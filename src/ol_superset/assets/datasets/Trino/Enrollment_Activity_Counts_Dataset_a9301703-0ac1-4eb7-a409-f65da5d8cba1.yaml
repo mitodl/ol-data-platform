@@ -228,7 +228,7 @@ sql: "select c.user_email\n , c.user_gender\n , c.user_country_code\n , c.user_h
   \ 10) as activity_date\n, MAX(CASE WHEN courseruncertificate_created_on is not null\
   \ then 1 else 0 end)  as certificate_count\n, 0 as enrollment_count\n, 0 as unenrolled_count\n\
   , 0 as audit_count\n, 0 as verified_count\n FROM ol_warehouse_production_mart.marts__combined_course_enrollment_detail\
-  \ as en_dtl\nwhere courseruncertificate_created_on is not null\nand (courserunenrollment_enrollment_status\
+  \ as en_dtl\nwhere courseruncertificate_is_earned = true\nand (courserunenrollment_enrollment_status\
   \ is null \n      or courserunenrollment_enrollment_status <> 'unenrolled')\ngroup\
   \ by 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13\n\nunion \n\nSELECT a.user_email\n ,\
   \ a.user_gender\n , a.user_country_code\n , a.user_highest_education\n , a.courserun_is_current\n\

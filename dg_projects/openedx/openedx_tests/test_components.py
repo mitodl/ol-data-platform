@@ -1,11 +1,21 @@
 """Tests for OpenEdxDeploymentComponent's definition wiring."""
 
 import pytest
-from dagster import AssetsDefinition, FilesystemIOManager, SourceAsset
+from dagster import (
+    AssetsDefinition,
+    DefaultScheduleStatus,
+    FilesystemIOManager,
+    SourceAsset,
+)
 from dagster._core.definitions.assets.graph.asset_graph import AssetGraph
 from dagster_aws.s3 import S3Resource
 from ol_orchestrate.lib.constants import VAULT_ADDRESS
+from ol_orchestrate.lib.failed_partitions import (
+    FAILED_PARTITION_CHECK_NAME,
+    FAILED_PARTITION_JOB_NAME,
+)
 from ol_orchestrate.lib.utils import unauthenticated_vault
+from openedx.components import openedx_deployment
 from openedx.components.openedx_deployment import OpenEdxDeploymentComponent
 
 DEPLOYMENT = "mitxonline"
@@ -146,3 +156,79 @@ def test_the_discovery_sensor_does_not_target_the_source_asset(
     targeted = courseware_sensor.asset_selection.resolve(_asset_graph(component))
 
     assert assets["courseware_asset"].key not in targeted
+
+
+def test_every_course_run_asset_has_a_failed_partition_check(
+    component: OpenEdxDeploymentComponent,
+) -> None:
+    """A failed course run is retried once, so something has to keep saying so."""
+    assets = component.build_assets()
+    irx_keys = assets["irx_export_asset"].keys
+    expected = {
+        key
+        for asset in assets.values()
+        if isinstance(asset, AssetsDefinition)
+        for key in asset.keys
+        if key not in irx_keys
+    }
+
+    checks = component.build_failed_partition_checks(assets)
+
+    assert {check.check_key.asset_key for check in checks} == expected
+    assert {check.check_key.name for check in checks} == {FAILED_PARTITION_CHECK_NAME}
+
+
+def test_the_irx_drop_has_no_failed_partition_check(
+    component: OpenEdxDeploymentComponent,
+) -> None:
+    """A failed night is superseded by the next one, not re-materialized."""
+    assets = component.build_assets()
+
+    checked = {
+        check.check_key.asset_key
+        for check in component.build_failed_partition_checks(assets)
+    }
+
+    assert checked.isdisjoint(assets["irx_export_asset"].keys)
+
+
+def test_the_failed_partition_inventory_is_scheduled(
+    component: OpenEdxDeploymentComponent,
+) -> None:
+    """The checks only report when something evaluates them."""
+    repository = component.build_definitions(
+        shared_resources=SHARED_RESOURCES
+    ).get_repository_def()
+
+    schedule = repository.get_schedule_def(f"{FAILED_PARTITION_JOB_NAME}_schedule")
+
+    assert schedule.job_name == FAILED_PARTITION_JOB_NAME
+
+
+@pytest.mark.parametrize(
+    ("environment", "status"),
+    [
+        ("production", DefaultScheduleStatus.RUNNING),
+        ("qa", DefaultScheduleStatus.STOPPED),
+    ],
+)
+def test_the_failed_partition_inventory_runs_by_default_only_in_production(
+    component: OpenEdxDeploymentComponent,
+    monkeypatch: pytest.MonkeyPatch,
+    environment: str,
+    status: DefaultScheduleStatus,
+) -> None:
+    """An inventory that has to be switched on by hand reports nothing until then."""
+    monkeypatch.setattr(openedx_deployment, "DAGSTER_ENV", environment)
+    assets = component.build_assets()
+
+    schedules = component.build_schedules(
+        assets, component.build_failed_partition_checks(assets)
+    )
+
+    (inventory,) = [
+        schedule
+        for schedule in schedules
+        if schedule.name == f"{FAILED_PARTITION_JOB_NAME}_schedule"
+    ]
+    assert inventory.default_status == status

@@ -145,17 +145,17 @@ with mitxonline_grades as (
 , final as (
     select
         {{ dbt_utils.generate_surrogate_key(['grade_id', 'platform']) }} as grade_key
-        , grade_id
-        , grade_date_key
-        , user_fk
-        , courserun_fk
-        , platform_fk
+        , gwf.grade_id
+        , gwf.grade_date_key
+        , gwf.user_fk
+        , gwf.courserun_fk
+        , gwf.platform_fk
         , gwf.platform
-        , grade_value
-        , is_passing
-        , letter_grade
-        , grade_created_on
-        , grade_updated_on
+        , gwf.grade_value
+        , gwf.is_passing
+        , gwf.letter_grade
+        , gwf.grade_created_on
+        , gwf.grade_updated_on
     from grades_with_fks as gwf
 
     {% if is_incremental() %}

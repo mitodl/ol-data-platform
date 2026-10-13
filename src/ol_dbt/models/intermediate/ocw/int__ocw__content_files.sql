@@ -24,10 +24,8 @@ with content as (
 , courses as (
     select
         course_slug
-        , replace(coalesce(nullif(course_legacy_uid, ''), nullif(course_site_uid, '')), '-', '')
-            as courserun_readable_id
-    from content
-    where coursecontent_kind = 'course'
+        , courserun_readable_id
+    from {{ ref('int__ocw__live_courses') }}
 )
 
 , pages as (
@@ -98,7 +96,7 @@ with content as (
             when not is_video then null
             when not is_current_format then nullif(coursecontent_legacy_thumbnail_file, '')
             when coalesce(coursecontent_video_youtube_id, '') != ''
-                then 'https://i.ytimg.com/vi/' || coursecontent_video_youtube_id || '/hqdefault.jpg'
+                then {{ dbt.concat(["'https://i.ytimg.com/vi/'", "coursecontent_video_youtube_id", "'/hqdefault.jpg'"]) }}
         end as image_src
         , case
             when is_video and is_current_format then nullif(coursecontent_video_youtube_id, '')
@@ -128,9 +126,10 @@ select
     , content_files.content_type
     , content_files.title
     , content_files.description
-    , '{{ ocw_base_url }}'
-    || substr(content_files.coursecontent_s3_key, 1, length(content_files.coursecontent_s3_key) - length('data.json'))
-        as url
+    , {{ dbt.concat([
+        "'" ~ ocw_base_url ~ "'"
+        , "substr(content_files.coursecontent_s3_key, 1, length(content_files.coursecontent_s3_key) - length('data.json'))"
+    ]) }} as url
     , content_files.content
     , content_files.file_type
     , content_files.file_extension

@@ -3,6 +3,7 @@
 from typing import Literal
 
 from dagster import (
+    AssetChecksDefinition,
     AssetsDefinition,
     AssetSelection,
     AutomationConditionSensorDefinition,
@@ -10,6 +11,7 @@ from dagster import (
     DefaultScheduleStatus,
     DefaultSensorStatus,
     Definitions,
+    ScheduleDefinition,
     SensorDefinition,
     SourceAsset,
     build_schedule_from_partitioned_job,
@@ -19,6 +21,10 @@ from dagster._core.definitions.partitions.partitioned_schedule import (
     UnresolvedPartitionedAssetScheduleDefinition,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ol_orchestrate.lib.failed_partitions import (
+    build_failed_partition_checks,
+    failed_partition_check_schedule,
+)
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 
@@ -215,17 +221,54 @@ class OpenEdxDeploymentComponent:
             automation_sensor,
         ]
 
-    def build_schedules(
+    def build_failed_partition_checks(
         self, assets: dict[str, AssetsDefinition | SourceAsset]
-    ) -> list[UnresolvedPartitionedAssetScheduleDefinition]:
-        """Build the nightly IRx drop's schedule for the deployment.
+    ) -> list[AssetChecksDefinition]:
+        """Build the failed-partition inventory checks for the deployment.
+
+        Covers the assets partitioned by course run. A run that fails there is
+        retried once and then left alone, so those are the ones whose failed
+        partitions go quiet. The IRx drop is partitioned by day and is not
+        covered: a night that failed is superseded by the next night's drop
+        rather than re-materialized, and would hold its check red.
 
         Args:
-            assets: The deployment's assets, used to target the schedule.
+            assets: The deployment's assets, as returned by ``build_assets``.
+
+        Returns:
+            One check per course-run-partitioned asset key.
+        """
+        course_runs = OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name]
+        return build_failed_partition_checks(
+            [
+                asset
+                for asset in assets.values()
+                if isinstance(asset, AssetsDefinition)
+                and asset.partitions_def == course_runs
+            ]
+        )
+
+    def build_schedules(
+        self,
+        assets: dict[str, AssetsDefinition | SourceAsset],
+        failed_partition_checks: list[AssetChecksDefinition],
+    ) -> list[UnresolvedPartitionedAssetScheduleDefinition | ScheduleDefinition]:
+        """Build the deployment's schedules.
+
+        The nightly IRx drop, and the daily failed-partition inventory.
+
+        Args:
+            assets: The deployment's assets, used to target the IRx schedule.
+            failed_partition_checks: The checks the inventory schedule evaluates.
 
         Returns:
             List of schedule definitions
         """
+        production_only = (
+            DefaultScheduleStatus.RUNNING
+            if DAGSTER_ENV == "production"
+            else DefaultScheduleStatus.STOPPED
+        )
         irx_export_job = define_asset_job(
             # Not the bare `<deployment>_irx_export`: that is the multi-asset's
             # op name, and a job sharing it fails the code location at load.
@@ -257,12 +300,13 @@ class OpenEdxDeploymentComponent:
             build_schedule_from_partitioned_job(
                 irx_export_job,
                 hour_of_day=6,
-                default_status=(
-                    DefaultScheduleStatus.RUNNING
-                    if DAGSTER_ENV == "production"
-                    else DefaultScheduleStatus.STOPPED
-                ),
-            )
+                default_status=production_only,
+            ),
+            # Running by default for the same reason: an inventory that has to
+            # be switched on by hand is one more quiet thing.
+            failed_partition_check_schedule(
+                failed_partition_checks, default_status=production_only
+            ),
         ]
 
     def build_resource(
@@ -296,6 +340,7 @@ class OpenEdxDeploymentComponent:
         """
         assets = self.build_assets()
         sensors = self.build_sensors(assets)
+        failed_partition_checks = self.build_failed_partition_checks(assets)
         deployment_resources = self.build_resource()
 
         # Combine deployment-specific and shared resources
@@ -305,7 +350,8 @@ class OpenEdxDeploymentComponent:
 
         return Definitions(
             assets=list(assets.values()),
-            schedules=self.build_schedules(assets),
+            asset_checks=failed_partition_checks,
+            schedules=self.build_schedules(assets, failed_partition_checks),
             sensors=sensors,
             resources=all_resources,
         )

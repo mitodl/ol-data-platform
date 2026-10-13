@@ -38,12 +38,12 @@ with coursepages as (
 
 select
     coursepageswithpath.course_id
-    , json_query(unnestedfacultymemberspage.cms_facultymemberspage_facultymember, 'lax $.value.name')
+    , {{ json_extract_value('unnestedfacultymemberspage.cms_facultymemberspage_facultymember', "'$.value.name'") }}
         as cms_facultymemberspage_facultymember_name
-    , json_query(unnestedfacultymemberspage.cms_facultymemberspage_facultymember, 'lax $.value.description')
+    , {{ json_extract_value('unnestedfacultymemberspage.cms_facultymemberspage_facultymember', "'$.value.description'") }}
         as cms_facultymemberspage_facultymember_description
 from unnestedfacultymemberspage
 inner join wagtailpages
     on unnestedfacultymemberspage.wagtail_page_id = wagtailpages.wagtail_page_id
 inner join coursepageswithpath
-    on wagtailpages.wagtail_page_path like coursepageswithpath.wagtail_page_path || '%'
+    on wagtailpages.wagtail_page_path like {{ dbt.concat(["coursepageswithpath.wagtail_page_path", "'%'"]) }}

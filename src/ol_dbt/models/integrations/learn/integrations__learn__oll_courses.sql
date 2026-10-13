@@ -23,7 +23,7 @@ with courses as (
         , row_number() over (
             partition by course_readable_id
             order by
-                coalesce(try_cast(course_year as int), 0) desc
+                coalesce({{ try_cast('course_year', 'integer') }}, 0) desc
                 , course_semester desc nulls last
         ) as rn
     from courses

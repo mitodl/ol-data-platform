@@ -118,7 +118,7 @@ class TikaClient:
 def client_for_profile() -> TikaClient:
     """Build the client for the active profile, failing if it has no token."""
     profile = config.active_profile()
-    if profile in config.ICEBERG_PROFILES:
+    if profile in config.DEPLOYED_PROFILES:
         token = vault.read_kv_secret(TIKA_VAULT_MOUNT, TIKA_VAULT_PATH)["value"]
         return TikaClient(_BASE_URLS.get(profile, _DEFAULT_BASE_URL), token)
     token = config.require_secrets(

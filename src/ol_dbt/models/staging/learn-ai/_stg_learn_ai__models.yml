@@ -63,7 +63,8 @@ models:
     - unique
   - name: chatsession_agent
     description: str, indicates the type of chatbot agent used in the session. Possible
-      values - TutorBot, ResourceRecommendationBot, VideoGPTBot, SyllabusBot
+      values - TutorBot, ResourceRecommendationBot, VideoGPTBot, SyllabusBot, CanvasSyllabusBot,
+      SearchSummaryBot
   - name: chatsession_title
     description: str, the initial question of the chat session.
   - name: user_id
@@ -71,7 +72,7 @@ models:
       user is not logged in.
   - name: chatsession_object_id
     description: str, course ID, video transcript asset ID, or edX module ID depending
-      on the chatsession_agent. May be blank for ResourceRecommendationBot.
+      on the chatsession_agent. May be blank for ResourceRecommendationBot and SearchSummaryBot.
   - name: canvas_course_id
     description: str, Canvas course ID for the chat session, e.g. 34625-15.060_FA25
       May be blank for non-Canvas

@@ -41,6 +41,7 @@ DAGSTER_SELECTOR_SUFFIX = "s3 data lake"
 INCREMENTAL_PREFIX = "incremental"
 XMIN_REPLICATION = "xmin"
 MIRROR_STRATEGY = "mirror"
+LOCAL_INGEST_STRATEGY = "ingest"
 AIRBYTE_LOADER = "airbyte"
 DLT_LOADER = "dlt"
 DAGSTER_LOADER = "dagster"
@@ -194,22 +195,23 @@ def _check_vocabulary(unit: Unit, vocabulary: Vocabulary, report: ValidationRepo
 def _check_strategies(unit: Unit, report: ValidationReport) -> None:
     """RFC 12711 §3's three rules."""
     strategies = unit.data.get("strategies") or {}
-    loader = unit.data.get("loader")
 
     # `local: mirror` is rejected by the JSON Schema enum; this catches the
     # second rule, which the schema cannot express. dlt is the only supported
-    # local ingest target, so this stays keyed on `loader != dlt` rather than
-    # on Airbyte alone: adding `dagster` (rule 7) did not add a second way to
-    # ingest locally, and reading the rule as "bans Airbyte" would let a unit
-    # declare a local path that nothing supports.
-    if strategies.get("local") == "ingest" and loader != "dlt":
+    # local ingest target, so the rule keys on the unit naming a dlt source and
+    # not on `loader`: `loader` records what loads production, and a source is
+    # built and run locally before production is cut over to it (spec §10.1).
+    # Reading the rule as "bans Airbyte" would let a `dagster` unit declare a
+    # local path that nothing supports.
+    if strategies.get("local") == LOCAL_INGEST_STRATEGY and DLT_LOADER not in unit.data:
         report.add(
             CHECK,
             Severity.ERROR,
             unit.key,
-            "strategies.local is `ingest` but the unit is not dlt-backed",
+            "strategies.local is `ingest` but the unit names no dlt source",
             "dlt is the only supported local ingest target: Airbyte cannot run in k3d, "
-            "and no other loader has a local path (RFC 12711 §3).",
+            "and no other loader has a local path (RFC 12711 §3). Add a `dlt:` block "
+            "naming the unit's source under ol_dlt.sources.",
         )
 
     # RFC 12711 Option 3: a scoped unit is ingested from the QA deployment, a
@@ -247,23 +249,41 @@ def _check_strategies(unit: Unit, report: ValidationReport) -> None:
 
 def _check_loader_block(unit: Unit, report: ValidationReport) -> None:
     loader = unit.data.get("loader")
-    for name in ("airbyte", "dlt"):
+    # An Airbyte-loaded unit may also carry `dlt:`. That is the state between
+    # the unit's dlt source being built and production being cut over to it,
+    # and it is what lets the unit declare `local: ingest` in the meantime.
+    allowed = {AIRBYTE_LOADER: {AIRBYTE_LOADER}, DLT_LOADER: {DLT_LOADER, AIRBYTE_LOADER}}
+    for name, loaders in allowed.items():
         present = name in unit.data
-        expected = loader == name
-        if present and not expected:
+        if present and loader not in loaders:
             report.add(
                 CHECK,
                 Severity.ERROR,
                 unit.key,
                 f"`{name}:` is present but loader is {loader!r}",
             )
-        if expected and not present:
+        if loader == name and not present:
             report.add(
                 CHECK,
                 Severity.ERROR,
                 unit.key,
                 f"loader is {loader!r} but there is no `{name}:` block",
             )
+
+
+def local_ingest_sources(units: list[Unit]) -> dict[str, str]:
+    """Return the dlt source module of each unit a local run can ingest.
+
+    :param units: The inventory units.
+    :returns: ``deployment/layer`` to ``ol_dlt.sources.<name>``, for the units
+        whose ``strategies.local`` is ``ingest``.
+    :rtype: dict[str, str]
+    """
+    return {
+        unit.key: str(unit.data[DLT_LOADER]["source_module"])
+        for unit in units
+        if unit.data["strategies"]["local"] == LOCAL_INGEST_STRATEGY
+    }
 
 
 def _check_tables(unit: Unit, report: ValidationReport) -> None:
@@ -920,10 +940,9 @@ def render_dagster_intervals(units: list[Unit]) -> dict[str, int]:
     never sees their connections, so an entry for one is dead weight that reads
     like coverage.
 
-    Paused connections are kept. Dagster builds its assets from the live
-    workspace and selects on the connection name alone, so a paused connection
-    still produces a group — and omitting its interval would silently hand it
-    the 24-hour default the moment somebody re-enables it.
+    Paused connections are kept. Dagster leaves a paused connection out of the
+    asset graph, and omitting its interval would silently hand it the 24-hour
+    default the moment somebody re-enables it.
     """
     intervals: dict[str, int] = {}
     sources: dict[str, str] = {}

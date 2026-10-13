@@ -266,7 +266,7 @@ with mitxonline_users as (
 
 , hashed_users as (
     select
-        {{ generate_hash_id('identity_key || platform') }} as user_hashed_id
+        {{ generate_hash_id(dbt.concat(["identity_key", "platform"])) }} as user_hashed_id
         , *
         , row_number() over (
             partition by coalesce(user_username, identity_key), platform

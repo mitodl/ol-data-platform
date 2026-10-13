@@ -25,7 +25,7 @@ with source as (
                 then '{{ var("edxorg") }}'
             else '{{ var("mitxonline") }}'
         end as courserun_platform
-        , replace(replace(courseware_id, 'course-v1:', ''), '+', '/') as courserun_edx_readable_id
+        , {{ format_course_id('courseware_id') }} as courserun_edx_readable_id
         ,{{ cast_timestamp_to_iso8601('start_date') }} as courserun_start_on
         ,{{ cast_timestamp_to_iso8601('end_date') }} as courserun_end_on
         ,{{ cast_timestamp_to_iso8601('enrollment_start') }} as courserun_enrollment_start_on

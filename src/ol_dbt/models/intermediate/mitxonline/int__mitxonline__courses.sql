@@ -33,7 +33,7 @@ with courses as (
             ) as row_num
         from program_requirements
         inner join programs on program_requirements.program_id = programs.program_id
-    )
+    ) as ranked_programs
     where row_num = 1
 )
 

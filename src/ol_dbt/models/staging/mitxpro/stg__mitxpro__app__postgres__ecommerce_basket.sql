@@ -4,7 +4,8 @@ with source as (
 
 )
 
-{{ deduplicate_raw_table(raw_table='raw__xpro__app__postgres__ecommerce_basket', partition_columns = 'user_id') }}
+-- production raw keeps baskets the app has deleted, so a user can have several; keep the newest
+{{ deduplicate_raw_table(order_by=['updated_on', 'id'], partition_columns='user_id') }}
 , renamed as (
 
     select

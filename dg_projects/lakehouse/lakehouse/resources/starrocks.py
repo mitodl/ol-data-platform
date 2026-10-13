@@ -3,6 +3,9 @@
 Modeled on VaultMySQLClientFactory (legacy_openedx/resources/mysql_db.py):
 credentials come from Vault's database secrets engine, generated fresh on each
 connection -- no passwords are held in Dagster config.
+
+The exception is ``static_username``, for a StarRocks that has no Vault mount
+(the local-dev cluster in ol-infrastructure, whose root takes no password).
 """
 
 import logging
@@ -67,14 +70,28 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
     database: str = PydanticField(
         description="StarRocks database/schema to connect to, e.g. 'b2b_analytics'."
     )
+    static_username: str | None = PydanticField(
+        default=None,
+        description=(
+            "Log in as this user with static_password and never call Vault. "
+            "Only for a StarRocks with no Vault mount, i.e. the local-dev "
+            "cluster. The connection then does not require TLS."
+        ),
+    )
+    static_password: str = PydanticField(
+        default="",
+        description="Password for static_username. The local-dev root has none.",
+    )
 
     def generate_credentials(self) -> tuple[str, str]:
-        """Fetch a fresh set of dynamic (username, password) credentials from Vault.
+        """Return (username, password): fresh from Vault, or the static login.
 
         Public so callers that need StarRocks credentials outside of `execute()`
         (e.g. injecting DBT_STARROCKS_USERNAME/PASSWORD for a dbt CLI invocation)
         can reuse the same Vault database secrets engine call.
         """
+        if self.static_username is not None:
+            return self.static_username, self.static_password
         creds = self.vault.client.secrets.database.generate_credentials(
             mount_point=self.vault_mount_point,
             name=self.vault_role,
@@ -82,7 +99,7 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
         return creds["username"], creds["password"]
 
     def execute(self, sql: str, *, idempotent: bool = True) -> None:
-        """Run *sql*, retrying with fresh Vault credentials on a transient error.
+        """Run *sql*, retrying with fresh credentials on a transient error.
 
         A fresh set of dynamic credentials is generated on every attempt (not just
         the first) since a 1044/1045 is most often caused by the previous attempt's
@@ -131,7 +148,7 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
                 delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
                 log.warning(
                     "StarRocks error %s (attempt %d/%d) -- retrying in %ds with "
-                    "fresh Vault credentials",
+                    "fresh credentials",
                     last_exc,
                     attempt,
                     _MAX_ATTEMPTS,
@@ -148,7 +165,11 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
                     user=username,
                     password=password,
                     cursorclass=DictCursor,
-                    ssl=_make_ssl_context(),
+                    # An explicit context makes pymysql refuse a server
+                    # without TLS, which the static login must not require.
+                    ssl=None
+                    if self.static_username is not None
+                    else _make_ssl_context(),
                 )
             except OperationalError as exc:
                 if exc.args[0] not in _RETRIABLE_ERRORS:

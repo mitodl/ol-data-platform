@@ -65,16 +65,18 @@ def _make_assets(
     chart_groupby: list[str],
     *,
     dataset_sql: str | None = None,
+    database: str = "Trino",
+    table_name: str = "my_report",
 ) -> Path:
     """Minimal assets dir: one dataset and one chart linked to it."""
     assets_dir = tmp_path / "assets"
     (assets_dir / "dashboards").mkdir(parents=True)
 
     _write_yaml(
-        assets_dir / "datasets" / "Trino" / "my_report_aaaa1111.yaml",
+        assets_dir / "datasets" / database / "my_report_aaaa1111.yaml",
         {
             "uuid": "aaaa-1111-1111-1111-111111111111",
-            "table_name": "my_report",
+            "table_name": table_name,
             "schema": "ol_warehouse_production_reporting",
             "catalog": "ol_data_lake_production",
             "sql": dataset_sql,
@@ -293,3 +295,65 @@ class TestChartColVsVirtualDataset:
         assert warnings > 0
         assert "nonexistent_column" in out
         assert "not found in virtual dataset" in out
+
+
+# ---------------------------------------------------------------------------
+# Warehouse databases other than Trino get the same checks
+# ---------------------------------------------------------------------------
+
+
+class TestStarRocksDatasets:
+    def test_starrocks_dataset_without_dbt_model_is_error(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        dbt_dir = _make_dbt_project(tmp_path, model_columns=["user_email"])
+        assets_dir = _make_assets(
+            tmp_path,
+            dataset_columns=["user_email"],
+            chart_groupby=["user_email"],
+            database="StarRocks_-_Lakehouse",
+            table_name="not_a_dbt_model",
+        )
+        index = build_asset_index(assets_dir)
+        errors, _warnings = _validate_dbt_chain(index, dbt_dir, 0)
+
+        out = capsys.readouterr().out
+        assert errors == 1
+        assert "not_a_dbt_model" in out
+        assert "no matching dbt model" in out
+
+    def test_non_warehouse_dataset_without_dbt_model_is_skipped(
+        self, tmp_path: Path
+    ) -> None:
+        dbt_dir = _make_dbt_project(tmp_path, model_columns=["user_email"])
+        assets_dir = _make_assets(
+            tmp_path,
+            dataset_columns=["user_email"],
+            chart_groupby=["user_email"],
+            database="Superset_Metadata_DB",
+            table_name="not_a_dbt_model",
+        )
+        index = build_asset_index(assets_dir)
+        errors, warnings = _validate_dbt_chain(index, dbt_dir, 0)
+
+        assert (errors, warnings) == (0, 0)
+
+    def test_starrocks_virtual_dataset_keeps_alias_case(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """StarRocks returns a SELECT alias as written, so that is the name to use."""
+        assets_dir = _make_assets(
+            tmp_path,
+            dataset_columns=["Cert_Count"],
+            chart_groupby=["cert_count"],
+            dataset_sql=(
+                "SELECT COUNT(*) AS Cert_Count "
+                "FROM ol_warehouse_production_mart.my_report"
+            ),
+            database="StarRocks_-_Lakehouse",
+        )
+        errors, _warnings, _index = _validate_asset_references(assets_dir, 0)
+
+        out = capsys.readouterr().out
+        assert errors == 1
+        assert "rename to 'Cert_Count'" in out

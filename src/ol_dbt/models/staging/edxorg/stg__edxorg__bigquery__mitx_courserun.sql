@@ -18,8 +18,10 @@ with source as (
         , url as courserun_url
         , instructors as courserun_instructors
         , registration_open as courserun_enrollment_start_date
-        , course_launch as courserun_start_date
-        , course_wrap as courserun_end_date
+        {#- The raw type of these two has been both an ISO 8601 string and a date. Downstream
+            coalesces them with the ISO 8601 strings from stg__edxorg__api__courserun. #}
+        , {{ cast_timestamp_to_iso8601('course_launch') }} as courserun_start_date
+        , {{ cast_timestamp_to_iso8601('course_wrap') }} as courserun_end_date
         , department as coursedepartment_name
         , dept_number as coursedepartment_number
         , case course_id

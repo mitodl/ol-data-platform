@@ -35,6 +35,7 @@ import tarfile
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
@@ -183,6 +184,10 @@ def _content_type(relative_path: str) -> str:
 # Statuses that mean the caller is not allowed to use Tika at all, rather than
 # that this particular document is unparseable. An empty access token -- what a
 # Vault read failure leaves behind -- produces exactly this.
+# MIT Learn sends this on every extraction (its TIKA_OCR_STRATEGY default), so a
+# scanned PDF has no text there. Without the header Tika applies its own default.
+TIKA_PDF_OCR_STRATEGY = "no_ocr"
+
 _TIKA_AUTH_STATUSES = frozenset({401, 403})
 _SERVER_ERROR_FLOOR = 500
 # The APISIX gateway in front of Tika answers 504 when Tika is slower than its
@@ -463,7 +468,7 @@ def extract_course_document_text(
                 members,
                 course_id=course_id,
                 source_system=source_system,
-                extract=tika.extract_text,
+                extract=partial(tika.extract_text, ocr_strategy=TIKA_PDF_OCR_STRATEGY),
                 is_supported=tika.is_supported,
             )
         assert_extraction_healthy(counters, course_id)

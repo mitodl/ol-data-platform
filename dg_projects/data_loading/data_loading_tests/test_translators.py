@@ -2,7 +2,7 @@
 
 These assert the asset specs produced by RawDataDltTranslator /
 EdxorgDltTranslator via the build_ingest_assets factory. They run under the
-default dev profile (filesystem storage).
+default dev profile (Iceberg on the local lake).
 """
 
 import pytest
@@ -24,7 +24,7 @@ def test_simple_source_spec_conventions() -> None:
     )
     assert spec.group_name == "oll"  # scoped by source system
     assert "dlt" in spec.kinds
-    assert "filesystem" in spec.kinds  # dev profile
+    assert "iceberg" in spec.kinds  # dev profile: the local lake
     # Root extract: no orphaned phantom upstream dep.
     assert list(spec.deps) == []
     # Glue fully-qualified table_name metadata is set from the dataset name.

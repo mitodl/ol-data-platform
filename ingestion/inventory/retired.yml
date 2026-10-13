@@ -798,3 +798,53 @@ retired:
     table's newest data object is from 2025-11-07 (measured 2026-10-06), which
     shows only when a row last changed. dbt never modeled it.
     b2b_contractprogramitem was not ingested when this was recorded.
+- deployment: mitx
+  layer: mongodb
+  raw_tables:
+  - raw__mitx__openedx__mongodb__forum_activities
+  - raw__mitx__openedx__mongodb__forum_contents
+  - raw__mitx__openedx__mongodb__forum_contents_tags_aggregation
+  - raw__mitx__openedx__mongodb__forum_delayed_backend_mongoid_jobs
+  - raw__mitx__openedx__mongodb__forum_notifications
+  - raw__mitx__openedx__mongodb__forum_subscriptions
+  - raw__mitx__openedx__mongodb__forum_users
+  retired_on: '2026-01-07'
+  reason: >-
+    Open edX moved the forum from MongoDB to MySQL (forum v2), and MITx
+    Residential cut over on 2025-10-28. The forum_* tables in the mitx/mysql
+    unit carry the whole corpus, migrated content included. The
+    "mitx-forum-production → S3 Data Lake" connection was inactive when the
+    inventory was snapshotted. This date is the tables' only Iceberg snapshot,
+    a full re-sync of the idle database (every row has one
+    _airbyte_extracted_at, 2026-01-07 17:25Z, measured 2026-10-07). dbt modeled
+    none of them.
+- deployment: mitxonline
+  layer: mongodb
+  raw_tables:
+  - raw__mitxonline__openedx__mongodb__forum_contents
+  - raw__mitxonline__openedx__mongodb__forum_subscriptions
+  - raw__mitxonline__openedx__mongodb__forum_users
+  retired_on: '2026-01-07'
+  reason: >-
+    Open edX moved the forum from MongoDB to MySQL (forum v2), and MITx Online
+    cut over on 2026-02-10. The forum_* tables in the mitxonline/mysql unit
+    carry the whole corpus, migrated content included. The
+    "mitxonline-forum-production → S3 Data Lake" connection was inactive when
+    the inventory was snapshotted. This date is the tables' only Iceberg
+    snapshot (2026-01-07 18:34Z, measured 2026-10-07), five weeks before the
+    cutover, so these tables never held the last of the MongoDB content. dbt
+    modeled none of them.
+- deployment: xpro
+  layer: mongodb
+  raw_tables:
+  - raw__xpro__openedx__mongodb__forum_contents
+  - raw__xpro__openedx__mongodb__forum_subscriptions
+  - raw__xpro__openedx__mongodb__forum_users
+  retired_on: '2026-01-07'
+  reason: >-
+    Open edX moved the forum from MongoDB to MySQL (forum v2), and xPRO cut
+    over on 2025-12-17. The forum_* tables in the xpro/mysql unit carry the
+    whole corpus, migrated content included. The
+    "xpro-forum-production → S3 Data Lake" connection was inactive when the
+    inventory was snapshotted. This date is the tables' only Iceberg snapshot
+    (2026-01-07 18:34Z, measured 2026-10-07). dbt modeled none of them.

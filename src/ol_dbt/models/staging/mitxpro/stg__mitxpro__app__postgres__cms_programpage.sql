@@ -18,6 +18,11 @@ select
     , external_marketing_url as cms_programpage_external_marketing_url
     , featured as cms_programpage_is_featured
     , search_image_id as cms_programpage_search_image_id
+    , thumbnail_image_id as cms_programpage_thumbnail_image_id
+    , min_weeks as cms_programpage_min_weeks
+    , max_weeks as cms_programpage_max_weeks
+    , min_weekly_hours as cms_programpage_min_weekly_hours
+    , max_weekly_hours as cms_programpage_max_weekly_hours
     , 'cms_programpage' as cms_programpage_model
 
 from programpage
@@ -34,6 +39,11 @@ select
     , externalprogrampage.external_marketing_url as cms_programpage_external_marketing_url
     , externalprogrampage.featured as cms_programpage_is_featured
     , externalprogrampage.search_image_id as cms_programpage_search_image_id
+    , externalprogrampage.thumbnail_image_id as cms_programpage_thumbnail_image_id
+    , externalprogrampage.min_weeks as cms_programpage_min_weeks
+    , externalprogrampage.max_weeks as cms_programpage_max_weeks
+    , externalprogrampage.min_weekly_hours as cms_programpage_min_weekly_hours
+    , externalprogrampage.max_weekly_hours as cms_programpage_max_weekly_hours
     , 'cms_externalprogrampage' as cms_programpage_model
 from externalprogrampage
 -- There is one program that has both a program page and an external program page. The external program page is not live

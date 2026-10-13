@@ -70,6 +70,7 @@ select
     , {{ json_extract_scalar('source.data_json', "'$.thumbnail_file'") }} as coursecontent_legacy_thumbnail_file
     , {{ json_extract_scalar('source.data_json', "'$.site_uid'") }} as course_site_uid
     , {{ json_extract_scalar('source.data_json', "'$.legacy_uid'") }} as course_legacy_uid
+    , case when source.content_kind = 'course' then source.data_json end as course_data_json
     , source.file_key as coursecontent_text_file_key
     , coalesce(extracted.content, source.content) as coursecontent_text
     , case when extracted.content is not null then 'extracted' else source.extraction_status end

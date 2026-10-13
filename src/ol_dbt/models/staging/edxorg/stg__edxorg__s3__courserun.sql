@@ -8,7 +8,7 @@ with source as (
         course_number
         , institution as courserun_institution
         , course_id as courserun_readable_id
-        , replace(replace(course_id, 'course-v1:', ''), '+', '/') as courserun_edx_readable_id
+        , {{ format_course_id('course_id') }} as courserun_edx_readable_id
         , title as courserun_title
         , semester as courserun_tag
         , self_paced as courserun_is_self_paced

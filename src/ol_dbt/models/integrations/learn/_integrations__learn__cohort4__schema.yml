@@ -20,6 +20,7 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: [etl_source, run_readable_id, key]
+        quote_columns: true
   columns:
   - name: etl_source
     description: str, mitxonline or xpro. Half of the scoped pull's key.
@@ -33,6 +34,7 @@ models:
       pull's key.
     tests: [not_null]
   - name: key
+    quote: true
     description: str, ContentFile.key, the edX module id Learn derives from the file's
       path. Unique within a run.
     tests: [not_null]
@@ -99,6 +101,7 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: [etl_source, run_readable_id, key]
+        quote_columns: true
   columns:
   - name: etl_source
     description: str, always ocw. Half of the scoped pull's key.
@@ -112,6 +115,7 @@ models:
       dashes; equals ContentFile.run.run_id. Half of the scoped pull's key.
     tests: [not_null]
   - name: key
+    quote: true
     description: str, ContentFile.key, the directory of the page or resource in the
       OCW bucket with its trailing slash, e.g. courses/<course>/resources/<name>/.
     tests: [not_null]

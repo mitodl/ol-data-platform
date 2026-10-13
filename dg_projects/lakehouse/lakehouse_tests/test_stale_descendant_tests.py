@@ -9,7 +9,10 @@ import ast
 from pathlib import Path
 
 import lakehouse
-from lakehouse.lib.stale_descendant_tests import stale_descendant_test_names
+from lakehouse.lib.stale_descendant_tests import (
+    stale_descendant_test_names,
+    unselected_model_test_names,
+)
 
 DIM_USER = "model.pkg.dim_user"
 BRIDGE = "model.pkg.bridge_user_role"
@@ -105,6 +108,39 @@ def test_a_test_the_run_selected_by_name_is_kept():
     assert stale_descendant_test_names(MANIFEST, {DIM_USER}, keep={FK}) == [SINGULAR]
 
 
+def test_without_automation_a_test_on_an_unselected_sibling_is_skipped():
+    """The QA case: dim_course_run is not built, so its table may not exist."""
+    assert unselected_model_test_names(MANIFEST, {DIM_DATE}) == [
+        "relationships_course_run_date"
+    ]
+    assert unselected_model_test_names(MANIFEST, {DIM_COURSE_RUN}) == []
+
+
+def test_without_automation_the_stale_descendant_tests_are_still_skipped():
+    assert unselected_model_test_names(MANIFEST, {DIM_USER}) == [SINGULAR, FK]
+    assert unselected_model_test_names(MANIFEST, {DIM_USER}, keep={FK}) == [SINGULAR]
+    assert unselected_model_test_names(MANIFEST, {DIM_USER, BRIDGE}) == []
+
+
+def test_without_automation_a_selected_seed_counts_as_a_selected_parent():
+    """Seeds and snapshots are assets too, so a run can select one alone."""
+    seed, model, source = "seed.pkg.codes", "model.pkg.stg_codes", "source.pkg.raw.c"
+    manifest = {
+        "nodes": {
+            "test.pkg.fk": _test_node("fk", model, [model, seed]),
+            "test.pkg.not_null": _test_node("not_null", model, [model, source]),
+        },
+        "child_map": {seed: [model, "test.pkg.fk"], model: ["test.pkg.fk"]},
+    }
+    assert stale_descendant_test_names(manifest, {seed}) == ["fk"]
+    assert unselected_model_test_names(manifest, {seed}) == ["fk"]
+
+
+def test_without_automation_a_test_with_no_selected_parent_is_not_named():
+    """Excluding a test dbt would not select only lengthens the command."""
+    assert unselected_model_test_names(MANIFEST, {STG_COURSES}) == []
+
+
 def test_the_exclusion_reaches_the_build_only_for_a_subset_run():
     source = Path(lakehouse.__file__).parent / "assets" / "lakehouse" / "dbt.py"
     functions = {
@@ -118,4 +154,9 @@ def test_the_exclusion_reaches_the_build_only_for_a_subset_run():
         if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "cli"
     ]
     assert "_stale_descendant_test_args" in ast.unparse(build_calls[0])
-    assert "context.is_subset" in ast.unparse(functions["_stale_descendant_test_args"])
+    exclusion = ast.unparse(functions["_stale_descendant_test_args"])
+    assert "context.is_subset" in exclusion
+    assert (
+        "stale_descendant_test_names if DBT_AUTOMATION_ENABLED "
+        "else unselected_model_test_names"
+    ) in exclusion

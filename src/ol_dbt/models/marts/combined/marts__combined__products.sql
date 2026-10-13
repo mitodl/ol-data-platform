@@ -63,9 +63,9 @@ with mitxonline_product as (
         , row_number() over (
             partition by courserun_readable_id
             order by
-                if(courserun_mode = 'verified', 0, 1)
+                if(courserun_mode = 'verified', 0, 1) asc
                 , price desc nulls last
-                , courserun_mode
+                , courserun_mode asc
                 , upgrade_deadline desc nulls last
         ) as _row_num
     from edxorg_product

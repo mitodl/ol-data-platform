@@ -24,6 +24,7 @@ from ol_dbt_cli.lib.git_utils import (
     get_changed_sql_models,
     get_deleted_sql_models,
     get_file_at_ref,
+    get_macro_sources_at_ref,
     get_repo_root,
     resolve_merge_base,
 )
@@ -33,11 +34,13 @@ from ol_dbt_cli.lib.manifest import (
     load_manifest,
 )
 from ol_dbt_cli.lib.sql_parser import (
+    MacroSources,
     ParsedModel,
     find_compiled_dir,
     get_columns_read_from_ref,
     parse_model_file,
     parse_model_sql_at_content,
+    read_macro_sources,
 )
 from ol_dbt_cli.lib.surrogate_keys import (
     SurrogateKeyChange,
@@ -304,8 +307,15 @@ def _analyse_model(
     manifest: ManifestRegistry | None,
     sql_models_by_name: dict[str, ParsedModel],
     repo_root: Path,
+    macro_sources: MacroSources | None = None,
+    base_macro_sources: MacroSources | None = None,
 ) -> ImpactAlert | None:
-    """Return an :class:`ImpactAlert` for *model_name* if there are column changes."""
+    """Return an :class:`ImpactAlert` for *model_name* if there are column changes.
+
+    *macro_sources* and *base_macro_sources* are the project macros of the working
+    tree and of *merge_base*. A model whose body is only a macro call is expanded
+    with the macros of its own side, so a column changed inside the macro shows.
+    """
     # Current column set — parsed from the raw working-tree SQL so it is
     # symmetric with the base side below. Parsing the current side from compiled
     # SQL while the base comes from raw git content produces spurious added/
@@ -316,7 +326,7 @@ def _analyse_model(
     # change detection while staying symmetric — which is what avoids the false
     # positives.
     try:
-        current_parsed = parse_model_sql_at_content(model_name, sql_file.read_text())
+        current_parsed = parse_model_sql_at_content(model_name, sql_file.read_text(), macro_sources)
     except Exception:  # noqa: BLE001
         return None
 
@@ -337,7 +347,7 @@ def _analyse_model(
             manifest_available=manifest is not None,
         )
 
-    base_parsed = parse_model_sql_at_content(model_name, base_content)
+    base_parsed = parse_model_sql_at_content(model_name, base_content, base_macro_sources)
     base_cols = base_parsed.output_columns
 
     if base_cols == current_cols:
@@ -394,6 +404,7 @@ def _analyse_deleted_model(
     manifest: ManifestRegistry | None,
     sql_models_by_name: dict[str, ParsedModel],
     repo_root: Path,
+    base_macro_sources: MacroSources | None = None,
 ) -> ImpactAlert:
     """Return an :class:`ImpactAlert` for *model_name*, deleted since *merge_base*.
 
@@ -408,7 +419,7 @@ def _analyse_deleted_model(
     base_content = get_file_at_ref(path_at_base, merge_base, repo_root=repo_root)
     base_cols: set[str] = set()
     if base_content is not None:
-        base_cols = parse_model_sql_at_content(model_name, base_content).output_columns
+        base_cols = parse_model_sql_at_content(model_name, base_content, base_macro_sources).output_columns
 
     consumers = {name for name, parsed in sql_models_by_name.items() if model_name in parsed.refs}
 
@@ -753,6 +764,8 @@ def impact(
         sys.exit(1)
 
     models_dir = dbt_dir / "models"
+    macro_sources = read_macro_sources(dbt_dir)
+    base_macro_sources = get_macro_sources_at_ref(dbt_dir, merge_base, repo_root=repo_root)
 
     # Resolve compiled SQL directory (Jinja-free, most accurate)
     compiled_dir: Path | None = None
@@ -788,7 +801,7 @@ def impact(
     parse_errors: dict[str, str] = {}
     for name, path in sql_file_map.items():
         try:
-            parsed = parse_model_file(path, compiled_dir=compiled_dir)
+            parsed = parse_model_file(path, compiled_dir=compiled_dir, macro_sources=macro_sources)
             sql_models_by_name[name] = parsed
             # parse_model_file may succeed but record internal parse errors
             if parsed.parse_error:
@@ -838,10 +851,12 @@ def impact(
                 "so macro-only changes are analysed."
             )
 
-        # With --auto-compile the compiled SQL reflects the macro edit, so run the
-        # standard column diff on affected models too — genuine added/removed
-        # columns then surface as their own (possibly BREAKING) alerts.
-        if auto_compile and macro_affected:
+        # Run the standard column diff on the affected models too. A model whose
+        # body is only a call to the changed macro is expanded with each side's
+        # macros, so a column the edit added or removed surfaces as its own
+        # (possibly BREAKING) alert. A model that merely uses the macro inside its
+        # own SQL renders the call as a placeholder on both sides and stays quiet.
+        if macro_affected:
             for name in sorted(macro_affected):
                 if name not in target_names:
                     target_names.append(name)
@@ -884,7 +899,9 @@ def impact(
             # Reload parsed models with fresh compiled SQL
             for name, path in sql_file_map.items():
                 try:
-                    sql_models_by_name[name] = parse_model_file(path, compiled_dir=compiled_dir)
+                    sql_models_by_name[name] = parse_model_file(
+                        path, compiled_dir=compiled_dir, macro_sources=macro_sources
+                    )
                 except Exception:  # noqa: BLE001, S110
                     pass
         except subprocess.CalledProcessError as exc:
@@ -902,7 +919,9 @@ def impact(
             path_at_base = deleted_models.get(name)
             if path_at_base is not None:
                 alerts.append(
-                    _analyse_deleted_model(name, path_at_base, merge_base, manifest, sql_models_by_name, repo_root)
+                    _analyse_deleted_model(
+                        name, path_at_base, merge_base, manifest, sql_models_by_name, repo_root, base_macro_sources
+                    )
                 )
             continue
         alert = _analyse_model(
@@ -913,6 +932,8 @@ def impact(
             manifest,
             sql_models_by_name,
             repo_root,
+            macro_sources,
+            base_macro_sources,
         )
         if alert is not None:
             alerts.append(alert)

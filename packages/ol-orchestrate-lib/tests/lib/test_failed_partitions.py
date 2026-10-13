@@ -231,3 +231,14 @@ def test_the_recovery_text_always_says_nothing_retries_automatically(
 
     assert "Nothing retries these automatically" in text
     assert "re-materiali" in text
+
+
+def test_the_schedule_can_be_running_by_default(partitioned_asset) -> None:
+    """A location that wants the inventory on at deploy can ask for it."""
+    checks = build_failed_partition_checks([partitioned_asset])
+
+    schedule = failed_partition_check_schedule(
+        checks, default_status=dg.DefaultScheduleStatus.RUNNING
+    )
+
+    assert schedule.default_status == dg.DefaultScheduleStatus.RUNNING

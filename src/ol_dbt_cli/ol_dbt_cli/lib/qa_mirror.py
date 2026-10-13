@@ -14,8 +14,9 @@ location imports it.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ol_dbt_cli.lib.inventory import (
     MIRROR_STRATEGY,
@@ -48,7 +49,8 @@ class MirrorDeclarationError(ValueError):
 class MirrorTable:
     unit: str
     raw_table: str
-    columns: dict[str, str]
+    columns: dict[str, Any]
+    """Column name to mode: one of the mode names, or ``{"json_keys": [...]}``."""
     where: str | None
 
     @property
@@ -109,9 +111,44 @@ def mirror_tables(units: list[Unit]) -> dict[str, list[MirrorTable]]:
 STRING_ONLY_MODES = frozenset({"hash", "redact"})
 REDACTED = "redacted"
 
+JSON_KEYS_MODE = "json_keys"
+_JSON_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+"""Keys are spliced into a string literal and a JSON path, so nothing that needs escaping in either."""
 
-def _expression(column: str, mode: str) -> str:
+
+def _json_keys(column: str, mode: Any) -> list[str] | None:
+    """Return the keys a ``{json_keys: [...]}`` mode keeps, or None when *mode* is a plain mode name."""
+    if isinstance(mode, str):
+        return None
+    keys = mode.get(JSON_KEYS_MODE) if isinstance(mode, dict) and set(mode) == {JSON_KEYS_MODE} else None
+    if (
+        not isinstance(keys, list)
+        or not keys
+        or not all(isinstance(key, str) and _JSON_KEY.fullmatch(key) for key in keys)
+        or len(set(keys)) != len(keys)
+    ):
+        msg = f"{column}: `{JSON_KEYS_MODE}` needs a list of distinct top-level key names, got {mode!r}"
+        raise MirrorDeclarationError(msg)
+    return keys
+
+
+def _needs_string(mode: Any) -> bool:
+    return not isinstance(mode, str) or mode in STRING_ONLY_MODES
+
+
+def _expression(column: str, mode: Any) -> str:
     quoted = quote(column)
+    keys = _json_keys(column, mode)
+    if keys is not None:
+        # A JSON string rebuilt from the named top-level keys alone, each with
+        # its whole value, so a key holding an object brings everything under
+        # it. json_query keeps the value's JSON type where get_json_string
+        # would turn a number into a string. A key the row lacks, and a value
+        # that is not JSON at all, come out as a JSON null, which reads back
+        # as NULL exactly as the missing key does in production. NULL stays
+        # NULL for the same reason as in `redact`.
+        pairs = ", ".join(f"'{key}', json_query(parse_json({quoted}), '$.{key}')" for key in keys)
+        return f"CASE WHEN {quoted} IS NULL THEN NULL ELSE CAST(json_object({pairs}) AS VARCHAR) END AS {quoted}"
     if mode == "hash":
         # Blank stays blank and NULL stays NULL. Hashing a blank would give every
         # blank username one shared digest, and turning it into NULL would break
@@ -138,8 +175,8 @@ def render_mirror(table: MirrorTable, production_types: dict[str, str]) -> Mirro
     *production_types* maps column name to StarRocks type, as ``DESCRIBE``
     reports it. The declaration is checked against it first: an allowlisted
     column production does not have means the declaration is stale, and
-    ``hash`` or ``redact`` on a non-string column would change the column's
-    type under the staging models that cast it. ``mirror.where`` is checked
+    ``hash``, ``redact`` or ``json_keys`` on a non-string column would change
+    the column's type under the staging models that cast it. ``mirror.where`` is checked
     for being a predicate rather than a statement, because a ``UNION`` there
     would read production columns the allowlist leaves out.
     """
@@ -157,10 +194,12 @@ def render_mirror(table: MirrorTable, production_types: dict[str, str]) -> Mirro
     not_strings = sorted(
         column
         for column, mode in table.columns.items()
-        if mode in STRING_ONLY_MODES and not types[column.lower()].startswith(_STRING_TYPE_PREFIXES)
+        if _needs_string(mode) and not types[column.lower()].startswith(_STRING_TYPE_PREFIXES)
     )
     if not_strings:
-        msg = f"{table.raw_table}: `hash` and `redact` need string columns, and {not_strings} are not"
+        # EXPLAIN would not catch this: StarRocks casts a bigint to varchar for
+        # parse_json and plans the query.
+        msg = f"{table.raw_table}: `hash`, `redact` and `json_keys` need string columns, and {not_strings} are not"
         raise MirrorDeclarationError(msg)
 
     select_list = ",\n    ".join(_expression(column, mode) for column, mode in table.columns.items())

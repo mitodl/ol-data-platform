@@ -116,7 +116,7 @@ from (
         , row_number() over (
             partition by enrollment_key
             order by
-                match_priority
+                match_priority asc
                 , order_updated_on desc nulls last
                 -- order_updated_on is order-level and shared by every line on a
                 -- multi-line order, so it alone can leave ties unresolved.

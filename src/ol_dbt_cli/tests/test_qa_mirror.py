@@ -26,7 +26,7 @@ PRODUCTION_TYPES = {
 }
 
 
-def _table(columns: dict[str, str], where: str | None = None) -> MirrorTable:
+def _table(columns: dict[str, Any], where: str | None = None) -> MirrorTable:
     return MirrorTable(unit="edxorg/s3", raw_table="raw__edxorg__Report", columns=columns, where=where)
 
 
@@ -68,8 +68,8 @@ class TestRenderMirror:
         with pytest.raises(MirrorDeclarationError, match="production does not have"):
             render_mirror(_table({"_file_modified_at": "copy"}), PRODUCTION_TYPES)
 
-    @pytest.mark.parametrize("mode", ["hash", "redact"])
-    def test_string_modes_refuse_a_non_string_column(self, mode: str) -> None:
+    @pytest.mark.parametrize("mode", ["hash", "redact", {"json_keys": ["channel"]}])
+    def test_string_modes_refuse_a_non_string_column(self, mode: Any) -> None:
         # Either would turn an int into a string under staging models that cast it.
         with pytest.raises(MirrorDeclarationError, match="need string columns"):
             render_mirror(_table({"birth_year": mode}), PRODUCTION_TYPES)
@@ -98,6 +98,36 @@ class TestRenderMirror:
         # So a not_null test on the column fails in QA exactly when it would in production.
         statement = render_mirror(_table({"last_name": "redact"}), PRODUCTION_TYPES)
         assert "CASE WHEN `last_name` IS NULL THEN NULL ELSE 'redacted' END AS `last_name`" in statement.sql
+
+    def test_json_keys_rebuilds_the_object_from_the_named_keys(self) -> None:
+        # zendesk's `via` holds the requester's email beside the channel a
+        # not_null test reads, so neither copying nor redacting the column works.
+        statement = render_mirror(_table({"email": {"json_keys": ["channel", "rel"]}}), PRODUCTION_TYPES)
+        assert (
+            "CASE WHEN `email` IS NULL THEN NULL ELSE CAST(json_object("
+            "'channel', json_query(parse_json(`email`), '$.channel'), "
+            "'rel', json_query(parse_json(`email`), '$.rel')) AS VARCHAR) END AS `email`"
+        ) in statement.sql
+
+    @pytest.mark.parametrize(
+        "mode",
+        [
+            {"json_keys": []},
+            {"json_keys": "channel"},
+            {"json_keys": ["channel", "channel"]},
+            {"json_keys": ["source.from"]},
+            {"json_keys": [["channel"]]},
+            {"json_keys": ["a') , `email`, ('"]},
+            {"json_keys": ["channel"], "also": "copy"},
+            {"json_key": ["channel"]},
+            ["channel"],
+        ],
+    )
+    def test_a_malformed_json_keys_mode_fails_closed(self, mode: Any) -> None:
+        # Same boundary as the unknown mode name: a key is spliced into a string
+        # literal and a JSON path, and the asset never runs the JSON Schema.
+        with pytest.raises(MirrorDeclarationError, match="json_keys"):
+            render_mirror(_table({"email": mode}), PRODUCTION_TYPES)
 
     def test_column_names_match_case_insensitively(self) -> None:
         statement = render_mirror(_table({"Email": "hash"}), {"email": "VARCHAR(65533)"})

@@ -28,8 +28,15 @@ from dagster_dbt.asset_utils import DAGSTER_DBT_UNIQUE_ID_METADATA_KEY
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
-from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED, DBT_TARGET
-from lakehouse.lib.stale_descendant_tests import stale_descendant_test_names
+from lakehouse.lib.dbt_environment import (
+    DBT_AUTOMATION_ENABLED,
+    DBT_TARGET,
+    SKIP_UNIT_TESTS_ARGS,
+)
+from lakehouse.lib.stale_descendant_tests import (
+    stale_descendant_test_names,
+    unselected_model_test_names,
+)
 from lakehouse.lib.surrogate_key_drift import (
     SURROGATE_KEY_STATE_ARTIFACT,
     SurrogateKeyDrift,
@@ -103,6 +110,9 @@ def _stale_descendant_test_args(context: AssetExecutionContext) -> list[str]:
 
     Empty for a run of the whole asset: every descendant is rebuilt in the same
     invocation, so nothing it tests is stale.
+
+    Without the automation sensor nothing builds the models outside the
+    selection, so there every test attached to one of them is excluded.
     """
     if not context.is_subset:
         return []
@@ -112,7 +122,12 @@ def _stale_descendant_test_args(context: AssetExecutionContext) -> list[str]:
         ]
         for key in context.selected_asset_keys
     }
-    tests = stale_descendant_test_names(
+    test_names = (
+        stale_descendant_test_names
+        if DBT_AUTOMATION_ENABLED
+        else unselected_model_test_names
+    )
+    tests = test_names(
         json.loads(dbt_project.manifest_path.read_text()),
         selected,
         keep={key.name for key in context.selected_asset_check_keys},
@@ -120,8 +135,8 @@ def _stale_descendant_test_args(context: AssetExecutionContext) -> list[str]:
     if not tests:
         return []
     context.log.info(
-        "Skipping %d test(s) attached to models downstream of this run's selection "
-        "that it does not rebuild; they run when those models are built: %s",
+        "Skipping %d test(s) attached to models this run does not rebuild; they "
+        "run when those models are built: %s",
         len(tests),
         ", ".join(tests),
     )
@@ -185,6 +200,42 @@ def _repair_surrogate_key_drift(
     return complete
 
 
+def _upload_run_results(
+    context: AssetExecutionContext,
+    dbt_s3_artifacts: DbtS3ArtifactsResource,
+    invocation: DbtCliInvocation,
+) -> None:
+    """Upload a build's run_results.json so OpenMetadata can ingest its outcomes.
+
+    Stored at a per-run versioned S3 key, so every incremental and full run is
+    kept. Called whether or not the build succeeded.
+
+    manifest.json and catalog.json are NOT generated here: producing the catalog
+    recompiles the whole project and queries every relation, which is far too
+    expensive to repeat on each incremental subset build. That work lives in the
+    dedicated `dbt_docs_artifacts_job`, which runs on a daily schedule.
+    """
+    if DAGSTER_ENV == "dev":
+        return
+    if not dbt_s3_artifacts.s3_bucket:
+        context.log.warning(
+            "DBT_ARTIFACTS_S3_BUCKET is not configured; dbt run results will "
+            "not be uploaded to S3 for OpenMetadata ingestion."
+        )
+        return
+    # dbt writes run_results.json once it has run its nodes, so a build that
+    # died before that (e.g. a parse error) leaves none behind.
+    if not (invocation.target_path / "run_results.json").exists():
+        context.log.warning(
+            "dbt build did not produce run_results.json; nothing to upload for "
+            "OpenMetadata."
+        )
+        return
+    dbt_s3_artifacts.upload_artifacts(
+        invocation.target_path, ["run_results.json"], context
+    )
+
+
 @dbt_assets(
     manifest=dbt_project.manifest_path,
     project=dbt_project,
@@ -209,34 +260,39 @@ def full_dbt_project(
     drift = _surrogate_key_drift(context, dbt_s3_artifacts)
 
     build_invocation = dbt.cli(
-        ["build", *_stale_descendant_test_args(context), *build_vars], context=context
+        [
+            "build",
+            *SKIP_UNIT_TESTS_ARGS,
+            *_stale_descendant_test_args(context),
+            *build_vars,
+        ],
+        context=context,
     )
-    yield from (build_invocation.stream().fetch_column_metadata().fetch_row_counts())
-
-    if drift is not None and _repair_surrogate_key_drift(
-        context, dbt, drift, _models_built_by(build_invocation), build_vars
-    ):
-        dbt_s3_artifacts.write_json_artifact(
-            SURROGATE_KEY_STATE_ARTIFACT, drift.current_state, context
+    # stream() raises once dbt exits non-zero, so the upload has to happen on
+    # the failure path too: a build with a failing test is the one whose results
+    # OpenMetadata most needs, and it never reaches the line after the try.
+    try:
+        yield from (
+            build_invocation.stream().fetch_column_metadata().fetch_row_counts()
         )
 
-    # Upload this run's results to a per-run versioned S3 key so OpenMetadata can
-    # ingest the model/test outcomes of every incremental and full run.
-    #
-    # manifest.json and catalog.json are NOT generated here: producing the catalog
-    # recompiles the whole project and queries every relation, which is far too
-    # expensive to repeat on each incremental subset build. That work lives in the
-    # dedicated `dbt_docs_artifacts_job`, which runs on a daily schedule.
-    if DAGSTER_ENV != "dev":
-        if not dbt_s3_artifacts.s3_bucket:
-            context.log.warning(
-                "DBT_ARTIFACTS_S3_BUCKET is not configured; dbt run results will "
-                "not be uploaded to S3 for OpenMetadata ingestion."
+        if drift is not None and _repair_surrogate_key_drift(
+            context, dbt, drift, _models_built_by(build_invocation), build_vars
+        ):
+            dbt_s3_artifacts.write_json_artifact(
+                SURROGATE_KEY_STATE_ARTIFACT, drift.current_state, context
             )
-        else:
-            dbt_s3_artifacts.upload_artifacts(
-                build_invocation.target_path, ["run_results.json"], context
+    except BaseException:
+        # The build's failure is the one the run has to report, so an upload
+        # that fails on top of it is logged and not raised in its place.
+        try:
+            _upload_run_results(context, dbt_s3_artifacts, build_invocation)
+        except Exception:
+            context.log.exception(
+                "Could not upload run_results.json for the failed dbt build"
             )
+        raise
+    _upload_run_results(context, dbt_s3_artifacts, build_invocation)
 
 
 @op(description="Generate dbt docs artifacts and upload them to S3 for OpenMetadata.")

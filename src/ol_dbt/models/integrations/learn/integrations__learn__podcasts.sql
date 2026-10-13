@@ -30,7 +30,7 @@ with channels as (
     select
         podcast_dlt_load_id
         , row_number() over (order by podcast_dlt_load_id desc) as loads_ago
-    from (select distinct podcast_dlt_load_id from channels)
+    from (select distinct podcast_dlt_load_id from channels) as channel_loads
 )
 
 , current_channels as (

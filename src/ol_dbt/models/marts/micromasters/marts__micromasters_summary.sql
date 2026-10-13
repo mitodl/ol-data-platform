@@ -24,14 +24,13 @@ with micromasters_enrollments as (
             mitx_programs.is_dedp_program = true then 'Data, Economics, and Design of Policy'
         else micromasters_enrollments.program_title end as program_title
         , count(
-            distinct micromasters_enrollments.courserun_readable_id
-            || micromasters_enrollments.user_email
+            distinct {{ dbt.concat(["micromasters_enrollments.courserun_readable_id", "micromasters_enrollments.user_email"]) }}
         ) as total_enrollments
         , count(distinct micromasters_enrollments.user_email) as unique_users
         , count(distinct micromasters_enrollments.user_address_country) as unique_countries
         , count(distinct case
             when micromasters_enrollments.courserunenrollment_enrollment_mode = 'verified'
-                then (micromasters_enrollments.courserun_readable_id || micromasters_enrollments.user_email)
+                then {{ dbt.concat(["micromasters_enrollments.courserun_readable_id", "micromasters_enrollments.user_email"]) }}
         end) as verified_enrollments
         , count(distinct case
             when micromasters_enrollments.courserunenrollment_enrollment_mode = 'verified'
@@ -52,8 +51,7 @@ with micromasters_enrollments as (
         else micromasters_course_certificates.program_title end as program_title
         , count(
             distinct
-            micromasters_course_certificates.courserun_readable_id
-            || micromasters_course_certificates.user_email
+            {{ dbt.concat(["micromasters_course_certificates.courserun_readable_id", "micromasters_course_certificates.user_email"]) }}
         ) as course_certificates
         , count(distinct micromasters_course_certificates.user_email) as unique_course_certificate_earners
     from micromasters_course_certificates

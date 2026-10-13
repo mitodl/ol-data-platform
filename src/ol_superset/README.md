@@ -84,7 +84,7 @@ This checks:
 |-------|----------|-------------|
 | Dashboard chart UUIDs exist locally | **Error** | All chart UUIDs referenced in dashboard position grid must have a file in `assets/charts/` |
 | Chart dataset UUIDs exist locally | **Error** | Each chart's `dataset_uuid` must have a matching file in `assets/datasets/` |
-| Dataset `table_name` matches a dbt model | **Error** | Non-virtual Trino datasets must reference a model that exists in the dbt project's YAML schema files |
+| Dataset `table_name` matches a dbt model | **Error** | Non-virtual warehouse datasets (Trino and StarRocks) must reference a model that exists in the dbt project's YAML schema files |
 | Dataset `schema` matches expected dbt layer | **Warning** | Flags schema mismatches (e.g., a reporting model accidentally placed in the mart schema) |
 | Dataset columns documented in dbt model | **Warning** | Columns in the Superset dataset that are not documented in the dbt model's YAML (may still exist in the warehouse) |
 | Chart column refs exist in dataset | **Warning** | Plain column names referenced in chart params (groupby, all_columns, x_axis, SIMPLE filters) must appear in the dataset's column list |

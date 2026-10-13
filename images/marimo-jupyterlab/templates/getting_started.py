@@ -2,6 +2,7 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #   "altair>=5.4",
+#   "marimo",
 #   "numpy>=2.0",
 #   "pandas>=2.0",
 #   "polars>=1.0",

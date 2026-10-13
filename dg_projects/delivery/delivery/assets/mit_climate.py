@@ -30,7 +30,7 @@ from dagster import (
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
-from ol_orchestrate.resources.learn_api import MITLearnApiClient
+from ol_orchestrate.resources.learn_api import MITLearnApiClient, webhook_status
 
 log = logging.getLogger(__name__)
 
@@ -108,11 +108,12 @@ def mit_climate_webhook(
         context.log.exception(msg)
         raise RuntimeError(msg) from exc
 
+    status = webhook_status(response)
     context.add_output_metadata(
         {
             "resource_count": len(resources),
-            "webhook_status": "success",
+            "webhook_status": status,
             "response": MetadataValue.json(response),
         }
     )
-    return {"resource_count": len(resources), "webhook_status": "success"}
+    return {"resource_count": len(resources), "webhook_status": status}

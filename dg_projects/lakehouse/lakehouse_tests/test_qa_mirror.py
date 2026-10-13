@@ -87,6 +87,20 @@ def test_describes_explains_drops_then_copies() -> None:
     }
 
 
+def test_a_json_keys_mode_is_reported_as_masked() -> None:
+    # The one mode that is a mapping rather than a name has to survive the
+    # masked-column report and its JSON metadata.
+    mode = {"json_keys": ["channel"]}
+    table = MirrorTable(
+        unit=TABLE.unit,
+        raw_table=TABLE.raw_table,
+        columns={"_airbyte_extracted_at": "copy", "email": mode},
+        where=None,
+    )
+    result = _materialise(FakeStarRocks(PRODUCTION), [table])
+    assert result.metadata["tables"].data[table.name]["masked"] == {"email": mode}
+
+
 def test_a_stale_declaration_fails_before_any_qa_copy_in_the_unit_is_dropped() -> None:
     stale = MirrorTable(
         unit=TABLE.unit,

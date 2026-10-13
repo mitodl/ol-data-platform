@@ -52,13 +52,13 @@ with enroll_dtl as (
         , en_dtl.course_readable_id
         , en_dtl.courserun_readable_id
         , substring(en_dtl.courseruncertificate_created_on, 1, 10) as activity_date
-        , max(case when en_dtl.courseruncertificate_created_on is not null then 1 else 0 end) as certificate_count
+        , 1 as certificate_count
         , 0 as enrollment_count
         , 0 as unenrolled_count
         , 0 as audit_count
         , 0 as verified_count
     from enroll_dtl as en_dtl
-    where en_dtl.courseruncertificate_created_on is not null
+    where en_dtl.courseruncertificate_is_earned = true
     group by
         en_dtl.user_email
         , en_dtl.user_gender

@@ -17,11 +17,12 @@ src/ol_dlt/
 ├── pyproject.toml        # package "ol-dlt"; OSS dlt + pyiceberg deps; ruff banned-api: dagster*
 ├── .dlt/
 │   ├── config.toml       # [runtime]/[extract], [iceberg_catalog], per-source destinations
-│   ├── .pyiceberg.yaml   # aws_glue catalog config
+│   ├── .pyiceberg.yaml   # aws_glue and local lake catalog config
 │   └── secrets.toml.template
 ├── ol_dlt/
 │   ├── config.py         # profile -> destination/dataset/table_format factory
 │   ├── database.py       # reusable relational-database source (spec -> @dlt.source)
+│   ├── local_lake.py     # the local lake's catalog, as a host process reaches it
 │   ├── vault.py          # Vault-issued database credentials (pure hvac)
 │   └── sources/<name>/   # @dlt.source / @dlt.resource bodies only
 └── tests/                # unit + materialization tests (ephemeral DuckDB/filesystem)
@@ -34,12 +35,16 @@ There is no `dlt.yml` / dlt+ project manifest — we run open-source dlt. The
 read in `ol_dlt/config.py`. It is the single source of truth that replaces the
 old per-`loads.py` `DAGSTER_ENVIRONMENT` branching.
 
-| `DLT_PROFILE`     | destination                                   | `table_format` hint |
-| ----------------- | --------------------------------------------- | ------------------- |
-| `dev` / `ci`      | local filesystem (parquet files)              | `native`            |
-| `test`            | ephemeral tmp filesystem (parquet files)      | `native`            |
-| `qa`              | `s3://ol-data-lake-raw-qa/<source>` + Glue    | `iceberg`           |
-| `production`      | `s3://ol-data-lake-raw-production/<source>`    | `iceberg`           |
+| `DLT_PROFILE`     | destination                                         | `table_format` hint |
+| ----------------- | --------------------------------------------------- | ------------------- |
+| `dev`             | `s3://ol-data-lake-local/raw/<source>` + local lake | `iceberg`           |
+| `ci`              | local filesystem (parquet files)                    | `native`            |
+| `test`            | ephemeral tmp filesystem (parquet files)            | `native`            |
+| `qa`              | `s3://ol-data-lake-raw-qa/<source>` + Glue          | `iceberg`           |
+| `production`      | `s3://ol-data-lake-raw-production/<source>` + Glue  | `iceberg`           |
+
+`dev` is the local lake of `ol-infrastructure/local-dev`: see [Local lake](#local-lake).
+With no cluster running, use `ci`, which needs nothing but a filesystem.
 
 The `table_format` column is the value `config.active_table_format()` passes to
 `@dlt.resource(table_format=...)`. dlt only accepts `iceberg`/`delta`/`hive`/
@@ -60,8 +65,8 @@ source, not via the workspace.
 cd src/ol_dlt
 uv sync                       # creates a scoped, dlt-only src/ol_dlt/.venv
 
-# run a source against the local filesystem destination
-DLT_PROFILE=dev uv run python -m ol_dlt.sources.oll
+# run a source against the local filesystem destination (no cluster needed)
+DLT_PROFILE=ci uv run python -m ol_dlt.sources.oll
 
 # inspect a pipeline's state / last load
 uv run dlt pipeline oll info
@@ -88,7 +93,8 @@ uv tree --package ol-dlt | grep -i dagster   # expect: no output
 # 3. The banned-api rule keeps dagster out of the source.
 uv run ruff check --select TID251 .          # expect: All checks passed!
 
-# 4. Live standalone runs (hit real upstreams; write parquet to the local fs).
+# 4. Live standalone runs (hit real upstreams; write Iceberg tables to the
+#    local lake, or parquet to the local fs with DLT_PROFILE=ci).
 #    Credential-free sources:
 DLT_PROFILE=dev uv run python -m ol_dlt.sources.oll
 DLT_PROFILE=dev uv run python -m ol_dlt.sources.mitpe
@@ -130,12 +136,15 @@ KEYCLOAK_SPEC = DatabaseSourceSpec(
 **Which database gets read is the profile's job, not the spec's.** `qa` reads
 the QA database, `production` reads production, and `dev`/`ci`/`test` read the
 local-dev CloudNativePG cluster from `ol-infrastructure/local-dev`, so no
-developer needs access to a deployed environment to exercise a pipeline:
+developer needs access to a deployed environment to exercise a pipeline. `ci`
+writes parquet files and needs only the database:
 
 ```bash
 kubectl port-forward -n local-infra svc/local-pg-rw 5432:5432
-DLT_PROFILE=dev uv run python -m ol_dlt.sources.keycloak
+DLT_PROFILE=ci uv run python -m ol_dlt.sources.keycloak
 ```
+
+`dev` writes the tables into the local lake: see [Local lake](#local-lake).
 
 Per-source overrides come from `<NAME>_DB_HOST` / `_PORT` / `_USERNAME` /
 `_PASSWORD`. Deployed profiles **require** `<NAME>_DB_HOST` (the Dagster Pulumi
@@ -151,6 +160,74 @@ run in a deployed environment, both in `ol-infrastructure`:
    `src/ol_infrastructure/applications/dagster/dagster_server_policy.hcl`.
 2. Add `<NAME>_DB_HOST` to the `data_loading` deployment env in the dagster
    `__main__.py`, sourced from the application stack's exported RDS host.
+
+## Local lake
+
+`DLT_PROFILE=dev` writes Iceberg tables into the lake that
+`ol-infrastructure/local-dev` runs when `data-platform` is in `enabled_apps`: RustFS
+behind Gravitino's Iceberg REST catalog, read by StarRocks. Tables land in
+`ol_data_lake_local.ol_warehouse_local_raw`, the schema the dbt sources read under
+`ol-dbt starrocks --env dev`, so a source run against a local app database feeds a
+local dbt build with no Vault, VPN or AWS credentials.
+
+The pipeline runs on your machine, so it needs three port-forwards. Tilt holds the
+catalog and object store ones (`iceberg-catalog-port-forward`,
+`lake-object-store-port-forward`) when your ol-infrastructure checkout has them; open
+those two by hand only if it does not, each in its own terminal:
+
+```bash
+kubectl -n local-infra port-forward svc/local-pg-rw 5432:5432   # the app databases
+kubectl -n local-infra port-forward svc/gravitino 9001:9001     # the Iceberg REST catalog
+kubectl -n local-infra port-forward svc/rustfs 9000:9000        # the object store
+
+cd src/ol_dlt
+uv run python -m ol_dlt.sources.keycloak
+```
+
+From the repository root, `ol-dbt ingest local` runs every source the inventory marks
+`strategies.local: ingest` the same way, with `DLT_PROFILE=dev` set for it.
+
+`mysql -h 127.0.0.1 -P 9030 -u root` then reads the tables:
+
+```sql
+SELECT count(*) FROM ol_data_lake_local.ol_warehouse_local_raw.raw__keycloak__app__postgres__user_entity;
+```
+
+If 9000 or 9001 is taken on your machine, forward to another port and say so:
+
+```bash
+export PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__URI=http://localhost:19001/iceberg
+export PYICEBERG_CATALOG__OL_DATA_LAKE_LOCAL__S3__ENDPOINT=http://localhost:19000
+```
+
+Gravitino tells every client to use the object store's in-cluster address, which does
+not resolve on your machine. `ol_dlt/local_lake.py` keeps the forwarded one, and
+explains why that needs a catalog subclass.
+
+The `data_loading` container in `docker-compose.yaml` cannot reach those forwards, so
+it sets `DLT_PROFILE=ci` and keeps writing parquet files inside the container. Run the
+code location on your machine (`dagster dev`) to materialize an asset into the lake.
+
+The Postgres connection is made without TLS when it goes to the forward (no
+`<NAME>_DB_HOST` set). Closing a TLS session through `kubectl port-forward` can make it
+exit with "lost connection to pod", which takes every other table's connection with it.
+
+Two things to know when a dbt build follows a load:
+
+- The local StarRocks catalog has its Iceberg metadata cache off
+  (`enable_iceberg_metadata_cache` in ol-infrastructure's `lakehouse.py`), so a build
+  started right after a load reads that load. A cluster whose core stack last ran before
+  that setting existed answers from the previous load for about half a minute, and the
+  build passes on the old rows. Restart Tilt to apply it, or run `REFRESH EXTERNAL TABLE
+  <catalog>.<schema>.<table>` after a load.
+- `ol-dbt fixtures load` writes the same schema, and drops and recreates the tables it
+  has a fixture for. A source does the same in the other direction: a table it loads
+  that has no `_dlt_` column is dropped and created from the source's columns
+  (`ol_dlt/local_lake.py` logs each one). A fixture that declares `_dlt_load_id`
+  (`ocw__s3.yml`, which follows its dlt source's schema) is kept and loaded into. The fixture's column types are the deployed
+  table's, and where Airbyte landed those (`timestamp`, `double`) pyiceberg cannot evolve
+  them into what the source reads (`timestamptz`, `decimal`). Whichever ran last owns
+  the table, so run the source after the fixtures.
 
 ## Backfilling a file-drop source
 

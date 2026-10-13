@@ -31,7 +31,7 @@ select
     playlists.playlist_id                                    as readable_id
     , playlists.channel_id
     , playlists.playlist_title                               as title
-    , 'https://www.youtube.com/playlist?list=' || playlists.playlist_id as url
+    , {{ dbt.concat(["'https://www.youtube.com/playlist?list='", "playlists.playlist_id"]) }} as url
     , playlists.playlist_image_url                           as image_url
     , playlists.playlist_title                               as image_alt
     , playlists.playlist_offered_by                          as offered_by

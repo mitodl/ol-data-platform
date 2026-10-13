@@ -12,9 +12,9 @@ from pyiceberg.expressions import And, BooleanExpression, EqualTo, In, Or
 
 JOIN_COLS = ["source_slug", "source_record_ref"]
 
-# Bump when the masking rules change. A full refresh re-redacts only rows stored
-# with another version, so a run that dies partway resumes where it stopped.
-REDACTION_VERSION = "v2"
+# Bump when the masking rules or the upstream text change. A full refresh
+# re-redacts only rows stored with another version, so it resumes after a crash.
+REDACTION_VERSION = "v3"
 
 # Rows redacted and written together. A crash loses at most one batch. Each write
 # scans the table once (~10s at 600k rows), so larger batches are cheaper.

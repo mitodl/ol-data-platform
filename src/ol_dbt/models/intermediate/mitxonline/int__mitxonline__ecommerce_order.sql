@@ -68,6 +68,7 @@ select
     , orders.order_updated_on
     , orders.order_reference_number
     , orders.order_total_price_paid
+    , orders.order_payment_processor
     , users.user_id
     , users.user_username
     , users.user_full_name

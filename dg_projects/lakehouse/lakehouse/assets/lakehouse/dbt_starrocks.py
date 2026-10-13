@@ -19,12 +19,15 @@ from lakehouse.assets.lakehouse.dbt import (
 from lakehouse.lib.dbt_environment import STARROCKS_DBT_TARGET
 from lakehouse.lib.starrocks_dbt import (
     MAX_BUILD_ATTEMPTS,
+    MissingBaseTablesError,
+    base_table_relations,
     documented_columns,
     drifted_relations,
     live_column_query,
     live_columns,
     looks_retriable,
     retry_delay,
+    unreadable_base_tables,
 )
 from lakehouse.resources.starrocks import StarRocksResource
 
@@ -116,6 +119,26 @@ def _stale_materialized_views(
     return drifted_relations(documented, live_columns(starrocks.fetch(query, params)))
 
 
+def _require_base_tables(
+    context: AssetExecutionContext, starrocks: StarRocksResource
+) -> None:
+    """Refuse a --full-refresh while a base table of the MVs can't be read.
+
+    The run fails with every view still in place. They keep the previous
+    SELECT and the previous refresh's rows until a later run succeeds; the
+    alternative is a dropped view and a 500 in ol-analytics-api.
+    """
+    manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
+    relations = base_table_relations(manifest, os.environ)
+    context.log.info(
+        "Checking the %d base tables of the materialized views before --full-refresh",
+        len(relations),
+    )
+    unreadable = unreadable_base_tables(relations, starrocks.fetch, log=context.log)
+    if unreadable:
+        raise MissingBaseTablesError(unreadable)
+
+
 @dbt_assets(
     manifest=starrocks_dbt_project.manifest_path,
     project=starrocks_dbt_project,
@@ -132,16 +155,18 @@ def starrocks_dbt_assets(
 ):
     """Build the tag:starrocks dbt models directly against StarRocks.
 
-    The StarRocks profile (unlike the Trino profile used elsewhere in this
-    project) has no static service-account password sitting in the pod
+    The deployed StarRocks profiles (unlike the Trino profile used elsewhere in
+    this project) have no static service-account password sitting in the pod
     environment -- credentials come from Vault's dynamic database secrets
-    engine and must be generated fresh for this run. Shares the same
+    engine and must be generated fresh for this run. The local profiles name
+    their own login and ignore the two credential variables set below. Shares the same
     `starrocks` resource (and Vault mount) as `refresh_starrocks_analytics_mvs`,
     which depends on this asset.
 
     Escalates to --full-refresh when a materialized view's columns in StarRocks
     have fallen out of step with the manifest, since a plain build would not
-    notice -- see `_stale_materialized_views`.
+    notice -- see `_stale_materialized_views`. It checks first that the
+    views' base tables can be read, see `_require_base_tables`.
     """
     build_args = ["build"]
     stale = _stale_materialized_views(context, starrocks)
@@ -154,6 +179,7 @@ def starrocks_dbt_assets(
             "building with --full-refresh so the new SELECT actually lands: %s",
             ", ".join(stale),
         )
+        _require_base_tables(context, starrocks)
         build_args.append("--full-refresh")
 
     last_exc: DagsterDbtCliRuntimeError | None = None
@@ -162,7 +188,7 @@ def starrocks_dbt_assets(
             delay = retry_delay(attempt)
             context.log.warning(
                 "dbt build failed (attempt %d/%d) -- retrying in %ds with fresh "
-                "Vault credentials: %s",
+                "credentials: %s",
                 attempt,
                 MAX_BUILD_ATTEMPTS,
                 delay,

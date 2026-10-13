@@ -24,6 +24,15 @@ _SPEC = DatabaseSourceSpec(
 )
 
 
+def _iceberg_pipeline(lake: Path, tmp_path: Path, name: str) -> dlt.Pipeline:
+    return dlt.pipeline(
+        pipeline_name=name,
+        destination=dlt.destinations.filesystem(bucket_url=lake.as_uri()),
+        dataset_name="raw",
+        pipelines_dir=str(tmp_path / "pipelines"),
+    )
+
+
 def test_cursor_column_requires_primary_key() -> None:
     with pytest.raises(ValueError, match="primary_key is required"):
         DatabaseTable(name="thing", cursor_column="updated_at")
@@ -63,7 +72,7 @@ def test_local_profile_url_uses_local_dev_defaults() -> None:
     assert url.username == database.LOCAL_DEV_USERNAME
     assert url.password == database.LOCAL_DEV_PASSWORD
     assert url.database == "example"
-    assert "sslmode" not in url.query
+    assert url.query["sslmode"] == "disable"
 
 
 def test_local_profile_url_honors_env_overrides(
@@ -74,6 +83,43 @@ def test_local_profile_url_honors_env_overrides(
     monkeypatch.setenv("EXAMPLE_DB_USERNAME", "reader")
     url = database._connection_url(_SPEC, "dev")  # noqa: SLF001
     assert (url.host, url.port, url.username) == ("db.internal", 6543, "reader")
+    assert "sslmode" not in url.query
+
+
+@pytest.mark.parametrize("host", ["db.internal", "10.0.0.5"])
+def test_local_sources_only_refuses_a_host_off_this_machine(
+    monkeypatch: pytest.MonkeyPatch, host: str
+) -> None:
+    monkeypatch.setenv(database.LOCAL_SOURCES_ONLY_VARIABLE, "1")
+    monkeypatch.setenv("EXAMPLE_DB_HOST", host)
+    with pytest.raises(ValueError, match="EXAMPLE_DB_HOST is .* not this machine"):
+        database._connection_url(_SPEC, "dev")  # noqa: SLF001
+
+
+def test_local_sources_only_refuses_a_host_from_secrets_toml(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The host is checked where it is resolved, so the provider does not matter."""
+    monkeypatch.setenv(database.LOCAL_SOURCES_ONLY_VARIABLE, "1")
+    monkeypatch.delenv("EXAMPLE_DB_HOST", raising=False)
+    monkeypatch.setattr(
+        database.config,
+        "resolve_secret",
+        lambda _, name: "db.internal" if name == "EXAMPLE_DB_HOST" else None,
+    )
+    with pytest.raises(ValueError, match="not this machine"):
+        database._connection_url(_SPEC, "dev")  # noqa: SLF001
+
+
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "::1"])
+def test_local_sources_only_keeps_a_loopback_override(
+    monkeypatch: pytest.MonkeyPatch, host: str
+) -> None:
+    monkeypatch.setenv(database.LOCAL_SOURCES_ONLY_VARIABLE, "1")
+    monkeypatch.setenv("EXAMPLE_DB_HOST", host)
+    monkeypatch.setenv("EXAMPLE_DB_PORT", "15432")
+    url = database._connection_url(_SPEC, "dev")  # noqa: SLF001
+    assert (url.host, url.port) == (host, 15432)
 
 
 def test_deployed_profile_url_omits_credentials_and_requires_tls(
@@ -181,7 +227,7 @@ def test_table_format_follows_the_explicit_profile(
         database.vault, "read_database_credentials", lambda *_a: ("u", "p")
     )
     deployed = database.build_database_source(_SPEC, profile="production")
-    local = database.build_database_source(_SPEC, profile="dev")
+    local = database.build_database_source(_SPEC, profile="ci")
     assert (
         deployed.resources["raw__example__app__postgres__widget"]
         .compute_table_schema()
@@ -268,7 +314,7 @@ def test_cursor_column_reads_only_rows_above_the_stored_cursor(
     Deliberately asserts on rows *extracted*, not on the destination contents:
     the filesystem destination only honours ``write_disposition="merge"`` when
     the table format is ``iceberg`` (deployed profiles), and falls back to
-    append on the native parquet used by ``test``/``dev``. Counting extracted
+    append on the native parquet used by ``test``/``ci``. Counting extracted
     rows tests our cursor wiring rather than the destination's merge support.
     """
     db_path = tmp_path / "incremental.db"
@@ -348,13 +394,8 @@ def test_a_not_null_column_added_upstream_lands_on_a_populated_iceberg_table(
         db_schema=None,  # SQLite has no named schema
         tables=(DatabaseTable(name="widget", primary_key="id"),),
     )
-    pipeline = dlt.pipeline(
-        pipeline_name="database_iceberg_evolution_test",
-        destination=dlt.destinations.filesystem(
-            bucket_url=sqlite_iceberg_lake.as_uri()
-        ),
-        dataset_name="raw",
-        pipelines_dir=str(tmp_path / "pipelines"),
+    pipeline = _iceberg_pipeline(
+        sqlite_iceberg_lake, tmp_path, "database_iceberg_evolution_test"
     )
     table = "raw__example__app__postgres__widget"
 
@@ -378,3 +419,113 @@ def test_a_not_null_column_added_upstream_lands_on_a_populated_iceberg_table(
 
     rows = pipeline.dataset()[table].arrow().sort_by("id").to_pylist()
     assert [(row["id"], row["b2b_only"]) for row in rows] == [(1, False), (2, True)]
+
+
+@pytest.mark.integration
+def test_an_empty_source_table_still_lands_as_an_iceberg_table(
+    sqlite_iceberg_lake: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A source table with no rows must still exist in the lake.
+
+    dlt creates no destination table for a resource that yields no data, so the
+    run succeeds while a declared table is missing and its staging model fails
+    on a missing source.
+
+    The second half covers the transitions either side of that: a populated
+    replace table emptied upstream ends up empty, and the table created empty
+    takes rows on a later load.
+    """
+    db_path = tmp_path / "example.db"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("CREATE TABLE widget (id INTEGER PRIMARY KEY, name TEXT)")
+        connection.execute("CREATE TABLE gadget (id INTEGER PRIMARY KEY, name TEXT)")
+        connection.execute("INSERT INTO widget VALUES (1, 'first')")
+
+    monkeypatch.setattr(
+        database,
+        "_connection_url",
+        lambda *_a, **_k: URL.create("sqlite", database=str(db_path)),
+    )
+    monkeypatch.setattr(config, "active_table_format", lambda *_a, **_k: "iceberg")
+    spec = DatabaseSourceSpec(
+        name="example",
+        raw_table_prefix="raw__example__app__postgres__",
+        database="example",
+        vault_mount="postgres-example",
+        db_schema=None,  # SQLite has no named schema
+        tables=(
+            DatabaseTable(name="widget", primary_key="id"),
+            DatabaseTable(name="gadget", primary_key="id"),
+        ),
+    )
+    pipeline = _iceberg_pipeline(sqlite_iceberg_lake, tmp_path, "database_empty_test")
+    widget = "raw__example__app__postgres__widget"
+    gadget = "raw__example__app__postgres__gadget"
+
+    info = pipeline.run(database.build_database_source(spec, profile="test"))
+    assert not info.has_failed_jobs
+    empty = pipeline.dataset()[gadget].arrow()
+    assert empty.num_rows == 0
+    assert {"id", "name"} <= set(empty.column_names)
+    assert pipeline.dataset()[widget].arrow().num_rows == 1
+
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("DELETE FROM widget")
+        connection.execute("INSERT INTO gadget VALUES (1, 'gizmo')")
+    info = pipeline.run(database.build_database_source(spec, profile="test"))
+    assert not info.has_failed_jobs
+    assert pipeline.dataset()[widget].arrow().num_rows == 0
+    assert pipeline.dataset()[gadget].arrow().to_pylist()[0]["name"] == "gizmo"
+
+
+@pytest.mark.integration
+def test_a_zero_row_read_of_a_cursor_table_merges_as_a_no_op(
+    sqlite_iceberg_lake: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A merge table must take a zero-row read without losing or failing.
+
+    A cursor read returns no rows when the source table is empty, before or
+    after it held rows. (An idle cursor does not: dlt re-reads the boundary
+    row and drops it later.) The first case has to create the table, and the
+    second has to leave the merged rows alone, since a merge never deletes.
+    """
+    db_path = tmp_path / "incremental.db"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "CREATE TABLE event (id INTEGER PRIMARY KEY, name TEXT, updated_at INTEGER)"
+        )
+
+    monkeypatch.setattr(
+        database,
+        "_connection_url",
+        lambda *_a, **_k: URL.create("sqlite", database=str(db_path)),
+    )
+    monkeypatch.setattr(config, "active_table_format", lambda *_a, **_k: "iceberg")
+    spec = DatabaseSourceSpec(
+        name="example",
+        raw_table_prefix="raw__example__app__postgres__",
+        database="example",
+        vault_mount="postgres-example",
+        db_schema=None,  # SQLite has no named schema
+        tables=(
+            DatabaseTable(name="event", primary_key="id", cursor_column="updated_at"),
+        ),
+    )
+    pipeline = _iceberg_pipeline(sqlite_iceberg_lake, tmp_path, "database_idle_test")
+    table = "raw__example__app__postgres__event"
+
+    def _load() -> list[tuple[int, str]]:
+        info = pipeline.run(database.build_database_source(spec, profile="test"))
+        assert not info.has_failed_jobs
+        rows = pipeline.dataset()[table].arrow().to_pylist()
+        return [(row["id"], row["name"]) for row in rows]
+
+    assert _load() == []
+
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("INSERT INTO event VALUES (1, 'first', 100)")
+    assert _load() == [(1, "first")]
+
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("DELETE FROM event")
+    assert _load() == [(1, "first")]

@@ -129,6 +129,7 @@ with mitxonline_courses as (
         , courserun_title
         , courserun_start_on
         , courserun_end_on
+        , enrollment_created_on as recency_on
     from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
 
     union all
@@ -140,6 +141,7 @@ with mitxonline_courses as (
         , courserun_title
         , courserun_start_on
         , courserun_end_on
+        , user_gdpr_consent_date as recency_on
     from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
 )
 
@@ -159,7 +161,11 @@ with mitxonline_courses as (
             runs.*
             , row_number() over (
                 partition by runs.platform, runs.course_readable_id
-                order by runs.courserun_start_on desc, runs.courserun_end_on desc, runs.courserun_title asc
+                order by
+                    runs.courserun_start_on desc
+                    , runs.courserun_end_on desc
+                    , runs.recency_on desc
+                    , runs.courserun_title asc
             ) as _row_num
         from emeritus_global_alumni_runs as runs
         left join mitxpro_course_codes
@@ -193,7 +199,7 @@ with mitxonline_courses as (
 )
 
 -- SCD Type 2 logic: Detect changes
-, new_and_changed_courses as (
+, incoming as (
     select distinct
         {{ dbt_utils.generate_surrogate_key([
             'platform',
@@ -210,26 +216,33 @@ with mitxonline_courses as (
         , cast(null as timestamp) as end_date
         , true as is_current
     from current_courses
-
-    {% if is_incremental() %}
-    -- Only include new courses or courses with changed attributes
-    where not exists (
-        select 1
-        from {{ this }} as existing
-        where
-            existing.course_readable_id = current_courses.course_readable_id
-            and existing.primary_platform = current_courses.platform
-            and existing.is_current = true
-            and existing.course_title = current_courses.course_title
-            and coalesce(existing.course_number, '') = coalesce(current_courses.course_number, '')
-            and coalesce(existing.course_description, '') = coalesce(current_courses.course_description, '')
-            and coalesce(existing.course_is_live, false) = coalesce(current_courses.course_is_live, false)
-    )
-    {% endif %}
 )
 
 {% if is_incremental() %}
--- Update existing records: Set end_date and is_current for changed records
+, unchanged_keys as (
+    {{ scd2_unchanged_keys(
+        'incoming',
+        this,
+        ['course_readable_id', 'primary_platform'],
+        ['course_title', 'course_number', 'course_description', 'course_is_live']
+    ) }}
+)
+
+-- Only include new courses or courses with changed attributes
+, new_and_changed_courses as (
+    select incoming.*
+    from incoming
+    where not exists (
+        select 1
+        from unchanged_keys
+        where
+            unchanged_keys.course_readable_id = incoming.course_readable_id
+            and unchanged_keys.primary_platform = incoming.primary_platform
+    )
+)
+
+-- Expire every current row of a changed key, including extra current rows left by
+-- conflicting upstream copies
 , records_to_expire as (
     select distinct
         existing.course_pk
@@ -277,5 +290,5 @@ with mitxonline_courses as (
 
 select * from combined
 {% else %}
-select * from new_and_changed_courses
+select * from incoming
 {% endif %}

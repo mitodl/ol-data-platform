@@ -13,6 +13,7 @@ from dagster import (
     DefaultScheduleStatus,
     DefaultSensorStatus,
     Definitions,
+    RunConfig,
     ScheduleDefinition,
     build_last_update_freshness_checks,
     build_sensor_for_freshness_checks,
@@ -41,6 +42,18 @@ from lakehouse.assets.iceberg_maintenance import (
     iceberg_dbt_layer_maintenance,
     iceberg_raw_layer_maintenance,
 )
+from lakehouse.assets.iceberg_orphan_files import (
+    ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS,
+    ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS,
+    IcebergOrphanFilesConfig,
+    iceberg_raw_orphan_files,
+)
+from lakehouse.assets.lake_orphan_sweep import (
+    LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS,
+    LAKE_ORPHAN_SWEEP_MIN_AGE_DAYS,
+    LakeOrphanSweepConfig,
+    lake_orphan_sweep,
+)
 from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
     DBT_TARGET,
@@ -57,7 +70,10 @@ from lakehouse.assets.lakehouse.dbt_starrocks import (
 from lakehouse.assets.qa_mirror import build_qa_mirror_assets
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import create_superset_asset
-from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED
+from lakehouse.lib.dbt_environment import (
+    DBT_AUTOMATION_ENABLED,
+    STARROCKS_IS_LOCAL,
+)
 from lakehouse.lib.inventory import INVENTORY_DIR
 from lakehouse.lib.non_airbyte_staging import (
     non_airbyte_raw_tables,
@@ -90,9 +106,10 @@ trino_catalog_map = {
 }
 
 # Hosts match the starrocks_qa / starrocks_production target defaults in
-# src/ol_dbt/profiles.yml. dev/ci fall back to the QA FE for schema parity.
+# src/ol_dbt/profiles.yml. ci falls back to the QA FE for schema parity. dev is
+# the local-dev cluster, which Tilt forwards to this port on the host.
 starrocks_host_map = {
-    "dev": "lakehouse.qa.starrocks.ol.mit.edu",
+    "dev": "127.0.0.1",
     "ci": "lakehouse.qa.starrocks.ol.mit.edu",
     "qa": "lakehouse.qa.starrocks.ol.mit.edu",
     "production": "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local",
@@ -160,12 +177,29 @@ airbyte_workspace = (
             else "mock_password"
         ),
         request_timeout=60,  # Allow up to a minute for Airbyte requests
+        # The delay doubles per retry (5, 10, 20, 40), so a request that is
+        # refused straight away waits up to 75 seconds for the API to come
+        # back; one that hangs also spends request_timeout on each of its five
+        # attempts. The 502 burst on 2026-10-07 ran
+        # from about 00:03:45Z to 00:04:45Z, longer than the library's three
+        # retries at a quarter second apart.
+        request_max_retries=4,
+        request_retry_delay=5,
         # Attach to a sync that is already in flight rather than raising. The
         # automation condition and Airbyte's own scheduler both launch syncs, so
         # a tick landing on top of a running sync is routine, not exceptional --
         # left at the library default of False it raised "Found sync job for
         # connection_id=... already running" across ten connections.
         poll_previous_running_sync=True,
+        # Leave the Airbyte job running when the run worker is terminated. Run
+        # pods are preempted and the monitoring daemon resumes them, so the
+        # library default of True cancels a healthy sync that the resumed
+        # worker would have attached to: it then finds nothing in flight, POSTs
+        # a new job while the cancelled one winds down and gets a 409, and any
+        # other run attached to the same job fails with "Job was cancelled".
+        # The cost is that terminating a run in Dagster no longer stops the
+        # sync; cancel it in Airbyte.
+        cancel_on_termination=False,
     )
     if not SKIP_AIRBYTE
     else None
@@ -255,10 +289,9 @@ if DAGSTER_ENV == "production":
         msg = f"No sync intervals rendered from the inventory at {INVENTORY_DIR}."
         raise RuntimeError(msg)
     # A single live group the inventory does not cover (a connection created or
-    # renamed in the UI) warns rather than raises. There is one today, the
-    # edx.org course-metadata connection pending deletion, and failing here
-    # would take the whole code location down for it. airbyte_inventory_drift
-    # reports the connection behind it as undeclared.
+    # renamed in the UI) warns rather than raises, because failing here would
+    # take the whole code location down for it. airbyte_inventory_drift reports
+    # the connection behind it as undeclared.
     if uncovered := sorted(group_names - group_name_to_interval.keys()):
         import warnings
 
@@ -268,15 +301,25 @@ if DAGSTER_ENV == "production":
             stacklevel=2,
         )
 
+# The dbt schema, and so the Dagster group, of the raw history snapshots
+# (`snapshots: raw_history: +schema` in dbt_project.yml).
+RAW_HISTORY_GROUP = "history"
+
 airbyte_asset_jobs = []
 airbyte_update_schedules = []
 group_count = len(group_names)
 for group_name in group_names:
     job = define_asset_job(
         name=f"sync_and_stage_{group_name}",
-        selection=AssetSelection.groups(group_name)
-        .downstream(depth=1, include_self=True)
-        .required_multi_asset_neighbors(),
+        # The raw history snapshots read the raw tables directly, so depth 1
+        # reaches them as it does staging. They are left to dbt_automation_sensor
+        # instead: it runs them once per change to raw whichever loader made it,
+        # and a run from this job would not clear the sensor's pending upstream
+        # change, so each sync would snapshot twice.
+        selection=(
+            AssetSelection.groups(group_name).downstream(depth=1, include_self=True)
+            - AssetSelection.groups(RAW_HISTORY_GROUP)
+        ).required_multi_asset_neighbors(),
     )
     interval = group_name_to_interval.get(group_name, 24)  # default to 24 hours
     # No offset needed - K8s autoscaling handles concurrent syncs
@@ -343,11 +386,16 @@ superset_starrocks_assets = [
     if key.path[0] in dbt_models_for_superset_datasets
 ]
 
-# Iceberg maintenance schedules — both default STOPPED; enable in production via
-# the Dagster UI or Terraform after verifying the first manual run succeeds.
+# Iceberg maintenance schedules.
 #
 # 02:00 UTC: dbt layer (after nightly Airbyte syncs complete, before business hours)
 # 03:00 UTC: raw layer (staggered to avoid concurrent Glue/S3 load with dbt layer)
+#
+# The dbt-layer schedule defaults to STOPPED and is started in the Dagster UI.
+# The raw-layer schedule is RUNNING where it is registered: left STOPPED it was
+# registered in QA and never ticked, so nothing expired the snapshots QA's own
+# raw loads leave behind. An instance where it has been started or stopped in
+# the UI keeps that state.
 iceberg_dbt_maintenance_schedule = ScheduleDefinition(
     name="iceberg_dbt_maintenance_nightly",
     job=define_asset_job(
@@ -367,7 +415,58 @@ iceberg_raw_maintenance_schedule = ScheduleDefinition(
     ),
     cron_schedule="0 3 * * *",
     execution_timezone="UTC",
-    default_status=DefaultScheduleStatus.STOPPED,
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
+# Weekly, not nightly: an orphan has to be LAKE_ORPHAN_SWEEP_MIN_AGE_DAYS old
+# before the sweep will touch it, and the buckets keep a deleted object as a
+# noncurrent version for weeks afterwards, so a daily run reclaims nothing
+# sooner. Sunday 05:00 UTC is after the 02:00 and 03:00 maintenance runs.
+#
+# RUNNING where it is registered. The asset decides what a tick may do: it
+# deletes only in LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS and reports elsewhere.
+lake_orphan_sweep_schedule = ScheduleDefinition(
+    name="lake_orphan_sweep_weekly",
+    job=define_asset_job(
+        name="lake_orphan_sweep_job",
+        selection=AssetSelection.assets(lake_orphan_sweep),
+        config=RunConfig(
+            ops={
+                "lake_orphan_sweep": LakeOrphanSweepConfig(
+                    min_age_days=LAKE_ORPHAN_SWEEP_MIN_AGE_DAYS,
+                    delete=DAGSTER_ENV in LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS,
+                )
+            }
+        ),
+    ),
+    cron_schedule="0 5 * * 0",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
+# Weekly for the same reasons as the sweep above, and an hour after it. Sunday
+# 06:00 UTC is also after that night's 03:00 raw snapshot expiry, which is what
+# turns files into orphans.
+#
+# RUNNING where it is registered. The asset decides what a tick may do: it
+# deletes only in ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS and reports elsewhere.
+iceberg_raw_orphan_files_schedule = ScheduleDefinition(
+    name="iceberg_raw_orphan_files_weekly",
+    job=define_asset_job(
+        name="iceberg_raw_orphan_files_job",
+        selection=AssetSelection.assets(iceberg_raw_orphan_files),
+        config=RunConfig(
+            ops={
+                "iceberg_raw_orphan_files": IcebergOrphanFilesConfig(
+                    min_age_days=ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS,
+                    delete=DAGSTER_ENV in ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS,
+                )
+            }
+        ),
+    ),
+    cron_schedule="0 6 * * 0",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.RUNNING,
 )
 
 # Regenerate dbt docs artifacts (manifest.json + catalog.json) for OpenMetadata
@@ -434,7 +533,7 @@ airbyte_drift_schedules = (
                 ),
                 cron_schedule="0 3 * * *",
                 execution_timezone="UTC",
-                # RUNNING, unlike the maintenance schedules above that someone
+                # RUNNING, unlike the dbt maintenance schedule above that someone
                 # starts by hand: left at Dagster's STOPPED default this never
                 # ticked in production (no SchedulerDaemon evaluation of it in
                 # the 30 days to 2026-09-26). It only reads, and
@@ -534,7 +633,8 @@ non_airbyte_staging_schedules = (
 # that reads more than one ingestion unit, so a QA build is complete relative to
 # QA's apps rather than a silently partial union. The rest wait on raw tables QA
 # does not have: program_certificates on the edX program_learner_report and
-# email_opt_in mirrors, and the dlt/API sources (mit_edx_courses and
+# email_opt_in mirrors, ocw_courses on the OCW live bucket (the ocw__s3 unit is
+# omitted in QA), and the dlt/API sources (mit_edx_courses and
 # mit_edx_programs on the edX catalog, mitpe, mit_climate, oll, podcasts) whose
 # loaders run in production only.
 learn_integrations_qa_schedule = ScheduleDefinition(
@@ -578,6 +678,7 @@ resources_dict = {
         vault_mount_point=STARROCKS_VAULT_MOUNT,
         host=starrocks_host_map[DAGSTER_ENV],
         database="b2b_analytics",
+        static_username="root" if STARROCKS_IS_LOCAL else None,
     ),
     # Separate from "dbt" (pinned to a Trino target) -- see dbt_starrocks.py.
     "starrocks_dbt": starrocks_dbt_cli,
@@ -619,6 +720,8 @@ defs = Definitions(
             *superset_starrocks_assets,
             iceberg_dbt_layer_maintenance,
             iceberg_raw_layer_maintenance,
+            lake_orphan_sweep,
+            iceberg_raw_orphan_files,
             refresh_starrocks_analytics_mvs,
             *airbyte_drift_assets,
             *qa_mirror_assets,
@@ -671,10 +774,10 @@ defs = Definitions(
         dbt_docs_artifacts_job,
         dbt_source_freshness_job,
     ],
-    # Registration is the gate. `default_status=DefaultScheduleStatus.STOPPED`
-    # on each of these only seeds the instance's instigator state on first
-    # deploy; a UI toggle overrides it forever after, so whether one of these
-    # ticked in QA was instance state nothing in this file had a say in. A
+    # Registration is the gate. A `default_status` on one of these only seeds
+    # the instance's instigator state on first deploy; a UI toggle overrides
+    # it forever after, so whether a STOPPED one ticked in QA was instance
+    # state nothing in this file had a say in. A
     # schedule this filter drops is not stopped, it is absent -- there is
     # nothing left to toggle. Note it also drops the job for the four that
     # build one inline; see scheduled_automation for what that does and does
@@ -684,6 +787,8 @@ defs = Definitions(
             *(("daily_sync_and_stage", s) for s in airbyte_update_schedules),
             ("iceberg_dbt_maintenance_nightly", iceberg_dbt_maintenance_schedule),
             ("iceberg_raw_maintenance_nightly", iceberg_raw_maintenance_schedule),
+            ("lake_orphan_sweep_weekly", lake_orphan_sweep_schedule),
+            ("iceberg_raw_orphan_files_weekly", iceberg_raw_orphan_files_schedule),
             ("dbt_docs_artifacts_daily", dbt_docs_artifacts_schedule),
             ("dbt_source_freshness_daily", dbt_source_freshness_schedule),
             ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),

@@ -146,6 +146,8 @@ def test_full_refresh_selector_is_one_space_separated_argument():
     assert full_refresh_build_args(["fact_a", "fact_b"]) == [
         "build",
         "--full-refresh",
+        "--exclude-resource-type",
+        "unit_test",
         "--select",
         "fact_a fact_b",
     ]
@@ -234,6 +236,28 @@ def test_state_is_written_only_after_a_complete_repair(dbt_asset_module):
     assert "full_refresh_build_args" in {name for _, name in _called_names(guarded[0])}
 
 
+def test_the_warehouse_build_leaves_unit_tests_out(dbt_asset_module):
+    """A `this` fixture naming a new column stops the model that would add it."""
+    asset = _function(dbt_asset_module, "full_dbt_project")
+    builds = [
+        node.args[0]
+        for node in ast.walk(asset)
+        if isinstance(node, ast.Call)
+        and getattr(node.func, "attr", "") == "cli"
+        and isinstance(node.args[0], ast.List)
+        and isinstance(node.args[0].elts[0], ast.Constant)
+        and node.args[0].elts[0].value == "build"
+    ]
+    assert builds, "full_dbt_project no longer calls dbt build with a literal list"
+    for build in builds:
+        starred = {
+            elt.value.id
+            for elt in build.elts
+            if isinstance(elt, ast.Starred) and isinstance(elt.value, ast.Name)
+        }
+        assert "SKIP_UNIT_TESTS_ARGS" in starred
+
+
 def test_the_repair_is_scoped_to_what_this_run_actually_built(dbt_asset_module):
     """A subset build must not mark drift handled for models it never touched."""
     repair = _function(dbt_asset_module, "_repair_surrogate_key_drift")
@@ -242,6 +266,44 @@ def test_the_repair_is_scoped_to_what_this_run_actually_built(dbt_asset_module):
 
     asset = _function(dbt_asset_module, "full_dbt_project")
     assert "_models_built_by" in {name for _, name in _called_names(asset)}
+
+
+def test_run_results_are_uploaded_when_the_build_fails(dbt_asset_module):
+    """stream() raises on a failing test, the build OpenMetadata most needs.
+
+    An upload placed after the stream is skipped by exactly those builds, which
+    leaves OpenMetadata able to show a dbt test as passed or stale, never failed.
+    """
+    asset = _function(dbt_asset_module, "full_dbt_project")
+    guarded = [
+        node
+        for node in ast.walk(asset)
+        if isinstance(node, ast.Try)
+        and "stream" in {name for _, name in _called_names(ast.Module(node.body, []))}
+    ]
+    assert guarded, "the build's stream must stay inside a try"
+    handlers = guarded[0].handlers
+    assert len(handlers) == 1
+    # BaseException, so a cancelled run uploads what it finished too.
+    assert isinstance(handlers[0].type, ast.Name)
+    assert handlers[0].type.id == "BaseException"
+    assert "_upload_run_results" in {
+        name for _, name in _called_names(ast.Module(handlers[0].body, []))
+    }
+    # The upload sits in its own try, so a failed upload cannot replace the
+    # build's error, and the handler ends by re-raising that error.
+    upload_guard = handlers[0].body[0]
+    assert isinstance(upload_guard, ast.Try)
+    assert upload_guard.handlers
+    last = handlers[0].body[-1]
+    assert isinstance(last, ast.Raise)
+    assert last.exc is None
+
+    # A successful build uploads after the try.
+    after = asset.body[asset.body.index(guarded[0]) + 1 :]
+    assert "_upload_run_results" in {
+        name for _, name in _called_names(ast.Module(after, []))
+    }
 
 
 def test_the_state_artifact_name_is_stable():

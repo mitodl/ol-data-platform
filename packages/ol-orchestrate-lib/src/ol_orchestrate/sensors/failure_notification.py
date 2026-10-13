@@ -42,6 +42,10 @@ from dagster import (
 from slack_sdk import WebClient
 
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
+from ol_orchestrate.lib.failed_partitions import (
+    FAILED_PARTITION_CHECK_NAME,
+    FAILED_PARTITION_JOB_NAME,
+)
 from ol_orchestrate.lib.sentry import (
     INTERRUPTION_ERRORS,
     PARTITION_NAME_TAG,
@@ -729,6 +733,39 @@ def is_reported_by_the_run_failure_sensor(evaluation: Any) -> bool:
     return set(evaluation.metadata or {}) >= DBT_PROVENANCE_KEYS
 
 
+def is_inventory_check_outside_its_job(
+    instance: Any, run_id: str, evaluation: Any, job_names: dict[str, str | None]
+) -> bool:
+    """Whether a failed-partition check ran as a passenger of a materialization.
+
+    The inventory checks are meant to report once a day, from their own job.
+    Dagster also runs them with every automation-requested materialization of
+    the asset they watch: a check with no automation condition makes the daemon
+    request the run with no check selection, and the code server expands that to
+    every check on the asset. The check counts failed partitions across the
+    whole asset, so a healthy partition materializing while any other is failed
+    records an ERROR evaluation. Announcing those would post once per
+    materialization, which is the noise the daily schedule exists to avoid.
+
+    The evaluation is still recorded, so the Dagster UI stays current. Only the
+    announcement is held for the scheduled run.
+
+    :param instance: The Dagster instance, to look up the evaluation's run.
+    :param run_id: The run that recorded the evaluation.
+    :param evaluation: The asset check evaluation.
+    :param job_names: Job name by run id, filled in as runs are looked up, so a
+        run that evaluated several checks is read once.
+    :returns: True when the evaluation should not be announced.
+    :rtype: bool
+    """
+    if evaluation.check_name != FAILED_PARTITION_CHECK_NAME:
+        return False
+    if run_id not in job_names:
+        run = instance.get_run_by_id(run_id)
+        job_names[run_id] = run.job_name if run is not None else None
+    return job_names[run_id] != FAILED_PARTITION_JOB_NAME
+
+
 # Bounds on the substance appended to each failure's detail block. Kept small
 # on purpose: this appends to the block's existing text rather than adding a
 # block per failure, which is what keeps the 1-header-plus-1-block-per-failure
@@ -878,13 +915,18 @@ def collect_new_check_failures(
         for record in records
     ]
     # WARN-severity checks are advisory; only ERROR is worth a notification. dbt
-    # tests are dropped because their run failure already reports them in full.
+    # tests are dropped because their run failure already reports them in full,
+    # and the failed-partition inventory is announced only from its own job.
+    job_names: dict[str, str | None] = {}
     failures = [
         (run_id, evaluation)
         for run_id, evaluation in evaluations
         if not evaluation.passed
         and evaluation.severity == AssetCheckSeverity.ERROR
         and not is_reported_by_the_run_failure_sensor(evaluation)
+        and not is_inventory_check_outside_its_job(
+            instance, run_id, evaluation, job_names
+        )
     ]
     # The newest record of an ascending batch: nothing older is left behind,
     # nothing newer is re-delivered.

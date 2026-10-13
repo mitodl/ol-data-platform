@@ -446,9 +446,9 @@ class TestQaGaps:
             (Severity.INFO, "(qa baseline)", "1 known QA gap(s) tolerated by baseline")
         ]
 
-    def test_resolved_baseline_entry_is_info(self) -> None:
+    def test_resolved_baseline_entry_errors(self) -> None:
         assert _gap_report(_observation(), {XPRO_GAP}) == [
-            (Severity.INFO, "(qa baseline)", f"Resolved baseline entry: {XPRO_GAP}")
+            (Severity.ERROR, "(qa baseline)", f"Resolved baseline entry: {XPRO_GAP}")
         ]
 
     def test_old_observation_warns(self) -> None:

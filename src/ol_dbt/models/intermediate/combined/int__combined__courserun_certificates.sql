@@ -15,7 +15,7 @@ with mitx_certificates as (
         , user_full_name
         , if(
             platform = '{{ var("edxorg") }}'
-            , replace(replace(courserun_readable_id, 'course-v1:', ''), '+', '/')
+            , {{ format_course_id('courserun_readable_id') }}
             , courserun_readable_id
         ) as courserun_readable_id
     from {{ ref('int__mitx__courserun_certificates') }}

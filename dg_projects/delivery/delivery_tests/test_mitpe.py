@@ -1,9 +1,14 @@
 """Tests for shaping MIT PE integration rows into MIT Learn's webhook payload."""
 
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any
 
-from delivery.assets.mitpe import build_resources
+import polars as pl
+import pytest
+from dagster import build_asset_context
+from delivery.assets import mitpe
+from delivery.assets.mitpe import build_resources, mitpe_webhook
 
 
 def course_row(**overrides: Any) -> dict[str, Any]:
@@ -103,3 +108,60 @@ def test_program_courses_are_references_and_courses_get_course_data() -> None:
 
     program = build_resources([], [program_row()], [])[0]
     assert program["courses"] == [{"readable_id": "course-1", "platform": "mitpe"}]
+
+
+class _FakeLearnClient:
+    def __init__(self) -> None:
+        self.batches: list[dict[str, Any]] = []
+
+    def notify_learning_resources(self, resources, **kwargs):
+        self.batches.append({"resources": resources, **kwargs})
+        return {"status": "success"}
+
+
+def _deliver(
+    monkeypatch: pytest.MonkeyPatch, tables: dict[str, list[dict[str, Any]]]
+) -> _FakeLearnClient:
+    monkeypatch.setattr(
+        mitpe,
+        "_read_table",
+        lambda _context, table: pl.DataFrame(tables[table], infer_schema_length=None),
+    )
+    client = _FakeLearnClient()
+    mitpe_webhook(
+        context=build_asset_context(), learn_api=SimpleNamespace(client=client)
+    )
+    return client
+
+
+def test_programs_are_declared_synced_when_none_are_listed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no programs in the batch, the declaration is what prunes them."""
+    client = _deliver(
+        monkeypatch,
+        {
+            mitpe._COURSES_TABLE: [course_row()],
+            mitpe._PROGRAMS_TABLE: [],
+            mitpe._RUNS_TABLE: [run_row()],
+        },
+    )
+
+    [batch] = client.batches
+    assert [r["resource_type"] for r in batch["resources"]] == ["course"]
+    assert batch["sync"] == [("mitpe", "program")]
+
+
+def test_an_empty_course_table_is_not_delivered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No courses means a broken build, and sending would unpublish the programs."""
+    with pytest.raises(RuntimeError, match="has no rows"):
+        _deliver(
+            monkeypatch,
+            {
+                mitpe._COURSES_TABLE: [],
+                mitpe._PROGRAMS_TABLE: [],
+                mitpe._RUNS_TABLE: [],
+            },
+        )

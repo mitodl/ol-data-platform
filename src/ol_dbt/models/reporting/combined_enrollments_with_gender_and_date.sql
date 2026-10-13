@@ -56,7 +56,7 @@ select
     , enrollment_detail.user_id
     , enrollment_detail.user_username
     , nullif(enrollment_detail.user_gender, '') as user_gender
-    , substring(courserunenrollment_created_on, 1, 10) as courserunenrollment_created_on_date
+    , substring(enrollment_detail.courserunenrollment_created_on, 1, 10) as courserunenrollment_created_on_date
     , coalesce(combined_users.user_job_title, edxorg_user_profile.user_job_title) as user_job_title
     , coalesce(combined_users.user_industry, edxorg_user_profile.user_industry) as user_industry
 from enrollment_detail

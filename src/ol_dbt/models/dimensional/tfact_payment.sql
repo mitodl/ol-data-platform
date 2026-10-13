@@ -133,17 +133,17 @@ with mitxonline_payments as (
             'cast(payment_id as varchar)',
             'platform'
         ]) }} as payment_key
-        , payment_id
-        , order_id
-        , payment_date_key
-        , user_fk
-        , platform_fk
+        , pwf.payment_id
+        , pwf.order_id
+        , pwf.payment_date_key
+        , pwf.user_fk
+        , pwf.platform_fk
         , pwf.platform
-        , payment_method_fk
-        , transaction_amount
-        , transaction_type
-        , transaction_status
-        , transaction_created_on
+        , pwf.payment_method_fk
+        , pwf.transaction_amount
+        , pwf.transaction_type
+        , pwf.transaction_status
+        , pwf.transaction_created_on
     from payments_with_fks as pwf
 
     {% if is_incremental() %}

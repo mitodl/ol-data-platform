@@ -26,14 +26,21 @@ Reflection is deferred (``defer_table_reflect=True``) for the same reason — no
 database connection is opened until a resource is extracted.
 """
 
+import ipaddress
 import logging
-from collections.abc import Generator, Sequence
+import os
+from collections.abc import Generator, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 import dlt
 from dlt.sources.credentials import ConnectionStringCredentials
-from dlt.sources.sql_database import remove_nullability_adapter, sql_table
+from dlt.sources.sql_database import (
+    TableLoader,
+    remove_nullability_adapter,
+    sql_table,
+)
+from dlt.sources.sql_database.arrow_helpers import row_tuples_to_arrow
 from sqlalchemy import event
 from sqlalchemy.engine import URL, Engine
 
@@ -51,6 +58,19 @@ DEFAULT_CHUNK_SIZE = 50_000
 LOCAL_DEV_HOST = "localhost"
 LOCAL_DEV_USERNAME = "app"
 LOCAL_DEV_PASSWORD = "localdev"  # noqa: S105  # pragma: allowlist secret
+# Set by `ol-dbt ingest local`, which promises to load the local lake from the
+# local-dev cluster. With it, a `<NAME>_DB_HOST` override has to be a loopback
+# address, whichever provider it came from (environment or .dlt/secrets.toml).
+LOCAL_SOURCES_ONLY_VARIABLE = "OL_DLT_LOCAL_SOURCES_ONLY"
+
+
+def _is_loopback(host: str) -> bool:
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 @dataclass(frozen=True)
@@ -71,8 +91,8 @@ class DatabaseTable:
             yields a load that captures new rows and silently never reflects an
             edit. And ``merge`` only dedupes on the Iceberg profiles — the
             filesystem destination falls back to append on the native parquet
-            used by ``dev``/``test``, so a local incremental run accumulates
-            duplicate rows even though the deployed run does not.
+            used by ``ci``/``test``, so an incremental run there accumulates
+            duplicate rows even though the ``dev`` and deployed runs do not.
         excluded_columns: Columns never to select. Use this for secrets and
             credential material, which must not reach the warehouse at all.
     """
@@ -134,7 +154,7 @@ class DatabaseSourceSpec:
 
 def _uses_vault(profile: str) -> bool:
     """Return True when the profile reads a deployed (Vault-backed) database."""
-    return profile in config.ICEBERG_PROFILES
+    return profile in config.DEPLOYED_PROFILES
 
 
 def _connection_url(spec: DatabaseSourceSpec, profile: str) -> URL:
@@ -161,6 +181,13 @@ def _connection_url(spec: DatabaseSourceSpec, profile: str) -> URL:
             database=spec.database,
             query={"sslmode": "require"},
         )
+    if host and os.getenv(LOCAL_SOURCES_ONLY_VARIABLE) and not _is_loopback(host):
+        msg = (
+            f"{spec.env_prefix}_HOST is {host!r}, which is not this machine, and "
+            f"{LOCAL_SOURCES_ONLY_VARIABLE} is set. Remove the override from the "
+            "environment or .dlt/secrets.toml to read the local-dev database."
+        )
+        raise ValueError(msg)
     return URL.create(
         spec.drivername,
         username=config.resolve_secret(None, f"{spec.env_prefix}_USERNAME")
@@ -170,6 +197,11 @@ def _connection_url(spec: DatabaseSourceSpec, profile: str) -> URL:
         host=host or LOCAL_DEV_HOST,
         port=int(port) if port else spec.port,
         database=spec.database,
+        # Closing a TLS session through `kubectl port-forward` can reset the pod
+        # side of the stream, and kubectl answers a reset by dropping the whole
+        # forward ("lost connection to pod"), which fails every other table
+        # mid-extract. A host override is some other database, left to libpq.
+        query={} if host else {"sslmode": "disable"},
     )
 
 
@@ -221,6 +253,42 @@ def _vault_credential_injector(spec: DatabaseSourceSpec) -> Any:  # noqa: ANN401
     return adapt
 
 
+class EmptyTableLoader(TableLoader):
+    """Table loader that yields a zero-row Arrow table when a read returns no rows.
+
+    dlt's loader yields nothing for an empty result, and dlt creates no
+    destination table for a resource that produced no data item. The raw table
+    for an empty source table then never exists, while the run still succeeds
+    and Dagster records the asset as materialized, and the dbt staging model
+    that reads it fails on a missing source.
+
+    A zero-row Arrow table counts as a data item, so the table is created with
+    its reflected columns. A column whose source type dlt cannot map has no
+    type until a row supplies one, so it is absent from a table created empty
+    and is added by the first load that reads a row.
+    """
+
+    def _convert_result(
+        self,
+        result: Any,  # noqa: ANN401
+        backend_kwargs: dict[str, Any],
+    ) -> Iterator[Any]:
+        column_names = list(result.keys())
+        yielded = False
+        for item in super()._convert_result(result, backend_kwargs):
+            yielded = True
+            yield item
+        if not yielded:
+            yield row_tuples_to_arrow(
+                [],
+                columns={
+                    name: self.columns.get(name, {"name": name})
+                    for name in column_names
+                },
+                tz=backend_kwargs.get("tz", "UTC"),
+            )
+
+
 def build_table_resource(
     spec: DatabaseSourceSpec,
     table: DatabaseTable,
@@ -242,6 +310,7 @@ def build_table_resource(
         # pyarrow reflects source types faithfully instead of re-inferring them
         # from sampled rows, which keeps the Iceberg schema stable run to run.
         backend="pyarrow",
+        table_loader_class=EmptyTableLoader,
         reflection_level="full",
         # No connection until extraction — see the module docstring.
         defer_table_reflect=True,

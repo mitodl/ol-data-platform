@@ -82,7 +82,7 @@ left join wagtail_page
 left join platform
     on courses.platform_id = platform.platform_id
 left join certificate_page_path
-    on wagtail_page.wagtail_page_path like certificate_page_path.wagtail_page_path || '%'
+    on wagtail_page.wagtail_page_path like {{ dbt.concat(["certificate_page_path.wagtail_page_path", "'%'"]) }}
 left join course_topics on courses.course_id = course_topics.course_id
 left join course_instructors on courses.course_id = course_instructors.course_id
 left join course_images on cms_courses.cms_coursepage_search_image_id = course_images.image_id

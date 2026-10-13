@@ -237,14 +237,15 @@ class TestCheckDimensionalLayering:
         infos = [i for i in report.issues if i.severity == Severity.INFO]
         assert any("tolerated by baseline" in i.message for i in infos)
 
-    def test_stale_baseline_entry_reported(self) -> None:
-        # No current violations, but the baseline lists one → INFO to prompt cleanup.
+    def test_stale_baseline_entry_errors(self) -> None:
+        # Left in place, the entry would let marts__x -> int__gone come back unnoticed.
         parsed = self._parsed({"marts__x": ["dim_user"], "dim_user": []})
         paths = self._paths({"marts__x": "marts", "dim_user": "dimensional"})
         report = ValidationReport()
         _check_dimensional_layering(None, parsed, paths, baseline={"marts__x -> int__gone"}, report=report)
-        assert report.errors == []
-        assert any("Resolved baseline entry" in i.message for i in report.issues)
+        assert [(e.model, e.message) for e in report.errors] == [
+            ("marts__x", "Resolved baseline entry: marts__x -> int__gone")
+        ]
 
     def test_manifest_takes_precedence_over_sql(self) -> None:
         # SQL fallback would find nothing (no refs), but the manifest has the edge.

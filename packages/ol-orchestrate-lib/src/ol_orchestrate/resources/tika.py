@@ -19,6 +19,8 @@ Infrastructure source:
 """
 
 import logging
+import random
+import time
 
 import httpx2 as httpx
 from dagster import ConfigurableResource
@@ -26,7 +28,15 @@ from pydantic import Field, PrivateAttr
 
 log = logging.getLogger(__name__)
 
-# MIME types Tika handles well via the /tika endpoint.
+TIKA_CONTENT_KEY = "X-TIKA:content"
+TIKA_CONTAINER_EXCEPTION_KEY = "X-TIKA:EXCEPTION:container_exception"
+
+
+class TikaParseError(Exception):
+    """Tika could not parse the document it was sent."""
+
+
+# MIME types Tika handles well.
 # Anything outside this set is likely to return empty text or garbage.
 #
 # The last four were added to close a gap against MIT Learn, which filters by
@@ -78,6 +88,26 @@ SUPPORTED_CONTENT_TYPES: frozenset[str] = frozenset(
         "text/x-tex",
     ]
 )
+
+
+# What a caller sees while a Tika pod restarts its parser process. Tika runs the
+# parser in a forked JVM that the watchdog kills and restarts on a heap
+# OutOfMemoryError or a task timeout, without the container restarting, so the
+# pod stays Ready and APISIX keeps routing to it. On 2026-10-02 the three
+# production pods did this 327 times against 9 container restarts, and each
+# restart answered every request in flight on that pod with a 502.
+#
+# 504 is absent on purpose: it is the gateway timing out one slow parse, and
+# sending the same document again costs another full timeout.
+RETRYABLE_STATUSES = frozenset({502, 503})
+
+# The forked process was back in 1 to 24 seconds in the restarts read from the
+# 2026-10-02 logs. The second retry is sent 10 to 30 seconds after the first
+# failure and the third 32 to 98 seconds after it, so the third always clears
+# the slowest of them. Kept to three because the document that killed the
+# parser is retried too, and each of its retries kills the parser again for
+# every other caller on that pod.
+RETRY_DELAYS_SECONDS = (5, 15, 45)
 
 
 def _base_content_type(content_type: str) -> str:
@@ -161,6 +191,53 @@ class TikaResource(ConfigurableResource[None]):
         if self._http_client is not None:
             self._http_client.close()
 
+    def _put(
+        self, endpoint: str, file_bytes: bytes, headers: dict[str, str]
+    ) -> httpx.Response:
+        """PUT a document to Tika, waiting out a parser restart.
+
+        :param endpoint: Tika endpoint name, e.g. ``"rmeta/text"`` or ``"meta"``.
+        :param file_bytes: Raw bytes of the document.
+        :param headers: Request headers, including the access token.
+        :returns: The successful response.
+        :raises httpx.HTTPStatusError: On a non-2xx status that is not
+            retryable, or a retryable one that outlasted every retry.
+        :raises httpx.TransportError: On a timeout, or a connection failure
+            that outlasted every retry.
+
+        Blocks for up to 98 seconds of waits on top of the request timeouts
+        when every attempt fails.
+        """
+        url = f"{self.base_url}/{endpoint}"
+        for delay in RETRY_DELAYS_SECONDS:
+            try:
+                response = self._client.put(url, content=file_bytes, headers=headers)
+                response.raise_for_status()
+            except httpx.HTTPStatusError as error:
+                if error.response.status_code not in RETRYABLE_STATUSES:
+                    raise
+                failure: Exception = error
+            # Not TransportError: that also covers timeouts (one slow
+            # document) and errors raised before anything is sent, such as a
+            # base_url with no scheme, which no wait will fix.
+            except (httpx.NetworkError, httpx.RemoteProtocolError) as error:
+                failure = error
+            else:
+                return response
+            # Every caller that lost a request to the same restart would
+            # otherwise come back in the same instant.
+            wait_seconds = delay * random.uniform(0.5, 1.5)  # noqa: S311
+            log.warning(
+                "Tika /%s failed (%s); retrying in %.0f s",
+                endpoint,
+                failure,
+                wait_seconds,
+            )
+            time.sleep(wait_seconds)
+        response = self._client.put(url, content=file_bytes, headers=headers)
+        response.raise_for_status()
+        return response
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -172,11 +249,18 @@ class TikaResource(ConfigurableResource[None]):
         *,
         ocr_strategy: str | None = None,
     ) -> str | None:
-        """Extract plain text from a document using the Tika ``/tika`` endpoint.
+        """Extract plain text from a document using Tika's ``/rmeta/text`` endpoint.
 
-        Sends the file bytes via HTTP PUT and returns the response body as a
-        stripped string, or ``None`` if Tika returns an empty response or the
-        content type is not in :data:`SUPPORTED_CONTENT_TYPES`.
+        Sends the file bytes via HTTP PUT and returns the text of the document
+        and of everything embedded in it as one stripped string, or ``None`` if
+        Tika finds no text or the content type is not in
+        :data:`SUPPORTED_CONTENT_TYPES`.
+
+        ``/rmeta/text`` and not ``/tika``: this is the endpoint MIT Learn's
+        client reads (``tika.parser.from_buffer``), and the two disagree.
+        ``/tika`` writes ``[image: <alt>]`` for every ``<img>``, so an HTML
+        file holding only an icon has text there and none here, and Learn
+        loads no ContentFile for a file with no text.
 
         Args:
             file_bytes: Raw bytes of the document to process.
@@ -193,6 +277,7 @@ class TikaResource(ConfigurableResource[None]):
         Raises:
             httpx.HTTPStatusError: If Tika responds with a non-2xx status.
             httpx.TimeoutException: If the request exceeds :attr:`timeout` seconds.
+            TikaParseError: If Tika could not parse the document.
         """
         if _base_content_type(content_type) not in SUPPORTED_CONTENT_TYPES:
             log.debug(
@@ -203,20 +288,26 @@ class TikaResource(ConfigurableResource[None]):
 
         headers = {
             "Content-Type": content_type,
-            "Accept": "text/plain",
+            "Accept": "application/json",
             "X-Access-Token": self.access_token,
         }
         if ocr_strategy:
             headers["X-Tika-PDFOcrStrategy"] = ocr_strategy
 
-        response = self._client.put(
-            f"{self.base_url}/tika",
-            content=file_bytes,
-            headers=headers,
-        )
-        response.raise_for_status()
+        response = self._put("rmeta/text", file_bytes, headers)
 
-        text = response.text.strip()
+        # One entry for the document and one per embedded file. An entry with
+        # no text has no content key.
+        parts = response.json()
+
+        # /rmeta answers 200 for a document it cannot parse, where /tika
+        # answered 422. Without this an unparseable document reads as an empty
+        # one, and the caller's health check counts empty as a success.
+        parse_error = parts[0].get(TIKA_CONTAINER_EXCEPTION_KEY)
+        if parse_error:
+            raise TikaParseError(parse_error.splitlines()[0])
+
+        text = "".join(part.get(TIKA_CONTENT_KEY) or "" for part in parts).strip()
         return text if text else None
 
     def extract_metadata(
@@ -246,12 +337,7 @@ class TikaResource(ConfigurableResource[None]):
             "Accept": "application/json",
             "X-Access-Token": self.access_token,
         }
-        response = self._client.put(
-            f"{self.base_url}/meta",
-            content=file_bytes,
-            headers=headers,
-        )
-        response.raise_for_status()
+        response = self._put("meta", file_bytes, headers)
 
         try:
             return response.json()

@@ -51,6 +51,7 @@ from ol_dbt_cli.lib.sql_parser import (
     ParsedModel,
     find_compiled_dir,
     parse_model_file,
+    read_macro_sources,
 )
 from ol_dbt_cli.lib.yaml_registry import YamlRegistry, build_yaml_registry
 
@@ -961,9 +962,12 @@ def diff(
 
     yaml_registry = build_yaml_registry(models_dir)
     sql_models_by_name: dict[str, ParsedModel] = {}
+    macro_sources = read_macro_sources(dbt_dir)
     for sql_file in models_dir.rglob("*.sql"):
         try:
-            sql_models_by_name[sql_file.stem] = parse_model_file(sql_file, compiled_dir=compiled_dir)
+            sql_models_by_name[sql_file.stem] = parse_model_file(
+                sql_file, compiled_dir=compiled_dir, macro_sources=macro_sources
+            )
         except Exception:  # noqa: BLE001, S112
             continue
 

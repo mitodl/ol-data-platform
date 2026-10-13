@@ -45,6 +45,41 @@ dagster dev
 - **Effect**: Controls Dagster environment configuration
 - **Default**: `dev` for local development
 
+## StarRocks in `dev`
+
+With `DAGSTER_ENVIRONMENT` unset or `dev`, the StarRocks assets
+(`starrocks_dbt_assets` and the materialized view refresh) connect to
+the StarRocks in ol-infrastructure's local-dev cluster. That is the k3d stack
+with `data-platform` in `enabled_apps`, which Tilt forwards to `127.0.0.1:9030`.
+They log in as its passwordless `root` and need no Vault token.
+
+The code location still attempts a Vault login when it loads, for its other
+resources, and without a cached token that opens the OIDC browser flow. Set
+`VAULT_OIDC_NONINTERACTIVE=1` to skip it: the login fails, the location loads
+with a warning, and the StarRocks resource connects to the local cluster as
+before.
+
+- dbt target: `starrocks_local_b2b`. The b2b materialized views are built in
+  `default_catalog.b2b_analytics` and `default_catalog.b2b_learner_records`.
+- Lake: the views read `ol_data_lake_local.ol_warehouse_local_dimensional`.
+  Nothing fills that schema yet, so a build fails on a missing table until the
+  tables a view reads exist.
+- `ol-dbt starrocks build --env dev --target starrocks_local_b2b --select tag:starrocks`
+  runs the same build without Dagster.
+
+To use the QA cluster instead, run with `DAGSTER_ENVIRONMENT=qa`, which is what
+`docker-compose.yaml` sets for this code location. That needs a Vault login
+(`bin/vault-login`).
+
+`DAGSTER_DBT_STARROCKS_TARGET` cannot cross that line. The host follows the
+environment and the login follows the target, so `dev` with any target other
+than `starrocks_local_b2b`, or a local target under any other environment,
+fails when the code location loads. That includes `starrocks_local` under
+`dev`: it would build the views in the Iceberg catalog, where the refresh asset
+does not look.
+
+The Trino side of `dev` is unchanged and still reads production.
+
 ## Common Workflows
 
 ### Working on dbt Models

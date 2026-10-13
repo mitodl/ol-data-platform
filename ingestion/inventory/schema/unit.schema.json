@@ -218,9 +218,24 @@
               "columns": {
                 "type": "object",
                 "minProperties": 1,
-                "description": "The column allowlist. A production column not listed here is not copied. `copy` keeps the value. `hash` writes its sha256 hex digest, so the column stays distinct and joinable within mirrored data. `redact` writes the literal 'redacted' wherever the value is not NULL, so not_null tests behave as in production. `nullify` keeps the column with every value NULL, so the models that select it still compile. `hash` and `redact` take string columns only.",
+                "description": "The column allowlist. A production column not listed here is not copied. `copy` keeps the value. `hash` writes its sha256 hex digest, so the column stays distinct and joinable within mirrored data. `redact` writes the literal 'redacted' wherever the value is not NULL, so not_null tests behave as in production. `nullify` keeps the column with every value NULL, so the models that select it still compile. `{json_keys: [...]}` rebuilds a JSON string from the named top-level keys alone, each with its whole value, for a column whose JSON mixes PII with a value a model needs. `hash`, `redact` and `json_keys` take string columns only.",
                 "additionalProperties": {
-                  "enum": ["copy", "hash", "redact", "nullify"]
+                  "oneOf": [
+                    {"enum": ["copy", "hash", "redact", "nullify"]},
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["json_keys"],
+                      "properties": {
+                        "json_keys": {
+                          "type": "array",
+                          "minItems": 1,
+                          "uniqueItems": true,
+                          "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}
+                        }
+                      }
+                    }
+                  ]
                 }
               },
               "where": {

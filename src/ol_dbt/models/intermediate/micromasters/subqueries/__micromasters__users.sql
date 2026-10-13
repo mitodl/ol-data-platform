@@ -43,7 +43,7 @@ with users as (
             ) as row_num
         from edxorg_auth
         left join edxorg_users on edxorg_auth.user_edxorg_username = edxorg_users.user_edxorg_username
-    )
+    ) as ranked_usernames
     where row_num = 1
 )
 

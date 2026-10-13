@@ -627,6 +627,17 @@ def test_extract_column_refs_comprehensive() -> None:
     assert "cnt" not in refs
 
 
+def test_sql_metric_parsed_in_dataset_dialect() -> None:
+    """Backticks quote an identifier on StarRocks and nothing on Trino."""
+    params = {
+        "metrics": [
+            {"expressionType": "SQL", "sqlExpression": "SUM(`Cnt`)", "label": "total"}
+        ]
+    }
+    assert extract_chart_column_refs(params, "starrocks") == {"Cnt"}
+    assert extract_chart_column_refs(params, "trino") == set()
+
+
 # ---------------------------------------------------------------------------
 # Tests: extract_virtual_dataset_columns
 # ---------------------------------------------------------------------------
@@ -658,6 +669,12 @@ def test_extract_virtual_columns_case_insensitive() -> None:
     result = extract_virtual_dataset_columns(sql)
     assert result.has_wildcard is False
     assert result.columns == {"useremail", "coursename"}
+
+
+def test_extract_virtual_columns_starrocks_keeps_case() -> None:
+    sql = "SELECT a.UserEmail, a.cnt AS CourseCount FROM schema.tbl a"
+    result = extract_virtual_dataset_columns(sql, "starrocks")
+    assert result.columns == {"UserEmail", "CourseCount"}
 
 
 def test_extract_virtual_columns_cte() -> None:

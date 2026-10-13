@@ -92,6 +92,7 @@ with bootcamps__ecommerce_order as (
         , mitxonline__ecommerce_order.order_state
         , mitxonline__ecommerce_order.order_total_price_paid
         , mitxonline__ecommerce_order.discount_amount_text
+        , mitxonline__ecommerce_order.order_payment_processor
         ----In MITx Online, there are two transactions for an refunded order.
         ----Here we picked the refund transaction ID and auth code until we change the unique key
         , coalesce(
@@ -274,6 +275,7 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
+        , order_payment_processor
         , null as couponpaymentversion_coupon_type
         , null as order_type
         , user_email as redeemed_email
@@ -336,6 +338,7 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
+        , null as order_payment_processor
         , couponpaymentversion_coupon_type
         , order_type
         , redeemed_email
@@ -389,6 +392,7 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
+        , null as order_payment_processor
         , null as couponpaymentversion_coupon_type
         , null as order_type
         , null as redeemed_email
@@ -442,6 +446,7 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
+        , null as order_payment_processor
         , null as couponpaymentversion_coupon_type
         , null as order_type
         , null as redeemed_email
@@ -468,9 +473,7 @@ with bootcamps__ecommerce_order as (
 )
 
 select
-    {{ generate_hash_id('cast(order_id as varchar)
-        || cast(coalesce(line_id, 9) as varchar)
-        || platform') }} as combined_orders_hash_id
+    {{ generate_hash_id(dbt.concat(["cast(order_id as varchar)", "cast(coalesce(line_id, 9) as varchar)", "platform"])) }} as combined_orders_hash_id
     , platform
     , order_id
     , line_id
@@ -488,6 +491,7 @@ select
     , order_created_on
     , order_reference_number
     , order_state
+    , order_payment_processor
     , order_tax_amount
     , order_tax_country_code
     , order_tax_rate
@@ -518,5 +522,5 @@ select
     , unit_price
     , user_email
     , user_id
-    , {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_hashed_id
+    , {{ generate_hash_id(dbt.concat(["cast(user_id as varchar)", "platform"])) }} as user_hashed_id
 from combined_orders

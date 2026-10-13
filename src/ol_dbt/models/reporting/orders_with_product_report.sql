@@ -25,6 +25,7 @@ select
     , orders.order_created_on
     , orders.order_reference_number
     , orders.order_state
+    , orders.order_payment_processor
     , orders.order_tax_amount
     , orders.order_tax_country_code
     , orders.order_tax_rate
