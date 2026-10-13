@@ -13,6 +13,7 @@ import ast
 from pathlib import Path
 
 import lakehouse
+import pytest
 from lakehouse.lib.scheduled_automation import SCHEDULE_ENVIRONMENTS
 
 
@@ -77,10 +78,19 @@ def test_call_site_and_declaration_agree():
     assert _schedule_ids_passed_at_the_call_site() == set(SCHEDULE_ENVIRONMENTS)
 
 
-def test_airbyte_drift_schedule_starts_running():
-    # Left at Dagster's STOPPED default, this schedule was registered in
-    # production and never ticked once, so the drift check it exists for never
-    # ran. Read statically for the same reason as the test above.
+@pytest.mark.parametrize(
+    "schedule_name",
+    [
+        # Left at Dagster's STOPPED default, this schedule was registered in
+        # production and never ticked once, so the drift check it exists for
+        # never ran.
+        "airbyte_inventory_drift_daily_schedule",
+        # Registered in QA with a STOPPED default, it never ticked there either.
+        "iceberg_raw_maintenance_nightly",
+    ],
+)
+def test_schedule_starts_running(schedule_name: str):
+    # Read statically for the same reason as the test above.
     source = Path(lakehouse.__file__).parent.joinpath("definitions.py").read_text()
     schedule = next(
         node
@@ -91,7 +101,7 @@ def test_airbyte_drift_schedule_starts_running():
         and any(
             keyword.arg == "name"
             and isinstance(keyword.value, ast.Constant)
-            and keyword.value.value == "airbyte_inventory_drift_daily_schedule"
+            and keyword.value.value == schedule_name
             for keyword in node.keywords
         )
     )
