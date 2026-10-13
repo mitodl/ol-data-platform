@@ -24,6 +24,7 @@ import yaml
 from ol_dbt_cli.lib import fixture_generation
 from ol_dbt_cli.lib.fixture_generation import (
     RESERVED_DOMAIN,
+    RESERVED_URL_DOMAIN,
     RowFactory,
     draw,
     generate_rows,
@@ -45,7 +46,7 @@ USERS, ENROLLMENTS = f"{PREFIX}users_user", f"{PREFIX}courses_courserunenrollmen
 AIRBYTE = {"_airbyte_raw_id": "string", "_airbyte_extracted_at": "long", "_airbyte_generation_id": "long"}
 HAND_WRITTEN_COURSES = [
     {"id": 1, "readable_id": "course-v1:Demo+ByHand", "title": "By hand"},
-    {"id": 7, "readable_id": "course-v1:Demo+AlsoByHand", "title": "Also by hand"},
+    {"id": "7", "readable_id": "course-v1:Demo+AlsoByHand", "title": "Also by hand"},
 ]
 TABLES: dict[str, dict[str, Any]] = {
     COURSES: {
@@ -98,7 +99,7 @@ TABLES: dict[str, dict[str, Any]] = {
 # sha256 of the demo package's rows at scale 1. It changes when mimesis or
 # factory_boy change what a seed generates, which is the reason to look at a
 # bump of either before merging it.
-PINNED_DIGEST = "d56938019e7dbb217c90c122b5f19fdcf3dd03dd606e8b3cdc41d75bf858922f"  # pragma: allowlist secret
+PINNED_DIGEST = "9fbcd8a1cc51f05e3373312aad768b9c9e3538fd326724c8f0dfc20cc12f7d4a"  # pragma: allowlist secret
 
 
 def _unit(tmp_path: Path, tables: dict[str, dict[str, Any]] = TABLES) -> tuple[UnitFixture, Unit]:
@@ -258,7 +259,7 @@ def test_rows_reference_the_rows_they_were_built_from(tmp_path: Path, demo: Unit
 
     generated = generate_rows(fixture, unit, demo)
 
-    readable_ids = {row["id"]: row["readable_id"] for row in HAND_WRITTEN_COURSES + generated[COURSES]}
+    readable_ids = {int(row["id"]): row["readable_id"] for row in HAND_WRITTEN_COURSES + generated[COURSES]}
     assert sorted(page["course_id"] for page in generated[PAGES]) == [8, 9, 10, 11]
     for run in generated[RUNS]:
         assert run["courseware_id"] == f"{readable_ids[run['course_id']]}+{run['run_tag']}"
@@ -299,7 +300,7 @@ def test_generated_addresses_are_on_the_reserved_domain(tmp_path: Path, demo: Un
     addresses = [user[column] for user in generated[USERS] for column in ("email", "contact_email")]
     assert all(address.endswith(f"@{RESERVED_DOMAIN}") for address in addresses)
     assert len({user["email"] for user in generated[USERS]}) == len(generated[USERS])
-    assert all(page["thumbnail_url"].startswith(f"https://{RESERVED_DOMAIN}/") for page in generated[PAGES])
+    assert all(page["thumbnail_url"].startswith(f"https://{RESERVED_URL_DOMAIN}/") for page in generated[PAGES])
 
 
 @pytest.mark.parametrize(
@@ -471,7 +472,7 @@ def test_scaled_count_never_reaches_zero() -> None:
     assert [scaled_count(Thing, scale) for scale in (0.01, 0.5, 1, 100)] == [1, 2, 4, 400]
 
 
-@pytest.mark.parametrize("scale", [0, -1])
+@pytest.mark.parametrize("scale", [0, -1, float("nan"), float("inf")])
 def test_generate_rows_rejects_a_scale_that_is_not_positive(tmp_path: Path, scale: float) -> None:
     fixture, unit = _unit(tmp_path)
 

@@ -48,6 +48,7 @@ True)`` raises under a seed).
 from __future__ import annotations
 
 import datetime
+import math
 import random
 import re
 import string
@@ -72,13 +73,16 @@ if TYPE_CHECKING:
 
 type Row = dict[str, Any]
 
-# RFC 2606 reserves it, so a local app that sends mail to or fetches from a
-# generated address reaches nothing.
+# RFC 2606 reserves both. example.com is IANA's and no user's, so mail a local
+# app sends to a generated address reaches nobody. It does resolve, so URLs go
+# under .test, where nothing does.
 RESERVED_DOMAIN = "example.com"
+RESERVED_URL_DOMAIN = "example.test"
 # The day the committed fixtures' `_dlt_load_id` values fall on.
 LOADED_AT = datetime.datetime(2026, 10, 1, tzinfo=datetime.UTC)
 _DLT_ID_ALPHABET = string.ascii_letters + string.digits
 _DLT_ID_LENGTH = 14
+_INTEGER_TYPES = frozenset({"int", "long"})
 
 # mimesis methods that make up a hostname with a real top-level domain.
 _REAL_ADDRESS_METHODS = frozenset({"url", "uri", "hostname", "dsn"})
@@ -227,7 +231,7 @@ def _checked(provider: str, kwargs: dict[str, Any]) -> dict[str, Any]:
     return kwargs
 
 
-def url(domain: str = RESERVED_DOMAIN) -> Any:
+def url(domain: str = RESERVED_URL_DOMAIN) -> Any:
     """Declare a column holding an ``https`` URL under ``domain``."""
     return factory.LazyFunction(lambda: f"https://{domain}/{_current().field('internet.slug')}")
 
@@ -329,7 +333,7 @@ def generate_rows(
     :raises ValueError: If ``scale`` is not positive, a value cannot be held by
         its column, or the rows fail :func:`validate_generated`.
     """
-    if scale <= 0:
+    if not (math.isfinite(scale) and scale > 0):
         msg = f"scale is {scale!r}, expected a positive number"
         raise ValueError(msg)
     seed_generation(factories.SEED, _sequence_starts(fixture, unit))
@@ -351,7 +355,7 @@ def generate_rows(
 
 
 def _sequence_starts(fixture: UnitFixture, unit: Unit) -> dict[str, int]:
-    """Return each table's first sequence number: one past its largest hand-written integer key."""
+    """Return each table's first sequence number: one past the largest hand-written key in an integer column."""
     key_columns = {
         table["raw_table"]: [path[0] for path in table["primary_key"]]
         for table in unit.tables
@@ -361,10 +365,11 @@ def _sequence_starts(fixture: UnitFixture, unit: Unit) -> dict[str, int]:
         table.raw_table: 1
         + max(
             (
-                row[column]
+                # As the column holds it: a quoted "7" in a long is 7.
+                coerce_value(row[column], table.columns[column])
                 for row in table.rows
                 for column in key_columns.get(table.raw_table, [])
-                if isinstance(row.get(column), int)
+                if table.columns.get(column) in _INTEGER_TYPES and row.get(column) is not None
             ),
             default=0,
         )
