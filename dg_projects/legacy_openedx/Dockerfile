@@ -50,9 +50,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # PINNED, and the pins are load-bearing rather than routine hygiene. The
 # preemption budget ol-infrastructure sets for run workers
 # (dagster_instance.yaml: OTEL_BSP_SCHEDULE_DELAY, OTEL_EXPORTER_OTLP_TIMEOUT)
-# is derived from opentelemetry-sdk 1.45.0 internals, and two of them are not
+# is derived from opentelemetry-sdk 1.45.1 internals, and two of them are not
 # stable API:
-#   - OTEL_BSP_EXPORT_TIMEOUT is inert in 1.45.0 -- BatchProcessor stores
+#   - OTEL_BSP_EXPORT_TIMEOUT is inert in 1.45.1 -- BatchProcessor stores
 #     _export_timeout_millis and never reads it -- so the shutdown drain runs at
 #     a hardcoded 30s join. A release that wires it up changes the budget.
 #   - The Python HTTP exporter reads OTEL_EXPORTER_OTLP_TIMEOUT in SECONDS
@@ -64,19 +64,19 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # for that reason: it is the package the reasoning actually depends on.
 # Re-check that reasoning when bumping these, not just the test suite.
 #
-# Since 1.45.0 the HTTP exporter sends through urllib3, which this image
-# instruments. Its requests stay untraced only because the SDK suppresses
-# instrumentation around each export.
+# The HTTP exporter sends through requests (1.45.0 alone used urllib3
+# directly), and this image instruments both. Its requests stay untraced only
+# because the SDK suppresses instrumentation around each export.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv \
-        opentelemetry-distro==0.66b0 \
-        opentelemetry-sdk==1.45.0 \
-        opentelemetry-exporter-otlp-proto-http==1.45.0 \
-        opentelemetry-instrumentation-sqlalchemy==0.66b0 \
-        opentelemetry-instrumentation-grpc==0.66b0 \
-        opentelemetry-instrumentation-botocore==0.66b0 \
-        opentelemetry-instrumentation-requests==0.66b0 \
-        opentelemetry-instrumentation-urllib3==0.66b0
+        opentelemetry-distro==0.66b1 \
+        opentelemetry-sdk==1.45.1 \
+        opentelemetry-exporter-otlp-proto-http==1.45.1 \
+        opentelemetry-instrumentation-sqlalchemy==0.66b1 \
+        opentelemetry-instrumentation-grpc==0.66b1 \
+        opentelemetry-instrumentation-botocore==0.66b1 \
+        opentelemetry-instrumentation-requests==0.66b1 \
+        opentelemetry-instrumentation-urllib3==0.66b1
 
 # Then, use a final image without uv
 FROM python:3.14-slim-bookworm

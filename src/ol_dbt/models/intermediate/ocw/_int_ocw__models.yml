@@ -368,7 +368,12 @@ models:
 
 - name: int__ocw__live_courses
   description: One row per OCW course published to the OCW live bucket, with the fields
-    of its data.json that MIT Learn's OCW ETL reads.
+    of its data.json that MIT Learn's OCW ETL reads. A directory left in the bucket
+    by a site that ocw-studio has since published under another path is not a course.
+  config:
+    meta:
+      # It reads the OCW live bucket, and ocw/s3 is qa: omit in the inventory.
+      qa_buildable: false
   columns:
   - name: course_slug
     description: str, the course's directory under courses/ in the bucket
@@ -425,6 +430,10 @@ models:
   description: One row per page or resource of an OCW course that MIT Learn loads
     as a ContentFile, derived from the OCW live bucket the way Learn's OCW ETL derives
     it.
+  config:
+    meta:
+      # It reads the OCW live bucket, and ocw/s3 is qa: omit in the inventory.
+      qa_buildable: false
   columns:
   - name: courserun_readable_id
     description: str, the course's legacy_uid, or its site_uid when it has none, without
@@ -533,9 +542,16 @@ unit_tests:
 - name: test_int__ocw__live_courses_reads_what_learn_reads
   description: >
     The run id prefers legacy_uid, cross-listed numbers are split and trimmed,
-    topic paths are flattened, and absent keys give empty values.
+    topic paths are flattened, absent keys give empty values, and the directory
+    a renamed site left behind is not a course.
   model: int__ocw__live_courses
   given:
+  - input: ref('stg__ocw__studio__postgres__websites_website')
+    rows:
+    - {website_url_path: courses/a-course}
+    - {website_url_path: courses/b-course}
+    # Two sites holding one url_path do not double the course.
+    - {website_url_path: courses/b-course}
   - input: ref('stg__ocw__s3__course_content')
     rows:
     - course_slug: a-course
@@ -560,6 +576,12 @@ unit_tests:
         "extra_course_numbers": "", "term": "", "year": "", "image_src": "",
         "instructors": null, "course_image_metadata": {"image_metadata": {"image-alt":
         null}}}
+    - course_slug: b-course-2016
+      coursecontent_kind: course
+      course_site_uid: a062e4e8-db04-4bcd-bb1d-4d6f80c18083
+      course_legacy_uid: ""
+      course_data_json: >-
+        {"course_title": "B Course", "primary_course_number": "6.1810"}
     # Pages and resources are not courses.
     - {course_slug: a-course, coursecontent_kind: page, course_data_json: null}
   expect:

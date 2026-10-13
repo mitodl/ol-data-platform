@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-from ol_dbt_cli.commands.run import _build_dbt_command
+from ol_dbt_cli.commands.run import DEFAULT_PROFILE_TARGET, _build_dbt_command, run
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -243,3 +245,50 @@ def test_subcommand_is_second_token(subcommand: str) -> None:
 def test_extra_args_appended_at_end() -> None:
     cmd = build(extra_args=["--threads", "8"])
     assert cmd[-2:] == ["--threads", "8"]
+
+
+# ---------------------------------------------------------------------------
+# --indirect-selection
+# ---------------------------------------------------------------------------
+
+
+def _dbt_command_from_run(tmp_path: Path, **kwargs: str) -> list[str]:
+    with patch("ol_dbt_cli.commands.run.subprocess.run") as mock_subprocess:
+        mock_subprocess.return_value.returncode = 0
+        with pytest.raises(SystemExit):
+            run(project_dir=str(tmp_path), state_dir=str(tmp_path / "state"), save_state=False, **kwargs)
+    return mock_subprocess.call_args.args[0]
+
+
+def test_indirect_selection_reaches_dbt(tmp_path: Path) -> None:
+    cmd = _dbt_command_from_run(tmp_path, indirect_selection="buildable")
+    assert cmd[-2:] == ["--indirect-selection", "buildable"]
+
+
+def test_indirect_selection_absent_by_default(tmp_path: Path) -> None:
+    assert "--indirect-selection" not in _dbt_command_from_run(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Which lake the default target reads
+# ---------------------------------------------------------------------------
+
+
+def test_default_profile_target_matches_profiles_yml() -> None:
+    profiles = Path(__file__).parents[2] / "ol_dbt" / "profiles.yml"
+    match = re.search(r"^  target: (\S+)$", profiles.read_text(), re.MULTILINE)
+
+    assert match is not None
+    assert match.group(1) == DEFAULT_PROFILE_TARGET
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "said"),
+    [({}, True), ({"target": "dev_local"}, True), ({"target": "starrocks_local"}, False)],
+)
+def test_run_says_the_duckdb_target_reads_the_deployed_lake(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], kwargs: dict[str, str], said: bool
+) -> None:
+    _dbt_command_from_run(tmp_path, **kwargs)
+
+    assert ("Target dev_local: DuckDB" in capsys.readouterr().out) is said

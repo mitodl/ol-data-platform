@@ -5,6 +5,7 @@ so retrying it fails on "already exists" and hides the real error. Those
 statements are only retried when the connection itself failed.
 """
 
+import ssl
 from typing import Any, Self
 
 import pytest
@@ -131,3 +132,54 @@ def test_a_fetch_with_no_params_binds_nothing(
     sql = "EXPLAIN SELECT a FROM t WHERE b LIKE '%sandbox%'"
     assert resource.fetch(sql) == []
     assert sent == [(sql, None)]
+
+
+class QuietCursor(FakeCursor):
+    def execute(self, sql: str, _params: Any) -> None:
+        self.conn.statements.append(sql)
+
+
+class QuietConnection(FakeConnection):
+    def cursor(self) -> QuietCursor:
+        return QuietCursor(self)
+
+
+def _record_connect_kwargs(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    calls: list[dict[str, Any]] = []
+
+    def fake_connect(**kwargs: Any) -> QuietConnection:
+        calls.append(kwargs)
+        return QuietConnection([])
+
+    monkeypatch.setattr(starrocks_module, "connect", fake_connect)
+    return calls
+
+
+def test_a_static_login_never_asks_vault(monkeypatch: pytest.MonkeyPatch) -> None:
+    # model_construct leaves `vault` unset, so reaching for it raises.
+    local = StarRocksResource.model_construct(
+        vault_mount_point="database-starrocks",
+        vault_role="admin",
+        host="127.0.0.1",
+        port=9030,
+        database="b2b_analytics",
+        static_username="root",
+        static_password="",
+    )
+    calls = _record_connect_kwargs(monkeypatch)
+
+    local.execute("SELECT 1")
+
+    assert local.generate_credentials() == ("root", "")
+    assert [(c["user"], c["password"], c["ssl"]) for c in calls] == [("root", "", None)]
+
+
+def test_a_vault_login_requires_tls(
+    monkeypatch: pytest.MonkeyPatch, resource: StarRocksResource
+) -> None:
+    calls = _record_connect_kwargs(monkeypatch)
+
+    resource.execute("SELECT 1")
+
+    assert calls[0]["user"] == "user"
+    assert isinstance(calls[0]["ssl"], ssl.SSLContext)

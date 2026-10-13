@@ -16,6 +16,7 @@ import itertools
 import json
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any, cast
 
 import polars as pl
@@ -64,6 +65,19 @@ FORUM_CONTENTS_MODEL = "forum_contents"
 # Rows decoded per pull from a data file. studentmodule's state column averages
 # 2 KB a row, so a batch is about 35 MB of text.
 READ_BATCH_ROWS = 16_384
+
+# Reads of one irx table before a data file that keeps disappearing fails the
+# run. A mitx drop takes about 40 minutes, most of it studentmodule, and on
+# 2026-10-12 dbt rebuilt that table three times in about 70.
+MAX_TABLE_READS = 3
+
+
+class SourceTableReplacedError(Exception):
+    """A data file of the snapshot being read no longer exists.
+
+    The irx models are dbt tables, so a build writes a new table and drops the
+    old one with its data files, whatever snapshot a reader has pinned.
+    """
 
 
 @dataclass(frozen=True)
@@ -181,6 +195,13 @@ def legacy_batch(
         .drop_nulls(list(export.required))
     )
     return batch.select(legacy_csv_columns(batch.schema, export.columns))
+
+
+def legacy_batches(
+    batches: Iterable[pl.DataFrame], export: IrxExportFile, course_ids: Sequence[str]
+) -> Iterator[pl.DataFrame]:
+    """Cut each batch of an irx model down to its legacy CSV's rows and columns."""
+    return (legacy_batch(batch, export, course_ids) for batch in batches)
 
 
 class _DigestingWriter(io.RawIOBase):
@@ -305,7 +326,13 @@ def read_data_files(
     scan = table.scan(snapshot_id=snapshot_id, selected_fields=tuple(columns))
     schema = schema_to_pyarrow(scan.projection())
     yield cast("pl.DataFrame", pl.from_arrow(schema.empty_table()))
-    for task in scan.plan_files():
+    try:
+        # Planning reads the snapshot's manifest list and manifests, which a
+        # dbt rebuild drops along with the data files.
+        tasks = list(scan.plan_files())
+    except FileNotFoundError as error:
+        raise SourceTableReplacedError(str(error)) from error
+    for task in tasks:
         # Reading the Parquet file directly skips what ArrowScan would apply.
         # The irx tables are rebuilt whole by dbt, so they never carry deletes.
         if task.delete_files:
@@ -315,14 +342,23 @@ def read_data_files(
                     "does not apply; the export would deliver deleted rows."
                 )
             )
-        with table.io.new_input(task.file.file_path).open() as source:
-            for batch in pq.ParquetFile(source).iter_batches(
-                batch_size=READ_BATCH_ROWS, columns=schema.names
-            ):
-                yield cast(
-                    "pl.DataFrame",
-                    pl.from_arrow(batch.select(schema.names).cast(schema)),
-                )
+        data_file = table.io.new_input(task.file.file_path)
+        try:
+            with data_file.open() as source:
+                for batch in pq.ParquetFile(source).iter_batches(
+                    batch_size=READ_BATCH_ROWS, columns=schema.names
+                ):
+                    yield cast(
+                        "pl.DataFrame",
+                        pl.from_arrow(batch.select(schema.names).cast(schema)),
+                    )
+        except OSError as error:
+            # A file dropped before it is opened raises FileNotFoundError; one
+            # dropped between two ranged reads raises a bare OSError naming the
+            # object store's own error, so the file is looked for again.
+            if isinstance(error, FileNotFoundError) or not data_file.exists():
+                raise SourceTableReplacedError(task.file.file_path) from error
+            raise
 
 
 def build_irx_export_asset(deployment: str) -> AssetsDefinition:
@@ -434,30 +470,24 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
         yield delivered["course_ids.csv"]
 
         for export in IRX_EXPORT_FILES:
-            batches, metadata = _read_pinned(
-                irx_model_name(deployment, export.model), export.source_columns
-            )
             file_name = f"{export.name}.csv"
-            delivered[file_name] = _export(
+            delivered[file_name] = _export_table(
                 AssetKey([deployment, IRX_EXPORT_GROUP, export.name]),
                 write_legacy_csv,
-                (legacy_batch(batch, export, course_ids) for batch in batches),
+                irx_model_name(deployment, export.model),
                 drop / file_name,
-                metadata,
+                export.source_columns,
+                partial(legacy_batches, export=export, course_ids=course_ids),
             )
             yield delivered[file_name]
 
         # Not cut to the course list: legacy dumped the whole forum database,
         # posts in runs the LMS no longer lists included.
-        batches, metadata = _read_pinned(
-            irx_model_name(deployment, FORUM_CONTENTS_MODEL)
-        )
-        delivered["forum_contents.parquet"] = _export(
+        delivered["forum_contents.parquet"] = _export_table(
             forum_key,
             write_parquet,
-            batches,
+            irx_model_name(deployment, FORUM_CONTENTS_MODEL),
             drop / "forum_contents.parquet",
-            metadata,
         )
         yield delivered["forum_contents.parquet"]
 
@@ -472,8 +502,9 @@ def _read_pinned(
 ) -> tuple[Iterator[pl.DataFrame], dict[str, str]]:
     """Read an irx table at its current snapshot.
 
-    Pinned so the row count and the file are read from the same snapshot even
-    if dbt rebuilds the model mid-export.
+    Pinned so the file's metadata names the snapshot its rows came from. The
+    pin does not keep the snapshot readable: a dbt rebuild replaces the table
+    and deletes the old one's data files (SourceTableReplacedError).
     """
     table = load_dbt_model_table(IRX_GLUE_DATABASE, table_name)
     snapshot = table.current_snapshot()
@@ -533,6 +564,39 @@ def _write_manifest(
             "sha256": sha256,
         },
     )
+
+
+def _export_table(  # noqa: PLR0913
+    key: AssetKey,
+    write: Callable[[Iterable[pl.DataFrame], UPath], tuple[str, int, int]],
+    table_name: str,
+    destination: UPath,
+    columns: Sequence[str] = ("*",),
+    cut: Callable[[Iterator[pl.DataFrame]], Iterable[pl.DataFrame]] = iter,
+) -> MaterializeResult:
+    """Export one irx table, starting over if dbt replaces it under the read.
+
+    The file is rewritten whole from the new table's snapshot: the destination
+    is overwritten, and the digest, row count and snapshot id recorded are the
+    last read's.
+    """
+
+    def export_once() -> MaterializeResult:
+        batches, metadata = _read_pinned(table_name, columns)
+        return _export(key, write, cut(batches), destination, metadata)
+
+    for _ in range(MAX_TABLE_READS - 1):
+        try:
+            return export_once()
+        except SourceTableReplacedError as error:
+            get_dagster_logger().warning(
+                "%s.%s was replaced while it was being read (%s is gone); "
+                "reading it again from its current snapshot",
+                IRX_GLUE_DATABASE,
+                table_name,
+                error,
+            )
+    return export_once()
 
 
 def _export(

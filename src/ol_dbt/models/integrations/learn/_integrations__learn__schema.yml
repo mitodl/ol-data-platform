@@ -13,6 +13,10 @@ models:
     the OCW live bucket, with the fields MIT Learn's OCW ETL builds a course and
     its one run from. Sourced from int__ocw__live_courses, which reads each
     course's published data.json.
+  config:
+    meta:
+      # It reads the OCW live bucket, and ocw/s3 is qa: omit in the inventory.
+      qa_buildable: false
   columns:
   - name: readable_id
     description: >

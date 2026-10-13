@@ -736,8 +736,21 @@ def _drop_objects(
 
 local_app = cyclopts.App(
     name="local",
-    help="Local dbt development with DuckDB + Iceberg.",
+    help="Local dbt development with DuckDB, reading the deployed lake's Iceberg tables from Glue.",
 )
+
+
+def _print_mode(databases: list[str] | None = None) -> None:
+    """Say which lake the views read.
+
+    "local" names the engine here, not the data: these views are the deployed
+    lake's tables, and the lake a developer's own apps feed is a different
+    command.
+    """
+    glue = f"AWS Glue ({', '.join(databases)})" if databases else "AWS Glue"
+    print(f"ol-dbt local: DuckDB on this machine, reading {glue}.")
+    print("  Needs AWS credentials. Rows from your local-dev apps are not here:")
+    print("  `ol-dbt starrocks build --env dev` builds on the local lake (docs/LOCAL_LAKE.md).")
 
 
 @local_app.command
@@ -802,6 +815,7 @@ def register(
     else:
         databases = [DEFAULT_GLUE_DATABASE]
         print(f"\n🔄 Registering default database: {DEFAULT_GLUE_DATABASE}")
+    _print_mode(databases)
 
     # Read before any registration writes, or it would report this run's own
     # timestamp back as the previous refresh.
@@ -885,6 +899,7 @@ def list_sources(
     ] = DEFAULT_DUCKDB_PATH,
 ) -> None:
     """List currently registered Glue sources in DuckDB."""
+    _print_mode()
     _show_registry(duckdb_path)
 
 
@@ -1007,6 +1022,7 @@ def test(
     print("=" * 70)
     print("Testing DuckDB + AWS Glue + Iceberg Integration")
     print("=" * 70)
+    _print_mode()
 
     duckdb_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"\nConnecting to DuckDB at: {duckdb_path}")
@@ -1283,6 +1299,13 @@ def setup(
     print("Local dbt Development Environment Setup")
     print("DuckDB + Iceberg Direct Read from S3")
     print("=" * 70 + "\n")
+    layer_map: dict[str, list[str]] = {
+        "all": LAYER_DATABASES,
+        "raw": [DEFAULT_GLUE_DATABASE],
+        "staging": ["ol_warehouse_production_staging"],
+    }
+    databases = layer_map[layers]
+    _print_mode(databases)
 
     # Step 1 — Prerequisites
     print("=" * 70)
@@ -1409,12 +1432,6 @@ def setup(
     print("Step 5: Registering Iceberg Sources from AWS Glue")
     print("=" * 70)
 
-    layer_map: dict[str, list[str]] = {
-        "all": LAYER_DATABASES,
-        "raw": [DEFAULT_GLUE_DATABASE],
-        "staging": ["ol_warehouse_production_staging"],
-    }
-    databases = layer_map[layers]
     print(f"ℹ Layers: {layers} ({len(databases)} database(s))")
 
     total_reg: dict[str, int] = {"success": 0, "error": 0, "skipped": 0, "new": 0, "updated": 0, "refreshed": 0}

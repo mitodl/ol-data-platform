@@ -49,6 +49,8 @@ run_app = cyclopts.App(
 )
 
 DEFAULT_STATE_DIR = ".dbt-state"
+# The `target:` of src/ol_dbt/profiles.yml, which a run with no --target gets.
+DEFAULT_PROFILE_TARGET = "dev_local"
 STATE_ARTIFACTS = ("manifest.json", "run_results.json")
 
 
@@ -85,6 +87,9 @@ def _save_artifacts(target_dir: Path, state_dir: Path) -> list[str]:
             shutil.copy2(src, state_dir / name)
             saved.append(name)
     return saved
+
+
+IndirectSelection = Literal["eager", "cautious", "buildable", "empty"]
 
 
 def _build_dbt_command(
@@ -208,6 +213,17 @@ def run(  # noqa: PLR0913
             help="Path to the dbt project root (must contain dbt_project.yml). Defaults to src/ol_dbt.",
         ),
     ] = None,
+    indirect_selection: Annotated[
+        IndirectSelection | None,
+        Parameter(
+            name="--indirect-selection",
+            help=(
+                "Which tests a selected model brings with it (dbt's --indirect-selection). "
+                "`buildable` leaves out a test that also reads a model outside the selection."
+            ),
+            show_default=False,
+        ),
+    ] = None,
 ) -> None:
     """Execute dbt incrementally using state-based selection.
 
@@ -233,6 +249,12 @@ def run(  # noqa: PLR0913
 
     # ── Status banner ──────────────────────────────────────────────────────
     console.print(f"\n[bold]ol-dbt run[/] [dim]{subcommand}[/] — dbt project: [cyan]{dbt_dir}[/]")
+    if (target or DEFAULT_PROFILE_TARGET) == DEFAULT_PROFILE_TARGET:
+        # "local" is the engine: the views are the deployed lake's tables.
+        console.print(
+            f"[dim]Target {DEFAULT_PROFILE_TARGET}: DuckDB on this machine, reading the deployed lake's Glue tables. "
+            "The local lake is `ol-dbt starrocks build --env dev`.[/]"
+        )
     if full_refresh:
         console.print("[yellow]⟳  Full refresh — ignoring saved state[/]")
     elif has_any_state and select is None:
@@ -271,7 +293,7 @@ def run(  # noqa: PLR0913
         defer=defer,
         target=target,
         vars=vars,
-        extra_args=[],
+        extra_args=["--indirect-selection", indirect_selection] if indirect_selection else [],
     )
 
     console.print(f"\n[dim]$ {' '.join(cmd)}[/]\n")
