@@ -309,11 +309,9 @@ def drifted_relations(
 ) -> list[str]:
     """MVs whose columns in StarRocks no longer match what dbt says they are.
 
-    These need `dbt build --full-refresh` to catch up: dbt-core only replaces
-    an existing materialized view under that flag, and dbt-starrocks'
-    `get_materialized_view_configuration_changes` is an empty macro, so an
-    edited SELECT is otherwise a silent no-op (a plain build logs "no
-    configuration changes were identified" and the MV keeps its old query).
+    The asset builds these with --full-refresh. With the pinned dbt-starrocks
+    that changes nothing, since a plain build replaces every view too; see
+    `_stale_materialized_views` in the asset module for why the check stays.
 
     Set equality, so an added, renamed, or removed column all count. That
     rests on `documented_columns` being the model's full output schema, which
@@ -330,15 +328,15 @@ def drifted_relations(
 
 
 class MissingBaseTablesError(Exception):
-    """A full refresh was called for while a base table could not be read."""
+    """A build was called for while a base table could not be read."""
 
     def __init__(self, failures: Mapping[str, Exception]) -> None:
         self.failures = dict(failures)
         detail = "\n".join(f"{name}: {exc}" for name, exc in self.failures.items())
         super().__init__(
             f"{len(self.failures)} base table(s) of the StarRocks materialized "
-            "views could not be read, so the views were not rebuilt with "
-            f"--full-refresh and still hold their previous definition:\n{detail}"
+            "views could not be read, so the views were not rebuilt and still "
+            f"hold their previous definition:\n{detail}"
         )
 
 
@@ -407,9 +405,9 @@ def unreadable_base_tables(
 ) -> dict[str, Exception]:
     """Probe each of *relations* and return the ones StarRocks can't resolve.
 
-    Run this before a `dbt build --full-refresh`. That build drops every
-    selected MV and recreates it, and a CREATE whose base table is missing
-    fails after the drop. On 2026-10-09 four views were lost that way: #2881
+    Run this before a `dbt build`, with or without --full-refresh. The build
+    drops every selected MV and recreates it, and a CREATE whose base table is
+    missing fails after the drop. On 2026-10-09 four views were lost that way: #2881
     pointed them at afact_learner_courserun_progress, which production had
     never built, and ol-analytics-api answered 500 on the endpoints that read
     them until the next successful build.
@@ -657,8 +655,8 @@ def stamp_change_log(
     never skipped. A source timestamp can't give this: the change reaches the
     MV some time after it was made.
 
-    A view that was not refreshed must not be stamped. `dbt build
-    --full-refresh` recreates an MV empty, and an MV whose refresh then fails
+    A view that was not refreshed must not be stamped. `dbt build`
+    recreates an MV empty, and an MV whose refresh then fails
     stays empty; stamping it would mark every record deleted. The stamp reads
     the MV as it is when the statement runs, so a second run of the build
     overlapping this one can still do that; the next stamp reverses it and

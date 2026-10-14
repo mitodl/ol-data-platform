@@ -90,18 +90,12 @@ def _stale_materialized_views(
 ) -> list[str]:
     """MVs whose columns in StarRocks disagree with the dbt manifest.
 
-    dbt cannot find these itself. dbt-core only replaces an existing
-    materialized view under --full-refresh, and asks the adapter for
-    configuration changes otherwise -- but dbt-starrocks'
-    `starrocks__get_materialized_view_configuration_changes` returns nothing,
-    so a plain build logs "no configuration changes were identified" and leaves
-    the old SELECT in place. Green build, green refresh, change never landed.
-
-    That made shipping a column a two-step release with a hand-run
-    `dbt run --full-refresh --select b2b_analytics` in the middle, and nothing
-    but memory enforcing the order -- while ol-analytics-api's `build_select`
-    projects each model's own field list, so deploying the consumer first turns
-    the miss into an unknown-column error at request time.
+    Nothing depends on this with the pinned dbt-core 1.12.5 and dbt-starrocks
+    1.12.2, where a plain build already replaces every view (see
+    `starrocks_dbt_assets`). It is kept for an adapter that starts answering
+    "no configuration changes": dbt-core then refreshes an existing view in
+    place, an edited SELECT never lands, and ol-analytics-api's `build_select`
+    turns a column it expects into an unknown-column error at request time.
     """
     manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
     documented = documented_columns(manifest)
@@ -122,7 +116,7 @@ def _stale_materialized_views(
 def _require_base_tables(
     context: AssetExecutionContext, starrocks: StarRocksResource
 ) -> None:
-    """Refuse a --full-refresh while a base table of the MVs can't be read.
+    """Refuse to build while a base table of the MVs can't be read.
 
     The run fails with every view still in place. They keep the previous
     SELECT and the previous refresh's rows until a later run succeeds; the
@@ -131,7 +125,7 @@ def _require_base_tables(
     manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
     relations = base_table_relations(manifest, os.environ)
     context.log.info(
-        "Checking the %d base tables of the materialized views before --full-refresh",
+        "Checking the %d base tables of the materialized views before the build",
         len(relations),
     )
     unreadable = unreadable_base_tables(relations, starrocks.fetch, log=context.log)
@@ -163,23 +157,28 @@ def starrocks_dbt_assets(
     `starrocks` resource (and Vault mount) as `refresh_starrocks_analytics_mvs`,
     which depends on this asset.
 
+    Every build drops and recreates every materialized view, with or without
+    --full-refresh. dbt-starrocks' configuration-changes macro
+    (`starrocks__get_materialized_view_configuration_changes`) has an empty
+    body, which renders as an empty string and not as none, so dbt-core takes
+    its alter path for an existing view, and dbt-starrocks implements alter as
+    drop then create. A CREATE that fails leaves the view dropped, so the
+    views' base tables are checked before any build, see
+    `_require_base_tables`. Each view is also empty from its CREATE until its
+    next refresh finishes, and ol-analytics-api queries these live.
+
     Escalates to --full-refresh when a materialized view's columns in StarRocks
-    have fallen out of step with the manifest, since a plain build would not
-    notice -- see `_stale_materialized_views`. It checks first that the
-    views' base tables can be read, see `_require_base_tables`.
+    have fallen out of step with the manifest, see `_stale_materialized_views`.
     """
+    _require_base_tables(context, starrocks)
     build_args = ["build"]
     stale = _stale_materialized_views(context, starrocks)
     if stale:
-        # --full-refresh drops and recreates every selected MV, not just the
-        # stale ones, which is why it is conditional: each recreated view is
-        # briefly absent, and ol-analytics-api queries these live.
         context.log.info(
             "Materialized views whose columns differ from the dbt manifest -- "
             "building with --full-refresh so the new SELECT actually lands: %s",
             ", ".join(stale),
         )
-        _require_base_tables(context, starrocks)
         build_args.append("--full-refresh")
 
     last_exc: DagsterDbtCliRuntimeError | None = None

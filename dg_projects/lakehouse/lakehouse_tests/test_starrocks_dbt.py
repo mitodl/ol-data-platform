@@ -5,8 +5,10 @@ motivated this module (run acc2b10c, 2026-07-22), not invented -- the point of
 the retry pattern is that it matches what StarRocks actually emits.
 """
 
+import ast
 import logging
 import re
+from pathlib import Path
 
 import pytest
 from lakehouse.lib.starrocks_dbt import (
@@ -454,9 +456,7 @@ class TestDriftedRelations:
         assert drifted_relations(documented, live) == ["b2b_analytics.mv_a"]
 
     def test_matching_columns_are_not_drift(self):
-        """The common case -- it must not force a full refresh, since that drops
-        and recreates views ol-analytics-api is serving from.
-        """
+        """The common case -- it must not force a full refresh."""
         columns = {"org_key", "video_watchers"}
         assert (
             drifted_relations(
@@ -865,6 +865,29 @@ def _tracked_node(**tracking):
     )
 
 
+class TestBaseTablesAreCheckedBeforeEveryBuild:
+    def test_the_check_is_not_conditional_on_a_full_refresh(self):
+        """A plain build drops and recreates every view too, so a missing base
+        table loses the views whether or not their columns drifted.
+        """
+        source = (
+            Path(__file__).parents[1] / "lakehouse/assets/lakehouse/dbt_starrocks.py"
+        ).read_text()
+        asset = next(
+            node
+            for node in ast.parse(source).body
+            if isinstance(node, ast.FunctionDef) and node.name == "starrocks_dbt_assets"
+        )
+        top_level_calls = [
+            statement.value.func.id
+            for statement in asset.body
+            if isinstance(statement, ast.Expr)
+            and isinstance(statement.value, ast.Call)
+            and isinstance(statement.value.func, ast.Name)
+        ]
+        assert "_require_base_tables" in top_level_calls
+
+
 class TestChangeTrackedViews:
     def test_tracks_every_column_outside_the_key_and_identity(self):
         manifest = _manifest(
@@ -988,7 +1011,7 @@ class TestAfterRefresh:
         )
 
     def test_a_failed_refresh_is_not_followed_up(self):
-        """`dbt build --full-refresh` recreates an MV empty. Stamping a change
+        """`dbt build` recreates an MV empty. Stamping a change
         log from one whose refresh then failed would mark every record deleted.
         """
         starrocks = ScriptedStarRocks(
