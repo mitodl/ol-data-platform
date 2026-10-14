@@ -11,9 +11,13 @@ reads its scan targets from Glue (see
 :func:`ol_orchestrate.lib.lake_orphan_sweep.warehouse_scan_targets`).
 
 It reports everywhere and deletes only where
-:data:`LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS` says so. That set starts empty:
-the first deletion list for an environment gets read by a person before the
-environment is added.
+:data:`LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS` says so. An environment is added
+after a person has read a deletion list for it. QA is on the list; production
+is not yet.
+
+The data lake buckets are versioned, so a deleted prefix stays recoverable,
+and billed, until its noncurrent versions expire: 30 days in the dbt layer
+buckets, 90 in raw and history.
 """
 
 from datetime import UTC, datetime
@@ -29,7 +33,7 @@ WAREHOUSE_ENV = warehouse_env_for(DAGSTER_ENV)
 
 # Keyed on the Dagster environment, not the warehouse one: `dev` resolves to the
 # production warehouse, and a laptop must never be able to delete from it.
-LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS: frozenset[str] = frozenset()
+LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS: frozenset[str] = frozenset({"qa"})
 
 # The floor has to exceed the longest time a writer leaves files unregistered.
 # Measured 2026-10-06 over the 1,084 production tables Glue registered in the
@@ -138,7 +142,11 @@ def lake_orphan_sweep(
         ),
         # Databases this environment's role may not read. Their tables are not
         # among the references, so with any listed here the orphan counts are
-        # an upper bound, and the sweep refuses to delete.
+        # an upper bound, and the sweep refuses to delete. Only a database Glue
+        # lists and then denies shows up here. QA's role is not listed
+        # production's databases at all, so a production table located in a QA
+        # bucket would read as an orphan there without tripping this. On
+        # 2026-10-14 no table outside the QA databases was located in one.
         "unreadable_glue_databases": MetadataValue.json(result.unreadable_databases),
     }
 
