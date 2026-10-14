@@ -4,30 +4,24 @@
   defined once here. Every row is a learner with an enrollment row for a course run
   (afact_learner_courserun_progress), keyed on user_fk, with activity read from
   afact_learner_courserun_daily_activity as the learner-records views read it.
+  Learners are attributed to the contract they enrolled under (contract_fk), not to the
+  contracts that offer the run: a run can be offered under several contracts, and to
+  learners outside any of them.
 #}
 
-{# course run -> contract -> organization. A course run belongs to exactly one B2B
-   contract (courses_courserun.b2b_contract_id), so joining on courserun_pk cannot fan out. #}
-{% macro b2b_contract_courseruns() %}
+{# contract -> organization, joined to the learner rows on contract_fk. #}
+{% macro b2b_contracts() %}
     select
-        cr.courserun_pk,
-        cr.courserun_readable_id,
-        cr.courserun_title,
         c.contract_pk,
         c.contract_id,
         c.b2b_contract_name,
         org.organization_key,
         org.sso_organization_id,
         org.organization_name
-    from {{ source('dimensional', 'bridge_organization_courserun') }} boc
-    join {{ source('dimensional', 'dim_contract') }} c
-        on boc.contract_fk = c.contract_pk
+    from {{ source('dimensional', 'dim_contract') }} c
     join {{ source('dimensional', 'dim_organization') }} org
         on c.organization_fk = org.organization_pk
-    join {{ source('dimensional', 'dim_course_run') }} cr
-        on boc.courserun_fk = cr.courserun_pk
     where org.platform = 'mitxonline'
-      and cr.is_current = true
 {% endmacro %}
 
 {# One row per (learner, course run, month, kind of thing that happened in it): a day of
@@ -41,6 +35,7 @@
     select
         a.user_fk,
         a.courserun_fk,
+        p.contract_fk,
         concat(
             substr(cast(a.activity_date_key as varchar), 1, 4), '-',
             substr(cast(a.activity_date_key as varchar), 5, 2)
@@ -55,6 +50,7 @@
     join {{ source('dimensional', 'afact_learner_courserun_progress') }} p
         on a.user_fk = p.user_fk and a.courserun_fk = p.courserun_fk
     where a.platform = 'mitxonline'
+      and p.contract_fk is not null
       and p.enrollment_is_active = true
 
     union all
@@ -62,6 +58,7 @@
     select
         user_fk,
         courserun_fk,
+        contract_fk,
         substr(enrollment_created_on, 1, 7)                 as activity_year_and_month,
         0                                                   as is_active_day,
         1                                                   as new_enrollments,
@@ -71,6 +68,7 @@
         0                                                   as chatbot_interactions
     from {{ source('dimensional', 'afact_learner_courserun_progress') }}
     where platform = 'mitxonline'
+      and contract_fk is not null
       and enrollment_is_active = true
       and enrollment_created_on is not null
 
@@ -79,6 +77,7 @@
     select
         user_fk,
         courserun_fk,
+        contract_fk,
         substr(certificate_issued_on, 1, 7)                 as activity_year_and_month,
         0                                                   as is_active_day,
         0                                                   as new_enrollments,
@@ -88,6 +87,7 @@
         0                                                   as chatbot_interactions
     from {{ source('dimensional', 'afact_learner_courserun_progress') }}
     where platform = 'mitxonline'
+      and contract_fk is not null
       and is_certified = true
 {% endmacro %}
 
@@ -103,6 +103,7 @@
     select
         p.user_fk,
         p.courserun_fk,
+        p.contract_fk,
         p.enrollment_is_active,
         p.is_certified,
         case when p.enrollment_is_active then coalesce(a.days_active, 0) else 0 end
@@ -128,5 +129,6 @@
     ) a
         on p.user_fk = a.user_fk and p.courserun_fk = a.courserun_fk
     where p.platform = 'mitxonline'
+      and p.contract_fk is not null
       and (p.enrollment_is_active = true or p.is_certified = true)
 {% endmacro %}

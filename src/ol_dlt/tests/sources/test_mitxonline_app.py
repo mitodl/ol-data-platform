@@ -16,10 +16,15 @@ INVENTORY_UNIT = (
 )
 
 # RFC 12711 step 8's pilot slice. dim_organization, dim_contract and
-# bridge_organization_courserun read exactly these three, so a source that
+# bridge_organization_courserun read exactly these four, so a source that
 # drops one silently produces a partial B2B dimensional build.
 B2B_PILOT_TABLES = frozenset(
-    {"b2b_organizationpage", "b2b_contractpage", "courses_courserun"}
+    {
+        "b2b_organizationpage",
+        "b2b_contractpage",
+        "courses_courserun",
+        "courses_courserun_b2b_contracts",
+    }
 )
 
 

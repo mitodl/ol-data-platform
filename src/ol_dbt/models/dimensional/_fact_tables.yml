@@ -92,6 +92,16 @@ models:
     - relationships:
         to: ref('dim_platform')
         field: platform_pk
+  - name: contract_fk
+    description: Foreign key to dim_contract. The MITx Online B2B contract the learner
+      enrolled under, from the enrollment's own b2b_contract_id. Null for a non-B2B
+      enrollment and on every other platform. A course run can be offered under several
+      contracts, so this, not bridge_organization_courserun, is what attributes an
+      enrollment to a contract.
+    tests:
+    - relationships:
+        to: ref('dim_contract')
+        field: contract_pk
   - name: platform
     description: Platform identifier string
     tests:
@@ -1197,6 +1207,8 @@ unit_tests:
     rows: []
   - input: ref('dim_program')
     rows: []
+  - input: ref('dim_contract')
+    rows: []
   - input: ref('dim_platform')
     rows:
     - platform_pk: "PLATFORM_MITXONLINE"
@@ -1242,6 +1254,124 @@ unit_tests:
       enrollment_created_on: "2024-01-15T00:00:00"
       enrollment_updated_on: "2024-01-15T00:00:00"
       enrollment_is_edx_enrolled: true
+- name: test_tfact_enrollment_fills_contract_fk_on_existing_b2b_rows
+  description: >
+    MITx Online backfilled each enrollment's b2b_contract_id without the row's
+    updated_on passing our watermark, and contract_fk arrives as a new column. The
+    incremental filter must re-select a stored B2B enrollment whose contract_fk is
+    missing and write it, and leave a non-B2B enrollment alone.
+  model: tfact_enrollment
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__courserunenrollments')
+    rows:
+    - courserunenrollment_id: 6001
+      user_id: 555
+      b2b_contract_id: 1904
+      courserun_readable_id: "course-v1:MITxT+1"
+      courserunenrollment_created_on: "2024-01-15T00:00:00"
+      courserunenrollment_updated_on: "2024-01-15T00:00:00"
+      courserunenrollment_is_active: true
+      courserunenrollment_enrollment_mode: "verified"
+      courserunenrollment_enrollment_status: "enrolled"
+      courserunenrollment_is_edx_enrolled: true
+    - courserunenrollment_id: 6002
+      user_id: 556
+      courserun_readable_id: "course-v1:MITxT+1"
+      courserunenrollment_created_on: "2024-01-15T00:00:00"
+      courserunenrollment_updated_on: "2024-01-15T00:00:00"
+      courserunenrollment_is_active: true
+      courserunenrollment_enrollment_mode: "verified"
+      courserunenrollment_enrollment_status: "enrolled"
+      courserunenrollment_is_edx_enrolled: true
+  - input: ref('int__mitxpro__programenrollments')
+    rows: []
+  - input: ref('int__mitxpro__courserunenrollments')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_enrollments')
+    rows: []
+  - input: ref('int__mitxonline__programenrollments')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_enrollments')
+    rows: []
+  - input: ref('int__bootcamps__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('int__micromasters__course_enrollments')
+    rows: []
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_555"
+      mitxonline_application_user_id: 555
+    - user_pk: "USER_556"
+      mitxonline_application_user_id: 556
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_contract')
+    rows:
+    - contract_pk: "CONTRACT_1904"
+      contract_id: 1904
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_MITXONLINE"
+      platform_readable_id: "mitxonline"
+      # Both enrollments are stored without a contract_fk; an unrelated later-dated enrollment pushes the watermark past them.
+  - input: this
+    rows:
+    - enrollment_key: "138707f4f49de0845e4263b5ebdd013d"  # pragma: allowlist secret
+      enrollment_id: "6001"
+      enrollment_type: "course"
+      enrollment_date_key: 20240115
+      user_fk: "USER_555"
+      platform_fk: "PLATFORM_MITXONLINE"
+      platform: "mitxonline"
+      enrollment_is_active: true
+      enrollment_mode: "verified"
+      enrollment_status: "enrolled"
+      enrollment_created_on: "2024-01-15T00:00:00"
+      enrollment_updated_on: "2024-01-15T00:00:00"
+      enrollment_is_edx_enrolled: true
+    - enrollment_key: "41162ba2680034f26c0e2beb0362f07a"  # pragma: allowlist secret
+      enrollment_id: "6002"
+      enrollment_type: "course"
+      enrollment_date_key: 20240115
+      user_fk: "USER_556"
+      platform_fk: "PLATFORM_MITXONLINE"
+      platform: "mitxonline"
+      enrollment_is_active: true
+      enrollment_mode: "verified"
+      enrollment_status: "enrolled"
+      enrollment_created_on: "2024-01-15T00:00:00"
+      enrollment_updated_on: "2024-01-15T00:00:00"
+      enrollment_is_edx_enrolled: true
+    - enrollment_key: "unrelated-later-enrollment"
+      enrollment_id: "9999"
+      enrollment_type: "course"
+      enrollment_date_key: 20240201
+      user_fk: "SOME_OTHER_USER_PK"
+      platform: "mitxonline"
+      enrollment_is_active: true
+      enrollment_mode: "verified"
+      enrollment_status: "enrolled"
+      enrollment_created_on: "2024-02-01T00:00:00"
+      enrollment_updated_on: "2024-02-01T00:00:00"
+      enrollment_is_edx_enrolled: true
+  expect:
+    rows:
+    - enrollment_key: "138707f4f49de0845e4263b5ebdd013d"  # pragma: allowlist secret
+      enrollment_id: "6001"
+      user_fk: "USER_555"
+      contract_fk: "CONTRACT_1904"
+      platform: "mitxonline"
 - name: test_tfact_enrollment_refreshes_stale_courserun_fk_after_course_run_remap
   description: >
     When an enrollment resolves to a different dim_course_run than the one stored
@@ -1297,6 +1427,8 @@ unit_tests:
       platform: "mitxonline"
       is_current: true
   - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_contract')
     rows: []
   - input: ref('dim_platform')
     rows:
@@ -1459,6 +1591,8 @@ unit_tests:
       is_current: true
   - input: ref('dim_program')
     rows: []
+  - input: ref('dim_contract')
+    rows: []
   - input: ref('dim_platform')
     rows:
     - platform_pk: "PLATFORM_EMERITUS"
@@ -1580,6 +1714,8 @@ unit_tests:
   - input: ref('dim_course_run')
     rows: []
   - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_contract')
     rows: []
   - input: ref('dim_platform')
     rows: []

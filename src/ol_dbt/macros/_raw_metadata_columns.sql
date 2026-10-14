@@ -320,6 +320,7 @@
         'raw__mitxonline__app__postgres__courses_course': none,
         'raw__mitxonline__app__postgres__courses_course_departments': none,
         'raw__mitxonline__app__postgres__courses_courserun': none,
+        'raw__mitxonline__app__postgres__courses_courserun_b2b_contracts': none,
         'raw__mitxonline__app__postgres__courses_courserun_enrollment_modes': none,
         'raw__mitxonline__app__postgres__courses_courseruncertificate': none,
         'raw__mitxonline__app__postgres__courses_courserunenrollment': none,

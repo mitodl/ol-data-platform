@@ -32,7 +32,7 @@ with activity as (
 contract_enrollments as (
     select
         c.organization_fk,
-        boc.contract_fk,
+        e.contract_fk,
         e.user_fk,
         e.courserun_fk,
         cr.course_fk,
@@ -50,13 +50,11 @@ contract_enrollments as (
             coalesce(g.grade_updated_on, ''),
             coalesce(cert.certificate_updated_on, '')
         ) as record_updated_on
-    from {{ source('dimensional', 'bridge_organization_courserun') }} boc
+    from {{ source('dimensional', 'tfact_enrollment') }} e
     join {{ source('dimensional', 'dim_contract') }} c
-        on boc.contract_fk = c.contract_pk
+        on e.contract_fk = c.contract_pk
     join {{ source('dimensional', 'dim_course_run') }} cr
-        on boc.courserun_fk = cr.courserun_pk
-    join {{ source('dimensional', 'tfact_enrollment') }} e
-        on boc.courserun_fk = e.courserun_fk
+        on e.courserun_fk = cr.courserun_pk
     left join {{ source('dimensional', 'tfact_grade') }} g
         on e.user_fk = g.user_fk and e.courserun_fk = g.courserun_fk
     left join {{ source('dimensional', 'tfact_certificate') }} cert

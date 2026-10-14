@@ -19,6 +19,7 @@ with
             edx_enrolled as courserunenrollment_is_edx_enrolled,
             run_id as courserun_id,
             user_id,
+            b2b_contract_id,
             enrollment_mode as courserunenrollment_enrollment_mode,
             edx_emails_subscription as courserunenrollment_has_edx_email_subscription,
             case when change_status = '' then null else change_status end as courserunenrollment_enrollment_status,

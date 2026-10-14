@@ -39,8 +39,14 @@ with enrollment_detail as (
     select * from {{ ref('dim_user') }}
 )
 
+-- The report is keyed on the course run, so only the run's organization is read. A run
+-- offered under contracts of two organizations appears once for each.
 , b2b_contract_to_courseruns as (
-    select * from {{ ref('int__mitxonline__b2b_contract_to_courseruns') }}
+    select distinct
+        courserun_readable_id
+        , organization_key
+        , organization_name
+    from {{ ref('int__mitxonline__b2b_contract_to_courseruns') }}
 )
 
 , org_field as (

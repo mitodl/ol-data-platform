@@ -8,6 +8,9 @@
 -- Grain: org x contract (all orgs; MIT admin view only). Refreshed by the Dagster
 -- b2b_organization MV-refresh asset.
 -- health_status: inactive | at_risk | high_utilization | healthy | early_stage
+-- Seats and certificates are counted as in mv_b2b_contract_utilization: course enrollments
+-- made under the contract, and certificates for those enrollments' runs. Every contract
+-- has a row, as there, including one with no enrollments yet.
 with contract_stats as (
     select
         org.organization_key,
@@ -28,13 +31,12 @@ with contract_stats as (
     from {{ source('dimensional', 'dim_contract') }} c
     join {{ source('dimensional', 'dim_organization') }} org
         on c.organization_fk = org.organization_pk
-    join {{ source('dimensional', 'bridge_organization_courserun') }} boc
-        on c.contract_pk = boc.contract_fk
     left join {{ source('dimensional', 'tfact_enrollment') }} e
-        on boc.courserun_fk = e.courserun_fk
+        on c.contract_pk = e.contract_fk
+        and e.enrollment_type = 'course'
     left join {{ source('dimensional', 'tfact_certificate') }} cert
         on e.user_fk = cert.user_fk
-        and boc.courserun_fk = cert.courserun_fk
+        and e.courserun_fk = cert.courserun_fk
         and cert.certificate_is_revoked = false
     where org.platform = 'mitxonline'
     group by

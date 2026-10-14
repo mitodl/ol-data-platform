@@ -456,12 +456,13 @@ models:
   description: >
     All-time content engagement depth per org x contract x course run. This is
     the contract-scoped sibling of mv_b2b_content_engagement_depth, which stays
-    at org x course run. Because a course run belongs to exactly one contract,
-    adding the contract labels rows rather than splitting them: every count
-    here equals its org-level counterpart for the same course run, which is
-    what makes the complement recoverable when only some contracts are
+    at org x course run. Each learner's course run is attributed to the one
+    contract they enrolled under, so the contract rows partition the org-level
+    rows: a run offered under one of the org's contracts is only labelled, and
+    a run offered under several is split into rows that sum to the org row.
+    Either way the complement is recoverable when only some contracts are
     suppressed. Manual-refresh materialized view. Source: the same facts as
-    the org-level view, grouped by the contract that owns the course run.
+    the org-level view, grouped by the contract each learner enrolled under.
     Consumers: L&D manager content-engagement
     panel, contract-scoped.
   columns:

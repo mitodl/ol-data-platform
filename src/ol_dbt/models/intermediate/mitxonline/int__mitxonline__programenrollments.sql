@@ -29,6 +29,7 @@ with enrollments as (
         , enrollments.programenrollment_updated_on
         , enrollments.programenrollment_enrollment_mode
         , enrollments.programenrollment_enrollment_status
+        , enrollments.b2b_contract_id
         , programs.program_title
         , users.user_username
         , users.user_email

@@ -6,23 +6,28 @@
 ) }}
 
 -- Grain: org x contract. Refreshed by the Dagster b2b_organization MV-refresh asset.
+-- A seat is a learner with a course enrollment made under the contract
+-- (tfact_enrollment.contract_fk), and a certificate counts when it is for one of those
+-- enrollments' runs. A program enrollment also carries the contract, but takes no seat
+-- until the learner enrolls in a course.
 with enrollments as (
     select
-        boc.contract_fk,
+        e.contract_fk,
         e.user_fk,
+        e.courserun_fk,
         e.enrollment_is_active
-    from {{ source('dimensional', 'bridge_organization_courserun') }} boc
-    join {{ source('dimensional', 'tfact_enrollment') }} e
-        on boc.courserun_fk = e.courserun_fk
+    from {{ source('dimensional', 'tfact_enrollment') }} e
+    where e.contract_fk is not null
+      and e.enrollment_type = 'course'
 ),
 
 certificates as (
     select
-        boc.contract_fk,
+        e.contract_fk,
         cert.user_fk
-    from {{ source('dimensional', 'bridge_organization_courserun') }} boc
+    from enrollments e
     join {{ source('dimensional', 'tfact_certificate') }} cert
-        on boc.courserun_fk = cert.courserun_fk
+        on e.user_fk = cert.user_fk and e.courserun_fk = cert.courserun_fk
     where cert.certificate_is_revoked = false
 )
 

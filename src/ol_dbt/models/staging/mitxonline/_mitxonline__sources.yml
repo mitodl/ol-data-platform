@@ -405,6 +405,10 @@ sources:
       description: str, enrollment mode for user
     - name: edx_emails_subscription
       description: bool, indicates whether the user should receive emails from edx
+    - name: b2b_contract_id
+      description: int, foreign key to b2b_contractpage (page_ptr_id). The B2B contract
+        the learner enrolled under, null for a non-B2B enrollment. Backfilled by MITx
+        Online migration courses 0108 from the run's contract.
 
     config:
       freshness:
@@ -447,6 +451,9 @@ sources:
       description: int, unique ID for each user on the MITx Online platform
     - name: enrollment_mode
       description: str, enrollment mode for user
+    - name: b2b_contract_id
+      description: int, foreign key to b2b_contractpage (page_ptr_id). The B2B contract
+        the learner enrolled in the program under, null for a non-B2B enrollment.
 
   - name: raw__mitxonline__app__postgres__courses_programenrollmentaudit
     columns:
@@ -506,6 +513,18 @@ sources:
       description: timestamp, specifying when a course run was initially created
     - name: updated_on
       description: timestamp, specifying when a course run was most recently updated
+
+  - name: raw__mitxonline__app__postgres__courses_courserun_b2b_contracts
+    description: The B2B contracts a course run is offered under (CourseRun.b2b_contracts).
+      Replaced courses_courserun.b2b_contract in MITx Online migrations courses 0104/0105;
+      a run can belong to several contracts.
+    columns:
+    - name: id
+      description: int, primary key for this table
+    - name: courserun_id
+      description: int, foreign key to courses_courserun
+    - name: contractpage_id
+      description: int, foreign key to b2b_contractpage (page_ptr_id)
 
   - name: raw__mitxonline__app__postgres__users_user
     columns:

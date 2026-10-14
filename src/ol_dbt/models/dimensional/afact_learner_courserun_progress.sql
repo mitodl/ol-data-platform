@@ -8,6 +8,7 @@ with enrollments_ranked as (
     select
         user_fk
         , courserun_fk
+        , contract_fk
         , platform
         , enrollment_date_key
         , enrollment_created_on
@@ -82,6 +83,7 @@ with enrollments_ranked as (
     select
         enrollments.user_fk
         , enrollments.courserun_fk
+        , enrollments.contract_fk
         , enrollments.platform
         , enrollments.enrollment_created_on
         , enrollments.enrollment_updated_on
@@ -148,6 +150,9 @@ with enrollments_ranked as (
 select
     user_fk
     , courserun_fk
+    -- The reported enrollment's B2B contract, so the B2B views attribute a learner to the
+    -- contract they enrolled under and not to every contract that offers the run.
+    , contract_fk
     , platform
     , enrollment_created_on
     , enrollment_updated_on

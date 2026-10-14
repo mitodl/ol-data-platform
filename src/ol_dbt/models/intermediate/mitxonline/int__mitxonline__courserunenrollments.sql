@@ -109,6 +109,7 @@ with enrollments as (
         , enrollments.courserunenrollment_updated_on
         , enrollments.courserunenrollment_enrollment_status
         , enrollments.courserunenrollment_is_edx_enrolled
+        , enrollments.b2b_contract_id
         , mitxonline_runs.courserun_platform as courserunenrollment_platform
         , mitxonline_runs.courserun_title
         , mitxonline_runs.courserun_readable_id
