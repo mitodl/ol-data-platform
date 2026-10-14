@@ -52,7 +52,12 @@ models:
         field: course_pk
         where: "platform != 'edxorg' and course_fk is not null"
   - name: platform_fk
-    description: Foreign key to dim_platform (Phase 3+)
+    description: Foreign key to dim_platform, resolved from the platform string
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
   - name: platform
     description: Platform identifier string
     tests:
@@ -128,7 +133,10 @@ models:
   - name: enrollment_end
     description: timestamp, the end of the enrollment window for this course run
   - name: source_id
-    description: string, source system identifier for this course run record
+    description: >
+      Integer source system ID for this course run. Null for edxorg and
+      residential runs, which expose no native integer run ID. Not unique across
+      platforms; pair it with platform.
 
 unit_tests:
 - name: test_dim_course_run_merge_is_idempotent_under_duplicate_copies
