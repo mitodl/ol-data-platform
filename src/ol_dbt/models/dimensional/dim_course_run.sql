@@ -405,8 +405,7 @@ with micromasters_courseruns as (
             'courserun_is_live',
             'courserun_upgrade_deadline',
             'semester',
-            'passing_grade',
-            'course_fk'
+            'passing_grade'
         ]
     ) }}
 )

@@ -545,10 +545,7 @@ unit_tests:
   description: >
     An Emeritus run in the target whose code has since become an xPro run drops out
     of the
-    source. It must be expired, since no replacement row triggers the expiry. An Emeritus
-    run that stays is re-versioned when its course moves from the synthesized course
-    to an
-    xPro course, though none of its own attributes changed.
+    source. It must be expired, since no replacement row triggers the expiry.
   model: dim_course_run
   overrides:
     macros:
@@ -575,8 +572,6 @@ unit_tests:
     rows:
     - {courserun_external_readable_id: "MO-DL-26-09#1", courserun_title: "DL (Sep-2026)",
       enrollment_created_on: "2026-08-01T00:00:00"}
-    - {courserun_external_readable_id: "MO-DL-27-03#1", courserun_title: "DL (Mar-2027)",
-      enrollment_created_on: "2026-08-01T00:00:00"}
   - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
     rows: []
   - input: ref('int__edxorg__mitx_courseruns')
@@ -595,16 +590,9 @@ unit_tests:
     rows:
     - {courserun_pk: "old_a", courserun_readable_id: "MO-DL-26-12#1", platform: "emeritus",
       courserun_title: "DL (Dec-2026)", effective_date: "2026-08-11 00:46:01", is_current: true}
-    - {courserun_pk: "old_b", courserun_readable_id: "MO-DL-27-03#1", platform: "emeritus",
-      courserun_title: "DL (Mar-2027)", course_fk: "emeritus_dl", effective_date: "2026-08-11\
-        \ 00:46:01", is_current: true}
   expect:
     rows:
     - {courserun_readable_id: "MO-DL-26-12#1", platform: "emeritus", course_fk: null,
-      is_current: false}
-    - {courserun_readable_id: "MO-DL-27-03#1", platform: "emeritus", course_fk: "xpro_dl",
-      is_current: true}
-    - {courserun_readable_id: "MO-DL-27-03#1", platform: "emeritus", course_fk: "emeritus_dl",
       is_current: false}
     - {courserun_readable_id: "course-v1:xPRO+DL+R1", platform: "mitxpro", course_fk: "xpro_dl",
       is_current: true}
