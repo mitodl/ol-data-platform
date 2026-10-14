@@ -231,11 +231,14 @@ def starrocks_dbt_assets(
             )
             raise
 
-        yield from events
-        # Best effort here too: the models are built, and failing the step over
-        # an S3 error would hold back the materialized view refresh that
-        # ol-analytics-api reads.
-        upload_build_artifacts_best_effort(
-            context, starrocks_dbt_s3_artifacts, invocation, OM_ARTIFACTS
-        )
+        try:
+            yield from events
+        finally:
+            # In a finally so a run cancelled while the events are yielded
+            # still uploads. Best effort here too: the models are built, and
+            # failing the step over an S3 error would hold back the
+            # materialized view refresh that ol-analytics-api reads.
+            upload_build_artifacts_best_effort(
+                context, starrocks_dbt_s3_artifacts, invocation, OM_ARTIFACTS
+            )
         return

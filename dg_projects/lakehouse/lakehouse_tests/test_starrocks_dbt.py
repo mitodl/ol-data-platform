@@ -1088,14 +1088,22 @@ def test_the_build_uploads_its_artifacts_for_openmetadata():
     assert gives_up.end_lineno is not None
     assert gives_up.lineno < on_failure <= gives_up.end_lineno
 
-    # After the events are yielded, so an upload cannot cost a materialization.
-    yields = [
-        node.lineno
+    # In the finally around the yield: after the events, so an upload cannot
+    # cost a materialization, and also when the run is cancelled mid-yield.
+    yield_guard = next(
+        node
         for node in ast.walk(asset)
-        if isinstance(node, ast.YieldFrom) and ast.unparse(node.value) == "events"
-    ]
-    assert yields
-    assert max(yields) < on_success
+        if isinstance(node, ast.Try)
+        and any(
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.YieldFrom)
+            and ast.unparse(stmt.value.value) == "events"
+            for stmt in node.body
+        )
+    )
+    assert yield_guard.finalbody
+    assert yield_guard.finalbody[0].lineno <= on_success
+    assert on_success <= (yield_guard.finalbody[-1].end_lineno or 0)
 
 
 def test_openmetadata_gets_the_manifest_with_the_results():
