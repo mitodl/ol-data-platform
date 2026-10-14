@@ -246,6 +246,41 @@ def _scope_changed(catalog, run_row: dict[str, Any]) -> bool:
     )
 
 
+def _check_incremental_base(catalog, run_row: dict[str, Any]) -> None:
+    # A run held for review resolves against the keys live now: if another run went
+    # live meanwhile, its new keys would retire with no drop in continuity.
+    live_run_id = latest_identity_processed_run(catalog, database_name)
+    if run_row.get("base_cluster_run_id") != live_run_id:
+        msg = (
+            f"Run {run_row['cluster_run_id']} extended "
+            f"{run_row.get('base_cluster_run_id')}, but the live run is now "
+            f"{live_run_id}; start a new feedback_clusters run."
+        )
+        raise permanent_failure(msg)
+
+
+def _resolve_matches(
+    incremental_candidates_df: pl.DataFrame | None,
+    new_cluster_members: dict[int, frozenset[str]],
+    active_cluster_members: dict[str, frozenset[str]],
+    match_threshold: float,
+):
+    # An incremental run names the key each cluster keeps; others match by Jaccard
+    if incremental_candidates_df is None:
+        return match_clusters(
+            new_cluster_members, active_cluster_members, match_threshold
+        )
+    carried_key_of_cluster_id = dict(
+        incremental_candidates_df.select("cluster_id", "cluster_key")
+        .drop_nulls("cluster_key")
+        .unique()
+        .iter_rows()
+    )
+    return extend_matches(
+        new_cluster_members, carried_key_of_cluster_id, set(active_cluster_members)
+    )
+
+
 def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
     """cluster_key -> its current feedback_cluster row, for carrying
     first_seen_run_id forward on a continued/merged key.
@@ -278,7 +313,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
                 "upsert_options": {"join_cols": ["cluster_key"]},
                 "schema_update_mode": "update",
             },
-            code_version="feedback_cluster_identity_v4",
+            code_version="feedback_cluster_identity_v5",
             automation_condition=upstream_or_code_changes(),
         ),
         "feedback_cluster_lineage": AssetOut(
@@ -289,7 +324,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_cluster_identity_v4",
+            code_version="feedback_cluster_identity_v5",
             automation_condition=upstream_or_code_changes(),
             is_required=False,
         ),
@@ -302,7 +337,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
                 "upsert_options": {"join_cols": ["cluster_run_id"]},
                 "schema_update_mode": "update",
             },
-            code_version="feedback_cluster_identity_v4",
+            code_version="feedback_cluster_identity_v5",
             automation_condition=upstream_or_code_changes(),
             is_required=False,
         ),
@@ -364,6 +399,7 @@ def feedback_cluster_identity(
     candidate_columns = ["feedback_conversation_pk", "cluster_id"]
     # Only extend runs write cluster_key; an older table may not have the column
     if is_extend_run:
+        _check_incremental_base(catalog, run_row)
         candidate_columns.append("cluster_key")
 
     candidates_df = (
@@ -396,20 +432,12 @@ def feedback_cluster_identity(
         active_cluster_members = dict.fromkeys(active_cluster_members, frozenset())
     existing_cluster_rows = _existing_cluster_rows(catalog)
 
-    if is_extend_run:
-        carried_key_of_cluster_id = dict(
-            candidates_df.select("cluster_id", "cluster_key")
-            .drop_nulls("cluster_key")
-            .unique()
-            .iter_rows()
-        )
-        matches, lineage_rows = extend_matches(
-            new_cluster_members, carried_key_of_cluster_id, set(active_cluster_members)
-        )
-    else:
-        matches, lineage_rows = match_clusters(
-            new_cluster_members, active_cluster_members, config.match_threshold
-        )
+    matches, lineage_rows = _resolve_matches(
+        candidates_df if is_extend_run else None,
+        new_cluster_members,
+        active_cluster_members,
+        config.match_threshold,
+    )
     lineage_rows.extend(
         {
             "prior_cluster_key": other_config_key,

@@ -56,7 +56,7 @@ def _live_cluster_keys(
     embedding_provenance: tuple[str, int, str | None],
     feedback_since: str | None,
     platforms: list[str] | None,
-) -> dict[str, str]:
+) -> tuple[str | None, dict[str, str]]:
     # Another scope would carry no member forward, and identity would then retire
     # every live key without the continuity floor to stop it.
     live_run_id = latest_identity_processed_run(catalog, database_name)
@@ -90,7 +90,7 @@ def _live_cluster_keys(
             "feedback_clusters with full_refresh."
         )
         raise permanent_failure(msg)
-    return cluster_key_by_pk
+    return live_run_id, cluster_key_by_pk
 
 
 def _clear_partial_run(catalog, table_identifier: str, cluster_run_id: str) -> None:
@@ -227,7 +227,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v6",
+            code_version="feedback_clusters_v7",
         ),
         "feedback_cluster_candidate": AssetOut(
             key=AssetKey(["intermediate", "feedback_cluster_candidate"]),
@@ -237,7 +237,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v6",
+            code_version="feedback_clusters_v7",
             # Not required: a failed run writes feedback_cluster_run with no candidates.
             is_required=False,
         ),
@@ -369,16 +369,18 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
         "is_promoted": config.is_promoted,
     }
     if not config.full_refresh:
+        base_cluster_run_id, cluster_key_by_pk = _live_cluster_keys(
+            catalog, embedding_provenance, config.feedback_since, config.platforms
+        )
         candidates_df, run_metadata = extend_clusters(
             embeddings_df,
             embedding_provenance,
-            _live_cluster_keys(
-                catalog, embedding_provenance, config.feedback_since, config.platforms
-            ),
+            cluster_key_by_pk,
             umap_params=umap_params,
             add_new_clusters=config.add_new_clusters,
             **step_settings,
         )
+        run_metadata["base_cluster_run_id"] = base_cluster_run_id
     else:
         candidates_df, run_metadata = cluster_embeddings(
             embeddings_df,

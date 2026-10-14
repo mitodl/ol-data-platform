@@ -5,9 +5,11 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import polars as pl
+import pytest
 from ml.assets.feedback_cluster_identity import (
     FeedbackClusterIdentityConfig,
     _active_cluster_members,
+    _check_incremental_base,
     _other_config_active_keys,
     _select_run_to_process,
 )
@@ -225,3 +227,17 @@ def test_active_cluster_members_keeps_only_members_in_the_run_date_range() -> No
     }
     # old-only stays, empty, so match_clusters retires it rather than dropping it
     assert since_2026 == {"mixed": frozenset({"new-1"}), "old-only": frozenset()}
+
+
+def test_check_incremental_base_rejects_a_run_built_on_an_older_live_run() -> None:
+    with patch(
+        "ml.assets.feedback_cluster_identity.latest_identity_processed_run",
+        return_value="live",
+    ):
+        _check_incremental_base(
+            MagicMock(), {"cluster_run_id": "new", "base_cluster_run_id": "live"}
+        )
+        with pytest.raises(Exception, match="the live run is now live"):
+            _check_incremental_base(
+                MagicMock(), {"cluster_run_id": "new", "base_cluster_run_id": "older"}
+            )

@@ -78,23 +78,29 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
     # Promoted counts as soon as the run completes, so this sensor's own run is not
     # started again while identity catches up. Processed counts too: a run promoted
     # by hand through identity's cluster_run_id keeps is_promoted=false.
+    runs_lf = get_dbt_model_as_dataframe(
+        database_name=cluster_database_name, table_name="feedback_cluster_run"
+    )
+    run_columns = runs_lf.collect_schema().names()
+
+    # A table written before a column existed reads it as null
+    def run_column(name: str, dtype: pl.DataType) -> pl.Expr:
+        return pl.col(name) if name in run_columns else pl.lit(None, dtype=dtype)
+
     baseline_df = (
-        get_dbt_model_as_dataframe(
-            database_name=cluster_database_name, table_name="feedback_cluster_run"
-        )
-        .filter(
+        runs_lf.filter(
             (pl.col("run_status") == "completed")
             & (
-                pl.col("is_promoted")
+                run_column("is_promoted", pl.Boolean).fill_null(False)  # noqa: FBT003
                 | pl.col("cluster_run_id").is_in(processed_run_ids)
             )
             & (pl.col("embedding_model_version") == default_embedding_model_version())
             & (pl.col("embedding_dim") == EMBEDDING_DIM)
             & (pl.col("embedding_input_filter") == "summary")
-            & pl.col("feedback_since").eq_missing(
+            & run_column("feedback_since", pl.String).eq_missing(
                 pl.lit(DEFAULT_FEEDBACK_SINCE, dtype=pl.String)
             )
-            & pl.col("platforms").eq_missing(
+            & run_column("platforms", pl.String).eq_missing(
                 pl.lit(platforms_to_run_value(DEFAULT_PLATFORMS), dtype=pl.String)
             )
         )

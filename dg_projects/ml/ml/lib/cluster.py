@@ -48,9 +48,10 @@ CLUSTER_RUN_SCHEMA = {
     # (see extend_clusters). Null on runs written before this column existed: a full
     # refresh.
     "run_type": pl.String,
-    # Extend runs only
+    # Incremental runs only. base_cluster_run_id is the live run this one extended.
     "placed_noise_count": pl.Int64,
     "new_cluster_count": pl.Int64,
+    "base_cluster_run_id": pl.String,
 }
 
 # Explicit intent, set at launch time -- not inferred from embedding_model_version/
@@ -673,7 +674,7 @@ def extend_clusters(  # noqa: PLR0913 -- same settings as cluster_embeddings
         "embedding_input_filter": embedding_input_filter,
         "umap_n_components": umap_n_components,
         "umap_n_neighbors": umap_n_neighbors,
-        "hdbscan_min_cluster_size": None,
+        "hdbscan_min_cluster_size": new_cluster_min_size if add_new_clusters else None,
         "random_state": random_state,
         "cluster_count": len(np.unique(labels[labels != NOISE_CLUSTER_ID])),
         "noise_count": int((labels == NOISE_CLUSTER_ID).sum()),
