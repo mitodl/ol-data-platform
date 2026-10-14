@@ -66,6 +66,12 @@ def _returning(
     return calls
 
 
+def _enable_delete(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        module, "LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS", frozenset({module.DAGSTER_ENV})
+    )
+
+
 def _metadata(config: LakeOrphanSweepConfig) -> dict[str, Any]:
     output = lake_orphan_sweep(build_asset_context(), config)
     return {key: value.value for key, value in output.metadata.items()}
@@ -89,6 +95,29 @@ def test_delete_is_refused_where_it_is_not_enabled(monkeypatch: pytest.MonkeyPat
         )
 
     assert calls == []
+
+
+def test_delete_is_refused_below_the_scheduled_floor(monkeypatch: pytest.MonkeyPatch):
+    _enable_delete(monkeypatch)
+    calls = _returning(monkeypatch, _result(None))
+
+    with pytest.raises(ValueError, match="at least 7"):
+        lake_orphan_sweep(
+            build_asset_context(),
+            LakeOrphanSweepConfig(
+                min_age_days=module.LAKE_ORPHAN_SWEEP_MIN_AGE_DAYS - 1, delete=True
+            ),
+        )
+
+    assert calls == []
+
+
+def test_report_run_may_go_below_the_floor(monkeypatch: pytest.MonkeyPatch):
+    calls = _returning(monkeypatch, _result(None))
+
+    lake_orphan_sweep(build_asset_context(), LakeOrphanSweepConfig(min_age_days=1))
+
+    assert calls[0]["min_age_days"] == 1
 
 
 def test_report_run_says_delete_did_not_run(
@@ -118,9 +147,7 @@ def test_report_run_says_delete_did_not_run(
 def test_delete_run_reports_what_it_deleted_and_what_it_kept(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setattr(
-        module, "LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS", frozenset({module.DAGSTER_ENV})
-    )
+    _enable_delete(monkeypatch)
     outcomes = [
         PrefixOutcome("lake-mart-qa", f"gone-{UUID}", "deleted", objects=2, bytes=105),
         PrefixOutcome(
@@ -144,9 +171,7 @@ def test_delete_run_reports_what_it_deleted_and_what_it_kept(
 
 
 def test_delete_errors_fail_the_run(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(
-        module, "LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS", frozenset({module.DAGSTER_ENV})
-    )
+    _enable_delete(monkeypatch)
     outcomes = [
         PrefixOutcome(
             "lake-mart-qa",
