@@ -1133,19 +1133,7 @@
     string, as an array of `element_type`. '[{"name": "a"}, {"name": "b"}]' -> ['a', 'b'].
 #}
 {% macro json_array_field_values(json_col, field, element_type='varchar') -%}
-    {{ adapter.dispatch('json_array_field_values', 'open_learning')(json_col, field, element_type) }}
-{%- endmacro %}
-
-{% macro default__json_array_field_values(json_col, field, element_type='varchar') -%}
-    cast(json_parse(json_query({{ json_col }}, 'lax $.{{ field }}' with array wrapper)) as array({{ element_type }}))  --noqa
-{%- endmacro %}
-
-{% macro duckdb__json_array_field_values(json_col, field, element_type='varchar') -%}
-    cast(json_extract_string({{ json_col }}, '$[*].{{ field }}') as {{ element_type }}[])
-{%- endmacro %}
-
-{% macro starrocks__json_array_field_values(json_col, field, element_type='varchar') -%}
-    cast(json_query(parse_json({{ json_col }}), '$[*].{{ field }}') as array<{{ element_type }}>)
+    {{ json_path_values(json_col, '$[*].' ~ field, element_type) }}
 {%- endmacro %}
 
 
@@ -1173,6 +1161,114 @@
 
 
 {#
+    json_path_values: every value a JSON path matches, as an array of `element_type`.
+    Write the array step explicitly ('$[*].value', '$.instructors[*].name'): Trino's lax
+    mode would unwrap the array without it, DuckDB's wildcard would not. No match gives
+    NULL (Trino's json_query is NULL ON EMPTY), as does a NULL input.
+
+    Usage:
+      {{ json_path_values('contents', '$[*].value', 'integer') }}
+#}
+{% macro json_path_values(json_col, json_path, element_type='varchar') -%}
+    {{ adapter.dispatch('json_path_values', 'open_learning')(json_col, json_path, element_type) }}
+{%- endmacro %}
+
+{% macro default__json_path_values(json_col, json_path, element_type) -%}
+    cast(json_parse(json_query({{ json_col }}, 'lax {{ json_path }}' with array wrapper)) as array({{ element_type }}))
+{%- endmacro %}
+
+{% macro duckdb__json_path_values(json_col, json_path, element_type) -%}
+    nullif(cast(json_extract_string({{ json_col }}, '{{ json_path }}') as {{ element_type }}[]), [])
+{%- endmacro %}
+
+{% macro starrocks__json_path_values(json_col, json_path, element_type) -%}
+    cast(json_query(parse_json({{ json_col }}), '{{ json_path }}') as array<{{ element_type }}>)
+{%- endmacro %}
+
+
+{#
+    json_extract_json_array: the JSON array at `json_path` as an array of JSON values,
+    to unnest. Raises where the path holds something other than an array; use
+    unnest_json_array for input that may be malformed.
+
+    Usage:
+      cross join unnest({{ json_extract_json_array('chat_json', "'$.chat_history'") }})
+      with ordinality as t (element, idx)
+#}
+{% macro json_extract_json_array(json_col, json_path) -%}
+    {{ adapter.dispatch('json_extract_json_array', 'open_learning')(json_col, json_path) }}
+{%- endmacro %}
+
+{% macro default__json_extract_json_array(json_col, json_path) -%}
+    cast(json_extract({{ json_col }}, {{ json_path }}) as array(json))
+{%- endmacro %}
+
+{% macro duckdb__json_extract_json_array(json_col, json_path) -%}
+    cast(json_extract({{ json_col }}, {{ json_path }}) as json[])
+{%- endmacro %}
+
+{% macro starrocks__json_extract_json_array(json_col, json_path) -%}
+    cast(json_query(parse_json({{ json_col }}), {{ json_path }}) as array<json>)
+{%- endmacro %}
+
+
+{#
+    json_to_varchar: a native JSON value as its JSON text. Trino cannot write a JSON
+    value to an Iceberg v2 table, so an unnested JSON element needs this before it is
+    selected.
+#}
+{% macro json_to_varchar(json_expr) -%}
+    {{ adapter.dispatch('json_to_varchar', 'open_learning')(json_expr) }}
+{%- endmacro %}
+
+{% macro default__json_to_varchar(json_expr) -%}
+    json_format({{ json_expr }})
+{%- endmacro %}
+
+{% macro duckdb__json_to_varchar(json_expr) -%}
+    cast({{ json_expr }} as varchar)
+{%- endmacro %}
+
+{% macro starrocks__json_to_varchar(json_expr) -%}
+    cast({{ json_expr }} as varchar)
+{%- endmacro %}
+
+
+{#
+    array_to_json_string: an array (of strings, numbers or JSON values) as JSON text.
+    ['a', 'b'] -> '["a","b"]'.
+#}
+{% macro array_to_json_string(array_expr) -%}
+    {{ adapter.dispatch('array_to_json_string', 'open_learning')(array_expr) }}
+{%- endmacro %}
+
+{% macro default__array_to_json_string(array_expr) -%}
+    json_format(cast({{ array_expr }} as json))
+{%- endmacro %}
+
+{% macro duckdb__array_to_json_string(array_expr) -%}
+    cast(to_json({{ array_expr }}) as varchar)
+{%- endmacro %}
+
+
+{#
+    json_object_pair: a native JSON object with one key, for intra-query composition
+    (see json_extract_json for why it must not be selected as a column on Trino).
+#}
+{% macro json_object_pair(key_expr, value_expr) -%}
+    {{ adapter.dispatch('json_object_pair', 'open_learning')(key_expr, value_expr) }}
+{%- endmacro %}
+
+{% macro default__json_object_pair(key_expr, value_expr) -%}
+    json_parse(json_object({{ key_expr }} : {{ value_expr }}))
+{%- endmacro %}
+
+{% macro duckdb__json_object_pair(key_expr, value_expr) -%}
+    json_object({{ key_expr }}, {{ value_expr }})
+{%- endmacro %}
+
+
+{#
     json_nested_array_distinct_values: the distinct strings in a JSON array of arrays
     at `json_path`, sorted. '[["b", "a"], ["a"]]' -> ['a', 'b']. An absent path gives
     an empty array.
@@ -1180,10 +1276,18 @@
 {% macro json_nested_array_distinct_values(json_col, json_path) -%}
     coalesce(
         array_sort(array_distinct({{ 'array_flatten' if target.type == 'starrocks' else 'flatten' }}(
-            {{ adapter.dispatch('json_extract_nested_varchar_array', 'open_learning')(json_col, json_path) }}
+            {{ json_extract_nested_varchar_array(json_col, json_path) }}
         )))
         , {{ empty_varchar_array() }}
     )
+{%- endmacro %}
+
+{#
+    json_extract_nested_varchar_array: the JSON array of arrays at `json_path` as an
+    array of varchar arrays. '[["a", "b"], ["c"]]' -> [['a', 'b'], ['c']].
+#}
+{% macro json_extract_nested_varchar_array(json_col, json_path) -%}
+    {{ adapter.dispatch('json_extract_nested_varchar_array', 'open_learning')(json_col, json_path) }}
 {%- endmacro %}
 
 {% macro default__json_extract_nested_varchar_array(json_col, json_path) -%}
