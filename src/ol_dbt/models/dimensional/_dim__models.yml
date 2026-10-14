@@ -401,6 +401,8 @@ models:
     description: int, openedx user id for MITx Residential
   - name: user_residential_username
     description: string, username on MITx Residential
+  - name: user_bootcamps_username
+    description: string, username on Bootcamps
   - name: edxorg_openedx_user_id
     data_type: bigint
     description: int, openedx user id for edX.org
@@ -501,6 +503,19 @@ models:
       for MITxOnline and edX.org users (sourced via int__mitx__users, which coalesces
       MITxOnline, edX.org, and MicroMasters records), MITx Pro users, and Bootcamps
       users. Null for Emeritus, Global Alumni, and Residential users.
+  - name: user_street_address
+    description: str, street address. Person-level - street address, city and postal
+      code are taken together from one of the user's accounts, so all three describe
+      the same address. That is the account with the latest join date that has a street
+      address or postal code, ties broken by platform and then platform id. Emeritus
+      and Global Alumni accounts have no join date, so they rank last. Populated for
+      edX.org, MITx Pro, Bootcamps, Emeritus, Global Alumni and MicroMasters accounts.
+  - name: user_address_city
+    description: str, city of the address in user_street_address. For a user whose
+      only address is a MITx Residential account, which carries a city but no street
+      address or postal code, it is that city alone.
+  - name: user_address_postal_code
+    description: str, postal code of the address in user_street_address.
   - name: latest_income_usd
     description: numeric, the most recent income amount in USD from the user's flexible
       pricing (financial aid) application on MITxOnline. Null if the user has never
@@ -1970,6 +1985,94 @@ unit_tests:
       mitlearn_user_id:
       mitxpro_application_user_id: 7
       bootcamps_application_user_id: 3
+- name: test_dim_user_address_parts_come_from_one_account
+  description: >
+    Street, city and postal code are filled from a single account. The
+    Bootcamps account joined later, so it is the first with an address and
+    has a street only; the MITx Pro account has all three. The result is the
+    Bootcamps street with no city or postal code. Taking each part from the
+    first account that has it would return the MITx Pro city and postal code
+    beside the Bootcamps street. A Residential account that joined later and
+    has only a city does not replace a fuller address.
+  model: dim_user
+  given:
+  - input: ref('stg__mitxpro__app__postgres__users_user')
+    rows:
+    - user_id: 7
+      user_username: alan
+      user_email: alan@example.com
+      user_is_active: true
+      user_joined_on: '2022-01-01T00:00:00'
+  - input: ref('stg__mitxpro__app__postgres__users_legaladdress')
+    rows:
+    - user_id: 7
+      user_street_address: 1 Xpro Street
+      user_address_city: Xprotown
+      user_address_postal_code: '11111'
+  - input: ref('int__bootcamps__users')
+    rows:
+    - user_id: 3
+      user_username: alan-bootcamps
+      user_email: alan@example.com
+      user_is_active: true
+      user_joined_on: '2025-01-01T00:00:00'
+      user_street_address: 2 Bootcamps Street
+    - user_id: 4
+      user_username: carol-bootcamps
+      user_email: carol@example.com
+      user_is_active: true
+      user_joined_on: '2020-01-01T00:00:00'
+      user_street_address: 3 Bootcamps Street
+      user_address_city: Boston
+      user_address_postal_code: '02110'
+  # Inputs the case above doesn't use.
+  - input: ref('stg__mitlearn__app__postgres__users_user')
+    rows: []
+  - input: ref('int__mitx__users')
+    rows: []
+  - input: ref('int__mitxonline__flexiblepricing_flexiblepriceapplication')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopic')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile_topic_interests')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__openedx_openedxuser')
+    rows: []
+  - input: ref('stg__mitxonline__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_profile')
+    rows: []
+  - input: ref('stg__mitxpro__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__auth_user')
+    rows:
+    - user_id: 9
+      user_username: carol-residential
+      user_email: carol@example.com
+      user_is_active: true
+      user_joined_on: '2023-01-01T00:00:00'
+  - input: ref('stg__mitxresidential__openedx__auth_userprofile')
+    rows:
+    - user_id: 9
+      user_address_city: Cambridge
+  expect:
+    rows:
+    - email: alan@example.com
+      user_bootcamps_username: alan-bootcamps
+      user_street_address: 2 Bootcamps Street
+      user_address_city:
+      user_address_postal_code:
+    - email: carol@example.com
+      user_bootcamps_username: carol-bootcamps
+      user_street_address: 3 Bootcamps Street
+      user_address_city: Boston
+      user_address_postal_code: '02110'
 - name: test_afact_learner_courserun_progress_status_and_needs_attention
   description: >
     Pins completion_status and needs_attention_since, one learner per case.
