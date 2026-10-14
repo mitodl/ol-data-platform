@@ -1656,7 +1656,10 @@ models:
       so a source that records a local offset can be a day off UTC. not_started is
       the enrollment date (1970-01-01 when the enrollment has none); in_progress is
       last_active_on plus var needs_attention_quiet_days (30); null for in_progress
-      with a grade but no tracked activity, and for passed and certified.
+      with a grade but no tracked activity, and for passed and certified. It is a
+      threshold to compare against. Days needing attention is <current UTC date> -
+      needs_attention_since only where the predicate above holds (a future date is
+      a learner not yet due) and never for the 1970-01-01 rows.
   - name: content_units_completed
     description: int, units (Open edX verticals) of the run's current course structure
       the learner has completed, from afact_learner_courserun_content_progress. A
@@ -2761,3 +2764,52 @@ unit_tests:
     - event_id: "stored-check-id"
       user_fk: "NEW_USER_PK"
       event_type: "problem_check"
+- name: test_tfact_discussion_events_date_fk_keeps_the_source_day
+  description: >
+    date_fk is the day written in the source timestamp, with the offset dropped,
+    not the UTC day. The activity fact and needs_attention_since inherit it, so a
+    change here moves a learner's needs-attention date by a day.
+  model: tfact_discussion_events
+  given:
+  - input: ref('stg__mitxonline__openedx__tracking_logs__user_activity')
+    rows:
+    # 2024-01-16 04:30 UTC.
+    - user_username: "late"
+      openedx_user_id: 1
+      courserun_readable_id: "course-v1:MITx+1.01x+1T2024"
+      useractivity_event_type: "edx.forum.thread.created"
+      useractivity_event_object: "{}"
+      useractivity_timestamp: "2024-01-15T23:30:00.123456-05:00"
+    # 2024-01-15 22:30 UTC.
+    - user_username: "early"
+      openedx_user_id: 2
+      courserun_readable_id: "course-v1:MITx+1.01x+1T2024"
+      useractivity_event_type: "edx.forum.thread.created"
+      useractivity_event_object: "{}"
+      useractivity_timestamp: "2024-01-16T00:30:00.123456+02:00"
+    - user_username: "utc"
+      openedx_user_id: 3
+      courserun_readable_id: "course-v1:MITx+1.01x+1T2024"
+      useractivity_event_type: "edx.forum.thread.created"
+      useractivity_event_object: "{}"
+      useractivity_timestamp: "2024-01-15T23:30:00.123456Z"
+  - input: ref('stg__mitxpro__openedx__tracking_logs__user_activity')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__tracking_logs__user_activity')
+    rows: []
+  - input: ref('stg__edxorg__s3__tracking_logs__user_activity')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  expect:
+    rows:
+    - user_username: "late"
+      date_fk: 20240115
+    - user_username: "early"
+      date_fk: 20240116
+    - user_username: "utc"
+      date_fk: 20240115
