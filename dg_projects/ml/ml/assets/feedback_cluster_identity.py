@@ -103,7 +103,17 @@ def _select_run_to_process(
             & (pl.col("embedding_dim") == EMBEDDING_DIM)
             & (pl.col("embedding_input_filter") == PRODUCTION_EMBEDDING_INPUT)
         )
-        .select(["cluster_run_id", "run_at"])
+        .select(
+            "cluster_run_id",
+            "run_at",
+            # A table written before these columns existed holds full refreshes only
+            *(
+                pl.col(column)
+                if column in runs_lazy.collect_schema().names()
+                else pl.lit(None, dtype=pl.String).alias(column)
+                for column in ("run_type", "base_cluster_run_id")
+            ),
+        )
         .collect()
     )
     if runs_df.height == 0:
@@ -130,6 +140,12 @@ def _select_run_to_process(
     )
     if live_run_at_df.height:
         unprocessed = unprocessed.filter(pl.col("run_at") > live_run_at_df.item())
+    # An incremental run that finished after another run went live extended the
+    # wrong base; _check_incremental_base would reject it on every selection.
+    unprocessed = unprocessed.filter(
+        pl.col("run_type").ne_missing(pl.lit("incremental"))
+        | pl.col("base_cluster_run_id").eq_missing(pl.lit(live_run_id))
+    )
     unprocessed = unprocessed.sort("run_at", descending=True)
     if unprocessed.height == 0:
         return None

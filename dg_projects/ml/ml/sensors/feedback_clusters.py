@@ -14,7 +14,6 @@ from ml.lib.cluster import (
     platforms_to_run_value,
     should_trigger_early_recluster,
 )
-from ml.lib.cluster_run_lookup import latest_identity_processed_run
 from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
 from ml.lib.iceberg_helpers import table_exists
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
@@ -64,16 +63,36 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
         .item()
     )
 
-    if latest_identity_processed_run(catalog, cluster_database_name) is None:
+    # Start only a run that can succeed: an incremental run needs an active
+    # cluster, and a processed run can have none (an all-noise first run).
+    if not table_exists(catalog, f"{cluster_database_name}.feedback_cluster") or (
+        get_dbt_model_as_dataframe(
+            database_name=cluster_database_name, table_name="feedback_cluster"
+        )
+        .filter(
+            (pl.col("cluster_status") == "active")
+            & (pl.col("embedding_model_version") == default_embedding_model_version())
+            & (pl.col("embedding_dim") == EMBEDDING_DIM)
+            & (pl.col("embedding_input_filter") == "summary")
+        )
+        .select(pl.len())
+        .collect()
+        .item()
+        == 0
+    ):
         return SkipReason("No live clusters to extend; run a full recluster first")
     processed_run_ids = (
         get_dbt_model_as_dataframe(
-            database_name=cluster_database_name, table_name="feedback_cluster_lineage"
+            database_name=cluster_database_name,
+            table_name="feedback_cluster_identity_run",
         )
         .select("cluster_run_id")
-        .unique()
         .collect()["cluster_run_id"]
         .to_list()
+        if table_exists(
+            catalog, f"{cluster_database_name}.feedback_cluster_identity_run"
+        )
+        else []
     )
     # Promoted counts as soon as the run completes, so this sensor's own run is not
     # started again while identity catches up. Processed counts too: a run promoted
@@ -113,6 +132,13 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
         baseline_df.item() if baseline_df.height else None
     )
 
+    if last_completed_total_conversations is None:
+        # The clusters in use have another embedding config or scope, which an
+        # incremental run would reject
+        return SkipReason(
+            "No run with the default embedding config and scope is in use; run a "
+            "full recluster first"
+        )
     if should_trigger_early_recluster(
         embedding_count, last_completed_total_conversations
     ):

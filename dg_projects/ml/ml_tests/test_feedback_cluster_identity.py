@@ -208,6 +208,13 @@ def test_select_run_to_process_skips_runs_older_than_the_live_one() -> None:
     assert select(runs_lf) == "newer"
     assert select(runs_lf.filter(pl.col("cluster_run_id") != "newer")) is None
 
+    # An incremental run that finished after another run went live is skipped
+    stale_base_lf = runs_lf.with_columns(
+        pl.Series("run_type", [None, None, "incremental"], dtype=pl.String),
+        pl.Series("base_cluster_run_id", [None, None, "stale"], dtype=pl.String),
+    )
+    assert select(stale_base_lf) is None
+
 
 def test_select_run_to_process_explicit_override_bypasses_filter() -> None:
     # An operator-supplied cluster_run_id (e.g. to process a bake-off run on
