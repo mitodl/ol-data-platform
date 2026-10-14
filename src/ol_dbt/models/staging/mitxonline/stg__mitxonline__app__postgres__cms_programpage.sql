@@ -18,6 +18,13 @@ with source as (
         , video_url as program_video_url
         , {{ json_query_string('price', "'$[0].value.text'") }} as program_price
         , feature_image_id as program_feature_image_id
+        , min_weeks as program_min_weeks
+        , max_weeks as program_max_weeks
+        , min_weekly_hours as program_min_weekly_hours
+        , max_weekly_hours as program_max_weekly_hours
+        , min_price as program_min_price
+        , max_price as program_max_price
+        , include_in_learn_catalog as program_is_in_learn_catalog
     from most_recent_source
 )
 

@@ -51,7 +51,7 @@ These columns are optional but recommended for most marts:
 
 Each source may add additional columns following its needs. Common patterns include:
 
-### Course Sources (MITxOnline, MIT edX)
+### Course Sources (MIT edX)
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -61,7 +61,7 @@ Each source may add additional columns following its needs. Common patterns incl
 | `runs` | string | Semicolon-separated run records; each record is pipe-delimited: `readable_id\|start_on\|end_on\|is_live` |
 | `published` | boolean | Whether the resource is published/live |
 
-### Program Sources (MITxOnline, MIT edX)
+### Program Sources (MIT edX)
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -152,6 +152,94 @@ page's faculty), `courses` (comma-separated readable ids of its live courses, in
 order), and the fields of the single run MIT Learn gives a program: `price`, `start_date` and
 `enrollment_start` (from the earliest open run of the program's first course) and `end_date`
 (the latest end of any live run of its courses).
+
+### MITx Online
+
+The four MITx Online models carry what MIT Learn's MITx Online ETL
+(`learning_resources/etl/mitxonline.py`) reads from MITx Online's catalog API, with the
+API's rules for what is listed and the ETL's rules for what is published. They do not
+follow the delimited-string columns above. Courses come from `/api/internal/courses/`,
+which lists every course and every run and ignores `?live=true`; programs come from
+`/api/v2/programs/?live=true`, which leaves out B2B-only programs.
+
+Neither catalog model has a `url`: MIT Learn points a MITx Online resource at its own site
+(`/courses/<readable_id>`, `/programs/<readable_id>`, or `/courses/p/<readable_id>` for a
+program with `display_mode` `course`) when `has_page` is true, and builds that from its own
+base URL. `description` is the page's HTML: the API strips the tags (`bleach.clean` with no
+allowed tags) before MIT Learn's `clean_data`, so the Sync task has to do both.
+
+`integrations__learn__mitxonline_courses` has one row per course, published or not, except
+courses titled "Proctored Exam", which the ETL drops. Beyond the required columns:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `image_url` | string | The page's feature image with the `?v=<file hash>` suffix the API adds |
+| `has_page` | boolean | Whether the course has a CMS page |
+| `published` | boolean | Page live, `include_in_learn_catalog`, and a published run in `integrations__learn__mitxonline_runs` |
+| `include_in_learn_catalog`, `ingest_content_files_for_ai` | boolean | Page flags; the second is MIT Learn's `force_ingest` |
+| `topics` | array(string) | The page's topics and their parent topics, sorted |
+| `departments` | array(string) | Department names, sorted. MIT Learn maps names to department ids and drops a name it does not know |
+| `course_numbers` | array(string) | Course numbers of the runs, latest run first; the first is primary |
+| `certification` | boolean | Whether a published, current run offers the verified mode |
+| `certification_type` | string | `MicroMasters Credential` or `Certificate of Completion`; used only when `certification` is true |
+| `availability` | string | `dated` when any run is enrollable and not self-paced, else `anytime` |
+| `pace` | array(string) | Distinct `pace` of the course's runs |
+| `duration`, `time_commitment` | string | Free text from the page |
+| `min_weeks`, `max_weeks` | int | From the page |
+| `min_weekly_hours`, `max_weekly_hours` | string | From the page, as stored; MIT Learn parses them to integers |
+| `min_price`, `max_price` | decimal | The page's certificate price range |
+
+`integrations__learn__mitxonline_runs` has one row per run of those courses, source runs and
+B2B runs included, because MIT Learn stores those too, unpublished. `published`, `status`
+and `prices` depend on the time the model builds.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `readable_id` | string | The run's course |
+| `run_id` | string | Courseware id; unique |
+| `title` | string | Run title |
+| `start_date`, `end_date`, `enrollment_start`, `enrollment_end` | string | ISO 8601 UTC, nullable. `start_date` falls back to `enrollment_start` |
+| `published` | boolean | Not a variant, enrollable, and the course page is live |
+| `b2b_only`, `is_variant` | boolean | A variant is a B2B-only run or one whose language matches a non-default variant set of the course |
+| `status` | string | `Current` when the course has a page and the run is fully enrollable, else `Archived` |
+| `pace` | string | `self_paced` or `instructor_paced` |
+| `language`, `course_number` | string | From the run |
+| `has_verified_mode` | boolean | Whether the run offers the verified enrollment mode |
+| `prices` | array(decimal) | Zero for the audit mode, the page's min and max price for the verified mode; only zero when the run is not current or the page has no price |
+| `instructors` | array(string) | Names of the course page's instructors. A name linked twice appears twice |
+
+`integrations__learn__mitxonline_programs` has one row per live program that is not B2B-only.
+It has `image_url`, `has_page`, `topics` (the page topics of its live courses, without
+parents), `departments`, `certification`, `certification_type`, `availability`, the duration
+and price columns above, `display_mode`, `published` (page live and `include_in_learn_catalog`)
+and the fields of the single run MIT Learn gives a program: `start_date`, `end_date`,
+`enrollment_start`, `enrollment_end` and `prices`. The run's `pace` is the distinct pace of
+the program's courses and is left to the Sync task.
+
+`integrations__learn__mitxonline_program_children` has one row per program and child, from
+the program's requirement tree:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `readable_id` | string | The parent program |
+| `child_resource_type` | string | `course` or `program` |
+| `child_readable_id` | string | The child course or program |
+| `child_display_mode` | string | A child program's display mode; null for a course |
+| `child_position` | int | Zero-based place in the tree, in the order MIT Learn gives a program's courses. Null for a child program not shown as a course, whose courses are listed under the parent with positions of their own |
+
+A course is listed only when its page is live, so positions have gaps. A required program is
+followed one level down: no required program requires another today.
+
+`courses_programrequirement` and `courses_program_departments` are replicated without
+deletes. A deleted tree node whose path another node took is left out (the staging model
+keeps the higher id of a path, which is the wrong row if the path went to an older sibling
+that moved up), and one whose path was not reused still appears as a child. A department
+removed from a program can linger too.
+
+Checked on 2026-10-13 against a build on production raw: the models publish the same 157
+courses and 28 programs MIT Learn does, with the same published runs, run dates, prices,
+course numbers, certification, availability, pace and images, and the same position for
+every program child MIT Learn shows.
 
 ### Content File Sources
 
@@ -291,3 +379,4 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-06 | Tobias Macey | xPRO models rebuilt on what MIT Learn's xPRO ETL reads from the xPRO catalog API. Added `integrations__learn__xpro_runs` with prices and enrollment dates. `runs`, `page_slug`, `length`, `effort` and the course `instructors` string are gone from the xPRO models; `topics` is an array; `url` is absolute; `published` follows price. |
 | 2026-10-07 | Tobias Macey | `integrations__learn__ocw_courses` rebuilt on each course's published `data.json`, which MIT Learn's OCW ETL reads, in place of ocw-studio's database. `readable_id` takes Learn's form; added `run_id`, `slug`, `image_alt`, `image_description`, `ocw_topics`, `content_tags`, `hide_download`; `level`, `extra_course_numbers`, `departments` and `topics` are arrays; `departments` holds numbers; `instructors` is JSON; `description` is HTML; `url` ends in a slash. |
 | 2026-10-09 | Tobias Macey | The OCW models leave out a bucket directory that no ocw-studio site has as its `url_path` (the old path of a renamed site), which had put two rows with one `readable_id` and `run_id` in `integrations__learn__ocw_courses`. |
+| 2026-10-13 | Tobias Macey | MITx Online models rebuilt on what MIT Learn's MITx Online ETL reads from the MITx Online catalog API. Added `integrations__learn__mitxonline_runs` and `integrations__learn__mitxonline_program_children`. `runs`, `courses`, `url`, `page_slug`, `price`, `length`, `effort`, `instructors` and `program_type` are gone from the courses and programs models; `topics` and `departments` are arrays; `published` follows MIT Learn's rule; B2B-only programs are left out and courses that are not live are included. |

@@ -13,6 +13,12 @@ with source as (
         , title as program_title
         , readable_id as program_readable_id
         , availability as program_availability
+        , display_mode as program_display_mode
+        , b2b_only as program_is_b2b_only
+        , {{ cast_timestamp_to_iso8601('start_date') }} as program_start_on
+        , {{ cast_timestamp_to_iso8601('end_date') }} as program_end_on
+        , {{ cast_timestamp_to_iso8601('enrollment_start') }} as program_enrollment_start_on
+        , {{ cast_timestamp_to_iso8601('enrollment_end') }} as program_enrollment_end_on
         , if(program_type like 'MicroMasters%', 'MicroMasters', program_type) as program_type
         , if(program_type like 'MicroMasters%', true, false) as program_is_micromasters
         , if(program_type like 'MicroMasters%', 'MicroMasters Credential', 'Certificate of Completion')
