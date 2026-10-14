@@ -150,18 +150,20 @@ def iceberg_raw_orphan_files(
             f"{[t.refused for t in result.refused[:3]] + result.failures[:3]}"
         )
         raise RuntimeError(msg)
+    orphan_objects = sum(t.orphan_objects for t in examined)
+    orphan_bytes = sum(t.orphan_bytes for t in examined)
+    eligible_objects = sum(t.eligible_objects for t in examined)
+    eligible_bytes = sum(t.eligible_bytes for t in examined)
     metadata: dict[str, Any] = {
         "glue_database": MetadataValue.text(RAW_GLUE_DATABASE),
         "min_age_days": MetadataValue.int(config.min_age_days),
         "tables_examined": MetadataValue.int(len(examined)),
         "objects_listed": MetadataValue.int(sum(t.objects_listed for t in examined)),
         "bytes_listed": MetadataValue.int(sum(t.bytes_listed for t in examined)),
-        "orphan_objects": MetadataValue.int(sum(t.orphan_objects for t in examined)),
-        "orphan_bytes": MetadataValue.int(sum(t.orphan_bytes for t in examined)),
-        "eligible_objects": MetadataValue.int(
-            sum(t.eligible_objects for t in examined)
-        ),
-        "eligible_bytes": MetadataValue.int(sum(t.eligible_bytes for t in examined)),
+        "orphan_objects": MetadataValue.int(orphan_objects),
+        "orphan_bytes": MetadataValue.int(orphan_bytes),
+        "eligible_objects": MetadataValue.int(eligible_objects),
+        "eligible_bytes": MetadataValue.int(eligible_bytes),
         "orphan_details": MetadataValue.json(_detail_rows(result)),
         # Left alone, each for the reason given. Their orphans are not counted
         # above, so the totals are a lower bound while any are listed.
@@ -182,24 +184,43 @@ def iceberg_raw_orphan_files(
 
     delete_errors = [error for t in examined for error in t.delete_errors]
     if config.delete:
+        deleted_objects = sum(t.deleted_objects or 0 for t in examined)
+        deleted_bytes = sum(t.deleted_bytes or 0 for t in examined)
         metadata |= {
             "delete_status": MetadataValue.text("ran"),
-            "deleted_objects": MetadataValue.int(
-                sum(t.deleted_objects or 0 for t in examined)
-            ),
-            "deleted_bytes": MetadataValue.int(
-                sum(t.deleted_bytes or 0 for t in examined)
-            ),
+            "deleted_objects": MetadataValue.int(deleted_objects),
+            "deleted_bytes": MetadataValue.int(deleted_bytes),
             "delete_error_count": MetadataValue.int(len(delete_errors)),
         }
+        delete_summary = (
+            f"ran, {deleted_objects} objects ({deleted_bytes} bytes) deleted, "
+            f"error count {len(delete_errors)}"
+        )
     else:
         # No deleted_* keys in a report run. A zero there would read as "ran
         # and found nothing to delete".
         metadata["delete_status"] = MetadataValue.text("not run (report only)")
+        delete_summary = "not run (report only)"
 
-    # Raising drops the metadata above. The pass has already logged every table
-    # it failed on or deleted from to context.log, so the run's log is the
-    # record.
+    # The metadata is only in the event log, and raising below drops it. This
+    # line, and the pass's own per-table lines (every table it failed on or
+    # deleted from), reach the compute log either way.
+    context.log.info(
+        "%s: %d tables examined, %d refused, %d failed. Orphan %d objects "
+        "(%d bytes), eligible %d objects (%d bytes). Delete: %s. Unreadable "
+        "Glue databases: %s.",
+        RAW_GLUE_DATABASE,
+        len(examined),
+        len(result.refused),
+        len(result.failures),
+        orphan_objects,
+        orphan_bytes,
+        eligible_objects,
+        eligible_bytes,
+        delete_summary,
+        sorted(result.unreadable_databases),
+    )
+
     threshold = maintenance_failure_threshold(attempted)
     if len(result.failures) >= threshold:
         msg = (
