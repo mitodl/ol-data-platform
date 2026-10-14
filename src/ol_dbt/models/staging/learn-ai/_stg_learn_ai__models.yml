@@ -172,3 +172,27 @@ models:
   - name: rating_updated_on
     data_type: timestamp
     description: date and time when the rating was last updated.
+
+unit_tests:
+- name: test_stg__learn_ai__app__postgres__chatbots_djangocheckpoint_reads_messages_from_the_list
+  description: >
+    A checkpoint's writes hold their messages as a list of one message. The
+    content comes from the first message, and a checkpoint with no writes has
+    neither message.
+  model: stg__learn_ai__app__postgres__chatbots_djangocheckpoint
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__learn_ai__app__postgres__ai_chatbots_djangocheckpoint')
+    rows:
+    - {id: 1, _airbyte_extracted_at: 1, created_on: "2026-10-01 00:00:00", metadata: '{"step":
+        0, "source": "input", "writes": {"__start__": {"messages": [{"kwargs": {"content":
+        "What is a fixture?"}}]}}}'}
+    - {id: 2, _airbyte_extracted_at: 1, created_on: "2026-10-01 00:00:01", metadata: '{"step":
+        1, "source": "loop", "writes": {"agent": {"messages": [{"kwargs": {"content":
+        "A stand-in row."}}]}}}'}
+    - {id: 3, _airbyte_extracted_at: 1, created_on: "2026-10-01 00:00:02", metadata: '{"step":
+        2, "source": "loop", "writes": null}'}
+  expect:
+    rows:
+    - {djangocheckpoint_id: 1, human_message: "What is a fixture?", agent_message: null}
+    - {djangocheckpoint_id: 2, human_message: null, agent_message: A stand-in row.}
+    - {djangocheckpoint_id: 3, human_message: null, agent_message: null}

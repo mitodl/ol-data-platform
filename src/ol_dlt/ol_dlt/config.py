@@ -12,7 +12,10 @@ Dagster code location maps ``DAGSTER_ENVIRONMENT`` -> ``DLT_PROFILE`` before
 importing pipeline factories.
 
 Profiles:
-  - dev / ci: local filesystem, parquet, dataset ol_warehouse_<profile>_raw
+  - dev: the local lake of ol-infrastructure/local-dev (RustFS behind the
+    Gravitino Iceberg REST catalog), iceberg, dataset ol_warehouse_local_raw,
+    which is the schema the ``starrocks_local`` dbt profile reads sources from
+  - ci: local filesystem, parquet, dataset ol_warehouse_ci_raw
   - test: ephemeral tmp filesystem, parquet, dataset ol_warehouse_test_raw
   - qa / production: s3://ol-data-lake-raw-<profile>/<source> with the Glue
     catalog, iceberg, dataset ol_warehouse_<profile>_raw
@@ -28,8 +31,23 @@ from dlt.destinations import filesystem
 
 DEFAULT_PROFILE = "dev"
 
-# Profiles that write Iceberg tables to S3 and register them in the Glue catalog.
-ICEBERG_PROFILES = frozenset({"qa", "production"})
+# Profiles that run against a deployed environment: Glue catalog, the raw data
+# lake bucket, and credentials from Vault.
+DEPLOYED_PROFILES = frozenset({"qa", "production"})
+
+# The profile that writes to the local lake. It keeps the name `dev` and gets no
+# `local` beside it, as the StarRocks `dev` env does.
+LOCAL_LAKE_PROFILE = "dev"
+
+# Profiles that write Iceberg tables through a catalog.
+ICEBERG_PROFILES = DEPLOYED_PROFILES | {LOCAL_LAKE_PROFILE}
+
+# The local lake, as ol-infrastructure's local-dev/infra/modules/lakehouse.py
+# and objectstore.py define it. The catalog itself (REST endpoint, object store
+# endpoint and keys) is the entry of this name in .dlt/.pyiceberg.yaml.
+LOCAL_LAKE_CATALOG = "ol-data-lake-local"
+LOCAL_LAKE_BUCKET_ROOT = "s3://ol-data-lake-local/raw"
+LOCAL_LAKE_DATASET = "ol_warehouse_local_raw"
 
 # dlt's table_format hint accepts only iceberg/delta/hive/native (NOT "parquet",
 # and NOT None per the type stub). "native" means the destination's native format
@@ -102,8 +120,8 @@ def active_profile() -> str:
 def active_table_format(profile: str | None = None) -> TableFormat:
     """Return the table format for the (active) profile.
 
-    ``"iceberg"`` for qa/production, ``"native"`` (plain filesystem parquet) for
-    dev/ci/test. Use this in ``@dlt.resource(..., table_format=...)`` so a source
+    ``"iceberg"`` for dev/qa/production, ``"native"`` (plain filesystem parquet)
+    for ci/test. Use this in ``@dlt.resource(..., table_format=...)`` so a source
     body never branches on the environment itself.
 
     Takes an optional explicit ``profile`` for the same reason ``dataset_name``
@@ -115,21 +133,27 @@ def active_table_format(profile: str | None = None) -> TableFormat:
 
 
 def dataset_name(profile: str | None = None) -> str:
-    """Return the dataset/Glue-database name for the (active) profile."""
-    return f"ol_warehouse_{profile or active_profile()}_raw"
+    """Return the dataset (catalog namespace) name for the (active) profile."""
+    resolved = profile or active_profile()
+    if resolved == LOCAL_LAKE_PROFILE:
+        return LOCAL_LAKE_DATASET
+    return f"ol_warehouse_{resolved}_raw"
 
 
 def bucket_root(profile: str | None = None) -> str:
     """Return the destination bucket root (no trailing slash) for the profile.
 
     qa/production resolve to the raw data lake bucket for that environment.
-    Local profiles (dev/ci/test) resolve to a filesystem path; the
-    ``OL_DLT_BUCKET_URL`` env var overrides it (the test harness sets this to a
-    per-test tmp dir).
+    dev resolves to a prefix of the local lake's bucket: its catalog and
+    credentials belong to that one object store, so nothing overrides it.
+    ci/test resolve to a filesystem path, which the ``OL_DLT_BUCKET_URL`` env
+    var overrides (the test harness sets it to a per-test tmp dir).
     """
     resolved = profile or active_profile()
-    if resolved in ICEBERG_PROFILES:
+    if resolved in DEPLOYED_PROFILES:
         return f"s3://ol-data-lake-raw-{resolved}"
+    if resolved == LOCAL_LAKE_PROFILE:
+        return LOCAL_LAKE_BUCKET_ROOT
     override = os.getenv("OL_DLT_BUCKET_URL")
     if override:
         return override.rstrip("/")
@@ -144,11 +168,20 @@ def destination_for(source_name: str, profile: str | None = None) -> Any:  # noq
     Each source gets an isolated ``<bucket_root>/<source_name>`` prefix, matching
     the per-source destination isolation that used to be enumerated in
     ``.dlt/config.toml``.
+
+    The local lake's destination carries its object store credentials, and
+    those are also what selects its catalog: see ``ol_dlt.local_lake``.
     """
-    root = bucket_root(profile)
+    options: dict[str, Any] = {}
+    if (profile or active_profile()) == LOCAL_LAKE_PROFILE:
+        # Imported here because local_lake reads this module's constants.
+        from ol_dlt.local_lake import object_store_credentials  # noqa: PLC0415
+
+        options["credentials"] = object_store_credentials()
     return filesystem(
-        bucket_url=f"{root}/{source_name}",
+        bucket_url=f"{bucket_root(profile)}/{source_name}",
         layout=_LAYOUT,
+        **options,
     )
 
 

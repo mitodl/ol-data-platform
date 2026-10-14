@@ -371,7 +371,7 @@ def _incrementally_place_new_embeddings(  # noqa: PLR0913 -- one filter per scop
 
 
 @asset(
-    code_version="feedback_cluster_assignment_v2",
+    code_version="feedback_cluster_assignment_v3",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_cluster_membership"]),
     deps=[

@@ -29,7 +29,7 @@ def resolve_client_credentials(
     ``<env_prefix>_CLIENT_ID`` / ``_CLIENT_SECRET`` / ``_ACCESS_TOKEN_URL``
     environment variables apply only to the other profiles.
     """
-    if config.active_profile() in config.ICEBERG_PROFILES:
+    if config.active_profile() in config.DEPLOYED_PROFILES:
         oauth_client = vault.read_kv_secret(KV_MOUNT, vault_path)
         return {
             "client_id": oauth_client["id"],

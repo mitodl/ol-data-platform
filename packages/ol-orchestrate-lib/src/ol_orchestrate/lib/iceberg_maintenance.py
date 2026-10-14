@@ -38,7 +38,7 @@ committed data.
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import logging
 import re
 from collections.abc import Collection
@@ -157,11 +157,14 @@ RAW_LAYER_GROUP_CONFIGS: dict[str, RawLayerGroupConfig] = {
 # Airbyte's S3 Data Lake destination writes each sync to a branch named
 # ``airbyte_staging_<uuid>`` and leaves the branch behind once ``main`` has been
 # moved. pyiceberg never expires the head of a branch, so each leftover branch
-# keeps one snapshot (and every file it references) for good. The bare
-# ``airbyte_staging`` branch is not matched: whether the connector writes to it
-# again after creating it has not been checked.
+# keeps one snapshot (and every file it references) for good.
+#
+# The bare ``airbyte_staging`` branch is what the connector wrote to before
+# 0.3.50 (airbytehq/airbyte#79112), which replaced it with the per-sync name.
+# Nothing from 0.3.50 on creates, writes or removes it, so a stale one is
+# removed like the others.
 AIRBYTE_STAGING_BRANCH = re.compile(
-    r"airbyte_staging_[0-9a-f]{8}(?:_[0-9a-f]{4}){3}_[0-9a-f]{12}"
+    r"airbyte_staging(?:_[0-9a-f]{8}(?:_[0-9a-f]{4}){3}_[0-9a-f]{12})?"
 )
 MAIN_BRANCH = "main"
 
@@ -399,9 +402,7 @@ def expire_snapshots(  # noqa: PLR0913
       that would be).
     - ``stale_branch_count`` (int): Number of branches removed (or that would be).
     """
-    cutoff_dt = datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(
-        days=retention_days
-    )
+    cutoff_dt = dt.datetime.now(tz=dt.UTC) - dt.timedelta(days=retention_days)
     cutoff_ms = int(cutoff_dt.timestamp() * 1000)
 
     table = catalog.load_table(f"{database}.{table_name}")
@@ -614,7 +615,7 @@ def load_raw_layer_maintenance_work(
     log.info("Found %d Iceberg tables in %s", len(iceberg_table_names), glue_database)
 
     # ── 2. Load each table's snapshot metadata ────────────────────────────
-    now_ms = int(datetime.datetime.now(tz=datetime.UTC).timestamp() * 1000)
+    now_ms = int(dt.datetime.now(tz=dt.UTC).timestamp() * 1000)
     results: list[RawLayerTableInfo] = []
     failures: list[str] = []
 

@@ -116,11 +116,11 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # Never dev: it resolves to the production warehouse.
     "lake_orphan_sweep_weekly": frozenset({"qa"}),
     # Lists every raw Iceberg table's directory and compares it with what the
-    # table's metadata still reaches. It only reports until the asset's
-    # ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS names an environment, which
-    # today is nowhere. Production from the start, unlike the sweep: raw
-    # snapshot expiry runs there alone, so that is where the files it strands
-    # are, and a report reads Glue and S3 and writes nothing. Never dev: it
+    # table's metadata still reaches. It only reports unless the asset's
+    # ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS names the environment, which
+    # today is QA. Production from the start, unlike the sweep: raw
+    # snapshot expiry ran there first, so that is where most of the files it
+    # strands are, and a report reads Glue and S3 and writes nothing. Never dev: it
     # resolves to the production warehouse.
     "iceberg_raw_orphan_files_weekly": frozenset({"qa", "production"}),
     # `dbt docs generate` for OpenMetadata. Its JOB is the one that demonstrably

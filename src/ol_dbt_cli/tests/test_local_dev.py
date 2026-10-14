@@ -19,6 +19,8 @@ from ol_dbt_cli.commands.local_dev import (
     _show_registry,
     _stale_threshold_phrase,
     _validate_schema_safety,
+    list_sources,
+    register,
     snapshot,
 )
 
@@ -583,3 +585,22 @@ class TestGetGlueTablesFiltersShadowTables:
             tables = _get_glue_tables("ol_warehouse_production_dimensional")
 
         assert [t["name"] for t in tables] == ["dim_course"]
+
+
+class TestModeBanner:
+    """`ol-dbt local` reads the deployed lake, and says so before it does anything."""
+
+    def test_register_names_the_glue_databases_and_the_local_lake_command(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        with patch("ol_dbt_cli.commands.local_dev._get_glue_tables", return_value=[]):
+            register(database="ol_warehouse_production_raw", duckdb_path=tmp_path / "local.duckdb", dry_run=True)
+
+        out = capsys.readouterr().out
+        assert "reading AWS Glue (ol_warehouse_production_raw)" in out
+        assert "ol-dbt starrocks build --env dev" in out
+
+    def test_list_sources_says_it_too(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        list_sources(duckdb_path=tmp_path / "absent.duckdb")
+
+        assert "reading AWS Glue." in capsys.readouterr().out

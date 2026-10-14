@@ -10,8 +10,10 @@ from pyiceberg.table import Table
 
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
+from ol_orchestrate.lib.local_lake import get_local_lake_catalog, local_lake_database
 
 FIXTURE_DIR_VARIABLE = "DBT_MODEL_FIXTURE_DIR"
+LOCAL_LAKE_VARIABLE = "DBT_MODEL_LOCAL_LAKE"
 
 TYPE_RENAME = types.MappingProxyType(
     {
@@ -146,7 +148,28 @@ def get_dbt_model_as_dataframe(database_name: str, table_name: str) -> pl.LazyFr
     an asset can run on a laptop with no AWS credentials. The database name is
     not part of the path, because it differs by environment and the fixture
     does not.
+
+    Also in dev, ``DBT_MODEL_LOCAL_LAKE`` (any value) replaces the Glue read
+    with the table of the same name in the local lake of
+    ol-infrastructure/local-dev, in the ``ol_warehouse_local_<layer>`` schema
+    that ``ol-dbt starrocks build --env dev`` writes. Setting both variables is
+    an error: nothing says which of the two the run was meant to read.
     """
-    if DAGSTER_ENV == "dev" and (fixture_dir := os.environ.get(FIXTURE_DIR_VARIABLE)):
-        return pl.scan_ndjson(Path(fixture_dir) / f"{table_name}.jsonl")
+    if DAGSTER_ENV == "dev":
+        fixture_dir = os.environ.get(FIXTURE_DIR_VARIABLE)
+        local_lake = os.environ.get(LOCAL_LAKE_VARIABLE)
+        if fixture_dir and local_lake:
+            msg = (
+                f"{FIXTURE_DIR_VARIABLE} and {LOCAL_LAKE_VARIABLE} are both set. "
+                "Unset the one this run should not read."
+            )
+            raise ValueError(msg)
+        if fixture_dir:
+            return pl.scan_ndjson(Path(fixture_dir) / f"{table_name}.jsonl")
+        if local_lake:
+            return scan_dbt_model_table(
+                get_local_lake_catalog().load_table(
+                    f"{local_lake_database(database_name)}.{table_name}"
+                )
+            )
     return scan_dbt_model_table(load_dbt_model_table(database_name, table_name))

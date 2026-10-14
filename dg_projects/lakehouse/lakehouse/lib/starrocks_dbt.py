@@ -14,6 +14,8 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from jinja2 import Environment
+
 # Retries are of the whole `dbt build`, since dbt-starrocks has no adapter-level
 # retry of its own. Two failure modes need covering, and the slower one sets the
 # schedule: a rolling restart of the 3-replica FE StatefulSet, measured at ~3
@@ -325,6 +327,139 @@ def drifted_relations(
         for relation, columns in documented.items()
         if relation in live and columns != live[relation]
     )
+
+
+class MissingBaseTablesError(Exception):
+    """A full refresh was called for while a base table could not be read."""
+
+    def __init__(self, failures: Mapping[str, Exception]) -> None:
+        self.failures = dict(failures)
+        detail = "\n".join(f"{name}: {exc}" for name, exc in self.failures.items())
+        super().__init__(
+            f"{len(self.failures)} base table(s) of the StarRocks materialized "
+            "views could not be read, so the views were not rebuilt with "
+            f"--full-refresh and still hold their previous definition:\n{detail}"
+        )
+
+
+def _render_source_part(
+    source: Mapping[str, Any], part: str, env: Mapping[str, str]
+) -> str:
+    """Render a source's database or schema against *env*.
+
+    The manifest's rendered `database` and `schema` can't be used. One image
+    serves every environment, so its manifest is parsed at build time with a
+    placeholder DBT_DATA_LAKE_ENV (see the Dockerfile), and the build itself
+    re-parses with the run-time value. Rendering the YAML's own template with
+    the run-time environment names the catalog the build will read.
+    """
+    template = source.get(f"unrendered_{part}")
+    if not template:
+        return source[part]
+
+    def env_var(name: str, default: str | None = None) -> str:
+        return env[name] if default is None else env.get(name, default)
+
+    # S701: the output is an identifier inside a SQL statement, not HTML.
+    return Environment().from_string(template).render(env_var=env_var)  # noqa: S701
+
+
+def base_table_relations(
+    manifest: Mapping[str, Any], env: Mapping[str, str]
+) -> list[str]:
+    """List the source tables the StarRocks MVs select from.
+
+    Only a view's own `source()` calls are followed, including the ones its
+    macros make. Every view reads its sources directly today.
+
+    :param manifest: The parsed StarRocks dbt manifest.
+    :param env: The process environment the build will run with, which is
+        where `DBT_DATA_LAKE_ENV` picks the lake.
+    :returns: Catalog-qualified names, quoted as dbt-starrocks quotes them.
+    """
+    sources = [
+        manifest["sources"][unique_id]
+        for node in _materialized_view_nodes(manifest)
+        for unique_id in node["depends_on"]["nodes"]
+        if unique_id.startswith("source.")
+    ]
+    return sorted(
+        {
+            ".".join(
+                f"`{part}`"
+                for part in (
+                    _render_source_part(source, "database", env),
+                    _render_source_part(source, "schema", env),
+                    source["identifier"],
+                )
+            )
+            for source in sources
+        }
+    )
+
+
+def unreadable_base_tables(
+    relations: Iterable[str],
+    fetch: Callable[[str], Any],
+    *,
+    log: logging.Logger,
+    sleep: Callable[[float], None] = time.sleep,
+) -> dict[str, Exception]:
+    """Probe each of *relations* and return the ones StarRocks can't resolve.
+
+    Run this before a `dbt build --full-refresh`. That build drops every
+    selected MV and recreates it, and a CREATE whose base table is missing
+    fails after the drop. On 2026-10-09 four views were lost that way: #2881
+    pointed them at afact_learner_courserun_progress, which production had
+    never built, and ol-analytics-api answered 500 on the endpoints that read
+    them until the next successful build.
+
+    `limit 0` reads no data; the statement only has to get through analysis,
+    which is where a missing table is reported. It does not check that the
+    table has the columns the view selects.
+
+    A probe that fails on one of the build's retriable signatures (a dropped
+    connection, an FE restart, a base table Trino has just rebuilt) is tried
+    again on the build's schedule. Those clear on their own, but the build
+    must not start while one stands: its first attempt would drop the views
+    and then meet the same error. One that outlasts the attempts is reported
+    like any other.
+
+    :param relations: Catalog-qualified names, as `base_table_relations`
+        returns them.
+    :param fetch: Runs one SELECT. `StarRocksResource.fetch` in the asset.
+    :param log: Where progress goes. `context.log` in the asset.
+    :param sleep: Injected so tests don't wait out the retry delay.
+    :returns: The error for each relation that could not be read.
+    """
+    failures: dict[str, Exception] = {}
+    pending = list(relations)
+    for attempt in range(MAX_BUILD_ATTEMPTS):
+        if attempt:
+            sleep(retry_delay(attempt))
+        retry: list[str] = []
+        for relation in pending:
+            try:
+                fetch(f"select 1 from {relation} limit 0")  # noqa: S608
+            except Exception as exc:
+                if looks_retriable(exc) and attempt < MAX_BUILD_ATTEMPTS - 1:
+                    log.warning(
+                        "Probe of %s failed on a retriable error (attempt "
+                        "%d/%d), retrying in %ds: %s",
+                        relation,
+                        attempt + 1,
+                        MAX_BUILD_ATTEMPTS,
+                        retry_delay(attempt + 1),
+                        exc,
+                    )
+                    retry.append(relation)
+                    continue
+                log.exception("Base table %s can't be read", relation)
+                failures[relation] = exc
+        if not retry:
+            break
+        pending = retry
+    return failures
 
 
 # Model `meta` key that opts a materialized view into a change log.

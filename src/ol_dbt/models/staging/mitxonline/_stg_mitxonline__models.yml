@@ -2723,3 +2723,37 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["courserun_readable_id", "organization_id"]
+
+unit_tests:
+- name: test_stg__mitxonline__app__postgres__cms_coursepage_reads_price_from_the_streamfield_list
+  description: >
+    price is a Wagtail StreamField, stored as a JSON list holding at most one
+    price_details block. The text comes from the first block, and an empty list
+    has no price.
+  model: stg__mitxonline__app__postgres__cms_coursepage
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__cms_coursepage')
+    rows:
+    - {page_ptr_id: 1, course_id: 10, price: '[{"id": "a", "type": "price_details",
+        "value": {"link": "", "text": "$99"}}]'}
+    - {page_ptr_id: 2, course_id: 20, price: '[]'}
+  expect:
+    rows:
+    - {wagtail_page_id: 1, course_price: $99}
+    - {wagtail_page_id: 2, course_price: null}
+- name: test_stg__mitxonline__app__postgres__cms_programpage_reads_price_from_the_streamfield_list
+  description: >
+    price is a Wagtail StreamField, stored as a JSON list holding at most one
+    price_details block. The text comes from the first block, and an empty list
+    has no price.
+  model: stg__mitxonline__app__postgres__cms_programpage
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__cms_programpage')
+    rows:
+    - {page_ptr_id: 1, program_id: 10, price: '[{"id": "a", "type": "price_details",
+        "value": {"link": "https://example.com/pricing", "text": "Coming soon"}}]'}
+    - {page_ptr_id: 2, program_id: 20, price: '[]'}
+  expect:
+    rows:
+    - {wagtail_page_id: 1, program_price: Coming soon}
+    - {wagtail_page_id: 2, program_price: null}

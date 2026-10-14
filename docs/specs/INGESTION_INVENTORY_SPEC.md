@@ -19,7 +19,8 @@ file lives, how it crosses the repo boundary into Pulumi, what generates what, a
 first version of the file gets built without hand-transcribing 374 table declarations.
 
 It does not revisit those decisions, and it does not cover the dlt cutover itself (RFC 12319
-phase 2, strictly sequenced after this lands).
+phase 2, strictly sequenced after this lands). The one part of phase 2 recorded here is the
+order the units move in (§10).
 
 ---
 
@@ -213,10 +214,12 @@ tables:
 Carried over from RFC 12711 §3, unchanged:
 
 1. `local: mirror` is rejected by the schema (the enum omits the value).
-2. `local: ingest` requires `loader: dlt` — Airbyte cannot run in k3d. Adding `dagster`
-   (rule 7) does not widen this: dlt is the only supported local ingest target, so the rule
-   stays "requires dlt" rather than becoming "bans Airbyte". A `dagster` unit declaring
-   `local: ingest` would name a local path nothing implements.
+2. `local: ingest` requires a `dlt:` block — Airbyte cannot run in k3d. The rule keys on the
+   unit naming a dlt source and not on `loader`, because `loader` records what loads
+   production and a source runs locally before production is cut over to it (§10.1). For that
+   reason `dlt:` is also allowed beside `airbyte:` on a `loader: airbyte` unit. Adding
+   `dagster` (rule 7) does not widen this: dlt is the only supported local ingest target, and
+   a `dagster` unit declaring `local: ingest` would name a local path nothing implements.
 3. `mirror_max_age_days` is required iff any strategy is `mirror`, with no default.
 
 New here:
@@ -243,7 +246,8 @@ New here:
 6. Every `airbyte.connections[].name` ends with `s3 data lake` (case-insensitive) — the
    Dagster selector's precondition (§1.3) — or the unit is marked `dagster_visible: false`,
    which is an assertion that no dbt model depends on it (§8.1 finding C).
-7. `airbyte:` is present iff `loader: airbyte`; `dlt:` is present iff `loader: dlt`. A third
+7. `airbyte:` is present iff `loader: airbyte`. `dlt:` is required by `loader: dlt` and may
+   also sit on a `loader: airbyte` unit whose source is built (rule 2). A third
    value, `loader: dagster`, carries neither block: some tables are produced by a bespoke
    asset pipeline under `dg_projects/` rather than pulled by a loader, and the inventory
    claims to record everything we load (§2), not everything a loader fetches.
@@ -933,3 +937,128 @@ None blocking. Three worth deciding as the steps that surface them land:
 3. **Whether `sync_interval_hours` belongs on the unit or the table.** Today's cadence is per
    Airbyte connection, and connections are per unit, so unit-level is correct now. A dlt source
    can schedule per resource, so this may want to move later. Not worth pre-building.
+
+---
+
+## 10. dlt cutover sequence
+
+RFC 12319 orders the per-source cutovers by connector difficulty: database and S3/file
+sources first (step 6), SaaS APIs last (step 7). RFC 12711's local environment adds a second
+input. Airbyte cannot run in k3d, so a contributor can only ingest from a locally running app
+once that unit has a dlt source. This section merges the two. Of the 29 units that are still
+`loader: airbyte`, it orders the 24 with an active connection and leaves out the other 5.
+
+### 10.1 What a contributor waits on is the source, not the production cutover
+
+A unit moves in two steps, and they are separate changes:
+
+1. The dlt source is built and runs in `dev`, `ci` and `qa`. `mitxonline/app_postgres` and
+   `xpro/app_postgres` are here today (`MITXONLINE_APP_DLT_ENVIRONMENTS` and
+   `XPRO_APP_DLT_ENVIRONMENTS` in `dg_projects/data_loading`).
+2. Production is cut over: every production Airbyte connection of the unit is paused,
+   `production` joins that set and the unit flips to `loader: dlt`. A unit can have more than
+   one connection (§3.5). Five in the order below have two: the three `mysql` units,
+   `edxorg/s3` and `irx/bigquery`. One left running is a second writer on the unit's tables.
+
+Local ingest needs step 1 only. In the `dev` profile `ol_dlt.database` already reads the
+local-dev CloudNativePG cluster with fixed credentials and no Vault. So the order below is
+the order in which sources get built. Production cutovers follow in the same order, one at a
+time with verification in between, as RFC 12319 resolved.
+
+Until a unit's source is built, its local raw tables come from committed fixtures
+(`ingestion/inventory/fixtures/`, loaded with `ol-dbt fixtures load`). Units 1 and 2 have
+them. What the source adds is rows from the contributor's own running app.
+
+A unit whose source is built, and whose app runs in local-dev, declares `local: ingest` and
+names the source in a `dlt:` block, while `loader` goes on recording what loads production (§3.3 rule 2).
+`ol-dbt ingest local` runs the source of every such unit under the `dev` dlt profile, which
+writes Iceberg tables into the local lake's raw schema, the one `ol-dbt starrocks --env dev`
+reads. The unit keeps its fixture for a contributor who is not running the app. Unit 2
+(`xpro/app_postgres`) has a source and no local app, so it stays `local: fixture`.
+
+### 10.2 The order
+
+Models downstream is the count of dbt models, of 774, that reach a raw table of the unit
+through `ref()` and `source('ol_warehouse_raw_data', ...)`. Learn views is how many of the 27
+`integrations__learn__*` models do. Both were counted at `a2a43e4d0` by walking the model
+SQL, not from a dbt manifest. The walk does not follow `source('dimensional', ...)` or refs
+inside macros; following them raises most counts by 6 to 11 and leaves the order unchanged.
+Local app is the directory under `ol-infrastructure/local-dev/apps/` that runs the source.
+
+| # | Unit | Local app | Models downstream | Learn views | State |
+|---|---|---|---|---|---|
+| 1 | `mitxonline/app_postgres` | `mitxonline` | 220 | 3 | Source built, production on Airbyte |
+| 2 | `xpro/app_postgres` | none | 183 | 3 | Source built, production on Airbyte |
+| 3 | `micromasters/app_postgres` | to be added | 175 | 1 | No local app today |
+| 4 | `mitlearn/app_postgres` | `mit-learn` | 63 | 3 | The 3 Learn views depend on it for build order only (`int__learn__offeror_topic_lookup`) and read none of its rows |
+| 5 | `ocw/app_postgres` | `ocw-studio` | 47 | 0 | |
+| 6 | `learn_ai/app_postgres` | `learn-ai` | 19 | 0 | `ai_chatbots_djangocheckpoint` needs a load strategy first (PR #2879, open) |
+| 7 | `ovs/app_postgres` | `odl-video-service` | 13 | 0 | |
+| 8 | `mitxonline/mysql` | `openedx` | 169 | 1 | First MySQL source |
+| 9 | `mitx/mysql` | none | 137 | 0 | |
+| 10 | `xpro/mysql` | none | 120 | 0 | |
+| 11 | `edxorg/s3` | none | 56 | 1 | |
+| 12 | `mitxonline/tracking_logs` | none | 51 | 0 | |
+| 13 | `mitx/tracking_logs` | none | 44 | 0 | |
+| 14 | `xpro/tracking_logs` | none | 44 | 0 | |
+| 15 | `edxorg/tracking_logs` | none | 44 | 0 | |
+| 16 | `mitxonline/api` | none | 39 | 0 | |
+| 17 | `xpro/api` | none | 34 | 0 | |
+| 18 | `mitx/api` | none | 33 | 0 | |
+| 19 | `edxorg/google_sheets` | none | 3 | 0 | |
+| 20 | `irx/bigquery` | none | 144 | 1 | |
+| 21 | `emeritus/bigquery` | none | 59 | 0 | |
+| 22 | `global_alumni/bigquery` | none | 59 | 0 | |
+| 23 | `zendesk/api` | none | 17 | 0 | |
+| 24 | `mailgun/api` | none | 0 | 0 | No modeled table |
+
+Five units have no active connection and are not in the order: `salesforce/api` (4 models
+downstream), `mitxonline/hubspot`, `xpro/hubspot`, `mitxonline/openedx_notes` and
+`open_discussions/app_postgres`. None gets a dlt source unless its load is wanted again. RFC
+12319 step 7 names Salesforce and HubSpot as sources to migrate; this departs from it because
+their connections are inactive.
+
+How the order was built:
+
+- Connector kind sets the tiers, easiest first. Postgres (1 to 7) reuses `ol_dlt.database`,
+  which the two built sources already run on. MySQL (8 to 10) needs that module's first
+  non-Postgres source; no dlt source connects to MySQL today. The S3 sources (11 to 18) have
+  two file sources to work from, `ol_dlt.sources.edxorg_s3` and `ol_dlt.sources.posthog_events`.
+  The Google Sheet (19) and BigQuery (20 to 22) have no dlt source to copy from. The sheet is
+  one table, so it goes ahead. Zendesk and Mailgun (23, 24) have no source either, though
+  several HTTP API sources exist (`mitpe`, `see`, `youtube`).
+- Within a tier, a unit whose source is already built goes first (1 and 2). After that a unit
+  with a local app, or one that is to get one, goes ahead of one without, then by models
+  downstream.
+- The three `mysql` units share the Open edX schema, so 9 and 10 are configuration once 8
+  exists. The local `openedx` app is one generic Open edX on lehrer's MariaDB and pairs with
+  the local `mitxonline` app, which is why `mitxonline/mysql` is the one that goes first.
+
+The local input changes the difficulty-only order in one place. MySQL goes ahead of S3 and
+file sources. RFC 12319 puts both in its first tier without ordering them. No S3 unit has a
+local producer, and the Open edX tables are read by more models than any S3 unit.
+
+`micromasters/app_postgres` has no app under `local-dev/apps/` today. It is ranked as a unit
+with one, because the MicroMasters app can be added to local-dev, and that puts it third on
+models downstream. Until the app is added a contributor cannot ingest this unit locally, so
+its dlt source can be built before anyone can run it against a local database.
+
+### 10.3 What was not measured
+
+How often contributors change each source's models was not used to rank, because the
+staging directories are per deployment and not per unit. For reference, file changes (one per
+file per commit) under `src/ol_dbt/models/staging/` from 2026-07-10 to `a2a43e4d0`, for the
+directories an Airbyte unit feeds: `mitxonline` 139, `mitxpro` 55, `edxorg` 54,
+`mitxresidential` 24, `openedx` 12, `zendesk` 11, `mitlearn` 11, `ocw` 10, `micromasters` 8,
+`learn-ai` 6, `ovs` 2. That agrees with the head of the order and does not separate units 3
+to 7.
+
+Unit 1 has been run against a local-dev database and built on (2026-10-11, at `98ac575b1`):
+`mitxonline_app` loaded a seeded MITx Online database into the local lake and
+`+integrations__learn__mitxonline_courses` built on it. The other units' sources are not
+built, so nothing is measured for them.
+
+The per-source cutover recipe (`tk-per-source-dlt-cutover-recipe-sql-database-files-f7c0cf`)
+should be proven on unit 1. Its source exists, it is the unit most models read, and it is the
+first one a contributor can ingest locally. That proves the `sql_database` half of the recipe.
+The file half is first exercised by unit 11.

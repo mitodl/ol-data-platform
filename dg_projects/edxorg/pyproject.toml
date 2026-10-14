@@ -12,7 +12,7 @@ dependencies = [
     "google-cloud-storage>=3.0",
     "jsonlines ~= 4.0.0",
     "ol-orchestrate-lib",
-    "polars ~= 1.19",
+    "polars ~=2.0",
     "universal-pathlib ~= 0.3.1",
     "polars-hash>=0.5.6",
 ]

@@ -2,13 +2,23 @@
 
 from __future__ import annotations
 
+import json
 import os
 import socket
-from unittest.mock import patch
+import time
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
-from ol_dbt_cli.commands.starrocks import _ENVS, _port_is_free, run
+from ol_dbt_cli.commands.starrocks import (
+    _ENVS,
+    _local_raw_row_counts,
+    _port_is_free,
+    _report_local_branches,
+    run,
+)
 
 # ---------------------------------------------------------------------------
 # _ENVS config consistency
@@ -37,18 +47,16 @@ def test_env_config_has_required_keys(env_name: str) -> None:
 @pytest.mark.parametrize("env_name", list(_ENVS))
 def test_data_lake_env_is_a_real_catalog(env_name: str) -> None:
     """Interpolated into `ol_data_lake_<env>`, so a typo fails only at query time."""
-    assert _ENVS[env_name]["data_lake_env"] in {"qa", "production"}
+    assert _ENVS[env_name]["data_lake_env"] in {"local", "qa", "production"}
 
 
-def test_dev_reads_the_lake_its_cluster_can_see() -> None:
-    """`dev` connects to the QA cluster, which has no production catalog.
-
-    Mirrors STARROCKS_DBT_TARGET_MAP["dev"] / DATA_LAKE_ENV_MAP["dev"] in
-    lakehouse.lib.dbt_environment, which the Dagster side resolves from.
-    """
-    assert _ENVS["dev"]["dbt_target"] == _ENVS["qa"]["dbt_target"]
-    assert _ENVS["dev"]["host"] == _ENVS["qa"]["host"]
-    assert _ENVS["dev"]["data_lake_env"] == _ENVS["qa"]["data_lake_env"] == "qa"
+def test_dev_is_the_local_lake() -> None:
+    """`dev` is the k3d lake: its own cluster and catalog, and no Vault."""
+    assert _ENVS["dev"]["dbt_target"] == "starrocks_local"
+    assert _ENVS["dev"]["host"] == "127.0.0.1"
+    assert _ENVS["dev"]["data_lake_env"] == "local"
+    assert _ENVS["dev"]["vault_addr"] is None
+    assert _ENVS["dev"]["port_forward"] is False
 
 
 def test_ci_connects_directly_like_production() -> None:
@@ -130,15 +138,76 @@ def test_ci_env_skips_port_forward_by_default(mock_fetch, mock_port_forward, moc
 @patch("ol_dbt_cli.commands.starrocks._dbt_run")
 @patch("ol_dbt_cli.commands.starrocks._start_port_forward")
 @patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
-def test_dev_env_reads_qa_lake_from_qa_cluster(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
-    """`--env dev` connects to QA and exports the QA lake, the only one it can read."""
-    mock_fetch.return_value = ("user", "pass")
+def test_dev_env_reads_the_local_lake_without_vault(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    """`--env dev` reaches the local StarRocks with no Vault login and no tunnel of its own."""
     run(env="dev")
 
-    mock_port_forward.assert_called_once()
-    assert os.environ["DBT_DATA_LAKE_ENV"] == "qa"
+    mock_fetch.assert_not_called()
+    mock_port_forward.assert_not_called()
+    assert os.environ["DBT_STARROCKS_HOST"] == "127.0.0.1"
+    assert os.environ["DBT_DATA_LAKE_ENV"] == "local"
+    assert "DBT_STARROCKS_USERNAME" not in os.environ
     _, kwargs = mock_dbt_run.call_args
-    assert kwargs["target"] == "starrocks_qa_vault"
+    assert kwargs["target"] == "starrocks_local"
+    assert kwargs["indirect_selection"] == "buildable"
+
+
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_indirect_selection_is_dbt_s_default_off_the_local_lake(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    """Only the local lake changes the default: the other environments get dbt's own."""
+    mock_fetch.return_value = ("user", "password")
+    run(env="qa")
+
+    _, kwargs = mock_dbt_run.call_args
+    assert kwargs["indirect_selection"] is None
+
+
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_explicit_indirect_selection_overrides_env_default(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    run(env="dev", indirect_selection="eager")
+
+    _, kwargs = mock_dbt_run.call_args
+    assert kwargs["indirect_selection"] == "eager"
+
+
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_dev_env_accepts_the_local_b2b_target(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    """The profile Dagster's `dev` builds the b2b views on is reachable from the CLI too."""
+    run(env="dev", target="starrocks_local_b2b")
+
+    mock_fetch.assert_not_called()
+    _, kwargs = mock_dbt_run.call_args
+    assert kwargs["target"] == "starrocks_local_b2b"
+
+
+@pytest.mark.parametrize(
+    ("env", "target"),
+    [
+        ("dev", "starrocks_production"),
+        ("dev", "starrocks_qa_vault"),
+        ("qa", "starrocks_local"),
+        ("qa", "starrocks_local_b2b"),
+    ],
+)
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_target_cannot_cross_between_local_and_vault(
+    mock_fetch, mock_port_forward, mock_dbt_run, env: str, target: str
+) -> None:
+    """A Vault-backed target under `dev` has no credentials; the local one elsewhere has the wrong ones."""
+    with pytest.raises(SystemExit):
+        run(env=env, target=target)
+
+    mock_fetch.assert_not_called()
+    mock_port_forward.assert_not_called()
+    mock_dbt_run.assert_not_called()
 
 
 @patch("ol_dbt_cli.commands.starrocks._dbt_run")
@@ -186,3 +255,245 @@ def test_explicit_port_forward_overrides_env_default(mock_fetch, mock_port_forwa
 def test_unknown_env_exits() -> None:
     with pytest.raises(SystemExit):
         run(env="nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# The branch report after a build on the local lake
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("env", "target", "reported"),
+    [
+        ("dev", None, True),
+        # Reads default_catalog, not the raw schema the report counts.
+        ("dev", "starrocks_local_b2b", False),
+        ("qa", None, False),
+    ],
+)
+@patch("ol_dbt_cli.commands.starrocks._report_local_branches")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run", side_effect=SystemExit(0))
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_only_a_build_on_the_local_lake_reports_branches(  # noqa: PLR0913
+    mock_fetch, mock_port_forward, mock_dbt_run, mock_report, env: str, target: str | None, reported: bool
+) -> None:
+    mock_fetch.return_value = ("user", "password")
+    with pytest.raises(SystemExit):
+        run(env=env, target=target)
+
+    assert mock_report.called is reported
+
+
+@patch("ol_dbt_cli.commands.starrocks._report_local_branches")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run", side_effect=SystemExit(1))
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+def test_branches_are_reported_on_a_failed_build_and_dbt_s_exit_code_survives(
+    mock_port_forward, mock_dbt_run, mock_report
+) -> None:
+    """`ol-dbt run` leaves by sys.exit, and a failed build still built the models before the failure."""
+    with pytest.raises(SystemExit) as exit_info:
+        run(env="dev")
+
+    assert exit_info.value.code == 1
+    mock_report.assert_called_once()
+
+
+@patch("ol_dbt_cli.commands.starrocks._report_local_branches", side_effect=RuntimeError("lake is gone"))
+@patch("ol_dbt_cli.commands.starrocks._dbt_run", side_effect=SystemExit(2))
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+def test_a_report_that_fails_does_not_replace_dbt_s_exit_code(
+    mock_port_forward, mock_dbt_run, mock_report, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        run(env="dev")
+
+    assert exit_info.value.code == 2  # noqa: PLR2004
+    assert "Branch report skipped" in capsys.readouterr().err
+
+
+@patch("ol_dbt_cli.commands.starrocks._report_local_branches")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run", side_effect=KeyboardInterrupt)
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+def test_an_interrupted_build_reports_nothing(mock_port_forward, mock_dbt_run, mock_report) -> None:
+    with pytest.raises(KeyboardInterrupt):
+        run(env="dev")
+
+    mock_report.assert_not_called()
+
+
+def test_row_counts_cover_only_the_tables_the_raw_schema_holds() -> None:
+    """A count on a table that is not there would fail the whole report."""
+    cursor = MagicMock()
+    cursor.fetchall.side_effect = [[("raw__a",), ("raw__other",)], [(7,)]]
+    with patch("mysql.connector.connect") as mock_connect:
+        mock_connect.return_value.cursor.return_value = cursor
+        counts = _local_raw_row_counts({"raw__a", "raw__b"})
+
+    assert counts == {"raw__a": 7}
+    assert mock_connect.call_args.kwargs["host"] == "127.0.0.1"
+    statements = [call.args[0] for call in cursor.execute.call_args_list]
+    assert statements == [
+        "SHOW TABLES FROM `ol_data_lake_local`.`ol_warehouse_local_raw`",
+        "SELECT count(*) FROM `ol_data_lake_local`.`ol_warehouse_local_raw`.`raw__a`",
+    ]
+
+
+def _source(table: str) -> dict[str, object]:
+    return {
+        "unique_id": f"source.pkg.raw.{table}",
+        "name": table,
+        "identifier": table,
+        "source_name": "raw",
+        "resource_type": "source",
+        "original_file_path": "models/staging/_sources.yml",
+    }
+
+
+def _model(name: str, path: str, parents: list[str]) -> dict[str, object]:
+    return {
+        "unique_id": f"model.pkg.{name}",
+        "name": name,
+        "resource_type": "model",
+        "original_file_path": path,
+        "depends_on": {"nodes": parents},
+    }
+
+
+@pytest.fixture
+def local_build(tmp_path: Path) -> Path:
+    """Lay out a repo with two units, a fixture for one, and the artifacts of a build of a union of both."""
+    inventory = tmp_path / "ingestion" / "inventory"
+    for deployment in ("mitxonline", "xpro"):
+        unit = {
+            "deployment": deployment,
+            "layer": "app_postgres",
+            "strategies": {"qa": "ingest", "local": "fixture"},
+            "tables": [{"raw_table": f"raw__{deployment}__users"}],
+        }
+        path = inventory / "units" / f"{deployment}__app_postgres.yml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(yaml.safe_dump(unit))
+    fixture = inventory / "fixtures" / "mitxonline__app_postgres.yml"
+    fixture.parent.mkdir()
+    fixture.write_text("---\n")
+
+    nodes = [
+        _model("stg_mitxonline", "models/staging/a.sql", ["source.pkg.raw.raw__mitxonline__users"]),
+        _model("stg_xpro", "models/staging/b.sql", ["source.pkg.raw.raw__xpro__users"]),
+        _model("dim_user", "models/dimensional/dim_user.sql", ["model.pkg.stg_mitxonline", "model.pkg.stg_xpro"]),
+    ]
+    sources = [_source("raw__mitxonline__users"), _source("raw__xpro__users")]
+    target = tmp_path / "src" / "ol_dbt" / "target"
+    target.mkdir(parents=True)
+    (target / "manifest.json").write_text(
+        json.dumps(
+            {
+                "nodes": {str(node["unique_id"]): node for node in nodes},
+                "sources": {str(source["unique_id"]): source for source in sources},
+            }
+        )
+    )
+    results = [
+        {"unique_id": "model.pkg.stg_mitxonline", "status": "success"},
+        {"unique_id": "model.pkg.stg_xpro", "status": "success"},
+        {"unique_id": "model.pkg.dim_user", "status": "success"},
+        {"unique_id": "test.pkg.not_null_dim_user_id", "status": "pass"},
+    ]
+    (target / "run_results.json").write_text(json.dumps({"results": results}))
+    return tmp_path
+
+
+def test_report_names_the_branch_a_built_union_lacks(local_build: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    with (
+        patch("ol_dbt_cli.commands.starrocks.get_repo_root", return_value=local_build),
+        patch(
+            "ol_dbt_cli.commands.starrocks._local_raw_row_counts",
+            return_value={"raw__mitxonline__users": 4},
+        ) as mock_counts,
+    ):
+        _report_local_branches(local_build / "src" / "ol_dbt", time.time() - 60)
+
+    mock_counts.assert_called_once_with({"raw__mitxonline__users", "raw__xpro__users"})
+    out = capsys.readouterr().out
+    assert "dim_user: 1 of 2 branches present" in out
+    assert "xpro/app_postgres: absent (1 table(s)); no fixture committed for this unit" in out
+    assert "mitxonline/app_postgres: present" in out
+
+
+def test_report_skips_results_left_by_an_earlier_run(local_build: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """A dbt run that stops before its first node leaves the old run_results.json, which describes another build."""
+    with patch("ol_dbt_cli.commands.starrocks._local_raw_row_counts") as mock_counts:
+        _report_local_branches(local_build / "src" / "ol_dbt", time.time() + 60)
+
+    mock_counts.assert_not_called()
+    assert capsys.readouterr().out == ""
+
+
+def test_report_opens_no_connection_when_the_build_made_no_union(
+    local_build: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    results = local_build / "src" / "ol_dbt" / "target" / "run_results.json"
+    results.write_text(json.dumps({"results": [{"unique_id": "model.pkg.stg_xpro", "status": "success"}]}))
+    with (
+        patch("ol_dbt_cli.commands.starrocks.get_repo_root", return_value=local_build),
+        patch("ol_dbt_cli.commands.starrocks._local_raw_row_counts") as mock_counts,
+    ):
+        _report_local_branches(local_build / "src" / "ol_dbt", time.time() - 60)
+
+    mock_counts.assert_not_called()
+    assert capsys.readouterr().out == ""
+
+
+def test_report_flags_a_union_rebuilt_without_its_parents(
+    local_build: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    results = local_build / "src" / "ol_dbt" / "target" / "run_results.json"
+    results.write_text(json.dumps({"results": [{"unique_id": "model.pkg.dim_user", "status": "success"}]}))
+    with (
+        patch("ol_dbt_cli.commands.starrocks.get_repo_root", return_value=local_build),
+        patch(
+            "ol_dbt_cli.commands.starrocks._local_raw_row_counts",
+            return_value={"raw__mitxonline__users": 4, "raw__xpro__users": 2},
+        ),
+    ):
+        _report_local_branches(local_build / "src" / "ol_dbt", time.time() - 60)
+
+    out = capsys.readouterr().out
+    assert "1 of 1 union model(s) built have rows in every branch" in out
+    assert "built on parents this run did not rebuild" in out
+
+
+def test_report_counts_a_snapshot_the_run_built(local_build: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """`dbt build` snapshots too, and its result must not read as a parent left alone."""
+    target = local_build / "src" / "ol_dbt" / "target"
+    manifest = json.loads((target / "manifest.json").read_text())
+    manifest["nodes"]["snapshot.pkg.snapshot_xpro"] = {
+        "unique_id": "snapshot.pkg.snapshot_xpro",
+        "name": "snapshot_xpro",
+        "resource_type": "snapshot",
+        "original_file_path": "snapshots/xpro.sql",
+        "depends_on": {"nodes": ["model.pkg.stg_xpro"]},
+    }
+    manifest["nodes"]["model.pkg.dim_user"]["depends_on"]["nodes"] = [
+        "model.pkg.stg_mitxonline",
+        "snapshot.pkg.snapshot_xpro",
+    ]
+    (target / "manifest.json").write_text(json.dumps(manifest))
+    models = ["model.pkg.stg_mitxonline", "model.pkg.stg_xpro", "model.pkg.dim_user"]
+
+    def report(unique_ids: list[str]) -> str:
+        results = [{"unique_id": unique_id, "status": "success"} for unique_id in unique_ids]
+        (target / "run_results.json").write_text(json.dumps({"results": results}))
+        with (
+            patch("ol_dbt_cli.commands.starrocks.get_repo_root", return_value=local_build),
+            patch(
+                "ol_dbt_cli.commands.starrocks._local_raw_row_counts",
+                return_value={"raw__mitxonline__users": 4, "raw__xpro__users": 2},
+            ),
+        ):
+            _report_local_branches(target.parent, time.time() - 60)
+        return capsys.readouterr().out
+
+    assert "built on parents this run did not rebuild" in report(models)
+    assert "built on parents this run did not rebuild" not in report([*models, "snapshot.pkg.snapshot_xpro"])

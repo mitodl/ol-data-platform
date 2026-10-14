@@ -41,6 +41,8 @@ params:
   - user_address_city
   - user_address_state_or_territory
   - user_address_postal_code
+  - all_courses_passed_in_program
+  - verified_courses_passed_in_program
   allow_render_html: true
   annotation_layers: []
   color_pn: true

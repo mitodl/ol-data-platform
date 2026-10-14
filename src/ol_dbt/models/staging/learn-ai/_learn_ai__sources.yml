@@ -63,6 +63,8 @@ sources:
   - name: raw__learn_ai__app__postgres__ai_chatbots_djangocheckpoint
     description: Chatbot messages for RecommendationBot, SyllabusBot and VideoGPTBot
     columns:
+    - name: _airbyte_extracted_at
+      description: Timestamp when this record was extracted by Airbyte
     - name: id
       description: int, primary key in ai_chatbots_djangocheckpoint
     - name: type
@@ -80,12 +82,12 @@ sources:
     - name: parent_checkpoint_id
       description: str, checkpoint ID of the parent checkpoint. Null if this is the
         first checkpoint in the thread.
-    - name: created_at
+    - name: metadata
+      description: json, what the checkpoint wrote. The messages under writes.__start__
+        (the user's) and writes.agent (the chatbot's) are each a list of one message.
+    - name: created_on
       data_type: timestamp
       description: date and time when the checkpoint was created.
-    - name: updated_at
-      data_type: timestamp
-      description: date and time when the checkpoint was last updated.
 
   - name: raw__learn_ai__app__postgres__ai_chatbots_tutorbotoutput
     description: TutorBot chat history

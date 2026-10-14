@@ -15,7 +15,7 @@ contract:                    # an OpenMetadata CreateDataContract body, minus `e
   name: dim_user
   description: ...
   entityStatus: Approved
-  owners: [{type: team, name: data-engineering}]   # optional; resolved to ids on sync
+  owners: [{type: team, name: data-platform}]   # optional; resolved to ids on sync
   schema: [{name: user_pk, dataType: VARCHAR, constraint: PRIMARY_KEY}, ...]
   semantics: [{name: hasOwner, description: ..., rule: '<JsonLogic>', enabled: true}]
   sla: {refreshFrequency: {interval: 1, unit: day}}

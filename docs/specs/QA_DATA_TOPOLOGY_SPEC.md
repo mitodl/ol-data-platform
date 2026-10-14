@@ -231,11 +231,13 @@ be one, so `local: mirror` is unimplementable rather than merely unwise. Encodin
 enum that omits the value answers the question once, in one place, instead of re-litigating it
 per entry in review.
 
-**`local: ingest` requires the unit to be dlt-backed** — a validator rule, not a Step 5
+**`local: ingest` requires the unit to name a dlt source** — a validator rule, not a Step 5
 cross-check. Airbyte cannot run in k3d, so `local: ingest` on an Airbyte-only unit is false on
-its face. This belongs at inventory-parse time because it is a property of the unit itself; it
-should fail even when no model references the unit yet. Step 5's cross-check answers a
-different question (does a *model's* declaration match the inventory).
+its face. A unit that production still loads with Airbyte can declare it once its dlt source
+exists, by carrying a `dlt:` block beside `airbyte:`. This belongs at inventory-parse time
+because it is a property of the unit itself; it should fail even when no model references the
+unit yet. Step 5's cross-check answers a different question (does a *model's* declaration
+match the inventory).
 
 **Singletons get `fixture` locally, and that is the intended forcing function.** With `mirror`
 illegal and `ingest` impossible for a source with no local counterpart, `edxorg`, `emeritus`,
