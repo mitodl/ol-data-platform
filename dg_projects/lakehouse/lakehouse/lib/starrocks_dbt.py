@@ -309,7 +309,7 @@ def drifted_relations(
 ) -> list[str]:
     """MVs whose columns in StarRocks no longer match what dbt says they are.
 
-    The asset builds these with --full-refresh. With the pinned dbt-starrocks
+    The asset builds these with --full-refresh. With the locked dbt-starrocks
     that changes nothing, since a plain build replaces every view too; see
     `_stale_materialized_views` in the asset module for why the check stays.
 

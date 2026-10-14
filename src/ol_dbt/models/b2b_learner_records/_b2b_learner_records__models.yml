@@ -7,8 +7,8 @@
 # order: the Dagster drift check rebuilds an MV whose live columns differ.
 #
 # Every test here is severity: warn. A failing test fails starrocks_dbt_assets,
-# which skips the MV refresh for every StarRocks model, and the tests read the
-# previous refresh's rows anyway (a plain build leaves an existing MV untouched).
+# which skips the MV refresh for every StarRocks model, and the tests run
+# before that refresh, against a view the build has just recreated.
 # Anything the API contract depends on is enforced in the SQL instead.
 #
 # Change logs. A model that sets config.meta.change_tracking gets a companion

@@ -90,12 +90,12 @@ def _stale_materialized_views(
 ) -> list[str]:
     """MVs whose columns in StarRocks disagree with the dbt manifest.
 
-    Nothing depends on this with the pinned dbt-core 1.12.5 and dbt-starrocks
-    1.12.2, where a plain build already replaces every view (see
-    `starrocks_dbt_assets`). It is kept for an adapter that starts answering
-    "no configuration changes": dbt-core then refreshes an existing view in
-    place, an edited SELECT never lands, and ol-analytics-api's `build_select`
-    turns a column it expects into an unknown-column error at request time.
+    Nothing depends on this with the locked dbt-starrocks, where a plain
+    build already replaces every view (see `starrocks_dbt_assets`). It is kept
+    for an adapter that starts answering "no configuration changes": dbt then
+    refreshes an existing view in place, an edited SELECT never lands, and
+    ol-analytics-api's `build_select` turns a column it expects into an
+    unknown-column error at request time.
     """
     manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
     documented = documented_columns(manifest)
@@ -160,10 +160,10 @@ def starrocks_dbt_assets(
     Every build drops and recreates every materialized view, with or without
     --full-refresh. dbt-starrocks' configuration-changes macro
     (`starrocks__get_materialized_view_configuration_changes`) has an empty
-    body, which renders as an empty string and not as none, so dbt-core takes
-    its alter path for an existing view, and dbt-starrocks implements alter as
-    drop then create. A CREATE that fails leaves the view dropped, so the
-    views' base tables are checked before any build, see
+    body, which returns whitespace and not none, so dbt's materialization
+    takes its alter path for an existing view, and dbt-starrocks implements
+    alter as drop then create. A CREATE that fails leaves the view dropped, so
+    the views' base tables are checked before any build, see
     `_require_base_tables`. Each view is also empty from its CREATE until its
     next refresh finishes, and ol-analytics-api queries these live.
 

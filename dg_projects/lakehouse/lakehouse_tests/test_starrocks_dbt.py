@@ -434,7 +434,7 @@ class TestLiveColumns:
 class TestDriftedRelations:
     def test_added_column_is_drift(self):
         """PR #2520: the dbt model grew five cohort columns and the deployed MV
-        kept the old SELECT, which a plain `dbt build` reports as success.
+        kept the old SELECT.
         """
         documented = {"b2b_analytics.mv_a": {"org_key", "video_watchers"}}
         live = {"b2b_analytics.mv_a": {"org_key"}}
@@ -878,14 +878,24 @@ class TestBaseTablesAreCheckedBeforeEveryBuild:
             for node in ast.parse(source).body
             if isinstance(node, ast.FunctionDef) and node.name == "starrocks_dbt_assets"
         )
-        top_level_calls = [
-            statement.value.func.id
+        checks = [
+            statement.lineno
             for statement in asset.body
             if isinstance(statement, ast.Expr)
             and isinstance(statement.value, ast.Call)
             and isinstance(statement.value.func, ast.Name)
+            and statement.value.func.id == "_require_base_tables"
         ]
-        assert "_require_base_tables" in top_level_calls
+        builds = [
+            node.lineno
+            for node in ast.walk(asset)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "cli"
+        ]
+        assert checks, "the check must be a statement of its own in the asset"
+        assert builds
+        assert checks[0] < min(builds)
 
 
 class TestChangeTrackedViews:

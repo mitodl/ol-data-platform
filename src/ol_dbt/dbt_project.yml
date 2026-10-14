@@ -172,8 +172,8 @@ models:
     b2b_analytics:
       +enabled: "{{ target.type == 'starrocks' }}"
       # Every `dbt build` drops and recreates each MV with its current SELECT,
-      # with or without --full-refresh (dbt-core 1.12.5, dbt-starrocks 1.12.2;
-      # see lakehouse/assets/lakehouse/dbt_starrocks.py). An edited SELECT lands
+      # with or without --full-refresh (the locked dbt-starrocks; see
+      # lakehouse/assets/lakehouse/dbt_starrocks.py). An edited SELECT lands
       # on the next scheduled build, and each view is empty from that build
       # until its next refresh finishes. The Dagster asset also compares each
       # MV's live columns against this project's manifest and passes
