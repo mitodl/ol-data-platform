@@ -686,7 +686,7 @@ class TestBaseTableRelations:
                 ),
             ],
         )
-        assert base_table_relations(manifest, QA_LAKE) == [
+        assert base_table_relations(manifest, QA_LAKE, manifest["nodes"]) == [
             f"{QA_DIMENSIONAL}.`dim_program`",
             f"{QA_DIMENSIONAL}.`tfact_enrollment`",
         ]
@@ -703,10 +703,12 @@ class TestBaseTableRelations:
                 )
             ],
         )
-        assert base_table_relations(manifest, QA_LAKE) == [
+        assert base_table_relations(manifest, QA_LAKE, manifest["nodes"]) == [
             f"{QA_DIMENSIONAL}.`dim_user`"
         ]
-        assert base_table_relations(manifest, {"DBT_DATA_LAKE_ENV": "production"}) == [
+        assert base_table_relations(
+            manifest, {"DBT_DATA_LAKE_ENV": "production"}, manifest["nodes"]
+        ) == [
             "`ol_data_lake_production`.`ol_warehouse_production_dimensional`.`dim_user`"
         ]
 
@@ -727,7 +729,7 @@ class TestBaseTableRelations:
             "unrendered_database": None,
             "unrendered_schema": None,
         }
-        assert base_table_relations(manifest, {}) == [
+        assert base_table_relations(manifest, {}, manifest["nodes"]) == [
             "`default_catalog`.`b2b_learner_records`.`roster`"
         ]
 
@@ -746,7 +748,26 @@ class TestBaseTableRelations:
                 )
             ],
         )
-        assert base_table_relations(manifest, QA_LAKE) == []
+        assert base_table_relations(manifest, QA_LAKE, manifest["nodes"]) == []
+
+    def test_ignores_sources_of_views_the_build_does_not_select(self):
+        """An unselected view isn't dropped, so its base tables can't cost it."""
+        manifest = _manifest_reading(
+            ["dim_user", "dim_program"],
+            [
+                _reading(
+                    _mv_node("mv_b2b_learner", ["user_pk"]),
+                    "source.open_learning.dimensional.dim_user",
+                ),
+                _reading(
+                    _mv_node("mv_b2b_program_funnel", ["organization_key"]),
+                    "source.open_learning.dimensional.dim_program",
+                ),
+            ],
+        )
+        assert base_table_relations(
+            manifest, QA_LAKE, {"model.open_learning.mv_b2b_learner"}
+        ) == [f"{QA_DIMENSIONAL}.`dim_user`"]
 
 
 def _probe(relations, failing):

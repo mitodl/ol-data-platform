@@ -10,6 +10,7 @@ from dagster_dbt import (
     DbtProject,
     dbt_assets,
 )
+from dagster_dbt.asset_utils import DAGSTER_DBT_UNIQUE_ID_METADATA_KEY
 from dagster_dbt.errors import DagsterDbtCliRuntimeError
 
 from lakehouse.assets.lakehouse.dbt import (
@@ -116,16 +117,24 @@ def _stale_materialized_views(
 def _require_base_tables(
     context: AssetExecutionContext, starrocks: StarRocksResource
 ) -> None:
-    """Refuse to build while a base table of the MVs can't be read.
+    """Refuse to build while a base table of the selected MVs can't be read.
 
     The run fails with every view still in place. They keep the previous
     SELECT and the previous refresh's rows until a later run succeeds; the
-    alternative is a dropped view and a 500 in ol-analytics-api.
+    alternative is a dropped view and a 500 in ol-analytics-api. A view the
+    run doesn't select isn't dropped, so its base tables aren't checked.
     """
     manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
-    relations = base_table_relations(manifest, os.environ)
+    selected = {
+        context.assets_def.get_asset_spec(key).metadata[
+            DAGSTER_DBT_UNIQUE_ID_METADATA_KEY
+        ]
+        for key in context.selected_asset_keys
+    }
+    relations = base_table_relations(manifest, os.environ, selected)
     context.log.info(
-        "Checking the %d base tables of the materialized views before the build",
+        "Checking the %d base tables of the selected materialized views before "
+        "the build",
         len(relations),
     )
     unreadable = unreadable_base_tables(relations, starrocks.fetch, log=context.log)

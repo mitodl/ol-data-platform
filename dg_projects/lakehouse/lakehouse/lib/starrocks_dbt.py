@@ -10,7 +10,7 @@ or dbt.
 import logging
 import re
 import time
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -363,9 +363,9 @@ def _render_source_part(
 
 
 def base_table_relations(
-    manifest: Mapping[str, Any], env: Mapping[str, str]
+    manifest: Mapping[str, Any], env: Mapping[str, str], selected: Collection[str]
 ) -> list[str]:
-    """List the source tables the StarRocks MVs select from.
+    """List the source tables the selected StarRocks MVs select from.
 
     Only a view's own `source()` calls are followed, including the ones its
     macros make. Every view reads its sources directly today.
@@ -373,11 +373,17 @@ def base_table_relations(
     :param manifest: The parsed StarRocks dbt manifest.
     :param env: The process environment the build will run with, which is
         where `DBT_DATA_LAKE_ENV` picks the lake.
+    :param selected: Unique ids of the dbt nodes the build runs.
     :returns: Catalog-qualified names, quoted as dbt-starrocks quotes them.
     """
+    views = {
+        unique_id: node
+        for unique_id, node in manifest["nodes"].items()
+        if unique_id in selected
+    }
     sources = [
         manifest["sources"][unique_id]
-        for node in _materialized_view_nodes(manifest)
+        for node in _materialized_view_nodes({"nodes": views})
         for unique_id in node["depends_on"]["nodes"]
         if unique_id.startswith("source.")
     ]
