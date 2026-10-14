@@ -134,14 +134,46 @@ def iceberg_raw_orphan_files(
         logger=context.log,
     )
     attempted = len(result.tables) + len(result.failures)
+    examined = result.examined
+    orphan_objects = sum(t.orphan_objects for t in examined)
+    orphan_bytes = sum(t.orphan_bytes for t in examined)
+    eligible_objects = sum(t.eligible_objects for t in examined)
+    eligible_bytes = sum(t.eligible_bytes for t in examined)
+    delete_errors = [error for t in examined for error in t.delete_errors]
+    deleted_objects = sum(t.deleted_objects or 0 for t in examined)
+    # Bytes a delete was sent for, including objects whose delete failed.
+    delete_sent_bytes = sum(t.deleted_bytes or 0 for t in examined)
+
+    # The metadata is only in the event log, and every raise below drops it.
+    # This line, and the pass's own per-table lines (every table it failed on
+    # or deleted from), reach the compute log either way.
+    context.log.info(
+        "%s: %d tables examined, %d refused, %d failed. Orphan %d objects "
+        "(%d bytes), eligible %d objects (%d bytes). Delete: %s. Unreadable "
+        "Glue databases: %s.",
+        RAW_GLUE_DATABASE,
+        len(examined),
+        len(result.refused),
+        len(result.failures),
+        orphan_objects,
+        orphan_bytes,
+        eligible_objects,
+        eligible_bytes,
+        (
+            f"ran, {deleted_objects} objects deleted, {delete_sent_bytes} bytes "
+            f"sent for deletion, error count {len(delete_errors)}"
+            if config.delete
+            else "not run (report only)"
+        ),
+        sorted(result.unreadable_databases),
+    )
+
     if not attempted:
         msg = (
             f"Glue lists no Iceberg table in {RAW_GLUE_DATABASE}. Refusing to "
             "report success for zero work."
         )
         raise RuntimeError(msg)
-
-    examined = result.examined
     if not examined:
         msg = (
             f"None of the {attempted} Iceberg tables in {RAW_GLUE_DATABASE} was "
@@ -150,10 +182,6 @@ def iceberg_raw_orphan_files(
             f"{[t.refused for t in result.refused[:3]] + result.failures[:3]}"
         )
         raise RuntimeError(msg)
-    orphan_objects = sum(t.orphan_objects for t in examined)
-    orphan_bytes = sum(t.orphan_bytes for t in examined)
-    eligible_objects = sum(t.eligible_objects for t in examined)
-    eligible_bytes = sum(t.eligible_bytes for t in examined)
     metadata: dict[str, Any] = {
         "glue_database": MetadataValue.text(RAW_GLUE_DATABASE),
         "min_age_days": MetadataValue.int(config.min_age_days),
@@ -181,45 +209,17 @@ def iceberg_raw_orphan_files(
         # delete with any listed here.
         "unreadable_glue_databases": MetadataValue.json(result.unreadable_databases),
     }
-
-    delete_errors = [error for t in examined for error in t.delete_errors]
     if config.delete:
-        deleted_objects = sum(t.deleted_objects or 0 for t in examined)
-        deleted_bytes = sum(t.deleted_bytes or 0 for t in examined)
         metadata |= {
             "delete_status": MetadataValue.text("ran"),
             "deleted_objects": MetadataValue.int(deleted_objects),
-            "deleted_bytes": MetadataValue.int(deleted_bytes),
+            "deleted_bytes": MetadataValue.int(delete_sent_bytes),
             "delete_error_count": MetadataValue.int(len(delete_errors)),
         }
-        delete_summary = (
-            f"ran, {deleted_objects} objects ({deleted_bytes} bytes) deleted, "
-            f"error count {len(delete_errors)}"
-        )
     else:
         # No deleted_* keys in a report run. A zero there would read as "ran
         # and found nothing to delete".
         metadata["delete_status"] = MetadataValue.text("not run (report only)")
-        delete_summary = "not run (report only)"
-
-    # The metadata is only in the event log, and raising below drops it. This
-    # line, and the pass's own per-table lines (every table it failed on or
-    # deleted from), reach the compute log either way.
-    context.log.info(
-        "%s: %d tables examined, %d refused, %d failed. Orphan %d objects "
-        "(%d bytes), eligible %d objects (%d bytes). Delete: %s. Unreadable "
-        "Glue databases: %s.",
-        RAW_GLUE_DATABASE,
-        len(examined),
-        len(result.refused),
-        len(result.failures),
-        orphan_objects,
-        orphan_bytes,
-        eligible_objects,
-        eligible_bytes,
-        delete_summary,
-        sorted(result.unreadable_databases),
-    )
 
     threshold = maintenance_failure_threshold(attempted)
     if len(result.failures) >= threshold:
