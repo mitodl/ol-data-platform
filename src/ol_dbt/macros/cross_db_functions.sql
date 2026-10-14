@@ -1191,9 +1191,9 @@
 
 
 {#
-    json_extract_json_array: the JSON array at `json_path` as an array of JSON values,
-    to unnest. Raises where the path holds something other than an array; use
-    unnest_json_array for input that may be malformed.
+    json_extract_json_array: the JSON array at `json_path` of a JSON string, as an
+    array of JSON values to unnest. Raises on malformed JSON and where the path holds
+    something other than an array; use unnest_json_array for input that may be either.
 
     Usage:
       cross join unnest({{ json_extract_json_array('chat_json', "'$.chat_history'") }})
@@ -1204,15 +1204,65 @@
 {%- endmacro %}
 
 {% macro default__json_extract_json_array(json_col, json_path) -%}
-    cast(json_extract({{ json_col }}, {{ json_path }}) as array(json))
+    cast(json_extract(json_parse({{ json_col }}), {{ json_path }}) as array(json))
 {%- endmacro %}
 
 {% macro duckdb__json_extract_json_array(json_col, json_path) -%}
-    cast(json_extract({{ json_col }}, {{ json_path }}) as json[])
+    cast(json_extract(cast({{ json_col }} as json), {{ json_path }}) as json[])
 {%- endmacro %}
 
 {% macro starrocks__json_extract_json_array(json_col, json_path) -%}
     cast(json_query(parse_json({{ json_col }}), {{ json_path }}) as array<json>)
+{%- endmacro %}
+
+
+{#
+    json_strict_value: the scalar at `json_path` of a JSON string, as `data_type`.
+    Unlike json_extract_scalar and json_query_string it raises on malformed JSON, and on
+    Trino where the path holds a list or an object, so bad input fails the build.
+    StarRocks has no raising parse and returns NULL there.
+
+    Usage:
+      {{ json_strict_value('message', "'$.job.durationInMs'", 'decimal(38, 4)') }}
+#}
+{% macro json_strict_value(json_col, json_path, data_type='varchar') -%}
+    {{ adapter.dispatch('json_strict_value', 'open_learning')(json_col, json_path, data_type) }}
+{%- endmacro %}
+
+{% macro default__json_strict_value(json_col, json_path, data_type) -%}
+    cast(json_extract(json_parse({{ json_col }}), {{ json_path }}) as {{ data_type }})
+{%- endmacro %}
+
+{% macro duckdb__json_strict_value(json_col, json_path, data_type) -%}
+    cast(json_extract_string(cast({{ json_col }} as json), {{ json_path }}) as {{ data_type }})
+{%- endmacro %}
+
+{% macro starrocks__json_strict_value(json_col, json_path, data_type) -%}
+    cast(get_json_string(cast({{ json_col }} as varchar), {{ json_path }}) as {{ data_type }})
+{%- endmacro %}
+
+
+{#
+    array_transform: `lambda_body` applied to each element of an array, with the
+    element bound to `element_name`.
+
+    Usage:
+      {{ array_transform('signatories', 'x', "cast(x as integer)") }}
+#}
+{% macro array_transform(array_expr, element_name, lambda_body) -%}
+    {{ adapter.dispatch('array_transform', 'open_learning')(array_expr, element_name, lambda_body) }}
+{%- endmacro %}
+
+{% macro default__array_transform(array_expr, element_name, lambda_body) -%}
+    transform({{ array_expr }}, {{ element_name }} -> {{ lambda_body }})
+{%- endmacro %}
+
+{% macro duckdb__array_transform(array_expr, element_name, lambda_body) -%}
+    list_transform({{ array_expr }}, {{ element_name }} -> {{ lambda_body }})
+{%- endmacro %}
+
+{% macro starrocks__array_transform(array_expr, element_name, lambda_body) -%}
+    array_map({{ element_name }} -> {{ lambda_body }}, {{ array_expr }})
 {%- endmacro %}
 
 
@@ -1280,18 +1330,10 @@
 {% macro json_nested_array_distinct_values(json_col, json_path) -%}
     coalesce(
         array_sort(array_distinct({{ 'array_flatten' if target.type == 'starrocks' else 'flatten' }}(
-            {{ json_extract_nested_varchar_array(json_col, json_path) }}
+            {{ adapter.dispatch('json_extract_nested_varchar_array', 'open_learning')(json_col, json_path) }}
         )))
         , {{ empty_varchar_array() }}
     )
-{%- endmacro %}
-
-{#
-    json_extract_nested_varchar_array: the JSON array of arrays at `json_path` as an
-    array of varchar arrays. '[["a", "b"], ["c"]]' -> [['a', 'b'], ['c']].
-#}
-{% macro json_extract_nested_varchar_array(json_col, json_path) -%}
-    {{ adapter.dispatch('json_extract_nested_varchar_array', 'open_learning')(json_col, json_path) }}
 {%- endmacro %}
 
 {% macro default__json_extract_nested_varchar_array(json_col, json_path) -%}
@@ -1308,6 +1350,27 @@
         inner_array -> cast(inner_array as array<varchar>)
         , cast(json_query(parse_json({{ json_col }}), {{ json_path }}) as array<json>)
     )
+{%- endmacro %}
+
+{#
+    json_parse_nested_varchar_array: a JSON string holding an array of arrays, as an
+    array of varchar arrays to unnest. '[["a", "b"], ["c"]]' -> [['a', 'b'], ['c']].
+    Raises on malformed JSON (not on StarRocks, which has no raising parse).
+#}
+{% macro json_parse_nested_varchar_array(json_col) -%}
+    {{ adapter.dispatch('json_parse_nested_varchar_array', 'open_learning')(json_col) }}
+{%- endmacro %}
+
+{% macro default__json_parse_nested_varchar_array(json_col) -%}
+    cast(json_parse({{ json_col }}) as array(array(varchar)))
+{%- endmacro %}
+
+{% macro duckdb__json_parse_nested_varchar_array(json_col) -%}
+    cast(cast({{ json_col }} as json) as varchar[][])
+{%- endmacro %}
+
+{% macro starrocks__json_parse_nested_varchar_array(json_col) -%}
+    {{ starrocks__json_extract_nested_varchar_array(json_col, "'$'") }}
 {%- endmacro %}
 
 {# base64url_decode_or_null: URL-safe base64 to UTF-8 text, NULL when it does not decode. #}

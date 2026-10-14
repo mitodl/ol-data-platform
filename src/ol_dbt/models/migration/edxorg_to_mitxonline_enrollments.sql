@@ -89,8 +89,10 @@ with combined_enrollments as (
         , cast(revision.wagtail_page_id as bigint) as certificate_page_id
         , array_sort(
             -- signatories is a JSON string holding the StreamField's JSON list
-            {{ json_array_field_values(
-                json_query_string('wagtailcore_revision_content', "'$.signatories'"), 'value', 'integer'
+            {{ array_transform(
+                json_extract_json_array(json_query_string('wagtailcore_revision_content', "'$.signatories'"), "'$'")
+                , 'x'
+                , "cast(" ~ json_extract_scalar('x', "'$.value'") ~ " as integer)"
             ) }}
         ) AS signatory_ids
     from {{ ref('stg__mitxonline__app__postgres__cms_wagtailcore_revision') }} as revision

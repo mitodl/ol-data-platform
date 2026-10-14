@@ -45,8 +45,8 @@ with ticket as (  -- noqa: PRS
 , custom_field_values as (
     select
       ticket.ticket_id
-      , cast({{ json_extract_scalar('t.json_str', "'$.id'") }} as bigint) as id
-      , {{ json_extract_scalar('t.json_str', "'$.value'") }} as value
+      , {{ json_strict_value('t.json_str', "'$.id'", 'bigint') }} as id
+      , {{ json_strict_value('t.json_str', "'$.value'") }} as value
     from ticket
     cross join unnest(ticket.ticket_custom_fields) AS t(json_str)
 )
