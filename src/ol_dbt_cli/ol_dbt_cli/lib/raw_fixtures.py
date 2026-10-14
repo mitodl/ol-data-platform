@@ -228,7 +228,7 @@ def parse_fixture(path: Path, unit: Unit) -> UnitFixture:
                 try:
                     _stored_value(value, columns[column])
                 except (ValueError, TypeError, ArithmeticError, struct.error) as error:
-                    msg = f"{label} has {value!r} in column {column}, which is not a {columns[column]}"
+                    msg = f"{label} has {value!r} in column {column}, which is not a valid {columns[column]}"
                     raise ValueError(msg) from error
             # A row with no key is NULL there, as any column it leaves out is.
             if not comparable or any(row.get(column) is None for column in key_columns):
@@ -353,7 +353,7 @@ def _primary_key(table: TableFixture, row: Mapping[str, Any], key_columns: list[
         try:
             key.append(None if value is None else _stored_value(value, fixture_type))
         except (ValueError, TypeError, ArithmeticError, struct.error) as error:
-            msg = f"{label} has {value!r} in primary key column {column}, which is not a {fixture_type}"
+            msg = f"{label} has {value!r} in primary key column {column}, which is not a valid {fixture_type}"
             raise ValueError(msg) from error
     return tuple(key)
 

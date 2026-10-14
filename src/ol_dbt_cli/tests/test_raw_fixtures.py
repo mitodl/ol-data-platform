@@ -158,22 +158,22 @@ def test_load_fixtures_reads_a_valid_file(tmp_path: Path) -> None:
         (
             _fixture({"id": "long", "n": "long"}, [{"id": 1}, {"id": 2, "n": "one"}]),
             "fixture",
-            "things row 2 has 'one' in column n, which is not a long",
+            "things row 2 has 'one' in column n, which is not a valid long",
         ),
         (
             _fixture({"id": "long", "n": "int"}, [{"id": 1, "n": 2**31}]),
             "fixture",
-            "row 1 has 2147483648 in column n, which is not a int",
+            "row 1 has 2147483648 in column n, which is not a valid int",
         ),
         (
             _fixture({"id": "long", "n": "decimal(5,2)"}, [{"id": 1, "n": 1.234}]),
             "fixture",
-            r"row 1 has 1.234 in column n, which is not a decimal\(5,2\)",
+            r"row 1 has 1.234 in column n, which is not a valid decimal\(5,2\)",
         ),
         (
             _fixture({"id": "long", "at": "timestamp"}, [{"id": 1, "at": "yesterday"}]),
             "fixture",
-            "row 1 has 'yesterday' in column at, which is not a timestamp",
+            "row 1 has 'yesterday' in column at, which is not a valid timestamp",
         ),
         (
             _fixture({"id": "long"}, [{"id": 1}, {"id": 2}, {"id": "1"}]),
@@ -289,7 +289,7 @@ def test_generated_rows_pass_validation(tmp_path: Path, monkeypatch: pytest.Monk
         ({RAW_TABLE: [{"id": "1"}]}, "things generated row 1 repeats primary key id='1'"),
         (
             {RAW_TABLE: [{"id": "one"}]},
-            "things generated row 1 has 'one' in primary key column id, which is not a long",
+            "things generated row 1 has 'one' in primary key column id, which is not a valid long",
         ),
     ],
 )
@@ -368,7 +368,7 @@ def test_validate_generated_rejects_a_key_its_column_cannot_hold(tmp_path: Path,
     (unit,) = load_units(inventory_dir)
     (fixture,) = load_fixtures(inventory_dir, [unit])
 
-    with pytest.raises(ValueError, match="generated row 1 has .* in primary key column id, which is not a"):
+    with pytest.raises(ValueError, match="generated row 1 has .* in primary key column id, which is not a valid"):
         validate_generated(fixture, unit, {RAW_TABLE: [{"id": value}]})
 
 
