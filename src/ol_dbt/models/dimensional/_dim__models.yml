@@ -1657,9 +1657,9 @@ models:
       the enrollment date (1970-01-01 when the enrollment has none); in_progress is
       last_active_on plus var needs_attention_quiet_days (30); null for in_progress
       with a grade but no tracked activity, and for passed and certified. It is a
-      threshold to compare against, not a date to subtract from. A duration built
-      on it (an average, a range, days needing attention) must leave out the 1970-01-01
-      rows.
+      threshold to compare against. Days needing attention is <current UTC date> -
+      needs_attention_since only where the predicate above holds (a future date is
+      a learner not yet due) and never for the 1970-01-01 rows.
   - name: content_units_completed
     description: int, units (Open edX verticals) of the run's current course structure
       the learner has completed, from afact_learner_courserun_content_progress. A
@@ -2792,7 +2792,7 @@ unit_tests:
       courserun_readable_id: "course-v1:MITx+1.01x+1T2024"
       useractivity_event_type: "edx.forum.thread.created"
       useractivity_event_object: "{}"
-      useractivity_timestamp: "2024-01-15T23:30:00.123456+00:00"
+      useractivity_timestamp: "2024-01-15T23:30:00.123456Z"
   - input: ref('stg__mitxpro__openedx__tracking_logs__user_activity')
     rows: []
   - input: ref('stg__mitxresidential__openedx__tracking_logs__user_activity')

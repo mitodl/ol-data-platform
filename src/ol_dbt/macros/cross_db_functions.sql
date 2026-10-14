@@ -339,6 +339,10 @@
     iso8601_to_date_key: Convert an ISO8601 varchar date/datetime field to an integer YYYYMMDD date key.
     Handles both 'YYYY-MM-DD' (10 chars) and 'YYYY-MM-DDTHH:MM:SS...' (>=19 chars) formats.
     Returns NULL if input is NULL.
+    The key is the date as written; a UTC offset is dropped, not applied.
+    afact_learner_courserun_progress.needs_attention_since counts from this day.
+    test_tfact_discussion_events_date_fk_keeps_the_source_day pins it on DuckDB
+    only, so a change to one variant has to be made to all three.
 #}
 {% macro iso8601_to_date_key(varchar_field) -%}
     {{ return(adapter.dispatch('iso8601_to_date_key', 'open_learning')(varchar_field)) }}
