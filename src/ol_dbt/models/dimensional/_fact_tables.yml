@@ -41,9 +41,13 @@ models:
     - accepted_values:
         values: ['course', 'program']
   - name: enrollment_date_key
-    description: Foreign key to dim_date for enrollment creation date
+    description: >
+      Foreign key to dim_date for enrollment creation date. Null for Global Alumni,
+      whose
+      source has no enrollment timestamp.
     tests:
-    - not_null
+    - not_null:
+        where: "platform != 'global_alumni'"
     - relationships:
         to: ref('dim_date')
         field: date_key
@@ -105,7 +109,7 @@ models:
     description: Enrollment creation timestamp (for incremental processing)
   - name: enrollment_updated_on
     description: Enrollment last-updated timestamp (for incremental processing). Null
-      for edxorg and residential platforms.
+      for edxorg, residential and global_alumni platforms.
   - name: enrollment_is_edx_enrolled
     description: >
       Boolean indicating whether the learner is enrolled on the edX side of the platform.
@@ -1176,6 +1180,12 @@ unit_tests:
     rows: []
   - input: ref('int__bootcamps__courserunenrollments')
     rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
   - input: ref('int__micromasters__course_enrollments')
     rows: []
       # dim_user has since re-keyed this user; user_pk no longer matches the target row below.
@@ -1232,6 +1242,353 @@ unit_tests:
       enrollment_created_on: "2024-01-15T00:00:00"
       enrollment_updated_on: "2024-01-15T00:00:00"
       enrollment_is_edx_enrolled: true
+- name: test_tfact_enrollment_refreshes_stale_courserun_fk_after_course_run_remap
+  description: >
+    When an enrollment resolves to a different dim_course_run than the one stored
+    (for
+    example an Emeritus run code that gains an xPro match after first resolving to
+    its
+    platform-native run), the incremental filter must re-select it and write the new
+    courserun_fk, even though user_fk and the source timestamps did not change.
+  model: tfact_enrollment
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__courserunenrollments')
+    rows:
+    - courserunenrollment_id: 6001
+      user_id: 555
+      courserun_readable_id: "course-v1:MITxT+1"
+      courserunenrollment_created_on: "2024-01-15T00:00:00"
+      courserunenrollment_updated_on: "2024-01-15T00:00:00"
+      courserunenrollment_is_active: true
+      courserunenrollment_enrollment_mode: "verified"
+      courserunenrollment_enrollment_status: "enrolled"
+      courserunenrollment_is_edx_enrolled: true
+  - input: ref('int__mitxpro__programenrollments')
+    rows: []
+  - input: ref('int__mitxpro__courserunenrollments')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_enrollments')
+    rows: []
+  - input: ref('int__mitxonline__programenrollments')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_enrollments')
+    rows: []
+  - input: ref('int__bootcamps__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('int__micromasters__course_enrollments')
+    rows: []
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_PK"
+      mitxonline_application_user_id: 555
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "NEW_RUN_PK"
+      courserun_readable_id: "course-v1:MITxT+1"
+      platform: "mitxonline"
+      is_current: true
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_MITXONLINE"
+      platform_readable_id: "mitxonline"
+      # Existing target state carries the old courserun_fk; an unrelated later-dated enrollment pushes the watermark past our row so only the stale-courserun_fk check can reselect it.
+  - input: this
+    rows:
+    - enrollment_key: "138707f4f49de0845e4263b5ebdd013d"  # pragma: allowlist secret
+      enrollment_id: "6001"
+      enrollment_type: "course"
+      enrollment_date_key: 20240115
+      user_fk: "USER_PK"
+      courserun_fk: "OLD_RUN_PK"
+      platform: "mitxonline"
+      enrollment_is_active: true
+      enrollment_mode: "verified"
+      enrollment_status: "enrolled"
+      enrollment_created_on: "2024-01-15T00:00:00"
+      enrollment_updated_on: "2024-01-15T00:00:00"
+      enrollment_is_edx_enrolled: true
+    - enrollment_key: "unrelated-later-enrollment"
+      enrollment_id: "9999"
+      enrollment_type: "course"
+      enrollment_date_key: 20240201
+      user_fk: "USER_PK"
+      courserun_fk: "OLD_RUN_PK"
+      platform: "mitxonline"
+      enrollment_is_active: true
+      enrollment_mode: "verified"
+      enrollment_status: "enrolled"
+      enrollment_created_on: "2024-02-01T00:00:00"
+      enrollment_updated_on: "2024-02-01T00:00:00"
+      enrollment_is_edx_enrolled: true
+  expect:
+    rows:
+    - enrollment_key: "138707f4f49de0845e4263b5ebdd013d"  # pragma: allowlist secret
+      enrollment_id: "6001"
+      enrollment_type: "course"
+      enrollment_date_key: 20240115
+      user_fk: "USER_PK"
+      courserun_fk: "NEW_RUN_PK"
+      platform: "mitxonline"
+      enrollment_is_active: true
+      enrollment_mode: "verified"
+      enrollment_status: "enrolled"
+      enrollment_created_on: "2024-01-15T00:00:00"
+      enrollment_updated_on: "2024-01-15T00:00:00"
+      enrollment_is_edx_enrolled: true
+- name: test_tfact_enrollment_resolves_emeritus_global_alumni_fks
+  description: >
+    Emeritus learners match dim_user by student id, falling back to email; Global
+    Alumni learners match by email, falling back to student id. Both platforms resolve
+    their course run through the xPro run that carries the same external run code,
+    or,
+    when no xPro run does, through the platform's own dim_course_run row for that
+    code.
+  model: tfact_enrollment
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__programenrollments')
+    rows: []
+  - input: ref('int__mitxpro__courserunenrollments')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_enrollments')
+    rows: []
+  - input: ref('int__mitxonline__programenrollments')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_enrollments')
+    rows: []
+  - input: ref('int__bootcamps__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows:
+    - courserun_external_readable_id: "RUN-A"
+      courserun_readable_id: "course-v1:xPRO+A+R1"
+    - courserun_external_readable_id: ""
+      courserun_readable_id: "course-v1:xPRO+NOCODE+R1"
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows:
+      # run code with no xPro run: resolves to the platform-native dim_course_run row
+    - user_id: "E-3"
+      user_email: "e3@example.com"
+      user_full_name: "Edda Three"
+      courserun_external_readable_id: "RUN-X"
+      enrollment_created_on: "2024-03-01T00:00:00"
+      enrollment_updated_on: "2024-03-02T00:00:00"
+      is_enrolled: true
+      # matched by student id
+    - user_id: "E-1"
+      user_email: "e1@example.com"
+      user_full_name: "Emma One"
+      courserun_external_readable_id: "RUN-A"
+      enrollment_created_on: "2024-03-01T00:00:00"
+      enrollment_updated_on: "2024-03-02T00:00:00"
+      is_enrolled: true
+      # no student id: matched by email, case-insensitively
+    - user_id:
+      user_email: "E2@Example.com"
+      user_full_name: "Eli Two"
+      courserun_external_readable_id: "RUN-A"
+      enrollment_created_on: "2024-03-01T00:00:00"
+      enrollment_updated_on: "2024-03-02T00:00:00"
+      is_enrolled: true
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows:
+      # matched by email
+    - user_id: "G-1"
+      user_email: "g1@example.com"
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: true
+      # no email: matched by student id
+    - user_id: "G-2"
+      user_email:
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: false
+      # run code with no xPro run: resolves to the platform-native dim_course_run row
+    - user_id: "G-3"
+      user_email: "g3@example.com"
+      courserun_external_readable_id: "RUN-Y"
+      is_enrolled: true
+  - input: ref('int__micromasters__course_enrollments')
+    rows: []
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_E1"
+      emeritus_user_id: "E-1"
+      email: "e1@example.com"
+    - user_pk: "USER_E2"
+      email: "e2@example.com"
+    - user_pk: "USER_G1"
+      global_alumni_user_id: "G-1-OTHER"
+      email: "g1@example.com"
+    - user_pk: "USER_G2"
+      global_alumni_user_id: "G-2"
+      email: "g2@example.com"
+    - user_pk: "USER_E3"
+      emeritus_user_id: "E-3"
+      email: "e3@example.com"
+    - user_pk: "USER_G3"
+      global_alumni_user_id: "G-3"
+      email: "g3@example.com"
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "RUN_A_XPRO"
+      courserun_readable_id: "course-v1:xPRO+A+R1"
+      platform: "mitxpro"
+      is_current: true
+    - courserun_pk: "RUN_X_EMERITUS"
+      courserun_readable_id: "RUN-X"
+      platform: "emeritus"
+      is_current: true
+    - courserun_pk: "RUN_Y_GLOBAL_ALUMNI"
+      courserun_readable_id: "RUN-Y"
+      platform: "global_alumni"
+      is_current: true
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_EMERITUS"
+      platform_readable_id: "emeritus"
+    - platform_pk: "PLATFORM_GLOBAL_ALUMNI"
+      platform_readable_id: "global_alumni"
+  expect:
+    rows:
+    - platform: "emeritus"
+      user_fk: "USER_E1"
+      courserun_fk: "RUN_A_XPRO"
+      platform_fk: "PLATFORM_EMERITUS"
+      enrollment_type: "course"
+      enrollment_is_active: true
+    - platform: "emeritus"
+      user_fk: "USER_E2"
+      courserun_fk: "RUN_A_XPRO"
+      platform_fk: "PLATFORM_EMERITUS"
+      enrollment_type: "course"
+      enrollment_is_active: true
+    - platform: "global_alumni"
+      user_fk: "USER_G1"
+      courserun_fk: "RUN_A_XPRO"
+      platform_fk: "PLATFORM_GLOBAL_ALUMNI"
+      enrollment_type: "course"
+      enrollment_is_active: true
+    - platform: "global_alumni"
+      user_fk: "USER_G2"
+      courserun_fk: "RUN_A_XPRO"
+      platform_fk: "PLATFORM_GLOBAL_ALUMNI"
+      enrollment_type: "course"
+      enrollment_is_active: false
+    - platform: "emeritus"
+      user_fk: "USER_E3"
+      courserun_fk: "RUN_X_EMERITUS"
+      platform_fk: "PLATFORM_EMERITUS"
+      enrollment_type: "course"
+      enrollment_is_active: true
+    - platform: "global_alumni"
+      user_fk: "USER_G3"
+      courserun_fk: "RUN_Y_GLOBAL_ALUMNI"
+      platform_fk: "PLATFORM_GLOBAL_ALUMNI"
+      enrollment_type: "course"
+      enrollment_is_active: true
+- name: test_tfact_enrollment_keys_emeritus_enrollment_id_on_the_staging_grain
+  description: >
+    An Emeritus enrollment_id is keyed on run code, email and first and last name,
+    never the
+    student id, so a student id filled in on a later load is the same enrollment (one
+    row),
+    while a different email is a different enrollment. The name is keyed as first
+    and last, so
+    two splits of one name ("William" + "Lo Cubilla" and "William Lo" + "Cubilla")
+    stay
+    separate rows.
+  model: tfact_enrollment
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__programenrollments')
+    rows: []
+  - input: ref('int__mitxpro__courserunenrollments')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_enrollments')
+    rows: []
+  - input: ref('int__mitxonline__programenrollments')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_enrollments')
+    rows: []
+  - input: ref('int__bootcamps__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows:
+      # no student id yet
+    - user_id:
+      user_email: "kay@example.com"
+      user_first_name: "Kay"
+      user_last_name: "Lee"
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: true
+      # the same enrollment after the student id is filled in
+    - user_id: "E-9"
+      user_email: "kay@example.com"
+      user_first_name: "Kay"
+      user_last_name: "Lee"
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: true
+      # the same student id on a different email
+    - user_id: "E-9"
+      user_email: "kay2@example.com"
+      user_first_name: "Kay"
+      user_last_name: "Lee"
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: true
+      # two splits of one full name
+    - user_id:
+      user_email: "w@example.com"
+      user_first_name: "William"
+      user_last_name: "Lo Cubilla"
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: true
+    - user_id:
+      user_email: "w@example.com"
+      user_first_name: "William Lo"
+      user_last_name: "Cubilla"
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: true
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('int__micromasters__course_enrollments')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  expect:
+    rows:
+    - enrollment_id: "dbaaca616b05ba02444ae6779d09d88f"
+    - enrollment_id: "c94628ef8ab4d0e3d40d2ea10cdd7867"
+    - enrollment_id: "3215e2888d9716016c40078b0c02d2a7"
+    - enrollment_id: "ed6e9b6f1b305180a4fd254b6e4a5b4e"
 - name: test_tfact_grade_refreshes_stale_user_fk_after_dim_user_rekey
   description: >
     Regression test for the dim_user re-key incident: when dim_user.user_pk changes
