@@ -48,6 +48,10 @@ def test_spec_matches_the_inventory_unit() -> None:
 def test_b2b_pilot_upstreams_are_covered() -> None:
     selected = {table.name for table in mitxonline_app.MITXONLINE_APP_SPEC.tables}
     assert B2B_PILOT_TABLES <= selected
+    resources = mitxonline_app.build_source().resources
+    assert {
+        f"raw__mitxonline__app__postgres__{name}" for name in B2B_PILOT_TABLES
+    } <= set(resources)
 
 
 def test_password_hash_is_excluded() -> None:
