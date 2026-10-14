@@ -92,10 +92,27 @@ def platforms_from_run_value(value: str | None) -> list[str] | None:
     return value.split(",") if value is not None else None
 
 
+# Text with nothing left after removing these is empty: "[No content]" (a Zendesk
+# body), "SCRUBBED" (a deleted ticket), redaction tags, the turn separator "---", and
+# whitespace. int__feedback__conversation uses the subject in place of an empty body,
+# so this drops only tickets where both are empty. Keep in step with that model.
+EMPTY_CONVERSATION_PATTERN = r"\[No content\]|SCRUBBED|<[A-Z_]+>|-|\s"
+
+
 def drop_short_conversations(
     conversations_lf: pl.LazyFrame, min_chars_by_source: dict[str, int] | None
 ) -> pl.LazyFrame:
-    """Drop conversations below their source's minimum length; others stay."""
+    """Drop empty conversations, and those below their source's minimum length."""
+    # Null, not empty: redaction hasn't reached the row yet (see needs_summary).
+    conversations_lf = conversations_lf.filter(
+        pl.col("conversation_text").is_null()
+        | (
+            pl.col("conversation_text")
+            .str.replace_all(EMPTY_CONVERSATION_PATTERN, "")
+            .str.len_chars()
+            > 0
+        )
+    )
     for source_slug, min_chars in (min_chars_by_source or {}).items():
         conversations_lf = conversations_lf.filter(
             ~(
@@ -115,7 +132,8 @@ def filter_conversation_scope(
     | None = DEFAULT_MIN_CONVERSATION_CHARS_BY_SOURCE,
 ) -> pl.LazyFrame:
     """Keep rows whose conversation opened on or after feedback_since, whose
-    platform is in platforms, and that meets its source's minimum length.
+    platform is in platforms, and that is not empty and meets its source's minimum
+    length.
 
     rows_lf is any frame keyed by feedback_conversation_pk, such as embeddings or
     cluster membership. feedback_since is a YYYY-MM-DD date, platforms a list of
@@ -123,8 +141,6 @@ def filter_conversation_scope(
     None for any skips that filter. Other rows stay in their tables; this only hides
     them from the caller.
     """
-    if feedback_since is None and platforms is None and not min_chars_by_source:
-        return rows_lf
     in_scope_lf = conversations_lf
     if feedback_since is not None:
         # conversation_opened_at is an ISO8601 string, so a YYYY-MM-DD prefix

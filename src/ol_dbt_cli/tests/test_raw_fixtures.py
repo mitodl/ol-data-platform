@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime
 import json
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -27,13 +28,25 @@ from ol_dbt_cli.lib.raw_fixtures import (
     merge_captured,
     row_parameters,
     starrocks_type,
+    unit_factories,
+    validate_generated,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RAW_TABLE = "raw__demo__s3__things"
+FACTORY_PACKAGES = Path(__file__).parent / "fixtures"
 
 
-def _inventory(tmp_path: Path, fixture: dict[str, Any] | None, *, local: str = "fixture") -> Path:
+def _inventory(
+    tmp_path: Path,
+    fixture: dict[str, Any] | None,
+    *,
+    local: str = "fixture",
+    primary_key: tuple[str, ...] = ("id",),
+) -> Path:
+    things: dict[str, Any] = {"name": "things", "raw_table": RAW_TABLE, "sync_mode": "full_refresh_overwrite"}
+    if primary_key:
+        things["primary_key"] = [[column] for column in primary_key]
     unit = {
         "schema_version": 1,
         "deployment": "demo",
@@ -43,7 +56,7 @@ def _inventory(tmp_path: Path, fixture: dict[str, Any] | None, *, local: str = "
         "loader": "dlt",
         "table_prefix": "raw__demo__s3__",
         "tables": [
-            {"name": "things", "raw_table": RAW_TABLE, "sync_mode": "full_refresh_overwrite", "modeled": True},
+            {**things, "modeled": True},
             {"name": "unread", "raw_table": "raw__demo__s3__unread", "sync_mode": "append", "modeled": False},
         ],
     }
@@ -67,6 +80,13 @@ def test_committed_fixtures_are_valid() -> None:
         for table in fixture.tables:
             create_table_sql(table, "c", "s")
             assert all(len(row) == len(table.columns) for row in row_parameters(table))
+
+
+def test_committed_hand_written_keys_are_what_their_columns_hold() -> None:
+    inventory_dir = REPO_ROOT / DEFAULT_INVENTORY_DIR
+    units = {unit.path.name: unit for unit in load_units(inventory_dir)}
+    for fixture in load_fixtures(inventory_dir, units.values()):
+        validate_generated(fixture, units[fixture.path.name], {table.raw_table: [] for table in fixture.tables})
 
 
 @pytest.mark.parametrize(
@@ -142,6 +162,208 @@ def test_load_fixtures_rejects(tmp_path: Path, fixture: dict[str, Any], local: s
 
     with pytest.raises(ValueError, match=message):
         load_fixtures(inventory_dir, load_units(inventory_dir))
+
+
+def test_a_unit_without_a_factory_package_has_none(tmp_path: Path) -> None:
+    (unit,) = load_units(_inventory(tmp_path, None))
+
+    assert unit_factories(unit) is None
+
+
+def test_a_factory_package_that_fails_to_import_is_an_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (unit,) = load_units(_inventory(tmp_path, None))
+    package = tmp_path / "broken_factories" / "demo__s3"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("import no_such_dependency\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    with pytest.raises(ModuleNotFoundError, match="no_such_dependency"):
+        unit_factories(unit, package="broken_factories")
+
+
+def test_a_factory_package_without_the_contract_is_an_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A directory with only `_generated.py` imports as a namespace package."""
+    (unit,) = load_units(_inventory(tmp_path, None))
+    package = tmp_path / "scaffolded_factories" / "demo__s3"
+    package.mkdir(parents=True)
+    (package / "_generated.py").write_text("")
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    with pytest.raises(ValueError, match="scaffolded_factories.demo__s3 has no SEED or generate"):
+        unit_factories(unit, package="scaffolded_factories")
+
+
+def test_generated_rows_pass_validation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.syspath_prepend(str(FACTORY_PACKAGES))
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long", "name": "string"}, [{"id": 1, "name": "by hand"}]))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    factories = unit_factories(unit, package="fixture_factories")
+    assert factories is not None
+    generated = factories.generate({table.raw_table: table.rows for table in fixture.tables}, scale=2)
+
+    validate_generated(fixture, unit, generated)
+    assert factories.SEED == 20261013  # noqa: PLR2004
+    assert generated == {
+        RAW_TABLE: [
+            {"id": 2},
+            {"id": 3, "name": "thing 3"},
+            {"id": 4},
+            {"id": 5, "name": "thing 5"},
+            {"id": 6},
+            {"id": 7, "name": "thing 7"},
+        ]
+    }
+
+
+@pytest.mark.parametrize(
+    ("generated", "message"),
+    [
+        ({"raw__demo__s3__unread": [{"id": 1}]}, "demo/s3 factories: raw__demo__s3__unread is not a table of"),
+        ({RAW_TABLE: [{"id": 2}, {"id": 3, "nmae": "x"}]}, "things generated row 2 sets nmae"),
+        ({RAW_TABLE: [{"name": "x"}]}, "things generated row 1 has no value for primary key column id"),
+        ({RAW_TABLE: [{"id": None}]}, "things generated row 1 has no value for primary key column id"),
+        ({RAW_TABLE: [{"id": 1}]}, "things generated row 1 repeats primary key id=1"),
+        ({RAW_TABLE: [{"id": 2}, {"id": 2}]}, "things generated row 2 repeats primary key id=2"),
+        ({RAW_TABLE: [{"id": "1"}]}, "things generated row 1 repeats primary key id='1'"),
+        (
+            {RAW_TABLE: [{"id": "one"}]},
+            "things generated row 1 has 'one' in primary key column id, which is not a long",
+        ),
+    ],
+)
+def test_validate_generated_rejects(tmp_path: Path, generated: dict[str, list[dict[str, Any]]], message: str) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long", "name": "string"}, [{"id": 1}]))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    with pytest.raises(ValueError, match=message):
+        validate_generated(fixture, unit, generated)
+
+
+def test_validate_generated_compares_every_column_of_a_compound_key(tmp_path: Path) -> None:
+    fixture_file = _fixture({"id": "long", "name": "string"}, [{"id": 1, "name": "a"}])
+    inventory_dir = _inventory(tmp_path, fixture_file, primary_key=("id", "name"))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    validate_generated(fixture, unit, {RAW_TABLE: [{"id": 1, "name": "b"}, {"id": 2, "name": "a"}]})
+    with pytest.raises(ValueError, match="generated row 2 repeats primary key id=1, name='a'"):
+        validate_generated(fixture, unit, {RAW_TABLE: [{"id": 2, "name": "a"}, {"id": 1, "name": "a"}]})
+    with pytest.raises(ValueError, match="generated row 1 has no value for primary key column name"):
+        validate_generated(fixture, unit, {RAW_TABLE: [{"id": 2}]})
+
+
+@pytest.mark.parametrize(
+    ("fixture_type", "hand_written", "generated"),
+    [
+        ("string", "7", 7),
+        ("double", 1, "1.0"),
+        ("decimal(10,2)", "1.50", 1.5),
+        ("date", datetime.date(2026, 1, 1), "2026-01-01"),
+        ("timestamp", datetime.datetime(2026, 1, 1, 12), "2026-01-01 12:00:00"),  # noqa: DTZ001
+        ("timestamp", datetime.datetime(2026, 1, 1, 12), datetime.datetime(2026, 1, 1, 12, tzinfo=datetime.UTC)),  # noqa: DTZ001
+        ("timestamp", datetime.datetime(2026, 1, 1), datetime.date(2026, 1, 1)),  # noqa: DTZ001
+        ("date", datetime.date(2026, 1, 1), datetime.datetime(2026, 1, 1, 12, tzinfo=datetime.UTC)),
+        ("float", 0.1, 0.10000000001),
+        ("boolean", True, 1),
+    ],
+)
+def test_validate_generated_compares_keys_as_the_column_holds_them(
+    tmp_path: Path, fixture_type: str, hand_written: Any, generated: Any
+) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": fixture_type}, [{"id": hand_written}]))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    with pytest.raises(ValueError, match="generated row 1 repeats primary key"):
+        validate_generated(fixture, unit, {RAW_TABLE: [{"id": generated}]})
+
+
+@pytest.mark.parametrize(
+    ("fixture_type", "value"),
+    [
+        ("int", 2**31),
+        ("long", -(2**63) - 1),
+        ("long", 1.5),
+        ("long", Decimal("2.7")),
+        ("long", "2.7"),
+        ("float", 1e39),
+        ("decimal(5,2)", "1.234"),
+        ("decimal(5,2)", 1000),
+        ("decimal(5,2)", "NaN"),
+        ("decimal(38,9)", "1" + "0" * 29),
+        ("decimal(3,3)", 1),
+        ("boolean", "true"),
+        ("boolean", 2),
+        ("date", "yesterday"),
+        ("date", 20260101),
+        ("date", [2026, 1, 1]),
+        ("timestamp", 1767225600),
+    ],
+)
+def test_validate_generated_rejects_a_key_its_column_cannot_hold(tmp_path: Path, fixture_type: str, value: Any) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": fixture_type}, []))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    with pytest.raises(ValueError, match="generated row 1 has .* in primary key column id, which is not a"):
+        validate_generated(fixture, unit, {RAW_TABLE: [{"id": value}]})
+
+
+@pytest.mark.parametrize(
+    ("fixture_type", "value"),
+    [
+        ("int", 2**31 - 1),
+        ("long", -(2**63)),
+        ("long", Decimal("3.0")),
+        ("long", 4.0),
+        ("decimal(5,2)", "999.99"),
+        ("decimal(5,2)", -0.5),
+        ("decimal(5,2)", "1.500"),
+        ("decimal(38,9)", "9" * 29 + ".123456789"),
+        ("decimal(3,3)", 0),
+        ("boolean", False),
+    ],
+)
+def test_validate_generated_accepts_a_key_at_the_edge_of_its_column(
+    tmp_path: Path, fixture_type: str, value: Any
+) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": fixture_type}, []))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    validate_generated(fixture, unit, {RAW_TABLE: [{"id": value}]})
+
+
+def test_validate_generated_rejects_a_nested_primary_key_path(tmp_path: Path) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long"}, []))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+    unit.tables[0]["primary_key"] = [["data", "id"]]
+
+    with pytest.raises(ValueError, match=r"things has nested primary key path data\.id"):
+        validate_generated(fixture, unit, {RAW_TABLE: [{"id": 1}]})
+
+
+def test_validate_generated_without_a_primary_key_checks_tables_and_columns_only(tmp_path: Path) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long"}, [{"id": 1}]), primary_key=())
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    validate_generated(fixture, unit, {RAW_TABLE: [{"id": 1}, {}]})
+    with pytest.raises(ValueError, match="generated row 1 sets nmae"):
+        validate_generated(fixture, unit, {RAW_TABLE: [{"nmae": "x"}]})
+
+
+def test_validate_generated_rejects_a_key_column_the_fixture_does_not_declare(tmp_path: Path) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"name": "string"}, []))
+    (unit,) = load_units(inventory_dir)
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    with pytest.raises(ValueError, match="things has primary key column id, which .* does not declare"):
+        validate_generated(fixture, unit, {RAW_TABLE: [{"name": "x"}]})
 
 
 def test_selected_unit_without_a_fixture_is_an_error(tmp_path: Path) -> None:

@@ -17,6 +17,7 @@ from openedx.assets import irx_export
 from openedx.assets.irx_export import (
     IRX_EXPORT_FILES,
     MANIFEST_NAME,
+    SourceTableReplacedError,
     _DigestingWriter,
     build_irx_export_asset,
     legacy_csv_columns,
@@ -178,16 +179,18 @@ DROP_DATE = "2026-09-20"
 COURSE_ID = "course-v1:MITx+1.00x+3T2026"
 
 
-class _Snapshot(SimpleNamespace):
-    snapshot_id = 42
-
-
 class _Table:
+    """A stand-in whose snapshot id moves each time the table is loaded."""
+
+    loads = 0
+
     def __init__(self, name: str):
         self.name = name
+        type(self).loads += 1
+        self.snapshot_id = type(self).loads
 
-    def current_snapshot(self) -> _Snapshot:
-        return _Snapshot()
+    def current_snapshot(self) -> SimpleNamespace:
+        return SimpleNamespace(snapshot_id=self.snapshot_id)
 
 
 def _irx_frame(table: _Table) -> pl.DataFrame:
@@ -217,10 +220,16 @@ def drop_root(tmp_path, monkeypatch) -> UPath:
     return drop
 
 
-def _run_export(monkeypatch, fail_on: str | None = None):
+def _run_export(
+    monkeypatch, fail_on: str | None = None, replaced: dict[str, int] | None = None
+):
+    """Run the mitx export; ``replaced`` maps a model to reads that lose a file."""
+    replaced = dict(replaced or {})
+
     def read(
-        table: _Table, _snapshot_id: int, columns: tuple[str, ...]
+        table: _Table, snapshot_id: int, columns: tuple[str, ...]
     ) -> Iterator[pl.DataFrame]:
+        assert snapshot_id == table.snapshot_id
         if fail_on and table.name.endswith(fail_on):
             raise RuntimeError
         frame = _irx_frame(table)
@@ -229,6 +238,12 @@ def _run_export(monkeypatch, fail_on: str | None = None):
         # One batch per row, after the empty schema batch, so the drop is
         # assembled across batches the way a multi-file table's would be.
         yield frame.clear()
+        model = next((name for name in replaced if table.name.endswith(name)), None)
+        if model and replaced[model]:
+            replaced[model] -= 1
+            # Partway through, so rows of the dropped table are already written.
+            yield frame.head(1)
+            raise SourceTableReplacedError(table.name)
         yield from frame.iter_slices(1)
 
     monkeypatch.setattr(irx_export, "read_data_files", read)
@@ -273,6 +288,60 @@ def test_failed_rerun_takes_the_old_manifest_down(drop_root, monkeypatch) -> Non
     assert (drop_root / MANIFEST_NAME).exists()
 
     result = _run_export(monkeypatch, fail_on="courseware_studentmodule")
+
+    assert not result.success
+    assert not (drop_root / MANIFEST_NAME).exists()
+
+
+def test_a_table_replaced_mid_read_is_exported_again_from_the_start(
+    drop_root, monkeypatch
+) -> None:
+    assert _run_export(monkeypatch).success
+    clean = {
+        path.name: path.read_bytes()
+        for path in drop_root.iterdir()
+        if path.name != MANIFEST_NAME
+    }
+
+    result = _run_export(
+        monkeypatch,
+        replaced={
+            "courseware_studentmodule": irx_export.MAX_TABLE_READS - 1,
+            "forum_contents": 1,
+        },
+    )
+
+    assert result.success
+    manifest = json.loads((drop_root / MANIFEST_NAME).read_bytes())
+    for entry in manifest["files"]:
+        data = (drop_root / entry["name"]).read_bytes()
+        assert data == clean[entry["name"]]
+        assert entry["sha256"] == hashlib.sha256(data).hexdigest()
+    row_counts = {entry["name"]: entry["row_count"] for entry in manifest["files"]}
+    assert row_counts["studentmodule_query.csv"] == 1
+    assert row_counts["forum_contents.parquet"] == len(FORUM_ROWS)
+    # The snapshot recorded is the one the delivered bytes came from: the last
+    # table loaded for that file, not the one the first read pinned.
+    snapshot_ids = {
+        event.asset_key.path[
+            -1
+        ]: event.step_materialization_data.materialization.metadata[
+            "source_snapshot_id"
+        ].value
+        for event in result.get_asset_materialization_events()
+        if event.asset_key.path[-1] in ("studentmodule_query", "forum_contents")
+    }
+    assert snapshot_ids == {
+        "studentmodule_query": str(_Table.loads - 2),
+        "forum_contents": str(_Table.loads),
+    }
+
+
+def test_a_table_replaced_on_every_read_fails_the_drop(drop_root, monkeypatch) -> None:
+    result = _run_export(
+        monkeypatch,
+        replaced={"courseware_studentmodule": irx_export.MAX_TABLE_READS},
+    )
 
     assert not result.success
     assert not (drop_root / MANIFEST_NAME).exists()
@@ -402,6 +471,96 @@ def test_read_data_files_never_decodes_more_than_a_batch_of_rows(
     )
 
     assert [batch.height for batch in batches] == [0, 1, 1]
+
+
+def test_read_data_files_reports_a_data_file_dropped_before_it_is_opened(
+    tmp_path,
+) -> None:
+    table = _iceberg_table(tmp_path, data_files=2)
+    batches = read_data_files(table, table.current_snapshot().snapshot_id)
+    next(batches)
+    next(batches)
+    for task in table.scan().plan_files():
+        UPath(task.file.file_path).unlink()
+
+    with pytest.raises(SourceTableReplacedError):
+        next(batches)
+
+
+def test_read_data_files_reports_manifests_dropped_before_planning(tmp_path) -> None:
+    table = _iceberg_table(tmp_path, data_files=1)
+    batches = read_data_files(table, table.current_snapshot().snapshot_id)
+    next(batches)
+    for manifest in tmp_path.rglob("*.avro"):
+        manifest.unlink()
+
+    with pytest.raises(SourceTableReplacedError):
+        next(batches)
+
+
+def test_read_data_files_raises_other_planning_errors_as_they_are(
+    tmp_path, monkeypatch
+) -> None:
+    table = _iceberg_table(tmp_path, data_files=1)
+    scan = table.scan()
+    monkeypatch.setattr(table, "scan", lambda **_kwargs: scan)
+    monkeypatch.setattr(
+        type(scan), "plan_files", lambda _self: (_ for _ in ()).throw(PermissionError)
+    )
+    batches = read_data_files(table, table.current_snapshot().snapshot_id)
+    next(batches)
+
+    with pytest.raises(PermissionError):
+        next(batches)
+
+
+class _DroppedMidRead:
+    """An input file whose object is deleted after its first batch is decoded."""
+
+    def __init__(self, inner: Any, *, still_exists: bool):
+        self._inner = inner
+        self._still_exists = still_exists
+
+    def open(self) -> Any:
+        return self._inner.open()
+
+    def exists(self) -> bool:
+        return self._still_exists
+
+
+@pytest.mark.parametrize(
+    ("still_exists", "raised"),
+    [(False, SourceTableReplacedError), (True, OSError)],
+)
+def test_read_data_files_tells_a_dropped_file_from_another_read_error(
+    tmp_path, monkeypatch, still_exists, raised
+) -> None:
+    table = _iceberg_table(tmp_path, data_files=1)
+    monkeypatch.setattr(irx_export, "READ_BATCH_ROWS", 1)
+    new_input = table.io.new_input
+    monkeypatch.setattr(
+        table.io,
+        "new_input",
+        lambda location: _DroppedMidRead(
+            new_input(location), still_exists=still_exists
+        ),
+    )
+    real_iter_batches = irx_export.pq.ParquetFile.iter_batches
+
+    def iter_batches(self, *args: Any, **kwargs: Any) -> Iterator[pa.RecordBatch]:
+        yield next(iter(real_iter_batches(self, *args, **kwargs)))
+        # pyarrow reports a failed ranged GET as an OSError with no errno.
+        message = "AWS Error RESOURCE_NOT_FOUND during GetObject operation"
+        raise OSError(message)
+
+    monkeypatch.setattr(irx_export.pq.ParquetFile, "iter_batches", iter_batches)
+    batches = read_data_files(table, table.current_snapshot().snapshot_id)
+    next(batches)
+    assert next(batches).height == 1
+
+    with pytest.raises(raised) as caught:
+        next(batches)
+    assert caught.type is raised
 
 
 def test_read_data_files_refuses_a_snapshot_with_delete_files(tmp_path) -> None:

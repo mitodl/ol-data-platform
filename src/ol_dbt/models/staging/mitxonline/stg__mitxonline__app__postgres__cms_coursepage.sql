@@ -16,7 +16,7 @@ with source as (
         , about as course_about
         , what_you_learn as course_what_you_learn
         , video_url as course_video_url
-        , {{ json_query_string('price', "'$.value.text'") }} as course_price
+        , {{ json_query_string('price', "'$[0].value.text'") }} as course_price
         , feature_image_id as course_feature_image_id
     from most_recent_source
 )

@@ -202,6 +202,7 @@ def _active_members_frames(table_name: str, **_: Any) -> pl.LazyFrame:
                 ],
                 "source_slug": ["zendesk"] * 3,
                 "conversation_text_chars": [600] * 3,
+                "conversation_text": ["x" * 600] * 3,
             }
         ),
     }
