@@ -124,14 +124,14 @@ with mitx_users as (
                     user_gdpr_consent_date desc
                     , enrollment_created_on desc
                     , enrollment_updated_on desc
-                    , user_id
-                    , user_email
-                    , user_full_name
-                    , user_address_country
-                    , user_gender
-                    , user_company
-                    , user_job_title
-                    , user_industry
+                    , user_id asc
+                    , user_email asc
+                    , user_full_name asc
+                    , user_address_country asc
+                    , user_gender asc
+                    , user_company asc
+                    , user_job_title asc
+                    , user_industry asc
             ) as row_num
         from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
     )
@@ -155,14 +155,14 @@ with mitx_users as (
                 order by
                     user_gdpr_consent_date desc
                     , courserun_start_on desc
-                    , user_id
-                    , user_email
-                    , user_full_name
-                    , user_address_country
-                    , user_gender
-                    , user_company
-                    , user_job_title
-                    , user_industry
+                    , user_id asc
+                    , user_email asc
+                    , user_full_name asc
+                    , user_address_country asc
+                    , user_gender asc
+                    , user_company asc
+                    , user_job_title asc
+                    , user_industry asc
             ) as row_num
         from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
     )
