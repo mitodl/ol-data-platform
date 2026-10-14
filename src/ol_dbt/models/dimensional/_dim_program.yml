@@ -81,7 +81,7 @@ models:
     tests:
     - not_null
   - name: platform_fk
-    description: Foreign key to dim_platform (Phase 3+)
+    description: Foreign key to dim_platform, resolved from the platform string
   - name: first_published_date
     description: Original VARCHAR published date from source
   - name: published_date
