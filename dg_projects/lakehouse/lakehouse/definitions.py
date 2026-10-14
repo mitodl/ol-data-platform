@@ -78,6 +78,7 @@ from lakehouse.lib.dbt_environment import (
     DBT_AUTOMATION_ENABLED,
     STARROCKS_IS_LOCAL,
 )
+from lakehouse.lib.executor import executor_for_environment
 from lakehouse.lib.inventory import INVENTORY_DIR
 from lakehouse.lib.non_airbyte_staging import (
     non_airbyte_raw_tables,
@@ -760,6 +761,7 @@ defs = Definitions(
     ),
     asset_checks=[*dbt_layer_freshness_checks, *dimensional_schema_change_checks],
     resources=resources_dict,
+    executor=executor_for_environment(DAGSTER_ENV),
     sensors=[
         iceberg_snapshot_pointer_lag_sensor,
         dbt_layer_freshness_sensor,
