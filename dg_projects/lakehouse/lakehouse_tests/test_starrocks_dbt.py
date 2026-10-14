@@ -10,11 +10,13 @@ import logging
 import re
 from pathlib import Path
 
+import lakehouse
 import pytest
 from lakehouse.lib.starrocks_dbt import (
     MAX_BUILD_ATTEMPTS,
     MAX_MV_REFRESH_ATTEMPTS,
     MV_REFRESH_RETRY_DELAY_SECONDS,
+    OM_ARTIFACTS,
     RETRIABLE_ERROR_PATTERN,
     RETRY_BASE_DELAY,
     ChangeTrackedView,
@@ -1094,3 +1096,68 @@ class TestAfterRefresh:
         assert starrocks.statements[-1] == (
             "REFRESH MATERIALIZED VIEW b2b_analytics.mv_b WITH SYNC MODE"
         )
+
+
+def test_the_build_uploads_its_artifacts_for_openmetadata():
+    """Parsed, not imported: the asset module needs a dbt manifest on disk.
+
+    OpenMetadata reads the tag:starrocks test outcomes from these uploads, and
+    a failing build is the one it most needs, so both exits have to upload.
+    """
+    source = Path(lakehouse.__file__).parent / "assets/lakehouse/dbt_starrocks.py"
+    asset = next(
+        node
+        for node in ast.walk(ast.parse(source.read_text()))
+        if isinstance(node, ast.FunctionDef) and node.name == "starrocks_dbt_assets"
+    )
+
+    stream_guard = next(
+        node
+        for node in ast.walk(asset)
+        if isinstance(node, ast.Try) and node.handlers[0].name == "exc"
+    )
+    uploads = [
+        (call.lineno, [ast.unparse(arg) for arg in call.args])
+        for call in ast.walk(asset)
+        if isinstance(call, ast.Call)
+        and getattr(call.func, "id", "") == "upload_build_artifacts_best_effort"
+    ]
+    assert len(uploads) == 3, "one upload per exit: failed, cancelled and passed"
+    for _, args in uploads:
+        assert args[1] == "starrocks_dbt_s3_artifacts", "not the Trino prefix"
+        assert args[3] == "OM_ARTIFACTS"
+
+    on_failure, on_cancel, on_success = sorted(line for line, _ in uploads)
+    cancelled = stream_guard.handlers[1]
+    assert cancelled.type is not None
+    assert ast.unparse(cancelled.type) == "BaseException"
+    assert cancelled.end_lineno is not None
+    assert cancelled.lineno < on_cancel <= cancelled.end_lineno
+    assert isinstance(cancelled.body[-1], ast.Raise)
+    # Inside the branch that gives up, so a retried attempt uploads nothing.
+    gives_up = stream_guard.handlers[0].body[0]
+    assert isinstance(gives_up, ast.If)
+    assert gives_up.end_lineno is not None
+    assert gives_up.lineno < on_failure <= gives_up.end_lineno
+
+    # In the finally around the yield: after the events, so an upload cannot
+    # cost a materialization, and also when the run is cancelled mid-yield.
+    yield_guard = next(
+        node
+        for node in ast.walk(asset)
+        if isinstance(node, ast.Try)
+        and any(
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.YieldFrom)
+            and ast.unparse(stmt.value.value) == "events"
+            for stmt in node.body
+        )
+    )
+    assert yield_guard.finalbody
+    assert yield_guard.finalbody[0].lineno <= on_success
+    assert on_success <= (yield_guard.finalbody[-1].end_lineno or 0)
+
+
+def test_openmetadata_gets_the_manifest_with_the_results():
+    """Nothing else produces a manifest for the StarRocks target."""
+    assert set(OM_ARTIFACTS) == {"run_results.json", "manifest.json"}

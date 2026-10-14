@@ -16,10 +16,12 @@ from dagster_dbt.errors import DagsterDbtCliRuntimeError
 from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
     DbtAutomationTranslator,
+    upload_build_artifacts_best_effort,
 )
 from lakehouse.lib.dbt_environment import STARROCKS_DBT_TARGET
 from lakehouse.lib.starrocks_dbt import (
     MAX_BUILD_ATTEMPTS,
+    OM_ARTIFACTS,
     MissingBaseTablesError,
     base_table_relations,
     documented_columns,
@@ -30,6 +32,7 @@ from lakehouse.lib.starrocks_dbt import (
     retry_delay,
     unreadable_base_tables,
 )
+from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 from lakehouse.resources.starrocks import StarRocksResource
 
 # tag:starrocks models (see dbt_project.yml) are additionally gated
@@ -155,6 +158,7 @@ def starrocks_dbt_assets(
     context: AssetExecutionContext,
     starrocks_dbt: DbtCliResource,
     starrocks: StarRocksResource,
+    starrocks_dbt_s3_artifacts: DbtS3ArtifactsResource,
 ):
     """Build the tag:starrocks dbt models directly against StarRocks.
 
@@ -220,9 +224,29 @@ def starrocks_dbt_assets(
             events = list(invocation.stream())
         except DagsterDbtCliRuntimeError as exc:
             if attempt == MAX_BUILD_ATTEMPTS - 1 or not looks_retriable(exc):
+                # Only the attempt the run ends on: the S3 key is per Dagster
+                # run, and a retried attempt's results are superseded.
+                upload_build_artifacts_best_effort(
+                    context, starrocks_dbt_s3_artifacts, invocation, OM_ARTIFACTS
+                )
                 raise
             last_exc = exc
             continue
+        except BaseException:
+            # A cancelled run uploads what it finished, as full_dbt_project does.
+            upload_build_artifacts_best_effort(
+                context, starrocks_dbt_s3_artifacts, invocation, OM_ARTIFACTS
+            )
+            raise
 
-        yield from events
+        try:
+            yield from events
+        finally:
+            # In a finally so a run cancelled while the events are yielded
+            # still uploads. Best effort here too: the models are built, and
+            # failing the step over an S3 error would hold back the
+            # materialized view refresh that ol-analytics-api reads.
+            upload_build_artifacts_best_effort(
+                context, starrocks_dbt_s3_artifacts, invocation, OM_ARTIFACTS
+            )
         return
