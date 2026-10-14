@@ -170,12 +170,43 @@ def test_filter_conversation_scope_drops_conversations_below_source_minimum() ->
             "feedback_conversation_pk": ["short", "long", "ticket"],
             "source_slug": ["learn_ai_tutor", "learn_ai_tutor", "zendesk"],
             "conversation_text_chars": [26, 80, 10],
+            "conversation_text": ["x" * 26, "x" * 80, "x" * 10],
         }
     )
 
     result = cluster.filter_conversation_scope(embeddings_lf, conversations_lf, None)
 
     assert result.collect()["feedback_conversation_pk"].to_list() == ["long", "ticket"]
+
+
+def test_drop_short_conversations_drops_placeholder_only_text() -> None:
+    conversations_lf = pl.LazyFrame(
+        {
+            "feedback_conversation_pk": [
+                "empty",
+                "redacted",
+                "two_empty_turns",
+                "short",
+                "pending",
+            ],
+            "source_slug": ["zendesk"] * 5,
+            "conversation_text_chars": [12, 18, 24, 2, None],
+            "conversation_text": [
+                "[No content]",
+                "<PERSON>\n <EMAIL_ADDRESS>",
+                "[No content]\n---\nSCRUBBED",
+                "Hi",
+                None,
+            ],
+        }
+    )
+
+    result = cluster.drop_short_conversations(conversations_lf, None)
+
+    assert result.collect()["feedback_conversation_pk"].to_list() == [
+        "short",
+        "pending",
+    ]
 
 
 def test_should_trigger_early_recluster_with_no_prior_completed_run() -> None:
@@ -208,6 +239,7 @@ def test_filter_conversation_scope_keeps_feedback_since_date() -> None:
                 "2024-01-01T00:00:00.000",
                 "2025-06-01T12:00:00.000",
             ],
+            "conversation_text": ["text"] * 3,
         }
     )
 

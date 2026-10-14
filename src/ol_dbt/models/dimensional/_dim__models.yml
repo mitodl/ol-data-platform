@@ -1656,7 +1656,221 @@ models:
       so a source that records a local offset can be a day off UTC. not_started is
       the enrollment date (1970-01-01 when the enrollment has none); in_progress is
       last_active_on plus var needs_attention_quiet_days (30); null for in_progress
-      with a grade but no tracked activity, and for passed and certified.
+      with a grade but no tracked activity, and for passed and certified. It is a
+      threshold to compare against. Days needing attention is <current UTC date> -
+      needs_attention_since only where the predicate above holds (a future date is
+      a learner not yet due) and never for the 1970-01-01 rows.
+  - name: content_units_completed
+    description: int, units (Open edX verticals) of the run's current course structure
+      the learner has completed, from afact_learner_courserun_content_progress. A
+      unit is complete when every block in it that counts toward progress is complete,
+      as on the Open edX progress page. As there, a unit with nothing the learner
+      can complete (discussion only, or every block restricted to another enrollment
+      track) is complete once the learner has completed any block in the run. 0 when
+      the learner has no completion matched to them, which includes a learner whose
+      Open edX user id is not on their dim_user row. Null when the run has no units
+      to count, which is every edxorg and bootcamps run.
+  - name: content_units_total
+    description: int, units (Open edX verticals) in the run's current course structure
+      that the learner's enrollment track is shown, from dim_course_content_progress_block.
+      The track is read from enrollment_mode and enrollment_is_active, and an inactive
+      enrollment is shown no track-restricted unit. Content groups and content type
+      gating are not followed, so it can still exceed what one learner is shown. Null
+      when the run has no course structure, and for every edxorg and bootcamps run.
+  - name: content_progress
+    description: double, content_units_completed / content_units_total, between 0.0
+      and 1.0 like grade_value. Times 100 it is the completion percent the Open edX
+      progress page shows, apart from the content groups and content type gating this
+      model does not follow. Null when content_units_total is null or 0. Not an input
+      to completion_status; a certified learner can be below 1.0.
+    tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+
+- name: dim_course_content_progress_block
+  description: >
+    One row per (platform, course run, enrollment track group, block), for each
+    unit of the run's current course structure (dim_course_content where
+    is_latest) and each block in it that counts toward a learner's progress. A
+    block counts when Open edX records completion on it: every block that is
+    not a container (course, chapter, sequential, vertical, library_content,
+    itembank, split_test, conditional) and not a discussion. Blocks under a
+    staff-only chapter, sequential or vertical are left out. MITx Online, xPRO
+    and residential only, the platforms with block completion data; edX.org has
+    a course structure and is left out.
+
+    Progress is counted in units, as the Open edX progress page does. A unit is
+    a vertical directly under a sequential (vertical_block_id). Each unit has a
+    row of its own, with block_id = vertical_block_id and a weight of 0, so a
+    unit with nothing to complete is still counted. A run's total for a track
+    group is its count of distinct vertical_block_id, not a row count.
+
+    A block or unit restricted by enrollment track (group_access on Open edX
+    user partition 50) has rows only for the track groups it is shown to. A run
+    has a set of rows for each group its restrictions name and one for group 0,
+    which is every other learner. A run with no track restriction has group 0
+    alone.
+
+    Within a unit, blocks are grouped into progress items. A randomized pool
+    (library_content, itembank) shows each learner max_count of its children,
+    so the pool is one item weighing max_count. Every other block is its own
+    item weighing 1. A unit is complete when the learner's completed weight
+    reaches the sum of progress_item_weight over the unit's distinct
+    progress_item_block_id.
+
+    Content groups, content type gating and split_test branches are not
+    modelled, so a unit can hold blocks one learner is never shown, and that
+    learner cannot complete it here.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - platform
+        - courserun_readable_id
+        - enrollment_track_group_id
+        - block_id
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - xpro/api
+      - xpro/app_postgres
+  columns:
+  - name: courserun_fk
+    description: string, foreign key to dim_course_run. Null when the course structure's
+      run has no current dim_course_run row.
+  - name: platform
+    description: string, platform of the course structure (mitxonline, mitxpro, residential).
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ['mitxonline', 'mitxpro', 'residential']
+  - name: courserun_readable_id
+    description: string, the Open edX course ID formatted as course-v1:{org}+{course
+      code}+{run_tag}.
+    tests:
+    - not_null
+  - name: enrollment_track_group_id
+    description: int, the Open edX enrollment track group the row applies to, e.g.
+      1 audit, 2 verified (macro openedx_enrollment_track_group_ids). 0 is every learner
+      whose group the run's track restrictions do not name, including one with no
+      active enrollment.
+    tests:
+    - not_null
+  - name: block_id
+    description: string, the block's Open edX usage key, as dim_course_content.block_id.
+      The unit's own row carries the unit's key.
+    tests:
+    - not_null
+  - name: block_category
+    description: string, the block's type, e.g. problem, html, video. vertical on
+      a unit's own row.
+  - name: chapter_block_id
+    description: string, block id of the chapter the block is in.
+  - name: sequential_block_id
+    description: string, block id of the sequential the block is in.
+  - name: vertical_block_id
+    description: string, block id of the unit the block is in, the vertical directly
+      under its sequential. A block in a vertical nested in a split_test or conditional
+      carries the outer vertical.
+    tests:
+    - not_null
+  - name: progress_item_block_id
+    description: string, the progress item the block counts in. The parent block id
+      for a child of a randomized pool, else block_id.
+    tests:
+    - not_null
+  - name: progress_item_weight
+    description: int, how many completed blocks the item is worth. 1 for a block that
+      is its own item, and 0 on a unit's own row. For a pool, max_count (1 when unset),
+      capped at the number of children the track group is shown, or that number when
+      max_count is negative. Repeated on every block of the item.
+    tests:
+    - not_null
+
+- name: afact_learner_courserun_content_progress
+  description: >
+    One row per (learner, course run, enrollment track group), for each learner
+    with at least one completed block in the run and each track group
+    dim_course_content_progress_block has for the run. A row is what the
+    learner has completed of the units that track group is shown. The
+    completion is Open edX's own block completion record
+    (completion_blockcompletion), which covers ungraded content. MITx Online,
+    xPRO and residential only: edX.org and Bootcamps have no block completion
+    data.
+
+    Counted against dim_course_content_progress_block, so a block removed from
+    the course no longer counts and content_units_completed cannot exceed the
+    run's total. Consumers read it through afact_learner_courserun_progress,
+    which picks the row for the learner's own track group and adds the total
+    and the learners with nothing completed.
+
+    Consent is not applied. A consumer-facing model built on this one must
+    carry or apply consent itself.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - user_fk
+        - courserun_fk
+        - enrollment_track_group_id
+      config:
+        # One duplicate doubles afact_learner_courserun_progress's rows.
+        error_if: ">0"
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+  columns:
+  - name: user_fk
+    description: string, foreign key to dim_user, matched on the platform's Open edX
+      user id.
+    tests:
+    - not_null
+  - name: courserun_fk
+    description: string, foreign key to dim_course_run.
+    tests:
+    - not_null
+  - name: platform
+    description: string, platform the completions were recorded on (mitxonline, mitxpro,
+      residential).
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, the Open edX course ID formatted as course-v1:{org}+{course
+      code}+{run_tag}.
+    tests:
+    - not_null
+  - name: enrollment_track_group_id
+    description: int, the Open edX enrollment track group the row is counted for,
+      as dim_course_content_progress_block.enrollment_track_group_id.
+    tests:
+    - not_null
+  - name: content_units_completed
+    description: int, units (Open edX verticals) the learner has completed of those
+      the track group is shown. A unit is complete when the learner's completed weight
+      reaches the unit's. A randomized pool counts up to its progress_item_weight,
+      however many of its blocks the learner completed. A unit with nothing for the
+      track group to complete counts, as it does on the Open edX progress page. 0
+      when the learner has completed blocks and finished no unit.
+    tests:
+    - not_null
 
 unit_tests:
 - name: test_dim_user_pk_is_minted_from_the_group_identity
@@ -1920,6 +2134,10 @@ unit_tests:
       date: "2024-02-15"
     - date_key: 20240301
       date: "2024-03-01"
+  - input: ref('dim_course_content_progress_block')
+    rows: []
+  - input: ref('afact_learner_courserun_content_progress')
+    rows: []
   expect:
     rows:
     - user_fk: certified
@@ -2101,6 +2319,10 @@ unit_tests:
     rows: []
   - input: ref('dim_date')
     rows: []
+  - input: ref('dim_course_content_progress_block')
+    rows: []
+  - input: ref('afact_learner_courserun_content_progress')
+    rows: []
   expect:
     rows:
     - user_fk: refunded_then_active
@@ -2119,6 +2341,323 @@ unit_tests:
       enrollment_is_active: false
       enrollment_status: deferred
       enrollment_created_on: "2024-01-01T00:00:00"
+- name: test_afact_learner_courserun_progress_content_progress
+  description: >
+    content_progress is the learner's completed units over the run's total. The
+    total counts each vertical once however many blocks it holds, a learner
+    with nothing completed reads 0 rather than null, and a run with no course
+    structure reads null. In a run with a track-restricted unit, the total and
+    the completed units are those of the learner's enrollment track: a verified
+    learner is counted against the verified group, and an audit learner or one
+    whose enrollment is inactive against group 0.
+  model: afact_learner_courserun_progress
+  given:
+  - input: ref('tfact_enrollment')
+    rows:
+    - {enrollment_id: "1", enrollment_type: course, user_fk: halfway, courserun_fk: run-1,
+      platform: mitxonline}
+    - {enrollment_id: "2", enrollment_type: course, user_fk: nothing_done, courserun_fk: run-1,
+      platform: mitxonline}
+    - {enrollment_id: "3", enrollment_type: course, user_fk: no_structure, courserun_fk: run-2,
+      platform: edxorg}
+    - {enrollment_id: "4", enrollment_type: course, user_fk: verified, courserun_fk: run-3,
+      platform: mitxonline, enrollment_mode: verified, enrollment_is_active: true}
+    - {enrollment_id: "5", enrollment_type: course, user_fk: audit, courserun_fk: run-3,
+      platform: mitxonline, enrollment_mode: audit, enrollment_is_active: true}
+    - {enrollment_id: "6", enrollment_type: course, user_fk: unenrolled, courserun_fk: run-3,
+      platform: mitxonline, enrollment_mode: verified, enrollment_is_active: false}
+  - input: ref('tfact_grade')
+    rows: []
+  - input: ref('tfact_certificate')
+    rows: []
+  - input: ref('afact_learner_courserun_daily_activity')
+    rows: []
+  - input: ref('dim_date')
+    rows: []
+  # Five blocks in two verticals: a total of 2.
+  - input: ref('dim_course_content_progress_block')
+    rows:
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: html-1, vertical_block_id: vert-1}
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: video-1, vertical_block_id: vert-1}
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: problem-1, vertical_block_id: vert-2}
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: problem-2, vertical_block_id: vert-2}
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: problem-3, vertical_block_id: vert-2}
+    - {courserun_fk: null, enrollment_track_group_id: 0, block_id: html-9, vertical_block_id: vert-9}
+    # run-3 shows vert-paid to the verified group (2) only.
+    - {courserun_fk: run-3, enrollment_track_group_id: 0, block_id: html-open, vertical_block_id: vert-open}
+    - {courserun_fk: run-3, enrollment_track_group_id: 2, block_id: html-open, vertical_block_id: vert-open}
+    - {courserun_fk: run-3, enrollment_track_group_id: 2, block_id: html-paid, vertical_block_id: vert-paid}
+  - input: ref('afact_learner_courserun_content_progress')
+    rows:
+    - {user_fk: halfway, courserun_fk: run-1, enrollment_track_group_id: 0, content_units_completed: 1}
+    # Each run-3 learner has a row per track group; only their own group's is read.
+    - {user_fk: verified, courserun_fk: run-3, enrollment_track_group_id: 0, content_units_completed: 1}
+    - {user_fk: verified, courserun_fk: run-3, enrollment_track_group_id: 2, content_units_completed: 2}
+    - {user_fk: audit, courserun_fk: run-3, enrollment_track_group_id: 0, content_units_completed: 1}
+    - {user_fk: audit, courserun_fk: run-3, enrollment_track_group_id: 2, content_units_completed: 0}
+  expect:
+    rows:
+    - {user_fk: halfway, content_units_completed: 1, content_units_total: 2, content_progress: 0.5}
+    - {user_fk: nothing_done, content_units_completed: 0, content_units_total: 2,
+      content_progress: 0.0}
+    - {user_fk: no_structure, content_units_completed: null, content_units_total: null,
+      content_progress: null}
+    - {user_fk: verified, content_units_completed: 2, content_units_total: 2, content_progress: 1.0}
+    - {user_fk: audit, content_units_completed: 1, content_units_total: 1, content_progress: 1.0}
+    - {user_fk: unenrolled, content_units_completed: 0, content_units_total: 1, content_progress: 0.0}
+- name: test_dim_course_content_progress_block_units
+  description: >
+    Pins which blocks count toward progress, the unit each is in and what each
+    item weighs. Containers and discussions do not count. A block under a
+    staff-only chapter, sequential or vertical does not count, including
+    through a pool. A pool's children share one item weighing max_count: 1 when
+    unset, capped at the number of children, and every child when negative. A
+    block in a vertical nested in a split_test belongs to the outer vertical.
+    Each unit has a row of its own weighing 0, so a discussion-only unit is
+    still listed. Superseded structure versions and edX.org structures are
+    ignored. A run with an enrollment track restriction has rows for the group
+    it names and for group 0: a restricted block or unit is listed for the
+    named group only, and an empty restriction or one on another partition
+    restricts nothing.
+  model: dim_course_content_progress_block
+  given:
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: run-1, courserun_readable_id: "course-v1:A+B+C", platform: mitxonline,
+      is_current: true}
+    - {courserun_pk: run-1-old, courserun_readable_id: "course-v1:A+B+C", platform: mitxonline,
+      is_current: false}
+  - input: ref('dim_course_content')
+    format: sql
+    rows: |
+      select * from (values
+        ('mitxonline', 'course-v1:A+B+C', 0, 'course', cast(null as varchar), 'course', '{}', cast(null as varchar), cast(null as varchar), true)
+        , ('mitxonline', 'course-v1:A+B+C', 1, 'ch-1', 'course', 'chapter', '{}', 'ch-1', cast(null as varchar), true)
+        , ('mitxonline', 'course-v1:A+B+C', 2, 'seq-1', 'ch-1', 'sequential', '{}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 3, 'vert-1', 'seq-1', 'vertical', '{}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 4, 'html-1', 'vert-1', 'html', '{}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 5, 'discussion-1', 'vert-1', 'discussion', '{}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 6, 'pool-default', 'vert-1', 'library_content', '{}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 7, 'pd-1', 'pool-default', 'problem', '{}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 8, 'pd-2', 'pool-default', 'problem', '{}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 9, 'pool-over', 'vert-1', 'library_content', '{"max_count": 5}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 10, 'po-1', 'pool-over', 'problem', '{}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 11, 'po-2', 'pool-over', 'problem', '{}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 12, 'pool-all', 'vert-1', 'itembank', '{"max_count": -1}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 13, 'pa-1', 'pool-all', 'problem', '{}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 14, 'pa-2', 'pool-all', 'problem', '{}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 15, 'pa-3', 'pool-all', 'problem', '{}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 16, 'vert-staff', 'seq-1', 'vertical', '{"visible_to_staff_only": true}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 17, 'html-staff', 'vert-staff', 'html', '{}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 18, 'pool-staff', 'vert-staff', 'library_content', '{}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 19, 'ps-1', 'pool-staff', 'problem', '{}', 'ch-1', 'seq-1', true)
+        , ('mitxonline', 'course-v1:A+B+C', 20, 'seq-staff', 'ch-1', 'sequential', '{"visible_to_staff_only": true}', 'ch-1', 'seq-staff', true)
+        , ('mitxonline', 'course-v1:A+B+C', 21, 'vert-2', 'seq-staff', 'vertical', '{}', 'ch-1', 'seq-staff', true)
+        , ('mitxonline', 'course-v1:A+B+C', 22, 'video-staff', 'vert-2', 'video', '{}', 'ch-1', 'seq-staff', true)
+        , ('mitxonline', 'course-v1:A+B+C', 23, 'ch-staff', 'course', 'chapter', '{"visible_to_staff_only": true}', 'ch-staff', cast(null as varchar), true)
+        , ('mitxonline', 'course-v1:A+B+C', 24, 'seq-3', 'ch-staff', 'sequential', '{}', 'ch-staff', 'seq-3', true)
+        , ('mitxonline', 'course-v1:A+B+C', 25, 'vert-3', 'seq-3', 'vertical', '{}', 'ch-staff', 'seq-3', true)
+        , ('mitxonline', 'course-v1:A+B+C', 26, 'problem-staff', 'vert-3', 'problem', '{}', 'ch-staff', 'seq-3', true)
+        , ('mitxonline', 'course-v1:A+B+C', 27, 'ch-2', 'course', 'chapter', '{}', 'ch-2', cast(null as varchar), true)
+        , ('mitxonline', 'course-v1:A+B+C', 28, 'seq-4', 'ch-2', 'sequential', '{}', 'ch-2', 'seq-4', true)
+        , ('mitxonline', 'course-v1:A+B+C', 29, 'vert-4', 'seq-4', 'vertical', '{}', 'ch-2', 'seq-4', true)
+        , ('mitxonline', 'course-v1:A+B+C', 30, 'video-1', 'vert-4', 'video', '{}', 'ch-2', 'seq-4', true)
+        , ('mitxonline', 'course-v1:A+B+C', 31, 'split-1', 'vert-4', 'split_test', '{}', 'ch-2', 'seq-4', true)
+        , ('mitxonline', 'course-v1:A+B+C', 32, 'vert-inner', 'split-1', 'vertical', '{}', 'ch-2', 'seq-4', true)
+        , ('mitxonline', 'course-v1:A+B+C', 33, 'problem-inner', 'vert-inner', 'problem', '{}', 'ch-2', 'seq-4', true)
+        , ('mitxonline', 'course-v1:A+B+C', 4, 'html-removed', 'vert-1', 'html', '{}', 'ch-1', 'seq-1', false)
+        , ('edxorg', 'course-v1:E+D+X', 4, 'html-edx', 'vert-edx', 'html', '{}', 'ch-edx', 'seq-edx', true)
+        , ('mitxonline', 'course-v1:T+R+K', 0, 'course-t', cast(null as varchar), 'course', '{}', cast(null as varchar), cast(null as varchar), true)
+        , ('mitxonline', 'course-v1:T+R+K', 1, 'ch-t', 'course-t', 'chapter', '{}', 'ch-t', cast(null as varchar), true)
+        , ('mitxonline', 'course-v1:T+R+K', 2, 'seq-t', 'ch-t', 'sequential', '{}', 'ch-t', 'seq-t', true)
+        , ('mitxonline', 'course-v1:T+R+K', 3, 'vert-open', 'seq-t', 'vertical', '{}', 'ch-t', 'seq-t', true)
+        , ('mitxonline', 'course-v1:T+R+K', 4, 'html-open', 'vert-open', 'html', '{}', 'ch-t', 'seq-t', true)
+        , ('mitxonline', 'course-v1:T+R+K', 5, 'problem-paid', 'vert-open', 'problem', '{"group_access": {"50": [2]}}', 'ch-t', 'seq-t', true)
+        , ('mitxonline', 'course-v1:T+R+K', 6, 'vert-paid', 'seq-t', 'vertical', '{"group_access": {"50": [2]}}', 'ch-t', 'seq-t', true)
+        , ('mitxonline', 'course-v1:T+R+K', 7, 'html-paid', 'vert-paid', 'html', '{}', 'ch-t', 'seq-t', true)
+        , ('mitxonline', 'course-v1:T+R+K', 8, 'vert-talk', 'seq-t', 'vertical', '{}', 'ch-t', 'seq-t', true)
+        , ('mitxonline', 'course-v1:T+R+K', 9, 'discussion-t', 'vert-talk', 'discussion', '{}', 'ch-t', 'seq-t', true)
+        , ('mitxonline', 'course-v1:T+R+K', 10, 'vert-any', 'seq-t', 'vertical', '{"group_access": {"50": []}}', 'ch-t', 'seq-t', true)
+        , ('mitxonline', 'course-v1:T+R+K', 11, 'video-gated', 'vert-any', 'video', '{"group_access": {"51": [1]}}', 'ch-t', 'seq-t', true)
+      ) as t (
+        platform, courserun_readable_id, block_index, block_id, parent_block_id, block_category
+        , block_metadata, chapter_block_id, sequential_block_id, is_latest
+      )
+  expect:
+    rows:
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: vert-1, vertical_block_id: vert-1,
+      progress_item_block_id: vert-1, progress_item_weight: 0}
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: html-1, vertical_block_id: vert-1,
+      progress_item_block_id: html-1, progress_item_weight: 1}
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: pd-1, vertical_block_id: vert-1,
+      progress_item_block_id: pool-default, progress_item_weight: 1}
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: pd-2, vertical_block_id: vert-1,
+      progress_item_block_id: pool-default, progress_item_weight: 1}
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: po-1, vertical_block_id: vert-1,
+      progress_item_block_id: pool-over, progress_item_weight: 2}
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: po-2, vertical_block_id: vert-1,
+      progress_item_block_id: pool-over, progress_item_weight: 2}
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: pa-1, vertical_block_id: vert-1,
+      progress_item_block_id: pool-all, progress_item_weight: 3}
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: pa-2, vertical_block_id: vert-1,
+      progress_item_block_id: pool-all, progress_item_weight: 3}
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: pa-3, vertical_block_id: vert-1,
+      progress_item_block_id: pool-all, progress_item_weight: 3}
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: vert-4, vertical_block_id: vert-4,
+      progress_item_block_id: vert-4, progress_item_weight: 0}
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: video-1, vertical_block_id: vert-4,
+      progress_item_block_id: video-1, progress_item_weight: 1}
+    - {courserun_fk: run-1, enrollment_track_group_id: 0, block_id: problem-inner,
+      vertical_block_id: vert-4, progress_item_block_id: problem-inner, progress_item_weight: 1}
+    - {courserun_fk: null, enrollment_track_group_id: 0, block_id: vert-open, vertical_block_id: vert-open,
+      progress_item_block_id: vert-open, progress_item_weight: 0}
+    - {courserun_fk: null, enrollment_track_group_id: 0, block_id: html-open, vertical_block_id: vert-open,
+      progress_item_block_id: html-open, progress_item_weight: 1}
+    - {courserun_fk: null, enrollment_track_group_id: 0, block_id: vert-talk, vertical_block_id: vert-talk,
+      progress_item_block_id: vert-talk, progress_item_weight: 0}
+    - {courserun_fk: null, enrollment_track_group_id: 0, block_id: vert-any, vertical_block_id: vert-any,
+      progress_item_block_id: vert-any, progress_item_weight: 0}
+    - {courserun_fk: null, enrollment_track_group_id: 0, block_id: video-gated, vertical_block_id: vert-any,
+      progress_item_block_id: video-gated, progress_item_weight: 1}
+    - {courserun_fk: null, enrollment_track_group_id: 2, block_id: vert-open, vertical_block_id: vert-open,
+      progress_item_block_id: vert-open, progress_item_weight: 0}
+    - {courserun_fk: null, enrollment_track_group_id: 2, block_id: html-open, vertical_block_id: vert-open,
+      progress_item_block_id: html-open, progress_item_weight: 1}
+    - {courserun_fk: null, enrollment_track_group_id: 2, block_id: problem-paid, vertical_block_id: vert-open,
+      progress_item_block_id: problem-paid, progress_item_weight: 1}
+    - {courserun_fk: null, enrollment_track_group_id: 2, block_id: vert-paid, vertical_block_id: vert-paid,
+      progress_item_block_id: vert-paid, progress_item_weight: 0}
+    - {courserun_fk: null, enrollment_track_group_id: 2, block_id: html-paid, vertical_block_id: vert-paid,
+      progress_item_block_id: html-paid, progress_item_weight: 1}
+    - {courserun_fk: null, enrollment_track_group_id: 2, block_id: vert-talk, vertical_block_id: vert-talk,
+      progress_item_block_id: vert-talk, progress_item_weight: 0}
+    - {courserun_fk: null, enrollment_track_group_id: 2, block_id: vert-any, vertical_block_id: vert-any,
+      progress_item_block_id: vert-any, progress_item_weight: 0}
+    - {courserun_fk: null, enrollment_track_group_id: 2, block_id: video-gated, vertical_block_id: vert-any,
+      progress_item_block_id: video-gated, progress_item_weight: 1}
+- name: test_afact_learner_courserun_content_progress_counts_units
+  description: >
+    A unit counts when every item in it is complete. A pool worth 1 is
+    complete with one of its blocks done, and two done still count once, so
+    vert-1 is complete for ada. A unit with one of two blocks done does not
+    count, and a learner with only such a unit reads 0. A completion of a block
+    that is no longer in the structure, a completion value below 1, and a
+    learner with no dim_user row do not count. Open edX user ids are matched
+    per platform. An id on two dim_user rows credits one of them. In a run with
+    two track groups a learner has a row for each, counted against the units
+    and blocks that group is shown. A unit with nothing for the group to
+    complete counts for every learner with a completion in the run, including
+    one whose only completion is of a block no longer in the structure.
+  model: afact_learner_courserun_content_progress
+  given:
+  - input: ref('dim_course_content_progress_block')
+    rows:
+    - {courserun_fk: run-1, platform: mitxonline, courserun_readable_id: "course-v1:A+B+C",
+      enrollment_track_group_id: 0, block_id: html-1, vertical_block_id: vert-1, progress_item_block_id: html-1,
+      progress_item_weight: 1}
+    - {courserun_fk: run-1, platform: mitxonline, courserun_readable_id: "course-v1:A+B+C",
+      enrollment_track_group_id: 0, block_id: pd-1, vertical_block_id: vert-1, progress_item_block_id: pool-default,
+      progress_item_weight: 1}
+    - {courserun_fk: run-1, platform: mitxonline, courserun_readable_id: "course-v1:A+B+C",
+      enrollment_track_group_id: 0, block_id: pd-2, vertical_block_id: vert-1, progress_item_block_id: pool-default,
+      progress_item_weight: 1}
+    - {courserun_fk: run-1, platform: mitxonline, courserun_readable_id: "course-v1:A+B+C",
+      enrollment_track_group_id: 0, block_id: video-1, vertical_block_id: vert-4,
+      progress_item_block_id: video-1, progress_item_weight: 1}
+    - {courserun_fk: run-1, platform: mitxonline, courserun_readable_id: "course-v1:A+B+C",
+      enrollment_track_group_id: 0, block_id: html-2, vertical_block_id: vert-5, progress_item_block_id: html-2,
+      progress_item_weight: 1}
+    - {courserun_fk: run-1, platform: mitxonline, courserun_readable_id: "course-v1:A+B+C",
+      enrollment_track_group_id: 0, block_id: problem-2, vertical_block_id: vert-5,
+      progress_item_block_id: problem-2, progress_item_weight: 1}
+    - {courserun_fk: run-9, platform: mitxpro, courserun_readable_id: "course-v1:X+Y+Z",
+      enrollment_track_group_id: 0, block_id: html-9, vertical_block_id: vert-9, progress_item_block_id: html-9,
+      progress_item_weight: 1}
+    - {courserun_fk: run-5, platform: residential, courserun_readable_id: "course-v1:R+E+S",
+      enrollment_track_group_id: 0, block_id: html-5, vertical_block_id: vert-5, progress_item_block_id: html-5,
+      progress_item_weight: 1}
+    # T+R+K shows problem-paid and the unit vert-paid to the verified group (2) only, and
+    # vert-talk holds nothing to complete.
+    - {courserun_fk: run-7, platform: mitxonline, courserun_readable_id: "course-v1:T+R+K",
+      enrollment_track_group_id: 0, block_id: vert-open, vertical_block_id: vert-open,
+      progress_item_block_id: vert-open, progress_item_weight: 0}
+    - {courserun_fk: run-7, platform: mitxonline, courserun_readable_id: "course-v1:T+R+K",
+      enrollment_track_group_id: 0, block_id: html-open, vertical_block_id: vert-open,
+      progress_item_block_id: html-open, progress_item_weight: 1}
+    - {courserun_fk: run-7, platform: mitxonline, courserun_readable_id: "course-v1:T+R+K",
+      enrollment_track_group_id: 0, block_id: vert-talk, vertical_block_id: vert-talk,
+      progress_item_block_id: vert-talk, progress_item_weight: 0}
+    - {courserun_fk: run-7, platform: mitxonline, courserun_readable_id: "course-v1:T+R+K",
+      enrollment_track_group_id: 2, block_id: vert-open, vertical_block_id: vert-open,
+      progress_item_block_id: vert-open, progress_item_weight: 0}
+    - {courserun_fk: run-7, platform: mitxonline, courserun_readable_id: "course-v1:T+R+K",
+      enrollment_track_group_id: 2, block_id: html-open, vertical_block_id: vert-open,
+      progress_item_block_id: html-open, progress_item_weight: 1}
+    - {courserun_fk: run-7, platform: mitxonline, courserun_readable_id: "course-v1:T+R+K",
+      enrollment_track_group_id: 2, block_id: problem-paid, vertical_block_id: vert-open,
+      progress_item_block_id: problem-paid, progress_item_weight: 1}
+    - {courserun_fk: run-7, platform: mitxonline, courserun_readable_id: "course-v1:T+R+K",
+      enrollment_track_group_id: 2, block_id: vert-paid, vertical_block_id: vert-paid,
+      progress_item_block_id: vert-paid, progress_item_weight: 0}
+    - {courserun_fk: run-7, platform: mitxonline, courserun_readable_id: "course-v1:T+R+K",
+      enrollment_track_group_id: 2, block_id: html-paid, vertical_block_id: vert-paid,
+      progress_item_block_id: html-paid, progress_item_weight: 1}
+    - {courserun_fk: run-7, platform: mitxonline, courserun_readable_id: "course-v1:T+R+K",
+      enrollment_track_group_id: 2, block_id: vert-talk, vertical_block_id: vert-talk,
+      progress_item_block_id: vert-talk, progress_item_weight: 0}
+  - input: ref('dim_user')
+    rows:
+    - {user_pk: ada, mitxonline_openedx_user_id: 1, mitxpro_openedx_user_id: 77, residential_openedx_user_id: null}
+    - {user_pk: linus, mitxonline_openedx_user_id: 3, mitxpro_openedx_user_id: null,
+      residential_openedx_user_id: null}
+    - {user_pk: grace, mitxonline_openedx_user_id: 2, mitxpro_openedx_user_id: null,
+      residential_openedx_user_id: 5}
+    # A second dim_user row with grace's MITx Online id. The lowest user_pk gets the completions.
+    - {user_pk: zed, mitxonline_openedx_user_id: 2, mitxpro_openedx_user_id: null,
+      residential_openedx_user_id: null}
+  - input: ref('stg__mitxonline__openedx__blockcompletion')
+    rows:
+    - {user_id: 1, courserun_readable_id: "course-v1:A+B+C", block_fk: html-1, block_completed: 1.0}
+    - {user_id: 1, courserun_readable_id: "course-v1:A+B+C", block_fk: pd-1, block_completed: 1.0}
+    - {user_id: 1, courserun_readable_id: "course-v1:A+B+C", block_fk: pd-2, block_completed: 1.0}
+    - {user_id: 1, courserun_readable_id: "course-v1:A+B+C", block_fk: html-removed,
+      block_completed: 1.0}
+    - {user_id: 1, courserun_readable_id: "course-v1:A+B+C", block_fk: video-1, block_completed: 0.0}
+    - {user_id: 1, courserun_readable_id: "course-v1:A+B+C", block_fk: html-2, block_completed: 1.0}
+    - {user_id: 2, courserun_readable_id: "course-v1:A+B+C", block_fk: video-1, block_completed: 1.0}
+    - {user_id: 3, courserun_readable_id: "course-v1:A+B+C", block_fk: html-2, block_completed: 1.0}
+    - {user_id: 3, courserun_readable_id: "course-v1:T+R+K", block_fk: html-open,
+      block_completed: 1.0}
+    - {user_id: 2, courserun_readable_id: "course-v1:T+R+K", block_fk: html-removed,
+      block_completed: 1.0}
+    # MITx Online user 77 is nobody; xPRO user 77 is ada.
+    - {user_id: 77, courserun_readable_id: "course-v1:A+B+C", block_fk: html-1, block_completed: 1.0}
+  - input: ref('stg__mitxpro__openedx__blockcompletion')
+    rows:
+    - {user_id: 77, courserun_readable_id: "course-v1:X+Y+Z", block_fk: html-9, block_completed: 1.0}
+  - input: ref('stg__mitxresidential__openedx__blockcompletion')
+    rows:
+    - {user_id: 5, courserun_readable_id: "course-v1:R+E+S", block_fk: html-5, block_completed: 1.0}
+  expect:
+    rows:
+    - {user_fk: ada, courserun_fk: run-1, platform: mitxonline, enrollment_track_group_id: 0,
+      content_units_completed: 1}
+    - {user_fk: grace, courserun_fk: run-1, platform: mitxonline, enrollment_track_group_id: 0,
+      content_units_completed: 1}
+    - {user_fk: linus, courserun_fk: run-1, platform: mitxonline, enrollment_track_group_id: 0,
+      content_units_completed: 0}
+    - {user_fk: ada, courserun_fk: run-9, platform: mitxpro, enrollment_track_group_id: 0,
+      content_units_completed: 1}
+    - {user_fk: grace, courserun_fk: run-5, platform: residential, enrollment_track_group_id: 0,
+      content_units_completed: 1}
+    - {user_fk: linus, courserun_fk: run-7, platform: mitxonline, enrollment_track_group_id: 0,
+      content_units_completed: 2}
+    - {user_fk: linus, courserun_fk: run-7, platform: mitxonline, enrollment_track_group_id: 2,
+      content_units_completed: 1}
+    - {user_fk: grace, courserun_fk: run-7, platform: mitxonline, enrollment_track_group_id: 0,
+      content_units_completed: 1}
+    - {user_fk: grace, courserun_fk: run-7, platform: mitxonline, enrollment_track_group_id: 2,
+      content_units_completed: 1}
 - name: test_tfact_problem_events_rekey_keeps_stored_event_id
   description: >
     Regression test for the 2026-10-06 unique_tfact_problem_events_event_id failure.
@@ -2225,3 +2764,52 @@ unit_tests:
     - event_id: "stored-check-id"
       user_fk: "NEW_USER_PK"
       event_type: "problem_check"
+- name: test_tfact_discussion_events_date_fk_keeps_the_source_day
+  description: >
+    date_fk is the day written in the source timestamp, with the offset dropped,
+    not the UTC day. The activity fact and needs_attention_since inherit it, so a
+    change here moves a learner's needs-attention date by a day.
+  model: tfact_discussion_events
+  given:
+  - input: ref('stg__mitxonline__openedx__tracking_logs__user_activity')
+    rows:
+    # 2024-01-16 04:30 UTC.
+    - user_username: "late"
+      openedx_user_id: 1
+      courserun_readable_id: "course-v1:MITx+1.01x+1T2024"
+      useractivity_event_type: "edx.forum.thread.created"
+      useractivity_event_object: "{}"
+      useractivity_timestamp: "2024-01-15T23:30:00.123456-05:00"
+    # 2024-01-15 22:30 UTC.
+    - user_username: "early"
+      openedx_user_id: 2
+      courserun_readable_id: "course-v1:MITx+1.01x+1T2024"
+      useractivity_event_type: "edx.forum.thread.created"
+      useractivity_event_object: "{}"
+      useractivity_timestamp: "2024-01-16T00:30:00.123456+02:00"
+    - user_username: "utc"
+      openedx_user_id: 3
+      courserun_readable_id: "course-v1:MITx+1.01x+1T2024"
+      useractivity_event_type: "edx.forum.thread.created"
+      useractivity_event_object: "{}"
+      useractivity_timestamp: "2024-01-15T23:30:00.123456Z"
+  - input: ref('stg__mitxpro__openedx__tracking_logs__user_activity')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__tracking_logs__user_activity')
+    rows: []
+  - input: ref('stg__edxorg__s3__tracking_logs__user_activity')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  expect:
+    rows:
+    - user_username: "late"
+      date_fk: 20240115
+    - user_username: "early"
+      date_fk: 20240116
+    - user_username: "utc"
+      date_fk: 20240115

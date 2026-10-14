@@ -10,15 +10,18 @@ from dagster_dbt import (
     DbtProject,
     dbt_assets,
 )
+from dagster_dbt.asset_utils import DAGSTER_DBT_UNIQUE_ID_METADATA_KEY
 from dagster_dbt.errors import DagsterDbtCliRuntimeError
 
 from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
     DbtAutomationTranslator,
+    upload_build_artifacts_best_effort,
 )
 from lakehouse.lib.dbt_environment import STARROCKS_DBT_TARGET
 from lakehouse.lib.starrocks_dbt import (
     MAX_BUILD_ATTEMPTS,
+    OM_ARTIFACTS,
     MissingBaseTablesError,
     base_table_relations,
     documented_columns,
@@ -29,6 +32,7 @@ from lakehouse.lib.starrocks_dbt import (
     retry_delay,
     unreadable_base_tables,
 )
+from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 from lakehouse.resources.starrocks import StarRocksResource
 
 # tag:starrocks models (see dbt_project.yml) are additionally gated
@@ -90,18 +94,12 @@ def _stale_materialized_views(
 ) -> list[str]:
     """MVs whose columns in StarRocks disagree with the dbt manifest.
 
-    dbt cannot find these itself. dbt-core only replaces an existing
-    materialized view under --full-refresh, and asks the adapter for
-    configuration changes otherwise -- but dbt-starrocks'
-    `starrocks__get_materialized_view_configuration_changes` returns nothing,
-    so a plain build logs "no configuration changes were identified" and leaves
-    the old SELECT in place. Green build, green refresh, change never landed.
-
-    That made shipping a column a two-step release with a hand-run
-    `dbt run --full-refresh --select b2b_analytics` in the middle, and nothing
-    but memory enforcing the order -- while ol-analytics-api's `build_select`
-    projects each model's own field list, so deploying the consumer first turns
-    the miss into an unknown-column error at request time.
+    Nothing depends on this with the locked dbt-starrocks, where a plain
+    build already replaces every view (see `starrocks_dbt_assets`). It is kept
+    for an adapter that starts answering "no configuration changes": dbt then
+    refreshes an existing view in place, an edited SELECT never lands, and
+    ol-analytics-api's `build_select` turns a column it expects into an
+    unknown-column error at request time.
     """
     manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
     documented = documented_columns(manifest)
@@ -122,16 +120,24 @@ def _stale_materialized_views(
 def _require_base_tables(
     context: AssetExecutionContext, starrocks: StarRocksResource
 ) -> None:
-    """Refuse a --full-refresh while a base table of the MVs can't be read.
+    """Refuse to build while a base table of the selected MVs can't be read.
 
     The run fails with every view still in place. They keep the previous
     SELECT and the previous refresh's rows until a later run succeeds; the
-    alternative is a dropped view and a 500 in ol-analytics-api.
+    alternative is a dropped view and a 500 in ol-analytics-api. A view the
+    run doesn't select isn't dropped, so its base tables aren't checked.
     """
     manifest = json.loads(starrocks_dbt_project.manifest_path.read_text())
-    relations = base_table_relations(manifest, os.environ)
+    selected = {
+        context.assets_def.get_asset_spec(key).metadata[
+            DAGSTER_DBT_UNIQUE_ID_METADATA_KEY
+        ]
+        for key in context.selected_asset_keys
+    }
+    relations = base_table_relations(manifest, os.environ, selected)
     context.log.info(
-        "Checking the %d base tables of the materialized views before --full-refresh",
+        "Checking the %d base tables of the selected materialized views before "
+        "the build",
         len(relations),
     )
     unreadable = unreadable_base_tables(relations, starrocks.fetch, log=context.log)
@@ -152,6 +158,7 @@ def starrocks_dbt_assets(
     context: AssetExecutionContext,
     starrocks_dbt: DbtCliResource,
     starrocks: StarRocksResource,
+    starrocks_dbt_s3_artifacts: DbtS3ArtifactsResource,
 ):
     """Build the tag:starrocks dbt models directly against StarRocks.
 
@@ -163,23 +170,28 @@ def starrocks_dbt_assets(
     `starrocks` resource (and Vault mount) as `refresh_starrocks_analytics_mvs`,
     which depends on this asset.
 
+    Every build drops and recreates every materialized view, with or without
+    --full-refresh. dbt-starrocks' configuration-changes macro
+    (`starrocks__get_materialized_view_configuration_changes`) has an empty
+    body, which returns whitespace and not none, so dbt's materialization
+    takes its alter path for an existing view, and dbt-starrocks implements
+    alter as drop then create. A CREATE that fails leaves the view dropped, so
+    the views' base tables are checked before any build, see
+    `_require_base_tables`. Each view is also empty from its CREATE until its
+    next refresh finishes, and ol-analytics-api queries these live.
+
     Escalates to --full-refresh when a materialized view's columns in StarRocks
-    have fallen out of step with the manifest, since a plain build would not
-    notice -- see `_stale_materialized_views`. It checks first that the
-    views' base tables can be read, see `_require_base_tables`.
+    have fallen out of step with the manifest, see `_stale_materialized_views`.
     """
+    _require_base_tables(context, starrocks)
     build_args = ["build"]
     stale = _stale_materialized_views(context, starrocks)
     if stale:
-        # --full-refresh drops and recreates every selected MV, not just the
-        # stale ones, which is why it is conditional: each recreated view is
-        # briefly absent, and ol-analytics-api queries these live.
         context.log.info(
             "Materialized views whose columns differ from the dbt manifest -- "
             "building with --full-refresh so the new SELECT actually lands: %s",
             ", ".join(stale),
         )
-        _require_base_tables(context, starrocks)
         build_args.append("--full-refresh")
 
     last_exc: DagsterDbtCliRuntimeError | None = None
@@ -212,9 +224,29 @@ def starrocks_dbt_assets(
             events = list(invocation.stream())
         except DagsterDbtCliRuntimeError as exc:
             if attempt == MAX_BUILD_ATTEMPTS - 1 or not looks_retriable(exc):
+                # Only the attempt the run ends on: the S3 key is per Dagster
+                # run, and a retried attempt's results are superseded.
+                upload_build_artifacts_best_effort(
+                    context, starrocks_dbt_s3_artifacts, invocation, OM_ARTIFACTS
+                )
                 raise
             last_exc = exc
             continue
+        except BaseException:
+            # A cancelled run uploads what it finished, as full_dbt_project does.
+            upload_build_artifacts_best_effort(
+                context, starrocks_dbt_s3_artifacts, invocation, OM_ARTIFACTS
+            )
+            raise
 
-        yield from events
+        try:
+            yield from events
+        finally:
+            # In a finally so a run cancelled while the events are yielded
+            # still uploads. Best effort here too: the models are built, and
+            # failing the step over an S3 error would hold back the
+            # materialized view refresh that ol-analytics-api reads.
+            upload_build_artifacts_best_effort(
+                context, starrocks_dbt_s3_artifacts, invocation, OM_ARTIFACTS
+            )
         return

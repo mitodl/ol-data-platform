@@ -5,6 +5,7 @@ filesystem, so what counts as reachable is decided by pyiceberg's own metadata
 and manifests, not by a fake of them.
 """
 
+import json
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -197,6 +198,42 @@ class TestRemoveTableOrphanFiles:
         reloaded = catalog.load_table(f"{DATABASE}.{TABLE}")
         assert reloaded.scan().to_arrow().column("id").to_pylist() == [7, 8]
         assert _run(catalog, store).orphan_objects == 0
+
+    def test_a_delete_logs_every_key_it_removes(
+        self, catalog: SqlCatalog, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        _expired_table(catalog)
+        store = LocalStore()
+
+        with caplog.at_level("INFO", logger=iceberg_orphan_files.log.name):
+            result = _run(catalog, store, delete=True)
+
+        prefix = f"Deleting under {result.location}: "
+        logged = [
+            key
+            for message in caplog.messages
+            if message.startswith(prefix)
+            for key in json.loads(message.removeprefix(prefix))
+        ]
+        root = file_id(result.location).rstrip("/")
+        assert sorted(f"{root}/{key}" for key in logged) == sorted(
+            file_id(uri) for uri in store.deleted
+        )
+        assert len(logged) == result.deleted_objects > 0
+
+    def test_logged_keys_survive_spaces_and_a_different_scheme(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level("INFO", logger=iceberg_orphan_files.log.name):
+            iceberg_orphan_files._log_doomed_keys(
+                iceberg_orphan_files.log,
+                "s3://lake/t/",
+                ["s3a://lake/t/data/a b.parquet", "s3://lake/t/data/c.parquet"],
+            )
+
+        assert caplog.messages == [
+            'Deleting under s3://lake/t/: ["data/a b.parquet", "data/c.parquet"]'
+        ]
 
     def test_a_young_orphan_is_counted_and_left_alone(
         self, catalog: SqlCatalog

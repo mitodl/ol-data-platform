@@ -33,6 +33,7 @@ def _small_embeddings_lazyframe(n: int) -> pl.LazyFrame:
             # Doubles as the int__feedback__conversation mock, which the scope
             # filter reads for each source's minimum length.
             "conversation_text_chars": [600] * n,
+            "conversation_text": ["x" * 600] * n,
         }
     ).lazy()
 

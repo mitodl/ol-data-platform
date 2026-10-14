@@ -9,10 +9,13 @@ dependencies = [
     "boto3>=1.35",
     "cyclopts>=4.0",
     "duckdb>=1.0,!=1.5.0,!=1.5.1",
+    "factory-boy>=3.3.3,<4",
     "hvac[parser]>=2.0.0,<3",
     "jinja2>=3.1",
     "jsonschema>=4.0",
     "markupsafe>=2.1",
+    # Exact: the fixture generator's seeded rows are only the same on one mimesis version.
+    "mimesis==22.2.0",
     "mysql-connector-python>=9.1",
     "pyyaml>=6.0",
     "rich>=13.0",

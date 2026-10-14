@@ -9,9 +9,12 @@ directory and compares it with what the table's metadata can still reach (see
 :mod:`ol_orchestrate.lib.iceberg_orphan_files`).
 
 It reports everywhere and deletes only where
-:data:`ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS` says so. That set starts
-empty: the first report for an environment gets read by a person before the
-environment is added.
+:data:`ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS` says so. An environment is
+added after a person has read a report for it. QA is on the list; production
+is not yet.
+
+The raw buckets are versioned with a 90-day noncurrent expiry, so a delete
+leaves the bytes billed for another 90 days and recoverable for as long.
 
 Raw only. The dbt layers lose files to expiry the same way, but a ``table``
 materialization moves to a new directory on every build and the sweep collects
@@ -40,7 +43,7 @@ RAW_GLUE_DATABASE = f"ol_warehouse_{WAREHOUSE_ENV}_raw"
 
 # Keyed on the Dagster environment, not the warehouse one: `dev` resolves to the
 # production warehouse, and a laptop must never be able to delete from it.
-ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS: frozenset[str] = frozenset()
+ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS: frozenset[str] = frozenset({"qa"})
 
 # The floor has to exceed the longest time a writer holds a file before the
 # commit that references it. Not measured for the raw writers (an Airbyte sync
@@ -110,6 +113,13 @@ def iceberg_raw_orphan_files(
             "with delete=false to report."
         )
         raise ValueError(msg)
+    if config.delete and config.min_age_days < ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS:
+        msg = (
+            f"A delete run needs min_age_days of at least "
+            f"{ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS}, got {config.min_age_days}. A "
+            "report can use less."
+        )
+        raise ValueError(msg)
 
     glue, s3 = _aws_clients()
     result = remove_database_orphan_files(
@@ -124,14 +134,46 @@ def iceberg_raw_orphan_files(
         logger=context.log,
     )
     attempted = len(result.tables) + len(result.failures)
+    examined = result.examined
+    orphan_objects = sum(t.orphan_objects for t in examined)
+    orphan_bytes = sum(t.orphan_bytes for t in examined)
+    eligible_objects = sum(t.eligible_objects for t in examined)
+    eligible_bytes = sum(t.eligible_bytes for t in examined)
+    delete_errors = [error for t in examined for error in t.delete_errors]
+    deleted_objects = sum(t.deleted_objects or 0 for t in examined)
+    # Bytes a delete was sent for, including objects whose delete failed.
+    delete_sent_bytes = sum(t.deleted_bytes or 0 for t in examined)
+
+    # The metadata is only in the event log, and every raise below drops it.
+    # This line, and the pass's own per-table lines (every table it failed on
+    # or deleted from), reach the compute log either way.
+    context.log.info(
+        "%s: %d tables examined, %d refused, %d failed. Orphan %d objects "
+        "(%d bytes), eligible %d objects (%d bytes). Delete: %s. Unreadable "
+        "Glue databases: %s.",
+        RAW_GLUE_DATABASE,
+        len(examined),
+        len(result.refused),
+        len(result.failures),
+        orphan_objects,
+        orphan_bytes,
+        eligible_objects,
+        eligible_bytes,
+        (
+            f"ran, {deleted_objects} objects deleted, {delete_sent_bytes} bytes "
+            f"sent for deletion, error count {len(delete_errors)}"
+            if config.delete
+            else "not run (report only)"
+        ),
+        sorted(result.unreadable_databases),
+    )
+
     if not attempted:
         msg = (
             f"Glue lists no Iceberg table in {RAW_GLUE_DATABASE}. Refusing to "
             "report success for zero work."
         )
         raise RuntimeError(msg)
-
-    examined = result.examined
     if not examined:
         msg = (
             f"None of the {attempted} Iceberg tables in {RAW_GLUE_DATABASE} was "
@@ -146,12 +188,10 @@ def iceberg_raw_orphan_files(
         "tables_examined": MetadataValue.int(len(examined)),
         "objects_listed": MetadataValue.int(sum(t.objects_listed for t in examined)),
         "bytes_listed": MetadataValue.int(sum(t.bytes_listed for t in examined)),
-        "orphan_objects": MetadataValue.int(sum(t.orphan_objects for t in examined)),
-        "orphan_bytes": MetadataValue.int(sum(t.orphan_bytes for t in examined)),
-        "eligible_objects": MetadataValue.int(
-            sum(t.eligible_objects for t in examined)
-        ),
-        "eligible_bytes": MetadataValue.int(sum(t.eligible_bytes for t in examined)),
+        "orphan_objects": MetadataValue.int(orphan_objects),
+        "orphan_bytes": MetadataValue.int(orphan_bytes),
+        "eligible_objects": MetadataValue.int(eligible_objects),
+        "eligible_bytes": MetadataValue.int(eligible_bytes),
         "orphan_details": MetadataValue.json(_detail_rows(result)),
         # Left alone, each for the reason given. Their orphans are not counted
         # above, so the totals are a lower bound while any are listed.
@@ -169,17 +209,11 @@ def iceberg_raw_orphan_files(
         # delete with any listed here.
         "unreadable_glue_databases": MetadataValue.json(result.unreadable_databases),
     }
-
-    delete_errors = [error for t in examined for error in t.delete_errors]
     if config.delete:
         metadata |= {
             "delete_status": MetadataValue.text("ran"),
-            "deleted_objects": MetadataValue.int(
-                sum(t.deleted_objects or 0 for t in examined)
-            ),
-            "deleted_bytes": MetadataValue.int(
-                sum(t.deleted_bytes or 0 for t in examined)
-            ),
+            "deleted_objects": MetadataValue.int(deleted_objects),
+            "deleted_bytes": MetadataValue.int(delete_sent_bytes),
             "delete_error_count": MetadataValue.int(len(delete_errors)),
         }
     else:
@@ -187,9 +221,6 @@ def iceberg_raw_orphan_files(
         # and found nothing to delete".
         metadata["delete_status"] = MetadataValue.text("not run (report only)")
 
-    # Raising drops the metadata above. The pass has already logged every table
-    # it failed on or deleted from to context.log, so the run's log is the
-    # record.
     threshold = maintenance_failure_threshold(attempted)
     if len(result.failures) >= threshold:
         msg = (

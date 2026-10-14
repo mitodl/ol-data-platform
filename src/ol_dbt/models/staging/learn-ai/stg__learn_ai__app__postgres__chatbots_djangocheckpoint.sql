@@ -15,8 +15,8 @@ with source as (
         , parent_checkpoint_id
         , metadata as checkpoint_metadata
         , cast({{ json_query_string('metadata', "'$.step'") }} as integer) as checkpoint_step
-        , {{ json_query_string('metadata', "'$.writes.__start__.messages.kwargs.content'") }} as human_message
-        , {{ json_query_string('metadata', "'$.writes.agent.messages.kwargs.content'") }} as agent_message
+        , {{ json_query_string('metadata', "'$.writes.__start__.messages[0].kwargs.content'") }} as human_message
+        , {{ json_query_string('metadata', "'$.writes.agent.messages[0].kwargs.content'") }} as agent_message
         , {{ json_query_string('metadata', "'$.source'") }} as checkpoint_source
         , {{ cast_timestamp_to_iso8601('created_on') }} as checkpoint_created_on
     from most_recent_source

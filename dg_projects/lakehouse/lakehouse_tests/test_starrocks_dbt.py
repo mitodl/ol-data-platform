@@ -5,14 +5,18 @@ motivated this module (run acc2b10c, 2026-07-22), not invented -- the point of
 the retry pattern is that it matches what StarRocks actually emits.
 """
 
+import ast
 import logging
 import re
+from pathlib import Path
 
+import lakehouse
 import pytest
 from lakehouse.lib.starrocks_dbt import (
     MAX_BUILD_ATTEMPTS,
     MAX_MV_REFRESH_ATTEMPTS,
     MV_REFRESH_RETRY_DELAY_SECONDS,
+    OM_ARTIFACTS,
     RETRIABLE_ERROR_PATTERN,
     RETRY_BASE_DELAY,
     ChangeTrackedView,
@@ -432,7 +436,7 @@ class TestLiveColumns:
 class TestDriftedRelations:
     def test_added_column_is_drift(self):
         """PR #2520: the dbt model grew five cohort columns and the deployed MV
-        kept the old SELECT, which a plain `dbt build` reports as success.
+        kept the old SELECT.
         """
         documented = {"b2b_analytics.mv_a": {"org_key", "video_watchers"}}
         live = {"b2b_analytics.mv_a": {"org_key"}}
@@ -454,9 +458,7 @@ class TestDriftedRelations:
         assert drifted_relations(documented, live) == ["b2b_analytics.mv_a"]
 
     def test_matching_columns_are_not_drift(self):
-        """The common case -- it must not force a full refresh, since that drops
-        and recreates views ol-analytics-api is serving from.
-        """
+        """The common case -- it must not force a full refresh."""
         columns = {"org_key", "video_watchers"}
         assert (
             drifted_relations(
@@ -686,7 +688,7 @@ class TestBaseTableRelations:
                 ),
             ],
         )
-        assert base_table_relations(manifest, QA_LAKE) == [
+        assert base_table_relations(manifest, QA_LAKE, manifest["nodes"]) == [
             f"{QA_DIMENSIONAL}.`dim_program`",
             f"{QA_DIMENSIONAL}.`tfact_enrollment`",
         ]
@@ -703,10 +705,12 @@ class TestBaseTableRelations:
                 )
             ],
         )
-        assert base_table_relations(manifest, QA_LAKE) == [
+        assert base_table_relations(manifest, QA_LAKE, manifest["nodes"]) == [
             f"{QA_DIMENSIONAL}.`dim_user`"
         ]
-        assert base_table_relations(manifest, {"DBT_DATA_LAKE_ENV": "production"}) == [
+        assert base_table_relations(
+            manifest, {"DBT_DATA_LAKE_ENV": "production"}, manifest["nodes"]
+        ) == [
             "`ol_data_lake_production`.`ol_warehouse_production_dimensional`.`dim_user`"
         ]
 
@@ -727,7 +731,7 @@ class TestBaseTableRelations:
             "unrendered_database": None,
             "unrendered_schema": None,
         }
-        assert base_table_relations(manifest, {}) == [
+        assert base_table_relations(manifest, {}, manifest["nodes"]) == [
             "`default_catalog`.`b2b_learner_records`.`roster`"
         ]
 
@@ -746,7 +750,26 @@ class TestBaseTableRelations:
                 )
             ],
         )
-        assert base_table_relations(manifest, QA_LAKE) == []
+        assert base_table_relations(manifest, QA_LAKE, manifest["nodes"]) == []
+
+    def test_ignores_sources_of_views_the_build_does_not_select(self):
+        """An unselected view isn't dropped, so its base tables can't cost it."""
+        manifest = _manifest_reading(
+            ["dim_user", "dim_program"],
+            [
+                _reading(
+                    _mv_node("mv_b2b_learner", ["user_pk"]),
+                    "source.open_learning.dimensional.dim_user",
+                ),
+                _reading(
+                    _mv_node("mv_b2b_program_funnel", ["organization_key"]),
+                    "source.open_learning.dimensional.dim_program",
+                ),
+            ],
+        )
+        assert base_table_relations(
+            manifest, QA_LAKE, {"model.open_learning.mv_b2b_learner"}
+        ) == [f"{QA_DIMENSIONAL}.`dim_user`"]
 
 
 def _probe(relations, failing):
@@ -863,6 +886,39 @@ def _tracked_node(**tracking):
         ],
         meta={"change_tracking": tracking},
     )
+
+
+class TestBaseTablesAreCheckedBeforeEveryBuild:
+    def test_the_check_is_not_conditional_on_a_full_refresh(self):
+        """A plain build drops and recreates every view too, so a missing base
+        table loses the views whether or not their columns drifted.
+        """
+        source = (
+            Path(__file__).parents[1] / "lakehouse/assets/lakehouse/dbt_starrocks.py"
+        ).read_text()
+        asset = next(
+            node
+            for node in ast.parse(source).body
+            if isinstance(node, ast.FunctionDef) and node.name == "starrocks_dbt_assets"
+        )
+        checks = [
+            statement.lineno
+            for statement in asset.body
+            if isinstance(statement, ast.Expr)
+            and isinstance(statement.value, ast.Call)
+            and isinstance(statement.value.func, ast.Name)
+            and statement.value.func.id == "_require_base_tables"
+        ]
+        builds = [
+            node.lineno
+            for node in ast.walk(asset)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "cli"
+        ]
+        assert checks, "the check must be a statement of its own in the asset"
+        assert builds
+        assert checks[0] < min(builds)
 
 
 class TestChangeTrackedViews:
@@ -988,7 +1044,7 @@ class TestAfterRefresh:
         )
 
     def test_a_failed_refresh_is_not_followed_up(self):
-        """`dbt build --full-refresh` recreates an MV empty. Stamping a change
+        """`dbt build` recreates an MV empty. Stamping a change
         log from one whose refresh then failed would mark every record deleted.
         """
         starrocks = ScriptedStarRocks(
@@ -1040,3 +1096,68 @@ class TestAfterRefresh:
         assert starrocks.statements[-1] == (
             "REFRESH MATERIALIZED VIEW b2b_analytics.mv_b WITH SYNC MODE"
         )
+
+
+def test_the_build_uploads_its_artifacts_for_openmetadata():
+    """Parsed, not imported: the asset module needs a dbt manifest on disk.
+
+    OpenMetadata reads the tag:starrocks test outcomes from these uploads, and
+    a failing build is the one it most needs, so both exits have to upload.
+    """
+    source = Path(lakehouse.__file__).parent / "assets/lakehouse/dbt_starrocks.py"
+    asset = next(
+        node
+        for node in ast.walk(ast.parse(source.read_text()))
+        if isinstance(node, ast.FunctionDef) and node.name == "starrocks_dbt_assets"
+    )
+
+    stream_guard = next(
+        node
+        for node in ast.walk(asset)
+        if isinstance(node, ast.Try) and node.handlers[0].name == "exc"
+    )
+    uploads = [
+        (call.lineno, [ast.unparse(arg) for arg in call.args])
+        for call in ast.walk(asset)
+        if isinstance(call, ast.Call)
+        and getattr(call.func, "id", "") == "upload_build_artifacts_best_effort"
+    ]
+    assert len(uploads) == 3, "one upload per exit: failed, cancelled and passed"
+    for _, args in uploads:
+        assert args[1] == "starrocks_dbt_s3_artifacts", "not the Trino prefix"
+        assert args[3] == "OM_ARTIFACTS"
+
+    on_failure, on_cancel, on_success = sorted(line for line, _ in uploads)
+    cancelled = stream_guard.handlers[1]
+    assert cancelled.type is not None
+    assert ast.unparse(cancelled.type) == "BaseException"
+    assert cancelled.end_lineno is not None
+    assert cancelled.lineno < on_cancel <= cancelled.end_lineno
+    assert isinstance(cancelled.body[-1], ast.Raise)
+    # Inside the branch that gives up, so a retried attempt uploads nothing.
+    gives_up = stream_guard.handlers[0].body[0]
+    assert isinstance(gives_up, ast.If)
+    assert gives_up.end_lineno is not None
+    assert gives_up.lineno < on_failure <= gives_up.end_lineno
+
+    # In the finally around the yield: after the events, so an upload cannot
+    # cost a materialization, and also when the run is cancelled mid-yield.
+    yield_guard = next(
+        node
+        for node in ast.walk(asset)
+        if isinstance(node, ast.Try)
+        and any(
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.YieldFrom)
+            and ast.unparse(stmt.value.value) == "events"
+            for stmt in node.body
+        )
+    )
+    assert yield_guard.finalbody
+    assert yield_guard.finalbody[0].lineno <= on_success
+    assert on_success <= (yield_guard.finalbody[-1].end_lineno or 0)
+
+
+def test_openmetadata_gets_the_manifest_with_the_results():
+    """Nothing else produces a manifest for the StarRocks target."""
+    assert set(OM_ARTIFACTS) == {"run_results.json", "manifest.json"}

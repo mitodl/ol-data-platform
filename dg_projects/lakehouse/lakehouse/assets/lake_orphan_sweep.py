@@ -140,10 +140,12 @@ def lake_orphan_sweep(
         # and found nothing to delete".
         metadata["delete_status"] = MetadataValue.text("not run (report only)")
         context.log.info(
-            "Report only: %d orphan prefixes, %d eligible (%d bytes).",
+            "Report only: %d orphan prefixes, %d eligible (%d bytes). "
+            "Unreadable Glue databases: %s.",
             len(result.orphans),
             len(eligible),
             sum(r["bytes"] for r in eligible),
+            sorted(result.unreadable_databases),
         )
         return Output(value=None, metadata=metadata)
 

@@ -91,7 +91,9 @@ def test_delete_is_refused_where_it_is_not_enabled(monkeypatch: pytest.MonkeyPat
     assert calls == []
 
 
-def test_report_run_says_delete_did_not_run(monkeypatch: pytest.MonkeyPatch):
+def test_report_run_says_delete_did_not_run(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
     calls = _returning(monkeypatch, _result(None))
 
     metadata = _metadata(LakeOrphanSweepConfig(min_age_days=7))
@@ -107,6 +109,10 @@ def test_report_run_says_delete_did_not_run(monkeypatch: pytest.MonkeyPatch):
     assert metadata["orphan_details"][0]["path"] == f"s3://lake-mart-qa/gone-{UUID}/"
     assert metadata["unsuffixed_unreferenced_prefixes"] == 1
     assert metadata["unreadable_glue_databases"] == ["ol_warehouse_production_mart"]
+    assert (
+        "Report only: 2 orphan prefixes, 1 eligible (105 bytes). Unreadable Glue "
+        "databases: ['ol_warehouse_production_mart']."
+    ) in capsys.readouterr().err
 
 
 def test_delete_run_reports_what_it_deleted_and_what_it_kept(
