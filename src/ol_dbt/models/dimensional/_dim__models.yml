@@ -2764,3 +2764,52 @@ unit_tests:
     - event_id: "stored-check-id"
       user_fk: "NEW_USER_PK"
       event_type: "problem_check"
+- name: test_tfact_discussion_events_date_fk_keeps_the_source_day
+  description: >
+    date_fk is the day written in the source timestamp, with the offset dropped,
+    not the UTC day. The activity fact and needs_attention_since inherit it, so a
+    change here moves a learner's needs-attention date by a day.
+  model: tfact_discussion_events
+  given:
+  - input: ref('stg__mitxonline__openedx__tracking_logs__user_activity')
+    rows:
+    # 2024-01-16 04:30 UTC.
+    - user_username: "late"
+      openedx_user_id: 1
+      courserun_readable_id: "course-v1:MITx+1.01x+1T2024"
+      useractivity_event_type: "edx.forum.thread.created"
+      useractivity_event_object: "{}"
+      useractivity_timestamp: "2024-01-15T23:30:00.123456-05:00"
+    # 2024-01-15 22:30 UTC.
+    - user_username: "early"
+      openedx_user_id: 2
+      courserun_readable_id: "course-v1:MITx+1.01x+1T2024"
+      useractivity_event_type: "edx.forum.thread.created"
+      useractivity_event_object: "{}"
+      useractivity_timestamp: "2024-01-16T00:30:00.123456+02:00"
+    - user_username: "utc"
+      openedx_user_id: 3
+      courserun_readable_id: "course-v1:MITx+1.01x+1T2024"
+      useractivity_event_type: "edx.forum.thread.created"
+      useractivity_event_object: "{}"
+      useractivity_timestamp: "2024-01-15T23:30:00.123456+00:00"
+  - input: ref('stg__mitxpro__openedx__tracking_logs__user_activity')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__tracking_logs__user_activity')
+    rows: []
+  - input: ref('stg__edxorg__s3__tracking_logs__user_activity')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  expect:
+    rows:
+    - user_username: "late"
+      date_fk: 20240115
+    - user_username: "early"
+      date_fk: 20240116
+    - user_username: "utc"
+      date_fk: 20240115
