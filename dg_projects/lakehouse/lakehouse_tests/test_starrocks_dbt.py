@@ -5,8 +5,10 @@ motivated this module (run acc2b10c, 2026-07-22), not invented -- the point of
 the retry pattern is that it matches what StarRocks actually emits.
 """
 
+import ast
 import logging
 import re
+from pathlib import Path
 
 import pytest
 from lakehouse.lib.starrocks_dbt import (
@@ -432,7 +434,7 @@ class TestLiveColumns:
 class TestDriftedRelations:
     def test_added_column_is_drift(self):
         """PR #2520: the dbt model grew five cohort columns and the deployed MV
-        kept the old SELECT, which a plain `dbt build` reports as success.
+        kept the old SELECT.
         """
         documented = {"b2b_analytics.mv_a": {"org_key", "video_watchers"}}
         live = {"b2b_analytics.mv_a": {"org_key"}}
@@ -454,9 +456,7 @@ class TestDriftedRelations:
         assert drifted_relations(documented, live) == ["b2b_analytics.mv_a"]
 
     def test_matching_columns_are_not_drift(self):
-        """The common case -- it must not force a full refresh, since that drops
-        and recreates views ol-analytics-api is serving from.
-        """
+        """The common case -- it must not force a full refresh."""
         columns = {"org_key", "video_watchers"}
         assert (
             drifted_relations(
@@ -686,7 +686,7 @@ class TestBaseTableRelations:
                 ),
             ],
         )
-        assert base_table_relations(manifest, QA_LAKE) == [
+        assert base_table_relations(manifest, QA_LAKE, manifest["nodes"]) == [
             f"{QA_DIMENSIONAL}.`dim_program`",
             f"{QA_DIMENSIONAL}.`tfact_enrollment`",
         ]
@@ -703,10 +703,12 @@ class TestBaseTableRelations:
                 )
             ],
         )
-        assert base_table_relations(manifest, QA_LAKE) == [
+        assert base_table_relations(manifest, QA_LAKE, manifest["nodes"]) == [
             f"{QA_DIMENSIONAL}.`dim_user`"
         ]
-        assert base_table_relations(manifest, {"DBT_DATA_LAKE_ENV": "production"}) == [
+        assert base_table_relations(
+            manifest, {"DBT_DATA_LAKE_ENV": "production"}, manifest["nodes"]
+        ) == [
             "`ol_data_lake_production`.`ol_warehouse_production_dimensional`.`dim_user`"
         ]
 
@@ -727,7 +729,7 @@ class TestBaseTableRelations:
             "unrendered_database": None,
             "unrendered_schema": None,
         }
-        assert base_table_relations(manifest, {}) == [
+        assert base_table_relations(manifest, {}, manifest["nodes"]) == [
             "`default_catalog`.`b2b_learner_records`.`roster`"
         ]
 
@@ -746,7 +748,26 @@ class TestBaseTableRelations:
                 )
             ],
         )
-        assert base_table_relations(manifest, QA_LAKE) == []
+        assert base_table_relations(manifest, QA_LAKE, manifest["nodes"]) == []
+
+    def test_ignores_sources_of_views_the_build_does_not_select(self):
+        """An unselected view isn't dropped, so its base tables can't cost it."""
+        manifest = _manifest_reading(
+            ["dim_user", "dim_program"],
+            [
+                _reading(
+                    _mv_node("mv_b2b_learner", ["user_pk"]),
+                    "source.open_learning.dimensional.dim_user",
+                ),
+                _reading(
+                    _mv_node("mv_b2b_program_funnel", ["organization_key"]),
+                    "source.open_learning.dimensional.dim_program",
+                ),
+            ],
+        )
+        assert base_table_relations(
+            manifest, QA_LAKE, {"model.open_learning.mv_b2b_learner"}
+        ) == [f"{QA_DIMENSIONAL}.`dim_user`"]
 
 
 def _probe(relations, failing):
@@ -863,6 +884,39 @@ def _tracked_node(**tracking):
         ],
         meta={"change_tracking": tracking},
     )
+
+
+class TestBaseTablesAreCheckedBeforeEveryBuild:
+    def test_the_check_is_not_conditional_on_a_full_refresh(self):
+        """A plain build drops and recreates every view too, so a missing base
+        table loses the views whether or not their columns drifted.
+        """
+        source = (
+            Path(__file__).parents[1] / "lakehouse/assets/lakehouse/dbt_starrocks.py"
+        ).read_text()
+        asset = next(
+            node
+            for node in ast.parse(source).body
+            if isinstance(node, ast.FunctionDef) and node.name == "starrocks_dbt_assets"
+        )
+        checks = [
+            statement.lineno
+            for statement in asset.body
+            if isinstance(statement, ast.Expr)
+            and isinstance(statement.value, ast.Call)
+            and isinstance(statement.value.func, ast.Name)
+            and statement.value.func.id == "_require_base_tables"
+        ]
+        builds = [
+            node.lineno
+            for node in ast.walk(asset)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "cli"
+        ]
+        assert checks, "the check must be a statement of its own in the asset"
+        assert builds
+        assert checks[0] < min(builds)
 
 
 class TestChangeTrackedViews:
@@ -988,7 +1042,7 @@ class TestAfterRefresh:
         )
 
     def test_a_failed_refresh_is_not_followed_up(self):
-        """`dbt build --full-refresh` recreates an MV empty. Stamping a change
+        """`dbt build` recreates an MV empty. Stamping a change
         log from one whose refresh then failed would mark every record deleted.
         """
         starrocks = ScriptedStarRocks(
