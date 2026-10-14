@@ -1178,7 +1178,11 @@
 {%- endmacro %}
 
 {% macro duckdb__json_path_values(json_col, json_path, element_type) -%}
-    nullif(cast(json_extract_string({{ json_col }}, '{{ json_path }}') as {{ element_type }}[]), [])
+    {# json_valid: Trino's json_query gives NULL for malformed JSON, json_extract_string raises #}
+    case
+        when json_valid({{ json_col }})
+            then nullif(cast(json_extract_string({{ json_col }}, '{{ json_path }}') as {{ element_type }}[]), [])
+    end
 {%- endmacro %}
 
 {% macro starrocks__json_path_values(json_col, json_path, element_type) -%}
