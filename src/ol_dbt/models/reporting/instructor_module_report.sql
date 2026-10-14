@@ -6,18 +6,6 @@ with chatbot_events as (
     select * from {{ ref('dim_course_content') }}
 )
 
-, organization as (
-    select * from {{ ref('dim_organization') }}
-)
-
-, organization_courserun as (
-    select * from {{ ref('bridge_organization_courserun') }}
-)
-
-, course_run as (
-    select * from {{ ref('dim_course_run') }}
-)
-
 , users as (
     select * from {{ ref('dim_user') }}
 )
@@ -47,6 +35,17 @@ with chatbot_events as (
     group by
         user_email
         , courserun_readable_id
+)
+
+-- The learner's organization, through the contract they enrolled under. A run can be
+-- offered under several contracts, so the run alone would fan out.
+, learner_organization as (
+    select distinct
+        user_email
+        , courserun_readable_id
+        , organization_name
+    from org_data
+    where organization_name is not null
 )
 
 , enroll_activity as (
@@ -223,7 +222,7 @@ select
     combined_data.user_email
     , combined_data.activity_date
     , combined_data.courserun_readable_id
-    , organization.organization_name
+    , learner_organization.organization_name
     , combined_data.chatbot_used_count
     , combined_data.block_category
     , combined_data.block_title
@@ -245,11 +244,7 @@ left join any_activity
     on
         combined_data.user_email = any_activity.user_email
         and combined_data.courserun_readable_id = any_activity.courserun_readable_id
-left join course_run
+left join learner_organization
     on
-        combined_data.courserun_readable_id = course_run.courserun_readable_id
-        and course_run.is_current = true
-left join organization_courserun
-    on course_run.courserun_pk = organization_courserun.courserun_fk
-left join organization
-    on organization_courserun.organization_fk = organization.organization_pk
+        combined_data.user_email = learner_organization.user_email
+        and combined_data.courserun_readable_id = learner_organization.courserun_readable_id

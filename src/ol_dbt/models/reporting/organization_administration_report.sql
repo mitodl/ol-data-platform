@@ -39,14 +39,51 @@ with enrollment_detail as (
     select * from {{ ref('dim_user') }}
 )
 
--- The report is keyed on the course run, so only the run's organization is read. A run
--- offered under contracts of two organizations appears once for each.
-, b2b_contract_to_courseruns as (
+, enrollment as (
+    select * from {{ ref('tfact_enrollment') }}
+    where platform = 'mitxonline' and enrollment_type = 'course'
+)
+
+, contract as (
+    select * from {{ ref('dim_contract') }}
+)
+
+, organization as (
+    select * from {{ ref('dim_organization') }}
+)
+
+, course_run as (
+    select * from {{ ref('dim_course_run') }}
+    where is_current = true
+)
+
+-- export_b2b_organization_data ships each organization the rows with its
+-- organization_key, so a learner's organization comes from the contract they enrolled
+-- under and never from the run alone: a run can be offered under several contracts,
+-- and to learners outside any of them.
+, enrollment_organization as (
     select distinct
-        courserun_readable_id
-        , organization_key
-        , organization_name
-    from {{ ref('int__mitxonline__b2b_contract_to_courseruns') }}
+        enrollment_detail.courserun_readable_id
+        , enrollment_detail.user_email
+        , organization.organization_key
+        , organization.organization_name
+    from enrollment_detail
+    inner join enrollment
+        on cast(enrollment_detail.courserunenrollment_id as varchar) = enrollment.enrollment_id
+    inner join contract
+        on enrollment.contract_fk = contract.contract_pk
+    inner join organization
+        on contract.organization_fk = organization.organization_pk
+    where enrollment_detail.platform = '{{ var("mitxonline") }}'
+)
+
+-- Runs offered under a contract. Their learners without one get no organization, not
+-- the course-role fallback.
+, contract_courseruns as (
+    select distinct course_run.courserun_readable_id
+    from {{ ref('bridge_organization_courserun') }} as organization_courserun
+    inner join course_run
+        on organization_courserun.courserun_fk = course_run.courserun_pk
 )
 
 , org_field as (
@@ -296,8 +333,8 @@ select
     , enroll_data.courserun_title
     , enroll_data.user_email
     , activity_day_data.enrolled_count
-    , coalesce(b2b_contract_to_courseruns.organization_key, org_field.organization) as organization_key
-    , b2b_contract_to_courseruns.organization_name
+    , coalesce(enrollment_organization.organization_key, org_field.organization) as organization_key
+    , enrollment_organization.organization_name
     , activity_day_data.activity_date
     , substring(cast(activity_day_data.activity_date as varchar), 1, 7) as activity_year_and_month
     , activity_day_data.chatbot_used_count
@@ -312,11 +349,17 @@ select
         or activity_day_data.certificate_count > 0
         then 1 else 0 end as active_count
 from enroll_data
+left join contract_courseruns
+    on enroll_data.courserun_readable_id = contract_courseruns.courserun_readable_id
 left join org_field
-    on enroll_data.courserun_readable_id = org_field.courserun_readable_id
+    on
+        enroll_data.courserun_readable_id = org_field.courserun_readable_id
+        and contract_courseruns.courserun_readable_id is null
 left join activity_day_data
     on
         enroll_data.user_email = activity_day_data.user_email
         and enroll_data.courserun_readable_id = activity_day_data.courserun_readable_id
-left join b2b_contract_to_courseruns
-    on enroll_data.courserun_readable_id = b2b_contract_to_courseruns.courserun_readable_id
+left join enrollment_organization
+    on
+        enroll_data.user_email = enrollment_organization.user_email
+        and enroll_data.courserun_readable_id = enrollment_organization.courserun_readable_id

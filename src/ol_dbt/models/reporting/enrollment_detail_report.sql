@@ -35,8 +35,10 @@ with enrollment as (
     select * from {{ ref('tfact_grade') }}
 )
 
-, organization_courserun as (
-    select * from {{ ref('bridge_organization_courserun') }}
+-- The organization comes from the contract the learner enrolled under. A run can be
+-- offered under several contracts, so joining the run to the bridge would fan out.
+, contract as (
+    select * from {{ ref('dim_contract') }}
 )
 
 , organization as (
@@ -243,10 +245,10 @@ left join grade
         enrollment.user_fk = grade.user_fk
         and enrollment.courserun_fk = grade.courserun_fk
         and enrollment.platform_fk = grade.platform_fk
-left join organization_courserun
-    on enrollment.courserun_fk = organization_courserun.courserun_fk
+left join contract
+    on enrollment.contract_fk = contract.contract_pk
 left join organization
-    on organization_courserun.organization_fk = organization.organization_pk
+    on contract.organization_fk = organization.organization_pk
 inner join d_user
     on enrollment.user_fk = d_user.user_pk
 left join f_order
