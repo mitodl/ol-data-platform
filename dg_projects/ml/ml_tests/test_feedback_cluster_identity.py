@@ -159,9 +159,54 @@ def test_select_run_to_process_skips_unpromoted_same_model_sweep() -> None:
             return_value="text-embedding-3-large",
         ),
         patch("ml.assets.feedback_cluster_identity.EMBEDDING_DIM", 1024),
+        patch(
+            "ml.assets.feedback_cluster_identity.latest_identity_processed_run",
+            return_value=None,
+        ),
     ):
         result = _select_run_to_process(MagicMock(), FeedbackClusterIdentityConfig())
     assert result == "production-run"
+
+
+def test_select_run_to_process_skips_runs_older_than_the_live_one() -> None:
+    # "stale" is promoted and unprocessed, but older than the live run: identity
+    # rejected it, or it waits for promotion by cluster_run_id.
+    runs_lf = _lazyframe(
+        {
+            "cluster_run_id": ["stale", "live", "newer"],
+            "run_status": ["completed"] * 3,
+            "run_at": [datetime(2026, 1, d, tzinfo=UTC) for d in (1, 2, 3)],
+            "embedding_model_version": ["text-embedding-3-large"] * 3,
+            "embedding_dim": [1024] * 3,
+            "embedding_input_filter": ["summary"] * 3,
+            "is_promoted": [True] * 3,
+        }
+    )
+    identity_lf = _lazyframe({"cluster_run_id": ["live"]})
+
+    def select(runs: pl.LazyFrame) -> str | None:
+        with (
+            patch(
+                "ml.assets.feedback_cluster_identity.table_exists", return_value=True
+            ),
+            patch(
+                "ml.assets.feedback_cluster_identity.get_dbt_model_as_dataframe",
+                side_effect=_runs_and_identity_frames(runs, identity_lf),
+            ),
+            patch(
+                "ml.assets.feedback_cluster_identity.default_embedding_model_version",
+                return_value="text-embedding-3-large",
+            ),
+            patch("ml.assets.feedback_cluster_identity.EMBEDDING_DIM", 1024),
+            patch(
+                "ml.assets.feedback_cluster_identity.latest_identity_processed_run",
+                return_value="live",
+            ),
+        ):
+            return _select_run_to_process(MagicMock(), FeedbackClusterIdentityConfig())
+
+    assert select(runs_lf) == "newer"
+    assert select(runs_lf.filter(pl.col("cluster_run_id") != "newer")) is None
 
 
 def test_select_run_to_process_explicit_override_bypasses_filter() -> None:

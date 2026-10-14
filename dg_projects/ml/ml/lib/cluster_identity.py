@@ -316,8 +316,10 @@ def extend_matches(
 
     The run already names the key each cluster keeps: placed noise can double a
     cluster, which Jaccard would read as a split. A cluster_id that carries an
-    active key continues it, any other cluster_id is new, and an active key the
-    run has no cluster for retires. Returns the same shape as match_clusters.
+    active key continues it, and any other cluster_id is new. No key retires: an
+    active key the run has no cluster for stays active, so missing input (such as
+    an upstream outage) cannot empty the live clusters. Retiring a key is a full
+    refresh's job. Returns the same shape as match_clusters.
     """
     matches: list[ClusterMatch] = []
     lineage_rows: list[dict[str, Any]] = []
@@ -337,17 +339,6 @@ def extend_matches(
                 "jaccard": None,
             }
         )
-    continued_keys = {m.cluster_key for m in matches if m.relation == "continued"}
-    lineage_rows.extend(
-        {
-            "prior_cluster_key": old_key,
-            "cluster_key": None,
-            "cluster_id": None,
-            "relation": "retired",
-            "jaccard": None,
-        }
-        for old_key in sorted(active_cluster_keys - continued_keys)
-    )
     return matches, lineage_rows
 
 

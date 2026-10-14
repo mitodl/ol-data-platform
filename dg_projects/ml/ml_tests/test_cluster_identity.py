@@ -297,7 +297,7 @@ def test_nearest_active_cluster_zero_vector_is_unplaced() -> None:
     assert similarity is None
 
 
-def test_extend_matches_continues_carried_keys_and_retires_missing_ones() -> None:
+def test_extend_matches_continues_carried_keys_and_never_retires() -> None:
     matches, lineage_rows = cluster_identity.extend_matches(
         {0: frozenset({"a", "b"}), 1: frozenset({"c"})},
         {0: "kept"},
@@ -309,8 +309,8 @@ def test_extend_matches_continues_carried_keys_and_retires_missing_ones() -> Non
     assert by_id[0].cluster_key == "kept"
     assert by_id[1].relation == "new"
     assert by_id[1].cluster_key not in {"kept", "empty"}
+    # "empty" has no cluster in this run, but stays active
     assert {(row["prior_cluster_key"], row["relation"]) for row in lineage_rows} == {
         ("kept", "continued"),
         (None, "new"),
-        ("empty", "retired"),
     }

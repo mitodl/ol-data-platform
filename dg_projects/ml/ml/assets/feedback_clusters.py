@@ -262,6 +262,13 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
     runs. feedback_cluster_identity matches this run's clusters onto stable
     cluster_keys immediately after; no human approves a run.
     """
+    if config.is_promoted and (config.full_refresh or config.add_new_clusters):
+        # The review gate: identity would otherwise take the run live at once
+        msg = (
+            "full_refresh and add_new_clusters change the categories, so run them "
+            "with is_promoted false and promote the run after a review."
+        )
+        raise permanent_failure(msg)
     embedding_model_version = (
         config.embedding_model_version or default_embedding_model_version()
     )
@@ -381,6 +388,13 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
             **step_settings,
         )
         run_metadata["base_cluster_run_id"] = base_cluster_run_id
+        if candidates_df["cluster_key"].is_null().all():
+            # Missing embeddings, such as an upstream outage
+            msg = (
+                "No embedded conversation carries a live cluster, so this run would "
+                "change nothing; check feedback_embeddings."
+            )
+            raise permanent_failure(msg)
     else:
         candidates_df, run_metadata = cluster_embeddings(
             embeddings_df,

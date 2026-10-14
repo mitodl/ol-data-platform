@@ -119,9 +119,18 @@ def _select_run_to_process(
             .unique()
             .collect()["cluster_run_id"]
         )
-    unprocessed = runs_df.filter(
-        ~pl.col("cluster_run_id").is_in(already_processed)
-    ).sort("run_at", descending=True)
+    unprocessed = runs_df.filter(~pl.col("cluster_run_id").is_in(already_processed))
+    # Only runs newer than the live one: an older run is promoted by cluster_run_id
+    # after a review, and a stale run identity rejected must not be picked again.
+    live_run_id = latest_identity_processed_run(catalog, database_name)
+    live_run_at_df = (
+        runs_lazy.filter(pl.col("cluster_run_id") == live_run_id)
+        .select("run_at")
+        .collect()
+    )
+    if live_run_at_df.height:
+        unprocessed = unprocessed.filter(pl.col("run_at") > live_run_at_df.item())
+    unprocessed = unprocessed.sort("run_at", descending=True)
     if unprocessed.height == 0:
         return None
     return unprocessed["cluster_run_id"][0]
