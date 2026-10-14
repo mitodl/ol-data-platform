@@ -197,13 +197,19 @@ def test_failures_over_the_threshold_fail_the_run(monkeypatch: pytest.MonkeyPatc
         )
 
 
-def test_a_run_that_examined_no_table_fails(monkeypatch: pytest.MonkeyPatch):
+def test_a_run_that_examined_no_table_fails(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
     _returning(monkeypatch, _result(tables=_tables()[2:] * 30))
 
     with pytest.raises(RuntimeError, match="None of the 30 Iceberg tables"):
         iceberg_raw_orphan_files(
             build_asset_context(), IcebergOrphanFilesConfig(min_age_days=MIN_AGE_DAYS)
         )
+
+    assert f"{DATABASE}: 0 tables examined, 30 refused, 0 failed." in (
+        capsys.readouterr().err
+    )
 
 
 def test_a_database_with_no_iceberg_tables_fails(monkeypatch: pytest.MonkeyPatch):
@@ -213,3 +219,36 @@ def test_a_database_with_no_iceberg_tables_fails(monkeypatch: pytest.MonkeyPatch
         iceberg_raw_orphan_files(
             build_asset_context(), IcebergOrphanFilesConfig(min_age_days=MIN_AGE_DAYS)
         )
+
+
+def test_report_run_logs_its_totals(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    _returning(monkeypatch, _result())
+
+    _metadata(IcebergOrphanFilesConfig(min_age_days=MIN_AGE_DAYS))
+
+    assert (
+        f"{DATABASE}: 2 tables examined, 1 refused, 0 failed. Orphan 100 objects "
+        "(8000 bytes), eligible 90 objects (7000 bytes). Delete: not run (report "
+        "only). Unreadable Glue databases: ['ol_warehouse_production_mart']."
+    ) in capsys.readouterr().err
+
+
+def test_a_failed_delete_run_still_logs_its_totals(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    _enable_delete(monkeypatch)
+    tables = _tables(deleted=True, errors=["s3://lake/k: AccessDenied no"])
+    _returning(monkeypatch, _result(tables=tables))
+
+    with pytest.raises(RuntimeError, match="could not be deleted"):
+        iceberg_raw_orphan_files(
+            build_asset_context(),
+            IcebergOrphanFilesConfig(min_age_days=MIN_AGE_DAYS, delete=True),
+        )
+
+    assert (
+        "Delete: ran, 89 objects deleted, 7000 bytes sent for deletion, "
+        "error count 1." in capsys.readouterr().err
+    )
