@@ -1656,7 +1656,10 @@ models:
       so a source that records a local offset can be a day off UTC. not_started is
       the enrollment date (1970-01-01 when the enrollment has none); in_progress is
       last_active_on plus var needs_attention_quiet_days (30); null for in_progress
-      with a grade but no tracked activity, and for passed and certified.
+      with a grade but no tracked activity, and for passed and certified. It is a
+      threshold to compare against, not a date to subtract from. A duration built
+      on it (an average, a range, days needing attention) must leave out the 1970-01-01
+      rows.
   - name: content_units_completed
     description: int, units (Open edX verticals) of the run's current course structure
       the learner has completed, from afact_learner_courserun_content_progress. A
