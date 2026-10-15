@@ -16,23 +16,25 @@ if TYPE_CHECKING:
 # A Jinja block ends only at a closing delimiter outside its strings, so a hook
 # such as `post_hook="update t set v = a || {{ this }}"` is consumed whole.
 _JINJA_QUOTED = r"""'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*\""""
+_JINJA_COMMENT_PATTERN = r"\{\#.*?\#\}"
+_JINJA_BLOCK = rf"""\{{\{{(?:{_JINJA_QUOTED}|[^'"}}]|\}}(?!\}}))*\}}\}}|\{{%(?:{_JINJA_QUOTED}|[^'"%]|%(?!\}}))*%\}}"""
+# Trino and DuckDB escape a quote only by doubling it, so `'\'` is a whole literal.
+# A literal may hold Jinja, whose own quotes do not end it:
+# `'lax {{ json_path | replace("'", "") }}'`.
+_SQL_QUOTED = rf"""'(?:{_JINJA_BLOCK}|{_JINJA_COMMENT_PATTERN}|[^'{{]|\{{(?![{{%\#])|'')*'|"(?:[^"]|"")*\""""
 _TOKEN = re.compile(
     rf"""
-      \{{\#.*?\#\}}              # Jinja comment
-    | (?P<jinja>
-          \{{\{{(?:{_JINJA_QUOTED}|[^'"}}]|\}}(?!\}}))*\}}\}}
-        | \{{%(?:{_JINJA_QUOTED}|[^'"%]|%(?!\}}))*%\}}
-      )
+      {_JINJA_COMMENT_PATTERN}
+    | (?P<jinja>{_JINJA_BLOCK})
     | /\*.*?\*/                # SQL block comment
     | --[^\n]*                 # SQL line comment
-    | '(?:[^'\\]|\\.|'')*'     # single-quoted string
-    | "(?:[^"\\]|\\.|"")*"     # double-quoted identifier, or a Jinja string
+    | {_SQL_QUOTED}            # string literal or double-quoted identifier
     """,
     re.DOTALL | re.VERBOSE,
 )
 _JINJA_STRING = re.compile(r"""'(?P<single>(?:[^'\\]|\\.)*)'|"(?P<double>(?:[^"\\]|\\.)*)\"""")
 _NOT_NEWLINE = re.compile(r"[^\n]")
-_JINJA_COMMENT = re.compile(r"\{#.*?#\}", re.DOTALL)
+_JINJA_COMMENT = re.compile(_JINJA_COMMENT_PATTERN, re.DOTALL)
 _MACRO = re.compile(
     r"\{%-?\s*macro\s+(?P<name>\w+)\s*\(.*?%\}(?P<body>.*?)\{%-?\s*endmacro\b[^%]*%\}",
     re.DOTALL,
