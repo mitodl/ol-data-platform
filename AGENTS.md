@@ -260,6 +260,7 @@ analysis, and validation. It is installed as part of `uv sync`.
 | `ol-dbt local register` | Register AWS Glue Iceberg tables as DuckDB views |
 | `ol-dbt fixtures load` | Create the local lake's raw tables from `ingestion/inventory/fixtures/` and each unit's factory package (see `docs/LOCAL_LAKE.md`) |
 | `ol-dbt fixtures generate` | Write the rows `fixtures load` would insert as JSON lines, with no StarRocks connection |
+| `ol-dbt fixtures scaffold` | Write a unit's base factories from a dump of its Django app's models (`bin/django-model-dump.py`) |
 | `ol-dbt ingest local` | Load the local lake's raw tables from the local-dev app databases, for units with `strategies.local: ingest` |
 
 ### `ol-dbt run` — Incremental State-Based Execution

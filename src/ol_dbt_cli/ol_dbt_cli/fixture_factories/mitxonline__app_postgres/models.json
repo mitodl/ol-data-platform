@@ -1,0 +1,2150 @@
+{
+  "format_version": 1,
+  "app": "mitxonline",
+  "commit": "git:47ad6f2e9b2e7f3bd3c9cf60102754d8de3410d7",
+  "django": "5.2.17",
+  "tables": {
+    "cms_coursepage": {
+      "model": "cms.CoursePage",
+      "managed": true,
+      "columns": {
+        "page_ptr_id": {
+          "field": "OneToOneField",
+          "internal_type": "OneToOneField",
+          "null": false,
+          "primary_key": true,
+          "unique": true,
+          "foreign_key": {
+            "table": "wagtailcore_page",
+            "column": "id"
+          },
+          "one_to_one": true,
+          "parent_link": true
+        },
+        "search_image_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "wagtailimages_image",
+            "column": "id"
+          }
+        },
+        "description": {
+          "field": "RichTextField",
+          "internal_type": "TextField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "length": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 50,
+          "default": ""
+        },
+        "min_weekly_hours": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 5,
+          "default": ""
+        },
+        "max_weekly_hours": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 5,
+          "default": ""
+        },
+        "min_weeks": {
+          "field": "SmallIntegerField",
+          "internal_type": "SmallIntegerField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "max_weeks": {
+          "field": "SmallIntegerField",
+          "internal_type": "SmallIntegerField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "effort": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 100
+        },
+        "price": {
+          "field": "StreamField",
+          "internal_type": "JSONField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "json": true
+        },
+        "min_price": {
+          "field": "DecimalField",
+          "internal_type": "DecimalField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_digits": 10,
+          "decimal_places": 2,
+          "default": 0
+        },
+        "max_price": {
+          "field": "DecimalField",
+          "internal_type": "DecimalField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_digits": 10,
+          "decimal_places": 2,
+          "default": 0
+        },
+        "prerequisites": {
+          "field": "RichTextField",
+          "internal_type": "TextField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "about": {
+          "field": "RichTextField",
+          "internal_type": "TextField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "faq_url": {
+          "field": "URLField",
+          "internal_type": "CharField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 200,
+          "regex": [
+            "^(?:[a-z0-9.+-]*)://(?:[^\\s:@/]+(?::[^\\s:@/]*)?@)?(?:(?:0|25[0-5]|2[0-4][0-9]|1[0-9]?[0-9]?|[1-9][0-9]?)(?:\\.(?:0|25[0-5]|2[0-4][0-9]|1[0-9]?[0-9]?|[1-9][0-9]?)){3}|\\[[0-9a-f:.]+\\]|([a-z\u00a1-\uffff0-9](?:[a-z\u00a1-\uffff0-9-]{0,61}[a-z\u00a1-\uffff0-9])?(?:\\.(?!-)[a-z\u00a1-\uffff0-9-]{1,63}(?<!-))*\\.(?!-)(?:[a-z\u00a1-\uffff-]{2,63}|xn--[a-z0-9]{1,59})(?<!-)\\.?|localhost))(?::[0-9]{1,5})?(?:[/?#][^\\s]*)?\\Z"
+          ]
+        },
+        "video_url": {
+          "field": "URLField",
+          "internal_type": "CharField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 200,
+          "regex": [
+            "^(?:[a-z0-9.+-]*)://(?:[^\\s:@/]+(?::[^\\s:@/]*)?@)?(?:(?:0|25[0-5]|2[0-4][0-9]|1[0-9]?[0-9]?|[1-9][0-9]?)(?:\\.(?:0|25[0-5]|2[0-4][0-9]|1[0-9]?[0-9]?|[1-9][0-9]?)){3}|\\[[0-9a-f:.]+\\]|([a-z\u00a1-\uffff0-9](?:[a-z\u00a1-\uffff0-9-]{0,61}[a-z\u00a1-\uffff0-9])?(?:\\.(?!-)[a-z\u00a1-\uffff0-9-]{1,63}(?<!-))*\\.(?!-)(?:[a-z\u00a1-\uffff-]{2,63}|xn--[a-z0-9]{1,59})(?<!-)\\.?|localhost))(?::[0-9]{1,5})?(?:[/?#][^\\s]*)?\\Z"
+          ]
+        },
+        "what_you_learn": {
+          "field": "RichTextField",
+          "internal_type": "TextField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "hubspot_form_id": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 50,
+          "default": ""
+        },
+        "hyl_choice_realworld_learning": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "hyl_choice_learn_by_doing": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "hyl_choice_learn_from_others": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "hyl_choice_learn_on_demand": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "hyl_choice_ai_enabled_support": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "hyl_choice_stackable_credentials": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "feature_image_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "wagtailimages_image",
+            "column": "id"
+          }
+        },
+        "faculty_section_title": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255,
+          "default": "Meet your instructors"
+        },
+        "course_id": {
+          "field": "OneToOneField",
+          "internal_type": "OneToOneField",
+          "null": true,
+          "primary_key": false,
+          "unique": true,
+          "foreign_key": {
+            "table": "courses_course",
+            "column": "id"
+          },
+          "one_to_one": true
+        },
+        "include_in_learn_catalog": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "ingest_content_files_for_ai": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "show_course_outline": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": true
+        }
+      }
+    },
+    "cms_coursepage_topics": {
+      "model": "cms.CoursePage_topics",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "coursepage_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "cms_coursepage",
+            "column": "page_ptr_id"
+          }
+        },
+        "coursestopic_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "courses_coursestopic",
+            "column": "id"
+          }
+        }
+      },
+      "unique_together": [
+        [
+          "coursepage_id",
+          "coursestopic_id"
+        ]
+      ]
+    },
+    "cms_instructorpage": {
+      "model": "cms.InstructorPage",
+      "managed": true,
+      "columns": {
+        "page_ptr_id": {
+          "field": "OneToOneField",
+          "internal_type": "OneToOneField",
+          "null": false,
+          "primary_key": true,
+          "unique": true,
+          "foreign_key": {
+            "table": "wagtailcore_page",
+            "column": "id"
+          },
+          "one_to_one": true,
+          "parent_link": true
+        },
+        "instructor_name": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255,
+          "default": ""
+        },
+        "instructor_title": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255
+        },
+        "instructor_bio_short": {
+          "field": "RichTextField",
+          "internal_type": "TextField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "instructor_bio_long": {
+          "field": "RichTextField",
+          "internal_type": "TextField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "feature_image_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "wagtailimages_image",
+            "column": "id"
+          }
+        }
+      }
+    },
+    "cms_instructorpagelink": {
+      "model": "cms.InstructorPageLink",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "page_id": {
+          "field": "ParentalKey",
+          "internal_type": "ParentalKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "wagtailcore_page",
+            "column": "id"
+          }
+        },
+        "linked_instructor_page_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "cms_instructorpage",
+            "column": "page_ptr_id"
+          }
+        },
+        "order": {
+          "field": "SmallIntegerField",
+          "internal_type": "SmallIntegerField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": 1
+        }
+      }
+    },
+    "cms_programpage": {
+      "model": "cms.ProgramPage",
+      "managed": true,
+      "columns": {
+        "page_ptr_id": {
+          "field": "OneToOneField",
+          "internal_type": "OneToOneField",
+          "null": false,
+          "primary_key": true,
+          "unique": true,
+          "foreign_key": {
+            "table": "wagtailcore_page",
+            "column": "id"
+          },
+          "one_to_one": true,
+          "parent_link": true
+        },
+        "search_image_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "wagtailimages_image",
+            "column": "id"
+          }
+        },
+        "length": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 50,
+          "default": ""
+        },
+        "min_weekly_hours": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 5,
+          "default": ""
+        },
+        "max_weekly_hours": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 5,
+          "default": ""
+        },
+        "min_weeks": {
+          "field": "SmallIntegerField",
+          "internal_type": "SmallIntegerField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "max_weeks": {
+          "field": "SmallIntegerField",
+          "internal_type": "SmallIntegerField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "effort": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 100
+        },
+        "price": {
+          "field": "StreamField",
+          "internal_type": "JSONField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "json": true
+        },
+        "min_price": {
+          "field": "DecimalField",
+          "internal_type": "DecimalField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_digits": 10,
+          "decimal_places": 2,
+          "default": 0
+        },
+        "max_price": {
+          "field": "DecimalField",
+          "internal_type": "DecimalField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_digits": 10,
+          "decimal_places": 2,
+          "default": 0
+        },
+        "prerequisites": {
+          "field": "RichTextField",
+          "internal_type": "TextField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "about": {
+          "field": "RichTextField",
+          "internal_type": "TextField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "faq_url": {
+          "field": "URLField",
+          "internal_type": "CharField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 200,
+          "regex": [
+            "^(?:[a-z0-9.+-]*)://(?:[^\\s:@/]+(?::[^\\s:@/]*)?@)?(?:(?:0|25[0-5]|2[0-4][0-9]|1[0-9]?[0-9]?|[1-9][0-9]?)(?:\\.(?:0|25[0-5]|2[0-4][0-9]|1[0-9]?[0-9]?|[1-9][0-9]?)){3}|\\[[0-9a-f:.]+\\]|([a-z\u00a1-\uffff0-9](?:[a-z\u00a1-\uffff0-9-]{0,61}[a-z\u00a1-\uffff0-9])?(?:\\.(?!-)[a-z\u00a1-\uffff0-9-]{1,63}(?<!-))*\\.(?!-)(?:[a-z\u00a1-\uffff-]{2,63}|xn--[a-z0-9]{1,59})(?<!-)\\.?|localhost))(?::[0-9]{1,5})?(?:[/?#][^\\s]*)?\\Z"
+          ]
+        },
+        "video_url": {
+          "field": "URLField",
+          "internal_type": "CharField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 200,
+          "regex": [
+            "^(?:[a-z0-9.+-]*)://(?:[^\\s:@/]+(?::[^\\s:@/]*)?@)?(?:(?:0|25[0-5]|2[0-4][0-9]|1[0-9]?[0-9]?|[1-9][0-9]?)(?:\\.(?:0|25[0-5]|2[0-4][0-9]|1[0-9]?[0-9]?|[1-9][0-9]?)){3}|\\[[0-9a-f:.]+\\]|([a-z\u00a1-\uffff0-9](?:[a-z\u00a1-\uffff0-9-]{0,61}[a-z\u00a1-\uffff0-9])?(?:\\.(?!-)[a-z\u00a1-\uffff0-9-]{1,63}(?<!-))*\\.(?!-)(?:[a-z\u00a1-\uffff-]{2,63}|xn--[a-z0-9]{1,59})(?<!-)\\.?|localhost))(?::[0-9]{1,5})?(?:[/?#][^\\s]*)?\\Z"
+          ]
+        },
+        "what_you_learn": {
+          "field": "RichTextField",
+          "internal_type": "TextField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "hubspot_form_id": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 50,
+          "default": ""
+        },
+        "hyl_choice_realworld_learning": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "hyl_choice_learn_by_doing": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "hyl_choice_learn_from_others": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "hyl_choice_learn_on_demand": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "hyl_choice_ai_enabled_support": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "hyl_choice_stackable_credentials": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "feature_image_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "wagtailimages_image",
+            "column": "id"
+          }
+        },
+        "faculty_section_title": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255,
+          "default": "Meet your instructors"
+        },
+        "program_id": {
+          "field": "OneToOneField",
+          "internal_type": "OneToOneField",
+          "null": true,
+          "primary_key": false,
+          "unique": true,
+          "foreign_key": {
+            "table": "courses_program",
+            "column": "id"
+          },
+          "one_to_one": true
+        },
+        "description": {
+          "field": "RichTextField",
+          "internal_type": "TextField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "include_in_learn_catalog": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "list_price": {
+          "field": "DecimalField",
+          "internal_type": "DecimalField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "max_digits": 10,
+          "decimal_places": 2
+        }
+      }
+    },
+    "courses_course": {
+      "model": "courses.Course",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "created_on": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "updated_on": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "title": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255
+        },
+        "readable_id": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": true,
+          "max_length": 255,
+          "regex": [
+            "^[\\w\\-+:\\.]+$"
+          ]
+        },
+        "live": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "certificates_disabled": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        }
+      }
+    },
+    "courses_course_departments": {
+      "model": "courses.Course_departments",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "course_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "courses_course",
+            "column": "id"
+          }
+        },
+        "department_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "courses_department",
+            "column": "id"
+          }
+        }
+      },
+      "unique_together": [
+        [
+          "course_id",
+          "department_id"
+        ]
+      ]
+    },
+    "courses_courserun": {
+      "model": "courses.CourseRun",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "created_on": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "updated_on": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "language": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 8,
+          "choices": [
+            "af_ZA",
+            "ar",
+            "az",
+            "bo",
+            "da",
+            "de",
+            "de_DE",
+            "el",
+            "es_419",
+            "es_ES",
+            "en",
+            "fa",
+            "fr",
+            "fr_CA",
+            "he",
+            "hi",
+            "hu",
+            "id",
+            "it_IT",
+            "ja",
+            "ka",
+            "kk",
+            "ko",
+            "lv",
+            "nl",
+            "pl",
+            "pt_BR",
+            "pt_PT",
+            "ro",
+            "ru",
+            "sq",
+            "sv",
+            "sw",
+            "te",
+            "th",
+            "tr_TR",
+            "uk",
+            "uz",
+            "vi",
+            "zh_CN",
+            "zh_HANS",
+            "zh_HK"
+          ],
+          "default": "en"
+        },
+        "variant_length": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 1,
+          "choices": [
+            "",
+            "S"
+          ],
+          "default": ""
+        },
+        "variant_industry": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 3,
+          "choices": [
+            "",
+            "E",
+            "F",
+            "HC",
+            "M"
+          ],
+          "default": ""
+        },
+        "course_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "courses_course",
+            "column": "id"
+          }
+        },
+        "title": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255
+        },
+        "courseware_id": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": true,
+          "max_length": 255
+        },
+        "run_tag": {
+          "field": "TextField",
+          "internal_type": "TextField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 100
+        },
+        "has_courseware_url": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": true
+        },
+        "start_date": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "end_date": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "certificate_available_date": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "enrollment_start": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "enrollment_end": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "expiration_date": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "upgrade_deadline": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "live": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "is_self_paced": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "b2b_contract_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "b2b_contractpage",
+            "column": "page_ptr_id"
+          }
+        },
+        "b2b_only": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "is_source_run": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "is_primary_language": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        }
+      },
+      "unique_together": [
+        [
+          "course_id",
+          "courseware_id",
+          "run_tag"
+        ]
+      ]
+    },
+    "courses_courserun_enrollment_modes": {
+      "model": "courses.CourseRun_enrollment_modes",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "courserun_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "courses_courserun",
+            "column": "id"
+          }
+        },
+        "enrollmentmode_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "courses_enrollmentmode",
+            "column": "id"
+          }
+        }
+      },
+      "unique_together": [
+        [
+          "courserun_id",
+          "enrollmentmode_id"
+        ]
+      ]
+    },
+    "courses_coursestopic": {
+      "model": "courses.CoursesTopic",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "created_on": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "updated_on": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "name": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 128
+        },
+        "parent_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "courses_coursestopic",
+            "column": "id"
+          }
+        }
+      },
+      "unique_together": [
+        [
+          "name",
+          "parent_id"
+        ]
+      ]
+    },
+    "courses_department": {
+      "model": "courses.Department",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "created_on": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "updated_on": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "name": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": true,
+          "max_length": 128
+        },
+        "slug": {
+          "field": "SlugField",
+          "internal_type": "SlugField",
+          "null": false,
+          "primary_key": false,
+          "unique": true,
+          "max_length": 128,
+          "regex": [
+            "^[-a-zA-Z0-9_]+\\Z"
+          ]
+        }
+      }
+    },
+    "courses_enrollmentmode": {
+      "model": "courses.EnrollmentMode",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "mode_slug": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": true,
+          "max_length": 255,
+          "default": "audit"
+        },
+        "mode_display_name": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255,
+          "default": "audit"
+        },
+        "requires_payment": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        }
+      }
+    },
+    "courses_program": {
+      "model": "courses.Program",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "created_on": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "updated_on": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "title": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255
+        },
+        "readable_id": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": true,
+          "max_length": 255,
+          "regex": [
+            "^[\\w\\-+:\\.]+$"
+          ]
+        },
+        "live": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "program_type": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255,
+          "default": "Series"
+        },
+        "availability": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255,
+          "choices": [
+            "anytime",
+            "dated"
+          ],
+          "default": "anytime"
+        },
+        "enrollment_start": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "enrollment_end": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "display_mode": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 32,
+          "choices": [
+            "course"
+          ]
+        },
+        "start_date": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "end_date": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "b2b_only": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "certificates_disabled": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        }
+      }
+    },
+    "courses_program_departments": {
+      "model": "courses.Program_departments",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "program_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "courses_program",
+            "column": "id"
+          }
+        },
+        "department_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "courses_department",
+            "column": "id"
+          }
+        }
+      },
+      "unique_together": [
+        [
+          "program_id",
+          "department_id"
+        ]
+      ]
+    },
+    "courses_program_enrollment_modes": {
+      "model": "courses.Program_enrollment_modes",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "program_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "courses_program",
+            "column": "id"
+          }
+        },
+        "enrollmentmode_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "courses_enrollmentmode",
+            "column": "id"
+          }
+        }
+      },
+      "unique_together": [
+        [
+          "program_id",
+          "enrollmentmode_id"
+        ]
+      ]
+    },
+    "courses_programrequirement": {
+      "model": "courses.ProgramRequirement",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "depth": {
+          "field": "PositiveIntegerField",
+          "internal_type": "PositiveIntegerField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "numchild": {
+          "field": "PositiveIntegerField",
+          "internal_type": "PositiveIntegerField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": 0
+        },
+        "path": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": true,
+          "max_length": 255
+        },
+        "node_type": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 12,
+          "choices": [
+            "program_root",
+            "operator",
+            "course",
+            "program",
+            "track"
+          ]
+        },
+        "operator": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 13,
+          "choices": [
+            "all_of",
+            "min_number_of"
+          ]
+        },
+        "operator_value": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 100
+        },
+        "program_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "courses_program",
+            "column": "id"
+          }
+        },
+        "course_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "courses_course",
+            "column": "id"
+          }
+        },
+        "required_program_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "courses_program",
+            "column": "id"
+          }
+        },
+        "title": {
+          "field": "TextField",
+          "internal_type": "TextField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": ""
+        },
+        "description": {
+          "field": "TextField",
+          "internal_type": "TextField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": ""
+        },
+        "elective_flag": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        }
+      },
+      "treebeard": {
+        "alphabet": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+        "steplen": 4
+      }
+    },
+    "django_content_type": {
+      "model": "contenttypes.ContentType",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "app_label": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 100
+        },
+        "model": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 100
+        }
+      },
+      "unique_together": [
+        [
+          "app_label",
+          "model"
+        ]
+      ]
+    },
+    "variants_supportedvariant": {
+      "model": "variants.SupportedVariant",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "created_on": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "updated_on": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "language": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 8,
+          "choices": [
+            "af_ZA",
+            "ar",
+            "az",
+            "bo",
+            "da",
+            "de",
+            "de_DE",
+            "el",
+            "es_419",
+            "es_ES",
+            "en",
+            "fa",
+            "fr",
+            "fr_CA",
+            "he",
+            "hi",
+            "hu",
+            "id",
+            "it_IT",
+            "ja",
+            "ka",
+            "kk",
+            "ko",
+            "lv",
+            "nl",
+            "pl",
+            "pt_BR",
+            "pt_PT",
+            "ro",
+            "ru",
+            "sq",
+            "sv",
+            "sw",
+            "te",
+            "th",
+            "tr_TR",
+            "uk",
+            "uz",
+            "vi",
+            "zh_CN",
+            "zh_HANS",
+            "zh_HK"
+          ],
+          "default": "en"
+        },
+        "variant_length": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 1,
+          "choices": [
+            "",
+            "S"
+          ],
+          "default": ""
+        },
+        "variant_industry": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 3,
+          "choices": [
+            "",
+            "E",
+            "F",
+            "HC",
+            "M"
+          ],
+          "default": ""
+        },
+        "content_type_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "django_content_type",
+            "column": "id"
+          }
+        },
+        "object_id": {
+          "field": "PositiveIntegerField",
+          "internal_type": "PositiveIntegerField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "active": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": true
+        },
+        "b2b_only": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "default_variant": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        }
+      },
+      "generic_foreign_keys": [
+        {
+          "name": "variant_object",
+          "content_type": "content_type_id",
+          "object_id": "object_id"
+        }
+      ]
+    },
+    "wagtailcore_page": {
+      "model": "wagtailcore.Page",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "path": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": true,
+          "max_length": 255
+        },
+        "depth": {
+          "field": "PositiveIntegerField",
+          "internal_type": "PositiveIntegerField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "numchild": {
+          "field": "PositiveIntegerField",
+          "internal_type": "PositiveIntegerField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": 0
+        },
+        "translation_key": {
+          "field": "UUIDField",
+          "internal_type": "UUIDField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 32
+        },
+        "locale_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "wagtailcore_locale",
+            "column": "id"
+          }
+        },
+        "latest_revision_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "wagtailcore_revision",
+            "column": "id"
+          }
+        },
+        "live": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": true
+        },
+        "has_unpublished_changes": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "first_published_at": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "last_published_at": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "live_revision_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "wagtailcore_revision",
+            "column": "id"
+          }
+        },
+        "go_live_at": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "expire_at": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "expired": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "locked": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "locked_at": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "locked_by_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "users_user",
+            "column": "id"
+          }
+        },
+        "title": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255
+        },
+        "draft_title": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255
+        },
+        "slug": {
+          "field": "SlugField",
+          "internal_type": "SlugField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255,
+          "regex": [
+            "^[-\\w]+\\Z"
+          ]
+        },
+        "content_type_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "django_content_type",
+            "column": "id"
+          }
+        },
+        "url_path": {
+          "field": "TextField",
+          "internal_type": "TextField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "owner_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "users_user",
+            "column": "id"
+          }
+        },
+        "seo_title": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255
+        },
+        "show_in_menus": {
+          "field": "BooleanField",
+          "internal_type": "BooleanField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "default": false
+        },
+        "search_description": {
+          "field": "TextField",
+          "internal_type": "TextField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "latest_revision_created_at": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "alias_of_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "wagtailcore_page",
+            "column": "id"
+          }
+        }
+      },
+      "unique_together": [
+        [
+          "translation_key",
+          "locale_id"
+        ]
+      ],
+      "treebeard": {
+        "alphabet": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "steplen": 4
+      }
+    },
+    "wagtailimages_image": {
+      "model": "wagtailimages.Image",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "collection_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "wagtailcore_collection",
+            "column": "id"
+          }
+        },
+        "title": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255
+        },
+        "file": {
+          "field": "WagtailImageField",
+          "internal_type": "FileField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 100
+        },
+        "description": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 255,
+          "default": ""
+        },
+        "width": {
+          "field": "IntegerField",
+          "internal_type": "IntegerField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "height": {
+          "field": "IntegerField",
+          "internal_type": "IntegerField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "created_at": {
+          "field": "DateTimeField",
+          "internal_type": "DateTimeField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "uploaded_by_user_id": {
+          "field": "ForeignKey",
+          "internal_type": "ForeignKey",
+          "null": true,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "users_user",
+            "column": "id"
+          }
+        },
+        "focal_point_x": {
+          "field": "PositiveIntegerField",
+          "internal_type": "PositiveIntegerField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "focal_point_y": {
+          "field": "PositiveIntegerField",
+          "internal_type": "PositiveIntegerField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "focal_point_width": {
+          "field": "PositiveIntegerField",
+          "internal_type": "PositiveIntegerField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "focal_point_height": {
+          "field": "PositiveIntegerField",
+          "internal_type": "PositiveIntegerField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "file_size": {
+          "field": "PositiveIntegerField",
+          "internal_type": "PositiveIntegerField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "file_hash": {
+          "field": "CharField",
+          "internal_type": "CharField",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "max_length": 40
+        }
+      }
+    }
+  }
+}

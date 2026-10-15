@@ -178,6 +178,39 @@ ol-dbt fixtures generate --unit xpro/app_postgres --table raw__xpro__app__postgr
 Generated rows are fixture rows to `ol-dbt ingest local`, so "load fixtures first and
 the source second" above still holds.
 
+### Scaffolding a factory package
+
+For a Django app, the base factories come from the app's models. `bin/django-model-dump.py`
+runs with the app's own Python and writes what its models say about each table (keys,
+foreign keys, `unique`, `choices`, nullability, field classes, treebeard trees) as JSON.
+It imports the models and reads no rows. Each setting the app's `settings.py` marks
+`required=True` needs a value to import, and a placeholder does, since nothing connects
+(`DATABASE_URL` has to parse as a URL, e.g. `postgres://x:x@127.0.0.1/x`):
+
+```bash
+APP=~/code/mit/repos/mitxonline
+# With the app's required settings exported as placeholders:
+"$APP/.venv/bin/python" bin/django-model-dump.py --app-dir "$APP" \
+    --settings main.settings --commit "$(git -C "$APP" rev-parse HEAD)" > /tmp/mitxonline-models.json
+ol-dbt fixtures scaffold --unit mitxonline/app_postgres --models /tmp/mitxonline-models.json
+```
+
+An app with no environment of its own can get one from its lock file without touching the
+checkout, e.g. `UV_PROJECT_ENVIRONMENT=/tmp/mitxpro-venv uv sync --project "$APP" --frozen --no-dev --no-install-project`.
+
+`scaffold` writes three files in the unit's package:
+
+- `_generated.py`: one base factory per fixture table, parents first, rewritten wholesale
+  on every run. What the models cannot say (a JSON column's shape, a treebeard tree's
+  `path`, a self reference, a generic foreign key's object id) is left unset with a comment.
+- `models.json`: the dump cut down to the unit's fixture tables. A later `scaffold` with
+  no `--models` reads it, so the package can be rescaffolded without the app.
+- `__init__.py`, only if there is none: the unit's `SEED` and a `generate` that adds no
+  rows. The hand-written module subclasses the base factories and wires the tables together.
+
+A column the fixture and the models disagree on (Airbyte drops and adds columns) is
+printed and drawn by its fixture type.
+
 ### Adding a fixture
 
 Rows are hand-written or generated, never copied from a deployed environment. Raw

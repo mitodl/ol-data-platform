@@ -27,7 +27,10 @@ from rich.console import Console
 from rich.markup import escape
 from ruamel.yaml import YAML
 
+from ol_dbt_cli import fixture_factories
 from ol_dbt_cli.lib.cursor_audit import select_units
+from ol_dbt_cli.lib.fixture_scaffold import GENERATED_FILE, MODELS_FILE, starter_package
+from ol_dbt_cli.lib.fixture_scaffold import scaffold as fixture_scaffold
 from ol_dbt_cli.lib.glue_schema import DEFAULT_GLUE_DATABASE, column_types_by_table
 from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, Unit, load_units
 from ol_dbt_cli.lib.raw_fixtures import (
@@ -68,6 +71,8 @@ LOCAL_USER = "root"
 LOCAL_HOST = "127.0.0.1"
 LOCAL_PORT = 9030
 YAML_WIDTH = 4096
+# Where `scaffold` writes a unit's factory package.
+FACTORIES_DIR = Path(fixture_factories.__file__).parent
 
 InventoryDir = Annotated[
     Path,
@@ -349,3 +354,50 @@ def capture(
         with path.open("w") as handle:
             round_trip.dump(merge_captured(existing, captured), handle)
         console.print(f"Wrote {escape(str(path))}: {len(captured)} table(s)")
+
+
+@fixtures_app.command
+def scaffold(
+    *,
+    unit: Annotated[str, Parameter(help="The unit, as deployment/layer.")],
+    models: Annotated[
+        Path | None,
+        Parameter(
+            help="What bin/django-model-dump.py wrote. Default: the models.json already in the unit's package.",
+            show_default=False,
+        ),
+    ] = None,
+    inventory_dir: InventoryDir = DEFAULT_INVENTORY_DIR,
+    factories_dir: Annotated[
+        Path, Parameter(help="The directory holding one factory package per unit.")
+    ] = FACTORIES_DIR,
+) -> None:
+    """Write a unit's base factories from its source app's Django models.
+
+    Writes `_generated.py` and `models.json` (the dump, cut down to the unit's
+    fixture tables) in the unit's factory package, and an `__init__.py` that
+    adds no rows if the package has none. A hand-written `__init__.py` is never
+    touched. Columns the fixture and the models disagree on are printed.
+    """
+    (selected,) = _select(inventory_dir, [unit])
+    (fixture,) = load_fixtures(inventory_dir, [selected], selected=True)
+    package = factories_dir / selected.path.stem
+    models_path = models or package / MODELS_FILE
+    if not models_path.exists():
+        err_console.print(
+            f"[bold red]No {escape(str(models_path))}. Dump the app's models with bin/django-model-dump.py "
+            "and pass it as --models."
+        )
+        sys.exit(1)
+    result = fixture_scaffold(fixture, selected, json.loads(models_path.read_text()))
+    package.mkdir(parents=True, exist_ok=True)
+    (package / MODELS_FILE).write_text(json.dumps(result.models, indent=2) + "\n")
+    (package / GENERATED_FILE).write_text(result.source)
+    written = [package / MODELS_FILE, package / GENERATED_FILE]
+    if not (package / "__init__.py").exists():
+        (package / "__init__.py").write_text(starter_package(selected))
+        written.append(package / "__init__.py")
+    for note in result.notes:
+        err_console.print(f"[yellow]{escape(note)}", soft_wrap=True)
+    for path in written:
+        console.print(f"Wrote {escape(str(path))}", soft_wrap=True)

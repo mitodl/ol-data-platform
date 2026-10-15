@@ -79,6 +79,9 @@ type Row = dict[str, Any]
 # under .test, where nothing does.
 RESERVED_DOMAIN = "example.com"
 RESERVED_URL_DOMAIN = "example.test"
+# What share of rows `or_null` leaves NULL: enough that a model's NULL branch
+# has rows at tens of rows per table.
+NULL_SHARE = 0.2
 # The day the committed fixtures' `_dlt_load_id` values fall on.
 LOADED_AT = datetime.datetime(2026, 10, 1, tzinfo=datetime.UTC)
 _DLT_ID_ALPHABET = string.ascii_letters + string.digits
@@ -235,6 +238,15 @@ def _checked(provider: str, kwargs: dict[str, Any]) -> dict[str, Any]:
 def url(domain: str = RESERVED_URL_DOMAIN) -> Any:
     """Declare a column holding an ``https`` URL under ``domain``."""
     return factory.LazyFunction(lambda: f"https://{domain}/{_current().field('internet.slug')}")
+
+
+def or_null(declaration: Any, share: float = NULL_SHARE) -> Any:
+    """Declare a nullable column: NULL in ``share`` of rows, drawn with the seeded RNG, ``declaration`` in the rest."""
+    return factory.Maybe(
+        factory.LazyFunction(lambda: _current().random.random() < share),
+        yes_declaration=None,
+        no_declaration=declaration,
+    )
 
 
 def parent(param: str, column: str) -> Any:
