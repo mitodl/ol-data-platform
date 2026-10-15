@@ -33,6 +33,20 @@ with enrollment_detail as (
                 then course.course_readable_id
             end
         ) as verified_courses_taken_in_program
+        , count(
+            distinct case
+                when
+                    course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
+                    and course_enrollment_detail.courserungrade_is_passing = true
+                then course.course_readable_id
+            end
+        ) as verified_courses_passed_in_program
+        , count(
+            distinct case
+                when course_enrollment_detail.courserungrade_is_passing = true
+                then course.course_readable_id
+            end
+        ) as all_courses_passed_in_program
         , sum(
             case
                 when upper(course.course_title) like '%CAPSTONE%'
@@ -106,6 +120,8 @@ select
     , coalesce(courses_detail.verified_courses_taken_in_program, 0) as verified_courses_taken_in_program
     , coalesce(courses_detail.course_certificate_sum, 0) as course_certificate_sum
     , coalesce(courses_detail.verified_courses_taken_in_program, 0) as courses_taken_in_program
+    , coalesce(courses_detail.verified_courses_passed_in_program, 0) as verified_courses_passed_in_program
+    , coalesce(courses_detail.all_courses_passed_in_program, 0) as all_courses_passed_in_program
     , coalesce(
         combined_users.user_street_address, combined_users2.user_street_address
     ) as user_street_address
