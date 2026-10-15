@@ -127,10 +127,23 @@ def test_generated_courses_and_programs_are_on_the_xpro_platform(xpro: Generated
         assert {row["platform_id"] for row in xpro.generated[PREFIX + table]} == {platform}
 
 
-def test_generated_topics_carry_names_learn_maps() -> None:
-    names = {row["name"] for row in _xpro(1).generated[f"{PREFIX}courses_coursetopic"]}
+def test_generated_topics_carry_names_learn_maps(xpro: GeneratedRows) -> None:
+    names = {row["name"] for row in xpro.generated[f"{PREFIX}courses_coursetopic"]}
 
     assert names <= set(xpro__app_postgres.LEARN_TOPICS)
+
+
+def test_topics_stop_at_the_names_learn_maps_however_large_the_scale() -> None:
+    names = [row["name"] for row in _xpro(10).generated[f"{PREFIX}courses_coursetopic"]]
+
+    assert sorted(names) == sorted(xpro__app_postgres.LEARN_TOPICS)
+
+
+def test_every_generated_course_page_has_two_distinct_topics(xpro: GeneratedRows) -> None:
+    topics_per_page = Counter(row["coursepage_id"] for row in xpro.generated[f"{PREFIX}cms_coursepage_topics"])
+
+    assert {row["page_ptr_id"] for row in xpro.generated[f"{PREFIX}cms_coursepage"]} == set(topics_per_page)
+    assert set(topics_per_page.values()) == {xpro__app_postgres.TOPICS_PER_COURSE_PAGE}
 
 
 def test_a_product_version_is_made_after_its_product_and_not_edited(xpro: GeneratedRows) -> None:

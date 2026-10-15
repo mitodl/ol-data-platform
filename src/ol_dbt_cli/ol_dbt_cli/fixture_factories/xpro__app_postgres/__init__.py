@@ -126,12 +126,6 @@ def _before_extract(moment: datetime.datetime) -> datetime.datetime:
     return min(moment, EXTRACTED)
 
 
-def _topic_name(number: int) -> str:
-    """Return the Learn topic names in turn, numbered once they run out, so every name is unique."""
-    rounds, index = divmod(number, len(LEARN_TOPICS))
-    return LEARN_TOPICS[index] if rounds == 0 else f"{LEARN_TOPICS[index]} {rounds + 1}"
-
-
 def _weeks() -> Any:
     return fg.value("numeric.integer_number", start=4, end=12)
 
@@ -374,8 +368,13 @@ def _content_type(hand_written: Mapping[str, list[Row]], model: str) -> Row:
 
 
 def _topics(hand_written: Mapping[str, list[Row]], scale: float) -> list[Row]:
-    """Half the generated topics at the top level, the other half under a top-level topic."""
-    topics = [CourseTopic.build(name=_topic_name(number)) for number in range(fg.scaled_count(CourseTopic, scale))]
+    """Half the generated topics at the top level, the other half under a top-level topic.
+
+    No more than there are Learn topic names: Learn drops a topic it does not
+    know, and a name must be unique, so past that scale the courses share them.
+    """
+    count = min(fg.scaled_count(CourseTopic, scale), len(LEARN_TOPICS))
+    topics = [CourseTopic.build(name=name) for name in LEARN_TOPICS[:count]]
     top = topics[: len(topics) // 2]
     top_level = [row for row in hand_written[CourseTopicBase.raw_table] if row.get("parent_id") is None] + top
     return [*top, *attach(topics[len(topics) // 2 :], top_level)]
@@ -488,7 +487,12 @@ def generate(hand_written: Mapping[str, list[Row]], scale: float) -> dict[str, l
         tree, ProgramPage, programs, index=PROGRAMS_INDEX, page_type=PROGRAM_PAGE_TYPE, images=images, column="program"
     )
     all_topics = [*hand_written[CourseTopicBase.raw_table], *topics]
-    page_topics = fg.link(course_pages, all_topics, len(course_pages) * min(TOPICS_PER_COURSE_PAGE, len(all_topics)))
+    # Each page its own distinct topics, so every page has exactly this many.
+    page_topics = [
+        (page, topic)
+        for page in course_pages
+        for topic in fg.pair(all_topics, min(TOPICS_PER_COURSE_PAGE, len(all_topics)))
+    ]
 
     return {
         CourseTopicBase.raw_table: topics,
