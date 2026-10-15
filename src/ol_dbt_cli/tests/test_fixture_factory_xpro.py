@@ -1,12 +1,14 @@
 """The xpro/app_postgres factory package against what the xPRO staging models test.
 
 The staging data tests run only on a built lake. These hold the generated rows to the
-unique, compound-unique and accepted-values tests on the 18 tables the xPRO Learn models
-read, and to a whole treebeard tree, before anything loads.
+unique, compound-unique and accepted-values tests on the tables the package generates,
+to a whole treebeard tree, and to dates that do not move with the day a model builds,
+before anything loads. The not_null tests are left to a build.
 """
 
 from __future__ import annotations
 
+import datetime
 import json
 from collections import Counter
 from pathlib import Path
@@ -14,7 +16,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from ol_dbt_cli.lib.fixture_generation import generate_rows
+from ol_dbt_cli.fixture_factories import xpro__app_postgres
+from ol_dbt_cli.lib.fixture_generation import LOADED_AT, generate_rows
 from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, load_units
 from ol_dbt_cli.lib.raw_fixtures import load_fixtures, unit_factories
 
@@ -87,6 +90,54 @@ def test_the_package_generates_every_table_it_feeds(xpro: GeneratedRows) -> None
 )
 def test_generated_rows_keep_the_staging_uniques(xpro: GeneratedRows, table: str, columns: tuple[str, ...]) -> None:
     assert _repeats([tuple(row.get(column) for column in columns) for row in _all(xpro, table)]) == []
+
+
+@pytest.mark.parametrize(
+    ("tables", "column"),
+    [
+        # Staging unions each pair into one model with a unique test on the column.
+        (("cms_coursepage", "cms_externalcoursepage"), "course_id"),
+        (("cms_programpage", "cms_externalprogrampage"), "program_id"),
+    ],
+)
+def test_a_course_or_program_has_one_page_across_both_page_tables(
+    xpro: GeneratedRows, tables: tuple[str, ...], column: str
+) -> None:
+    assert _repeats([row[column] for table in tables for row in _all(xpro, table)]) == []
+
+
+def test_every_date_is_before_the_extract_or_far_off(xpro: GeneratedRows) -> None:
+    """A date between today and 2099 would change which runs and pages the models list as the days pass."""
+    extracted = LOADED_AT.replace(tzinfo=None)
+    near = [
+        (table, column, value)
+        for table, rows in xpro.generated.items()
+        for row in rows
+        for column, value in row.items()
+        if isinstance(value, datetime.datetime) and extracted < value < datetime.datetime(2090, 1, 1)  # noqa: DTZ001
+    ]
+
+    assert near == []
+
+
+def test_generated_courses_and_programs_are_on_the_xpro_platform(xpro: GeneratedRows) -> None:
+    (platform,) = (row["id"] for row in _all(xpro, "courses_platform") if row["name"] == "xPRO")
+
+    for table in ("courses_course", "courses_program"):
+        assert {row["platform_id"] for row in xpro.generated[PREFIX + table]} == {platform}
+
+
+def test_generated_topics_carry_names_learn_maps() -> None:
+    names = {row["name"] for row in _xpro(1).generated[f"{PREFIX}courses_coursetopic"]}
+
+    assert names <= set(xpro__app_postgres.LEARN_TOPICS)
+
+
+def test_a_product_version_is_made_after_its_product_and_not_edited(xpro: GeneratedRows) -> None:
+    products = {row["id"]: row for row in xpro.generated[f"{PREFIX}ecommerce_product"]}
+    for version in xpro.generated[f"{PREFIX}ecommerce_productversion"]:
+        assert version["created_on"] >= products[version["product_id"]]["created_on"]
+        assert version["updated_on"] == version["created_on"]
 
 
 def test_page_formats_are_ones_the_staging_tests_accept(xpro: GeneratedRows) -> None:
