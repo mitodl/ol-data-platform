@@ -68,6 +68,7 @@ from ol_dbt_cli.lib.qa_contract import (
     write_qa_baseline,
 )
 from ol_dbt_cli.lib.qa_observation import OBSERVATION_FILENAME, QA_GLUE_DATABASE, load_observation
+from ol_dbt_cli.lib.raw_json_calls import RAW_JSON_CALLS_CHECK, check_raw_json_calls
 from ol_dbt_cli.lib.sql_parser import (
     ParsedModel,
     consumed_columns_by_ref_via_scope,
@@ -1021,7 +1022,7 @@ def validate(
                 "Comma-separated list of checks to skip: yaml_sql_sync, upstream_refs, dangling_refs, "
                 "broken_ref_columns, docs_coverage, pk_test_coverage, yaml_integrity, select_star, "
                 "dimensional_layering, qa_branch_contract, data_contract, metric_registry, pipe_concat, "
-                "cohort_policy."
+                "cohort_policy, raw_json_calls."
             ),
         ),
     ] = None,
@@ -1033,7 +1034,7 @@ def validate(
                 "Comma-separated list of checks to run exclusively (all others are skipped): "
                 "yaml_sql_sync, upstream_refs, dangling_refs, broken_ref_columns, docs_coverage, "
                 "pk_test_coverage, yaml_integrity, select_star, dimensional_layering, qa_branch_contract, "
-                "data_contract, metric_registry, pipe_concat, cohort_policy. "
+                "data_contract, metric_registry, pipe_concat, cohort_policy, raw_json_calls. "
                 "Mutually exclusive with --skip."
             ),
         ),
@@ -1174,6 +1175,9 @@ def validate(
     14. cohort_policy        — a model that declares config.meta.cohort on a column declares it
                                on every column, with one primary cohort and every reference
                                naming a cohort of the same model (ERROR)
+    15. raw_json_calls       — no model, test, snapshot, analysis or YAML expression calls a
+                               JSON function (json_parse, json_query, ...) outside a dispatch
+                               macro (ERROR)
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -1244,6 +1248,7 @@ def validate(
         METRIC_REGISTRY_CHECK,
         PIPE_CONCAT_CHECK,
         COHORT_POLICY_CHECK,
+        RAW_JSON_CALLS_CHECK,
     }
     # Run once over the whole project whatever --model / --changed-only selects.
     global_checks = {
@@ -1254,6 +1259,7 @@ def validate(
         METRIC_REGISTRY_CHECK,
         PIPE_CONCAT_CHECK,
         COHORT_POLICY_CHECK,
+        RAW_JSON_CALLS_CHECK,
     }
     if skip_checks and only_checks:
         console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
@@ -1588,6 +1594,11 @@ def validate(
     # Global because the declarations live in YAML, which --changed-only does not select.
     if COHORT_POLICY_CHECK not in skipped:
         check_cohort_policy(dbt_dir, report)
+
+    # Global like pipe_concat: a call is as wrong in a test or a YAML expression
+    # as in a model, and --changed-only selects neither.
+    if RAW_JSON_CALLS_CHECK not in skipped:
+        check_raw_json_calls(dbt_dir, report)
 
     # Output
     if output_format == "json":
