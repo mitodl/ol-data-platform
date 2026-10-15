@@ -551,6 +551,33 @@ def test_a_hand_written_row_keeps_its_key_and_its_place(
         generate_rows(fixture, unit, _changing(change))
 
 
+def _keyed_by(key_type: str, key: Any) -> dict[str, dict[str, Any]]:
+    pages = TREE_TABLES[PAGE_TREE]
+    return {
+        PAGE_TREE: {
+            **pages,
+            "columns": {**pages["columns"], "id": key_type},
+            "rows": [{**pages["rows"][0], "id": key}],
+        }
+    }
+
+
+def test_a_key_that_equals_its_old_value_and_is_stored_differently_is_a_new_key(tmp_path: Path) -> None:
+    # 1.0 == 1, and a string key stores them as '1.0' and '1'.
+    fixture, unit = _unit(tmp_path, _keyed_by("string", 1))
+
+    with pytest.raises(ValueError, match="hand-written row 1: generate changed primary key column id"):
+        generate_rows(fixture, unit, _changing(lambda rows: rows[0].update(id=1.0)))
+
+
+def test_a_key_stored_as_it_was_is_the_same_key(tmp_path: Path) -> None:
+    fixture, unit = _unit(tmp_path, _keyed_by("long", "1"))
+
+    rows = generate_rows(fixture, unit, _changing(lambda rows: rows[0].update(id=1)))
+
+    assert rows.hand_written[PAGE_TREE][0]["id"] == 1
+
+
 @pytest.mark.parametrize("changed", ["3", 3.0, 0.0])
 def test_a_changed_hand_written_value_is_held_as_its_column_holds_it(tmp_path: Path, changed: Any) -> None:
     fixture, unit = _unit(tmp_path, TREE_TABLES)

@@ -64,7 +64,7 @@ import factory.random
 from factory.declarations import BaseDeclaration
 from mimesis import Field, Locale
 
-from ol_dbt_cli.lib.raw_fixtures import coerce_value, validate_generated
+from ol_dbt_cli.lib.raw_fixtures import coerce_value, stored_key, validate_generated
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -400,7 +400,17 @@ def _check_hand_written(table: TableFixture, rows: list[Row], key_columns: list[
         if unknown := sorted(set(after) - set(table.columns)):
             msg = f"{label} sets {', '.join(unknown)}, which the table does not have"
             raise ValueError(msg)
-        if rekeyed := [column for column in key_columns if after.get(column) != before.get(column)]:
+        # As the table holds them: 1 and 1.0 are equal, and '1' and '1.0' in a string key are not.
+        if rekeyed := [
+            column
+            for column, was, now in zip(
+                key_columns,
+                stored_key(table, before, key_columns, label),
+                stored_key(table, after, key_columns, label),
+                strict=True,
+            )
+            if was != now
+        ]:
             msg = f"{label}: generate changed primary key column {', '.join(rekeyed)}"
             raise ValueError(msg)
         for column, changed in after.items():

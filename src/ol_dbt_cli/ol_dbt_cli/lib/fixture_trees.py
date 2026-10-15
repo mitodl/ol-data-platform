@@ -92,7 +92,8 @@ class Tree:
                     child["url_path"] = f"{parent['url_path']}{child['slug']}/"
             self._hold(child)
         if parent is not None:
-            parent["numchild"] = (parent.get("numchild") or 0) + len(children)
+            # A hand-written count can be a quoted "0", which a long column accepts.
+            parent["numchild"] = int(parent.get("numchild") or 0) + len(children)
         return list(children)
 
     def _step(self, number: int, parent_path: str) -> str:

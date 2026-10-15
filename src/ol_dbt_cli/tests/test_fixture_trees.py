@@ -95,6 +95,16 @@ def test_a_stand_in_for_a_held_page_is_that_page() -> None:
     assert placed["url_path"] == "/home/courses/local-fixtures-i/about/"
 
 
+def test_a_quoted_child_count_is_counted() -> None:
+    # A long column accepts a quoted "1", and the fixture keeps it as written.
+    root = {"path": "0001", "depth": 1, "numchild": "1"}
+    child = {"path": "00010001", "depth": 2, "numchild": 0}
+
+    Tree([root, child]).add([{}], under=root)
+
+    assert root["numchild"] == 2
+
+
 def test_a_root_page_has_the_root_url_path() -> None:
     (root,) = Tree([]).add([{"id": 1, "slug": "root"}])
 
