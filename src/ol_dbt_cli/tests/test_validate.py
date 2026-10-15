@@ -1099,14 +1099,16 @@ class TestChangedOnlyWithNoChangedModel:
     def test_ci_skip_list_still_runs_yaml_integrity_as_json(
         self, repo: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """The changed-models step in dbt PR CI skips five global checks and leaves yaml_integrity on."""
+        """The changed-models step in dbt PR CI skips six global checks and leaves yaml_integrity on."""
         (repo / "src" / "ol_dbt" / "models" / "_models.yml").write_text(
             yaml.safe_dump({"version": 2, "models": [{"name": "model_without_sql"}]})
         )
         with pytest.raises(SystemExit) as exc:
             self._validate(
                 repo,
-                skip_checks="dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat",
+                skip_checks=(
+                    "dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat,cohort_policy"
+                ),
                 output_format="json",
             )
         assert exc.value.code == 1

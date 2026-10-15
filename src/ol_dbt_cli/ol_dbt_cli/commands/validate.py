@@ -27,6 +27,7 @@ from typing import Annotated, cast
 from cyclopts import Parameter
 from rich.console import Console
 
+from ol_dbt_cli.lib.cohort_policy import COHORT_POLICY_CHECK, check_cohort_policy
 from ol_dbt_cli.lib.data_contracts import (
     DATA_CONTRACT_CHECK,
     DEFAULT_CONTRACTS_DIR,
@@ -1019,7 +1020,8 @@ def validate(
             help=(
                 "Comma-separated list of checks to skip: yaml_sql_sync, upstream_refs, dangling_refs, "
                 "broken_ref_columns, docs_coverage, pk_test_coverage, yaml_integrity, select_star, "
-                "dimensional_layering, qa_branch_contract, data_contract, metric_registry, pipe_concat."
+                "dimensional_layering, qa_branch_contract, data_contract, metric_registry, pipe_concat, "
+                "cohort_policy."
             ),
         ),
     ] = None,
@@ -1031,7 +1033,7 @@ def validate(
                 "Comma-separated list of checks to run exclusively (all others are skipped): "
                 "yaml_sql_sync, upstream_refs, dangling_refs, broken_ref_columns, docs_coverage, "
                 "pk_test_coverage, yaml_integrity, select_star, dimensional_layering, qa_branch_contract, "
-                "data_contract, metric_registry, pipe_concat. "
+                "data_contract, metric_registry, pipe_concat, cohort_policy. "
                 "Mutually exclusive with --skip."
             ),
         ),
@@ -1169,6 +1171,9 @@ def validate(
                                columns its implemented_by models still declare and select
     13. pipe_concat          — no model, macro, test or YAML expression uses the || operator,
                                which StarRocks evaluates as a logical OR (ERROR)
+    14. cohort_policy        — a model that declares config.meta.cohort on a column declares it
+                               on every column, with one primary cohort and every reference
+                               naming a cohort of the same model (ERROR)
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -1238,6 +1243,7 @@ def validate(
         DATA_CONTRACT_CHECK,
         METRIC_REGISTRY_CHECK,
         PIPE_CONCAT_CHECK,
+        COHORT_POLICY_CHECK,
     }
     # Run once over the whole project whatever --model / --changed-only selects.
     global_checks = {
@@ -1247,6 +1253,7 @@ def validate(
         DATA_CONTRACT_CHECK,
         METRIC_REGISTRY_CHECK,
         PIPE_CONCAT_CHECK,
+        COHORT_POLICY_CHECK,
     }
     if skip_checks and only_checks:
         console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
@@ -1577,6 +1584,10 @@ def validate(
     # in a model, and --changed-only selects neither.
     if PIPE_CONCAT_CHECK not in skipped:
         check_pipe_concat(dbt_dir, report)
+
+    # Global because the declarations live in YAML, which --changed-only does not select.
+    if COHORT_POLICY_CHECK not in skipped:
+        check_cohort_policy(dbt_dir, report)
 
     # Output
     if output_format == "json":

@@ -17,6 +17,7 @@ dependencies = [
     # Exact: the fixture generator's seeded rows are only the same on one mimesis version.
     "mimesis==22.2.0",
     "mysql-connector-python>=9.1",
+    "pydantic>=2.0",
     "pyyaml>=6.0",
     "rich>=13.0",
     "ruamel.yaml>=0.18",
