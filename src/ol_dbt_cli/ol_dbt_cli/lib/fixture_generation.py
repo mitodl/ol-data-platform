@@ -47,6 +47,7 @@ True)`` raises under a seed).
 
 from __future__ import annotations
 
+import copy
 import datetime
 import math
 import random
@@ -63,7 +64,7 @@ import factory.random
 from factory.declarations import BaseDeclaration
 from mimesis import Field, Locale
 
-from ol_dbt_cli.lib.raw_fixtures import coerce_value, validate_generated
+from ol_dbt_cli.lib.raw_fixtures import coerce_value, stored_key, validate_generated
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -314,9 +315,18 @@ def _reset_iterators(declaration: Any) -> None:
             _reset_iterators(part)
 
 
-def generate_rows(
-    fixture: UnitFixture, unit: Unit, factories: UnitFactories, scale: float = 1.0
-) -> dict[str, list[Row]]:
+@dataclass(frozen=True)
+class GeneratedRows:
+    """What :func:`generate_rows` returns: each raw table's rows to load, in order."""
+
+    #: The fixture file's rows of every table, as ``generate`` left them. A
+    #: tree placement changes a hand-written parent's ``numchild`` here.
+    hand_written: dict[str, list[Row]]
+    #: The rows the package generated, by raw table.
+    generated: dict[str, list[Row]]
+
+
+def generate_rows(fixture: UnitFixture, unit: Unit, factories: UnitFactories, scale: float = 1.0) -> GeneratedRows:
     """Generate a unit's rows: seed, run its factory package, finish and check the rows.
 
     Each row comes back as a hand-written row is held, so it loads the same
@@ -324,21 +334,32 @@ def generate_rows(
     list in a ``string`` column is left for the loader to write as JSON), and
     the loader's own columns are filled where the factory left them out.
 
+    ``generate`` is given copies of the hand-written rows, so the parsed
+    fixture is never changed. It may change a value in one (a treebeard
+    parent's ``numchild``), and not its primary key or how many there are.
+
     :param fixture: The unit's parsed fixture file.
     :param unit: The inventory unit.
     :param factories: The unit's factory package.
     :param scale: Multiplies every factory's ``default_count``.
-    :returns: The generated rows of each raw table, the hand-written ones left out.
-    :rtype: dict[str, list[Row]]
+    :returns: The hand-written rows as ``generate`` left them, and the generated rows.
+    :rtype: GeneratedRows
     :raises ValueError: If ``scale`` is not positive, a value cannot be held by
-        its column, or the rows fail :func:`validate_generated`.
+        its column, ``generate`` added, removed or re-keyed a hand-written row,
+        or the generated rows fail :func:`validate_generated`.
     """
     if not (math.isfinite(scale) and scale > 0):
         msg = f"scale is {scale!r}, expected a positive number"
         raise ValueError(msg)
-    seed_generation(factories.SEED, _sequence_starts(fixture, unit))
-    generated = factories.generate({table.raw_table: table.rows for table in fixture.tables}, scale)
+    key_columns = _key_columns(unit)
+    seed_generation(factories.SEED, _sequence_starts(fixture, key_columns))
+    hand_written = {table.raw_table: copy.deepcopy(table.rows) for table in fixture.tables}
+    generated = factories.generate(types.MappingProxyType(hand_written), scale)
     tables = {table.raw_table: table for table in fixture.tables}
+    for table in fixture.tables:
+        _check_hand_written(
+            table, hand_written[table.raw_table], key_columns.get(table.raw_table, []), f"{unit.key} factories"
+        )
     # A table or column the fixture file does not have is left as it is, for
     # the validator to report.
     finished = {
@@ -351,16 +372,59 @@ def generate_rows(
         for raw_table, rows in generated.items()
     }
     validate_generated(fixture, unit, finished)
-    return finished
+    return GeneratedRows(hand_written=hand_written, generated=finished)
 
 
-def _sequence_starts(fixture: UnitFixture, unit: Unit) -> dict[str, int]:
-    """Return each table's first sequence number: one past the largest hand-written key in an integer column."""
-    key_columns = {
+def _key_columns(unit: Unit) -> dict[str, list[str]]:
+    return {
         table["raw_table"]: [path[0] for path in table["primary_key"]]
         for table in unit.tables
         if table.get("primary_key")
     }
+
+
+def _check_hand_written(table: TableFixture, rows: list[Row], key_columns: list[str], where: str) -> None:
+    """Hold the hand-written rows ``generate`` changed to what the validator assumed of them.
+
+    :func:`validate_generated` compares generated keys with the file's, so a
+    hand-written row keeps its key and stays a row of the file.
+    """
+    if len(rows) != len(table.rows):
+        msg = (
+            f"{where}: generate left {len(rows)} hand-written rows of {table.raw_table}, not the file's "
+            f"{len(table.rows)}; return generated rows, do not add them to hand_written"
+        )
+        raise ValueError(msg)
+    # A key column the file does not declare is validate_generated's to report,
+    # and generate cannot set it without failing the unknown-column check.
+    key_columns = [column for column in key_columns if column in table.columns]
+    for number, (before, after) in enumerate(zip(table.rows, rows, strict=True), start=1):
+        label = f"{where}: {table.raw_table} hand-written row {number}"
+        if unknown := sorted(set(after) - set(table.columns)):
+            msg = f"{label} sets {', '.join(unknown)}, which the table does not have"
+            raise ValueError(msg)
+        # As the table holds them: 1 and 1.0 are equal, and '1' and '1.0' in a string key are not.
+        if rekeyed := [
+            column
+            for column, was, now in zip(
+                key_columns,
+                stored_key(table, before, key_columns, label),
+                stored_key(table, after, key_columns, label),
+                strict=True,
+            )
+            if was != now
+        ]:
+            msg = f"{label}: generate changed primary key column {', '.join(rekeyed)}"
+            raise ValueError(msg)
+        for column, changed in after.items():
+            original = before.get(column)
+            # 0.0 equals 0 and is still not what a long column holds.
+            if changed is not None and (changed != original or type(changed) is not type(original)):
+                after[column] = _coerced(changed, table.columns[column], label, column)
+
+
+def _sequence_starts(fixture: UnitFixture, key_columns: Mapping[str, list[str]]) -> dict[str, int]:
+    """Return each table's first sequence number: one past the largest hand-written key in an integer column."""
     return {
         table.raw_table: 1
         + max(
@@ -380,14 +444,17 @@ def _sequence_starts(fixture: UnitFixture, unit: Unit) -> dict[str, int]:
 def _finished(row: Row, table: TableFixture, label: str) -> Row:
     finished = {**_loader_columns(table), **row}
     for column, fixture_type in table.columns.items():
-        if finished.get(column) is None:
-            continue
-        try:
-            finished[column] = coerce_value(finished[column], fixture_type)
-        except (ValueError, TypeError, ArithmeticError, struct.error) as error:
-            msg = f"{label} has {finished[column]!r} in column {column}, which is not a valid {fixture_type}"
-            raise ValueError(msg) from error
+        if finished.get(column) is not None:
+            finished[column] = _coerced(finished[column], fixture_type, label, column)
     return finished
+
+
+def _coerced(value: Any, fixture_type: str, label: str, column: str) -> Any:
+    try:
+        return coerce_value(value, fixture_type)
+    except (ValueError, TypeError, ArithmeticError, struct.error) as error:
+        msg = f"{label} has {value!r} in column {column}, which is not a valid {fixture_type}"
+        raise ValueError(msg) from error
 
 
 def _loader_columns(table: TableFixture) -> Row:

@@ -126,7 +126,11 @@ class UnitFactories(Protocol):
     def generate(
         self, hand_written: Mapping[str, list[dict[str, Any]]], scale: float
     ) -> dict[str, list[dict[str, Any]]]:
-        """Return the generated rows of each raw table, the hand-written ones left out."""
+        """Return the generated rows of each raw table, the hand-written ones left out.
+
+        ``hand_written`` holds copies. A change to a value in one (a treebeard
+        parent's ``numchild``) is what loads.
+        """
         ...
 
 
@@ -233,7 +237,7 @@ def parse_fixture(path: Path, unit: Unit) -> UnitFixture:
             # A row with no key is NULL there, as any column it leaves out is.
             if not comparable or any(row.get(column) is None for column in key_columns):
                 continue
-            key = _primary_key(table, row, key_columns, label)
+            key = stored_key(table, row, key_columns, label)
             if key in seen:
                 value = ", ".join(f"{column}={row[column]!r}" for column in key_columns)
                 msg = f"{label} repeats the primary key of row {seen[key]}, {value}"
@@ -325,7 +329,7 @@ def validate_generated(fixture: UnitFixture, unit: Unit, generated: Mapping[str,
             msg = f"{where} has primary key column {', '.join(undeclared)}, which {fixture.path} does not declare"
             raise ValueError(msg)
         seen = {
-            _primary_key(table, row, key_columns, f"{where} hand-written row {number}")
+            stored_key(table, row, key_columns, f"{where} hand-written row {number}")
             for number, row in enumerate(table.rows, start=1)
         }
         for number, row in enumerate(rows, start=1):
@@ -337,7 +341,7 @@ def validate_generated(fixture: UnitFixture, unit: Unit, generated: Mapping[str,
             if missing := [column for column in key_columns if row.get(column) is None]:
                 msg = f"{where} generated row {number} has no value for primary key column {', '.join(missing)}"
                 raise ValueError(msg)
-            key = _primary_key(table, row, key_columns, f"{where} generated row {number}")
+            key = stored_key(table, row, key_columns, f"{where} generated row {number}")
             if key in seen:
                 value = ", ".join(f"{column}={row[column]!r}" for column in key_columns)
                 msg = f"{where} generated row {number} repeats primary key {value}"
@@ -345,8 +349,17 @@ def validate_generated(fixture: UnitFixture, unit: Unit, generated: Mapping[str,
             seen.add(key)
 
 
-def _primary_key(table: TableFixture, row: Mapping[str, Any], key_columns: list[str], label: str) -> tuple[Any, ...]:
-    """Return the key of ``row`` as the table will hold it, so `"1"` and `1` in a ``long`` column are one key."""
+def stored_key(table: TableFixture, row: Mapping[str, Any], key_columns: list[str], label: str) -> tuple[Any, ...]:
+    """Return the key of ``row`` as the table will hold it, so `"1"` and `1` in a ``long`` column are one key.
+
+    :param table: The table ``row`` belongs to.
+    :param row: A hand-written or generated row.
+    :param key_columns: The table's primary key columns.
+    :param label: Names the row in an error.
+    :returns: Each key column's value as stored, ``None`` where the row has none.
+    :rtype: tuple[Any, ...]
+    :raises ValueError: If a key column holds a value its type cannot.
+    """
     key = []
     for column in key_columns:
         value, fixture_type = row.get(column), table.columns[column]
