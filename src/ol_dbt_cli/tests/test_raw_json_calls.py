@@ -70,22 +70,50 @@ def test_reports_a_call_passed_to_a_macro_as_sql(dbt_dir: Path) -> None:
     ]
 
 
-def test_does_not_read_macros(dbt_dir: Path) -> None:
-    (dbt_dir / "macros" / "x.sql").write_text("{% macro default__f(c) %}json_parse({{ c }}){% endmacro %}")
-    assert _messages(dbt_dir) == []
+def test_reads_macros_except_the_engine_bodies(dbt_dir: Path) -> None:
+    (dbt_dir / "macros" / "x.sql").write_text(
+        "{% macro f(c) %}{{ return(adapter.dispatch('f')(c)) }}{% endmacro %}\n"
+        "{% macro default__f(c) %}json_parse({{ c }}){% endmacro %}\n"
+        "{% macro duckdb__f(c) %}json_extract_string({{ c }}, '$'){% endmacro %}\n"
+        "{% macro starrocks__f(c) %}json_query(parse_json({{ c }}), '$'){% endmacro %}\n"
+        "{% macro trino__f(c) %}json_format({{ c }}){% endmacro %}\n"
+        "{% macro g(c) %}json_parse({{ c }}){% endmacro %}\n"
+    )
+    assert _messages(dbt_dir) == [
+        "macros/x.sql:6 calls json_parse() directly; use a macro: "
+        "json_strict_value, json_extract_json_array, json_parse_nested_varchar_array or unnest_json_array"
+    ]
 
 
-def test_reads_tests_and_yaml_expressions(dbt_dir: Path) -> None:
-    (dbt_dir / "tests").mkdir()
+def test_reports_the_line_of_a_call_in_a_multiline_jinja_string(dbt_dir: Path) -> None:
+    (dbt_dir / "models" / "m.sql").write_text(
+        '{{ config(\n    post_hook="update {{ this }}\n    set v = json_format(x)"\n) }}\nselect 1'
+    )
+    assert _messages(dbt_dir) == [
+        "models/m.sql:3 calls json_format() directly; use a macro: json_to_varchar or array_to_json_string"
+    ]
+
+
+def test_reads_tests_snapshots_analyses_and_yaml_expressions(dbt_dir: Path) -> None:
+    for name in ("tests", "snapshots", "analyses", "seeds"):
+        (dbt_dir / name).mkdir()
     (dbt_dir / "tests" / "t.sql").write_text("select * from t where json_format(x) = '[]'")
+    (dbt_dir / "snapshots" / "s.sql").write_text("select json_size(x, '$') from t")
+    (dbt_dir / "analyses" / "a.sql").write_text("select json_value(x, 'lax $.a') from t")
+    (dbt_dir / "seeds" / "_s.yml").write_text("seeds: [{name: s, data_tests: [{t: {expression: 'json_exists(x)'}}]}]\n")
+    (dbt_dir / "dbt_project.yml").write_text("on-run-end: ['select json_array_get(x, 0)']\n")
     (dbt_dir / "models" / "_m.yml").write_text(
         "models: [{name: m, description: 'json_parse(x) is not called', "
         "data_tests: [{t: {expression: 'json_extract(x, ''$.a'') is not null'}}]}]\n"
     )
     assert _messages(dbt_dir) == [
+        "analyses/a.sql:1 calls json_value() directly",
+        "snapshots/s.sql:1 calls json_size() directly",
         "tests/t.sql:1 calls json_format() directly; use a macro: json_to_varchar or array_to_json_string",
+        "dbt_project.yml calls json_array_get() directly in on-run-end[0]",
         "models/_m.yml calls json_extract() directly in models[0].data_tests[0].t.expression; "
         "use a macro: json_strict_value, json_extract_json_array or json_extract_value",
+        "seeds/_s.yml calls json_exists() directly in seeds[0].data_tests[0].t.expression",
     ]
 
 

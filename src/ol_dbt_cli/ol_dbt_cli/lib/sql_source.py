@@ -32,6 +32,11 @@ _TOKEN = re.compile(
 )
 _JINJA_STRING = re.compile(r"""'(?P<single>(?:[^'\\]|\\.)*)'|"(?P<double>(?:[^"\\]|\\.)*)\"""")
 _NOT_NEWLINE = re.compile(r"[^\n]")
+_JINJA_COMMENT = re.compile(r"\{#.*?#\}", re.DOTALL)
+_MACRO = re.compile(
+    r"\{%-?\s*macro\s+(?P<name>\w+)\s*\(.*?%\}(?P<body>.*?)\{%-?\s*endmacro\b[^%]*%\}",
+    re.DOTALL,
+)
 # YAML keys whose values are prose or fixture data, never SQL.
 _NON_SQL_KEYS = frozenset({"description", "rows", "meta", "tags"})
 
@@ -58,6 +63,18 @@ def sql_code(source: str) -> str:
                 string_start, string_end = string.span(group)
                 chars[start + string_start : start + string_end] = sql_code(string.group(group))
     return "".join(chars)
+
+
+def macro_declarations(source: str) -> Iterator[re.Match[str]]:
+    """Find the macros *source* defines. A macro inside a Jinja comment defines nothing.
+
+    The comments are blanked rather than removed so offsets still index *source*.
+
+    :param source: The text of a SQL file.
+    :returns: A match per macro, with ``name`` and ``body`` groups.
+    :rtype: Iterator[re.Match[str]]
+    """
+    return _MACRO.finditer(_JINJA_COMMENT.sub(lambda m: _NOT_NEWLINE.sub(" ", m.group()), source))
 
 
 def yaml_sql_strings(node: Any, path: str = "") -> Iterator[tuple[str, str]]:

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from ol_dbt_cli.lib.sql_source import sql_code, yaml_sql_strings
+from ol_dbt_cli.lib.sql_source import macro_declarations, sql_code, yaml_sql_strings
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
 if TYPE_CHECKING:
@@ -38,31 +38,17 @@ _DETAIL = (
     "Concatenate strings with {{ dbt.concat([a, b]) }}; append to an array with a dispatched macro."
 )
 
-_JINJA_COMMENT = re.compile(r"\{#.*?#\}", re.DOTALL)
 _PIPES = re.compile(r"\|\|")
-_MACRO = re.compile(
-    r"\{%-?\s*macro\s+(?P<name>\w+)\s*\(.*?%\}(?P<body>.*?)\{%-?\s*endmacro\b[^%]*%\}",
-    re.DOTALL,
-)
 
 
 def _pipe_offsets(sql: str) -> Iterator[int]:
     return (match.start() for match in _PIPES.finditer(sql_code(sql)))
 
 
-def _macro_declarations(source: str) -> Iterator[re.Match[str]]:
-    """Find the macros *source* defines. A macro inside a Jinja comment defines nothing.
-
-    The comments are blanked rather than removed so offsets still index *source*.
-    """
-    blanked = _JINJA_COMMENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group()), source)
-    return _MACRO.finditer(blanked)
-
-
 def _other_engine_spans(source: str, starrocks_macros: frozenset[str]) -> list[tuple[int, int]]:
     """Spans of the macro bodies in *source* that StarRocks never renders."""
     spans = []
-    for match in _macro_declarations(source):
+    for match in macro_declarations(source):
         name = match.group("name")
         other_engine = name.startswith(_OTHER_ENGINE_PREFIXES) or (
             name.startswith("default__") and name.removeprefix("default__") in starrocks_macros
@@ -89,7 +75,7 @@ def check_pipe_concat(dbt_dir: Path, report: ValidationReport) -> None:
     starrocks_macros = frozenset(
         match.group("name").removeprefix("starrocks__")
         for source in sources.values()
-        for match in _macro_declarations(source)
+        for match in macro_declarations(source)
         if match.group("name").startswith("starrocks__")
     )
 

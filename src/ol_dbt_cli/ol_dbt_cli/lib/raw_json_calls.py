@@ -10,8 +10,9 @@ models; nothing kept them out while that was under way, and raw
 ``json_extract_scalar`` calls went from 14 to 22 between July and September 2026.
 
 Like ``pipe_concat`` the check reads source files, not compiled SQL, because PR
-CI compiles for DuckDB only. ``macros/`` is not read: the engine bodies are
-where these calls belong.
+CI compiles for DuckDB only. The body of a macro named for an engine
+(``default__x``, ``duckdb__x``, ``starrocks__x``, ``trino__x``) is exempt: that
+is where these calls belong. The rest of ``macros/`` is read like a model.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from ol_dbt_cli.lib.sql_source import sql_code, yaml_sql_strings
+from ol_dbt_cli.lib.sql_source import macro_declarations, sql_code, yaml_sql_strings
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
 if TYPE_CHECKING:
@@ -30,15 +31,19 @@ if TYPE_CHECKING:
 
 RAW_JSON_CALLS_CHECK = "raw_json_calls"
 
-_SQL_DIRS = ("models", "tests", "snapshots", "analyses")
+_SQL_DIRS = ("models", "macros", "tests", "snapshots", "analyses")
 _YAML_DIRS = (*_SQL_DIRS, "seeds")
+_ENGINE_PREFIXES = ("default__", "duckdb__", "starrocks__", "trino__")
 _CALL = re.compile(r"(?<!\w)(?P<name>json_\w+|is_json_scalar)\s*\(", re.IGNORECASE)
 # The macros that replace the calls the conversions met. Any other JSON function
 # gets the generic advice.
 _MACROS = {
     "json_parse": "json_strict_value, json_extract_json_array, json_parse_nested_varchar_array or unnest_json_array",
     "json_extract": "json_strict_value, json_extract_json_array or json_extract_value",
-    "json_extract_scalar": "json_extract_scalar, or json_strict_value to keep raising on malformed JSON",
+    "json_extract_scalar": (
+        "json_extract_scalar (as {{ json_extract_scalar(col, path) }}), "
+        "or json_strict_value to keep raising on malformed JSON"
+    ),
     "json_query": "json_query_string, json_path_values or json_array_field_values",
     "json_format": "json_to_varchar or array_to_json_string",
     "json_object": "json_object_pair or json_object_from_pairs",
@@ -53,13 +58,19 @@ def _calls(sql: str) -> Iterator[re.Match[str]]:
     return _CALL.finditer(sql_code(sql))
 
 
+def _engine_spans(source: str) -> list[tuple[int, int]]:
+    return [
+        match.span("body") for match in macro_declarations(source) if match.group("name").startswith(_ENGINE_PREFIXES)
+    ]
+
+
 def _advice(name: str) -> str:
     macros = _MACROS.get(name.lower())
     return f"; use a macro: {macros}" if macros else ""
 
 
 def check_raw_json_calls(dbt_dir: Path, report: ValidationReport) -> None:
-    """Report every JSON function called directly in the project's SQL and YAML outside ``macros/``.
+    """Report every JSON function called directly in the project's SQL and YAML outside an engine body.
 
     :param dbt_dir: The dbt project directory.
     :param report: The report to add an ERROR to for each call.
@@ -74,7 +85,10 @@ def check_raw_json_calls(dbt_dir: Path, report: ValidationReport) -> None:
 
     for path in sql_files:
         source = path.read_text()
+        exempt = _engine_spans(source)
         for call in _calls(source):
+            if any(start <= call.start() < end for start, end in exempt):
+                continue
             name = call.group("name")
             line = source.count("\n", 0, call.start()) + 1
             report.add(
