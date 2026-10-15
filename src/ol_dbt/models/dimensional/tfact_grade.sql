@@ -54,12 +54,30 @@ with mitxonline_grades as (
     from {{ ref('int__edxorg__mitx_courserun_grades') }}
 )
 
+, residential_grades as (
+    select
+        cast(courserungrade_id as varchar) as grade_id
+        , user_id
+        , courserun_readable_id
+        , courserungrade_grade as grade_value
+        , courserungrade_letter_grade as letter_grade
+        -- residential has no passing flag; a non-empty letter grade means passed, as in
+        -- int__combined__courserun_enrollments
+        , coalesce(courserungrade_letter_grade != '', false) as is_passing
+        , courserungrade_created_on as grade_created_on
+        , courserungrade_updated_on as grade_updated_on
+        , 'residential' as platform
+    from {{ ref('int__mitxresidential__courserun_grades') }}
+)
+
 , combined_grades as (
     select * from mitxonline_grades
     union all
     select * from mitxpro_grades
     union all
     select * from edxorg_grades
+    union all
+    select * from residential_grades
 )
 
 , user_lookup as (
@@ -68,6 +86,7 @@ with mitxonline_grades as (
         , mitxonline_application_user_id
         , mitxpro_application_user_id
         , edxorg_openedx_user_id
+        , residential_openedx_user_id
     from {{ ref('dim_user') }}
     where user_pk is not null
 )
@@ -95,6 +114,9 @@ with mitxonline_grades as (
             end,
             case when combined_grades.platform = 'edxorg'
                 then ul_edxorg.user_pk
+            end,
+            case when combined_grades.platform = 'residential'
+                then ul_residential.user_pk
             end
         ) as user_fk
         , dim_course_run.courserun_pk as courserun_fk
@@ -110,6 +132,9 @@ with mitxonline_grades as (
     left join user_lookup as ul_edxorg
         on combined_grades.platform = 'edxorg'
         and combined_grades.user_id = ul_edxorg.edxorg_openedx_user_id
+    left join user_lookup as ul_residential
+        on combined_grades.platform = 'residential'
+        and combined_grades.user_id = ul_residential.residential_openedx_user_id
     left join dim_course_run
         on combined_grades.courserun_readable_id = dim_course_run.courserun_readable_id
         and combined_grades.platform = dim_course_run.platform
