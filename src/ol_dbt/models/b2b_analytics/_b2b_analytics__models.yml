@@ -8,8 +8,10 @@
 # Every column also declares config.meta.cohort: what a consumer that publishes
 # these rows under a k-anonymity floor has to do with it. ol-analytics-api
 # declares the same thing per response model as a CohortPolicy
-# (tenants/b2b_dashboard/models.py). Nothing compares the two yet; where they
-# differ, the declaration here is the one checked against this SQL.
+# (tenants/b2b_dashboard/models.py). `ol-dbt exposures export` copies these
+# declarations, with the column lists, to exposures/ol_analytics_api_b2b_dashboard.json
+# for the API to check its CohortPolicy against; regenerate it after a change here.
+# Where the two differ, the declaration here is the one checked against this SQL.
 #   role: primary     the row's headline cohort; the row is withheld under the floor
 #   role: secondary   another distinct-learner count, withheld on its own under the
 #                     floor. contained_in names the cohort it is a subset of, so the

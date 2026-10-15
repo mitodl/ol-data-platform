@@ -6,6 +6,7 @@ import cyclopts
 
 from ol_dbt_cli.commands.contracts import contracts_app
 from ol_dbt_cli.commands.diff import diff
+from ol_dbt_cli.commands.exposures import exposures_app
 from ol_dbt_cli.commands.fixtures import fixtures_app
 from ol_dbt_cli.commands.generate import generate_app
 from ol_dbt_cli.commands.impact import impact
@@ -84,6 +85,7 @@ app.command(fixtures_app)
 app.command(ingest_app)
 app.command(contracts_app)
 app.command(metrics_app)
+app.command(exposures_app)
 app.command(impact, name="impact")
 app.command(validate, name="validate")
 app.command(diff, name="diff")

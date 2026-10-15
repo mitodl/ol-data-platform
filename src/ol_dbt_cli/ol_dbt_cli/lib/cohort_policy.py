@@ -72,7 +72,7 @@ class ColumnCohort(BaseModel):
         return self
 
 
-def _column_cohort(column: Mapping[str, Any]) -> Any:
+def column_cohort(column: Mapping[str, Any]) -> Any:
     """Return a column's cohort block from ``config.meta`` or the older column-level ``meta``.
 
     dbt copies either spelling into the manifest, so a declaration under the older
@@ -101,7 +101,7 @@ def _model_issues(columns: Sequence[Mapping[str, Any]]) -> list[str]:
     cohorts: dict[str, ColumnCohort] = {}
     for column in columns:
         name = str(column.get("name", "<unnamed column>"))
-        raw = _column_cohort(column)
+        raw = column_cohort(column)
         if raw is None:
             issues.append(f"{name} declares no config.meta.cohort")
             continue
@@ -157,7 +157,7 @@ def check_cohort_policy(dbt_dir: Path, report: ValidationReport) -> None:
             if not isinstance(model, dict):
                 continue
             columns = [column for column in model.get("columns") or [] if isinstance(column, dict)]
-            if not any(_column_cohort(column) is not None for column in columns):
+            if not any(column_cohort(column) is not None for column in columns):
                 continue
             for message in _model_issues(columns):
                 report.add(

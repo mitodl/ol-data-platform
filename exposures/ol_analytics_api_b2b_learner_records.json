@@ -1,0 +1,90 @@
+{
+  "generated_by": "ol-dbt exposures export",
+  "exposure": "ol_analytics_api_b2b_learner_records",
+  "models": {
+    "mv_b2b_learner_enrollment": {
+      "columns": [
+        {"name": "organization_key"},
+        {"name": "sso_organization_id"},
+        {"name": "organization_name"},
+        {"name": "contract_pk"},
+        {"name": "contract_id"},
+        {"name": "b2b_contract_name"},
+        {"name": "courserun_pk"},
+        {"name": "courserun_readable_id"},
+        {"name": "courserun_title"},
+        {"name": "courserun_start_on"},
+        {"name": "courserun_end_on"},
+        {"name": "user_pk"},
+        {"name": "user_global_id"},
+        {"name": "email"},
+        {"name": "full_name"},
+        {"name": "enrollment_created_on"},
+        {"name": "enrollment_is_active"},
+        {"name": "enrollment_mode"},
+        {"name": "enrollment_status"},
+        {"name": "is_passing"},
+        {"name": "grade_value"},
+        {"name": "letter_grade"},
+        {"name": "certificate_issued_on"},
+        {"name": "certificate_is_revoked"},
+        {"name": "last_active_on"},
+        {"name": "completion_status"},
+        {"name": "is_certified"},
+        {"name": "is_in_progress"},
+        {"name": "is_not_started"},
+        {"name": "needs_attention_since"},
+        {"name": "days_active"},
+        {"name": "videos_played"},
+        {"name": "problems_attempted"},
+        {"name": "chatbot_interactions"},
+        {"name": "outcomes_shared"},
+        {"name": "outcomes_consent_on"},
+        {"name": "record_updated_on"}
+      ]
+    },
+    "mv_b2b_learner": {
+      "columns": [
+        {"name": "organization_key"},
+        {"name": "sso_organization_id"},
+        {"name": "organization_name"},
+        {"name": "user_pk"},
+        {"name": "user_global_id"},
+        {"name": "email"},
+        {"name": "full_name"},
+        {"name": "membership_source"},
+        {"name": "is_organization_manager"},
+        {"name": "first_enrolled_on"},
+        {"name": "last_enrolled_on"},
+        {"name": "courses_enrolled"},
+        {"name": "courses_passed"},
+        {"name": "courses_certified"},
+        {"name": "program_certificates_earned"},
+        {"name": "last_active_on"},
+        {"name": "courses_in_progress"},
+        {"name": "outcomes_shared"},
+        {"name": "outcomes_consent_on"},
+        {"name": "record_updated_on"}
+      ]
+    },
+    "mv_b2b_contract_courserun": {
+      "columns": [
+        {"name": "organization_key"},
+        {"name": "sso_organization_id"},
+        {"name": "organization_name"},
+        {"name": "contract_pk"},
+        {"name": "contract_id"},
+        {"name": "b2b_contract_name"},
+        {"name": "b2b_contract_is_active"},
+        {"name": "b2b_contract_start_date"},
+        {"name": "b2b_contract_end_date"},
+        {"name": "seat_limit"},
+        {"name": "courserun_pk"},
+        {"name": "courserun_readable_id"},
+        {"name": "courserun_title"},
+        {"name": "courserun_start_on"},
+        {"name": "courserun_end_on"}
+      ]
+    }
+  }
+}

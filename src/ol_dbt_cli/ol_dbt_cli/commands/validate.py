@@ -44,6 +44,11 @@ from ol_dbt_cli.lib.dimensional_layering import (
     load_baseline,
     write_baseline,
 )
+from ol_dbt_cli.lib.exposure_contracts import (
+    DEFAULT_EXPOSURES_DIR,
+    EXPOSURE_CONTRACT_CHECK,
+    check_exposure_contracts,
+)
 from ol_dbt_cli.lib.git_utils import (
     get_changed_macro_files,
     get_changed_sql_models,
@@ -1022,7 +1027,7 @@ def validate(
                 "Comma-separated list of checks to skip: yaml_sql_sync, upstream_refs, dangling_refs, "
                 "broken_ref_columns, docs_coverage, pk_test_coverage, yaml_integrity, select_star, "
                 "dimensional_layering, qa_branch_contract, data_contract, metric_registry, pipe_concat, "
-                "cohort_policy, raw_json_calls."
+                "cohort_policy, raw_json_calls, exposure_contract."
             ),
         ),
     ] = None,
@@ -1034,7 +1039,7 @@ def validate(
                 "Comma-separated list of checks to run exclusively (all others are skipped): "
                 "yaml_sql_sync, upstream_refs, dangling_refs, broken_ref_columns, docs_coverage, "
                 "pk_test_coverage, yaml_integrity, select_star, dimensional_layering, qa_branch_contract, "
-                "data_contract, metric_registry, pipe_concat, cohort_policy, raw_json_calls. "
+                "data_contract, metric_registry, pipe_concat, cohort_policy, raw_json_calls, exposure_contract. "
                 "Mutually exclusive with --skip."
             ),
         ),
@@ -1121,6 +1126,16 @@ def validate(
             ),
         ),
     ] = None,
+    exposures_dir_path: Annotated[
+        str | None,
+        Parameter(
+            name=["--exposures-dir"],
+            help=(
+                "Exposure contract files directory for the exposure_contract check. "
+                "Defaults to <repo>/exposures, where <repo> is two levels above --dbt-dir."
+            ),
+        ),
+    ] = None,
     update_baseline: Annotated[
         bool,
         Parameter(
@@ -1178,6 +1193,9 @@ def validate(
     15. raw_json_calls       — no model, test, snapshot, analysis or YAML expression calls a
                                JSON function (json_parse, json_query, ...) outside a dispatch
                                macro (ERROR)
+    16. exposure_contract    — exposures/<name>.json of every application exposure matches the
+                               columns and cohort declarations of the models it depends on;
+                               regenerate with `ol-dbt exposures export` (ERROR)
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -1249,6 +1267,7 @@ def validate(
         PIPE_CONCAT_CHECK,
         COHORT_POLICY_CHECK,
         RAW_JSON_CALLS_CHECK,
+        EXPOSURE_CONTRACT_CHECK,
     }
     # Run once over the whole project whatever --model / --changed-only selects.
     global_checks = {
@@ -1260,6 +1279,7 @@ def validate(
         PIPE_CONCAT_CHECK,
         COHORT_POLICY_CHECK,
         RAW_JSON_CALLS_CHECK,
+        EXPOSURE_CONTRACT_CHECK,
     }
     if skip_checks and only_checks:
         console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
@@ -1599,6 +1619,13 @@ def validate(
     # as in a model, and --changed-only selects neither.
     if RAW_JSON_CALLS_CHECK not in skipped:
         check_raw_json_calls(dbt_dir, report)
+
+    # Global because the files are generated from YAML, which --changed-only does not select.
+    if EXPOSURE_CONTRACT_CHECK not in skipped:
+        exposures_dir = (
+            Path(exposures_dir_path).resolve() if exposures_dir_path else dbt_dir.parents[1] / DEFAULT_EXPOSURES_DIR
+        )
+        check_exposure_contracts(dbt_dir, exposures_dir, report)
 
     # Output
     if output_format == "json":
