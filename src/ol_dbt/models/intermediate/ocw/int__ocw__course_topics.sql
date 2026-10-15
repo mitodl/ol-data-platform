@@ -8,5 +8,5 @@ select distinct -- a few courses have duplicated topic, subtopic and speciality 
     , {{ element_at_array('course_topic', 2) }} as course_subtopic -- noqa
     , {{ element_at_array('course_topic', 3) }} as course_speciality -- noqa
 from websitecontents
-cross join unnest(cast(json_parse(course_topics) as array(array(varchar)))) as t(course_topic) -- noqa
+cross join unnest({{ json_parse_nested_varchar_array('course_topics') }}) as t(course_topic) -- noqa
 where websitecontents.websitecontent_type = 'sitemetadata'

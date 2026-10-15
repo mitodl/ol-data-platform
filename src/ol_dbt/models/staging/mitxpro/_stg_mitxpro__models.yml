@@ -1970,6 +1970,7 @@ models:
     description: json, json of the course or program faculty, contains name and description
     tests:
     - not_null
+    - json_array
 
 - name: stg__mitxpro__openedx__mysql__auth_user
   description: xPro open edX users

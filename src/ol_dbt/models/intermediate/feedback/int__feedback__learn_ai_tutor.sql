@@ -35,7 +35,7 @@ with chatbot as (
 , tutorbot as (
     select
         *
-        , json_parse({{ json_extract_scalar('tutorbot_chat_json', "'$'") }}) as chat_json
+        , {{ json_extract_scalar('tutorbot_chat_json', "'$'") }} as chat_json
     from {{ ref('int__learn_ai__tutorbot') }}
 )
 
@@ -57,7 +57,7 @@ with chatbot as (
         end as human_message
     from tutorbot
     cross join
-        unnest(cast(json_extract(tutorbot.chat_json, '$.chat_history') as array<json>))  -- noqa: PRS
+        unnest({{ json_extract_json_array('tutorbot.chat_json', "'$.chat_history'") }})  -- noqa: PRS
         with ordinality as t(element, idx)
 )
 

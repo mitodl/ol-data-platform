@@ -22,18 +22,9 @@ with source as (
         , state
         , created_at
         , last_modified
-        , cast(
-            json_extract(
-                cast(
-                    json_extract(
-                        cast(
-                            json_extract(json_parse(message), '$.outputGroupDetails[0]')
-                            as json
-                        ), '$.outputDetails[0]'
-                    ) as json
-                ), '$.durationInMs'
-            ) as decimal(38, 4)
-        ) / 1000.0 as video_duration
+        , {{ json_strict_value(
+            'message', "'$.outputGroupDetails[0].outputDetails[0].durationInMs'", 'decimal(38, 4)'
+        ) }} / 1000.0 as video_duration
     from {{ source('ol_warehouse_raw_data', 'raw__ovs__postgres__ui_encodejob') }}
 
 )

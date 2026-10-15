@@ -25,9 +25,7 @@ with ticket as (  -- noqa: PRS
 , followers as (
     select
       ticket.ticket_id,
-      json_format(
-        cast(array_agg(users.user_name) AS json)
-      ) as followers
+      {{ array_to_json_string('array_agg(users.user_name)') }} as followers
     from ticket
     cross join unnest(ticket.ticket_follower_user_ids) AS t(user_id)
     join users on t.user_id = users.user_id
@@ -37,39 +35,30 @@ with ticket as (  -- noqa: PRS
 , collaborators as (
     select
       ticket.ticket_id,
-      json_format(
-        cast(array_agg(users.user_name) AS json)
-      ) as collaborators
+      {{ array_to_json_string('array_agg(users.user_name)') }} as collaborators
     from ticket
     cross join unnest(ticket.ticket_collaborator_user_ids) AS t(user_id)
     join users on t.user_id = users.user_id
     group by ticket.ticket_id
 )
 
-, named_custom_fields as (
+, custom_field_values as (
     select
       ticket.ticket_id
-      , json_format(
-         cast(
-          array_agg(
-            json_parse(
-              json_object(
-                field.field_title : u.value
-              )
-            )
-          ) as json
-        )
-      ) as custom_fields
+      , {{ json_strict_value('t.json_str', "'$.id'", 'bigint') }} as id
+      , {{ json_strict_value('t.json_str', "'$.value'") }} as value
     from ticket
     cross join unnest(ticket.ticket_custom_fields) AS t(json_str)
-    cross join unnest(
-      array[
-        cast(json_parse(t.json_str) AS row(id bigint, value varchar))  -- noqa: PRS,RF02
-      ]
-    ) as u(id, value)
+)
+
+, named_custom_fields as (
+    select
+      u.ticket_id
+      , {{ array_to_json_string("array_agg(" ~ json_object_pair('field.field_title', 'u.value') ~ ")") }} as custom_fields
+    from custom_field_values as u
     join field on u.id = field.field_id
     where u.value is not null
-    group by ticket.ticket_id
+    group by u.ticket_id
 )
 
 
