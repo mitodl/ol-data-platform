@@ -133,6 +133,24 @@ MODELS: dict[str, Any] = {
         },
         "users_user": {"model": "users.User", "managed": True, "columns": {"id": _key()}},
         "courses_program": {"model": "courses.Program", "managed": True, "columns": {"id": _key()}},
+        "cms_widget": {
+            "model": "cms.Widget",
+            "managed": True,
+            "columns": {
+                "id": _key(),
+                # Columns named as the helpers later columns call.
+                "value": _column("CharField", max_length=50),
+                "title": _column("CharField", max_length=100),
+                "url": {**_column("CharField", max_length=200), "field": "URLField"},
+                "video_url": {**_column("CharField", max_length=200), "field": "URLField"},
+                "factory": _column("CharField", max_length=20),
+                # Classes Django reports as CharField, with names that hint at nothing.
+                "homepage": {**_column("CharField", max_length=200), "field": "URLField"},
+                "contact": {**_column("CharField", max_length=254), "field": "EmailField"},
+                "code": _column("CharField", unique=True, max_length=4),
+                "ref": _column("CharField", unique=True, max_length=8),
+            },
+        },
         "users_token": {
             "model": "users.Token",
             "managed": True,
@@ -193,6 +211,21 @@ FIXTURE_TABLES: dict[str, tuple[str, dict[str, str]]] = {
     "ecommerce_product": ("id", {"id": "long", "content_type_id": "long", "object_id": "long"}),
     "things_unmodeled": ("id", {"id": "long", "note": "string", "amount": "decimal(10,2)"}),
     "courses_program": ("id", {"id": "long"}),
+    "cms_widget": (
+        "id",
+        {
+            "id": "long",
+            "value": "string",
+            "title": "string",
+            "url": "string",
+            "video_url": "string",
+            "factory": "string",
+            "homepage": "string",
+            "contact": "string",
+            "code": "string",
+            "ref": "string",
+        },
+    ),
     "users_token": ("key", {"key": "string", "class": "string", "owner": "long"}),
 }
 
@@ -232,7 +265,7 @@ def _unit(tmp_path: Path, keys: Mapping[str, str] | None = None) -> tuple[UnitFi
 
 
 def _class_body(source: str, name: str) -> str:
-    start = source.index(f"class {name}(RowFactory):")
+    start = source.index(f"class {name}(fg.RowFactory):")
     end = source.find("\n\n\n", start)
     return source[start : end if end != -1 else None]
 
@@ -248,18 +281,18 @@ def test_each_column_gets_what_its_model_says(scaffolded: str) -> None:
 
     assert "id = factory.Sequence(lambda n: n)" in course
     assert 'readable_id = factory.Sequence(lambda n: f"readable-{n}")' in course
-    assert 'title = value("text.title")' in course
-    assert 'contact_email = value("person.email")' in course
-    assert 'live = value("development.boolean")' in course
-    assert 'price = value("numeric.decimal_number", start=0, end=99999)' in course
-    assert 'created_on = value("datetime.datetime", start=2020, end=2025)' in course
-    assert 'start_date = or_null(value("datetime.date", start=2020, end=2025))' in course
+    assert 'title = fg.value("text.title")' in course
+    assert 'contact_email = fg.value("person.email")' in course
+    assert 'live = fg.value("development.boolean")' in course
+    assert 'price = fg.value("numeric.decimal_number", start=0, end=99999)' in course
+    assert 'created_on = fg.value("datetime.datetime", start=2020, end=2025)' in course
+    assert 'start_date = fg.or_null(fg.value("datetime.date", start=2020, end=2025))' in course
     # The blank None choice is the column's NULL.
     assert 'kind = factory.Iterator(["online", "hybrid"])' in course
-    assert 'external_uuid = value("cryptographic.uuid")' in course
-    assert 'platform_id = parent("platform", "id")' in course
+    assert 'external_uuid = fg.value("cryptographic.uuid")' in course
+    assert 'platform_id = fg.parent("platform", "id")' in course
     # Not a column of the model, so drawn by its fixture type.
-    assert 'legacy_code = value("text.word")' in course
+    assert 'legacy_code = fg.value("text.word")' in course
     assert "_airbyte_raw_id" not in course
 
 
@@ -287,26 +320,38 @@ def test_nullable_unique_and_case_rules(scaffolded: str) -> None:
     token = _class_body(scaffolded, "TokenBase")
 
     # A nullable foreign key into the fixture is NULL when generate() passes no parent.
-    assert 'program_id = parent("program", "id", nullable=True)' in course
-    assert 'login_email = factory.Sequence(lambda n: f"user{n}@{RESERVED_DOMAIN}")' in course
-    assert "homepage_url = url()" in course
-    assert 'level = or_null(factory.Iterator(["intro", "advanced"]))' in course
+    assert 'program_id = fg.parent("program", "id", nullable=True)' in course
+    assert 'login_email = factory.Sequence(lambda n: f"user{n}@{fg.RESERVED_DOMAIN}")' in course
+    assert "homepage_url = fg.url()" in course
+    assert 'level = fg.or_null(factory.Iterator(["intro", "advanced"]))' in course
     assert "rank = factory.Sequence(lambda n: n)" in course
     # The model's CEUs, matched without case, and drawn to fit decimal(5,2).
-    assert 'ceus = or_null(value("numeric.decimal_number", start=0, end=999))' in course
+    assert 'ceus = fg.or_null(fg.value("numeric.decimal_number", start=0, end=999))' in course
     # Too short for a word.
-    assert 'hours = value("numeric.integer_number", start=0, end=9999)' in course
+    assert 'hours = fg.value("numeric.integer_number", start=0, end=9999)' in course
     assert "_dlt_id" not in course
-    for name in ("RESERVED_DOMAIN", "url"):
-        assert name in scaffolded.split("\n\n\n")[0]
-    assert 'key = value("cryptographic.uuid")' in token
+    assert "from ol_dbt_cli.lib import fixture_generation as fg" in scaffolded
+    assert 'key = fg.value("cryptographic.uuid")' in token
     assert "# class: a Python keyword" in token
-    assert 'owner = parent("owner_row", "id")' in token
+    assert 'owner = fg.parent("owner_row", "id")' in token
     assert "owner_row = None" in token
-    assert 'amount = value("numeric.decimal_number", start=0, end=99999999)' not in scaffolded
-    assert 'amount = value("numeric.decimal_number", start=0, end=999999)' in _class_body(
+    assert 'amount = fg.value("numeric.decimal_number", start=0, end=99999999)' not in scaffolded
+    assert 'amount = fg.value("numeric.decimal_number", start=0, end=999999)' in _class_body(
         scaffolded, "ThingsUnmodeledBase"
     )
+
+
+def test_field_classes_and_short_unique_text(scaffolded: str) -> None:
+    widget = _class_body(scaffolded, "WidgetBase")
+
+    assert "homepage = fg.url()" in widget
+    assert 'contact = fg.value("person.email")' in widget
+    assert "url = fg.url()" in widget
+    assert "# factory: a Python keyword or a name this module uses" in widget
+    assert "# code: unique, and 4 characters hold too few distinct values to generate" in widget
+    assert "    code =" not in widget
+    # Too short for "ref-" and six digits, so the digits alone.
+    assert "ref = factory.Sequence(str)" in widget
 
 
 def test_long_names_come_out_as_ruff_formats_and_checks_them(tmp_path: Path) -> None:
@@ -335,8 +380,8 @@ def test_long_names_come_out_as_ruff_formats_and_checks_them(tmp_path: Path) -> 
         fixture, unit, {**MODELS, "tables": tables, "app": "mit-learn-application-with-a-long-name"}
     ).source
     # Each kind of line that has to be broken up was.
-    assert "@table(\n" in source
-    assert f"{long_parent}_id = parent(\n" in source
+    assert "@fg.table(\n" in source
+    assert f"{long_parent}_id = fg.parent(\n" in source
     assert '    """Table learning_resources' in source
     path = tmp_path / "_generated.py"
     path.write_text(source)
@@ -358,9 +403,9 @@ def test_long_names_come_out_as_ruff_formats_and_checks_them(tmp_path: Path) -> 
 def test_a_key_that_is_a_foreign_key_copies_its_parent(scaffolded: str) -> None:
     page = _class_body(scaffolded, "CoursePageBase")
 
-    assert 'page_ptr_id = parent("page_ptr", "id")' in page
+    assert 'page_ptr_id = fg.parent("page_ptr", "id")' in page
     assert "# page_ptr_id: one-to-one with wagtailcore_page; draw its parents with pair()." in page
-    assert 'course_id = parent("course", "id")' in page
+    assert 'course_id = fg.parent("course", "id")' in page
 
 
 def test_a_table_with_no_model_counts_its_key_on_the_sequence(tmp_path: Path) -> None:
@@ -370,7 +415,7 @@ def test_a_table_with_no_model_counts_its_key_on_the_sequence(tmp_path: Path) ->
 
     unmodeled = _class_body(result.source, "ThingsUnmodeledBase")
     assert "id = factory.Sequence(lambda n: n)" in unmodeled
-    assert 'note = value("text.word")' in unmodeled
+    assert 'note = fg.value("text.word")' in unmodeled
     assert any(
         note.startswith(f"{PREFIX}things_unmodeled: no model has table things_unmodeled") for note in result.notes
     )
@@ -461,12 +506,16 @@ def test_the_scaffolded_factories_generate_rows_that_pass_validation(
             generated.ThingsUnmodeledBase.raw_table: generated.ThingsUnmodeledBase.build_batch(3),
             generated.ProgramBase.raw_table: generated.ProgramBase.build_batch(2),
             generated.TokenBase.raw_table: generated.TokenBase.build_batch(2, owner_row={"id": 1}),
+            generated.WidgetBase.raw_table: generated.WidgetBase.build_batch(3),
         }
 
     package: Any = SimpleNamespace(SEED=1, generate=generate)
     rows = generate_rows(fixture, unit, package)
 
-    assert [len(rows.generated[PREFIX + name]) for name in FIXTURE_TABLES] == [8, 4, 4, 4, 3, 3, 2, 2]
+    assert [len(rows.generated[PREFIX + name]) for name in FIXTURE_TABLES] == [8, 4, 4, 4, 3, 3, 2, 3, 2]
+    # A column named value or url does not shadow the helpers later columns call.
+    widgets = rows.generated[f"{PREFIX}cms_widget"]
+    assert all(row["video_url"].startswith("https://") and row["title"] for row in widgets)
     # Built with no program, the nullable program_id is NULL.
     assert {row["program_id"] for row in rows.generated[f"{PREFIX}courses_course"]} == {None}
     assert {row["owner"] for row in rows.generated[f"{PREFIX}users_token"]} == {1}

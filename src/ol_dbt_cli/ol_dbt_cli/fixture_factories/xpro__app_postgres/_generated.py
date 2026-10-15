@@ -8,53 +8,53 @@ from __future__ import annotations
 
 import factory
 
-from ol_dbt_cli.lib.fixture_generation import RowFactory, or_null, parent, table, url, value
+from ol_dbt_cli.lib import fixture_generation as fg
 
 SCAFFOLD_DEFAULT_COUNT = 10
 
 
-@table("raw__xpro__app__postgres__courses_coursetopic", default_count=SCAFFOLD_DEFAULT_COUNT)
-class CourseTopicBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__courses_coursetopic", default_count=SCAFFOLD_DEFAULT_COUNT)
+class CourseTopicBase(fg.RowFactory):
     """Table courses_coursetopic, from model courses.CourseTopic."""
 
     # parent_id: references this table; NULL unless generate() sets it with attach().
 
     id = factory.Sequence(lambda n: n)
     name = factory.Sequence(lambda n: f"name-{n}")
-    created_on = value("datetime.datetime", start=2020, end=2025)
-    updated_on = value("datetime.datetime", start=2020, end=2025)
+    created_on = fg.value("datetime.datetime", start=2020, end=2025)
+    updated_on = fg.value("datetime.datetime", start=2020, end=2025)
 
 
-@table("raw__xpro__app__postgres__courses_platform", default_count=SCAFFOLD_DEFAULT_COUNT)
-class PlatformBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__courses_platform", default_count=SCAFFOLD_DEFAULT_COUNT)
+class PlatformBase(fg.RowFactory):
     """Table courses_platform, from model courses.Platform."""
 
     id = factory.Sequence(lambda n: n)
     name = factory.Sequence(lambda n: f"name-{n}")
-    created_on = value("datetime.datetime", start=2020, end=2025)
-    updated_on = value("datetime.datetime", start=2020, end=2025)
-    enable_sync = value("development.boolean")
+    created_on = fg.value("datetime.datetime", start=2020, end=2025)
+    updated_on = fg.value("datetime.datetime", start=2020, end=2025)
+    enable_sync = fg.value("development.boolean")
 
 
-@table("raw__xpro__app__postgres__courses_program", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ProgramBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__courses_program", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ProgramBase(fg.RowFactory):
     """Table courses_program, from model courses.Program."""
 
     class Params:
         platform = None
 
     id = factory.Sequence(lambda n: n)
-    live = value("development.boolean")
-    title = value("text.title")
-    created_on = value("datetime.datetime", start=2020, end=2025)
-    updated_on = value("datetime.datetime", start=2020, end=2025)
-    is_external = value("development.boolean")
-    platform_id = parent("platform", "id")
+    live = fg.value("development.boolean")
+    title = fg.value("text.title")
+    created_on = fg.value("datetime.datetime", start=2020, end=2025)
+    updated_on = fg.value("datetime.datetime", start=2020, end=2025)
+    is_external = fg.value("development.boolean")
+    platform_id = fg.parent("platform", "id")
     readable_id = factory.Sequence(lambda n: f"readable-{n}")
 
 
-@table("raw__xpro__app__postgres__courses_course", default_count=SCAFFOLD_DEFAULT_COUNT)
-class CourseBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__courses_course", default_count=SCAFFOLD_DEFAULT_COUNT)
+class CourseBase(fg.RowFactory):
     """Table courses_course, from model courses.Course."""
 
     class Params:
@@ -62,20 +62,20 @@ class CourseBase(RowFactory):
         platform = None
 
     id = factory.Sequence(lambda n: n)
-    live = value("development.boolean")
-    title = value("text.title")
-    created_on = value("datetime.datetime", start=2020, end=2025)
-    program_id = parent("program", "id", nullable=True)
-    updated_on = value("datetime.datetime", start=2020, end=2025)
-    is_external = value("development.boolean")
-    platform_id = parent("platform", "id")
+    live = fg.value("development.boolean")
+    title = fg.value("text.title")
+    created_on = fg.value("datetime.datetime", start=2020, end=2025)
+    program_id = fg.parent("program", "id", nullable=True)
+    updated_on = fg.value("datetime.datetime", start=2020, end=2025)
+    is_external = fg.value("development.boolean")
+    platform_id = fg.parent("platform", "id")
     readable_id = factory.Sequence(lambda n: f"readable-{n}")
-    external_course_id = value("text.word")
-    position_in_program = or_null(value("numeric.integer_number", start=0, end=1000))
+    external_course_id = fg.value("text.word")
+    position_in_program = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
 
 
-@table("raw__xpro__app__postgres__courses_courserun", default_count=SCAFFOLD_DEFAULT_COUNT)
-class CourseRunBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__courses_courserun", default_count=SCAFFOLD_DEFAULT_COUNT)
+class CourseRunBase(fg.RowFactory):
     """Table courses_courserun, from model courses.CourseRun."""
 
     # Unique together: course_id, run_tag. generate() must keep them distinct.
@@ -84,35 +84,35 @@ class CourseRunBase(RowFactory):
         course = None
 
     id = factory.Sequence(lambda n: n)
-    live = value("development.boolean")
-    title = value("text.title")
-    run_tag = value("numeric.integer_number", start=0, end=9999)
-    end_date = or_null(value("datetime.datetime", start=2020, end=2025))
-    course_id = parent("course", "id")
-    created_on = value("datetime.datetime", start=2020, end=2025)
-    start_date = or_null(value("datetime.datetime", start=2020, end=2025))
-    updated_on = value("datetime.datetime", start=2020, end=2025)
+    live = fg.value("development.boolean")
+    title = fg.value("text.title")
+    run_tag = fg.value("numeric.integer_number", start=0, end=9999)
+    end_date = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    course_id = fg.parent("course", "id")
+    created_on = fg.value("datetime.datetime", start=2020, end=2025)
+    start_date = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    updated_on = fg.value("datetime.datetime", start=2020, end=2025)
     courseware_id = factory.Sequence(lambda n: f"courseware-{n}")
-    enrollment_end = or_null(value("datetime.datetime", start=2020, end=2025))
-    expiration_date = or_null(value("datetime.datetime", start=2020, end=2025))
-    enrollment_start = or_null(value("datetime.datetime", start=2020, end=2025))
-    courseware_url_path = or_null(value("text.word"))
-    external_course_run_id = value("text.word")
+    enrollment_end = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    expiration_date = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    enrollment_start = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    courseware_url_path = fg.or_null(fg.value("text.word"))
+    external_course_run_id = fg.value("text.word")
 
 
-@table("raw__xpro__app__postgres__django_content_type", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ContentTypeBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__django_content_type", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ContentTypeBase(fg.RowFactory):
     """Table django_content_type, from model contenttypes.ContentType."""
 
     # Unique together: app_label, model. generate() must keep them distinct.
 
     id = factory.Sequence(lambda n: n)
-    model = value("text.word")
-    app_label = value("text.word")
+    model = fg.value("text.word")
+    app_label = fg.value("text.word")
 
 
-@table("raw__xpro__app__postgres__ecommerce_product", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ProductBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__ecommerce_product", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ProductBase(fg.RowFactory):
     """Table ecommerce_product, from model ecommerce.Product."""
 
     # Unique together: content_type_id, object_id. generate() must keep them distinct.
@@ -122,32 +122,32 @@ class ProductBase(RowFactory):
         content_type = None
 
     id = factory.Sequence(lambda n: n)
-    is_active = value("development.boolean")
-    created_on = value("datetime.datetime", start=2020, end=2025)
-    is_private = value("development.boolean")
-    updated_on = value("datetime.datetime", start=2020, end=2025)
-    content_type_id = parent("content_type", "id")
+    is_active = fg.value("development.boolean")
+    created_on = fg.value("datetime.datetime", start=2020, end=2025)
+    is_private = fg.value("development.boolean")
+    updated_on = fg.value("datetime.datetime", start=2020, end=2025)
+    content_type_id = fg.parent("content_type", "id")
 
 
-@table("raw__xpro__app__postgres__ecommerce_productversion", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ProductVersionBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__ecommerce_productversion", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ProductVersionBase(fg.RowFactory):
     """Table ecommerce_productversion, from model ecommerce.ProductVersion."""
 
     class Params:
         product = None
 
     id = factory.Sequence(lambda n: n)
-    price = value("numeric.decimal_number", start=0, end=999999)
-    text_id = or_null(value("text.sentence"))
-    created_on = value("datetime.datetime", start=2020, end=2025)
-    product_id = parent("product", "id")
-    updated_on = value("datetime.datetime", start=2020, end=2025)
-    description = value("text.sentence")
-    requires_enrollment_code = value("development.boolean")
+    price = fg.value("numeric.decimal_number", start=0, end=999999)
+    text_id = fg.or_null(fg.value("text.sentence"))
+    created_on = fg.value("datetime.datetime", start=2020, end=2025)
+    product_id = fg.parent("product", "id")
+    updated_on = fg.value("datetime.datetime", start=2020, end=2025)
+    description = fg.value("text.sentence")
+    requires_enrollment_code = fg.value("development.boolean")
 
 
-@table("raw__xpro__app__postgres__wagtailcore_page", default_count=SCAFFOLD_DEFAULT_COUNT)
-class PageBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__wagtailcore_page", default_count=SCAFFOLD_DEFAULT_COUNT)
+class PageBase(fg.RowFactory):
     """Table wagtailcore_page, from model wagtailcore.Page."""
 
     # Unique together: translation_key, locale_id. generate() must keep them distinct.
@@ -168,29 +168,29 @@ class PageBase(RowFactory):
         content_type = None
 
     id = factory.Sequence(lambda n: n)
-    live = value("development.boolean")
-    slug = value("internet.slug")
-    title = value("text.title")
-    locked = value("development.boolean")
-    expired = value("development.boolean")
-    expire_at = or_null(value("datetime.datetime", start=2020, end=2025))
-    locale_id = parent("locale", "id")
-    locked_at = or_null(value("datetime.datetime", start=2020, end=2025))
-    seo_title = value("text.title")
-    go_live_at = or_null(value("datetime.datetime", start=2020, end=2025))
-    draft_title = value("text.title")
-    show_in_menus = value("development.boolean")
-    content_type_id = parent("content_type", "id")
-    translation_key = value("cryptographic.uuid")
-    last_published_at = or_null(value("datetime.datetime", start=2020, end=2025))
-    first_published_at = or_null(value("datetime.datetime", start=2020, end=2025))
-    search_description = value("text.sentence")
-    has_unpublished_changes = value("development.boolean")
-    latest_revision_created_at = or_null(value("datetime.datetime", start=2020, end=2025))
+    live = fg.value("development.boolean")
+    slug = fg.value("internet.slug")
+    title = fg.value("text.title")
+    locked = fg.value("development.boolean")
+    expired = fg.value("development.boolean")
+    expire_at = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    locale_id = fg.parent("locale", "id")
+    locked_at = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    seo_title = fg.value("text.title")
+    go_live_at = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    draft_title = fg.value("text.title")
+    show_in_menus = fg.value("development.boolean")
+    content_type_id = fg.parent("content_type", "id")
+    translation_key = fg.value("cryptographic.uuid")
+    last_published_at = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    first_published_at = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    search_description = fg.value("text.sentence")
+    has_unpublished_changes = fg.value("development.boolean")
+    latest_revision_created_at = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
 
 
-@table("raw__xpro__app__postgres__cms_facultymemberspage", default_count=SCAFFOLD_DEFAULT_COUNT)
-class FacultyMembersPageBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__cms_facultymemberspage", default_count=SCAFFOLD_DEFAULT_COUNT)
+class FacultyMembersPageBase(fg.RowFactory):
     """Table cms_facultymemberspage, from model cms.FacultyMembersPage."""
 
     # members: JSON whose shape the model does not say; set it in __init__.py.
@@ -199,13 +199,13 @@ class FacultyMembersPageBase(RowFactory):
     class Params:
         page_ptr = None
 
-    heading = value("text.word")
-    subhead = or_null(value("text.word"))
-    page_ptr_id = parent("page_ptr", "id")
+    heading = fg.value("text.word")
+    subhead = fg.or_null(fg.value("text.word"))
+    page_ptr_id = fg.parent("page_ptr", "id")
 
 
-@table("raw__xpro__app__postgres__wagtailimages_image", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ImageBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__wagtailimages_image", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ImageBase(fg.RowFactory):
     """Table wagtailimages_image, from model wagtailimages.Image."""
 
     # collection_id: references wagtailcore_collection, which the fixture has no table for.
@@ -215,23 +215,23 @@ class ImageBase(RowFactory):
         collection = None
 
     id = factory.Sequence(lambda n: n)
-    file = value("file.file_name")
-    title = value("text.title")
-    width = value("numeric.integer_number", start=0, end=1000)
-    height = value("numeric.integer_number", start=0, end=1000)
-    file_hash = value("text.word")
-    file_size = or_null(value("numeric.integer_number", start=0, end=1000))
-    created_at = value("datetime.datetime", start=2020, end=2025)
-    collection_id = parent("collection", "id")
-    focal_point_x = or_null(value("numeric.integer_number", start=0, end=1000))
-    focal_point_y = or_null(value("numeric.integer_number", start=0, end=1000))
-    focal_point_width = or_null(value("numeric.integer_number", start=0, end=1000))
-    focal_point_height = or_null(value("numeric.integer_number", start=0, end=1000))
-    description = value("text.sentence")
+    file = fg.value("file.file_name")
+    title = fg.value("text.title")
+    width = fg.value("numeric.integer_number", start=0, end=1000)
+    height = fg.value("numeric.integer_number", start=0, end=1000)
+    file_hash = fg.value("text.word")
+    file_size = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    created_at = fg.value("datetime.datetime", start=2020, end=2025)
+    collection_id = fg.parent("collection", "id")
+    focal_point_x = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    focal_point_y = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    focal_point_width = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    focal_point_height = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    description = fg.value("text.sentence")
 
 
-@table("raw__xpro__app__postgres__cms_certificatepage", default_count=SCAFFOLD_DEFAULT_COUNT)
-class CertificatePageBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__cms_certificatepage", default_count=SCAFFOLD_DEFAULT_COUNT)
+class CertificatePageBase(fg.RowFactory):
     """Table cms_certificatepage, from model cms.CertificatePage."""
 
     # overrides: JSON whose shape the model does not say; set it in __init__.py.
@@ -242,17 +242,17 @@ class CertificatePageBase(RowFactory):
         page_ptr = None
         partner_logo = None
 
-    ceus = or_null(value("numeric.decimal_number", start=0, end=999))
-    page_ptr_id = parent("page_ptr", "id")
-    product_name = value("text.title")
-    institute_text = or_null(value("text.sentence"))
-    partner_logo_id = parent("partner_logo", "id", nullable=True)
-    partner_logo_placement = or_null(factory.Iterator([1, 2]))
-    display_mit_seal = value("development.boolean")
+    ceus = fg.or_null(fg.value("numeric.decimal_number", start=0, end=999))
+    page_ptr_id = fg.parent("page_ptr", "id")
+    product_name = fg.value("text.title")
+    institute_text = fg.or_null(fg.value("text.sentence"))
+    partner_logo_id = fg.parent("partner_logo", "id", nullable=True)
+    partner_logo_placement = fg.or_null(factory.Iterator([1, 2]))
+    display_mit_seal = fg.value("development.boolean")
 
 
-@table("raw__xpro__app__postgres__cms_coursepage", default_count=SCAFFOLD_DEFAULT_COUNT)
-class CoursePageBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__cms_coursepage", default_count=SCAFFOLD_DEFAULT_COUNT)
+class CoursePageBase(fg.RowFactory):
     """Table cms_coursepage, from model cms.CoursePage."""
 
     # content: JSON whose shape the model does not say; set it in __init__.py.
@@ -269,31 +269,31 @@ class CoursePageBase(RowFactory):
         background_image = None
 
     format = factory.Iterator(["Online", "Hybrid"])
-    subhead = value("text.word")
-    duration = or_null(value("text.word"))
-    featured = value("development.boolean")
-    course_id = parent("course", "id", nullable=True)
-    max_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
-    min_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
-    video_url = or_null(url())
-    description = value("text.sentence")
-    language_id = parent("language", "id")
-    page_ptr_id = parent("page_ptr", "id")
-    video_title = value("text.title")
-    catalog_details = value("text.sentence")
-    search_image_id = parent("search_image", "id", nullable=True)
-    time_commitment = or_null(value("text.word"))
-    max_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
-    min_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
-    thumbnail_image_id = parent("thumbnail_image", "id", nullable=True)
-    background_image_id = parent("background_image", "id", nullable=True)
-    background_video_url = or_null(url())
-    external_marketing_url = or_null(url())
-    marketing_hubspot_form_id = value("text.word")
+    subhead = fg.value("text.word")
+    duration = fg.or_null(fg.value("text.word"))
+    featured = fg.value("development.boolean")
+    course_id = fg.parent("course", "id", nullable=True)
+    max_weeks = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    min_weeks = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    video_url = fg.or_null(fg.url())
+    description = fg.value("text.sentence")
+    language_id = fg.parent("language", "id")
+    page_ptr_id = fg.parent("page_ptr", "id")
+    video_title = fg.value("text.title")
+    catalog_details = fg.value("text.sentence")
+    search_image_id = fg.parent("search_image", "id", nullable=True)
+    time_commitment = fg.or_null(fg.value("text.word"))
+    max_weekly_hours = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    min_weekly_hours = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    thumbnail_image_id = fg.parent("thumbnail_image", "id", nullable=True)
+    background_image_id = fg.parent("background_image", "id", nullable=True)
+    background_video_url = fg.or_null(fg.url())
+    external_marketing_url = fg.or_null(fg.url())
+    marketing_hubspot_form_id = fg.value("text.word")
 
 
-@table("raw__xpro__app__postgres__cms_coursepage_topics", default_count=SCAFFOLD_DEFAULT_COUNT)
-class CoursePageTopicsBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__cms_coursepage_topics", default_count=SCAFFOLD_DEFAULT_COUNT)
+class CoursePageTopicsBase(fg.RowFactory):
     """Table cms_coursepage_topics, from model cms.CoursePage_topics."""
 
     # Unique together: coursepage_id, coursetopic_id. generate() must keep them distinct.
@@ -303,12 +303,12 @@ class CoursePageTopicsBase(RowFactory):
         coursetopic = None
 
     id = factory.Sequence(lambda n: n)
-    coursepage_id = parent("coursepage", "page_ptr_id")
-    coursetopic_id = parent("coursetopic", "id")
+    coursepage_id = fg.parent("coursepage", "page_ptr_id")
+    coursetopic_id = fg.parent("coursetopic", "id")
 
 
-@table("raw__xpro__app__postgres__cms_externalcoursepage", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ExternalCoursePageBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__cms_externalcoursepage", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ExternalCoursePageBase(fg.RowFactory):
     """Table cms_externalcoursepage, from model cms.ExternalCoursePage."""
 
     # content: JSON whose shape the model does not say; set it in __init__.py.
@@ -325,31 +325,31 @@ class ExternalCoursePageBase(RowFactory):
         background_image = None
 
     format = factory.Iterator(["Online", "Hybrid"])
-    subhead = value("text.word")
-    duration = or_null(value("text.word"))
-    featured = value("development.boolean")
-    course_id = parent("course", "id", nullable=True)
-    max_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
-    min_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
-    video_url = or_null(url())
-    description = value("text.sentence")
-    language_id = parent("language", "id")
-    page_ptr_id = parent("page_ptr", "id")
-    video_title = value("text.title")
-    catalog_details = value("text.sentence")
-    search_image_id = parent("search_image", "id", nullable=True)
-    time_commitment = or_null(value("text.word"))
-    max_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
-    min_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
-    thumbnail_image_id = parent("thumbnail_image", "id", nullable=True)
-    background_image_id = parent("background_image", "id", nullable=True)
-    background_video_url = or_null(url())
-    external_marketing_url = or_null(url())
-    marketing_hubspot_form_id = value("text.word")
+    subhead = fg.value("text.word")
+    duration = fg.or_null(fg.value("text.word"))
+    featured = fg.value("development.boolean")
+    course_id = fg.parent("course", "id", nullable=True)
+    max_weeks = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    min_weeks = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    video_url = fg.or_null(fg.url())
+    description = fg.value("text.sentence")
+    language_id = fg.parent("language", "id")
+    page_ptr_id = fg.parent("page_ptr", "id")
+    video_title = fg.value("text.title")
+    catalog_details = fg.value("text.sentence")
+    search_image_id = fg.parent("search_image", "id", nullable=True)
+    time_commitment = fg.or_null(fg.value("text.word"))
+    max_weekly_hours = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    min_weekly_hours = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    thumbnail_image_id = fg.parent("thumbnail_image", "id", nullable=True)
+    background_image_id = fg.parent("background_image", "id", nullable=True)
+    background_video_url = fg.or_null(fg.url())
+    external_marketing_url = fg.or_null(fg.url())
+    marketing_hubspot_form_id = fg.value("text.word")
 
 
-@table("raw__xpro__app__postgres__cms_externalcoursepage_topics", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ExternalCoursePageTopicsBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__cms_externalcoursepage_topics", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ExternalCoursePageTopicsBase(fg.RowFactory):
     """Table cms_externalcoursepage_topics, from model cms.ExternalCoursePage_topics."""
 
     # Unique together: externalcoursepage_id, coursetopic_id. generate() must keep them distinct.
@@ -359,12 +359,12 @@ class ExternalCoursePageTopicsBase(RowFactory):
         externalcoursepage = None
 
     id = factory.Sequence(lambda n: n)
-    coursetopic_id = parent("coursetopic", "id")
-    externalcoursepage_id = parent("externalcoursepage", "page_ptr_id")
+    coursetopic_id = fg.parent("coursetopic", "id")
+    externalcoursepage_id = fg.parent("externalcoursepage", "page_ptr_id")
 
 
-@table("raw__xpro__app__postgres__cms_externalprogrampage", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ExternalProgramPageBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__cms_externalprogrampage", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ExternalProgramPageBase(fg.RowFactory):
     """Table cms_externalprogrampage, from model cms.ExternalProgramPage."""
 
     # content: JSON whose shape the model does not say; set it in __init__.py.
@@ -381,31 +381,31 @@ class ExternalProgramPageBase(RowFactory):
         background_image = None
 
     format = factory.Iterator(["Online", "Hybrid"])
-    subhead = value("text.word")
-    duration = or_null(value("text.word"))
-    featured = value("development.boolean")
-    max_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
-    min_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
-    video_url = or_null(url())
-    program_id = parent("program", "id", nullable=True)
-    description = value("text.sentence")
-    language_id = parent("language", "id")
-    page_ptr_id = parent("page_ptr", "id")
-    video_title = value("text.title")
-    catalog_details = value("text.sentence")
-    search_image_id = parent("search_image", "id", nullable=True)
-    time_commitment = or_null(value("text.word"))
-    max_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
-    min_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
-    thumbnail_image_id = parent("thumbnail_image", "id", nullable=True)
-    background_image_id = parent("background_image", "id", nullable=True)
-    background_video_url = or_null(url())
-    external_marketing_url = or_null(url())
-    marketing_hubspot_form_id = value("text.word")
+    subhead = fg.value("text.word")
+    duration = fg.or_null(fg.value("text.word"))
+    featured = fg.value("development.boolean")
+    max_weeks = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    min_weeks = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    video_url = fg.or_null(fg.url())
+    program_id = fg.parent("program", "id", nullable=True)
+    description = fg.value("text.sentence")
+    language_id = fg.parent("language", "id")
+    page_ptr_id = fg.parent("page_ptr", "id")
+    video_title = fg.value("text.title")
+    catalog_details = fg.value("text.sentence")
+    search_image_id = fg.parent("search_image", "id", nullable=True)
+    time_commitment = fg.or_null(fg.value("text.word"))
+    max_weekly_hours = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    min_weekly_hours = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    thumbnail_image_id = fg.parent("thumbnail_image", "id", nullable=True)
+    background_image_id = fg.parent("background_image", "id", nullable=True)
+    background_video_url = fg.or_null(fg.url())
+    external_marketing_url = fg.or_null(fg.url())
+    marketing_hubspot_form_id = fg.value("text.word")
 
 
-@table("raw__xpro__app__postgres__cms_programpage", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ProgramPageBase(RowFactory):
+@fg.table("raw__xpro__app__postgres__cms_programpage", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ProgramPageBase(fg.RowFactory):
     """Table cms_programpage, from model cms.ProgramPage."""
 
     # content: JSON whose shape the model does not say; set it in __init__.py.
@@ -422,27 +422,27 @@ class ProgramPageBase(RowFactory):
         background_image = None
 
     format = factory.Iterator(["Online", "Hybrid"])
-    subhead = value("text.word")
-    duration = or_null(value("text.word"))
-    featured = value("development.boolean")
-    max_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
-    min_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
-    video_url = or_null(url())
-    program_id = parent("program", "id", nullable=True)
-    description = value("text.sentence")
-    language_id = parent("language", "id")
-    page_ptr_id = parent("page_ptr", "id")
-    video_title = value("text.title")
-    catalog_details = value("text.sentence")
-    search_image_id = parent("search_image", "id", nullable=True)
-    time_commitment = or_null(value("text.word"))
-    max_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
-    min_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
-    thumbnail_image_id = parent("thumbnail_image", "id", nullable=True)
-    background_image_id = parent("background_image", "id", nullable=True)
-    background_video_url = or_null(url())
-    external_marketing_url = or_null(url())
-    marketing_hubspot_form_id = value("text.word")
+    subhead = fg.value("text.word")
+    duration = fg.or_null(fg.value("text.word"))
+    featured = fg.value("development.boolean")
+    max_weeks = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    min_weeks = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    video_url = fg.or_null(fg.url())
+    program_id = fg.parent("program", "id", nullable=True)
+    description = fg.value("text.sentence")
+    language_id = fg.parent("language", "id")
+    page_ptr_id = fg.parent("page_ptr", "id")
+    video_title = fg.value("text.title")
+    catalog_details = fg.value("text.sentence")
+    search_image_id = fg.parent("search_image", "id", nullable=True)
+    time_commitment = fg.or_null(fg.value("text.word"))
+    max_weekly_hours = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    min_weekly_hours = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    thumbnail_image_id = fg.parent("thumbnail_image", "id", nullable=True)
+    background_image_id = fg.parent("background_image", "id", nullable=True)
+    background_video_url = fg.or_null(fg.url())
+    external_marketing_url = fg.or_null(fg.url())
+    marketing_hubspot_form_id = fg.value("text.word")
 
 
 # Each tree's MP_Node.alphabet, for fixture_trees.Tree.

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import factory
 
-from ol_dbt_cli.lib.fixture_generation import RowFactory, or_null, parent, table, url, value
+from ol_dbt_cli.lib import fixture_generation as fg
 
 SCAFFOLD_DEFAULT_COUNT = 10
 
@@ -103,21 +103,21 @@ SUPPORTED_VARIANT_LANGUAGE_CHOICES = [
 ]
 
 
-@table("raw__mitxonline__app__postgres__courses_course", default_count=SCAFFOLD_DEFAULT_COUNT)
-class CourseBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__courses_course", default_count=SCAFFOLD_DEFAULT_COUNT)
+class CourseBase(fg.RowFactory):
     """Table courses_course, from model courses.Course."""
 
     id = factory.Sequence(lambda n: n)
-    live = value("development.boolean")
-    title = value("text.title")
-    created_on = value("datetime.datetime", start=2020, end=2025)
-    updated_on = value("datetime.datetime", start=2020, end=2025)
+    live = fg.value("development.boolean")
+    title = fg.value("text.title")
+    created_on = fg.value("datetime.datetime", start=2020, end=2025)
+    updated_on = fg.value("datetime.datetime", start=2020, end=2025)
     readable_id = factory.Sequence(lambda n: f"readable-{n}")
-    certificates_disabled = value("development.boolean")
+    certificates_disabled = fg.value("development.boolean")
 
 
-@table("raw__mitxonline__app__postgres__courses_courserun", default_count=SCAFFOLD_DEFAULT_COUNT)
-class CourseRunBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__courses_courserun", default_count=SCAFFOLD_DEFAULT_COUNT)
+class CourseRunBase(fg.RowFactory):
     """Table courses_courserun, from model courses.CourseRun."""
 
     # Unique together: course_id, courseware_id, run_tag. generate() must keep them distinct.
@@ -127,67 +127,67 @@ class CourseRunBase(RowFactory):
         course = None
 
     id = factory.Sequence(lambda n: n)
-    live = value("development.boolean")
-    title = value("text.title")
-    run_tag = value("text.sentence")
-    end_date = or_null(value("datetime.datetime", start=2020, end=2025))
-    course_id = parent("course", "id")
-    created_on = value("datetime.datetime", start=2020, end=2025)
-    start_date = or_null(value("datetime.datetime", start=2020, end=2025))
-    updated_on = value("datetime.datetime", start=2020, end=2025)
+    live = fg.value("development.boolean")
+    title = fg.value("text.title")
+    run_tag = fg.value("text.sentence")
+    end_date = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    course_id = fg.parent("course", "id")
+    created_on = fg.value("datetime.datetime", start=2020, end=2025)
+    start_date = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    updated_on = fg.value("datetime.datetime", start=2020, end=2025)
     courseware_id = factory.Sequence(lambda n: f"courseware-{n}")
-    is_self_paced = value("development.boolean")
-    enrollment_end = or_null(value("datetime.datetime", start=2020, end=2025))
-    expiration_date = or_null(value("datetime.datetime", start=2020, end=2025))
-    enrollment_start = or_null(value("datetime.datetime", start=2020, end=2025))
-    upgrade_deadline = or_null(value("datetime.datetime", start=2020, end=2025))
-    certificate_available_date = or_null(value("datetime.datetime", start=2020, end=2025))
-    is_source_run = value("development.boolean")
-    has_courseware_url = value("development.boolean")
+    is_self_paced = fg.value("development.boolean")
+    enrollment_end = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    expiration_date = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    enrollment_start = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    upgrade_deadline = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    certificate_available_date = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    is_source_run = fg.value("development.boolean")
+    has_courseware_url = fg.value("development.boolean")
     language = factory.Iterator(COURSE_RUN_LANGUAGE_CHOICES)
-    is_primary_language = value("development.boolean")
+    is_primary_language = fg.value("development.boolean")
     variant_length = factory.Iterator(["", "S"])
     variant_industry = factory.Iterator(["", "E", "F", "HC", "M"])
-    b2b_only = value("development.boolean")
-    courseware_url_path = value("text.word")
+    b2b_only = fg.value("development.boolean")
+    courseware_url_path = fg.value("text.word")
 
 
-@table("raw__mitxonline__app__postgres__courses_coursestopic", default_count=SCAFFOLD_DEFAULT_COUNT)
-class CoursesTopicBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__courses_coursestopic", default_count=SCAFFOLD_DEFAULT_COUNT)
+class CoursesTopicBase(fg.RowFactory):
     """Table courses_coursestopic, from model courses.CoursesTopic."""
 
     # Unique together: name, parent_id. generate() must keep them distinct.
     # parent_id: references this table; NULL unless generate() sets it with attach().
 
     id = factory.Sequence(lambda n: n)
-    name = value("text.title")
-    created_on = value("datetime.datetime", start=2020, end=2025)
-    updated_on = value("datetime.datetime", start=2020, end=2025)
+    name = fg.value("text.title")
+    created_on = fg.value("datetime.datetime", start=2020, end=2025)
+    updated_on = fg.value("datetime.datetime", start=2020, end=2025)
 
 
-@table("raw__mitxonline__app__postgres__courses_program", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ProgramBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__courses_program", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ProgramBase(fg.RowFactory):
     """Table courses_program, from model courses.Program."""
 
     id = factory.Sequence(lambda n: n)
-    live = value("development.boolean")
-    title = value("text.title")
-    end_date = or_null(value("datetime.datetime", start=2020, end=2025))
-    created_on = value("datetime.datetime", start=2020, end=2025)
-    start_date = or_null(value("datetime.datetime", start=2020, end=2025))
-    updated_on = value("datetime.datetime", start=2020, end=2025)
+    live = fg.value("development.boolean")
+    title = fg.value("text.title")
+    end_date = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    created_on = fg.value("datetime.datetime", start=2020, end=2025)
+    start_date = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    updated_on = fg.value("datetime.datetime", start=2020, end=2025)
     readable_id = factory.Sequence(lambda n: f"readable-{n}")
     availability = factory.Iterator(["anytime", "dated"])
-    program_type = or_null(value("text.word"))
-    enrollment_end = or_null(value("datetime.datetime", start=2020, end=2025))
-    enrollment_start = or_null(value("datetime.datetime", start=2020, end=2025))
-    b2b_only = value("development.boolean")
-    display_mode = or_null(factory.Iterator(["course"]))
-    certificates_disabled = value("development.boolean")
+    program_type = fg.or_null(fg.value("text.word"))
+    enrollment_end = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    enrollment_start = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    b2b_only = fg.value("development.boolean")
+    display_mode = fg.or_null(factory.Iterator(["course"]))
+    certificates_disabled = fg.value("development.boolean")
 
 
-@table("raw__mitxonline__app__postgres__courses_programrequirement", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ProgramRequirementBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__courses_programrequirement", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ProgramRequirementBase(fg.RowFactory):
     """Table courses_programrequirement, from model courses.ProgramRequirement."""
 
     # A treebeard tree: place rows with Tree(rows, alphabet=TREE_ALPHABETS[ProgramRequirementBase.raw_table]).
@@ -201,18 +201,18 @@ class ProgramRequirementBase(RowFactory):
         required_program = None
 
     id = factory.Sequence(lambda n: n)
-    title = or_null(value("text.title"))
-    operator = or_null(factory.Iterator(["all_of", "min_number_of"]))
-    course_id = parent("course", "id", nullable=True)
-    node_type = or_null(factory.Iterator(["program_root", "operator", "course", "program", "track"]))
-    program_id = parent("program", "id")
-    elective_flag = or_null(value("development.boolean"))
-    operator_value = or_null(value("text.word"))
-    required_program_id = parent("required_program", "id", nullable=True)
+    title = fg.or_null(fg.value("text.title"))
+    operator = fg.or_null(factory.Iterator(["all_of", "min_number_of"]))
+    course_id = fg.parent("course", "id", nullable=True)
+    node_type = fg.or_null(factory.Iterator(["program_root", "operator", "course", "program", "track"]))
+    program_id = fg.parent("program", "id")
+    elective_flag = fg.or_null(fg.value("development.boolean"))
+    operator_value = fg.or_null(fg.value("text.word"))
+    required_program_id = fg.parent("required_program", "id", nullable=True)
 
 
-@table("raw__mitxonline__app__postgres__wagtailimages_image", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ImageBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__wagtailimages_image", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ImageBase(fg.RowFactory):
     """Table wagtailimages_image, from model wagtailimages.Image."""
 
     # collection_id: references wagtailcore_collection, which the fixture has no table for.
@@ -222,34 +222,34 @@ class ImageBase(RowFactory):
         collection = None
 
     id = factory.Sequence(lambda n: n)
-    file = value("file.file_name")
-    title = value("text.title")
-    width = value("numeric.integer_number", start=0, end=1000)
-    height = value("numeric.integer_number", start=0, end=1000)
-    file_hash = value("text.word")
-    file_size = or_null(value("numeric.integer_number", start=0, end=1000))
-    created_at = value("datetime.datetime", start=2020, end=2025)
-    description = value("text.sentence")
-    collection_id = parent("collection", "id")
-    focal_point_x = or_null(value("numeric.integer_number", start=0, end=1000))
-    focal_point_y = or_null(value("numeric.integer_number", start=0, end=1000))
-    focal_point_width = or_null(value("numeric.integer_number", start=0, end=1000))
-    focal_point_height = or_null(value("numeric.integer_number", start=0, end=1000))
+    file = fg.value("file.file_name")
+    title = fg.value("text.title")
+    width = fg.value("numeric.integer_number", start=0, end=1000)
+    height = fg.value("numeric.integer_number", start=0, end=1000)
+    file_hash = fg.value("text.word")
+    file_size = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    created_at = fg.value("datetime.datetime", start=2020, end=2025)
+    description = fg.value("text.sentence")
+    collection_id = fg.parent("collection", "id")
+    focal_point_x = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    focal_point_y = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    focal_point_width = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    focal_point_height = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
 
 
-@table("raw__mitxonline__app__postgres__courses_department", default_count=SCAFFOLD_DEFAULT_COUNT)
-class DepartmentBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__courses_department", default_count=SCAFFOLD_DEFAULT_COUNT)
+class DepartmentBase(fg.RowFactory):
     """Table courses_department, from model courses.Department."""
 
     id = factory.Sequence(lambda n: n)
     name = factory.Sequence(lambda n: f"name-{n}")
     slug = factory.Sequence(lambda n: f"slug-{n}")
-    created_on = value("datetime.datetime", start=2020, end=2025)
-    updated_on = value("datetime.datetime", start=2020, end=2025)
+    created_on = fg.value("datetime.datetime", start=2020, end=2025)
+    updated_on = fg.value("datetime.datetime", start=2020, end=2025)
 
 
-@table("raw__mitxonline__app__postgres__courses_course_departments", default_count=SCAFFOLD_DEFAULT_COUNT)
-class CourseDepartmentsBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__courses_course_departments", default_count=SCAFFOLD_DEFAULT_COUNT)
+class CourseDepartmentsBase(fg.RowFactory):
     """Table courses_course_departments, from model courses.Course_departments."""
 
     # Unique together: course_id, department_id. generate() must keep them distinct.
@@ -259,22 +259,22 @@ class CourseDepartmentsBase(RowFactory):
         department = None
 
     id = factory.Sequence(lambda n: n)
-    course_id = parent("course", "id")
-    department_id = parent("department", "id")
+    course_id = fg.parent("course", "id")
+    department_id = fg.parent("department", "id")
 
 
-@table("raw__mitxonline__app__postgres__courses_enrollmentmode", default_count=SCAFFOLD_DEFAULT_COUNT)
-class EnrollmentModeBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__courses_enrollmentmode", default_count=SCAFFOLD_DEFAULT_COUNT)
+class EnrollmentModeBase(fg.RowFactory):
     """Table courses_enrollmentmode, from model courses.EnrollmentMode."""
 
     id = factory.Sequence(lambda n: n)
     mode_slug = factory.Sequence(lambda n: f"mode-slug-{n}")
-    requires_payment = value("development.boolean")
-    mode_display_name = value("text.title")
+    requires_payment = fg.value("development.boolean")
+    mode_display_name = fg.value("text.title")
 
 
-@table("raw__mitxonline__app__postgres__courses_courserun_enrollment_modes", default_count=SCAFFOLD_DEFAULT_COUNT)
-class CourseRunEnrollmentModesBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__courses_courserun_enrollment_modes", default_count=SCAFFOLD_DEFAULT_COUNT)
+class CourseRunEnrollmentModesBase(fg.RowFactory):
     """Table courses_courserun_enrollment_modes, from model courses.CourseRun_enrollment_modes."""
 
     # Unique together: courserun_id, enrollmentmode_id. generate() must keep them distinct.
@@ -284,12 +284,12 @@ class CourseRunEnrollmentModesBase(RowFactory):
         enrollmentmode = None
 
     id = factory.Sequence(lambda n: n)
-    courserun_id = parent("courserun", "id")
-    enrollmentmode_id = parent("enrollmentmode", "id")
+    courserun_id = fg.parent("courserun", "id")
+    enrollmentmode_id = fg.parent("enrollmentmode", "id")
 
 
-@table("raw__mitxonline__app__postgres__courses_program_departments", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ProgramDepartmentsBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__courses_program_departments", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ProgramDepartmentsBase(fg.RowFactory):
     """Table courses_program_departments, from model courses.Program_departments."""
 
     # Unique together: program_id, department_id. generate() must keep them distinct.
@@ -299,12 +299,12 @@ class ProgramDepartmentsBase(RowFactory):
         department = None
 
     id = factory.Sequence(lambda n: n)
-    program_id = parent("program", "id")
-    department_id = parent("department", "id")
+    program_id = fg.parent("program", "id")
+    department_id = fg.parent("department", "id")
 
 
-@table("raw__mitxonline__app__postgres__courses_program_enrollment_modes", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ProgramEnrollmentModesBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__courses_program_enrollment_modes", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ProgramEnrollmentModesBase(fg.RowFactory):
     """Table courses_program_enrollment_modes, from model courses.Program_enrollment_modes."""
 
     # Unique together: program_id, enrollmentmode_id. generate() must keep them distinct.
@@ -314,23 +314,23 @@ class ProgramEnrollmentModesBase(RowFactory):
         enrollmentmode = None
 
     id = factory.Sequence(lambda n: n)
-    program_id = parent("program", "id")
-    enrollmentmode_id = parent("enrollmentmode", "id")
+    program_id = fg.parent("program", "id")
+    enrollmentmode_id = fg.parent("enrollmentmode", "id")
 
 
-@table("raw__mitxonline__app__postgres__django_content_type", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ContentTypeBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__django_content_type", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ContentTypeBase(fg.RowFactory):
     """Table django_content_type, from model contenttypes.ContentType."""
 
     # Unique together: app_label, model. generate() must keep them distinct.
 
     id = factory.Sequence(lambda n: n)
-    model = value("text.word")
-    app_label = value("text.word")
+    model = fg.value("text.word")
+    app_label = fg.value("text.word")
 
 
-@table("raw__mitxonline__app__postgres__wagtailcore_page", default_count=SCAFFOLD_DEFAULT_COUNT)
-class PageBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__wagtailcore_page", default_count=SCAFFOLD_DEFAULT_COUNT)
+class PageBase(fg.RowFactory):
     """Table wagtailcore_page, from model wagtailcore.Page."""
 
     # Unique together: translation_key, locale_id. generate() must keep them distinct.
@@ -351,29 +351,29 @@ class PageBase(RowFactory):
         content_type = None
 
     id = factory.Sequence(lambda n: n)
-    live = value("development.boolean")
-    slug = value("internet.slug")
-    title = value("text.title")
-    locked = value("development.boolean")
-    expired = value("development.boolean")
-    expire_at = or_null(value("datetime.datetime", start=2020, end=2025))
-    locale_id = parent("locale", "id")
-    locked_at = or_null(value("datetime.datetime", start=2020, end=2025))
-    seo_title = value("text.title")
-    go_live_at = or_null(value("datetime.datetime", start=2020, end=2025))
-    draft_title = value("text.title")
-    show_in_menus = value("development.boolean")
-    content_type_id = parent("content_type", "id")
-    translation_key = value("cryptographic.uuid")
-    last_published_at = or_null(value("datetime.datetime", start=2020, end=2025))
-    first_published_at = or_null(value("datetime.datetime", start=2020, end=2025))
-    search_description = value("text.sentence")
-    has_unpublished_changes = value("development.boolean")
-    latest_revision_created_at = or_null(value("datetime.datetime", start=2020, end=2025))
+    live = fg.value("development.boolean")
+    slug = fg.value("internet.slug")
+    title = fg.value("text.title")
+    locked = fg.value("development.boolean")
+    expired = fg.value("development.boolean")
+    expire_at = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    locale_id = fg.parent("locale", "id")
+    locked_at = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    seo_title = fg.value("text.title")
+    go_live_at = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    draft_title = fg.value("text.title")
+    show_in_menus = fg.value("development.boolean")
+    content_type_id = fg.parent("content_type", "id")
+    translation_key = fg.value("cryptographic.uuid")
+    last_published_at = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    first_published_at = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
+    search_description = fg.value("text.sentence")
+    has_unpublished_changes = fg.value("development.boolean")
+    latest_revision_created_at = fg.or_null(fg.value("datetime.datetime", start=2020, end=2025))
 
 
-@table("raw__mitxonline__app__postgres__cms_coursepage", default_count=SCAFFOLD_DEFAULT_COUNT)
-class CoursePageBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__cms_coursepage", default_count=SCAFFOLD_DEFAULT_COUNT)
+class CoursePageBase(fg.RowFactory):
     """Table cms_coursepage, from model cms.CoursePage."""
 
     # price: JSON whose shape the model does not say; set it in __init__.py.
@@ -386,40 +386,40 @@ class CoursePageBase(RowFactory):
         search_image = None
         feature_image = None
 
-    about = or_null(value("text.sentence"))
-    effort = or_null(value("text.word"))
-    length = value("text.word")
-    faq_url = or_null(url())
-    course_id = parent("course", "id", nullable=True)
-    max_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
-    min_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
-    video_url = or_null(url())
-    description = value("text.sentence")
-    page_ptr_id = parent("page_ptr", "id")
-    prerequisites = or_null(value("text.sentence"))
-    what_you_learn = or_null(value("text.sentence"))
-    search_image_id = parent("search_image", "id", nullable=True)
-    feature_image_id = parent("feature_image", "id", nullable=True)
-    max_weekly_hours = value("numeric.integer_number", start=0, end=9999)
-    min_weekly_hours = value("numeric.integer_number", start=0, end=9999)
-    faculty_section_title = or_null(value("text.title"))
-    include_in_learn_catalog = or_null(value("development.boolean"))
-    ingest_content_files_for_ai = or_null(value("development.boolean"))
-    hyl_choice_learn_by_doing = or_null(value("development.boolean"))
-    hyl_choice_learn_on_demand = or_null(value("development.boolean"))
-    hyl_choice_learn_from_others = or_null(value("development.boolean"))
-    hyl_choice_ai_enabled_support = or_null(value("development.boolean"))
-    hyl_choice_realworld_learning = or_null(value("development.boolean"))
-    hyl_choice_stackable_credentials = or_null(value("development.boolean"))
-    max_price = value("numeric.decimal_number", start=0, end=999999)
-    min_price = value("numeric.decimal_number", start=0, end=999999)
-    hubspot_form_id = value("text.word")
-    show_course_outline = value("development.boolean")
-    show_stay_updated = value("development.boolean")
+    about = fg.or_null(fg.value("text.sentence"))
+    effort = fg.or_null(fg.value("text.word"))
+    length = fg.value("text.word")
+    faq_url = fg.or_null(fg.url())
+    course_id = fg.parent("course", "id", nullable=True)
+    max_weeks = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    min_weeks = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    video_url = fg.or_null(fg.url())
+    description = fg.value("text.sentence")
+    page_ptr_id = fg.parent("page_ptr", "id")
+    prerequisites = fg.or_null(fg.value("text.sentence"))
+    what_you_learn = fg.or_null(fg.value("text.sentence"))
+    search_image_id = fg.parent("search_image", "id", nullable=True)
+    feature_image_id = fg.parent("feature_image", "id", nullable=True)
+    max_weekly_hours = fg.value("numeric.integer_number", start=0, end=9999)
+    min_weekly_hours = fg.value("numeric.integer_number", start=0, end=9999)
+    faculty_section_title = fg.or_null(fg.value("text.title"))
+    include_in_learn_catalog = fg.or_null(fg.value("development.boolean"))
+    ingest_content_files_for_ai = fg.or_null(fg.value("development.boolean"))
+    hyl_choice_learn_by_doing = fg.or_null(fg.value("development.boolean"))
+    hyl_choice_learn_on_demand = fg.or_null(fg.value("development.boolean"))
+    hyl_choice_learn_from_others = fg.or_null(fg.value("development.boolean"))
+    hyl_choice_ai_enabled_support = fg.or_null(fg.value("development.boolean"))
+    hyl_choice_realworld_learning = fg.or_null(fg.value("development.boolean"))
+    hyl_choice_stackable_credentials = fg.or_null(fg.value("development.boolean"))
+    max_price = fg.value("numeric.decimal_number", start=0, end=999999)
+    min_price = fg.value("numeric.decimal_number", start=0, end=999999)
+    hubspot_form_id = fg.value("text.word")
+    show_course_outline = fg.value("development.boolean")
+    show_stay_updated = fg.value("development.boolean")
 
 
-@table("raw__mitxonline__app__postgres__cms_coursepage_topics", default_count=SCAFFOLD_DEFAULT_COUNT)
-class CoursePageTopicsBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__cms_coursepage_topics", default_count=SCAFFOLD_DEFAULT_COUNT)
+class CoursePageTopicsBase(fg.RowFactory):
     """Table cms_coursepage_topics, from model cms.CoursePage_topics."""
 
     # Unique together: coursepage_id, coursestopic_id. generate() must keep them distinct.
@@ -429,12 +429,12 @@ class CoursePageTopicsBase(RowFactory):
         coursestopic = None
 
     id = factory.Sequence(lambda n: n)
-    coursepage_id = parent("coursepage", "page_ptr_id")
-    coursestopic_id = parent("coursestopic", "id")
+    coursepage_id = fg.parent("coursepage", "page_ptr_id")
+    coursestopic_id = fg.parent("coursestopic", "id")
 
 
-@table("raw__mitxonline__app__postgres__cms_instructorpage", default_count=SCAFFOLD_DEFAULT_COUNT)
-class InstructorPageBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__cms_instructorpage", default_count=SCAFFOLD_DEFAULT_COUNT)
+class InstructorPageBase(fg.RowFactory):
     """Table cms_instructorpage, from model cms.InstructorPage."""
 
     # page_ptr_id: one-to-one with wagtailcore_page; draw its parents with pair().
@@ -443,16 +443,16 @@ class InstructorPageBase(RowFactory):
         page_ptr = None
         feature_image = None
 
-    page_ptr_id = parent("page_ptr", "id")
-    instructor_name = value("person.full_name")
-    feature_image_id = parent("feature_image", "id", nullable=True)
-    instructor_title = or_null(value("text.title"))
-    instructor_bio_long = or_null(value("text.sentence"))
-    instructor_bio_short = or_null(value("text.sentence"))
+    page_ptr_id = fg.parent("page_ptr", "id")
+    instructor_name = fg.value("person.full_name")
+    feature_image_id = fg.parent("feature_image", "id", nullable=True)
+    instructor_title = fg.or_null(fg.value("text.title"))
+    instructor_bio_long = fg.or_null(fg.value("text.sentence"))
+    instructor_bio_short = fg.or_null(fg.value("text.sentence"))
 
 
-@table("raw__mitxonline__app__postgres__cms_instructorpagelink", default_count=SCAFFOLD_DEFAULT_COUNT)
-class InstructorPageLinkBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__cms_instructorpagelink", default_count=SCAFFOLD_DEFAULT_COUNT)
+class InstructorPageLinkBase(fg.RowFactory):
     """Table cms_instructorpagelink, from model cms.InstructorPageLink."""
 
     class Params:
@@ -460,13 +460,13 @@ class InstructorPageLinkBase(RowFactory):
         linked_instructor_page = None
 
     id = factory.Sequence(lambda n: n)
-    order = or_null(value("numeric.integer_number", start=0, end=1000))
-    page_id = parent("page", "id")
-    linked_instructor_page_id = parent("linked_instructor_page", "page_ptr_id", nullable=True)
+    order = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    page_id = fg.parent("page", "id")
+    linked_instructor_page_id = fg.parent("linked_instructor_page", "page_ptr_id", nullable=True)
 
 
-@table("raw__mitxonline__app__postgres__cms_programpage", default_count=SCAFFOLD_DEFAULT_COUNT)
-class ProgramPageBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__cms_programpage", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ProgramPageBase(fg.RowFactory):
     """Table cms_programpage, from model cms.ProgramPage."""
 
     # price: JSON whose shape the model does not say; set it in __init__.py.
@@ -479,39 +479,39 @@ class ProgramPageBase(RowFactory):
         search_image = None
         feature_image = None
 
-    about = or_null(value("text.sentence"))
-    effort = or_null(value("text.word"))
-    length = value("text.word")
-    faq_url = or_null(url())
-    max_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
-    min_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
-    video_url = or_null(url())
-    program_id = parent("program", "id", nullable=True)
-    description = or_null(value("text.sentence"))
-    page_ptr_id = parent("page_ptr", "id")
-    prerequisites = or_null(value("text.sentence"))
-    what_you_learn = or_null(value("text.sentence"))
-    search_image_id = parent("search_image", "id", nullable=True)
-    feature_image_id = parent("feature_image", "id", nullable=True)
-    max_weekly_hours = value("numeric.integer_number", start=0, end=9999)
-    min_weekly_hours = value("numeric.integer_number", start=0, end=9999)
-    faculty_section_title = or_null(value("text.title"))
-    include_in_learn_catalog = or_null(value("development.boolean"))
-    hyl_choice_learn_by_doing = or_null(value("development.boolean"))
-    hyl_choice_learn_on_demand = or_null(value("development.boolean"))
-    hyl_choice_learn_from_others = or_null(value("development.boolean"))
-    hyl_choice_ai_enabled_support = or_null(value("development.boolean"))
-    hyl_choice_realworld_learning = or_null(value("development.boolean"))
-    hyl_choice_stackable_credentials = or_null(value("development.boolean"))
-    list_price = or_null(value("numeric.decimal_number", start=0, end=999999))
-    max_price = value("numeric.decimal_number", start=0, end=999999)
-    min_price = value("numeric.decimal_number", start=0, end=999999)
-    hubspot_form_id = value("text.word")
-    show_stay_updated = value("development.boolean")
+    about = fg.or_null(fg.value("text.sentence"))
+    effort = fg.or_null(fg.value("text.word"))
+    length = fg.value("text.word")
+    faq_url = fg.or_null(fg.url())
+    max_weeks = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    min_weeks = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+    video_url = fg.or_null(fg.url())
+    program_id = fg.parent("program", "id", nullable=True)
+    description = fg.or_null(fg.value("text.sentence"))
+    page_ptr_id = fg.parent("page_ptr", "id")
+    prerequisites = fg.or_null(fg.value("text.sentence"))
+    what_you_learn = fg.or_null(fg.value("text.sentence"))
+    search_image_id = fg.parent("search_image", "id", nullable=True)
+    feature_image_id = fg.parent("feature_image", "id", nullable=True)
+    max_weekly_hours = fg.value("numeric.integer_number", start=0, end=9999)
+    min_weekly_hours = fg.value("numeric.integer_number", start=0, end=9999)
+    faculty_section_title = fg.or_null(fg.value("text.title"))
+    include_in_learn_catalog = fg.or_null(fg.value("development.boolean"))
+    hyl_choice_learn_by_doing = fg.or_null(fg.value("development.boolean"))
+    hyl_choice_learn_on_demand = fg.or_null(fg.value("development.boolean"))
+    hyl_choice_learn_from_others = fg.or_null(fg.value("development.boolean"))
+    hyl_choice_ai_enabled_support = fg.or_null(fg.value("development.boolean"))
+    hyl_choice_realworld_learning = fg.or_null(fg.value("development.boolean"))
+    hyl_choice_stackable_credentials = fg.or_null(fg.value("development.boolean"))
+    list_price = fg.or_null(fg.value("numeric.decimal_number", start=0, end=999999))
+    max_price = fg.value("numeric.decimal_number", start=0, end=999999)
+    min_price = fg.value("numeric.decimal_number", start=0, end=999999)
+    hubspot_form_id = fg.value("text.word")
+    show_stay_updated = fg.value("development.boolean")
 
 
-@table("raw__mitxonline__app__postgres__variants_supportedvariant", default_count=SCAFFOLD_DEFAULT_COUNT)
-class SupportedVariantBase(RowFactory):
+@fg.table("raw__mitxonline__app__postgres__variants_supportedvariant", default_count=SCAFFOLD_DEFAULT_COUNT)
+class SupportedVariantBase(fg.RowFactory):
     """Table variants_supportedvariant, from model variants.SupportedVariant."""
 
     # object_id: the object id of generic foreign key variant_object, set in generate() with content_type_id.
@@ -520,14 +520,14 @@ class SupportedVariantBase(RowFactory):
         content_type = None
 
     id = factory.Sequence(lambda n: n)
-    active = value("development.boolean")
-    b2b_only = value("development.boolean")
+    active = fg.value("development.boolean")
+    b2b_only = fg.value("development.boolean")
     language = factory.Iterator(SUPPORTED_VARIANT_LANGUAGE_CHOICES)
-    created_on = value("datetime.datetime", start=2020, end=2025)
-    updated_on = value("datetime.datetime", start=2020, end=2025)
+    created_on = fg.value("datetime.datetime", start=2020, end=2025)
+    updated_on = fg.value("datetime.datetime", start=2020, end=2025)
     variant_length = factory.Iterator(["", "S"])
-    content_type_id = parent("content_type", "id")
-    default_variant = value("development.boolean")
+    content_type_id = fg.parent("content_type", "id")
+    default_variant = fg.value("development.boolean")
     variant_industry = factory.Iterator(["", "E", "F", "HC", "M"])
 
 

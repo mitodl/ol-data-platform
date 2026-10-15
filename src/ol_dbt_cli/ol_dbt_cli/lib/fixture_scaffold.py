@@ -95,10 +95,20 @@ _NAME_PROVIDERS: tuple[tuple[str, str | None], ...] = (
     (r"(^|_)(uuid|guid)$", "cryptographic.uuid"),
     (r"(^|_)(description|summary|body|content|text|note|comment|message)$", "text.sentence"),
 )
-# A text column by field class when no name rule matches.
-_TEXT_PROVIDERS = {"TextField": "text.sentence", "EmailField": "person.email", "SlugField": "internet.slug"}
+# Text field classes that say what they hold, whatever the column is named.
+# `None` means url().
+_FIELD_PROVIDERS: dict[str, str | None] = {
+    "URLField": None,
+    "EmailField": "person.email",
+    "SlugField": "internet.slug",
+}
 # A CharField shorter than this gets a number: mimesis words run to 12 letters.
 _SHORT_TEXT = 12
+# Digits a unique text value has room for: a million rows, past 100x of tens.
+_UNIQUE_DIGITS = 6
+# Names the scaffolded module uses inside a class body. A column of one of
+# these names would shadow it, so it is left for __init__.py.
+_MODULE_NAMES = frozenset({"fg", "factory"})
 # Dates fall in a fixed range: a provider's default range ends at the current
 # year, so its rows would change with the date.
 _DATE_RANGE = "start=2020, end=2025"
@@ -106,14 +116,14 @@ _DECIMAL = re.compile(r"^decimal\((\d+),(\d+)\)$")
 # By fixture type: a column the model does not have, or a field class the
 # scaffold has no provider for.
 _FIXTURE_TYPE_DECLARATIONS = {
-    "boolean": 'value("development.boolean")',
-    "int": 'value("numeric.integer_number", start=0, end=1000)',
-    "long": 'value("numeric.integer_number", start=0, end=1000)',
-    "float": 'value("numeric.float_number", start=0, end=1000, precision=2)',
-    "double": 'value("numeric.float_number", start=0, end=1000, precision=2)',
-    "date": f'value("datetime.date", {_DATE_RANGE})',
-    "timestamp": f'value("datetime.datetime", {_DATE_RANGE})',
-    "string": 'value("text.word")',
+    "boolean": 'fg.value("development.boolean")',
+    "int": 'fg.value("numeric.integer_number", start=0, end=1000)',
+    "long": 'fg.value("numeric.integer_number", start=0, end=1000)',
+    "float": 'fg.value("numeric.float_number", start=0, end=1000, precision=2)',
+    "double": 'fg.value("numeric.float_number", start=0, end=1000, precision=2)',
+    "date": f'fg.value("datetime.date", {_DATE_RANGE})',
+    "timestamp": f'fg.value("datetime.datetime", {_DATE_RANGE})',
+    "string": 'fg.value("text.word")',
 }
 
 
@@ -328,9 +338,10 @@ def _factory(
     for column, fixture_type in table.columns.items():
         if column.startswith(_LOADER_PREFIXES):
             continue
-        if keyword.iskeyword(column):
+        if keyword.iskeyword(column) or column in _MODULE_NAMES:
             written.comments.append(
-                f"{column}: a Python keyword, so it cannot be a class attribute; set it in generate()."
+                f"{column}: a Python keyword or a name this module uses, so it cannot be a class attribute; "
+                "set it in generate()."
             )
             continue
         facts = model["columns"].get(column.lower())
@@ -338,7 +349,7 @@ def _factory(
             if model["model"] is not None:
                 notes.append(f"{table.raw_table}.{column}: not a column of {model['model']}; drawn by its fixture type")
             if column.lower() in key_columns:
-                key = "factory.Sequence(lambda n: n)" if fixture_type in {"int", "long"} else _unique_text(column)
+                key = "factory.Sequence(lambda n: n)" if fixture_type in {"int", "long"} else _unique_text(column, None)
                 written.lines.append(f"{column} = {key}")
             else:
                 written.lines.append(f"{column} = {_by_fixture_type(fixture_type)}")
@@ -375,18 +386,22 @@ def _declaration(  # noqa: PLR0911
         written.comments.append(f"{column}: JSON whose shape the model does not say; set it in __init__.py.")
         return None
     internal_type = facts["internal_type"]
-    if facts["primary_key"]:
-        if internal_type in _INTEGER_TYPES:
-            return "factory.Sequence(lambda n: n)"
-        return 'value("cryptographic.uuid")' if internal_type == "UUIDField" else _unique_text(column)
+    if facts["primary_key"] and internal_type in _INTEGER_TYPES:
+        return "factory.Sequence(lambda n: n)"
     # A unique column comes from the sequence, choices or not: cycling
     # through choices would repeat one.
     if facts["unique"] and internal_type in _INTEGER_TYPES:
         return _nullable("factory.Sequence(lambda n: n)", facts)
-    if facts["unique"] and internal_type == "UUIDField":
-        return _nullable('value("cryptographic.uuid")', facts)
-    if facts["unique"] and internal_type in _TEXT_TYPES:
-        return _nullable(_unique_text(column), facts)
+    if (facts["primary_key"] or facts["unique"]) and internal_type == "UUIDField":
+        return _nullable('fg.value("cryptographic.uuid")', facts)
+    if facts["primary_key"] or (facts["unique"] and internal_type in _TEXT_TYPES):
+        if (unique := _unique_text(column, facts)) is None:
+            written.comments.append(
+                f"{column}: unique, and {facts['max_length']} characters hold too few distinct values to generate; "
+                "set it in __init__.py."
+            )
+            return None
+        return unique if facts["primary_key"] else _nullable(unique, facts)
     # A blank choice of None is the column's NULL, which or_null already makes.
     if choices := [choice for choice in facts.get("choices", []) if choice is not None]:
         return _choices(column, choices, facts, written)
@@ -421,19 +436,25 @@ def _foreign_key(
     if prefix + target not in fixture_tables:
         written.comments.append(f"{column}: references {target}, which the fixture has no table for.")
     if facts["null"]:
-        return f'parent("{param}", "{foreign_key["column"]}", nullable=True)'
-    return f'parent("{param}", "{foreign_key["column"]}")'
+        return f'fg.parent("{param}", "{foreign_key["column"]}", nullable=True)'
+    return f'fg.parent("{param}", "{foreign_key["column"]}")'
 
 
 def _nullable(declaration: str, facts: Mapping[str, Any]) -> str:
-    return f"or_null({declaration})" if facts["null"] else declaration
+    return f"fg.or_null({declaration})" if facts["null"] else declaration
 
 
-def _unique_text(column: str) -> str:
-    if "email" in column.lower():
-        return 'factory.Sequence(lambda n: f"user{n}@{RESERVED_DOMAIN}")'
+def _unique_text(column: str, facts: Mapping[str, Any] | None) -> str | None:
+    """Return a sequence of distinct values that fit the column, or ``None`` when none would."""
+    max_length = (facts or {}).get("max_length")
+    if "email" in column.lower() or (facts or {}).get("field") == "EmailField":
+        return 'factory.Sequence(lambda n: f"user{n}@{fg.RESERVED_DOMAIN}")'
     stem = column.lower().removesuffix("_id").replace("_", "-")
-    return f'factory.Sequence(lambda n: f"{stem}-{{n}}")'
+    if max_length is None or len(stem) + 1 + _UNIQUE_DIGITS <= max_length:
+        return f'factory.Sequence(lambda n: f"{stem}-{{n}}")'
+    if max_length >= _UNIQUE_DIGITS:
+        return "factory.Sequence(str)"
+    return None
 
 
 def _by_fixture_type(fixture_type: str) -> str:
@@ -447,42 +468,47 @@ def _decimal(max_digits: int, decimal_places: int) -> str:
     # Below the column's largest value, so rounding to its places cannot carry
     # into a digit it does not have.
     top = 10 ** min(max_digits - decimal_places, 6) - 1
-    return f'value("numeric.decimal_number", start=0, end={top})'
+    return f'fg.value("numeric.decimal_number", start=0, end={top})'
 
 
 def _provider(column: str, facts: Mapping[str, Any], fixture_type: str) -> str:  # noqa: PLR0911
     internal_type = facts["internal_type"]
     if internal_type in _TEXT_TYPES:
+        # By class first: URLField and EmailField report CharField as their
+        # internal type, and a field's class says more than its name.
+        if facts["field"] in _FIELD_PROVIDERS:
+            provider = _FIELD_PROVIDERS[facts["field"]]
+            return "fg.url()" if provider is None else f'fg.value("{provider}")'
         for pattern, provider in _NAME_PROVIDERS:
             if re.search(pattern, column.lower()):
-                return "url()" if provider is None else f'value("{provider}")'
-        if internal_type == "URLField":
-            return "url()"
+                return "fg.url()" if provider is None else f'fg.value("{provider}")'
+        if internal_type == "TextField":
+            return 'fg.value("text.sentence")'
         # Too short for a word (min_weekly_hours is a CharField(5)): a number
         # that fits, which the string column holds as its text.
-        if internal_type == "CharField" and (facts.get("max_length") or _SHORT_TEXT) < _SHORT_TEXT:
-            return f'value("numeric.integer_number", start=0, end={10 ** min(facts["max_length"], 4) - 1})'
-        return f'value("{_TEXT_PROVIDERS.get(internal_type, "text.word")}")'
+        if (facts.get("max_length") or _SHORT_TEXT) < _SHORT_TEXT:
+            return f'fg.value("numeric.integer_number", start=0, end={10 ** min(facts["max_length"], 4) - 1})'
+        return 'fg.value("text.word")'
     if internal_type in _INTEGER_TYPES:
-        return 'value("numeric.integer_number", start=0, end=1000)'
+        return 'fg.value("numeric.integer_number", start=0, end=1000)'
     if internal_type == "BooleanField":
-        return 'value("development.boolean")'
+        return 'fg.value("development.boolean")'
     if internal_type == "DecimalField":
         return _decimal(facts["max_digits"], facts["decimal_places"])
     if internal_type == "FloatField":
-        return 'value("numeric.float_number", start=0, end=1000, precision=2)'
+        return 'fg.value("numeric.float_number", start=0, end=1000, precision=2)'
     if internal_type == "DateTimeField":
-        return f'value("datetime.datetime", {_DATE_RANGE})'
+        return f'fg.value("datetime.datetime", {_DATE_RANGE})'
     if internal_type == "DateField":
-        return f'value("datetime.date", {_DATE_RANGE})'
+        return f'fg.value("datetime.date", {_DATE_RANGE})'
     if internal_type == "TimeField":
-        return 'value("datetime.time")'
+        return 'fg.value("datetime.time")'
     if internal_type == "UUIDField":
-        return 'value("cryptographic.uuid")'
+        return 'fg.value("cryptographic.uuid")'
     if internal_type == "GenericIPAddressField":
-        return 'value("internet.ip_v4")'
+        return 'fg.value("internet.ip_v4")'
     if internal_type in {"FileField", "ImageField"}:
-        return 'value("file.file_name")'
+        return 'fg.value("file.file_name")'
     # A field class with no rule here (a DurationField): what its column holds.
     return _by_fixture_type(fixture_type)
 
@@ -503,8 +529,8 @@ def _choices(column: str, choices: list[Any], facts: Mapping[str, Any], written:
 def _module(models: Mapping[str, Any], unit: Unit, classes: list[_Class], alphabets: dict[str, str]) -> str:
     body: list[str] = []
     for written in classes:
-        body += ["", "", *_fit("", f'@table("{written.raw_table}", default_count=SCAFFOLD_DEFAULT_COUNT)')]
-        body.append(f"class {written.name}(RowFactory):")
+        body += ["", "", *_fit("", f'@fg.table("{written.raw_table}", default_count=SCAFFOLD_DEFAULT_COUNT)')]
+        body.append(f"class {written.name}(fg.RowFactory):")
         if len(written.docstring) == 1:
             body.append(f'{_INDENT}"""{written.docstring[0]}"""')
         else:
@@ -519,11 +545,6 @@ def _module(models: Mapping[str, Any], unit: Unit, classes: list[_Class], alphab
             body.append("")
             body += [fitted for line in written.lines for fitted in _fit(_INDENT, line)]
     text = "\n".join(body)
-    runtime = sorted(
-        name
-        for name in ("RESERVED_DOMAIN", "RowFactory", "or_null", "parent", "table", "url", "value")
-        if re.search(rf"\b{name}\b", text)
-    )
     provenance = (
         f"From {models['app']} at {models['commit']}. Written by `ol-dbt fixtures scaffold` from models.json "
         "and rewritten wholesale on every run: change a factory by subclassing it in __init__.py."
@@ -539,7 +560,10 @@ def _module(models: Mapping[str, Any], unit: Unit, classes: list[_Class], alphab
     ]
     if "factory." in text:
         header += ["import factory", ""]
-    header += _fit("", f"from ol_dbt_cli.lib.fixture_generation import {', '.join(runtime)}")
+    # Through the module, because a class body resolves a name to its own
+    # attributes first: a column named `value` would shadow value() for the
+    # columns after it.
+    header.append("from ol_dbt_cli.lib import fixture_generation as fg")
     header += ["", f"SCAFFOLD_DEFAULT_COUNT = {SCAFFOLD_DEFAULT_COUNT}"]
     for written in classes:
         for constant, items in written.constants:
@@ -567,10 +591,6 @@ def _fit(indent: str, line: str) -> list[str]:
     if len(indent + line) <= LINE_LIMIT or not line.endswith(")") or "(" not in line:
         return [indent + line]
     head, _, rest = line.partition("(")
-    if head.startswith("from "):
-        head, rest = line.removesuffix(")"), ""
-        names = head.split(" import ")[1].split(", ")
-        return [f"{indent}{head.split(' import ')[0]} import (", *[f"{indent}{_INDENT}{name}," for name in names], ")"]
     arguments = _split_arguments(rest.removesuffix(")"))
     inner = [fitted for argument in arguments for fitted in _fit(indent + _INDENT, f"{argument},")]
     return [f"{indent}{head}(", *inner, f"{indent})"]
