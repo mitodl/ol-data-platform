@@ -38,11 +38,15 @@ sources:
   - name: bridge_program_course
     description: "Program-to-course membership. Grain: one row per (program, course)."
   - name: tfact_enrollment
-    description: "Enrollment fact. Grain: one row per enrollment."
+    description: >
+      Enrollment fact. Grain: one row per enrollment. Read only where a view
+      needs the enrollment's program_fk; the rest read
+      afact_learner_courserun_progress.
   - name: tfact_certificate
-    description: "Certificate fact. Grain: one row per certificate."
-  - name: tfact_grade
-    description: "Grade fact. Grain: one row per (user, course_run)."
+    description: >
+      Certificate fact. Grain: one row per certificate. Read only for program
+      certificates; course certificates are read through
+      afact_learner_courserun_progress.
   - name: dim_user
     description: >
       User dimension. Grain: one row per person across platforms. Only the
@@ -66,7 +70,5 @@ sources:
   - name: afact_learner_courserun_progress
     description: >
       Where a learner stands in a course run. Grain: one row per (user, course
-      run) enrollment, with the enrollment, grade, certificate, is_certified and
-      completion_status.
-  - name: dim_date
-    description: "Date dimension. Grain: one row per day, keyed on date_key (YYYYMMDD)."
+      run) enrollment, with the enrollment, grade, current course certificate,
+      last_active_on, is_certified, completion_status and needs_attention_since.
