@@ -35,6 +35,11 @@ _SQL_DIRS = ("models", "macros", "tests", "snapshots", "analyses")
 _YAML_DIRS = (*_SQL_DIRS, "seeds")
 _ENGINE_PREFIXES = ("default__", "duckdb__", "starrocks__", "trino__")
 _CALL = re.compile(r"(?<!\w)(?P<name>json_\w+|is_json_scalar)\s*\(", re.IGNORECASE)
+# A relation named json_* followed by its column list is not a call: a CTE
+# (`with json_rows(id) as (`, `, json_rows(id) as (`), an INSERT or CREATE
+# target, or a table alias (`as json_items(e)`).
+_RELATION_KEYWORD = re.compile(r"(?<!\w)(?:as|into|recursive|table|view|with)\Z", re.IGNORECASE)
+_CTE_COLUMNS = re.compile(r"\([^()]*\)\s*as\s*\(", re.IGNORECASE)
 # The macros that replace the calls the conversions met. Any other JSON function
 # gets the generic advice.
 _MACROS = {
@@ -55,7 +60,14 @@ _DETAIL = (
 
 
 def _calls(sql: str) -> Iterator[re.Match[str]]:
-    return _CALL.finditer(sql_code(sql))
+    code = sql_code(sql)
+    for match in _CALL.finditer(code):
+        preceding = code[: match.start()].rstrip()
+        if _RELATION_KEYWORD.search(preceding, len(preceding) - len("recursive")) or _CTE_COLUMNS.match(
+            code, match.end() - 1
+        ):
+            continue
+        yield match
 
 
 def _engine_spans(source: str) -> list[tuple[int, int]]:

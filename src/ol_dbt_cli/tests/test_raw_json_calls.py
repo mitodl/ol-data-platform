@@ -62,6 +62,36 @@ def test_ignores_macro_calls_comments_and_quoted_text(dbt_dir: Path, sql: str) -
     assert _messages(dbt_dir) == []
 
 
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "with json_rows(id) as (select 1) select * from json_rows",
+        "with a as (select 1), json_rows (id) as (select 1) select * from json_rows",
+        "with recursive json_rows(id) as (select 1) select * from json_rows",
+        "insert into json_log(id, payload) values (1, '{}')",
+        "create table json_log(id int)",
+        "select e from t cross join unnest(t.items) as json_items(e)",
+    ],
+)
+def test_ignores_a_relation_named_json_with_a_column_list(dbt_dir: Path, sql: str) -> None:
+    (dbt_dir / "models" / "m.sql").write_text(sql)
+    assert _messages(dbt_dir) == []
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        # Trino and DuckDB do not escape a quote with a backslash.
+        "select '\\' as slash, json_extract_scalar(payload, '$.id') as id from t",
+        # The quotes inside Jinja inside a literal do not end the literal.
+        """select 'lax {{ p | replace("'", "") }}' as a, json_parse(x) as "b" from t""",
+    ],
+)
+def test_reports_a_call_after_a_literal_the_quotes_could_misread(dbt_dir: Path, sql: str) -> None:
+    (dbt_dir / "models" / "m.sql").write_text(sql)
+    assert len(_messages(dbt_dir)) == 1
+
+
 def test_reports_a_call_passed_to_a_macro_as_sql(dbt_dir: Path) -> None:
     (dbt_dir / "models" / "m.sql").write_text("""select {{ json_to_varchar("json_parse(payload)") }}""")
     assert _messages(dbt_dir) == [
