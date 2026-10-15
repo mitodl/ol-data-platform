@@ -180,6 +180,11 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # exception to "QA does not build" that holds only because none of its
     # models is a cross-source union, which ol-dbt validate enforces on the tag.
     "learn_integrations_qa_daily": frozenset({"qa"}),
+    # A sensor, not a schedule, gated here for the same reason. It writes check
+    # results to OpenMetadata on tables named from the image's manifest, which
+    # is compiled for production, and only the production stack copies the bot
+    # token to secret-data/pipelines/openmetadata.
+    "asset_check_openmetadata": frozenset({"production"}),
 }
 
 _UNDECLARED_ENVIRONMENTS = {
