@@ -8,6 +8,7 @@ from dagster import (
     AssetKey,
     AssetsDefinition,
     AssetSpec,
+    Failure,
     MaterializeResult,
     multi_asset,
 )
@@ -189,19 +190,33 @@ def build_superset_dataset_assets(
         context: AssetExecutionContext,
         superset_api: SupersetApiClientFactory,
     ) -> Iterator[MaterializeResult[Any]]:
+        errors: list[str] = []
         for dataset_key in sorted(context.selected_asset_keys):
             dbt_key = dbt_key_by_dataset_key[dataset_key]
-            yield MaterializeResult(
-                asset_key=dataset_key,
-                metadata=_refresh_dataset(
-                    context,
-                    superset_api.client,
-                    dbt_asset_group_name=dbt_key.path[0],
-                    dbt_model_name=dbt_key.path[1],
-                    database_id=database_id,
-                    database_name=database_name,
-                    schema_base=schema_base,
+            metadata = _refresh_dataset(
+                context,
+                superset_api.client,
+                dbt_asset_group_name=dbt_key.path[0],
+                dbt_model_name=dbt_key.path[1],
+                database_id=database_id,
+                database_name=database_name,
+                schema_base=schema_base,
+            )
+            if metadata["status"] == "error":
+                errors.append(metadata["error"])
+            yield MaterializeResult(asset_key=dataset_key, metadata=metadata)
+
+        # One bad dataset stays in its own metadata, so a single persistently
+        # broken table cannot fail every run. When every dataset failed, the
+        # cause is Superset itself (credentials, an outage), and the step has
+        # to fail for the Sentry hook and run_retries to see it.
+        if errors and len(errors) == len(context.selected_asset_keys):
+            raise Failure(
+                description=(
+                    f"Every selected {database_name} Superset dataset failed "
+                    f"({len(errors)}). First error: {errors[0]}"
                 ),
+                metadata={"failed_datasets": len(errors)},
             )
 
     return _superset_datasets

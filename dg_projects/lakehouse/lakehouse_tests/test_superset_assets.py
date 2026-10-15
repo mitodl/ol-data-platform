@@ -131,6 +131,32 @@ def test_a_bad_response_body_costs_only_its_own_dataset():
     assert statuses == {"first_model": "error", "second_model": "refreshed"}
 
 
+def test_the_step_fails_when_every_dataset_failed():
+    class NoTokenClient(FakeSupersetClient):
+        def refresh_dataset(self, dataset_id: int) -> dict[str, Any]:
+            self.refreshed.append(dataset_id)
+            msg = "Failed to fetch access token"
+            raise RuntimeError(msg)
+
+    superset_api = FakeSupersetApi()
+    superset_api.client = NoTokenClient()
+    keys = [AssetKey(["mart", "first_model"]), AssetKey(["mart", "second_model"])]
+    assets = build_superset_dataset_assets(keys, database_id=1)
+
+    result = materialize(
+        [assets], resources={"superset_api": superset_api}, raise_on_error=False
+    )
+
+    assert not result.success
+    failure = result.get_step_failure_events()[0].step_failure_data.error
+    assert failure is not None
+    assert "Every selected trino Superset dataset failed (2)" in failure.message
+    # Both datasets were tried before the step gave up.
+    assert superset_api.client.refreshed == [42, 42]
+    statuses = {m["status"] for m in _materialized_metadata(result).values()}
+    assert statuses == {"error"}
+
+
 def test_a_subset_touches_only_the_selected_datasets():
     superset_api = FakeSupersetApi()
     assets = build_superset_dataset_assets(
