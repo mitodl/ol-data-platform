@@ -191,47 +191,82 @@ models:
 
 - name: integrations__learn__oll_courses
   description: >
-    Open Learning Library courses exposed for MIT Learn's ETL. OCW-origin
-    rows are excluded (handled by integrations__learn__ocw_courses).
-    One row per non-OCW course. Sourced from stg__oll__google_sheets__courses
-    via the oll dlt pipeline.
-    NOTE: OLL has no last_modified timestamp; current_timestamp is used.
+    Open Learning Library courses for MIT Learn webhook delivery, shaped as MIT
+    Learn's legacy OLL ETL (learning_resources/etl/oll.py) writes them. One row per
+    row of the OLL sheet except the runs in MIT Learn's SKIP_OCW_COURSES; each
+    course has exactly one run. OCW-offered rows are included: they are OLL-hosted
+    runs MIT Learn lists as offered by OCW, not OCW course sites.
   columns:
   - name: readable_id
     description: >
-      Derived as MITx+{course_code}, matching the convention in
-      learning_resources/etl/oll.py. Used for upsert matching.
+      str, MITx+{course_number}, or for an OCW-offered row
+      {course_number}+{semester}_{year} with the semester lowercased, as the
+      legacy ETL builds them.
     tests: [not_null, unique]
-  - name: title
-    description: Course title.
+  - name: run_id
+    description: str, the sheet's edX run key, e.g. MITx+0.501x+2T2019. The course's
+      only run.
+    tests: [not_null, unique]
+  - name: course_number
+    description: str, the OLL course number, e.g. 0.501x.
     tests: [not_null]
+  - name: title
+    description: str, course title; also the run title and image alt text.
+    tests: [not_null]
+  - name: url
+    description: str, the course's openlearninglibrary.mit.edu URL.
+  - name: description
+    description: str, course description; also the full description and run description.
+  - name: image_url
+    description: str, course image URL (the sheet's flat image column).
+  - name: offered_by
+    description: str, MIT Learn offeror code, 'ocw' when the sheet says OCW, else
+      'mitx'.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [mitx, ocw]
+  - name: published
+    description: boolean, whether the sheet's published column is YES.
+    tests: [not_null]
+  - name: level
+    description: str, MIT Learn LevelType name of the sheet's level, null when empty
+      or not one MIT Learn knows.
+  - name: topics
+    description: array<str>, the sheet's MITx Online primary and secondary child topics,
+      in that order, with Educational Policy renamed Education Policy. Null when the
+      row has neither.
+  - name: instructors
+    description: array<str>, the sheet's instructor columns 1 to 6 in order, empty
+      ones dropped. Null when the row has none.
+  - name: year
+    description: int, the run's year from its run key, null when the key has no term.
+  - name: semester
+    description: str, Spring, Summer or Fall from a 1T/2T/3T term key, else the season
+      of a 2022_Summer style suffix, else null.
+  - name: duration
+    description: str, '{weeks} weeks', null when the sheet has no duration.
+  - name: min_weeks
+    description: int, the sheet's duration in weeks, rounded up.
+  - name: max_weeks
+    description: int, same as min_weeks.
+  - name: time_commitment
+    description: str, '{hours} hours/week', null when the sheet has no student effort.
+  - name: min_weekly_hours
+    description: int, the sheet's student effort in hours a week, rounded up.
+  - name: max_weekly_hours
+    description: int, same as min_weekly_hours.
   - name: last_modified
-    description: current_timestamp — OLL spreadsheet has no modification timestamp.
+    description: str, ISO 8601 build time; the sheet has no modification time.
     tests: [not_null]
   - name: etl_source
     description: Always 'oll'.
     tests: [not_null]
-  - name: description
-    description: Course description from the OLL spreadsheet.
-  - name: url
-    description: Course URL from the OLL spreadsheet.
-  - name: image_url
-    description: Course image URL from the OLL spreadsheet.
-  - name: topics
-    description: Comma-separated topic labels (normalized from pipe-separated raw
-      field).
-  - name: published
-    description: >
-      Always true; only the most recent offering per course (by year, then
-      semester) is exposed.
   - name: platform
-    description: Always 'oll', matches etl_source.
+    description: Always 'oll'.
   - name: resource_type
     description: Always 'course'.
-  - name: runs
-    description: >
-      Single run record in pipe-delimited format: run_id|||true
-      (no start/end dates available in the OLL spreadsheet).
 
 - name: integrations__learn__mit_edx_programs
   description: >
@@ -348,3 +383,44 @@ models:
   - name: instructor_position
     description: int, 1-based position of the instructor in the program.
     tests: [not_null]
+
+unit_tests:
+- name: test_integrations__learn__oll_courses_builds_legacy_ids_and_run_fields
+  description: >
+    MIT Learn's OLL ETL ids an OCW-offered row by course number, semester and year
+    parsed from the run key (a 1T/2T/3T term, else a 2022_Summer suffix) and every
+    other row by MITx+{course number}. It skips the SKIP_OCW_COURSES run, rounds
+    duration and effort up, and maps the level label to its LevelType name.
+  model: integrations__learn__oll_courses
+  given:
+  - input: ref('stg__oll__google_sheets__courses')
+    rows:
+    - {course_number: 0.501x, courserun_readable_id: MITx+0.501x+2T2019, course_title: Mechanics,
+      course_offered_by: MITx, course_is_published: true, course_level: Undergraduate,
+      course_duration_weeks: '13', course_weekly_hours: '3.5'}
+    - {course_number: '18.05', courserun_readable_id: MITx+18.05r_10+2022_Summer,
+      course_title: Probability, course_offered_by: OCW, course_is_published: true,
+      course_level: '', course_duration_weeks: '', course_weekly_hours: ''}
+    - {course_number: Pre_7.01r, courserun_readable_id: OCW+Pre-7.01+1T2020, course_title: Biology,
+      course_offered_by: OCW, course_is_published: true, course_level: High School,
+      course_duration_weeks: '6', course_weekly_hours: '4'}
+    - {course_number: 21A.819.1x, courserun_readable_id: MITx+21A.819.1x, course_title: Ethnography,
+      course_offered_by: MITx, course_is_published: false, course_level: Graduate,
+      course_duration_weeks: '4', course_weekly_hours: ''}
+    - {course_number: '18.031', courserun_readable_id: OCW+18.031+2019_Spring, course_title: Skipped,
+      course_offered_by: OCW, course_is_published: true, course_level: Undergraduate,
+      course_duration_weeks: '4', course_weekly_hours: '4'}
+  expect:
+    rows:
+    - {readable_id: MITx+0.501x, run_id: MITx+0.501x+2T2019, offered_by: mitx, published: true,
+      level: undergraduate, year: 2019, semester: Summer, duration: 13 weeks, min_weeks: 13,
+      time_commitment: 4 hours/week, min_weekly_hours: 4}
+    - {readable_id: 18.05+summer_2022, run_id: MITx+18.05r_10+2022_Summer, offered_by: ocw,
+      published: true, level: null, year: 2022, semester: Summer, duration: null,
+      min_weeks: null, time_commitment: null, min_weekly_hours: null}
+    - {readable_id: Pre_7.01r+spring_2020, run_id: OCW+Pre-7.01+1T2020, offered_by: ocw,
+      published: true, level: high_school, year: 2020, semester: Spring, duration: 6
+        weeks, min_weeks: 6, time_commitment: 4 hours/week, min_weekly_hours: 4}
+    - {readable_id: MITx+21A.819.1x, run_id: MITx+21A.819.1x, offered_by: mitx, published: false,
+      level: graduate, year: null, semester: null, duration: 4 weeks, min_weeks: 4,
+      time_commitment: null, min_weekly_hours: null}
