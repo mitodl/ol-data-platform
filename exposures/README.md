@@ -1,7 +1,7 @@
 # Exposure contracts
 
 Each JSON file here is what one application exposure reads from the warehouse:
-the columns of every model it depends on, in SELECT order, with each column's
+the columns of every model it depends on, with each column's
 `config.meta.cohort` declaration where the model has one. The files are
 generated from the model YAML and committed, so an application's CI can check
 itself against them without building the dbt project.

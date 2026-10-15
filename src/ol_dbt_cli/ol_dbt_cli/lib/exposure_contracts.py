@@ -5,13 +5,16 @@ CohortPolicy per response model that has to agree with ``config.meta.cohort``
 on those columns. Its CI cannot build this project, and the published dbt docs
 are built on a target where those views are disabled. So for every exposure of
 type application, ``ol-dbt exposures export`` writes ``exposures/<name>.json``:
-the columns of each model the exposure depends on, in SELECT order, with their
-cohort declarations. The application checks its models against that file.
+the columns of each model the exposure depends on, with their cohort
+declarations. The application checks its models against that file.
 
-The file is generated from the model YAML, which ``yaml_sql_sync`` already holds
-to the SQL. The ``exposure_contract`` check fails when the committed file no
-longer matches, so a dbt change to anything an application reads shows up in
-the change's own diff.
+The file is generated from the model YAML, whose column set ``yaml_sql_sync``
+already holds to the SQL. Columns are listed in the order the YAML documents
+them; the application selects by name, so the order carries no meaning.
+
+The ``exposure_contract`` check fails when the committed file no longer
+matches, so a dbt change to anything an application reads shows up in the
+change's own diff.
 """
 
 from __future__ import annotations
@@ -23,8 +26,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import yaml
+from pydantic import ValidationError
 
-from ol_dbt_cli.lib.cohort_policy import column_cohort
+from ol_dbt_cli.lib.cohort_policy import ColumnCohort, column_cohort
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
 if TYPE_CHECKING:
@@ -55,10 +59,17 @@ def _schema_documents(dbt_dir: Path) -> Iterator[dict[str, Any]]:
 
 
 def _contract_column(column: dict[str, Any]) -> dict[str, Any]:
+    """Return one column's contract entry, with its cohort block normalized.
+
+    Normalizing drops keys spelled at their default (``contained_in: null``,
+    ``uncontained: false``), so a consumer can test for a key's presence.
+
+    :raises ValidationError: The column's cohort block is invalid.
+    """
     entry: dict[str, Any] = {"name": column["name"]}
     cohort = column_cohort(column)
     if cohort is not None:
-        entry["cohort"] = cohort
+        entry["cohort"] = ColumnCohort.model_validate(cohort).model_dump(mode="json", exclude_defaults=True)
     return entry
 
 
@@ -94,7 +105,10 @@ def render_exposure_contracts(dbt_dir: Path) -> ExposureContracts:
             if not columns:
                 problems.append(f"{model_name} has no columns declared in YAML")
                 continue
-            models[model_name] = {"columns": [_contract_column(column) for column in columns]}
+            try:
+                models[model_name] = {"columns": [_contract_column(column) for column in columns]}
+            except ValidationError:
+                problems.append(f"{model_name} has an invalid config.meta.cohort; see the cohort_policy check")
         if problems:
             result.problems[name] = problems
             continue

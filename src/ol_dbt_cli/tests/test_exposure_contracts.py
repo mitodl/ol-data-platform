@@ -141,3 +141,24 @@ def test_an_exposure_that_cannot_be_rendered_writes_nothing(tmp_path: Path) -> N
 
 def test_the_committed_files_match_the_project() -> None:
     assert _check(REPO_ROOT / "src" / "ol_dbt", REPO_ROOT / "exposures") == []
+
+
+def test_cohort_keys_spelled_at_their_default_are_dropped(tmp_path: Path) -> None:
+    dbt_dir = _project(tmp_path)
+    models_file = dbt_dir / "models" / "_models.yml"
+    models = yaml.safe_load(models_file.read_text())
+    models["models"][0]["columns"][0]["config"]["meta"]["cohort"] |= {"contained_in": None, "uncontained": False}
+    models_file.write_text(yaml.safe_dump(models))
+
+    text = render_exposure_contracts(dbt_dir).files["api_dashboard"]
+    assert '        {"name": "organization_key", "cohort": {"role": "dimension"}},' in text.splitlines()
+
+
+def test_an_invalid_cohort_block_is_a_problem_not_a_crash(tmp_path: Path) -> None:
+    dbt_dir = _project(tmp_path)
+    models_file = dbt_dir / "models" / "_models.yml"
+    models_file.write_text(models_file.read_text().replace("role: dimension", "role: headline"))
+
+    assert render_exposure_contracts(dbt_dir).problems == {
+        "api_dashboard": ["mv_trend has an invalid config.meta.cohort; see the cohort_policy check"]
+    }
