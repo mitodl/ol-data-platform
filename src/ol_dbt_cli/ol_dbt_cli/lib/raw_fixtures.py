@@ -81,6 +81,8 @@ STARROCKS_TYPES: dict[str, str] = {
 }
 _DECIMAL = re.compile(r"^decimal\((\d+),\s*(\d+)\)$")
 _INTEGER_BITS = {"int": 32, "long": 64}
+# What `full_refresh_append` and `incremental_append` end in, of a unit table's sync modes.
+_APPEND_SUFFIX = "_append"
 
 # Hive type names as Glue reports them for an Iceberg table.
 _GLUE_TYPES: dict[str, str] = {
@@ -174,7 +176,8 @@ def parse_fixture(path: Path, unit: Unit) -> UnitFixture:
     :rtype: UnitFixture
     :raises ValueError: If the unit's local strategy takes no fixture, a table is not the
         unit's, a type is not in the format, or a row sets a column the table
-        does not have.
+        does not have, holds a value its column cannot, or repeats the primary
+        key of an earlier row.
     """
     data = yaml.safe_load(path.read_text())
     if data["schema_version"] != SCHEMA_VERSION:
@@ -184,7 +187,7 @@ def parse_fixture(path: Path, unit: Unit) -> UnitFixture:
     if local_strategy not in FIXTURE_STRATEGIES:
         msg = f"{path}: unit {unit.key} has strategies.local: {local_strategy}, which takes no fixture"
         raise ValueError(msg)
-    declared = {table["raw_table"] for table in unit.tables}
+    declared = {table["raw_table"]: table for table in unit.tables}
 
     tables = []
     for raw_table, body in data["tables"].items():
@@ -202,11 +205,41 @@ def parse_fixture(path: Path, unit: Unit) -> UnitFixture:
                 msg = f"{path}: {raw_table}.{column}: {error}"
                 raise ValueError(msg) from error
         rows = body.get("rows") or []
+        table = TableFixture(raw_table=raw_table, columns=dict(columns), rows=list(rows))
+        key_paths = declared[raw_table].get("primary_key") or []
+        key_columns = [path[0] for path in key_paths]
+        # A key the fixture cannot hold (a nested path, a column it does not
+        # declare) is `validate_generated`'s to report: only generating needs it.
+        # An append table keeps every version of a row, so its key repeats.
+        comparable = (
+            bool(key_paths)
+            and all(len(path) == 1 and path[0] in columns for path in key_paths)
+            and not declared[raw_table]["sync_mode"].endswith(_APPEND_SUFFIX)
+        )
+        seen: dict[tuple[Any, ...], int] = {}
         for number, row in enumerate(rows, start=1):
+            label = f"{path}: {raw_table} row {number}"
             if unknown := sorted(set(row) - set(columns)):
-                msg = f"{path}: {raw_table} row {number} sets {', '.join(unknown)}, which the table does not have"
+                msg = f"{label} sets {', '.join(unknown)}, which the table does not have"
                 raise ValueError(msg)
-        tables.append(TableFixture(raw_table=raw_table, columns=dict(columns), rows=list(rows)))
+            for column, value in row.items():
+                if value is None:
+                    continue
+                try:
+                    _stored_value(value, columns[column])
+                except (ValueError, TypeError, ArithmeticError, struct.error) as error:
+                    msg = f"{label} has {value!r} in column {column}, which is not a valid {columns[column]}"
+                    raise ValueError(msg) from error
+            # A row with no key is NULL there, as any column it leaves out is.
+            if not comparable or any(row.get(column) is None for column in key_columns):
+                continue
+            key = _primary_key(table, row, key_columns, label)
+            if key in seen:
+                value = ", ".join(f"{column}={row[column]!r}" for column in key_columns)
+                msg = f"{label} repeats the primary key of row {seen[key]}, {value}"
+                raise ValueError(msg)
+            seen[key] = number
+        tables.append(table)
     return UnitFixture(path=path, tables=tables)
 
 
@@ -320,7 +353,7 @@ def _primary_key(table: TableFixture, row: Mapping[str, Any], key_columns: list[
         try:
             key.append(None if value is None else _stored_value(value, fixture_type))
         except (ValueError, TypeError, ArithmeticError, struct.error) as error:
-            msg = f"{label} has {value!r} in primary key column {column}, which is not a {fixture_type}"
+            msg = f"{label} has {value!r} in primary key column {column}, which is not a valid {fixture_type}"
             raise ValueError(msg) from error
     return tuple(key)
 

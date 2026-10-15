@@ -429,7 +429,7 @@ def test_coerce_value(fixture_type: str, generated: Any, expected: Any) -> None:
 )
 def test_a_value_its_column_cannot_hold_names_the_column(tmp_path: Path, column: str, generated: Any) -> None:
     fixture, unit = _unit(tmp_path)
-    message = f"demo/app_postgres factories: {COURSES} generated row 2 has .* in column {column}, which is not a "
+    message = f"demo/app_postgres factories: {COURSES} generated row 2 has .* in column {column}, which is not a valid "
 
     with pytest.raises(ValueError, match=message):
         generate_rows(fixture, unit, _stub({COURSES: [{"id": 8}, {"id": 9, column: generated}]}))

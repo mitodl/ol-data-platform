@@ -385,7 +385,7 @@ def _finished(row: Row, table: TableFixture, label: str) -> Row:
         try:
             finished[column] = coerce_value(finished[column], fixture_type)
         except (ValueError, TypeError, ArithmeticError, struct.error) as error:
-            msg = f"{label} has {finished[column]!r} in column {column}, which is not a {fixture_type}"
+            msg = f"{label} has {finished[column]!r} in column {column}, which is not a valid {fixture_type}"
             raise ValueError(msg) from error
     return finished
 
