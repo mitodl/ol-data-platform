@@ -144,8 +144,9 @@ models:
     One row per news item MIT Learn's news_events app loads from an external feed,
     with the feed source's fields repeated on each row: MIT Open Learning's Medium
     publication and MIT Professional Education news. Learn's own website content
-    news stays in Learn. summary and content are the feed's HTML, unsanitized; Learn
-    sanitizes both with nh3 (the Medium summary to plain text), so the receiver must.
+    news stays in Learn. summary and content are the feed's HTML, unsanitized (Medium
+    content without its embeds' <iframe> tags); Learn sanitizes both with nh3 (the
+    Medium summary to plain text), so the receiver must. Learn does not sanitize title.
   config:
     meta:
       # Every feed it reads is qa: omit in the inventory; QA raw holds none.

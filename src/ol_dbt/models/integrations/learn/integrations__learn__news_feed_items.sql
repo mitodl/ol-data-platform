@@ -6,9 +6,10 @@
   news (mitpe_news.py). Learn's own website content news is not here: it is Learn's
   data and its sync is event-driven inside Learn.
 
-  summary and content are the feed's HTML, unsanitized. Learn runs both through
-  nh3 (main.utils.clean_data), the Medium summary with every tag stripped, and
-  the receiver is where that has to happen. title is not sanitized by Learn.
+  summary and content are the feed's HTML, unsanitized except that Medium content
+  loses its embeds' <iframe> tags as Learn's feedparser read does. Learn runs both
+  through nh3 (main.utils.clean_data), the Medium summary with every tag stripped,
+  and the receiver is where that has to happen. Learn does not sanitize title.
 #}
 
 with medium_posts as (
