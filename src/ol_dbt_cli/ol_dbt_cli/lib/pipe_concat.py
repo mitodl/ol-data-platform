@@ -15,10 +15,11 @@ and ``default__x`` when the project also defines ``starrocks__x``.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import yaml
 
+from ol_dbt_cli.lib.sql_source import sql_code, yaml_sql_strings
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
 if TYPE_CHECKING:
@@ -37,46 +38,16 @@ _DETAIL = (
     "Concatenate strings with {{ dbt.concat([a, b]) }}; append to an array with a dispatched macro."
 )
 
-# Comments and quoted text are consumed whole so a `||` inside them is not
-# reported. A Jinja expression or statement is consumed too, and the strings in
-# it are then read as SQL, because that is how SQL is handed to a macro:
-# `{{ from_iso8601_timestamp("created_on || 'Z'") }}`. A Jinja block ends only at
-# a closing delimiter outside its strings, so a hook such as
-# `post_hook="update t set v = a || {{ this }}"` is consumed whole.
-_JINJA_QUOTED = r"""'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*\""""
 _JINJA_COMMENT = re.compile(r"\{#.*?#\}", re.DOTALL)
-_TOKEN = re.compile(
-    rf"""
-      \{{\#.*?\#\}}              # Jinja comment
-    | (?P<jinja>
-          \{{\{{(?:{_JINJA_QUOTED}|[^'"}}]|\}}(?!\}}))*\}}\}}
-        | \{{%(?:{_JINJA_QUOTED}|[^'"%]|%(?!\}}))*%\}}
-      )
-    | /\*.*?\*/                # SQL block comment
-    | --[^\n]*                 # SQL line comment
-    | '(?:[^'\\]|\\.|'')*'     # single-quoted string
-    | "(?:[^"\\]|\\.|"")*"     # double-quoted identifier, or a Jinja string
-    | (?P<pipes>\|\|)
-    """,
-    re.DOTALL | re.VERBOSE,
-)
-_JINJA_STRING = re.compile(r"""'(?P<single>(?:[^'\\]|\\.)*)'|"(?P<double>(?:[^"\\]|\\.)*)\"""")
+_PIPES = re.compile(r"\|\|")
 _MACRO = re.compile(
     r"\{%-?\s*macro\s+(?P<name>\w+)\s*\(.*?%\}(?P<body>.*?)\{%-?\s*endmacro\b[^%]*%\}",
     re.DOTALL,
 )
-# YAML keys whose values are prose or fixture data, never SQL.
-_NON_SQL_KEYS = frozenset({"description", "rows", "meta", "tags"})
 
 
-def _pipe_offsets(sql: str, base: int = 0) -> Iterator[int]:
-    for match in _TOKEN.finditer(sql):
-        if match.group("pipes"):
-            yield base + match.start()
-        elif match.group("jinja"):
-            for string in _JINJA_STRING.finditer(match.group("jinja")):
-                group = "single" if string.group("single") is not None else "double"
-                yield from _pipe_offsets(string.group(group), base + match.start() + string.start(group))
+def _pipe_offsets(sql: str) -> Iterator[int]:
+    return (match.start() for match in _PIPES.finditer(sql_code(sql)))
 
 
 def _macro_declarations(source: str) -> Iterator[re.Match[str]]:
@@ -99,21 +70,6 @@ def _other_engine_spans(source: str, starrocks_macros: frozenset[str]) -> list[t
         if other_engine:
             spans.append(match.span("body"))
     return spans
-
-
-def _yaml_sql_strings(node: Any, path: str = "") -> Iterator[tuple[str, str]]:
-    """Yield ``(key path, value)`` for every string in *node* that may hold SQL."""
-    if isinstance(node, str):
-        yield path, node
-    elif isinstance(node, list):
-        for index, item in enumerate(node):
-            yield from _yaml_sql_strings(item, f"{path}[{index}]")
-    elif isinstance(node, dict):
-        for key, value in node.items():
-            # A unit test fixture written as SQL is the one `rows` that is not data.
-            if key in _NON_SQL_KEYS and not (key == "rows" and node.get("format") == "sql"):
-                continue
-            yield from _yaml_sql_strings(value, f"{path}.{key}" if path else str(key))
 
 
 def check_pipe_concat(dbt_dir: Path, report: ValidationReport) -> None:
@@ -152,7 +108,7 @@ def check_pipe_concat(dbt_dir: Path, report: ValidationReport) -> None:
             )
 
     for path in yaml_files:
-        for key_path, value in _yaml_sql_strings(yaml.safe_load(path.read_text())):
+        for key_path, value in yaml_sql_strings(yaml.safe_load(path.read_text())):
             if next(_pipe_offsets(value), None) is not None:
                 report.add(
                     PIPE_CONCAT_CHECK,
