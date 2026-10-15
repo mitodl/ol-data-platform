@@ -14,7 +14,9 @@
 #   role: secondary   another distinct-learner count, withheld on its own under the
 #                     floor. contained_in names the cohort it is a subset of, so the
 #                     learners in that cohort and not in this one are also checked
-#                     against the floor. uncontained: true says no such check
+#                     against the floor. The depth views' certificates_earned is
+#                     the one exception, declared contained in a cohort it is not
+#                     a subset of on purpose; its description says why. uncontained: true says no such check
 #                     applies: it is a subset of no cohort in the row, or only of
 #                     one the consumer does not publish (contributing_learners).
 #   role: derived     a total, rate or average that gives away the size of the
@@ -670,13 +672,23 @@ models:
   - name: certificates_earned
     description: >
       Learners holding an unrevoked certificate for this course run, whether
-      or not their enrollment is still active, so it is not a subset of
-      total_enrolled_learners. One per learner, so it is its own cohort.
+      or not their enrollment is still active. It is not a strict subset of
+      total_enrolled_learners: a learner who certified and then unenrolled is
+      counted here and not there. ol-analytics-api declares it contained in
+      total_enrolled_learners anyway (ol-analytics-api #95, decided
+      2026-10-15), so besides its own floor it is withheld when
+      total_enrolled_learners minus it is below the floor and not 0, which
+      includes below zero. That gap is the enrolled learners without a
+      certificate minus the unenrolled certificate holders, never more than
+      the true one, so the declaration over-suppresses on runs with unenrolled
+      holders. The exception is a gap of exactly 0, which is published though
+      it hides as many uncertified enrolled learners as there are unenrolled
+      holders.
     config:
       meta:
         cohort:
           role: secondary
-          uncontained: true
+          contained_in: total_enrolled_learners
 
 - name: mv_b2b_mit_admin_contract_health
   description: >
@@ -1180,11 +1192,20 @@ models:
   - name: certificates_earned
     description: >
       Learners holding an unrevoked certificate for this course run, whether
-      or not their enrollment is still active, so it is not a subset of
-      total_enrolled_learners. One per learner, so ol-analytics-api flooring
-      it as a count of itself floors a learner cohort.
+      or not their enrollment is still active. It is not a strict subset of
+      total_enrolled_learners: a learner who certified and then unenrolled is
+      counted here and not there. ol-analytics-api declares it contained in
+      total_enrolled_learners anyway (ol-analytics-api #95, decided
+      2026-10-15), so besides its own floor it is withheld when
+      total_enrolled_learners minus it is below the floor and not 0, which
+      includes below zero. That gap is the enrolled learners without a
+      certificate minus the unenrolled certificate holders, never more than
+      the true one, so the declaration over-suppresses on runs with unenrolled
+      holders. The exception is a gap of exactly 0, which is published though
+      it hides as many uncertified enrolled learners as there are unenrolled
+      holders.
     config:
       meta:
         cohort:
           role: secondary
-          uncontained: true
+          contained_in: total_enrolled_learners
