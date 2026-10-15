@@ -43,8 +43,8 @@ with enrollment_detail as (
         ) as capstone_sum
         , count(distinct(
             case
-                when courseruncertificate_is_earned = true
-                then course_readable_id
+                when course_enrollment_detail.courseruncertificate_is_earned = true
+                then course_enrollment_detail.course_readable_id
                 else null
             end
         )) as course_certificate_sum
