@@ -6,7 +6,7 @@
 ) }}
 
 -- Grain: org x course_run (all-time). Refreshed by the Dagster b2b_organization MV-refresh asset.
--- Rows come from the dimensional facts through the contract that owns the course run
+-- Rows come from the dimensional facts through the contract each learner enrolled under
 -- (see macros/b2b_engagement.sql); see mv_b2b_monthly_engagement_trend for what that
 -- changed.
 --
@@ -17,8 +17,8 @@
 -- emits, so each such sum publishes its own contributing cohort count
 -- (video_watchers, problem_attempters, chatbot_users) alongside it. Do not add
 -- an activity aggregate without also emitting the cohort it is attributable to.
-with contract_courseruns as (
-{{ b2b_contract_courseruns() }}
+with contracts as (
+{{ b2b_contracts() }}
 )
 
 , learner_courseruns as (
@@ -29,8 +29,8 @@ select
     cc.organization_key,
     cc.sso_organization_id,
     cc.organization_name,
-    cc.courserun_readable_id,
-    cc.courserun_title,
+    cr.courserun_readable_id,
+    cr.courserun_title,
     count(distinct case when lc.enrollment_is_active then lc.user_fk end)     as total_enrolled_learners,
     count(distinct case when lc.days_active > 0 then lc.user_fk end)          as engaged_learners,
     round(100.0 * count(distinct case when lc.days_active > 0 then lc.user_fk end)
@@ -55,11 +55,14 @@ select
     )                                                                         as chatbot_adoption_pct,
     sum(case when lc.is_certified then 1 else 0 end)                          as certificates_earned
 from learner_courseruns lc
-join contract_courseruns cc
-    on lc.courserun_fk = cc.courserun_pk
+join contracts cc
+    on lc.contract_fk = cc.contract_pk
+join {{ source('dimensional', 'dim_course_run') }} cr
+    on lc.courserun_fk = cr.courserun_pk
+where cr.is_current = true
 group by
     cc.organization_key,
     cc.sso_organization_id,
     cc.organization_name,
-    cc.courserun_readable_id,
-    cc.courserun_title
+    cr.courserun_readable_id,
+    cr.courserun_title

@@ -37,11 +37,12 @@ models:
     this backs ol-analytics-api's b2b_learner_records tenant (the /enrollments
     collection, and the /learners collection when filtered by contract_id or
     include_inactive), never the k-anonymized b2b_dashboard tenant. The
-    organization is attributed through the contract that owns the course run,
-    never through organization_administration_report's free-text
-    organization_key fallback. A course run belongs to at most one contract
-    (courses_courserun.b2b_contract_id is a single foreign key), so contract
-    attribution cannot fan out. The view is not filtered to the organization's
+    organization is attributed through the contract the learner enrolled under
+    (tfact_enrollment.contract_fk), never through the course run, which can be
+    offered under several contracts, and never through
+    organization_administration_report's free-text organization_key fallback.
+    An enrollment has one contract, so contract attribution cannot fan out.
+    The view is not filtered to the organization's
     current roster, because a learner removed from the organization keeps their
     enrollment in its contract runs; snapshot_mitxonline_b2b_userorganization
     records membership history. outcomes_shared carries the learner's
@@ -369,9 +370,9 @@ models:
     b2b_learner_records /courses collection. Carries no personal data; it sits
     in this database so the tenant reads a single schema. Includes runs with no
     enrollments, which is why it is not derived from mv_b2b_learner_enrollment.
-    A course run belongs to at most one contract
-    (courses_courserun.b2b_contract_id is a single FK), so the grain cannot fan
-    out. Manual-refresh materialized view.
+    Read from MITx Online's CourseRun.b2b_contracts through
+    bridge_organization_courserun; a run offered under several contracts has a
+    row for each. Manual-refresh materialized view.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:

@@ -8,7 +8,9 @@
 -- Grain: org x contract x course_run x learner. Refreshed by the Dagster b2b_organization
 -- MV-refresh asset. Individually identifying: read by ol-analytics-api's
 -- b2b_learner_records tenant, never by the k-anonymized b2b_dashboard tenant.
--- The organization is reached through the contract that owns the course run, never
+-- The organization is reached through the contract the learner enrolled under
+-- (tfact_enrollment.contract_fk), never through the course run: a run can be offered
+-- under several contracts, and to learners outside any contract. Nor through
 -- organization_administration_report's free-text organization_key fallback, which
 -- would show a partner learners who aren't theirs.
 -- Not filtered to the organization's current roster: a learner removed from the
@@ -79,15 +81,13 @@ select
         coalesce(cert.certificate_updated_on, ''),
         coalesce(uc.consent_modified_at, '')
     ), '')                                                                              as record_updated_on
-from {{ source('dimensional', 'bridge_organization_courserun') }} boc
+from {{ source('dimensional', 'tfact_enrollment') }} e
 join {{ source('dimensional', 'dim_contract') }} c
-    on boc.contract_fk = c.contract_pk
+    on e.contract_fk = c.contract_pk
 join {{ source('dimensional', 'dim_organization') }} org
     on c.organization_fk = org.organization_pk
 join {{ source('dimensional', 'dim_course_run') }} cr
-    on boc.courserun_fk = cr.courserun_pk
-join {{ source('dimensional', 'tfact_enrollment') }} e
-    on boc.courserun_fk = e.courserun_fk
+    on e.courserun_fk = cr.courserun_pk
 join {{ source('dimensional', 'dim_user') }} u
     on e.user_fk = u.user_pk
 left join {{ source('dimensional', 'tfact_grade') }} g
@@ -97,7 +97,7 @@ left join {{ source('dimensional', 'tfact_certificate') }} cert
 left join activity a
     on e.user_fk = a.user_fk and e.courserun_fk = a.courserun_fk
 left join {{ source('dimensional', 'bridge_user_contract') }} uc
-    on e.user_fk = uc.user_fk and boc.contract_fk = uc.contract_fk
+    on e.user_fk = uc.user_fk and e.contract_fk = uc.contract_fk
 left join {{ source('dimensional', 'dim_date') }} d
     on a.last_active_date_key = d.date_key
 where org.platform = 'mitxonline'

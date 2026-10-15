@@ -56,6 +56,7 @@ airbyte:
     - courses_course
     - courses_course_departments
     - courses_courserun
+    - courses_courserun_b2b_contracts
     - courses_courserun_enrollment_modes
     - courses_courseruncertificate
     - courses_courserunenrollment
@@ -242,6 +243,13 @@ tables:
   modeled: true
 - name: courses_courserun
   raw_table: raw__mitxonline__app__postgres__courses_courserun
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: courses_courserun_b2b_contracts
+  raw_table: raw__mitxonline__app__postgres__courses_courserun_b2b_contracts
   sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:

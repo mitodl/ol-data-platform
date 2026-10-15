@@ -63,8 +63,10 @@ join {{ source('dimensional', 'dim_program') }} p
     on opr.program_fk = p.program_pk
 join program_course_counts pcc
     on opr.contract_pk = pcc.contract_pk and opr.program_fk = pcc.program_fk
+-- Only enrollments made under this contract: a run can be offered under several.
 left join {{ source('dimensional', 'tfact_enrollment') }} e
     on opr.courserun_fk = e.courserun_fk
+    and opr.contract_pk = e.contract_fk
 left join {{ source('dimensional', 'tfact_certificate') }} cert
     on e.user_fk = cert.user_fk and opr.courserun_fk = cert.courserun_fk
 group by

@@ -16,11 +16,12 @@
 -- contract_id (mitxonline's ContractPage.page_ptr_id, the one a caller
 -- filters on).
 --
--- Because a course run belongs to exactly one contract, this view's rows are a
--- strict partition of the org-level view's rows: adding the contract does not
--- split any course run, it only labels it. Every count here therefore equals
--- its org-level counterpart for the same course run -- which is precisely what
--- makes the complement recoverable when only some contracts are suppressed.
+-- Each learner's course run is attributed to the one contract they enrolled
+-- under, so this view's rows partition the org-level view's rows. A run offered
+-- under one of the org's contracts is only labelled, and every count equals its
+-- org-level counterpart. A run offered under several is split, and its contract
+-- rows sum to the org row. Either way the complement is recoverable when only
+-- some contracts are suppressed.
 --
 -- Every activity SUM here is contributed to by only the learners who did that
 -- specific thing, and those cohorts are subsets of engaged_learners (enrolled
@@ -29,8 +30,8 @@
 -- emits, so each such sum publishes its own contributing cohort count
 -- (video_watchers, problem_attempters, chatbot_users) alongside it. Do not add
 -- an activity aggregate without also emitting the cohort it is attributable to.
-with contract_courseruns as (
-{{ b2b_contract_courseruns() }}
+with contracts as (
+{{ b2b_contracts() }}
 )
 
 , learner_courseruns as (
@@ -44,8 +45,8 @@ select
     cc.contract_pk,
     cc.contract_id,
     cc.b2b_contract_name,
-    cc.courserun_readable_id,
-    cc.courserun_title,
+    cr.courserun_readable_id,
+    cr.courserun_title,
     count(distinct case when lc.enrollment_is_active then lc.user_fk end)     as total_enrolled_learners,
     count(distinct case when lc.days_active > 0 then lc.user_fk end)          as engaged_learners,
     round(100.0 * count(distinct case when lc.days_active > 0 then lc.user_fk end)
@@ -70,8 +71,11 @@ select
     )                                                                         as chatbot_adoption_pct,
     sum(case when lc.is_certified then 1 else 0 end)                          as certificates_earned
 from learner_courseruns lc
-join contract_courseruns cc
-    on lc.courserun_fk = cc.courserun_pk
+join contracts cc
+    on lc.contract_fk = cc.contract_pk
+join {{ source('dimensional', 'dim_course_run') }} cr
+    on lc.courserun_fk = cr.courserun_pk
+where cr.is_current = true
 group by
     cc.organization_key,
     cc.sso_organization_id,
@@ -79,5 +83,5 @@ group by
     cc.contract_pk,
     cc.contract_id,
     cc.b2b_contract_name,
-    cc.courserun_readable_id,
-    cc.courserun_title
+    cr.courserun_readable_id,
+    cr.courserun_title

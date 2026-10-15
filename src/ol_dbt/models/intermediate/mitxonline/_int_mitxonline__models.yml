@@ -741,6 +741,10 @@ models:
     description: boolean, indicating whether the user is enrolled on edx
     tests:
     - not_null
+  - name: b2b_contract_id
+    data_type: bigint
+    description: int, foreign key to b2b_contractpage. The B2B contract the learner
+      enrolled under, null for a non-B2B enrollment.
   - name: courserunenrollment_platform
     description: str, indicating what platform user enrolled in the course run as
       some of edx.org enrollments were migrated from MicroMasters
@@ -953,6 +957,10 @@ models:
         arguments:
           values: ['deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled',
             '']
+  - name: b2b_contract_id
+    data_type: bigint
+    description: int, foreign key to b2b_contractpage. The B2B contract the learner
+      enrolled in the program under, null for a non-B2B enrollment.
   - name: program_title
     description: str, title of the course run
     tests:
@@ -2343,11 +2351,17 @@ models:
         column_list: ["program_id", "instructor_name"]
 
 - name: int__mitxonline__b2b_contract_to_courseruns
-  description: B2B contract maps to course runs on MITx Online
+  description: The B2B contracts each MITx Online course run is offered under. One
+    row per (course run, contract); a run can belong to several contracts.
   columns:
   - name: courserun_readable_id
     data_type: varchar
     description: Open edX Course ID formatted as course-v1:UAI_{org}+{course code}+{run_tag}
+    data_tests:
+    - not_null
+  - name: b2b_contract_id
+    data_type: bigint
+    description: foreign key to b2b_contractpage
     data_tests:
     - not_null
   - name: organization_key
@@ -2377,4 +2391,4 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["courserun_readable_id", "organization_key"]
+        column_list: ["courserun_readable_id", "b2b_contract_id"]

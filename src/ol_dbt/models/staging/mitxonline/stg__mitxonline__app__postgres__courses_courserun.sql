@@ -19,7 +19,6 @@ with source as (
         ) as courserun_url
         , run_tag as courserun_tag
         , is_self_paced as courserun_is_self_paced
-        , b2b_contract_id
         , case
             when courseware_id like 'MITx/%' or courseware_id like 'course-v1:MITx+%'
                 then '{{ var("edxorg") }}'

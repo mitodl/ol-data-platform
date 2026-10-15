@@ -240,11 +240,11 @@ models:
     description: boolean, indicating whether the user has passed the passing score
       set for this course on edX.org or MITxOnline or xPro
   - name: organization_key
-    description: str, organization identifier sourced from the MITxOnline B2B organization_key
-      when available, otherwise from the Open edX organization (org code) in user_course_roles
+    description: str, key of the MITxOnline B2B organization whose contract the enrollment
+      was made under. Null for enrollments outside a contract.
   - name: organization_name
-    description: str, organization name from the MITxOnline B2B organization mapping.
-      Null for non-B2B enrollments/platforms.
+    description: str, name of the MITxOnline B2B organization whose contract the enrollment
+      was made under. Null for enrollments outside a contract.
   - name: user_country_code
     description: str, country code on the platform user enrolled. May be blank.
   - name: user_highest_education
@@ -511,10 +511,12 @@ models:
     description: int, 1 on the date of the learner's earliest currently active enrollment
       (courserunenrollment_is_active) in the course run, otherwise 0
   - name: organization_key
-    description: str, key of the organization that lists the course. e.g. MITx, MITxT,
-      null
+    description: str, key of the MITxOnline B2B organization whose contract the learner
+      enrolled under. For a run offered under no contract, the organization from user_course_roles,
+      e.g. MITx, MITxT. Null for a learner in a contract run without a contract.
   - name: organization_name
-    description: str, name of the organization that lists the course.
+    description: str, name of the MITxOnline B2B organization whose contract the learner
+      enrolled under. Null otherwise.
   - name: activity_date
     description: date, date the user engaged in an activity
   - name: activity_year_and_month
@@ -562,7 +564,8 @@ models:
   - name: courserun_readable_id
     description: string, unique string to identify a course run
   - name: organization_name
-    description: string, name of the organization
+    description: string, name of the MITxOnline B2B organization whose contract the
+      learner enrolled under. Null otherwise.
   - name: chatbot_used_count
     description: int, a count of how many times the user engaged with a chatbot
   - name: block_category

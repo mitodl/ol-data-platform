@@ -68,6 +68,9 @@ models:
     description: bool, indicates whether the user should receive emails from edx
     tests:
     - not_null
+  - name: b2b_contract_id
+    description: int, foreign key to b2b_contractpage. The B2B contract the learner
+      enrolled under, null for a non-B2B enrollment.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -143,6 +146,9 @@ models:
     - not_null
   - name: programenrollment_enrollment_mode
     description: str, enrollment mode for user
+  - name: b2b_contract_id
+    description: int, foreign key to b2b_contractpage. The B2B contract the learner
+      enrolled in the program under, null for a non-B2B enrollment.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -1121,8 +1127,6 @@ models:
   - name: courserun_is_self_paced
     description: boolean, indicating whether users can take this course at their own
       pace and earn certificate at any time
-  - name: b2b_contract_id
-    description: int, foreign key to b2b_contract
   - name: courserun_start_on
     description: timestamp, specifying when the course begins
   - name: courserun_end_on
@@ -2248,6 +2252,33 @@ models:
   - name: sso_organization_id
     data_type: varchar
     description: the UUID for the organization in the SSO provider
+
+- name: stg__mitxonline__app__postgres__courses_courserun_b2b_contracts
+  description: The B2B contracts each MITx Online course run is offered under. A run
+    can belong to several contracts, and a run in no contract has no row.
+  columns:
+  - name: courserun_b2b_contract_id
+    data_type: bigint
+    description: primary key for this table
+    data_tests:
+    - not_null
+    - unique:
+        config:
+          error_if: "!=0"
+  - name: courserun_id
+    data_type: bigint
+    description: foreign key to courses_courserun
+    data_tests:
+    - not_null
+  - name: b2b_contract_id
+    data_type: bigint
+    description: foreign key to b2b_contractpage (page_ptr_id)
+    data_tests:
+    - not_null
+  data_tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["courserun_id", "b2b_contract_id"]
 
 - name: stg__mitxonline__app__postgres__b2b_contractpage
   description: MITx Online B2B contract pages
