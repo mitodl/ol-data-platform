@@ -848,3 +848,17 @@ retired:
     "xpro-forum-production → S3 Data Lake" connection was inactive when the
     inventory was snapshotted. This date is the tables' only Iceberg snapshot
     (2026-01-07 18:34Z, measured 2026-10-07). dbt modeled none of them.
+- deployment: edxorg
+  layer: s3
+  raw_tables:
+  - raw__edxorg__s3__course_blocks
+  retired_on: '2026-10-14'
+  reason: >-
+    Replaced by edxorg/course_xml's raw__edxorg__s3__course_structure_blocks,
+    which the course_xml_blocks dlt source loads from the same landing files
+    (#2840). The "edx.org Production Course Structure→ S3 Data Lake" Airbyte
+    connection loaded only the <course>|prod/ partitions; the dlt table holds
+    |edge/ as well, and stg__edxorg__s3__course_structure filters it to prod.
+    The landing zone keeps only the newest copy of a re-materialized structure,
+    so earlier copies of 1,918 files exist only in this table. They were not
+    backfilled. The table stays in place, read-only.

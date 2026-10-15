@@ -9,7 +9,11 @@ with problems as (
         , nullif({{ json_query_string('block_metadata', "'$.max_attempts'") }}, 'null') as max_attempts
         , nullif({{ json_query_string('block_metadata', "'$.start'") }}, 'null') as start_date
         , nullif({{ json_query_string('block_metadata', "'$.due'") }}, 'null') as due_date
-        , nullif({{ json_query_string('block_metadata', "'$.weight'") }}, 'null') as weight
+        -- The dlt-loaded structures keep the source's float text (1.0) where Airbyte
+        -- wrote 1, so drop a trailing .0 to keep one spelling per weight.
+        , {{ regexp_replace_all(
+            "nullif(" ~ json_query_string('block_metadata', "'$.weight'") ~ ", 'null')", "'\\.0$'", "''"
+        ) }} as weight
         , row_number() over (
             partition by platform, block_id
             order by is_latest desc, retrieved_at desc

@@ -10,8 +10,8 @@
 #
 # raw__edxorg__s3__course_structure_blocks is the same arrangement for the
 # un-nested course structure documents (edxorg/processed_data/course_blocks/).
-# It loads beside edxorg/s3's Airbyte-loaded raw__edxorg__s3__course_blocks, to
-# replace it, and is unmodeled until staging is repointed at it.
+# It replaced edxorg/s3's Airbyte-loaded raw__edxorg__s3__course_blocks (see
+# retired.yml).
 schema_version: 1
 deployment: edxorg
 scope: singleton
@@ -40,4 +40,19 @@ tables:
   sync_mode: incremental_append
   cursor_field:
   - _file_modified_at
-  modeled: false
+  modeled: true
+  mirror:
+    columns:
+      _file_modified_at: copy
+      _source_file: copy
+      block_id: copy
+      course_id: copy
+      block_type: copy
+      block_index: copy
+      block_title: copy
+      block_parent: copy
+      course_title: copy
+      retrieved_at: copy
+      block_details: copy
+      block_content_hash: copy
+      course_content_hash: copy

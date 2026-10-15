@@ -598,7 +598,9 @@ sources:
     - name: _ab_source_file_url
       description: str, url path for the raw log file
 
-  - name: raw__edxorg__s3__course_blocks
+  - name: raw__edxorg__s3__course_structure_blocks
+    description: edX.org course structure blocks, one row per block per structure
+      version, loaded by the course_xml_blocks dlt source from edxorg-raw-data/edxorg/processed_data/course_blocks/<course>|{prod,edge}/.
     columns:
     - name: block_id
       description: str, Unique ID for a distinct piece of content in a course, formatted
@@ -621,7 +623,9 @@ sources:
         like category, children and metadata. Different block type may have different
         member fields inside metadata.
     - name: course_id
-      description: str, course ID wrapped in quotes. e.g., ["MITx-CTL.SC1x_1-3T2022"]
+      description: str, course ID, either bare (MITx-CTL.SC1x_1-3T2022) or as the
+        JSON text of a one-element list (["MITx-CTL.SC1x_1-3T2022"]), depending on
+        the structure file
     - name: course_title
       description: str, title of the course extracted from the metadata field of 'course'
         block
@@ -633,8 +637,15 @@ sources:
       description: str, date indicating when the course starts, extracted from metadata
         of the 'course' block
     - name: retrieved_at
-      description: timestamp, time indicating when this block was initially retrieved
-        from S3
+      description: str, ISO 8601 time the structure was retrieved. A structure retrieved
+        again unchanged overwrites its landing file with a new value, so the landing
+        zone has only the latest retrieval, while this table keeps every copy it loaded
+    - name: _source_file
+      description: str, S3 URL of the structure file the row came from. The partition
+        segment ends in |prod or |edge, naming the edX.org instance
+    - name: _file_modified_at
+      description: timestamp, last-modified time of the structure file when it was
+        loaded
 
   - name: raw__edxorg__program_entitlement
     description: this table includes all the program entitlements on edX.org, which
