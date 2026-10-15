@@ -25,6 +25,9 @@ _DEFAULT_SCHEMA_BASE = "ol_warehouse_production"
 # expire partway through a database's datasets, since one client serves them all.
 _SUPERSET_CALL_ERRORS = (httpx.HTTPError, RuntimeError, ValueError)
 
+# Fewer failures than this cannot tell a Superset outage from one broken table.
+_MIN_FAILURES_TO_RAISE = 2
+
 
 def _validate_superset_database_config(database_id: int, database_name: str) -> None:
     """Validate that database_id and database_name are consistent.
@@ -207,10 +210,14 @@ def build_superset_dataset_assets(
             yield MaterializeResult(asset_key=dataset_key, metadata=metadata)
 
         # One bad dataset stays in its own metadata, so a single persistently
-        # broken table cannot fail every run. When every dataset failed, the
-        # cause is Superset itself (credentials, an outage), and the step has
-        # to fail for the Sentry hook and run_retries to see it.
-        if errors and len(errors) == len(context.selected_asset_keys):
+        # broken table cannot fail every run -- including an automation run
+        # that selected only that table. When at least two datasets were tried
+        # and every one failed, the cause is Superset itself (credentials, an
+        # outage), and the step has to fail for the Sentry hook and run_retries
+        # to see it.
+        if len(errors) >= _MIN_FAILURES_TO_RAISE and len(errors) == len(
+            context.selected_asset_keys
+        ):
             raise Failure(
                 description=(
                     f"Every selected {database_name} Superset dataset failed "

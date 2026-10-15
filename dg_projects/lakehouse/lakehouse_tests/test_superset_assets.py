@@ -157,6 +157,19 @@ def test_the_step_fails_when_every_dataset_failed():
     assert statuses == {"error"}
 
 
+def test_one_selected_dataset_failing_does_not_fail_the_step():
+    superset_api = FakeSupersetApi()
+    assets = build_superset_dataset_assets(DBT_KEYS, database_id=1)
+    selected = AssetKey(["superset", "dataset", "broken_model"])
+
+    result = materialize(
+        [assets], resources={"superset_api": superset_api}, selection=[selected]
+    )
+
+    assert result.success
+    assert _materialized_metadata(result)[selected]["status"] == "error"
+
+
 def test_a_subset_touches_only_the_selected_datasets():
     superset_api = FakeSupersetApi()
     assets = build_superset_dataset_assets(
