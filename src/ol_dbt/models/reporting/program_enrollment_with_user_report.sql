@@ -52,6 +52,13 @@ with enrollment_detail as (
         inner join course
             on course_enrollment_detail.course_readable_id = course.course_readable_id
             and course.is_current = true
+            and course.primary_platform = case
+                when course_enrollment_detail.platform = '{{ var("mitxonline") }}' then 'mitxonline'
+                when course_enrollment_detail.platform = '{{ var("edxorg") }}' then 'edxorg'
+                when course_enrollment_detail.platform in (
+                    '{{ var("mitxpro") }}', '{{ var("emeritus") }}', '{{ var("global_alumni") }}'
+                ) then 'mitxpro'
+            end
         inner join program_course
             on course.course_pk = program_course.course_fk
         inner join program
