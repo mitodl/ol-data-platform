@@ -395,6 +395,9 @@ def _check_hand_written(table: TableFixture, rows: list[Row], key_columns: list[
             f"{len(table.rows)}; return generated rows, do not add them to hand_written"
         )
         raise ValueError(msg)
+    # A key column the file does not declare is validate_generated's to report,
+    # and generate cannot set it without failing the unknown-column check.
+    key_columns = [column for column in key_columns if column in table.columns]
     for number, (before, after) in enumerate(zip(table.rows, rows, strict=True), start=1):
         label = f"{where}: {table.raw_table} hand-written row {number}"
         if unknown := sorted(set(after) - set(table.columns)):

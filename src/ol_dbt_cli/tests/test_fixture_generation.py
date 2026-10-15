@@ -578,6 +578,16 @@ def test_a_key_stored_as_it_was_is_the_same_key(tmp_path: Path) -> None:
     assert rows.hand_written[PAGE_TREE][0]["id"] == 1
 
 
+def test_a_table_keyed_by_a_column_the_file_leaves_out_is_not_compared(tmp_path: Path) -> None:
+    # The fixture may leave a key column out until the unit generates rows for it.
+    tables = {PAGE_TREE: {**TREE_TABLES[PAGE_TREE], "primary_key": "uuid"}}
+    fixture, unit = _unit(tmp_path, tables)
+
+    rows = generate_rows(fixture, unit, _changing(lambda rows: rows[0].update(numchild=1)))
+
+    assert rows.hand_written[PAGE_TREE][0]["numchild"] == 1
+
+
 @pytest.mark.parametrize("changed", ["3", 3.0, 0.0])
 def test_a_changed_hand_written_value_is_held_as_its_column_holds_it(tmp_path: Path, changed: Any) -> None:
     fixture, unit = _unit(tmp_path, TREE_TABLES)
