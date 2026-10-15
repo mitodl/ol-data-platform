@@ -11,7 +11,9 @@ with micromasters_course_keys as (
         program_id
         , course_id
         , cast(null as varchar) as course_readable_id
-        , true as is_required
+        -- An elective is one option in a "choose N of M" set, so it is not required on its
+        -- own. The number a program requires is program_num_required_courses upstream.
+        , programrequirement_type = 'Core' as is_required
         , 'mitxonline' as platform
         , 'mitxonline' as platform_code
         , course_order_in_program as course_order
@@ -23,6 +25,7 @@ with micromasters_course_keys as (
         program_id
         , course_id
         , cast(null as varchar) as course_readable_id
+        -- xPRO programs have no elective sets: every course in one is required.
         , true as is_required
         , 'mitxpro' as platform
         , 'mitxpro' as platform_code
@@ -34,12 +37,13 @@ with micromasters_course_keys as (
     -- int__micromasters__program_requirements is at (program_id, course_id, electiveset_id)
     -- grain. A course can satisfy multiple elective sets within the same program, producing
     -- duplicate (program_id, course_readable_id) pairs. Since the bridge only models
-    -- program→course membership (not which elective set), deduplicate here.
+    -- program→course membership (not which elective set), deduplicate here. A course is
+    -- either Core or Elective in a program, never both, so the flag survives the distinct.
     select distinct
         r.program_id
         , cast(null as integer) as course_id  -- MicroMasters uses readable_id path
         , ck.course_readable_id
-        , true as is_required
+        , r.programrequirement_type = 'Core' as is_required
         , 'micromasters' as platform
         , 'micromasters' as platform_code
         -- position_in_program is a stable integer from the MicroMasters course table
