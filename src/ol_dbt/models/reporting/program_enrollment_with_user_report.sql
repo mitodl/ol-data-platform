@@ -56,7 +56,6 @@ with enrollment_detail as (
             on course.course_pk = program_course.course_fk
         inner join program
             on program_course.program_fk = program.program_pk
-            and program.published_date is not null
     group by
         course_enrollment_detail.platform
         , program.program_readable_id
