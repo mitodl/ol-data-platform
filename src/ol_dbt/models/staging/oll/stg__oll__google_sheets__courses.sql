@@ -25,4 +25,3 @@ select
     , duration as course_duration_weeks
     , student_effort as course_weekly_hours
 from source
-where oll_course is not null and oll_course != ''

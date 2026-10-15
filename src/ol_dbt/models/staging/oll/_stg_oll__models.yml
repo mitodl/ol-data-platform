@@ -4,12 +4,21 @@ version: 2
 models:
 - name: stg__oll__google_sheets__courses
   description: Open Learning Library courses from the OLL metadata sheet MIT Learn
-    keeps in its repository, one row per sheet row (one edX run each). Rows with no
-    OLL course number are dropped.
+    keeps in its repository, one row per sheet row (one edX run each).
   columns:
   - name: course_number
-    description: str, OLL course number, e.g. 0.501x
-    tests: [not_null]
+    description: >
+      str, OLL course number, e.g. 0.501x. Never contains '+'. MIT Learn reads a
+      department out of a number that does and the OLL delivery sends none, so the
+      test fails the build on the first such row rather than let the two diverge.
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_values_to_not_match_like_pattern:
+        arguments:
+          like_pattern: '%+%'
+        # The project default only errors above 10 failing rows.
+        config:
+          error_if: "!=0"
   - name: courserun_readable_id
     description: str, the edX run key, e.g. MITx+0.501x+2T2019
     tests: [not_null, unique]

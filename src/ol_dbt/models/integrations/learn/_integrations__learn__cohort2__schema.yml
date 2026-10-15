@@ -424,3 +424,26 @@ unit_tests:
     - {readable_id: MITx+21A.819.1x, run_id: MITx+21A.819.1x, offered_by: mitx, published: false,
       level: graduate, year: null, semester: null, duration: 4 weeks, min_weeks: 4,
       time_commitment: null, min_weekly_hours: null}
+
+- name: test_integrations__learn__oll_courses_orders_instructors_and_topics
+  description: >
+    Instructors keep their column order and topics put the primary child first, as
+    the legacy ETL lists them. Empty columns are dropped, a row with none gets NULL
+    (sent as []), and Educational Policy is renamed Education Policy.
+  model: integrations__learn__oll_courses
+  given:
+  - input: ref('stg__oll__google_sheets__courses')
+    rows:
+    - {course_number: 0.501x, courserun_readable_id: MITx+0.501x+2T2019, course_offered_by: MITx,
+      instructor_1: Zed Last, instructor_2: '', instructor_3: Amy First, instructor_4: '',
+      instructor_5: '', instructor_6: '', course_primary_topic: Educational Policy,
+      course_secondary_topic: Mathematics}
+    - {course_number: 0.502x, courserun_readable_id: MITx+0.502x+1T2019, course_offered_by: MITx,
+      instructor_1: '', instructor_2: '', instructor_3: '', instructor_4: '', instructor_5: '',
+      instructor_6: '', course_primary_topic: '', course_secondary_topic: ''}
+  expect:
+    # DuckDB casts the list literals to the model's varchar[] columns.
+    rows:
+    - {readable_id: MITx+0.501x, topics: '[Education Policy, Mathematics]', instructors: '[Zed
+        Last, Amy First]'}
+    - {readable_id: MITx+0.502x, topics: null, instructors: null}
