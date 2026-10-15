@@ -249,8 +249,16 @@ def or_null(declaration: Any, share: float = NULL_SHARE) -> Any:
     )
 
 
-def parent(param: str, column: str) -> Any:
-    """Declare a column that copies ``column`` of the row held in ``class Params`` as ``param``."""
+def parent(param: str, column: str, *, nullable: bool = False) -> Any:
+    """Declare a column that copies ``column`` of the row held in ``class Params`` as ``param``.
+
+    :param param: The ``Params`` name ``generate`` passes the parent row as.
+    :param column: The parent's column the foreign key references.
+    :param nullable: The foreign key is nullable, so a row built with no
+        parent is NULL here. Otherwise building it raises.
+    """
+    if nullable:
+        return factory.LazyAttribute(lambda row: None if getattr(row, param) is None else getattr(row, param)[column])
     return factory.LazyAttribute(lambda row: getattr(row, param)[column])
 
 

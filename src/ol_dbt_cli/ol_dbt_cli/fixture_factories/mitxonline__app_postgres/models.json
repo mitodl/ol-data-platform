@@ -45,8 +45,7 @@
           "null": false,
           "primary_key": false,
           "unique": false,
-          "max_length": 50,
-          "default": ""
+          "max_length": 50
         },
         "min_weekly_hours": {
           "field": "CharField",
@@ -54,8 +53,7 @@
           "null": false,
           "primary_key": false,
           "unique": false,
-          "max_length": 5,
-          "default": ""
+          "max_length": 5
         },
         "max_weekly_hours": {
           "field": "CharField",
@@ -63,8 +61,7 @@
           "null": false,
           "primary_key": false,
           "unique": false,
-          "max_length": 5,
-          "default": ""
+          "max_length": 5
         },
         "min_weeks": {
           "field": "SmallIntegerField",
@@ -103,8 +100,7 @@
           "primary_key": false,
           "unique": false,
           "max_digits": 10,
-          "decimal_places": 2,
-          "default": 0
+          "decimal_places": 2
         },
         "max_price": {
           "field": "DecimalField",
@@ -113,8 +109,7 @@
           "primary_key": false,
           "unique": false,
           "max_digits": 10,
-          "decimal_places": 2,
-          "default": 0
+          "decimal_places": 2
         },
         "prerequisites": {
           "field": "RichTextField",
@@ -165,56 +160,49 @@
           "null": false,
           "primary_key": false,
           "unique": false,
-          "max_length": 50,
-          "default": ""
+          "max_length": 50
         },
         "hyl_choice_realworld_learning": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "hyl_choice_learn_by_doing": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "hyl_choice_learn_from_others": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "hyl_choice_learn_on_demand": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "hyl_choice_ai_enabled_support": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "hyl_choice_stackable_credentials": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "feature_image_id": {
           "field": "ForeignKey",
@@ -233,8 +221,7 @@
           "null": true,
           "primary_key": false,
           "unique": false,
-          "max_length": 255,
-          "default": "Meet your instructors"
+          "max_length": 255
         },
         "course_id": {
           "field": "OneToOneField",
@@ -253,24 +240,21 @@
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "ingest_content_files_for_ai": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "show_course_outline": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": true
+          "unique": false
         }
       }
     },
@@ -338,8 +322,7 @@
           "null": false,
           "primary_key": false,
           "unique": false,
-          "max_length": 255,
-          "default": ""
+          "max_length": 255
         },
         "instructor_title": {
           "field": "CharField",
@@ -414,8 +397,7 @@
           "internal_type": "SmallIntegerField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": 1
+          "unique": false
         }
       }
     },
@@ -453,8 +435,7 @@
           "null": false,
           "primary_key": false,
           "unique": false,
-          "max_length": 50,
-          "default": ""
+          "max_length": 50
         },
         "min_weekly_hours": {
           "field": "CharField",
@@ -462,8 +443,7 @@
           "null": false,
           "primary_key": false,
           "unique": false,
-          "max_length": 5,
-          "default": ""
+          "max_length": 5
         },
         "max_weekly_hours": {
           "field": "CharField",
@@ -471,8 +451,7 @@
           "null": false,
           "primary_key": false,
           "unique": false,
-          "max_length": 5,
-          "default": ""
+          "max_length": 5
         },
         "min_weeks": {
           "field": "SmallIntegerField",
@@ -511,8 +490,7 @@
           "primary_key": false,
           "unique": false,
           "max_digits": 10,
-          "decimal_places": 2,
-          "default": 0
+          "decimal_places": 2
         },
         "max_price": {
           "field": "DecimalField",
@@ -521,8 +499,7 @@
           "primary_key": false,
           "unique": false,
           "max_digits": 10,
-          "decimal_places": 2,
-          "default": 0
+          "decimal_places": 2
         },
         "prerequisites": {
           "field": "RichTextField",
@@ -573,56 +550,49 @@
           "null": false,
           "primary_key": false,
           "unique": false,
-          "max_length": 50,
-          "default": ""
+          "max_length": 50
         },
         "hyl_choice_realworld_learning": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "hyl_choice_learn_by_doing": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "hyl_choice_learn_from_others": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "hyl_choice_learn_on_demand": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "hyl_choice_ai_enabled_support": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "hyl_choice_stackable_credentials": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "feature_image_id": {
           "field": "ForeignKey",
@@ -641,8 +611,7 @@
           "null": true,
           "primary_key": false,
           "unique": false,
-          "max_length": 255,
-          "default": "Meet your instructors"
+          "max_length": 255
         },
         "program_id": {
           "field": "OneToOneField",
@@ -668,8 +637,7 @@
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "list_price": {
           "field": "DecimalField",
@@ -731,16 +699,14 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "certificates_disabled": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         }
       }
     },
@@ -860,8 +826,7 @@
             "zh_CN",
             "zh_HANS",
             "zh_HK"
-          ],
-          "default": "en"
+          ]
         },
         "variant_length": {
           "field": "CharField",
@@ -873,8 +838,7 @@
           "choices": [
             "",
             "S"
-          ],
-          "default": ""
+          ]
         },
         "variant_industry": {
           "field": "CharField",
@@ -889,8 +853,7 @@
             "F",
             "HC",
             "M"
-          ],
-          "default": ""
+          ]
         },
         "course_id": {
           "field": "ForeignKey",
@@ -932,8 +895,7 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": true
+          "unique": false
         },
         "start_date": {
           "field": "DateTimeField",
@@ -989,16 +951,14 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "is_self_paced": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "b2b_contract_id": {
           "field": "ForeignKey",
@@ -1016,24 +976,21 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "is_source_run": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "is_primary_language": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         }
       },
       "unique_together": [
@@ -1200,8 +1157,7 @@
           "null": false,
           "primary_key": false,
           "unique": true,
-          "max_length": 255,
-          "default": "audit"
+          "max_length": 255
         },
         "mode_display_name": {
           "field": "CharField",
@@ -1209,16 +1165,14 @@
           "null": false,
           "primary_key": false,
           "unique": false,
-          "max_length": 255,
-          "default": "audit"
+          "max_length": 255
         },
         "requires_payment": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         }
       }
     },
@@ -1271,8 +1225,7 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "program_type": {
           "field": "CharField",
@@ -1280,8 +1233,7 @@
           "null": true,
           "primary_key": false,
           "unique": false,
-          "max_length": 255,
-          "default": "Series"
+          "max_length": 255
         },
         "availability": {
           "field": "CharField",
@@ -1293,8 +1245,7 @@
           "choices": [
             "anytime",
             "dated"
-          ],
-          "default": "anytime"
+          ]
         },
         "enrollment_start": {
           "field": "DateTimeField",
@@ -1340,16 +1291,14 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "certificates_disabled": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         }
       }
     },
@@ -1458,8 +1407,7 @@
           "internal_type": "PositiveIntegerField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": 0
+          "unique": false
         },
         "path": {
           "field": "CharField",
@@ -1542,24 +1490,21 @@
           "internal_type": "TextField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": ""
+          "unique": false
         },
         "description": {
           "field": "TextField",
           "internal_type": "TextField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": ""
+          "unique": false
         },
         "elective_flag": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": true,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         }
       },
       "treebeard": {
@@ -1677,8 +1622,7 @@
             "zh_CN",
             "zh_HANS",
             "zh_HK"
-          ],
-          "default": "en"
+          ]
         },
         "variant_length": {
           "field": "CharField",
@@ -1690,8 +1634,7 @@
           "choices": [
             "",
             "S"
-          ],
-          "default": ""
+          ]
         },
         "variant_industry": {
           "field": "CharField",
@@ -1706,8 +1649,7 @@
             "F",
             "HC",
             "M"
-          ],
-          "default": ""
+          ]
         },
         "content_type_id": {
           "field": "ForeignKey",
@@ -1732,24 +1674,21 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": true
+          "unique": false
         },
         "b2b_only": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "default_variant": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         }
       },
       "generic_foreign_keys": [
@@ -1791,8 +1730,7 @@
           "internal_type": "PositiveIntegerField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": 0
+          "unique": false
         },
         "translation_key": {
           "field": "UUIDField",
@@ -1829,16 +1767,14 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": true
+          "unique": false
         },
         "has_unpublished_changes": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "first_published_at": {
           "field": "DateTimeField",
@@ -1884,16 +1820,14 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "locked": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "locked_at": {
           "field": "DateTimeField",
@@ -1982,8 +1916,7 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "search_description": {
           "field": "TextField",
@@ -2066,8 +1999,7 @@
           "null": false,
           "primary_key": false,
           "unique": false,
-          "max_length": 255,
-          "default": ""
+          "max_length": 255
         },
         "width": {
           "field": "IntegerField",

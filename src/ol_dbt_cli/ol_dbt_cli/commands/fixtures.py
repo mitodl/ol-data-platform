@@ -29,8 +29,6 @@ from ruamel.yaml import YAML
 
 from ol_dbt_cli import fixture_factories
 from ol_dbt_cli.lib.cursor_audit import select_units
-from ol_dbt_cli.lib.fixture_scaffold import GENERATED_FILE, MODELS_FILE, starter_package
-from ol_dbt_cli.lib.fixture_scaffold import scaffold as fixture_scaffold
 from ol_dbt_cli.lib.glue_schema import DEFAULT_GLUE_DATABASE, column_types_by_table
 from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, Unit, load_units
 from ol_dbt_cli.lib.raw_fixtures import (
@@ -379,6 +377,11 @@ def scaffold(
     adds no rows if the package has none. A hand-written `__init__.py` is never
     touched. Columns the fixture and the models disagree on are printed.
     """
+    # It reads fixture_trees, which imports the generation runtime: seconds
+    # that every other command would pay.
+    from ol_dbt_cli.lib.fixture_scaffold import GENERATED_FILE, MODELS_FILE, starter_package  # noqa: PLC0415
+    from ol_dbt_cli.lib.fixture_scaffold import scaffold as fixture_scaffold  # noqa: PLC0415
+
     (selected,) = _select(inventory_dir, [unit])
     (fixture,) = load_fixtures(inventory_dir, [selected], selected=True)
     package = factories_dir / selected.path.stem

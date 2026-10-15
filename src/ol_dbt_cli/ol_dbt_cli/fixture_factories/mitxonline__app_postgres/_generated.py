@@ -1,8 +1,7 @@
 """Base factories of the `mitxonline/app_postgres` unit, scaffolded from its models.
 
-From mitxonline at git:47ad6f2e9b2e7f3bd3c9cf60102754d8de3410d7. Written by `ol-dbt fixtures scaffold`
-from models.json and rewritten wholesale on every run: change a factory by
-subclassing it in __init__.py.
+From mitxonline at git:47ad6f2e9b2e7f3bd3c9cf60102754d8de3410d7. Written by `ol-dbt fixtures scaffold` from models.json
+and rewritten wholesale on every run: change a factory by subclassing it in __init__.py.
 """
 
 from __future__ import annotations
@@ -121,7 +120,7 @@ class CourseBase(RowFactory):
 class CourseRunBase(RowFactory):
     """Table courses_courserun, from model courses.CourseRun."""
 
-    # Unique together: course_id, courseware_id, run_tag. generate() keeps them distinct.
+    # Unique together: course_id, courseware_id, run_tag. generate() must keep them distinct.
     # b2b_contract_id: references b2b_contractpage, which the fixture has no table for; NULL.
 
     class Params:
@@ -157,7 +156,7 @@ class CourseRunBase(RowFactory):
 class CoursesTopicBase(RowFactory):
     """Table courses_coursestopic, from model courses.CoursesTopic."""
 
-    # Unique together: name, parent_id. generate() keeps them distinct.
+    # Unique together: name, parent_id. generate() must keep them distinct.
     # parent_id: references this table; NULL unless generate() sets it with attach().
 
     id = factory.Sequence(lambda n: n)
@@ -204,12 +203,12 @@ class ProgramRequirementBase(RowFactory):
     id = factory.Sequence(lambda n: n)
     title = or_null(value("text.title"))
     operator = or_null(factory.Iterator(["all_of", "min_number_of"]))
-    course_id = parent("course", "id")
+    course_id = parent("course", "id", nullable=True)
     node_type = or_null(factory.Iterator(["program_root", "operator", "course", "program", "track"]))
     program_id = parent("program", "id")
     elective_flag = or_null(value("development.boolean"))
     operator_value = or_null(value("text.word"))
-    required_program_id = parent("required_program", "id")
+    required_program_id = parent("required_program", "id", nullable=True)
 
 
 @table("raw__mitxonline__app__postgres__wagtailimages_image", default_count=SCAFFOLD_DEFAULT_COUNT)
@@ -253,7 +252,7 @@ class DepartmentBase(RowFactory):
 class CourseDepartmentsBase(RowFactory):
     """Table courses_course_departments, from model courses.Course_departments."""
 
-    # Unique together: course_id, department_id. generate() keeps them distinct.
+    # Unique together: course_id, department_id. generate() must keep them distinct.
 
     class Params:
         course = None
@@ -278,7 +277,7 @@ class EnrollmentModeBase(RowFactory):
 class CourseRunEnrollmentModesBase(RowFactory):
     """Table courses_courserun_enrollment_modes, from model courses.CourseRun_enrollment_modes."""
 
-    # Unique together: courserun_id, enrollmentmode_id. generate() keeps them distinct.
+    # Unique together: courserun_id, enrollmentmode_id. generate() must keep them distinct.
 
     class Params:
         courserun = None
@@ -293,7 +292,7 @@ class CourseRunEnrollmentModesBase(RowFactory):
 class ProgramDepartmentsBase(RowFactory):
     """Table courses_program_departments, from model courses.Program_departments."""
 
-    # Unique together: program_id, department_id. generate() keeps them distinct.
+    # Unique together: program_id, department_id. generate() must keep them distinct.
 
     class Params:
         program = None
@@ -308,7 +307,7 @@ class ProgramDepartmentsBase(RowFactory):
 class ProgramEnrollmentModesBase(RowFactory):
     """Table courses_program_enrollment_modes, from model courses.Program_enrollment_modes."""
 
-    # Unique together: program_id, enrollmentmode_id. generate() keeps them distinct.
+    # Unique together: program_id, enrollmentmode_id. generate() must keep them distinct.
 
     class Params:
         program = None
@@ -323,7 +322,7 @@ class ProgramEnrollmentModesBase(RowFactory):
 class ContentTypeBase(RowFactory):
     """Table django_content_type, from model contenttypes.ContentType."""
 
-    # Unique together: app_label, model. generate() keeps them distinct.
+    # Unique together: app_label, model. generate() must keep them distinct.
 
     id = factory.Sequence(lambda n: n)
     model = value("text.word")
@@ -334,7 +333,7 @@ class ContentTypeBase(RowFactory):
 class PageBase(RowFactory):
     """Table wagtailcore_page, from model wagtailcore.Page."""
 
-    # Unique together: translation_key, locale_id. generate() keeps them distinct.
+    # Unique together: translation_key, locale_id. generate() must keep them distinct.
     # A treebeard tree: place rows with Tree(rows, alphabet=TREE_ALPHABETS[PageBase.raw_table]).
     # path: set by Tree.add.
     # depth: set by Tree.add.
@@ -391,7 +390,7 @@ class CoursePageBase(RowFactory):
     effort = or_null(value("text.word"))
     length = value("text.word")
     faq_url = or_null(url())
-    course_id = parent("course", "id")
+    course_id = parent("course", "id", nullable=True)
     max_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
     min_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
     video_url = or_null(url())
@@ -399,10 +398,10 @@ class CoursePageBase(RowFactory):
     page_ptr_id = parent("page_ptr", "id")
     prerequisites = or_null(value("text.sentence"))
     what_you_learn = or_null(value("text.sentence"))
-    search_image_id = parent("search_image", "id")
-    feature_image_id = parent("feature_image", "id")
-    max_weekly_hours = value("text.word")
-    min_weekly_hours = value("text.word")
+    search_image_id = parent("search_image", "id", nullable=True)
+    feature_image_id = parent("feature_image", "id", nullable=True)
+    max_weekly_hours = value("numeric.integer_number", start=0, end=9999)
+    min_weekly_hours = value("numeric.integer_number", start=0, end=9999)
     faculty_section_title = or_null(value("text.title"))
     include_in_learn_catalog = or_null(value("development.boolean"))
     ingest_content_files_for_ai = or_null(value("development.boolean"))
@@ -423,7 +422,7 @@ class CoursePageBase(RowFactory):
 class CoursePageTopicsBase(RowFactory):
     """Table cms_coursepage_topics, from model cms.CoursePage_topics."""
 
-    # Unique together: coursepage_id, coursestopic_id. generate() keeps them distinct.
+    # Unique together: coursepage_id, coursestopic_id. generate() must keep them distinct.
 
     class Params:
         coursepage = None
@@ -445,8 +444,8 @@ class InstructorPageBase(RowFactory):
         feature_image = None
 
     page_ptr_id = parent("page_ptr", "id")
-    instructor_name = value("text.title")
-    feature_image_id = parent("feature_image", "id")
+    instructor_name = value("person.full_name")
+    feature_image_id = parent("feature_image", "id", nullable=True)
     instructor_title = or_null(value("text.title"))
     instructor_bio_long = or_null(value("text.sentence"))
     instructor_bio_short = or_null(value("text.sentence"))
@@ -463,7 +462,7 @@ class InstructorPageLinkBase(RowFactory):
     id = factory.Sequence(lambda n: n)
     order = or_null(value("numeric.integer_number", start=0, end=1000))
     page_id = parent("page", "id")
-    linked_instructor_page_id = parent("linked_instructor_page", "page_ptr_id")
+    linked_instructor_page_id = parent("linked_instructor_page", "page_ptr_id", nullable=True)
 
 
 @table("raw__mitxonline__app__postgres__cms_programpage", default_count=SCAFFOLD_DEFAULT_COUNT)
@@ -487,15 +486,15 @@ class ProgramPageBase(RowFactory):
     max_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
     min_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
     video_url = or_null(url())
-    program_id = parent("program", "id")
+    program_id = parent("program", "id", nullable=True)
     description = or_null(value("text.sentence"))
     page_ptr_id = parent("page_ptr", "id")
     prerequisites = or_null(value("text.sentence"))
     what_you_learn = or_null(value("text.sentence"))
-    search_image_id = parent("search_image", "id")
-    feature_image_id = parent("feature_image", "id")
-    max_weekly_hours = value("text.word")
-    min_weekly_hours = value("text.word")
+    search_image_id = parent("search_image", "id", nullable=True)
+    feature_image_id = parent("feature_image", "id", nullable=True)
+    max_weekly_hours = value("numeric.integer_number", start=0, end=9999)
+    min_weekly_hours = value("numeric.integer_number", start=0, end=9999)
     faculty_section_title = or_null(value("text.title"))
     include_in_learn_catalog = or_null(value("development.boolean"))
     hyl_choice_learn_by_doing = or_null(value("development.boolean"))

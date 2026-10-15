@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib
 import json
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
@@ -26,6 +28,7 @@ if TYPE_CHECKING:
     from ol_dbt_cli.lib.raw_fixtures import UnitFixture
 
 PREFIX = "raw__demo__app__postgres__"
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _column(internal_type: str, **facts: Any) -> dict[str, Any]:
@@ -81,6 +84,14 @@ MODELS: dict[str, Any] = {
                 "external_uuid": _column("UUIDField", unique=True),
                 "owner_id": _foreign_key("users_user", null=True),
                 "platform_id": _foreign_key("courses_platform"),
+                "program_id": _foreign_key("courses_program", null=True),
+                "login_email": _column("CharField", unique=True, max_length=254),
+                "homepage_url": _column("CharField", max_length=500),
+                "level": _column("CharField", null=True, max_length=20, choices=["intro", "advanced"]),
+                "rank": _column("IntegerField", unique=True),
+                # Airbyte lands this column as `ceus`.
+                "CEUs": _column("DecimalField", null=True, max_digits=5, decimal_places=2),
+                "hours": _column("CharField", max_length=5),
             },
         },
         "wagtailcore_page": {
@@ -121,6 +132,17 @@ MODELS: dict[str, Any] = {
             ],
         },
         "users_user": {"model": "users.User", "managed": True, "columns": {"id": _key()}},
+        "courses_program": {"model": "courses.Program", "managed": True, "columns": {"id": _key()}},
+        "users_token": {
+            "model": "users.Token",
+            "managed": True,
+            "columns": {
+                "key": _key("UUIDField"),
+                "class": _column("CharField", max_length=20),
+                # A db_column with no _id suffix.
+                "owner": _foreign_key("users_user"),
+            },
+        },
     },
 }
 
@@ -142,6 +164,14 @@ FIXTURE_TABLES: dict[str, tuple[str, dict[str, str]]] = {
             "external_uuid": "string",
             "owner_id": "long",
             "platform_id": "long",
+            "program_id": "long",
+            "login_email": "string",
+            "homepage_url": "string",
+            "level": "string",
+            "rank": "long",
+            "ceus": "decimal(5,2)",
+            "hours": "string",
+            "_dlt_id": "string",
             "legacy_code": "string",
             "_airbyte_raw_id": "string",
         },
@@ -161,7 +191,9 @@ FIXTURE_TABLES: dict[str, tuple[str, dict[str, str]]] = {
     ),
     "cms_coursepage": ("page_ptr_id", {"page_ptr_id": "long", "course_id": "long"}),
     "ecommerce_product": ("id", {"id": "long", "content_type_id": "long", "object_id": "long"}),
-    "things_unmodeled": ("id", {"id": "long", "note": "string"}),
+    "things_unmodeled": ("id", {"id": "long", "note": "string", "amount": "decimal(10,2)"}),
+    "courses_program": ("id", {"id": "long"}),
+    "users_token": ("key", {"key": "string", "class": "string", "owner": "long"}),
 }
 
 
@@ -248,6 +280,79 @@ def test_what_the_model_cannot_say_is_left_unset_with_a_comment(scaffolded: str)
     assert "# object_id: the object id of generic foreign key content_object" in product
     assert "object_id =" not in product
     assert "# Unique together: course_id, run_tag." in _class_body(scaffolded, "CourseRunBase")
+
+
+def test_nullable_unique_and_case_rules(scaffolded: str) -> None:
+    course = _class_body(scaffolded, "CourseBase")
+    token = _class_body(scaffolded, "TokenBase")
+
+    # A nullable foreign key into the fixture is NULL when generate() passes no parent.
+    assert 'program_id = parent("program", "id", nullable=True)' in course
+    assert 'login_email = factory.Sequence(lambda n: f"user{n}@{RESERVED_DOMAIN}")' in course
+    assert "homepage_url = url()" in course
+    assert 'level = or_null(factory.Iterator(["intro", "advanced"]))' in course
+    assert "rank = factory.Sequence(lambda n: n)" in course
+    # The model's CEUs, matched without case, and drawn to fit decimal(5,2).
+    assert 'ceus = or_null(value("numeric.decimal_number", start=0, end=999))' in course
+    # Too short for a word.
+    assert 'hours = value("numeric.integer_number", start=0, end=9999)' in course
+    assert "_dlt_id" not in course
+    for name in ("RESERVED_DOMAIN", "url"):
+        assert name in scaffolded.split("\n\n\n")[0]
+    assert 'key = value("cryptographic.uuid")' in token
+    assert "# class: a Python keyword" in token
+    assert 'owner = parent("owner_row", "id")' in token
+    assert "owner_row = None" in token
+    assert 'amount = value("numeric.decimal_number", start=0, end=99999999)' not in scaffolded
+    assert 'amount = value("numeric.decimal_number", start=0, end=999999)' in _class_body(
+        scaffolded, "ThingsUnmodeledBase"
+    )
+
+
+def test_long_names_come_out_as_ruff_formats_and_checks_them(tmp_path: Path) -> None:
+    table = "learning_resources_learningresourcerun_resource_prices_and_their_currency_conversions"
+    long_parent = "learning_resources_learningresourcerun_with_a_name_too_long_for_one_line"
+    tables = {
+        **MODELS["tables"],
+        table: {
+            "model": "learning_resources.LearningResourceRunResourcePricesAndTheirCurrencyConversions",
+            "managed": True,
+            "columns": {
+                "id": _key(),
+                f"{long_parent}_id": _foreign_key("courses_course", null=True),
+                "status_of_the_conversion": _column(
+                    "CharField", null=True, max_length=40, choices=["pending_review", "approved_by_staff"]
+                ),
+            },
+        },
+    }
+    FIXTURE_TABLES[table] = ("id", {"id": "long", f"{long_parent}_id": "long", "status_of_the_conversion": "string"})
+    try:
+        fixture, unit = _unit(tmp_path)
+    finally:
+        del FIXTURE_TABLES[table]
+    source = scaffold(
+        fixture, unit, {**MODELS, "tables": tables, "app": "mit-learn-application-with-a-long-name"}
+    ).source
+    # Each kind of line that has to be broken up was.
+    assert "@table(\n" in source
+    assert f"{long_parent}_id = parent(\n" in source
+    assert '    """Table learning_resources' in source
+    path = tmp_path / "_generated.py"
+    path.write_text(source)
+    # Outside the repository ruff would take ol_dbt_cli for a third-party package.
+    config = [
+        "--config",
+        str(REPO_ROOT / "src/ol_dbt_cli/pyproject.toml"),
+        "--config",
+        "lint.isort.known-first-party = ['ol_dbt_cli']",
+    ]
+
+    for command in (["format", "--check", "--diff"], ["check", "--select", "E,F,I,W"]):
+        ran = subprocess.run(  # noqa: S603
+            [sys.executable, "-m", "ruff", *command, *config, str(path)], capture_output=True, text=True, check=False
+        )
+        assert ran.returncode == 0, ran.stdout + ran.stderr
 
 
 def test_a_key_that_is_a_foreign_key_copies_its_parent(scaffolded: str) -> None:
@@ -354,12 +459,17 @@ def test_the_scaffolded_factories_generate_rows_that_pass_validation(
             ),
             generated.ProductBase.raw_table: generated.ProductBase.build_batch(3, content_type={"id": 1}),
             generated.ThingsUnmodeledBase.raw_table: generated.ThingsUnmodeledBase.build_batch(3),
+            generated.ProgramBase.raw_table: generated.ProgramBase.build_batch(2),
+            generated.TokenBase.raw_table: generated.TokenBase.build_batch(2, owner_row={"id": 1}),
         }
 
     package: Any = SimpleNamespace(SEED=1, generate=generate)
     rows = generate_rows(fixture, unit, package)
 
-    assert [len(rows.generated[PREFIX + name]) for name in FIXTURE_TABLES] == [8, 4, 4, 4, 3, 3]
+    assert [len(rows.generated[PREFIX + name]) for name in FIXTURE_TABLES] == [8, 4, 4, 4, 3, 3, 2, 2]
+    # Built with no program, the nullable program_id is NULL.
+    assert {row["program_id"] for row in rows.generated[f"{PREFIX}courses_course"]} == {None}
+    assert {row["owner"] for row in rows.generated[f"{PREFIX}users_token"]} == {1}
     assert {row["page_ptr_id"] for row in rows.generated[f"{PREFIX}cms_coursepage"]} == {
         row["id"] for row in rows.generated[f"{PREFIX}wagtailcore_page"]
     }

@@ -1,8 +1,7 @@
 """Base factories of the `xpro/app_postgres` unit, scaffolded from its models.
 
-From mitxpro at git:5196f767ba8db0160f3e67a8118b78c43638d5ef. Written by `ol-dbt fixtures scaffold`
-from models.json and rewritten wholesale on every run: change a factory by
-subclassing it in __init__.py.
+From mitxpro at git:5196f767ba8db0160f3e67a8118b78c43638d5ef. Written by `ol-dbt fixtures scaffold` from models.json and
+rewritten wholesale on every run: change a factory by subclassing it in __init__.py.
 """
 
 from __future__ import annotations
@@ -66,7 +65,7 @@ class CourseBase(RowFactory):
     live = value("development.boolean")
     title = value("text.title")
     created_on = value("datetime.datetime", start=2020, end=2025)
-    program_id = parent("program", "id")
+    program_id = parent("program", "id", nullable=True)
     updated_on = value("datetime.datetime", start=2020, end=2025)
     is_external = value("development.boolean")
     platform_id = parent("platform", "id")
@@ -79,7 +78,7 @@ class CourseBase(RowFactory):
 class CourseRunBase(RowFactory):
     """Table courses_courserun, from model courses.CourseRun."""
 
-    # Unique together: course_id, run_tag. generate() keeps them distinct.
+    # Unique together: course_id, run_tag. generate() must keep them distinct.
 
     class Params:
         course = None
@@ -87,7 +86,7 @@ class CourseRunBase(RowFactory):
     id = factory.Sequence(lambda n: n)
     live = value("development.boolean")
     title = value("text.title")
-    run_tag = value("text.word")
+    run_tag = value("numeric.integer_number", start=0, end=9999)
     end_date = or_null(value("datetime.datetime", start=2020, end=2025))
     course_id = parent("course", "id")
     created_on = value("datetime.datetime", start=2020, end=2025)
@@ -97,7 +96,7 @@ class CourseRunBase(RowFactory):
     enrollment_end = or_null(value("datetime.datetime", start=2020, end=2025))
     expiration_date = or_null(value("datetime.datetime", start=2020, end=2025))
     enrollment_start = or_null(value("datetime.datetime", start=2020, end=2025))
-    courseware_url_path = or_null(url())
+    courseware_url_path = or_null(value("text.word"))
     external_course_run_id = value("text.word")
 
 
@@ -105,7 +104,7 @@ class CourseRunBase(RowFactory):
 class ContentTypeBase(RowFactory):
     """Table django_content_type, from model contenttypes.ContentType."""
 
-    # Unique together: app_label, model. generate() keeps them distinct.
+    # Unique together: app_label, model. generate() must keep them distinct.
 
     id = factory.Sequence(lambda n: n)
     model = value("text.word")
@@ -116,7 +115,7 @@ class ContentTypeBase(RowFactory):
 class ProductBase(RowFactory):
     """Table ecommerce_product, from model ecommerce.Product."""
 
-    # Unique together: content_type_id, object_id. generate() keeps them distinct.
+    # Unique together: content_type_id, object_id. generate() must keep them distinct.
     # object_id: the object id of generic foreign key content_object, set in generate() with content_type_id.
 
     class Params:
@@ -151,7 +150,7 @@ class ProductVersionBase(RowFactory):
 class PageBase(RowFactory):
     """Table wagtailcore_page, from model wagtailcore.Page."""
 
-    # Unique together: translation_key, locale_id. generate() keeps them distinct.
+    # Unique together: translation_key, locale_id. generate() must keep them distinct.
     # A treebeard tree: place rows with Tree(rows, alphabet=TREE_ALPHABETS[PageBase.raw_table]).
     # path: set by Tree.add.
     # depth: set by Tree.add.
@@ -243,11 +242,11 @@ class CertificatePageBase(RowFactory):
         page_ptr = None
         partner_logo = None
 
-    ceus = value("numeric.float_number", start=0, end=1000, precision=2)
+    ceus = or_null(value("numeric.decimal_number", start=0, end=999))
     page_ptr_id = parent("page_ptr", "id")
     product_name = value("text.title")
     institute_text = or_null(value("text.sentence"))
-    partner_logo_id = parent("partner_logo", "id")
+    partner_logo_id = parent("partner_logo", "id", nullable=True)
     partner_logo_placement = or_null(factory.Iterator([1, 2]))
     display_mit_seal = value("development.boolean")
 
@@ -273,7 +272,7 @@ class CoursePageBase(RowFactory):
     subhead = value("text.word")
     duration = or_null(value("text.word"))
     featured = value("development.boolean")
-    course_id = parent("course", "id")
+    course_id = parent("course", "id", nullable=True)
     max_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
     min_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
     video_url = or_null(url())
@@ -282,12 +281,12 @@ class CoursePageBase(RowFactory):
     page_ptr_id = parent("page_ptr", "id")
     video_title = value("text.title")
     catalog_details = value("text.sentence")
-    search_image_id = parent("search_image", "id")
+    search_image_id = parent("search_image", "id", nullable=True)
     time_commitment = or_null(value("text.word"))
     max_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
     min_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
-    thumbnail_image_id = parent("thumbnail_image", "id")
-    background_image_id = parent("background_image", "id")
+    thumbnail_image_id = parent("thumbnail_image", "id", nullable=True)
+    background_image_id = parent("background_image", "id", nullable=True)
     background_video_url = or_null(url())
     external_marketing_url = or_null(url())
     marketing_hubspot_form_id = value("text.word")
@@ -297,7 +296,7 @@ class CoursePageBase(RowFactory):
 class CoursePageTopicsBase(RowFactory):
     """Table cms_coursepage_topics, from model cms.CoursePage_topics."""
 
-    # Unique together: coursepage_id, coursetopic_id. generate() keeps them distinct.
+    # Unique together: coursepage_id, coursetopic_id. generate() must keep them distinct.
 
     class Params:
         coursepage = None
@@ -329,7 +328,7 @@ class ExternalCoursePageBase(RowFactory):
     subhead = value("text.word")
     duration = or_null(value("text.word"))
     featured = value("development.boolean")
-    course_id = parent("course", "id")
+    course_id = parent("course", "id", nullable=True)
     max_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
     min_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
     video_url = or_null(url())
@@ -338,12 +337,12 @@ class ExternalCoursePageBase(RowFactory):
     page_ptr_id = parent("page_ptr", "id")
     video_title = value("text.title")
     catalog_details = value("text.sentence")
-    search_image_id = parent("search_image", "id")
+    search_image_id = parent("search_image", "id", nullable=True)
     time_commitment = or_null(value("text.word"))
     max_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
     min_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
-    thumbnail_image_id = parent("thumbnail_image", "id")
-    background_image_id = parent("background_image", "id")
+    thumbnail_image_id = parent("thumbnail_image", "id", nullable=True)
+    background_image_id = parent("background_image", "id", nullable=True)
     background_video_url = or_null(url())
     external_marketing_url = or_null(url())
     marketing_hubspot_form_id = value("text.word")
@@ -353,7 +352,7 @@ class ExternalCoursePageBase(RowFactory):
 class ExternalCoursePageTopicsBase(RowFactory):
     """Table cms_externalcoursepage_topics, from model cms.ExternalCoursePage_topics."""
 
-    # Unique together: externalcoursepage_id, coursetopic_id. generate() keeps them distinct.
+    # Unique together: externalcoursepage_id, coursetopic_id. generate() must keep them distinct.
 
     class Params:
         coursetopic = None
@@ -388,18 +387,18 @@ class ExternalProgramPageBase(RowFactory):
     max_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
     min_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
     video_url = or_null(url())
-    program_id = parent("program", "id")
+    program_id = parent("program", "id", nullable=True)
     description = value("text.sentence")
     language_id = parent("language", "id")
     page_ptr_id = parent("page_ptr", "id")
     video_title = value("text.title")
     catalog_details = value("text.sentence")
-    search_image_id = parent("search_image", "id")
+    search_image_id = parent("search_image", "id", nullable=True)
     time_commitment = or_null(value("text.word"))
     max_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
     min_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
-    thumbnail_image_id = parent("thumbnail_image", "id")
-    background_image_id = parent("background_image", "id")
+    thumbnail_image_id = parent("thumbnail_image", "id", nullable=True)
+    background_image_id = parent("background_image", "id", nullable=True)
     background_video_url = or_null(url())
     external_marketing_url = or_null(url())
     marketing_hubspot_form_id = value("text.word")
@@ -429,18 +428,18 @@ class ProgramPageBase(RowFactory):
     max_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
     min_weeks = or_null(value("numeric.integer_number", start=0, end=1000))
     video_url = or_null(url())
-    program_id = parent("program", "id")
+    program_id = parent("program", "id", nullable=True)
     description = value("text.sentence")
     language_id = parent("language", "id")
     page_ptr_id = parent("page_ptr", "id")
     video_title = value("text.title")
     catalog_details = value("text.sentence")
-    search_image_id = parent("search_image", "id")
+    search_image_id = parent("search_image", "id", nullable=True)
     time_commitment = or_null(value("text.word"))
     max_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
     min_weekly_hours = or_null(value("numeric.integer_number", start=0, end=1000))
-    thumbnail_image_id = parent("thumbnail_image", "id")
-    background_image_id = parent("background_image", "id")
+    thumbnail_image_id = parent("thumbnail_image", "id", nullable=True)
+    background_image_id = parent("background_image", "id", nullable=True)
     background_video_url = or_null(url())
     external_marketing_url = or_null(url())
     marketing_hubspot_form_id = value("text.word")

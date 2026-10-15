@@ -8,10 +8,11 @@ one base factory per fixture table, parents first. What a model says is used:
 - the primary key counts on the table's sequence, and a key that is also a
   foreign key (wagtail's ``page_ptr_id``) copies its parent's;
 - a foreign key to another fixture table reads its parent from ``class Params``
-  (:func:`~ol_dbt_cli.lib.fixture_generation.parent`), and a nullable one to a
-  table the fixture leaves out stays NULL;
+  (:func:`~ol_dbt_cli.lib.fixture_generation.parent`). A nullable one is NULL
+  when ``generate`` passes no parent, and one to a table the fixture leaves out
+  stays NULL;
 - ``unique`` text comes from the sequence, ``choices`` cycle through the stored
-  values, and a nullable column is NULL in a share of rows;
+  values, and any other nullable column is NULL in a share of rows;
 - the field class and the column name pick a mimesis provider.
 
 What a model cannot say is left unset with a comment, for the unit's
@@ -20,17 +21,23 @@ treebeard tree's ``path``, ``depth`` and ``numchild`` (placed by
 :class:`~ol_dbt_cli.lib.fixture_trees.Tree`), a ``parent_id`` to the same table
 (:func:`~ol_dbt_cli.lib.fixture_trees.attach`), a generic foreign key's object
 id, and the rules between columns. Every run writes the same file from the
-same inputs.
+same inputs, formatted as ruff formats it.
+
+Column names are matched without case: Airbyte lowercases them, so a model's
+``CEUs`` is the fixture's ``ceus``.
 """
 
 from __future__ import annotations
 
 import json
+import keyword
 import re
 import textwrap
 import zlib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+
+from ol_dbt_cli.lib.fixture_trees import TREEBEARD_STEPLEN
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -40,14 +47,16 @@ if TYPE_CHECKING:
 
 MODELS_FILE = "models.json"
 GENERATED_FILE = "_generated.py"
+FORMAT_VERSION = 1
 # Rows per table at scale 1. Tens of rows give the dbt tests something to fail
 # on; a hand-written subclass re-declares `@table` to change one.
 SCAFFOLD_DEFAULT_COUNT = 10
 # The line length ruff holds src/ol_dbt_cli to, so the written module needs no
 # reformatting to pass it.
 LINE_LIMIT = 120
+_INDENT = "    "
 _LOADER_PREFIXES = ("_airbyte_", "_dlt_")
-_TREE_COLUMNS = frozenset({"path", "depth", "numchild"})
+_TREE_COLUMNS = frozenset({"path", "depth", "numchild", "url_path"})
 _INTEGER_TYPES = frozenset(
     {
         "AutoField",
@@ -63,33 +72,39 @@ _INTEGER_TYPES = frozenset(
 )
 _TEXT_TYPES = frozenset({"CharField", "TextField", "SlugField", "EmailField", "URLField", "FilePathField"})
 # Column-name rules, tried in order on a text column: a regex on the name and
-# the provider it gets. `None` means url().
+# the provider it gets. `None` means url(). Whole words of the name, so
+# `capacity` is not a city.
 _NAME_PROVIDERS: tuple[tuple[str, str | None], ...] = (
-    (r"email", "person.email"),
+    (r"(^|_)email($|_)", "person.email"),
     (r"^first_name$", "person.first_name"),
     (r"^last_name$", "person.last_name"),
-    (r"^(full|display|legal)_name$", "person.full_name"),
+    (r"^(full|display|legal)_name$|(^|_)(person|instructor|author|contact|owner|user)_name$", "person.full_name"),
     (r"(^|_)name$", "text.title"),
-    (r"username", "person.username"),
-    (r"phone", "person.telephone"),
-    (r"url$|_url_|^url|link$", None),
-    (r"title", "text.title"),
-    (r"slug", "internet.slug"),
-    (r"city", "address.city"),
-    (r"country", "address.country_code"),
-    (r"state|region", "address.state"),
-    (r"postal|zip", "address.postal_code"),
-    (r"address", "address.address"),
-    (r"currency", "finance.currency_iso_code"),
-    (r"uuid|guid", "cryptographic.uuid"),
-    (r"description|summary|body|content|text|note|comment|message", "text.sentence"),
+    (r"(^|_)username$", "person.username"),
+    (r"(^|_)phone($|_)", "person.telephone"),
+    (r"(^|_)ip(_address)?$", "internet.ip_v4"),
+    (r"(^|_)(url|link)$", None),
+    (r"(^|_)title$", "text.title"),
+    (r"(^|_)slug$", "internet.slug"),
+    (r"(^|_)city$", "address.city"),
+    (r"(^|_)country(_code)?$", "address.country_code"),
+    (r"(^|_)(state|region)$", "address.state"),
+    (r"(^|_)(postal_code|zip_code|zip)$", "address.postal_code"),
+    (r"(^|_)address(_line_?\d)?$", "address.address"),
+    (r"(^|_)currency(_code)?$", "finance.currency_iso_code"),
+    (r"(^|_)(uuid|guid)$", "cryptographic.uuid"),
+    (r"(^|_)(description|summary|body|content|text|note|comment|message)$", "text.sentence"),
 )
 # A text column by field class when no name rule matches.
 _TEXT_PROVIDERS = {"TextField": "text.sentence", "EmailField": "person.email", "SlugField": "internet.slug"}
+# A CharField shorter than this gets a number: mimesis words run to 12 letters.
+_SHORT_TEXT = 12
 # Dates fall in a fixed range: a provider's default range ends at the current
 # year, so its rows would change with the date.
 _DATE_RANGE = "start=2020, end=2025"
-# A column the model does not have, by its fixture type.
+_DECIMAL = re.compile(r"^decimal\((\d+),(\d+)\)$")
+# By fixture type: a column the model does not have, or a field class the
+# scaffold has no provider for.
 _FIXTURE_TYPE_DECLARATIONS = {
     "boolean": 'value("development.boolean")',
     "int": 'value("numeric.integer_number", start=0, end=1000)',
@@ -120,7 +135,7 @@ class _Class:
 
     name: str
     raw_table: str
-    docstring: str
+    docstring: list[str]
     comments: list[str] = field(default_factory=list)
     params: list[str] = field(default_factory=list)
     lines: list[str] = field(default_factory=list)
@@ -129,6 +144,8 @@ class _Class:
 
 def trimmed_models(dump: Mapping[str, Any], fixture: UnitFixture, unit: Unit) -> dict[str, Any]:
     """Return ``dump`` holding only the tables the unit's fixture has, so the committed file stays small.
+
+    A table added to the fixture later needs a new dump.
 
     :param dump: What ``bin/django-model-dump.py`` wrote, or an earlier trimmed file.
     :param fixture: The unit's parsed fixture file.
@@ -179,10 +196,10 @@ def scaffold(fixture: UnitFixture, unit: Unit, models: Mapping[str, Any]) -> Sca
     :rtype: Scaffold
     :raises ValueError: If ``models`` is not a dump this module reads.
     """
-    if models.get("format_version") != 1:
-        msg = f"models has format_version {models.get('format_version')!r}; this scaffold reads 1"
+    if models.get("format_version") != FORMAT_VERSION:
+        msg = f"models has format_version {models.get('format_version')!r}; this scaffold reads {FORMAT_VERSION}"
         raise ValueError(msg)
-    tables = models["tables"]
+    tables = {name: _lowered(body) for name, body in models["tables"].items()}
     notes: list[str] = []
     primary_keys = {entry["raw_table"]: entry.get("primary_key") or [] for entry in unit.tables}
     fixture_tables = {table.raw_table for table in fixture.tables}
@@ -197,7 +214,9 @@ def scaffold(fixture: UnitFixture, unit: Unit, models: Mapping[str, Any]) -> Sca
             model = {"model": None, "columns": {}}
         elif tree := model.get("treebeard"):
             alphabets[table.raw_table] = tree["alphabet"]
-        inventory_key = [path[0] for path in primary_keys.get(table.raw_table, [])]
+            if tree["steplen"] != TREEBEARD_STEPLEN:
+                notes.append(f"{table.raw_table}: steplen {tree['steplen']}, and Tree places {TREEBEARD_STEPLEN}")
+        inventory_key = [path[0].lower() for path in primary_keys.get(table.raw_table, [])]
         model_key = [column for column, facts in model["columns"].items() if facts["primary_key"]]
         if model["model"] is not None and inventory_key != model_key:
             notes.append(
@@ -209,6 +228,30 @@ def scaffold(fixture: UnitFixture, unit: Unit, models: Mapping[str, Any]) -> Sca
         models=trimmed_models(models, fixture, unit),
         notes=notes,
     )
+
+
+def _lowered(model: Mapping[str, Any]) -> dict[str, Any]:
+    """Return ``model`` with every column name lowercased, as Airbyte lands them."""
+    columns = {
+        column.lower(): {
+            **facts,
+            **(
+                {"foreign_key": {**facts["foreign_key"], "column": facts["foreign_key"]["column"].lower()}}
+                if "foreign_key" in facts
+                else {}
+            ),
+        }
+        for column, facts in model["columns"].items()
+    }
+    lowered: dict[str, Any] = {**model, "columns": columns}
+    if "unique_together" in model:
+        lowered["unique_together"] = [[column.lower() for column in columns_] for columns_ in model["unique_together"]]
+    if "generic_foreign_keys" in model:
+        lowered["generic_foreign_keys"] = [
+            {**entry, "content_type": entry["content_type"].lower(), "object_id": entry["object_id"].lower()}
+            for entry in model["generic_foreign_keys"]
+        ]
+    return lowered
 
 
 def _db_table(raw_table: str, unit: Unit) -> str:
@@ -267,12 +310,17 @@ def _factory(
     notes: list[str],
 ) -> _Class:
     prefix = str(unit.data["table_prefix"])
-    source = f"model {model['model']}" if model["model"] else "no model"
-    written = _Class(names[db_table], table.raw_table, f"Table {db_table}, from {source}.")
+    summary = f"Table {db_table}, from model {model['model']}." if model["model"] else f"Table {db_table}, no model."
+    docstring = (
+        [summary]
+        if len(f'{_INDENT}"""{summary}"""') <= LINE_LIMIT
+        else [f"Table {db_table}.", f"From model {model['model']}."]
+    )
+    written = _Class(names[db_table], table.raw_table, docstring)
     tree = "treebeard" in model
     generic = {entry["object_id"]: entry for entry in model.get("generic_foreign_keys", [])}
     for columns in model.get("unique_together", []):
-        written.comments.append(f"Unique together: {', '.join(columns)}. generate() keeps them distinct.")
+        written.comments.append(f"Unique together: {', '.join(columns)}. generate() must keep them distinct.")
     if tree:
         written.comments.append(
             f"A treebeard tree: place rows with Tree(rows, alphabet=TREE_ALPHABETS[{names[db_table]}.raw_table])."
@@ -280,26 +328,32 @@ def _factory(
     for column, fixture_type in table.columns.items():
         if column.startswith(_LOADER_PREFIXES):
             continue
-        facts = model["columns"].get(column)
+        if keyword.iskeyword(column):
+            written.comments.append(
+                f"{column}: a Python keyword, so it cannot be a class attribute; set it in generate()."
+            )
+            continue
+        facts = model["columns"].get(column.lower())
         if facts is None:
             if model["model"] is not None:
                 notes.append(f"{table.raw_table}.{column}: not a column of {model['model']}; drawn by its fixture type")
-            if column in key_columns:
+            if column.lower() in key_columns:
                 key = "factory.Sequence(lambda n: n)" if fixture_type in {"int", "long"} else _unique_text(column)
                 written.lines.append(f"{column} = {key}")
             else:
-                written.lines.append(f"{column} = {_FIXTURE_TYPE_DECLARATIONS[fixture_type]}")
+                written.lines.append(f"{column} = {_by_fixture_type(fixture_type)}")
             continue
-        if tree and (column in _TREE_COLUMNS or column == "url_path"):
+        if tree and column.lower() in _TREE_COLUMNS:
             written.comments.append(f"{column}: set by Tree.add.")
             continue
-        if column in generic:
+        if column.lower() in generic:
+            entry = generic[column.lower()]
             written.comments.append(
-                f"{column}: the object id of generic foreign key {generic[column]['name']}, "
-                f"set in generate() with {generic[column]['content_type']}."
+                f"{column}: the object id of generic foreign key {entry['name']}, "
+                f"set in generate() with {entry['content_type']}."
             )
             continue
-        declaration = _declaration(column, facts, db_table, prefix, fixture_tables, written)
+        declaration = _declaration(column, facts, fixture_type, db_table, prefix, fixture_tables, written)
         if declaration is not None:
             written.lines.append(f"{column} = {declaration}")
     return written
@@ -308,6 +362,7 @@ def _factory(
 def _declaration(  # noqa: PLR0911
     column: str,
     facts: Mapping[str, Any],
+    fixture_type: str,
     db_table: str,
     prefix: str,
     fixture_tables: set[str],
@@ -315,35 +370,59 @@ def _declaration(  # noqa: PLR0911
 ) -> str | None:
     """Return the factory_boy declaration of one column, or ``None`` to leave it unset with a comment."""
     if foreign_key := facts.get("foreign_key"):
-        target = foreign_key["table"]
-        if target == db_table:
-            unless = "NULL unless generate() sets it" if facts["null"] else "generate() sets it"
-            written.comments.append(f"{column}: references this table; {unless} with attach().")
-            return None
-        if prefix + target not in fixture_tables and facts["null"]:
-            written.comments.append(f"{column}: references {target}, which the fixture has no table for; NULL.")
-            return None
-        param = column.removesuffix("_id")
-        written.params.append(param)
-        if facts.get("one_to_one"):
-            written.comments.append(f"{column}: one-to-one with {target}; draw its parents with pair().")
-        if prefix + target not in fixture_tables:
-            written.comments.append(f"{column}: references {target}, which the fixture has no table for.")
-        return f'parent("{param}", "{foreign_key["column"]}")'
+        return _foreign_key(column, facts, foreign_key, db_table, prefix, fixture_tables, written)
     if facts.get("json"):
         written.comments.append(f"{column}: JSON whose shape the model does not say; set it in __init__.py.")
         return None
     internal_type = facts["internal_type"]
-    if facts["primary_key"] or (facts["unique"] and internal_type in _INTEGER_TYPES):
-        return "factory.Sequence(lambda n: n)" if internal_type in _INTEGER_TYPES else _unique_text(column)
+    if facts["primary_key"]:
+        if internal_type in _INTEGER_TYPES:
+            return "factory.Sequence(lambda n: n)"
+        return 'value("cryptographic.uuid")' if internal_type == "UUIDField" else _unique_text(column)
+    # A unique column comes from the sequence, choices or not: cycling
+    # through choices would repeat one.
+    if facts["unique"] and internal_type in _INTEGER_TYPES:
+        return _nullable("factory.Sequence(lambda n: n)", facts)
+    if facts["unique"] and internal_type == "UUIDField":
+        return _nullable('value("cryptographic.uuid")', facts)
+    if facts["unique"] and internal_type in _TEXT_TYPES:
+        return _nullable(_unique_text(column), facts)
     # A blank choice of None is the column's NULL, which or_null already makes.
     if choices := [choice for choice in facts.get("choices", []) if choice is not None]:
         return _choices(column, choices, facts, written)
-    if facts["unique"] and internal_type == "UUIDField":
-        return 'value("cryptographic.uuid")'
-    if facts["unique"] and internal_type in _TEXT_TYPES:
-        return _unique_text(column)
-    return _nullable(_provider(column, facts), facts)
+    return _nullable(_provider(column, facts, fixture_type), facts)
+
+
+def _foreign_key(
+    column: str,
+    facts: Mapping[str, Any],
+    foreign_key: Mapping[str, Any],
+    db_table: str,
+    prefix: str,
+    fixture_tables: set[str],
+    written: _Class,
+) -> str | None:
+    target = foreign_key["table"]
+    if target == db_table:
+        unless = "NULL unless generate() sets it" if facts["null"] else "generate() sets it"
+        written.comments.append(f"{column}: references this table; {unless} with attach().")
+        return None
+    if prefix + target not in fixture_tables and facts["null"]:
+        written.comments.append(f"{column}: references {target}, which the fixture has no table for; NULL.")
+        return None
+    # A column without the _id suffix (a db_column) would be the param's own
+    # name, and factory_boy leaves a param out of the row.
+    param = column.lower().removesuffix("_id") if column.lower().endswith("_id") else f"{column.lower()}_row"
+    if keyword.iskeyword(param):
+        param = f"{param}_row"
+    written.params.append(param)
+    if facts.get("one_to_one"):
+        written.comments.append(f"{column}: one-to-one with {target}; draw its parents with pair().")
+    if prefix + target not in fixture_tables:
+        written.comments.append(f"{column}: references {target}, which the fixture has no table for.")
+    if facts["null"]:
+        return f'parent("{param}", "{foreign_key["column"]}", nullable=True)'
+    return f'parent("{param}", "{foreign_key["column"]}")'
 
 
 def _nullable(declaration: str, facts: Mapping[str, Any]) -> str:
@@ -351,28 +430,45 @@ def _nullable(declaration: str, facts: Mapping[str, Any]) -> str:
 
 
 def _unique_text(column: str) -> str:
-    if "email" in column:
+    if "email" in column.lower():
         return 'factory.Sequence(lambda n: f"user{n}@{RESERVED_DOMAIN}")'
-    stem = column.removesuffix("_id").replace("_", "-")
+    stem = column.lower().removesuffix("_id").replace("_", "-")
     return f'factory.Sequence(lambda n: f"{stem}-{{n}}")'
 
 
-def _provider(column: str, facts: Mapping[str, Any]) -> str:  # noqa: PLR0911
+def _by_fixture_type(fixture_type: str) -> str:
+    if match := _DECIMAL.match(fixture_type):
+        precision, scale = int(match.group(1)), int(match.group(2))
+        return _decimal(precision, scale)
+    return _FIXTURE_TYPE_DECLARATIONS[fixture_type]
+
+
+def _decimal(max_digits: int, decimal_places: int) -> str:
+    # Below the column's largest value, so rounding to its places cannot carry
+    # into a digit it does not have.
+    top = 10 ** min(max_digits - decimal_places, 6) - 1
+    return f'value("numeric.decimal_number", start=0, end={top})'
+
+
+def _provider(column: str, facts: Mapping[str, Any], fixture_type: str) -> str:  # noqa: PLR0911
     internal_type = facts["internal_type"]
     if internal_type in _TEXT_TYPES:
         for pattern, provider in _NAME_PROVIDERS:
-            if re.search(pattern, column):
+            if re.search(pattern, column.lower()):
                 return "url()" if provider is None else f'value("{provider}")'
         if internal_type == "URLField":
             return "url()"
+        # Too short for a word (min_weekly_hours is a CharField(5)): a number
+        # that fits, which the string column holds as its text.
+        if internal_type == "CharField" and (facts.get("max_length") or _SHORT_TEXT) < _SHORT_TEXT:
+            return f'value("numeric.integer_number", start=0, end={10 ** min(facts["max_length"], 4) - 1})'
         return f'value("{_TEXT_PROVIDERS.get(internal_type, "text.word")}")'
     if internal_type in _INTEGER_TYPES:
         return 'value("numeric.integer_number", start=0, end=1000)'
     if internal_type == "BooleanField":
         return 'value("development.boolean")'
     if internal_type == "DecimalField":
-        top = 10 ** min(facts["max_digits"] - facts["decimal_places"], 6) - 1
-        return f'value("numeric.decimal_number", start=0, end={top})'
+        return _decimal(facts["max_digits"], facts["decimal_places"])
     if internal_type == "FloatField":
         return 'value("numeric.float_number", start=0, end=1000, precision=2)'
     if internal_type == "DateTimeField":
@@ -387,7 +483,8 @@ def _provider(column: str, facts: Mapping[str, Any]) -> str:  # noqa: PLR0911
         return 'value("internet.ip_v4")'
     if internal_type in {"FileField", "ImageField"}:
         return 'value("file.file_name")'
-    return 'value("text.word")'
+    # A field class with no rule here (a DurationField): what its column holds.
+    return _by_fixture_type(fixture_type)
 
 
 def _choices(column: str, choices: list[Any], facts: Mapping[str, Any], written: _Class) -> str:
@@ -395,7 +492,7 @@ def _choices(column: str, choices: list[Any], facts: Mapping[str, Any], written:
     # Double-quoted strings, as ruff formats them.
     items = [json.dumps(choice) if isinstance(choice, str) else repr(choice) for choice in choices]
     declaration = _nullable(f"factory.Iterator([{', '.join(items)}])", facts)
-    if len(f"    {column} = {declaration}") <= LINE_LIMIT:
+    if len(f"{_INDENT}{column} = {declaration}") <= LINE_LIMIT:
         return declaration
     model = re.sub(r"(?<!^)(?=[A-Z])", "_", written.name.removesuffix("Base"))
     constant = f"{model}_{column}_choices".upper()
@@ -406,29 +503,35 @@ def _choices(column: str, choices: list[Any], facts: Mapping[str, Any], written:
 def _module(models: Mapping[str, Any], unit: Unit, classes: list[_Class], alphabets: dict[str, str]) -> str:
     body: list[str] = []
     for written in classes:
-        body += ["", "", f'@table("{written.raw_table}", default_count=SCAFFOLD_DEFAULT_COUNT)']
+        body += ["", "", *_fit("", f'@table("{written.raw_table}", default_count=SCAFFOLD_DEFAULT_COUNT)')]
         body.append(f"class {written.name}(RowFactory):")
-        body.append(f'    """{written.docstring}"""')
+        if len(written.docstring) == 1:
+            body.append(f'{_INDENT}"""{written.docstring[0]}"""')
+        else:
+            first, *rest = written.docstring
+            body += [f'{_INDENT}"""{first}', "", *[f"{_INDENT}{line}" for line in rest], f'{_INDENT}"""']
         if written.comments:
             body.append("")
-            body += [f"    # {line}" for comment in written.comments for line in _wrapped(comment, 6)]
+            body += [f"{_INDENT}# {line}" for comment in written.comments for line in _wrapped(comment, 6)]
         if written.params:
-            body += ["", "    class Params:"] + [f"        {param} = None" for param in written.params]
+            body += ["", f"{_INDENT}class Params:"] + [f"{_INDENT * 2}{param} = None" for param in written.params]
         if written.lines:
             body.append("")
-            body += [f"    {line}" for line in written.lines]
+            body += [fitted for line in written.lines for fitted in _fit(_INDENT, line)]
     text = "\n".join(body)
     runtime = sorted(
         name
         for name in ("RESERVED_DOMAIN", "RowFactory", "or_null", "parent", "table", "url", "value")
         if re.search(rf"\b{name}\b", text)
     )
+    provenance = (
+        f"From {models['app']} at {models['commit']}. Written by `ol-dbt fixtures scaffold` from models.json "
+        "and rewritten wholesale on every run: change a factory by subclassing it in __init__.py."
+    )
     header = [
         f'"""Base factories of the `{unit.key}` unit, scaffolded from its models.',
         "",
-        f"From {models['app']} at {models['commit']}. Written by `ol-dbt fixtures scaffold`",
-        "from models.json and rewritten wholesale on every run: change a factory by",
-        "subclassing it in __init__.py.",
+        *_wrapped(provenance, 0),
         '"""',
         "",
         "from __future__ import annotations",
@@ -436,16 +539,16 @@ def _module(models: Mapping[str, Any], unit: Unit, classes: list[_Class], alphab
     ]
     if "factory." in text:
         header += ["import factory", ""]
-    header.append(f"from ol_dbt_cli.lib.fixture_generation import {', '.join(runtime)}")
+    header += _fit("", f"from ol_dbt_cli.lib.fixture_generation import {', '.join(runtime)}")
     header += ["", f"SCAFFOLD_DEFAULT_COUNT = {SCAFFOLD_DEFAULT_COUNT}"]
     for written in classes:
         for constant, items in written.constants:
-            header += ["", f"{constant} = [", *[f"    {item}," for item in items], "]"]
+            header += ["", f"{constant} = [", *[f"{_INDENT}{item}," for item in items], "]"]
     if alphabets:
         class_names = {written.raw_table: written.name for written in classes}
         body += ["", "", "# Each tree's MP_Node.alphabet, for fixture_trees.Tree.", "TREE_ALPHABETS = {"]
         body += [
-            f'    {class_names[raw_table]}.raw_table: "{alphabet}",'
+            f'{_INDENT}{class_names[raw_table]}.raw_table: "{alphabet}",'
             for raw_table, alphabet in sorted(alphabets.items())
         ]
         body.append("}")
@@ -454,3 +557,40 @@ def _module(models: Mapping[str, Any], unit: Unit, classes: list[_Class], alphab
 
 def _wrapped(comment: str, indent: int) -> list[str]:
     return textwrap.wrap(comment, LINE_LIMIT - indent, break_long_words=False, break_on_hyphens=False)
+
+
+def _fit(indent: str, line: str) -> list[str]:
+    """Return ``line`` at ``indent``, its outermost call's arguments one a line when it is too long, as ruff does.
+
+    The trailing comma keeps ruff from joining them again.
+    """
+    if len(indent + line) <= LINE_LIMIT or not line.endswith(")") or "(" not in line:
+        return [indent + line]
+    head, _, rest = line.partition("(")
+    if head.startswith("from "):
+        head, rest = line.removesuffix(")"), ""
+        names = head.split(" import ")[1].split(", ")
+        return [f"{indent}{head.split(' import ')[0]} import (", *[f"{indent}{_INDENT}{name}," for name in names], ")"]
+    arguments = _split_arguments(rest.removesuffix(")"))
+    inner = [fitted for argument in arguments for fitted in _fit(indent + _INDENT, f"{argument},")]
+    return [f"{indent}{head}(", *inner, f"{indent})"]
+
+
+def _split_arguments(arguments: str) -> list[str]:
+    """Split a call's arguments at the commas outside brackets and strings."""
+    parts: list[str] = []
+    depth, quote, start = 0, "", 0
+    for position, character in enumerate(arguments):
+        if quote:
+            quote = "" if character == quote and arguments[position - 1] != "\\" else quote
+        elif character in "\"'":
+            quote = character
+        elif character in "([{":
+            depth += 1
+        elif character in ")]}":
+            depth -= 1
+        elif character == "," and depth == 0:
+            parts.append(arguments[start:position].strip())
+            start = position + 1
+    parts.append(arguments[start:].strip())
+    return [part for part in parts if part]

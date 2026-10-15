@@ -183,14 +183,15 @@ the source second" above still holds.
 For a Django app, the base factories come from the app's models. `bin/django-model-dump.py`
 runs with the app's own Python and writes what its models say about each table (keys,
 foreign keys, `unique`, `choices`, nullability, field classes, treebeard trees) as JSON.
-It imports the models and reads no rows. Each setting the app's `settings.py` marks
-`required=True` needs a value to import, and a placeholder does, since nothing connects
+It imports the models and reads no rows, and it refuses a database connection, so an app
+whose startup queried would fail the dump rather than reach a database. Each setting the
+app's `settings.py` marks `required=True` needs a value to import, and a placeholder does
 (`DATABASE_URL` has to parse as a URL, e.g. `postgres://x:x@127.0.0.1/x`):
 
 ```bash
 APP=~/code/mit/repos/mitxonline
 # With the app's required settings exported as placeholders:
-"$APP/.venv/bin/python" bin/django-model-dump.py --app-dir "$APP" \
+"$APP/.venv/bin/python" bin/django-model-dump.py --app-dir "$APP" --app mitxonline \
     --settings main.settings --commit "$(git -C "$APP" rev-parse HEAD)" > /tmp/mitxonline-models.json
 ol-dbt fixtures scaffold --unit mitxonline/app_postgres --models /tmp/mitxonline-models.json
 ```
@@ -204,12 +205,15 @@ checkout, e.g. `UV_PROJECT_ENVIRONMENT=/tmp/mitxpro-venv uv sync --project "$APP
   on every run. What the models cannot say (a JSON column's shape, a treebeard tree's
   `path`, a self reference, a generic foreign key's object id) is left unset with a comment.
 - `models.json`: the dump cut down to the unit's fixture tables. A later `scaffold` with
-  no `--models` reads it, so the package can be rescaffolded without the app.
+  no `--models` reads it, so the package can be rescaffolded without the app until the
+  fixture gains a table, which needs a new dump.
 - `__init__.py`, only if there is none: the unit's `SEED` and a `generate` that adds no
   rows. The hand-written module subclasses the base factories and wires the tables together.
 
-A column the fixture and the models disagree on (Airbyte drops and adds columns) is
-printed and drawn by its fixture type.
+A nullable foreign key is NULL in a row `generate` builds without that parent. Column
+names are matched without case, since Airbyte lowercases them. A column the fixture and
+the models disagree on (Airbyte drops and adds columns) is printed and drawn by its
+fixture type.
 
 ### Adding a fixture
 

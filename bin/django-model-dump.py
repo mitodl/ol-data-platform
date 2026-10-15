@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """Write what a Django app's models say about their tables, as JSON.
 
-`ol-dbt fixtures scaffold` reads the output. Run this with the app's own Python
-from the app's checkout, so its settings and models import. It reads no rows
-and opens no database connection: importing the models is all it does.
+`ol-dbt fixtures scaffold` reads the output. Run this with the app's own
+Python, so its settings and models import. It reads no rows: importing the
+models is all it does, and a database connection is refused, so an app's
+``ready()`` that queried would fail the dump instead of reaching a database.
 Standard library and Django only, because it runs in the app's environment,
 not this repository's::
 
-    cd ../mitxonline
-    .venv/bin/python ../ol-data-platform/bin/django-model-dump.py \\
-        --settings main.settings --commit "$(git rev-parse HEAD)" \\
-        > "$FACTORIES/mitxonline__app_postgres/models.json"
-
-where ``$FACTORIES`` is ``src/ol_dbt_cli/ol_dbt_cli/fixture_factories``.
+    APP=../mitxonline
+    "$APP/.venv/bin/python" bin/django-model-dump.py --app-dir "$APP" \\
+        --app mitxonline --settings main.settings \\
+        --commit "$(git -C "$APP" rev-parse HEAD)" > /tmp/models.json
 
 An app whose settings require environment variables (a secret key, a database
-URL) needs them set, and placeholders do: nothing connects. The tables are
-sorted, so a second run on the same commit writes the same file.
+URL) needs them set, and placeholders do. The output depends only on the
+models, the names given and the commit, so a second run on the same commit
+writes the same file.
 """
 
 # `_meta` is Django's public model API, underscore and all.
@@ -63,8 +63,6 @@ def _column(field: Any) -> dict[str, Any]:
         )
     if field.choices:
         column["choices"] = [_jsonable(value) for value, _ in field.flatchoices]
-    if field.has_default() and not callable(field.default):
-        column["default"] = _jsonable(field.default)
     if patterns := [
         validator.regex.pattern
         for validator in field.validators
@@ -141,7 +139,12 @@ def _table(model: Any) -> dict[str, Any]:
     return table
 
 
-def dump(app: str, commit: str | None) -> dict[str, Any]:
+def _no_connection(_wrapper: Any) -> None:
+    msg = "the model dump opens no database connection, and something asked for one"
+    raise RuntimeError(msg)
+
+
+def dump(app: str, commit: str) -> dict[str, Any]:
     """Return the tables of every installed model, keyed by ``db_table``.
 
     :param app: A name for the app, recorded in the output.
@@ -151,14 +154,22 @@ def dump(app: str, commit: str | None) -> dict[str, Any]:
     """
     import django  # noqa: PLC0415
     from django.apps import apps  # noqa: PLC0415
+    from django.db.backends.base.base import BaseDatabaseWrapper  # noqa: PLC0415
 
+    BaseDatabaseWrapper.ensure_connection = _no_connection
     django.setup()
     tables: dict[str, Any] = {}
+    owners: dict[str, str] = {}
     # Auto-created many-to-many tables too: a fixture can hold one.
     for model in apps.get_models(include_auto_created=True):
         if model._meta.proxy:
             continue
-        tables[model._meta.db_table] = _table(model)
+        db_table, label = model._meta.db_table, model._meta.label
+        if db_table in owners:
+            msg = f"{label} and {owners[db_table]} both have table {db_table}"
+            raise ValueError(msg)
+        owners[db_table] = label
+        tables[db_table] = _table(model)
     return {
         "format_version": FORMAT_VERSION,
         "app": app,
@@ -185,7 +196,9 @@ def main() -> None:
         help="The app's checkout. Default: the current directory.",
     )
     parser.add_argument(
-        "--app", help="A name for the app. Default: the checkout's directory name."
+        "--app",
+        required=True,
+        help="A name for the app, recorded in the output, e.g. mitxpro.",
     )
     parser.add_argument(
         "--commit",
@@ -196,10 +209,9 @@ def main() -> None:
     app_dir = arguments.app_dir.resolve()
     os.environ["DJANGO_SETTINGS_MODULE"] = arguments.settings
     sys.path.insert(0, str(app_dir))
-    # Settings read files relative to the checkout (.env, templates).
-    os.chdir(app_dir)
-    document = dump(arguments.app or app_dir.name, arguments.commit)
-    sys.stdout.write(json.dumps(document, indent=2, sort_keys=False) + "\n")
+    document = dump(arguments.app, arguments.commit)
+    # A NaN or infinity is not JSON, and the scaffold would read it back wrong.
+    sys.stdout.write(json.dumps(document, indent=2, allow_nan=False) + "\n")
 
 
 if __name__ == "__main__":

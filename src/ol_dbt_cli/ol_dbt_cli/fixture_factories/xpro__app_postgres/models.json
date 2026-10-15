@@ -67,8 +67,7 @@
             null,
             1,
             2
-          ],
-          "default": 2
+          ]
         },
         "signatories": {
           "field": "StreamField",
@@ -91,8 +90,7 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         }
       }
     },
@@ -226,8 +224,7 @@
           "choices": [
             "Online",
             "Hybrid"
-          ],
-          "default": "Online"
+          ]
         },
         "background_image_id": {
           "field": "ForeignKey",
@@ -289,8 +286,7 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "content": {
           "field": "StreamField",
@@ -485,8 +481,7 @@
           "choices": [
             "Online",
             "Hybrid"
-          ],
-          "default": "Online"
+          ]
         },
         "background_image_id": {
           "field": "ForeignKey",
@@ -548,8 +543,7 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "content": {
           "field": "StreamField",
@@ -744,8 +738,7 @@
           "choices": [
             "Online",
             "Hybrid"
-          ],
-          "default": "Online"
+          ]
         },
         "background_image_id": {
           "field": "ForeignKey",
@@ -807,8 +800,7 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "content": {
           "field": "StreamField",
@@ -1005,8 +997,7 @@
           "choices": [
             "Online",
             "Hybrid"
-          ],
-          "default": "Online"
+          ]
         },
         "background_image_id": {
           "field": "ForeignKey",
@@ -1068,8 +1059,7 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "content": {
           "field": "StreamField",
@@ -1160,16 +1150,14 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "is_external": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "external_course_id": {
           "field": "CharField",
@@ -1177,8 +1165,7 @@
           "null": false,
           "primary_key": false,
           "unique": false,
-          "max_length": 255,
-          "default": ""
+          "max_length": 255
         },
         "platform_id": {
           "field": "ForeignKey",
@@ -1270,8 +1257,7 @@
           "null": false,
           "primary_key": false,
           "unique": false,
-          "max_length": 255,
-          "default": ""
+          "max_length": 255
         },
         "start_date": {
           "field": "DateTimeField",
@@ -1313,8 +1299,7 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         }
       },
       "unique_together": [
@@ -1408,8 +1393,7 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         }
       }
     },
@@ -1462,16 +1446,14 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "is_external": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "platform_id": {
           "field": "ForeignKey",
@@ -1569,16 +1551,14 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": true
+          "unique": false
         },
         "is_private": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         }
       },
       "unique_together": [
@@ -1659,8 +1639,7 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         }
       }
     },
@@ -1695,8 +1674,7 @@
           "internal_type": "PositiveIntegerField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": 0
+          "unique": false
         },
         "translation_key": {
           "field": "UUIDField",
@@ -1733,16 +1711,14 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": true
+          "unique": false
         },
         "has_unpublished_changes": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "first_published_at": {
           "field": "DateTimeField",
@@ -1788,16 +1764,14 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "locked": {
           "field": "BooleanField",
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "locked_at": {
           "field": "DateTimeField",
@@ -1886,8 +1860,7 @@
           "internal_type": "BooleanField",
           "null": false,
           "primary_key": false,
-          "unique": false,
-          "default": false
+          "unique": false
         },
         "search_description": {
           "field": "TextField",
@@ -1970,8 +1943,7 @@
           "null": false,
           "primary_key": false,
           "unique": false,
-          "max_length": 255,
-          "default": ""
+          "max_length": 255
         },
         "width": {
           "field": "IntegerField",
