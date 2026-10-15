@@ -267,9 +267,14 @@ def upload_build_artifacts(
             "dbt build did not produce %s; not uploaded for OpenMetadata.",
             ", ".join(missing),
         )
+    results = [artifact for artifact in written if artifact != "manifest.json"]
+    dbt_s3_artifacts.upload_artifacts(invocation.target_path, results, context)
+    # Last, so a broken domain rules file cannot cost the run its test results.
     if "manifest.json" in written:
         assign_openmetadata_domains(context, invocation.target_path)
-    dbt_s3_artifacts.upload_artifacts(invocation.target_path, written, context)
+        dbt_s3_artifacts.upload_artifacts(
+            invocation.target_path, ["manifest.json"], context
+        )
 
 
 def upload_build_artifacts_best_effort(
