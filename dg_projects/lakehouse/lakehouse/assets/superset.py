@@ -18,6 +18,12 @@ from lakehouse.resources.superset_api import SupersetApiClient, SupersetApiClien
 
 _DEFAULT_SCHEMA_BASE = "ol_warehouse_production"
 
+# What one dataset's Superset calls can raise: transport and HTTP status errors,
+# RuntimeError from a token fetch or create the client rejects, and ValueError
+# (JSONDecodeError included) from a response body that is not JSON. A token can
+# expire partway through a database's datasets, since one client serves them all.
+_SUPERSET_CALL_ERRORS = (httpx.HTTPError, RuntimeError, ValueError)
+
 
 def _validate_superset_database_config(database_id: int, database_name: str) -> None:
     """Validate that database_id and database_name are consistent.
@@ -76,7 +82,7 @@ def _refresh_dataset(  # noqa: PLR0913
             database_id=database_id,
             schema_base=schema_base,
         )
-    except (httpx.HTTPError, RuntimeError) as e:
+    except _SUPERSET_CALL_ERRORS as e:
         context.log.exception(
             "Failed to get or create dataset for %s.%s",
             dbt_asset_group_name,
@@ -104,9 +110,9 @@ def _refresh_dataset(  # noqa: PLR0913
             dataset_id=int(dataset_id),
             payload={"description": f"Auto refreshed at {timestamp}"},
         )
-    except httpx.HTTPError as e:
+    except _SUPERSET_CALL_ERRORS as e:
         context.log.exception(
-            "HTTP error while refreshing dataset for %s.%s",
+            "Failed to refresh dataset for %s.%s",
             dbt_asset_group_name,
             dbt_model_name,
         )
@@ -134,10 +140,10 @@ def build_superset_dataset_assets(
 
     Every dataset is an asset of its own (``superset/dataset/<model>`` for
     Trino, ``superset/<database>/dataset/<model>`` otherwise), but they share a
-    single step. One step per dataset made a full dbt run fan out to ~200
+    single step. One step per dataset made a full dbt run fan out to 228
     steps the moment the dbt step finished, each a subprocess importing the
-    code location, which is the memory spike the lakehouse run workers were
-    dying at.
+    code location. Lakehouse run workers died about 40 seconds into that
+    fan-out on 2026-10-12, with memory climbing toward the pod limit.
 
     :param dbt_model_keys: The dbt model asset keys to publish, as
         ``(<dbt group>, <model name>)``.
@@ -182,7 +188,7 @@ def build_superset_dataset_assets(
     def _superset_datasets(
         context: AssetExecutionContext,
         superset_api: SupersetApiClientFactory,
-    ) -> Iterator[MaterializeResult]:
+    ) -> Iterator[MaterializeResult[Any]]:
         for dataset_key in sorted(context.selected_asset_keys):
             dbt_key = dbt_key_by_dataset_key[dataset_key]
             yield MaterializeResult(

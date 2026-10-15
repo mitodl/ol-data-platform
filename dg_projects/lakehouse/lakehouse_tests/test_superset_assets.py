@@ -107,6 +107,30 @@ def test_one_step_reports_each_dataset_status():
     assert [dataset_id for dataset_id, _ in superset_api.client.updated] == [42]
 
 
+def test_a_bad_response_body_costs_only_its_own_dataset():
+    class BadBodyClient(FakeSupersetClient):
+        def refresh_dataset(self, dataset_id: int) -> dict[str, Any]:
+            if len(self.refreshed) == 0:
+                self.refreshed.append(dataset_id)
+                msg = "Expecting value"
+                raise ValueError(msg)
+            return super().refresh_dataset(dataset_id)
+
+    superset_api = FakeSupersetApi()
+    superset_api.client = BadBodyClient()
+    keys = [AssetKey(["mart", "first_model"]), AssetKey(["mart", "second_model"])]
+    assets = build_superset_dataset_assets(keys, database_id=1)
+
+    result = materialize([assets], resources={"superset_api": superset_api})
+
+    assert result.success
+    statuses = {
+        key.path[-1]: metadata["status"]
+        for key, metadata in _materialized_metadata(result).items()
+    }
+    assert statuses == {"first_model": "error", "second_model": "refreshed"}
+
+
 def test_a_subset_touches_only_the_selected_datasets():
     superset_api = FakeSupersetApi()
     assets = build_superset_dataset_assets(
