@@ -20,7 +20,8 @@ and exposes what :class:`ol_dbt_cli.lib.raw_fixtures.UnitFactories` describes:
 
 ``SEED``
     The committed seed. The caller seeds with it before calling ``generate``,
-    so the same commit generates the same rows.
+    so the same commit generates the same rows. ``--seed`` on ``ol-dbt
+    fixtures load`` and ``generate`` replaces it for one run.
 
 ``generate(hand_written, scale)``
     Returns the generated rows keyed by raw table name. ``hand_written`` is the

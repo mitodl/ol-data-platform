@@ -4,16 +4,21 @@ The local lake (ol-infrastructure local-dev, `data-platform` in enabled_apps)
 starts with an empty raw schema, and a unit whose inventory entry says
 ``strategies.local: fixture`` has no loader that could fill it. ``load`` creates
 those tables from ``ingestion/inventory/fixtures/``, which is all a contributor
-needs: no Vault, no VPN, no AWS credentials. ``capture`` is the maintainer's
-half, the one command here that reads Glue. The format and the reasons for it
-are in ``ol_dbt_cli.lib.raw_fixtures``.
+needs: no Vault, no VPN, no AWS credentials. A unit with a factory package
+under ``ol_dbt_cli.fixture_factories`` also gets that package's generated
+rows, after the hand-written ones. ``generate`` writes what ``load`` would
+insert without connecting to anything. ``capture`` is the maintainer's half,
+the one command here that reads Glue. The format and the reasons for it are in
+``ol_dbt_cli.lib.raw_fixtures``.
 """
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, cast
+from typing import TYPE_CHECKING, Annotated, Any, cast
 
 from cyclopts import App, Parameter
 from rich.console import Console
@@ -25,6 +30,7 @@ from ol_dbt_cli.lib.glue_schema import DEFAULT_GLUE_DATABASE, column_types_by_ta
 from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, Unit, load_units
 from ol_dbt_cli.lib.raw_fixtures import (
     FIXTURE_STRATEGIES,
+    TableFixture,
     create_table_sql,
     fixture_path,
     fixture_type_from_glue,
@@ -33,6 +39,7 @@ from ol_dbt_cli.lib.raw_fixtures import (
     merge_captured,
     qualified_name,
     row_parameters,
+    unit_factories,
 )
 
 if TYPE_CHECKING:
@@ -68,6 +75,27 @@ UnitKeys = Annotated[
     list[str] | None,
     Parameter(help="Limit to these units, as deployment/layer. Repeatable.", show_default=False),
 ]
+Scale = Annotated[
+    float,
+    Parameter(help="Multiply every factory's default row count. Hand-written rows are not scaled."),
+]
+Seed = Annotated[
+    int | None,
+    Parameter(help="Seed generation with this in place of each factory package's SEED.", show_default=False),
+]
+
+
+@dataclasses.dataclass(frozen=True)
+class _TableRows:
+    """One table's rows in the order they load. ``generated`` is ``None`` for a unit with no factory package."""
+
+    table: TableFixture
+    hand_written: list[dict[str, Any]]
+    generated: list[dict[str, Any]] | None
+
+    @property
+    def rows(self) -> list[dict[str, Any]]:
+        return self.hand_written + (self.generated or [])
 
 
 def connect_local_lake(host: str = LOCAL_HOST, port: int = LOCAL_PORT) -> MySQLConnectionAbstract:
@@ -97,6 +125,38 @@ def _select(inventory_dir: Path, unit: list[str] | None) -> list[Unit]:
     return cast("list[Unit]", selected)
 
 
+def _table_rows(
+    inventory_dir: Path, unit: list[str] | None, *, generate: bool, scale: float, seed: int | None
+) -> list[_TableRows]:
+    """Read the selected units' fixtures and run their factory packages.
+
+    Every package runs before anything is written, so one that fails leaves
+    the lake as it was.
+    """
+    units = _select(inventory_dir, unit)
+    fixtures = load_fixtures(inventory_dir, units, selected=bool(unit))
+    if not fixtures:
+        err_console.print(f"[bold red]No fixtures under {escape(str(inventory_dir))}.")
+        sys.exit(1)
+    units_by_path = {fixture_path(inventory_dir, selected): selected for selected in units}
+    table_rows: list[_TableRows] = []
+    for fixture in fixtures:
+        fixture_unit = units_by_path[fixture.path]
+        factories = unit_factories(fixture_unit) if generate else None
+        if factories is None:
+            table_rows += [_TableRows(table, table.rows, None) for table in fixture.tables]
+            continue
+        # factory_boy and mimesis take seconds to import, and only generating needs them.
+        from ol_dbt_cli.lib.fixture_generation import generate_rows  # noqa: PLC0415
+
+        rows = generate_rows(fixture, fixture_unit, factories, scale, seed)
+        table_rows += [
+            _TableRows(table, rows.hand_written[table.raw_table], rows.generated.get(table.raw_table, []))
+            for table in fixture.tables
+        ]
+    return table_rows
+
+
 @fixtures_app.command
 def load(
     *,
@@ -105,29 +165,80 @@ def load(
     host: Annotated[str, Parameter(help="StarRocks FE host.")] = LOCAL_HOST,
     port: Annotated[int, Parameter(help="StarRocks query port.")] = LOCAL_PORT,
     schema: Annotated[str, Parameter(help="Raw schema to create the tables in.")] = LOCAL_RAW_SCHEMA,
+    generate: Annotated[
+        bool, Parameter(help="Add each factory package's generated rows. --no-generate loads the files' rows only.")
+    ] = True,
+    scale: Scale = 1.0,
+    seed: Seed = None,
 ) -> None:
     """Create and fill the raw tables of every committed fixture.
 
     Each table is dropped and created again, so the lake holds exactly what the
-    file says and a changed column list takes effect. Run it after the local-dev
-    stack is up, then build with `ol-dbt starrocks build --env dev`.
+    file and the unit's factory package make and a changed column list takes
+    effect. Run it after the local-dev stack is up, then build with
+    `ol-dbt starrocks build --env dev`.
     """
-    fixtures = load_fixtures(inventory_dir, _select(inventory_dir, unit), selected=bool(unit))
-    if not fixtures:
-        err_console.print(f"[bold red]No fixtures under {escape(str(inventory_dir))}.")
-        sys.exit(1)
+    table_rows = _table_rows(inventory_dir, unit, generate=generate, scale=scale, seed=seed)
 
     connection = connect_local_lake(host, port)
     cursor = connection.cursor()
     cursor.execute(f"CREATE DATABASE IF NOT EXISTS {qualified_name(LOCAL_CATALOG, schema)}")
-    for fixture in fixtures:
-        for table in fixture.tables:
-            cursor.execute(f"DROP TABLE IF EXISTS {qualified_name(LOCAL_CATALOG, schema, table.raw_table)} FORCE")
-            cursor.execute(create_table_sql(table, LOCAL_CATALOG, schema))
-            if table.rows:
-                cursor.executemany(insert_sql(table, LOCAL_CATALOG, schema), row_parameters(table))
-            console.print(f"{escape(schema)}.{escape(table.raw_table)}: {len(table.rows)} row(s)")
+    for loaded in table_rows:
+        table = loaded.table
+        cursor.execute(f"DROP TABLE IF EXISTS {qualified_name(LOCAL_CATALOG, schema, table.raw_table)} FORCE")
+        cursor.execute(create_table_sql(table, LOCAL_CATALOG, schema))
+        if loaded.rows:
+            parameters = row_parameters(dataclasses.replace(table, rows=loaded.rows))
+            cursor.executemany(insert_sql(table, LOCAL_CATALOG, schema), parameters)
+        counts = (
+            f"{len(loaded.hand_written)} row(s)"
+            if loaded.generated is None
+            else f"{len(loaded.hand_written)} hand-written + {len(loaded.generated)} generated row(s)"
+        )
+        console.print(f"{escape(schema)}.{escape(table.raw_table)}: {counts}", soft_wrap=True)
     connection.close()
+
+
+@fixtures_app.command(name="generate")
+def generate_command(
+    *,
+    unit: Annotated[list[str], Parameter(help="Units to generate, as deployment/layer. Repeatable.")],
+    inventory_dir: InventoryDir = DEFAULT_INVENTORY_DIR,
+    table: Annotated[
+        list[str] | None,
+        Parameter(help="Only these raw tables. Default: every table of the units. Repeatable.", show_default=False),
+    ] = None,
+    scale: Scale = 1.0,
+    seed: Seed = None,
+    out: Annotated[
+        Path | None,
+        Parameter(help="Write <out>/<raw_table>.jsonl, one row per line, instead of stdout.", show_default=False),
+    ] = None,
+) -> None:
+    """Write the rows `load` would insert, without connecting to StarRocks.
+
+    Hand-written rows come first, as the factory package left them, then the
+    generated ones. On stdout each line is {"raw_table": ..., "row": {...}}.
+    A date, timestamp or decimal is written as its string.
+    """
+    table_rows = _table_rows(inventory_dir, unit, generate=True, scale=scale, seed=seed)
+    wanted = set(table or [])
+    if unknown := sorted(wanted - {loaded.table.raw_table for loaded in table_rows}):
+        err_console.print(f"[bold red]Not a fixture table of the selected units: {', '.join(unknown)}")
+        sys.exit(1)
+    if wanted:
+        table_rows = [loaded for loaded in table_rows if loaded.table.raw_table in wanted]
+    if out is not None:
+        out.mkdir(parents=True, exist_ok=True)
+    for loaded in table_rows:
+        raw_table = loaded.table.raw_table
+        if out is None:
+            for row in loaded.rows:
+                sys.stdout.write(json.dumps({"raw_table": raw_table, "row": row}, default=str) + "\n")
+            continue
+        path = out / f"{raw_table}.jsonl"
+        path.write_text("".join(json.dumps(row, default=str) + "\n" for row in loaded.rows))
+        err_console.print(f"Wrote {escape(str(path))}: {len(loaded.rows)} row(s)")
 
 
 @fixtures_app.command

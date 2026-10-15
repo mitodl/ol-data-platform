@@ -12,6 +12,7 @@ import datetime
 import json
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -597,3 +598,112 @@ def test_load_recreates_each_table_on_the_local_catalog(tmp_path: Path, monkeypa
 def test_load_without_fixtures_exits(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         fixtures_command.load(inventory_dir=_inventory(tmp_path, None))
+
+
+@pytest.fixture
+def demo_factories(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give the `demo/s3` unit the test factory package, which continues its ids."""
+    monkeypatch.syspath_prepend(str(FACTORY_PACKAGES))
+    monkeypatch.setattr(
+        fixtures_command, "unit_factories", lambda unit: unit_factories(unit, package="fixture_factories")
+    )
+
+
+def _recorded_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **options: Any) -> _Recorder:
+    import mysql.connector  # noqa: PLC0415
+
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long", "name": "string"}, [{"id": 1, "name": "by hand"}]))
+    recorder = _Recorder()
+    monkeypatch.setattr(mysql.connector, "connect", recorder.connect)
+    fixtures_command.load(inventory_dir=inventory_dir, **options)
+    return recorder
+
+
+def _inserted(recorder: _Recorder) -> list[tuple[Any, ...]]:
+    (parameters,) = [parameters for statement, parameters in recorder.statements if statement.startswith("INSERT")]
+    return parameters
+
+
+@pytest.mark.usefixtures("demo_factories")
+def test_load_inserts_the_hand_written_rows_then_the_generated_ones(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    recorder = _recorded_load(tmp_path, monkeypatch)
+
+    assert _inserted(recorder) == [(1, "by hand"), (2, None), (3, "thing 3"), (4, None)]
+    assert f"ol_warehouse_local_raw.{RAW_TABLE}: 1 hand-written + 3 generated row(s)" in capsys.readouterr().out
+
+
+@pytest.mark.usefixtures("demo_factories")
+def test_load_scales_the_generated_rows_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _recorded_load(tmp_path, monkeypatch, scale=2)
+
+    assert [row[0] for row in _inserted(recorder)] == [1, 2, 3, 4, 5, 6, 7]
+
+
+@pytest.mark.usefixtures("demo_factories")
+def test_load_with_no_generate_inserts_the_file_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    recorder = _recorded_load(tmp_path, monkeypatch, generate=False)
+
+    assert _inserted(recorder) == [(1, "by hand")]
+    assert f"ol_warehouse_local_raw.{RAW_TABLE}: 1 row(s)" in capsys.readouterr().out
+
+
+def test_load_runs_every_factory_package_before_it_drops_a_table(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(hand_written: Any, scale: float) -> dict[str, list[dict[str, Any]]]:
+        return {RAW_TABLE: [{"id": 1}]}
+
+    monkeypatch.setattr(fixtures_command, "unit_factories", lambda unit: SimpleNamespace(SEED=1, generate=broken))
+
+    with pytest.raises(ValueError, match="generated row 1 repeats primary key id=1"):
+        _recorded_load(tmp_path, monkeypatch)
+
+
+@pytest.mark.usefixtures("demo_factories")
+def test_generate_writes_what_load_would_insert_without_connecting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import mysql.connector  # noqa: PLC0415
+
+    fixture = _fixture({"id": "long", "name": "string", "seen": "date"}, [{"id": 1, "seen": datetime.date(2026, 1, 2)}])
+    inventory_dir = _inventory(tmp_path, fixture)
+
+    def no_connection(**_: Any) -> None:
+        raise AssertionError
+
+    monkeypatch.setattr(mysql.connector, "connect", no_connection)
+
+    fixtures_command.generate_command(unit=["demo/s3"], inventory_dir=inventory_dir)
+
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert lines == [
+        {"raw_table": RAW_TABLE, "row": {"id": 1, "seen": "2026-01-02"}},
+        {"raw_table": RAW_TABLE, "row": {"id": 2}},
+        {"raw_table": RAW_TABLE, "row": {"id": 3, "name": "thing 3"}},
+        {"raw_table": RAW_TABLE, "row": {"id": 4}},
+    ]
+
+
+@pytest.mark.usefixtures("demo_factories")
+def test_generate_writes_a_file_per_table(tmp_path: Path) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long", "name": "string"}, []))
+    out = tmp_path / "rows"
+
+    fixtures_command.generate_command(unit=["demo/s3"], inventory_dir=inventory_dir, table=[RAW_TABLE], out=out)
+
+    assert [json.loads(line) for line in (out / f"{RAW_TABLE}.jsonl").read_text().splitlines()] == [
+        {"id": 1, "name": "thing 1"},
+        {"id": 2},
+        {"id": 3, "name": "thing 3"},
+    ]
+
+
+def test_generate_refuses_a_table_the_units_do_not_have(tmp_path: Path) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long"}, []))
+
+    with pytest.raises(SystemExit):
+        fixtures_command.generate_command(unit=["demo/s3"], inventory_dir=inventory_dir, table=["raw__demo__s3__nope"])
