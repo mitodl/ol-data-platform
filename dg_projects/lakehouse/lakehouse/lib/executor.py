@@ -18,6 +18,12 @@ deleted, which is the failure this exists to survive.
 
 Rolled out per environment, QA first, like DBT_AUTOMATION_ENVIRONMENTS. Production
 waits until QA runs have shown step pods come up and clean up as expected.
+
+DAGSTER_ENV alone does not say whether there is a cluster to launch step pods in:
+docker-compose runs the local lakehouse with DAGSTER_ENVIRONMENT=qa against the
+default run launcher, where k8s_job_executor fails at init trying to load in-cluster
+config. So the executor also requires KUBERNETES_SERVICE_HOST, which the kubelet
+sets in every pod.
 """
 
 from dagster import ExecutorDefinition
@@ -26,13 +32,18 @@ from dagster_k8s import k8s_job_executor
 STEP_POD_ENVIRONMENTS: frozenset[str] = frozenset({"qa"})
 
 
-def executor_for_environment(dagster_env: str) -> ExecutorDefinition | None:
+def executor_for_environment(
+    dagster_env: str, *, in_kubernetes: bool
+) -> ExecutorDefinition | None:
     """Return the executor for ``dagster_env``.
 
     :param dagster_env: The DAGSTER_ENV the code location is loaded in.
-    :returns: ``k8s_job_executor`` in STEP_POD_ENVIRONMENTS, otherwise None,
-        which leaves Dagster's default multiprocess executor in place (local
-        development has no Kubernetes cluster to launch step pods in).
+    :param in_kubernetes: Whether the code location runs in a Kubernetes pod.
+    :returns: ``k8s_job_executor`` in STEP_POD_ENVIRONMENTS when running in
+        Kubernetes, otherwise None, which leaves Dagster's default
+        multiprocess executor in place.
     :rtype: ExecutorDefinition | None
     """
-    return k8s_job_executor if dagster_env in STEP_POD_ENVIRONMENTS else None
+    if in_kubernetes and dagster_env in STEP_POD_ENVIRONMENTS:
+        return k8s_job_executor
+    return None

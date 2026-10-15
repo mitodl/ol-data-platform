@@ -761,7 +761,9 @@ defs = Definitions(
     ),
     asset_checks=[*dbt_layer_freshness_checks, *dimensional_schema_change_checks],
     resources=resources_dict,
-    executor=executor_for_environment(DAGSTER_ENV),
+    executor=executor_for_environment(
+        DAGSTER_ENV, in_kubernetes="KUBERNETES_SERVICE_HOST" in os.environ
+    ),
     sensors=[
         iceberg_snapshot_pointer_lag_sensor,
         dbt_layer_freshness_sensor,
