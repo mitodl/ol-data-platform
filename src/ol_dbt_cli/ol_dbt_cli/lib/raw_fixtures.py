@@ -126,7 +126,11 @@ class UnitFactories(Protocol):
     def generate(
         self, hand_written: Mapping[str, list[dict[str, Any]]], scale: float
     ) -> dict[str, list[dict[str, Any]]]:
-        """Return the generated rows of each raw table, the hand-written ones left out."""
+        """Return the generated rows of each raw table, the hand-written ones left out.
+
+        ``hand_written`` holds copies. A change to a value in one (a treebeard
+        parent's ``numchild``) is what loads.
+        """
         ...
 
 

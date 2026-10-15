@@ -29,6 +29,15 @@ and exposes what :class:`ol_dbt_cli.lib.raw_fixtures.UnitFactories` describes:
     one-to-one pairing and tree placement are ordinary Python in this function.
     A column a row leaves out is NULL, as in a hand-written row.
 
+    The hand-written rows are copies, and what ``generate`` leaves in them is
+    what loads: placing a generated page under a hand-written one adds to the
+    parent's ``numchild``. A hand-written row keeps its primary key, and
+    generated rows are returned, not added to ``hand_written``.
+
+Tables that reference themselves use :mod:`ol_dbt_cli.lib.fixture_trees`:
+``Tree`` for a django-treebeard ``MP_Node`` (``path``, ``depth``,
+``numchild``) and ``attach`` for a ``parent_id`` column.
+
 Each factory is a :class:`ol_dbt_cli.lib.fixture_generation.RowFactory` that
 names the table it fills and how many rows it makes at scale 1 with
 ``@table(raw_table, default_count=...)``, which sets them as the class
