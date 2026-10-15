@@ -175,6 +175,13 @@ def test_another_seed_generates_other_rows(tmp_path: Path, demo: UnitFactories) 
     assert generate_rows(fixture, unit, reseeded) != generate_rows(fixture, unit, demo)
 
 
+def test_a_seed_given_to_generate_rows_stands_in_for_the_package_seed(tmp_path: Path, demo: UnitFactories) -> None:
+    fixture, unit = _unit(tmp_path)
+    reseeded: Any = SimpleNamespace(SEED=demo.SEED + 1, generate=demo.generate)
+
+    assert generate_rows(fixture, unit, demo, seed=demo.SEED + 1) == generate_rows(fixture, unit, reseeded)
+
+
 def test_a_dependency_bump_that_changes_the_rows_fails_here(tmp_path: Path, demo: UnitFactories) -> None:
     fixture, unit = _unit(tmp_path)
 

@@ -293,7 +293,11 @@ def unit_factories(unit: Unit, package: str = FACTORY_PACKAGE) -> UnitFactories 
     # A directory holding only `_generated.py`, or a `__pycache__` left by
     # another branch, imports as an empty namespace package.
     if lacking := [attribute for attribute in ("SEED", "generate") if not hasattr(module, attribute)]:
-        msg = f"{name} has no {' or '.join(lacking)}; a unit's factory package defines both in its __init__.py"
+        msg = (
+            f"{name} has no {' or '.join(lacking)}; a unit's factory package defines both in its __init__.py. "
+            f"A directory another branch left holding only __pycache__ imports like this: delete "
+            f"{', '.join(module.__path__)}, or load with --no-generate"
+        )
         raise ValueError(msg)
     return cast("UnitFactories", module)
 

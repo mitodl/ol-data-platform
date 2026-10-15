@@ -326,7 +326,9 @@ class GeneratedRows:
     generated: dict[str, list[Row]]
 
 
-def generate_rows(fixture: UnitFixture, unit: Unit, factories: UnitFactories, scale: float = 1.0) -> GeneratedRows:
+def generate_rows(
+    fixture: UnitFixture, unit: Unit, factories: UnitFactories, scale: float = 1.0, seed: int | None = None
+) -> GeneratedRows:
     """Generate a unit's rows: seed, run its factory package, finish and check the rows.
 
     Each row comes back as a hand-written row is held, so it loads the same
@@ -342,6 +344,7 @@ def generate_rows(fixture: UnitFixture, unit: Unit, factories: UnitFactories, sc
     :param unit: The inventory unit.
     :param factories: The unit's factory package.
     :param scale: Multiplies every factory's ``default_count``.
+    :param seed: Seeds in place of the package's ``SEED``.
     :returns: The hand-written rows as ``generate`` left them, and the generated rows.
     :rtype: GeneratedRows
     :raises ValueError: If ``scale`` is not positive, a value cannot be held by
@@ -352,7 +355,7 @@ def generate_rows(fixture: UnitFixture, unit: Unit, factories: UnitFactories, sc
         msg = f"scale is {scale!r}, expected a positive number"
         raise ValueError(msg)
     key_columns = _key_columns(unit)
-    seed_generation(factories.SEED, _sequence_starts(fixture, key_columns))
+    seed_generation(factories.SEED if seed is None else seed, _sequence_starts(fixture, key_columns))
     hand_written = {table.raw_table: copy.deepcopy(table.rows) for table in fixture.tables}
     generated = factories.generate(types.MappingProxyType(hand_written), scale)
     tables = {table.raw_table: table for table in fixture.tables}

@@ -150,14 +150,40 @@ tables:
   an error.
 - A mapping or list is stored as JSON text, so a JSON-in-a-string column can be written
   as the structure it holds.
-- `ol-dbt fixtures load` drops and recreates each table, so the file is the whole state.
-  `--unit ocw/s3` limits it to one unit.
+- `ol-dbt fixtures load` drops and recreates each table, so the file and the unit's
+  factory package (below) are the whole state. `--unit ocw/s3` limits it to one unit.
+
+### Generated rows
+
+A unit can also have a factory package, `src/ol_dbt_cli/ol_dbt_cli/fixture_factories/<unit>/`
+(the contract is in that package's `__init__.py`). `ol-dbt fixtures load` runs it and
+inserts the file's rows followed by the generated ones, and prints both counts per table.
+Every package runs before any table is dropped, so one that fails leaves the lake as it was.
+
+```bash
+ol-dbt fixtures load --scale 100      # 100x each factory's default count; the file's rows are not scaled
+ol-dbt fixtures load --seed 7         # another seed than the package's SEED, for this run
+ol-dbt fixtures load --no-generate    # the files' rows only
+```
+
+To see what a package makes without a running lake, `ol-dbt fixtures generate` writes the
+rows `load` would insert as JSON lines:
+
+```bash
+ol-dbt fixtures generate --unit xpro/app_postgres                     # {"raw_table": ..., "row": {...}} per line
+ol-dbt fixtures generate --unit xpro/app_postgres --out /tmp/xpro     # /tmp/xpro/<raw_table>.jsonl
+ol-dbt fixtures generate --unit xpro/app_postgres --table raw__xpro__app__postgres__courses_course
+```
+
+Generated rows are fixture rows to `ol-dbt ingest local`, so "load fixtures first and
+the source second" above still holds.
 
 ### Adding a fixture
 
-Rows are written by hand and never copied from a deployed environment. Raw application
-tables hold learner data, and no command here reads rows from Glue or a database. Invent
-the few rows that exercise the model: one per branch of its logic is enough.
+Rows are hand-written or generated, never copied from a deployed environment. Raw
+application tables hold learner data, and no command here reads rows from Glue or a
+database. Invent the few rows that exercise the model: one per branch of its logic is
+enough. Rows that only need to exist in number belong in a factory package.
 
 For the columns, a maintainer with AWS credentials captures them from the landed schema
 once:

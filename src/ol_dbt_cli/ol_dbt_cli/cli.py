@@ -57,9 +57,11 @@ app = cyclopts.App(
       7d. Run dbt unit tests without warehouse credentials:
          $ ol-dbt unit-test
 
-      7e. Fill the local lake's raw schema from committed fixtures, then build on it:
+      7e. Fill the local lake's raw schema from committed fixtures and factory packages
+          (--scale 100 for 100x the generated rows), then build on it:
          $ ol-dbt fixtures load
          $ ol-dbt starrocks build --env dev --select +integrations__learn__ocw_courses
+         $ ol-dbt fixtures generate --unit xpro/app_postgres --out /tmp/xpro  # the rows, no lake
 
       7f. Replace a fixture's rows with the ones in your local-dev app database:
          $ ol-dbt ingest local --unit mitxonline/app_postgres
