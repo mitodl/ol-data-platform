@@ -144,8 +144,9 @@ models:
     One row per news item MIT Learn's news_events app loads from an external feed,
     with the feed source's fields repeated on each row: MIT Open Learning's Medium
     publication and MIT Professional Education news. Learn's own website content
-    news stays in Learn. summary and content are the feed's HTML, unsanitized; Learn
-    sanitizes both with nh3 (the Medium summary to plain text), so the receiver must.
+    news stays in Learn. summary and content are the feed's HTML, unsanitized (Medium
+    content without its embeds' <iframe> tags); Learn sanitizes both with nh3 (the
+    Medium summary to plain text), so the receiver must. Learn does not sanitize title.
   config:
     meta:
       # Every feed it reads is qa: omit in the inventory; QA raw holds none.
@@ -180,7 +181,8 @@ models:
   - name: summary
     description: str, HTML summary (unsanitized).
   - name: content
-    description: str, HTML content (unsanitized).
+    description: str, HTML content (unsanitized), with a Medium embed's <iframe> tags
+      removed as Learn's feedparser read removes them.
   - name: image_url
     description: str, absolute image URL, if the item has one.
   - name: image_alt
@@ -257,3 +259,22 @@ models:
   - name: event_end_datetime
     description: str, ISO 8601 UTC end time. Null for openlearning.mit.edu events,
       whose end time Learn does not load.
+
+unit_tests:
+- name: test_integrations__learn__news_feed_items_drops_medium_embed_iframe_tags
+  description: >
+    Medium wraps an embed's link in an <iframe>. Learn's feedparser read drops the
+    iframe tags and keeps the link; left in, nh3 would escape the link as text.
+  model: integrations__learn__news_feed_items
+  given:
+  - input: ref('stg__medium__rss__posts')
+    rows:
+    - post_guid: https://medium.com/p/1
+      post_content: '<p>Intro</p><iframe src="https://cdn.embedly.com/widgets/media.html"
+        width="854" height="480" frameborder="0" scrolling="no"><a href="https://medium.com/media/abc/href">https://medium.com/media/abc/href</a></iframe><p>More</p>'
+  - input: ref('stg__mitpe__api__news')
+    rows: []
+  expect:
+    rows:
+    - guid: https://medium.com/p/1
+      content: '<p>Intro</p><a href="https://medium.com/media/abc/href">https://medium.com/media/abc/href</a><p>More</p>'
