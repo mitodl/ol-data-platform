@@ -29,6 +29,7 @@ from ol_dbt_cli.lib.fixture_generation import (
     draw,
     generate_rows,
     link,
+    or_null,
     pair,
     pick,
     scaled_count,
@@ -473,6 +474,23 @@ def test_scale_multiplies_every_default_count(tmp_path: Path, demo: UnitFactorie
         15,
         30,
     ]
+
+
+@pytest.mark.parametrize(("share", "nulls"), [(0.0, range(0, 1)), (0.5, range(10, 31)), (1.0, range(40, 41))])
+def test_or_null_leaves_a_seeded_share_of_rows_null(share: float, nulls: range) -> None:
+    @table("raw__demo__app__postgres__notes", default_count=1)
+    class Note(RowFactory):
+        id = factory.Sequence(lambda n: n)
+        body = or_null(value("text.word"), share=share)
+
+    def bodies() -> list[Any]:
+        seed_generation(3)
+        return [row["body"] for row in Note.build_batch(40)]
+
+    first = bodies()
+
+    assert bodies() == first
+    assert sum(body is None for body in first) in nulls
 
 
 def test_scaled_count_never_reaches_zero() -> None:
