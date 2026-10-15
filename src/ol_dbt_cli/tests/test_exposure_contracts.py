@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 from ol_dbt_cli.lib.exposure_contracts import (
@@ -23,6 +24,7 @@ def _project(tmp_path: Path, *, exposures: list[dict[str, Any]] | None = None) -
     dbt_dir = tmp_path / "src" / "ol_dbt"
     models_dir = dbt_dir / "models"
     models_dir.mkdir(parents=True)
+    (dbt_dir / "dbt_project.yml").write_text("name: test\n")
     models = [
         {
             "name": "mv_trend",
@@ -162,3 +164,14 @@ def test_an_invalid_cohort_block_is_a_problem_not_a_crash(tmp_path: Path) -> Non
     assert render_exposure_contracts(dbt_dir).problems == {
         "api_dashboard": ["mv_trend has an invalid config.meta.cohort; see the cohort_policy check"]
     }
+
+
+def test_export_from_a_path_that_is_not_a_dbt_project_leaves_the_files_alone(tmp_path: Path) -> None:
+    dbt_dir = _project(tmp_path)
+    exposures_dir = tmp_path / "exposures"
+    write_exposure_contracts(dbt_dir, exposures_dir)
+    before = (exposures_dir / "api_dashboard.json").read_text()
+
+    with pytest.raises(FileNotFoundError, match="is not a dbt project"):
+        write_exposure_contracts(tmp_path / "src" / "ol_db", exposures_dir)
+    assert (exposures_dir / "api_dashboard.json").read_text() == before

@@ -141,7 +141,12 @@ def write_exposure_contracts(dbt_dir: Path, exposures_dir: Path) -> ExposureCont
     :param exposures_dir: The directory the contract files live in.
     :returns: What was rendered, including any problems.
     :rtype: ExposureContracts
+    :raises FileNotFoundError: ``dbt_dir`` is not a dbt project, which would otherwise
+        render no exposures and delete every committed file.
     """
+    if not (dbt_dir / "dbt_project.yml").is_file() or not (dbt_dir / "models").is_dir():
+        msg = f"{dbt_dir} is not a dbt project (no dbt_project.yml and models/)"
+        raise FileNotFoundError(msg)
     contracts = render_exposure_contracts(dbt_dir)
     if contracts.problems:
         return contracts
