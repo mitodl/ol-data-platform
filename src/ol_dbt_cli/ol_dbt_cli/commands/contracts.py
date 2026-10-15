@@ -60,6 +60,15 @@ def _type_mismatches(schema_validation: dict[str, Any] | None) -> list[str]:
     return (schema_validation or {}).get("typeMismatchFields") or []
 
 
+def _report_unresolved(contract: DataContract, exc: Exception) -> None:
+    """Report a contract whose entity or owners did not resolve, so the rest still run.
+
+    A dbt binding missing from the manifest raises ValueError; an entity or
+    owner OpenMetadata does not have raises RuntimeError (a 404).
+    """
+    console.print(f"[bold red]unresolved[/] {escape(contract.body['name'])}: {escape(str(exc))}")
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Refuse redirects: urllib would forward the bearer token to the new host."""
 
@@ -180,14 +189,19 @@ def sync(
     client = OpenMetadataClient.from_env()
     failures = 0
     for contract in contracts:
-        fqn = om_fqn(contract.entity, manifest, service)
-        owners = contract.body.get("owners")
-        body = create_request(
-            contract,
-            client.entity_id(contract.entity.entity_type, fqn),
-            client.owner_refs(owners) if owners else None,
-        )
         name = escape(contract.body["name"])
+        try:
+            fqn = om_fqn(contract.entity, manifest, service)
+            owners = contract.body.get("owners")
+            body = create_request(
+                contract,
+                client.entity_id(contract.entity.entity_type, fqn),
+                client.owner_refs(owners) if owners else None,
+            )
+        except (ValueError, RuntimeError) as exc:
+            failures += 1
+            _report_unresolved(contract, exc)
+            continue
         # PUT accepts a retyped column (OpenMetadata counts it as informational),
         # so every sync validates first and publishes only a clean contract.
         result = client.request("POST", "/v1/dataContracts/validate", body)
@@ -225,14 +239,17 @@ def validate(
     client = OpenMetadataClient.from_env()
     failures = 0
     for contract in contracts:
-        fqn = om_fqn(contract.entity, manifest, service)
+        try:
+            fqn = om_fqn(contract.entity, manifest, service)
+            entity_id = client.entity_id(contract.entity.entity_type, fqn)
+        except (ValueError, RuntimeError) as exc:
+            failures += 1
+            _report_unresolved(contract, exc)
+            continue
         result = client.request(
             "POST",
             "/v1/dataContracts/entity/validate",
-            query={
-                "entityId": client.entity_id(contract.entity.entity_type, fqn),
-                "entityType": contract.entity.entity_type,
-            },
+            query={"entityId": entity_id, "entityType": contract.entity.entity_type},
         )
         status = result["contractExecutionStatus"]
         mismatches = _type_mismatches(result.get("schemaValidation"))
