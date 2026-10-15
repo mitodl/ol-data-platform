@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 import sys
+from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, cast
 
@@ -97,6 +99,15 @@ class _TableRows:
     def rows(self) -> list[dict[str, Any]]:
         return self.hand_written + (self.generated or [])
 
+    def parameters(self) -> list[tuple[Any, ...]]:
+        """Return the INSERT parameters, a mapping or list already written as JSON text."""
+        return row_parameters(dataclasses.replace(self.table, rows=self.rows))
+
+
+def _json_value(value: Any) -> str:
+    # Decimal's str() turns a zero in a decimal(38,9) into 0E-9.
+    return format(value, "f") if isinstance(value, Decimal) else str(value)
+
 
 def connect_local_lake(host: str = LOCAL_HOST, port: int = LOCAL_PORT) -> MySQLConnectionAbstract:
     """Open the local StarRocks as its passwordless root.
@@ -133,6 +144,9 @@ def _table_rows(
     Every package runs before anything is written, so one that fails leaves
     the lake as it was.
     """
+    if not (math.isfinite(scale) and scale > 0):
+        err_console.print(f"[bold red]--scale is {scale}, expected a positive number.")
+        sys.exit(1)
     units = _select(inventory_dir, unit)
     fixtures = load_fixtures(inventory_dir, units, selected=bool(unit))
     if not fixtures:
@@ -178,17 +192,21 @@ def load(
     effect. Run it after the local-dev stack is up, then build with
     `ol-dbt starrocks build --env dev`.
     """
-    table_rows = _table_rows(inventory_dir, unit, generate=generate, scale=scale, seed=seed)
+    # Every row is made into parameters first, so a value that cannot be
+    # written as JSON fails before a table is dropped.
+    prepared = [
+        (loaded, loaded.parameters())
+        for loaded in _table_rows(inventory_dir, unit, generate=generate, scale=scale, seed=seed)
+    ]
 
     connection = connect_local_lake(host, port)
     cursor = connection.cursor()
     cursor.execute(f"CREATE DATABASE IF NOT EXISTS {qualified_name(LOCAL_CATALOG, schema)}")
-    for loaded in table_rows:
+    for loaded, parameters in prepared:
         table = loaded.table
         cursor.execute(f"DROP TABLE IF EXISTS {qualified_name(LOCAL_CATALOG, schema, table.raw_table)} FORCE")
         cursor.execute(create_table_sql(table, LOCAL_CATALOG, schema))
-        if loaded.rows:
-            parameters = row_parameters(dataclasses.replace(table, rows=loaded.rows))
+        if parameters:
             cursor.executemany(insert_sql(table, LOCAL_CATALOG, schema), parameters)
         counts = (
             f"{len(loaded.hand_written)} row(s)"
@@ -212,14 +230,17 @@ def generate_command(
     seed: Seed = None,
     out: Annotated[
         Path | None,
-        Parameter(help="Write <out>/<raw_table>.jsonl, one row per line, instead of stdout.", show_default=False),
+        Parameter(help="Write OUT/RAW_TABLE.jsonl, one row per line, instead of stdout.", show_default=False),
     ] = None,
 ) -> None:
     """Write the rows `load` would insert, without connecting to StarRocks.
 
     Hand-written rows come first, as the factory package left them, then the
-    generated ones. On stdout each line is {"raw_table": ..., "row": {...}}.
-    A date, timestamp or decimal is written as its string.
+    generated ones. Each row has every column, NULL where the row leaves one
+    out, and a mapping or list in a string column is the JSON text `load`
+    inserts. On stdout each line is {"raw_table": ..., "row": {...}}. A date,
+    timestamp or decimal is written as its string, and a timestamp keeps an
+    offset the connector drops.
     """
     table_rows = _table_rows(inventory_dir, unit, generate=True, scale=scale, seed=seed)
     wanted = set(table or [])
@@ -232,13 +253,14 @@ def generate_command(
         out.mkdir(parents=True, exist_ok=True)
     for loaded in table_rows:
         raw_table = loaded.table.raw_table
+        rows = [dict(zip(loaded.table.columns, parameters, strict=True)) for parameters in loaded.parameters()]
         if out is None:
-            for row in loaded.rows:
-                sys.stdout.write(json.dumps({"raw_table": raw_table, "row": row}, default=str) + "\n")
+            for row in rows:
+                sys.stdout.write(json.dumps({"raw_table": raw_table, "row": row}, default=_json_value) + "\n")
             continue
         path = out / f"{raw_table}.jsonl"
-        path.write_text("".join(json.dumps(row, default=str) + "\n" for row in loaded.rows))
-        err_console.print(f"Wrote {escape(str(path))}: {len(loaded.rows)} row(s)")
+        path.write_text("".join(json.dumps(row, default=_json_value) + "\n" for row in rows))
+        err_console.print(f"Wrote {escape(str(path))}: {len(rows)} row(s)")
 
 
 @fixtures_app.command
