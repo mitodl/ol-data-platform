@@ -70,8 +70,10 @@ with mitxonline_certificates as (
     from {{ ref('int__edxorg__mitx_courserun_certificates') }}
 )
 
+-- int__micromasters__course_certificates repeats a certificate once per program the course
+-- counts toward. Program is not kept here, so distinct leaves one row per certificate.
 , micromasters_certificates as (
-    select
+    select distinct
         {{ dbt_utils.generate_surrogate_key(['user_email', 'courserun_readable_id']) }} as certificate_id
         , cast(null as integer) as user_id  -- no integer user ID; resolved via user_email
         , cast(null as integer) as courserun_id
@@ -273,30 +275,11 @@ with mitxonline_certificates as (
         and combined_certificates.platform = dim_program.platform_code
 )
 
--- One certificate can enter twice under the same certificate_key (the joins above have
--- no uniqueness guarantee). Reduce to one row per key before ranking: ranked together, the
--- second copy would be marked not current and the certificate would lose is_current to
--- itself.
-, certificates_keyed as (
-    select
-        *
-        , row_number() over (
-            partition by certificate_id, platform, certificate_scope
-            order by
-                coalesce(certificate_updated_on, certificate_created_on) desc nulls last
-                , user_fk
-                , courserun_fk ASC
-                , program_fk ASC
-        ) as _key_row_num
-    from certificates_with_fks
-)
-
 -- MicroMasters course certificates are earned on and issued by edX.org, and both
 -- the edxorg and micromasters sources resolve courserun_fk to the same edxorg
 -- course run (see the dim_course_run join above). Their surrogate certificate_ids
 -- differ (user_id-based vs email-based), so the same physical certificate enters
--- as two rows and the certificate_key-based defensive dedup further below can't
--- catch it. The micromasters copy is dropped when an edxorg record exists for the same
+-- as two rows under different certificate_keys. The micromasters copy is dropped when an edxorg record exists for the same
 -- (user_fk, courserun_fk, certificate_scope) and both FKs resolved.
 -- One platform can also hold two certificates for a (user, course run): MITx Online has
 -- a pair issued two days apart, and a revoked certificate can be followed by a new one.
@@ -312,8 +295,7 @@ with mitxonline_certificates as (
             else concat(certificate_id, '|', platform, '|', certificate_scope)
         end as _certificate_group
         , case when platform = 'micromasters' then 1 else 0 end as _platform_rank
-    from certificates_keyed
-    where _key_row_num = 1
+    from certificates_with_fks
 )
 
 , certificates_ranked as (
@@ -462,35 +444,10 @@ with mitxonline_certificates as (
     {% endif %}
 )
 
--- Defensive dedup: certificates_keyed already leaves one row per certificate_key, and a
--- carried-forward row has no source row by construction. This guard keeps a duplicate key
--- out of the incremental delete+insert if either stops holding.
--- Note: QUALIFY is not supported by Trino; using ROW_NUMBER subquery instead.
-, final_deduped as (
-    select
-        certificate_key
-        , certificate_id
-        , certificate_issued_date_key
-        , user_fk
-        , courserun_fk
-        , program_fk
-        , platform_fk
-        , certificate_type_fk
-        , platform
-        , certificate_scope
-        , certificate_uuid
-        , certificate_is_revoked
-        , certificate_created_on
-        , certificate_updated_on
-        , certificate_issued_on
-        , is_current
-        , row_number() over (
-            partition by certificate_key
-            order by coalesce(certificate_updated_on, certificate_created_on) desc nulls last
-        ) as _row_num
-    from final
-)
-
+-- No dedup here: each source and lookup above is unique on its key, and a carried-forward
+-- row has no source row by construction, so a duplicate certificate_key means one of those
+-- stopped holding. The error-severity unique test on certificate_key reports it. A
+-- duplicate ranked above would also take is_current from itself.
 select
     certificate_key
     , certificate_id
@@ -508,5 +465,4 @@ select
     , certificate_updated_on
     , certificate_issued_on
     , is_current
-from final_deduped
-where _row_num = 1
+from final

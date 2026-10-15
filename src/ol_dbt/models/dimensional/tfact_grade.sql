@@ -176,31 +176,9 @@ with mitxonline_grades as (
     {% endif %}
 )
 
--- Defensive dedup: UNION ALL across platform CTEs has no upstream uniqueness guarantee.
--- If any intermediate develops grain drift this guard prevents duplicate grade_key values
--- from corrupting incremental MERGE operations.
--- Note: QUALIFY is not supported by Trino; using ROW_NUMBER subquery instead.
-, final_deduped as (
-    select
-        grade_key
-        , grade_id
-        , grade_date_key
-        , user_fk
-        , courserun_fk
-        , platform_fk
-        , platform
-        , grade_value
-        , is_passing
-        , letter_grade
-        , grade_created_on
-        , grade_updated_on
-        , row_number() over (
-            partition by grade_key
-            order by coalesce(grade_updated_on, grade_created_on) desc nulls last
-        ) as _row_num
-    from final
-)
-
+-- No dedup here: each lookup above is unique on its join key, so a duplicate grade_key
+-- means a source or a lookup lost its grain. The error-severity unique test on grade_key
+-- reports it. A row_number here would keep one copy's FKs at random.
 select
     grade_key
     , grade_id
@@ -214,5 +192,4 @@ select
     , letter_grade
     , grade_created_on
     , grade_updated_on
-from final_deduped
-where _row_num = 1
+from final

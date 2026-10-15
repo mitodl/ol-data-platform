@@ -189,13 +189,25 @@ with mitxonline_enrollments as (
 -- same code (courserun_external_readable_id, as in int__combined__courserun_enrollments),
 -- this lookup resolves it to that run's courserun_readable_id. Codes with no xPro run keep
 -- the external code, which matches the platform's own dim_course_run row.
+-- xPro can give two live runs one code (seven pairs since 2026-10-14, e.g. MCPO and MO_MCPO
+-- for MO-MCPO-26-12#1). The newest run takes the code, so an enrollment resolves to one run.
 , mitxpro_external_readable_id_lookup as (
     select courserun_external_readable_id, courserun_readable_id
-    from {{ ref('int__mitxpro__course_runs') }}
-    -- xPro runs with no external id carry '' rather than null; without this, a source row
-    -- with an empty run code would fan out across all of them
-    where courserun_external_readable_id is not null
-        and courserun_external_readable_id != ''
+    from (
+        select
+            courserun_external_readable_id
+            , courserun_readable_id
+            , row_number() over (
+                partition by courserun_external_readable_id
+                order by courserun_id desc
+            ) as _row_num
+        from {{ ref('int__mitxpro__course_runs') }}
+        -- xPro runs with no external id carry '' rather than null; without this, a source row
+        -- with an empty run code would fan out across all of them
+        where courserun_external_readable_id is not null
+            and courserun_external_readable_id != ''
+    ) as ranked
+    where _row_num = 1
 )
 
 , emeritus_enrollments as (
@@ -553,36 +565,9 @@ with mitxonline_enrollments as (
     {% endif %}
 )
 
--- Defensive dedup: the UNION ALL across 5 platform CTEs has no upstream uniqueness guarantee.
--- If any intermediate develops grain drift, this guard prevents duplicate enrollment_key values
--- from silently entering the fact table and corrupting incremental MERGE operations.
--- Note: QUALIFY is not supported by Trino; using ROW_NUMBER subquery instead.
-, final_deduped as (
-    select
-        enrollment_key
-        , enrollment_id
-        , enrollment_type
-        , enrollment_date_key
-        , user_fk
-        , courserun_fk
-        , program_fk
-        , platform_fk
-        , contract_fk
-        , platform
-        , enrollment_is_active
-        , enrollment_mode
-        , enrollment_status
-        , enrollment_created_on
-        , enrollment_updated_on
-        , enrollment_is_edx_enrolled
-        , order_id
-        , row_number() over (
-            partition by enrollment_key
-            order by coalesce(enrollment_updated_on, enrollment_created_on) desc nulls last
-        ) as _row_num
-    from final
-)
-
+-- No dedup here: each lookup above is unique on its join key, so a duplicate enrollment_key
+-- means a source or a lookup lost its grain. The error-severity unique test on
+-- enrollment_key reports it. A row_number here would keep one copy's FKs at random.
 select
     enrollment_key
     , enrollment_id
@@ -601,5 +586,4 @@ select
     , enrollment_updated_on
     , enrollment_is_edx_enrolled
     , order_id
-from final_deduped
-where _row_num = 1
+from final

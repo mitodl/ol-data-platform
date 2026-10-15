@@ -287,19 +287,9 @@ with mitxonline_orders as (
     {% endif %}
 )
 
--- Dimension joins can fan out rows when a source dimension has multiple qualifying
--- rows for the same key. Deduplicate to one row per (order_id, line_id, platform),
--- keeping the most recently updated row.
-, deduped as (
-    select
-        *
-        , row_number() over (
-            partition by order_key
-            order by order_updated_on desc nulls last
-        ) as _row_num
-    from final
-)
-
+-- No dedup here: each lookup above is unique on its join key, so a duplicate order_key
+-- means a source or a lookup lost its grain. The error-severity unique test on order_key
+-- reports it. A row_number here would keep one copy's FKs at random.
 select
     order_key
     , order_id
@@ -321,5 +311,4 @@ select
     , order_tax_rate
     , order_reference_number
     , order_updated_on
-from deduped
-where _row_num = 1
+from final
