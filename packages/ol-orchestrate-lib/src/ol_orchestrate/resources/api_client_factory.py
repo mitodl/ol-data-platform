@@ -9,6 +9,7 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.resources.api_client import BaseApiClient
 from ol_orchestrate.resources.canvas_api import CanvasApiClient
 from ol_orchestrate.resources.learn_api import MITLearnApiClient
+from ol_orchestrate.resources.openmetadata import OpenMetadataApiClient
 from ol_orchestrate.resources.secrets.vault import Vault
 
 
@@ -39,6 +40,7 @@ class ApiClientFactory(ConfigurableResource[BaseApiClient]):
     supported_client_class: ClassVar[dict[str, type[BaseApiClient]]] = {
         "CanvasApiClient": CanvasApiClient,
         "MITLearnApiClient": MITLearnApiClient,
+        "OpenMetadataApiClient": OpenMetadataApiClient,
     }
 
     def _initialize_client(self) -> BaseApiClient:

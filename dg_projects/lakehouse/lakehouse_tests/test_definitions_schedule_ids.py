@@ -38,9 +38,10 @@ def _schedule_ids_passed_at_the_call_site() -> set[str]:
         and isinstance(node.func, ast.Name)
         and node.func.id == "schedules_for_environment"
     ]
-    assert len(calls) == 1, "expected exactly one call site to read ids from"
+    # The schedules and the production-only sensors are gated separately.
+    assert calls, "expected a call site to read ids from"
 
-    ids = _string_keyed_tuple_ids(calls[0])
+    ids = set().union(*(_string_keyed_tuple_ids(call) for call in calls))
 
     # A schedule can also reach the call as `*some_name`, which is how any
     # conditionally-registered one gets there -- `airbyte_drift_schedules` is
@@ -54,7 +55,8 @@ def _schedule_ids_passed_at_the_call_site() -> set[str]:
     # the guard covers the shape that actually broke.
     starred_names = {
         node.value.id
-        for node in ast.walk(calls[0])
+        for call in calls
+        for node in ast.walk(call)
         if isinstance(node, ast.Starred) and isinstance(node.value, ast.Name)
     }
     for statement in tree.body:
