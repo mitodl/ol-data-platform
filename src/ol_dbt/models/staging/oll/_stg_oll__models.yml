@@ -1,0 +1,62 @@
+---
+version: 2
+
+models:
+- name: stg__oll__google_sheets__courses
+  description: Open Learning Library courses from the OLL metadata sheet MIT Learn
+    keeps in its repository, one row per sheet row (one edX run each).
+  columns:
+  - name: course_number
+    description: >
+      str, OLL course number, e.g. 0.501x. Never contains '+'. MIT Learn reads a
+      department out of a number that does and the OLL delivery sends none, so the
+      test fails the build on the first such row rather than let the two diverge.
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_values_to_not_match_like_pattern:
+        arguments:
+          like_pattern: '%+%'
+        # The project default only errors above 10 failing rows.
+        config:
+          error_if: "!=0"
+  - name: courserun_readable_id
+    description: str, the edX run key, e.g. MITx+0.501x+2T2019
+    tests: [not_null, unique]
+  - name: course_title
+    description: str, course title
+  - name: course_url
+    description: str, course URL on openlearninglibrary.mit.edu
+  - name: course_description
+    description: str, plain-text course description
+  - name: course_image_url
+    description: str, course image URL (the sheet's flat image column)
+  - name: course_offered_by
+    description: str, MITx or OCW
+  - name: course_is_published
+    description: boolean, whether the sheet's published column is YES
+  - name: course_level
+    description: str, level label, e.g. Undergraduate, Graduate, High School
+  - name: course_language
+    description: str, course language, e.g. English
+  - name: course_primary_topic
+    description: str, MITx Online primary child topic, as the sheet has it
+  - name: course_secondary_topic
+    description: str, MITx Online adopted secondary child topic, as the sheet has
+      it
+  - name: instructor_1
+    description: str, first instructor's full name, empty if none
+  - name: instructor_2
+    description: str, second instructor's full name, empty if none
+  - name: instructor_3
+    description: str, third instructor's full name, empty if none
+  - name: instructor_4
+    description: str, fourth instructor's full name, empty if none
+  - name: instructor_5
+    description: str, fifth instructor's full name, empty if none
+  - name: instructor_6
+    description: str, sixth instructor's full name, empty if none
+  - name: course_duration_weeks
+    description: str, duration in weeks as the sheet has it, may be empty
+  - name: course_weekly_hours
+    description: str, student effort in hours a week as the sheet has it (may be fractional
+      or empty)

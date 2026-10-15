@@ -49,3 +49,33 @@ sources:
       description: >
         str, offering institution (e.g. "MITx", "OCW") — from "Offered by"
         CSV header
+    - name: published
+      description: str, YES when the course is published — from "published" CSV header
+    - name: level
+      description: str, level label (e.g. "Undergraduate") — from "Level" CSV header
+    - name: language
+      description: str, course language — from "Language" CSV header
+    - name: mi_tx_o_primary_child
+      description: >
+        str, MITx Online primary child topic — from "MITxO Primary Child" CSV
+        header
+    - name: mi_tx_o_adopted_secondary_child
+      description: >
+        str, MITx Online secondary child topic — from "MITxO Adopted Secondary
+        Child " CSV header (the header has a trailing space)
+    - name: instructor_1
+      description: str, instructor full name — from "Instructor 1" CSV header
+    - name: instructor_2
+      description: str, instructor full name — from "Instructor 2" CSV header
+    - name: instructor_3
+      description: str, instructor full name — from "Instructor 3" CSV header
+    - name: instructor_4
+      description: str, instructor full name — from "Instructor 4" CSV header
+    - name: instructor_5
+      description: str, instructor full name — from "Instructor 5" CSV header
+    - name: instructor_6
+      description: str, instructor full name — from "Instructor 6" CSV header
+    - name: student_effort
+      description: >
+        str, hours a week (decimal, e.g. "3.5") — from "Student Effort" CSV
+        header
