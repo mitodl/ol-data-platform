@@ -20,7 +20,9 @@ class OpenMetadataApiClient(BaseApiClient):
     def from_secret(cls, raw_secret: dict[str, Any]) -> Self:
         return cls(base_url=raw_secret["server_url"], token=raw_secret["token"])
 
-    def send(self, method: str, endpoint: str, body: dict[str, Any]) -> dict[str, Any]:
+    def send(
+        self, method: str, endpoint: str, body: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Send *body* as JSON to ``<base_url>/<endpoint>`` and decode the response.
 
         :raises httpx.HTTPStatusError: on a non-2xx response.

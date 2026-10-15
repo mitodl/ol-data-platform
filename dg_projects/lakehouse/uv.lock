@@ -964,6 +964,30 @@ wheels = [
 ]
 
 [[package]]
+name = "factory-boy"
+version = "3.3.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "faker" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ba/98/75cacae9945f67cfe323829fc2ac451f64517a8a330b572a06a323997065/factory_boy-3.3.3.tar.gz", hash = "sha256:866862d226128dfac7f2b4160287e899daf54f2612778327dd03d0e2cb1e3d03", size = 164146, upload-time = "2025-02-03T09:49:04.433Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/27/8d/2bc5f5546ff2ccb3f7de06742853483ab75bf74f36a92254702f8baecc79/factory_boy-3.3.3-py2.py3-none-any.whl", hash = "sha256:1c39e3289f7e667c4285433f305f8d506efc2fe9c73aaea4151ebd5cdea394fc", size = 37036, upload-time = "2025-02-03T09:49:01.659Z" },
+]
+
+[[package]]
+name = "faker"
+version = "40.43.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/33/6c/b8793efc2f00a912ef17cf0b61b717cddf34607499efcb8a32238c119368/faker-40.43.0.tar.gz", hash = "sha256:02fae4327c03a4a6315e1b428a3878f435bfc276c93435ea349b95c0c9372361", size = 2032713, upload-time = "2026-10-09T20:06:29.652Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/81/ed/0d6d0d6467ae3d009fb82fb411867c7fcfeadbdd25602cab0d7a7963f400/faker-40.43.0-py3-none-any.whl", hash = "sha256:9dd7c0ddfaf30c842b05502d3cf641c135e0120a3a19047008ba8525b72953ed", size = 2069082, upload-time = "2026-10-09T20:06:27.166Z" },
+]
+
+[[package]]
 name = "filelock"
 version = "4.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1808,6 +1832,15 @@ wheels = [
 ]
 
 [[package]]
+name = "mimesis"
+version = "22.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e0/2b/629274dd6e23df1ab470e2c039c77033f674f73f0d48cca3d0c7777fce67/mimesis-22.2.0.tar.gz", hash = "sha256:7cd7d9dadd226129fd8bc6039fb0ff9b58efb2b4001022357f69381208e1df68", size = 18289536, upload-time = "2026-09-23T10:29:30.901Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/89/a6/1031fb1c0f453abd96589e2126707a42bcc4d19ec1d705886df6188182df/mimesis-22.2.0-py3-none-any.whl", hash = "sha256:037011eb3d5edf0b0b5d9eafd74d9881f6dce25b4f01032da0e13fb2a56f37e9", size = 4463089, upload-time = "2026-09-23T10:29:27.931Z" },
+]
+
+[[package]]
 name = "mmh3"
 version = "5.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2017,10 +2050,12 @@ dependencies = [
     { name = "boto3" },
     { name = "cyclopts" },
     { name = "duckdb" },
+    { name = "factory-boy" },
     { name = "hvac", extra = ["parser"] },
     { name = "jinja2" },
     { name = "jsonschema" },
     { name = "markupsafe" },
+    { name = "mimesis" },
     { name = "mysql-connector-python" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -2035,10 +2070,12 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.35" },
     { name = "cyclopts", specifier = ">=4.0" },
     { name = "duckdb", specifier = ">=1.0,!=1.5.0,!=1.5.1" },
+    { name = "factory-boy", specifier = ">=3.3.3,<4" },
     { name = "hvac", extras = ["parser"], specifier = ">=2.0.0,<3" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "jsonschema", specifier = ">=4.0" },
     { name = "markupsafe", specifier = ">=2.1" },
+    { name = "mimesis", specifier = "==22.2.0" },
     { name = "mysql-connector-python", specifier = ">=9.1" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0" },

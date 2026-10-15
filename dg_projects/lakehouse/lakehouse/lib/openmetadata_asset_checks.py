@@ -6,9 +6,11 @@ invisible there. ``asset_check_openmetadata_sensor`` pushes each evaluation as
 a result of a test case on the model's table.
 
 Every pushed test case uses one test definition, ``dagsterAssetCheck``, whose
-test platform is ``Other``. That is what tells them apart from dbt's test cases
-(platform ``dbt``), so OpenMetadata alerting can leave them out: Dagster's
-asset_check_failure_sensor already notifies for these checks.
+test platform is ``Other``, which tells them apart from dbt's test cases
+(platform ``dbt``) in the UI. OpenMetadata 2.0.5's alert filters cannot match
+on either, and Dagster's asset_check_failure_sensor already notifies for these
+checks, so an OpenMetadata alert on test case failures will include them unless
+they are written by a bot of their own (``matchUpdatedBy``).
 
 dbt tests are not pushed. dagster-dbt turns each one into an asset check too,
 but they already reach OpenMetadata through run_results.json, and pushing them
@@ -36,8 +38,8 @@ TRINO_SERVICE = "Starburst Galaxy"
 
 TEST_DEFINITION_NAME = "dagsterAssetCheck"
 
-# PUT /v1/dataQuality/testDefinitions is an upsert, so this is created once and
-# unchanged after.
+# Created when missing and never updated after, so disabling it in OpenMetadata
+# sticks.
 TEST_DEFINITION_REQUEST: dict[str, Any] = {
     "name": TEST_DEFINITION_NAME,
     "displayName": "Dagster asset check",
@@ -88,7 +90,7 @@ def table_fqns_by_asset_key(
 def test_case_request(
     evaluation: AssetCheckEvaluation, table_fqn: str
 ) -> dict[str, Any]:
-    """``CreateTestCase`` body for PUT /v1/dataQuality/testCases (an upsert).
+    """``CreateTestCase`` body for POST /v1/dataQuality/testCases.
 
     The ``dagster_`` prefix keeps a check from sharing a name with a dbt test
     case on the same table.
@@ -137,7 +139,8 @@ def push_check_evaluations(
     Evaluations of dbt tests and of assets with no table in *table_fqns* are
     skipped. So is a table OpenMetadata has not ingested yet (a 404), with a
     warning; any other API error is raised, so the sensor tick fails and the
-    batch is retried.
+    batch is retried. A retry re-posts the results written before the error,
+    which OpenMetadata refuses with a 409 and this counts as written.
 
     :param records: asset check evaluation event log records, oldest first.
     :returns: how many results were written.
@@ -158,35 +161,65 @@ def push_check_evaluations(
     ]
     if not pushable:
         return 0
-    client.send("PUT", "v1/dataQuality/testDefinitions", TEST_DEFINITION_REQUEST)
+    if not _exists(
+        client, f"v1/dataQuality/testDefinitions/name/{TEST_DEFINITION_NAME}"
+    ):
+        client.send("PUT", "v1/dataQuality/testDefinitions", TEST_DEFINITION_REQUEST)
     test_case_fqns: dict[tuple[AssetKey, str], str | None] = {}
     pushed = 0
     for entry, evaluation, table_fqn in pushable:
         key = (evaluation.asset_key, evaluation.check_name)
         if key not in test_case_fqns:
-            test_case_fqns[key] = _upsert_test_case(client, evaluation, table_fqn, log)
+            test_case_fqns[key] = _ensure_test_case(client, evaluation, table_fqn, log)
         test_case_fqn = test_case_fqns[key]
         if test_case_fqn is None:
             continue
-        client.send(
-            "POST",
-            f"v1/dataQuality/testCases/testCaseResults/{quote(test_case_fqn, safe='')}",
-            test_case_result_request(evaluation, int(entry.timestamp * 1000)),
-        )
+        try:
+            client.send(
+                "POST",
+                "v1/dataQuality/testCases/testCaseResults/"
+                f"{quote(test_case_fqn, safe='')}",
+                test_case_result_request(evaluation, int(entry.timestamp * 1000)),
+            )
+        except httpx.HTTPStatusError as exc:
+            # A result is unique on (test case, timestamp), so a 409 is this
+            # evaluation already written by a tick that failed later in its batch.
+            if exc.response.status_code != HTTPStatus.CONFLICT:
+                raise
         pushed += 1
     return pushed
 
 
-def _upsert_test_case(
+def _exists(client: OpenMetadataApiClient, endpoint: str) -> bool:
+    try:
+        client.send("GET", endpoint)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code != HTTPStatus.NOT_FOUND:
+            raise
+        return False
+    return True
+
+
+def _ensure_test_case(
     client: OpenMetadataApiClient,
     evaluation: AssetCheckEvaluation,
     table_fqn: str,
     log: logging.Logger,
 ) -> str | None:
+    """Create the check's test case unless it exists, and return its FQN.
+
+    Created only when missing, not upserted, so an edit made in OpenMetadata
+    (a description, an owner) is not overwritten every tick. None when
+    OpenMetadata has no such table.
+    """
+    request = test_case_request(evaluation, table_fqn)
+    test_case_fqn = f"{table_fqn}.{request['name']}"
+    if _exists(
+        client, f"v1/dataQuality/testCases/name/{quote(test_case_fqn, safe='')}"
+    ):
+        return test_case_fqn
     try:
-        test_case = client.send(
-            "PUT", "v1/dataQuality/testCases", test_case_request(evaluation, table_fqn)
-        )
+        client.send("POST", "v1/dataQuality/testCases", request)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code != HTTPStatus.NOT_FOUND:
             raise
@@ -196,4 +229,4 @@ def _upsert_test_case(
             evaluation.check_name,
         )
         return None
-    return test_case["fullyQualifiedName"]
+    return test_case_fqn
