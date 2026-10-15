@@ -670,13 +670,19 @@ models:
   - name: certificates_earned
     description: >
       Learners holding an unrevoked certificate for this course run, whether
-      or not their enrollment is still active, so it is not a subset of
-      total_enrolled_learners. One per learner, so it is its own cohort.
+      or not their enrollment is still active. It is not a strict subset of
+      total_enrolled_learners: a learner who certified and then unenrolled is
+      counted here and not there. ol-analytics-api declares it contained in
+      total_enrolled_learners anyway (ol-analytics-api #95, decided
+      2026-10-15), so it is withheld when total_enrolled_learners minus it is
+      1-4 or below zero. The gap it computes is never larger than the true
+      one, so the declaration can only over-suppress, on runs with unenrolled
+      certificate holders.
     config:
       meta:
         cohort:
           role: secondary
-          uncontained: true
+          contained_in: total_enrolled_learners
 
 - name: mv_b2b_mit_admin_contract_health
   description: >
@@ -1180,11 +1186,16 @@ models:
   - name: certificates_earned
     description: >
       Learners holding an unrevoked certificate for this course run, whether
-      or not their enrollment is still active, so it is not a subset of
-      total_enrolled_learners. One per learner, so ol-analytics-api flooring
-      it as a count of itself floors a learner cohort.
+      or not their enrollment is still active. It is not a strict subset of
+      total_enrolled_learners: a learner who certified and then unenrolled is
+      counted here and not there. ol-analytics-api declares it contained in
+      total_enrolled_learners anyway (ol-analytics-api #95, decided
+      2026-10-15), so it is withheld when total_enrolled_learners minus it is
+      1-4 or below zero. The gap it computes is never larger than the true
+      one, so the declaration can only over-suppress, on runs with unenrolled
+      certificate holders.
     config:
       meta:
         cohort:
           role: secondary
-          uncontained: true
+          contained_in: total_enrolled_learners
