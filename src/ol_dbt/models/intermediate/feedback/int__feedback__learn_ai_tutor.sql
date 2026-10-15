@@ -161,7 +161,6 @@ select
         when 'SyllabusBot' then 'course'
         when 'CanvasSyllabusBot' then 'course'
         when 'ResourceRecommendationBot' then 'resource'
-        when 'SearchSummaryBot' then 'resource'
         -- A warn test on int__learn_ai__chatbot.chatsession_agent flags a new agent
         else 'unspecified'
     end as subject_type
@@ -179,3 +178,6 @@ select
 from human_turns
 left join course_run
     on human_turns.courserun_readable_id = course_run.courserun_readable_id
+-- MIT Learn sends each search to SearchSummaryBot as a fixed prompt, so its messages
+-- are search terms, not feedback.
+where human_turns.chatsession_agent is distinct from 'SearchSummaryBot'
