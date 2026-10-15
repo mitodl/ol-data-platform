@@ -69,7 +69,7 @@ from lakehouse.assets.lakehouse.dbt_starrocks import (
 )
 from lakehouse.assets.qa_mirror import build_qa_mirror_assets
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
-from lakehouse.assets.superset import create_superset_asset
+from lakehouse.assets.superset import build_superset_dataset_assets
 from lakehouse.lib.dbt_environment import (
     DBT_AUTOMATION_ENABLED,
     STARROCKS_IS_LOCAL,
@@ -363,28 +363,21 @@ if TRINO_SUPERSET_DATABASE_ID == STARROCKS_SUPERSET_DATABASE_ID:
     raise ValueError(msg)
 _schema_base = "ol_warehouse_production"
 
-superset_assets = [
-    create_superset_asset(
-        dbt_asset_group_name=key.path[0],
-        dbt_model_name=key.path[1],
-        database_id=TRINO_SUPERSET_DATABASE_ID,
-        database_name="trino",
-        schema_base=_schema_base,
-    )
-    for key in dbt_model_keys
-    if key.path[0] in dbt_models_for_superset_datasets
+superset_model_keys = [
+    key for key in dbt_model_keys if key.path[0] in dbt_models_for_superset_datasets
 ]
-superset_starrocks_assets = [
-    create_superset_asset(
-        dbt_asset_group_name=key.path[0],
-        dbt_model_name=key.path[1],
-        database_id=STARROCKS_SUPERSET_DATABASE_ID,
-        database_name="starrocks",
-        schema_base=_schema_base,
-    )
-    for key in dbt_model_keys
-    if key.path[0] in dbt_models_for_superset_datasets
-]
+superset_assets = build_superset_dataset_assets(
+    superset_model_keys,
+    database_id=TRINO_SUPERSET_DATABASE_ID,
+    database_name="trino",
+    schema_base=_schema_base,
+)
+superset_starrocks_assets = build_superset_dataset_assets(
+    superset_model_keys,
+    database_id=STARROCKS_SUPERSET_DATABASE_ID,
+    database_name="starrocks",
+    schema_base=_schema_base,
+)
 
 # Iceberg maintenance schedules.
 #
@@ -727,8 +720,8 @@ defs = Definitions(
             *with_source_code_references([full_dbt_project]),
             *with_source_code_references([starrocks_dbt_assets]),
             *airbyte_assets,
-            *superset_assets,
-            *superset_starrocks_assets,
+            superset_assets,
+            superset_starrocks_assets,
             iceberg_dbt_layer_maintenance,
             iceberg_raw_layer_maintenance,
             lake_orphan_sweep,
