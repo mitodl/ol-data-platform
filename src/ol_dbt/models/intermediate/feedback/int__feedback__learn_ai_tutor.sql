@@ -180,4 +180,4 @@ left join course_run
     on human_turns.courserun_readable_id = course_run.courserun_readable_id
 -- MIT Learn sends each search to SearchSummaryBot as a fixed prompt, so its messages
 -- are search terms, not feedback.
-where human_turns.chatsession_agent != 'SearchSummaryBot'
+where human_turns.chatsession_agent is distinct from 'SearchSummaryBot'
