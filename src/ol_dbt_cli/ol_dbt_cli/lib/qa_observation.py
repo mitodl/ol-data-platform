@@ -160,3 +160,32 @@ def observe_glue(tables: set[str], database: str = QA_GLUE_DATABASE, region: str
     with ThreadPoolExecutor(max_workers=_METADATA_FETCH_WORKERS) as pool:
         states = dict(zip(names, pool.map(state, names), strict=True))
     return Observation(glue_database=database, observed_at=datetime.now(tz=UTC), tables=states)
+
+
+def holds_rows(state: TableState) -> bool:
+    """Whether QA can serve the table: an Iceberg table whose current snapshot has rows."""
+    return state.present and state.iceberg and bool(state.rows)
+
+
+def observation_drift(committed: Observation, live: Observation) -> list[str]:
+    """Return how *live* differs from *committed* in ways the QA branch contract reads.
+
+    The contract reads whether a table holds rows, and whether it is observed at
+    all. Row counts and snapshot times move on every load, so a difference in
+    those alone is not drift: a check on them would fail after every QA load and
+    say nothing about whether the committed file is still right.
+    """
+
+    def describe(state: TableState) -> str:
+        return f"holds {state.rows} rows" if holds_rows(state) else "holds no rows"
+
+    findings: dict[str, str] = {}
+    for name, after in live.tables.items():
+        before = committed.tables.get(name)
+        if before is None:
+            findings[name] = f"not in the committed observation; QA {describe(after)}"
+        elif holds_rows(before) != holds_rows(after):
+            findings[name] = f"committed observation {describe(before)}, QA now {describe(after)}"
+    for name in committed.tables.keys() - live.tables.keys():
+        findings[name] = "in the committed observation, no longer an inventory table QA ingests or mirrors"
+    return [f"{name}: {findings[name]}" for name in sorted(findings)]
