@@ -22,10 +22,30 @@ with enrollment_detail as (
     select * from {{ ref('dim_program') }}
 )
 
+, edxorg_program_courses as (
+    select
+        program.program_pk as program_fk
+        , course.course_pk as course_fk
+    from {{ ref('int__edxorg__mitx_program_courses') }} as edxorg_program_course
+    inner join program
+        on edxorg_program_course.program_uuid = program.source_id
+        and program.platform_code = 'edxorg'
+    inner join course
+        on edxorg_program_course.course_readable_id = course.course_readable_id
+        and course.primary_platform = 'edxorg'
+)
+
+, all_program_courses as (
+    select program_fk, course_fk from program_course
+    union all
+    select program_fk, course_fk from edxorg_program_courses
+)
+
 , courses_detail as (
     select
         course_enrollment_detail.platform
         , program.program_readable_id
+        , program.source_id as program_source_id
         , course_enrollment_detail.user_email
         , count(
             distinct case
@@ -73,13 +93,14 @@ with enrollment_detail as (
                     '{{ var("mitxpro") }}', '{{ var("emeritus") }}', '{{ var("global_alumni") }}'
                 ) then 'mitxpro'
             end
-        inner join program_course
+        inner join all_program_courses as program_course
             on course.course_pk = program_course.course_fk
         inner join program
             on program_course.program_fk = program.program_pk
     group by
         course_enrollment_detail.platform
         , program.program_readable_id
+        , program.source_id
         , course_enrollment_detail.user_email
 )
 
@@ -145,5 +166,11 @@ left join combined_users as combined_users2
     on enrollment_detail.user_hashed_id = combined_users2.user_hashed_id
 left join courses_detail
     on enrollment_detail.platform_name = courses_detail.platform
-    and enrollment_detail.program_readable_id = courses_detail.program_readable_id
+    and (
+        enrollment_detail.program_readable_id = courses_detail.program_readable_id
+        or (
+            enrollment_detail.program_readable_id is null
+            and enrollment_detail.program_uuid = courses_detail.program_source_id
+        )
+    )
     and enrollment_detail.user_email = courses_detail.user_email

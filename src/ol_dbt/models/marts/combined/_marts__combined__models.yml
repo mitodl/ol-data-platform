@@ -541,6 +541,8 @@ models:
     - not_null
   - name: program_id
     description: int, id representing a single program on a particular platform
+  - name: program_uuid
+    description: edX.org program UUID for enrollments without a MicroMasters mapping
   - name: program_title
     description: str, title of the program, including the specific track if applicable.
       e.g., Statistics and Data Science (General Track)

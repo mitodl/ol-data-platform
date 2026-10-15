@@ -78,6 +78,7 @@ with mitxpro__programenrollments as (
     select
         mitxpro__programs.platform_name
         , mitxpro__programs.program_id
+        , cast(null as varchar) as program_uuid
         , mitxpro__programs.program_title
         , mitxpro__programs.program_title as program_name
         , null as program_track
@@ -114,6 +115,7 @@ with mitxpro__programenrollments as (
     select
         '{{ var("mitxonline") }}' as platform_name
         , mitxonline__programs.program_id
+        , cast(null as varchar) as program_uuid
         , mitxonline__programs.program_title
         , mitxonline__programs.program_name
         , mitxonline__programs.program_track
@@ -150,6 +152,10 @@ with mitxpro__programenrollments as (
     select
         '{{ var("edxorg") }}' as platform_name
         , edx_program_enrollments.micromasters_program_id as program_id
+        , case
+            when edx_program_enrollments.micromasters_program_id is null
+            then edx_program_enrollments.program_uuid
+        end as program_uuid
         , edx_program_enrollments.program_title
         , edx_program_enrollments.program_name
         , edx_program_enrollments.program_track
@@ -186,6 +192,7 @@ with mitxpro__programenrollments as (
     select
         micromasters__program_enrollments.platform_name
         , micromasters__program_enrollments.micromasters_program_id as program_id
+        , cast(null as varchar) as program_uuid
         , micromasters__program_enrollments.program_title
         , mitxonline__programs.program_name
         , mitxonline__programs.program_track
@@ -274,6 +281,7 @@ with mitxpro__programenrollments as (
     select
         combined_programs.platform_name
         , combined_programs.program_id
+        , combined_programs.program_uuid
         , combined_programs.program_title
         , combined_programs.program_name
         , combined_programs.program_track
@@ -319,6 +327,7 @@ with mitxpro__programenrollments as (
     group by
         combined_programs.platform_name
         , combined_programs.program_id
+        , combined_programs.program_uuid
         , combined_programs.program_title
         , combined_programs.program_name
         , combined_programs.program_track
@@ -346,6 +355,7 @@ with mitxpro__programenrollments as (
 select
     final_combined_programs.platform_name
     , final_combined_programs.program_id
+    , final_combined_programs.program_uuid
     , final_combined_programs.program_title
     , final_combined_programs.program_name
     , final_combined_programs.program_track
