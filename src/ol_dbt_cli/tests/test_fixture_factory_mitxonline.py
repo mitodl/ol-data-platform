@@ -154,6 +154,85 @@ def test_variant_runs_have_a_non_default_variant_set_for_their_language(mitxonli
     assert variant_runs == variants
 
 
+def _enrollable(run: dict[str, Any]) -> bool:
+    """CourseRun.is_enrollable as int__mitxonline__catalog_course_runs evaluates it, as of the extract."""
+    now = LOADED_AT.replace(tzinfo=None)
+    return (
+        run["live"]
+        and run["start_date"] is not None
+        and run["enrollment_start"] is not None
+        and run["enrollment_start"] <= now
+        and (run["enrollment_end"] is None or run["enrollment_end"] > now)
+    )
+
+
+def test_generated_courses_runs_and_programs_reach_learn_published() -> None:
+    """The main path: a live in-catalog page over an enrollable run that is not a variant, at the default count."""
+    rows = _mitxonline(1)
+    wagtail = {row["id"]: row for row in _all(rows, "wagtailcore_page")}
+
+    def listed(table: str, column: str) -> set[int]:
+        return {
+            row[column]
+            for row in _generated(rows, table)
+            if wagtail[row["page_ptr_id"]]["live"] and row["include_in_learn_catalog"]
+        }
+
+    published_runs = [
+        run
+        for run in _generated(rows, "courses_courserun")
+        if _enrollable(run)
+        and not run["b2b_only"]
+        and run["language"] == mitxonline__app_postgres.LANGUAGE
+        and run["course_id"] in listed("cms_coursepage", "course_id")
+    ]
+    programs = [
+        program
+        for program in _generated(rows, "courses_program")
+        if program["live"] and not program["b2b_only"] and program["id"] in listed("cms_programpage", "program_id")
+    ]
+
+    assert published_runs
+    assert programs
+
+
+def test_every_off_path_branch_has_a_generated_row_at_the_default_count() -> None:
+    rows = _mitxonline(1)
+    courses = _generated(rows, "courses_course")
+    programs = _generated(rows, "courses_program")
+    runs = _generated(rows, "courses_courserun")
+    wagtail = {row["id"]: row for row in _generated(rows, "wagtailcore_page")}
+    course_pages = _generated(rows, "cms_coursepage")
+    pages = course_pages + _generated(rows, "cms_programpage")
+    requirements = _generated(rows, "courses_programrequirement")
+    required = {row["required_program_id"] for row in requirements if row["node_type"] == "program"}
+    modes = Counter(row["program_id"] for row in _generated(rows, "courses_program_enrollment_modes"))
+    branches = {
+        "a proctored exam": any("PROCTORED EXAM" in course["title"].upper() for course in courses),
+        "a course with no page": {course["id"] for course in courses} - {page["course_id"] for page in course_pages},
+        "a draft page": any(not wagtail[page["page_ptr_id"]]["live"] for page in pages),
+        "a page out of the Learn catalog": any(not page["include_in_learn_catalog"] for page in pages),
+        "a program that is not live": any(not program["live"] for program in programs),
+        "a B2B-only program": any(program["b2b_only"] for program in programs),
+        "a run that is not live": any(not run["live"] for run in runs),
+        "a B2B-only run": any(run["b2b_only"] for run in runs),
+        "a source run": any(run["is_source_run"] for run in runs),
+        "a required program shown as a course": any(
+            program["id"] in required and program["display_mode"] == "course" for program in programs
+        ),
+        "a required program standing for its courses": any(
+            program["id"] in required
+            and program["display_mode"] is None
+            and any(row["program_id"] == program["id"] and row["node_type"] == "course" for row in requirements)
+            for program in programs
+        ),
+        "an elective": any(row["operator"] == "min_number_of" for row in requirements),
+        "a program offering the audit mode": max(modes.values()) == 2,  # noqa: PLR2004
+    }
+
+    assert [branch for branch, present in branches.items() if not present] == []
+
+
 def test_the_hand_written_rows_load_unchanged() -> None:
     inventory_dir = REPO_ROOT / DEFAULT_INVENTORY_DIR
     (unit,) = [unit for unit in load_units(inventory_dir) if unit.key == "mitxonline/app_postgres"]
