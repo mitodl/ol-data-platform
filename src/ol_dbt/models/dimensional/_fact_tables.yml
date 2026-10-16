@@ -561,8 +561,8 @@ models:
 - name: tfact_grade
   description: >
     Transaction fact table for course run grade records.
-    Grain: One row per (user × course run) grade, across MITx Online, MITx Pro, and
-    edX.org.
+    Grain: One row per (user × course run) grade, across MITx Online, MITx Pro,
+    edX.org and Residential MITx.
     edX.org rows include MicroMasters-linked grades (micromasters_program_id IS NOT
     NULL);
     a separate MicroMasters platform source may be added in a future phase.
@@ -592,8 +592,8 @@ models:
     - not_null
   - name: grade_id
     description: >
-      Source system grade ID. Integer-cast courserungrade_id for MITx Online and MITx
-      Pro;
+      Source system grade ID. Integer-cast courserungrade_id for MITx Online, MITx
+      Pro and Residential;
       surrogate key from (user_id, courserun_readable_id) for edX.org.
     tests:
     - not_null
@@ -632,19 +632,21 @@ models:
         to: ref('dim_platform')
         field: platform_pk
   - name: platform
-    description: Platform identifier string (mitxonline, mitxpro, edxorg)
+    description: Platform identifier string (mitxonline, mitxpro, edxorg, residential)
     tests:
     - not_null
     - accepted_values:
-        values: ['mitxonline', 'mitxpro', 'edxorg']
+        values: ['mitxonline', 'mitxpro', 'edxorg', 'residential']
   - name: grade_value
     description: Numeric grade value between 0.0 and 1.0
   - name: is_passing
-    description: Boolean indicating whether the learner passed the course run
+    description: >
+      Boolean indicating whether the learner passed the course run. Residential has
+      no passing flag, so it is true when the letter grade is not empty.
   - name: letter_grade
     description: >
-      Letter grade string (e.g. 'Pass', 'Fail'). Available for MITx Online and MITx
-      Pro only;
+      Letter grade string (e.g. 'Pass', 'Fail'). Available for MITx Online, MITx
+      Pro and Residential;
       null for edX.org.
   - name: grade_created_on
     description: Grade creation timestamp (for incremental processing). Null for edX.org.
@@ -1754,6 +1756,8 @@ unit_tests:
     rows: []
   - input: ref('int__edxorg__mitx_courserun_grades')
     rows: []
+  - input: ref('int__mitxresidential__courserun_grades')
+    rows: []
       # dim_user has since re-keyed this user; user_pk no longer matches the target row below.
   - input: ref('dim_user')
     rows:
@@ -1800,6 +1804,53 @@ unit_tests:
       letter_grade: "A"
       grade_created_on: "2024-01-15T00:00:00"
       grade_updated_on: "2024-01-15T00:00:00"
+- name: test_tfact_grade_adds_residential_grades
+  description: >
+    Residential grades are in tfact_grade. The user resolves through
+    dim_user.residential_openedx_user_id, the run through dim_course_run on the
+    residential platform, and a non-empty letter grade means passed.
+  model: tfact_grade
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__courserun_grades')
+    rows: []
+  - input: ref('int__mitxpro__courserun_grades')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_grades')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_grades')
+    rows:
+    - {courserungrade_id: 11, user_id: 555, courserun_readable_id: "course-v1:MITx+6.002+2024",
+      courserungrade_grade: 0.9, courserungrade_letter_grade: "A", courserungrade_created_on: "2024-01-15T00:00:00",
+      courserungrade_updated_on: "2024-01-16T00:00:00"}
+    - {courserungrade_id: 12, user_id: 555, courserun_readable_id: "course-v1:MITx+6.003+2024",
+      courserungrade_grade: 0.2, courserungrade_letter_grade: "", courserungrade_created_on: "2024-01-15T00:00:00",
+      courserungrade_updated_on: "2024-01-16T00:00:00"}
+    - {courserungrade_id: 13, user_id: 556, courserun_readable_id: "course-v1:MITx+6.002+2024",
+      courserungrade_grade: 0.0, courserungrade_letter_grade: null, courserungrade_created_on: "2024-01-15T00:00:00",
+      courserungrade_updated_on: "2024-01-16T00:00:00"}
+  - input: ref('dim_user')
+    rows:
+    - {user_pk: "USER_RES_555", residential_openedx_user_id: 555}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: "RUN_6002", courserun_readable_id: "course-v1:MITx+6.002+2024",
+      platform: "residential", is_current: true}
+    - {courserun_pk: "RUN_6002_XPRO", courserun_readable_id: "course-v1:MITx+6.002+2024",
+      platform: "mitxpro", is_current: true}
+  - input: ref('dim_platform')
+    rows:
+    - {platform_pk: "PLATFORM_RESIDENTIAL", platform_readable_id: "residential"}
+  expect:
+    rows:
+    - {grade_id: "11", user_fk: "USER_RES_555", courserun_fk: "RUN_6002", platform_fk: "PLATFORM_RESIDENTIAL",
+      platform: "residential", grade_value: 0.9, is_passing: true, letter_grade: "A"}
+    - {grade_id: "12", user_fk: "USER_RES_555", courserun_fk: null, platform_fk: "PLATFORM_RESIDENTIAL",
+      platform: "residential", grade_value: 0.2, is_passing: false, letter_grade: ""}
+    - {grade_id: "13", user_fk: null, courserun_fk: "RUN_6002", platform_fk: "PLATFORM_RESIDENTIAL",
+      platform: "residential", grade_value: 0.0, is_passing: false, letter_grade: null}
 - name: test_tfact_order_refreshes_stale_user_fk_after_dim_user_rekey
   description: >
     Regression test for the dim_user re-key incident: when dim_user.user_pk changes
