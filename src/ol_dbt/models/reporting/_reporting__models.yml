@@ -285,6 +285,13 @@ models:
       a b2b order it will be the timestamp that order was updated otherwise it will
       be when the regular order was updated. For edX.org, it is the timestamp that
       order was updated in MicroMasters application.
+  - name: program_order_id
+    description: int, order ID of the program purchase that covered this enrollment,
+      for MITx Online and xPRO. Use it to find the course runs that a program coupon
+      code paid for. Null when no program purchase covered the enrollment.
+  - name: program_coupon_code
+    description: str, coupon code redeemed on the program purchase in program_order_id,
+      for example a B2B code. Null when there is no program order or it used no coupon.
   - name: receipt_payment_amount
     description: numeric, total amount for the order - req_amount from cybersource
       payment
