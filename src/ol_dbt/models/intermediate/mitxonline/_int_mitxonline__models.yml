@@ -2573,3 +2573,36 @@ unit_tests:
     - {courserun_id: 5, courserun_course_number: "2.01x", courserun_is_enrollable: false,
       courserun_is_fully_enrollable: false, courserun_is_variant: false, courserun_has_verified_mode: false,
       courserun_has_audit_mode: false}
+- name: test_int__mitxonline__users_one_row_per_user_with_two_openedx_usernames
+  description: >
+    A user can hold two Open edX usernames (e.g. one renamed when the account was
+    retired). The user stays one row, mapped through the synced username even when
+    the other is newer.
+  model: int__mitxonline__users
+  given:
+  - input: ref('stg__mitxonline__app__postgres__users_user')
+    rows:
+    - {user_id: 1, user_full_name: "Ann Lee", user_username: "ann@example.com"}
+  - input: ref('stg__mitxonline__app__postgres__users_legaladdress')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__users_userprofile')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__profiles_profile')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__auth_usersocialauth')
+    rows: []
+  - input: ref('__micromasters__users')
+    rows: []
+  - input: ref('stg__mitxonline__openedx__mysql__auth_user')
+    rows:
+    - {openedx_user_id: 11, user_username: "ann-lee"}
+    - {openedx_user_id: 12, user_username: "retired_ann"}
+  - input: ref('stg__mitxonline__app__postgres__openedx_openedxuser')
+    rows:
+    - {openedxuser_id: 101, user_id: 1, openedxuser_username: "ann-lee", openedxuser_has_been_synced: true,
+      openedxuser_updated_on: "2026-09-01T00:00:00.000"}
+    - {openedxuser_id: 102, user_id: 1, openedxuser_username: "retired_ann", openedxuser_has_been_synced: false,
+      openedxuser_updated_on: "2026-10-01T00:00:00.000"}
+  expect:
+    rows:
+    - {user_id: 1, openedx_user_id: 11, user_username: "ann-lee"}

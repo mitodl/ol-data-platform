@@ -189,13 +189,25 @@ with mitxonline_enrollments as (
 -- same code (courserun_external_readable_id, as in int__combined__courserun_enrollments),
 -- this lookup resolves it to that run's courserun_readable_id. Codes with no xPro run keep
 -- the external code, which matches the platform's own dim_course_run row.
+-- xPro can give two runs one code (e.g. MCPO and MO_MCPO both carry MO-MCPO-26-12#1 since
+-- 2026-10-14). The newest run takes the code, so an enrollment resolves to one run.
 , mitxpro_external_readable_id_lookup as (
     select courserun_external_readable_id, courserun_readable_id
-    from {{ ref('int__mitxpro__course_runs') }}
-    -- xPro runs with no external id carry '' rather than null; without this, a source row
-    -- with an empty run code would fan out across all of them
-    where courserun_external_readable_id is not null
-        and courserun_external_readable_id != ''
+    from (
+        select
+            courserun_external_readable_id
+            , courserun_readable_id
+            , row_number() over (
+                partition by courserun_external_readable_id
+                order by courserun_id desc
+            ) as _row_num
+        from {{ ref('int__mitxpro__course_runs') }}
+        -- xPro runs with no external id carry '' rather than null; without this, a source row
+        -- with an empty run code would fan out across all of them
+        where courserun_external_readable_id is not null
+            and courserun_external_readable_id != ''
+    ) as ranked
+    where _row_num = 1
 )
 
 , emeritus_enrollments as (
@@ -312,6 +324,20 @@ with mitxonline_enrollments as (
         , email
     from {{ ref('dim_user') }}
     where user_pk is not null
+)
+
+-- Global Alumni student ids held by exactly one dim_user row. dim_user keeps one Global
+-- Alumni row per email, so one id under two emails is two rows. Which learner an
+-- enrollment with that id (and no email to go on) belongs to can't be told, so it gets no
+-- user_fk rather than one learner's at random, or a copy per learner.
+, global_alumni_id_lookup as (
+    select
+        global_alumni_user_id
+        , max(user_pk) as user_pk
+    from user_lookup
+    where global_alumni_user_id is not null
+    group by global_alumni_user_id
+    having count(*) = 1
 )
 
 , dim_course_run as (
@@ -442,7 +468,7 @@ with mitxonline_enrollments as (
     left join user_lookup as ul_global_alumni
         on combined_enrollments.platform = 'global_alumni'
         and lower(combined_enrollments.user_email) = ul_global_alumni.email
-    left join user_lookup as ul_global_alumni_id
+    left join global_alumni_id_lookup as ul_global_alumni_id
         on combined_enrollments.platform = 'global_alumni'
         and combined_enrollments.external_user_id = ul_global_alumni_id.global_alumni_user_id
     left join dim_course_run
@@ -485,13 +511,19 @@ with mitxonline_enrollments as (
 -- code that gains an xPro match), or whose contract_fk has (MITx Online backfilled the
 -- enrollment's contract without moving updated_on past our watermark). The source row
 -- itself did not change, so the activity-timestamp watermark alone would never catch these.
+-- One row per key: a key a past run wrote twice would otherwise match each source row twice
+-- and be written twice again. It is re-selected instead, so delete+insert leaves one copy.
 , stale_fk_lookup as (
     select
         enrollment_key
-        , user_fk as stored_user_fk
-        , courserun_fk as stored_courserun_fk
-        , {% if target_has_contract_fk %}contract_fk{% else %}cast(null as varchar){% endif %} as stored_contract_fk
+        , max(user_fk) as stored_user_fk
+        , max(courserun_fk) as stored_courserun_fk
+        , max(
+            {% if target_has_contract_fk %}contract_fk{% else %}cast(null as varchar){% endif %}
+        ) as stored_contract_fk
+        , count(*) > 1 as stored_has_copies
     from {{ this }}
+    group by enrollment_key
 )
 {% endif %}
 
@@ -549,40 +581,14 @@ with mitxonline_enrollments as (
         or sfk.stored_courserun_fk is distinct from ewf.courserun_fk
         -- contract added or re-resolved, including every B2B row on the run that adds the column
         or sfk.stored_contract_fk is distinct from ewf.contract_fk
+        or sfk.stored_has_copies
     )
     {% endif %}
 )
 
--- Defensive dedup: the UNION ALL across 5 platform CTEs has no upstream uniqueness guarantee.
--- If any intermediate develops grain drift, this guard prevents duplicate enrollment_key values
--- from silently entering the fact table and corrupting incremental MERGE operations.
--- Note: QUALIFY is not supported by Trino; using ROW_NUMBER subquery instead.
-, final_deduped as (
-    select
-        enrollment_key
-        , enrollment_id
-        , enrollment_type
-        , enrollment_date_key
-        , user_fk
-        , courserun_fk
-        , program_fk
-        , platform_fk
-        , contract_fk
-        , platform
-        , enrollment_is_active
-        , enrollment_mode
-        , enrollment_status
-        , enrollment_created_on
-        , enrollment_updated_on
-        , enrollment_is_edx_enrolled
-        , order_id
-        , row_number() over (
-            partition by enrollment_key
-            order by coalesce(enrollment_updated_on, enrollment_created_on) desc nulls last
-        ) as _row_num
-    from final
-)
-
+-- No dedup here: each lookup above is unique on its join key, so a duplicate enrollment_key
+-- means a source or a lookup lost its grain. The error-severity unique test on
+-- enrollment_key reports it. A row_number here would keep one copy's FKs at random.
 select
     enrollment_key
     , enrollment_id
@@ -601,5 +607,4 @@ select
     , enrollment_updated_on
     , enrollment_is_edx_enrolled
     , order_id
-from final_deduped
-where _row_num = 1
+from final
