@@ -348,7 +348,7 @@ tables:
   modeled: true
 - name: courses_program_departments
   raw_table: raw__mitxonline__app__postgres__courses_program_departments
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - id
@@ -383,7 +383,7 @@ tables:
   modeled: true
 - name: courses_programrequirement
   raw_table: raw__mitxonline__app__postgres__courses_programrequirement
-  sync_mode: incremental_deduped_history
+  sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:
   - - id
