@@ -1534,11 +1534,11 @@ unit_tests:
 - name: test_tfact_enrollment_resolves_emeritus_global_alumni_fks
   description: >
     Emeritus learners match dim_user by student id, falling back to email; Global
-    Alumni learners match by email, falling back to student id only when the email
-    misses (one id can sit on two dim_user rows). Both platforms resolve
-    their course run through the xPro run that carries the same external run code
-    (the newest, by courserun_id, when two do), or, when no xPro run does, through
-    the platform's own dim_course_run row for that code.
+    Alumni learners match by email, falling back to student id. A student id two
+    dim_user rows hold (one id under two emails) resolves to no one. Both platforms
+    resolve their course run through the xPro run that carries the same external
+    run code (the newest, by courserun_id, when two do), or, when no xPro run does,
+    through the platform's own dim_course_run row for that code.
   model: tfact_enrollment
   overrides:
     macros:
@@ -1622,6 +1622,11 @@ unit_tests:
     - user_id: "G-4"
       user_email: "g4@example.com"
       courserun_external_readable_id: "RUN-A"
+      is_enrolled: true
+      # no email and that shared id: matches no one, and is not repeated
+    - user_id: "G-4"
+      user_email:
+      courserun_external_readable_id: "RUN-Y"
       is_enrolled: true
       # run code with no xPro run: resolves to the platform-native dim_course_run row
     - user_id: "G-3"
@@ -1737,6 +1742,12 @@ unit_tests:
     - platform: "global_alumni"
       user_fk: "USER_G4"
       courserun_fk: "RUN_A_XPRO"
+      platform_fk: "PLATFORM_GLOBAL_ALUMNI"
+      enrollment_type: "course"
+      enrollment_is_active: true
+    - platform: "global_alumni"
+      user_fk:
+      courserun_fk: "RUN_Y_GLOBAL_ALUMNI"
       platform_fk: "PLATFORM_GLOBAL_ALUMNI"
       enrollment_type: "course"
       enrollment_is_active: true

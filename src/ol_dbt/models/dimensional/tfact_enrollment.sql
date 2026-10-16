@@ -326,6 +326,20 @@ with mitxonline_enrollments as (
     where user_pk is not null
 )
 
+-- Global Alumni student ids held by exactly one dim_user row. dim_user keeps one Global
+-- Alumni row per email, so one id under two emails is two rows. Which learner an
+-- enrollment with that id (and no email to go on) belongs to can't be told, so it gets no
+-- user_fk rather than one learner's at random, or a copy per learner.
+, global_alumni_id_lookup as (
+    select
+        global_alumni_user_id
+        , max(user_pk) as user_pk
+    from user_lookup
+    where global_alumni_user_id is not null
+    group by global_alumni_user_id
+    having count(*) = 1
+)
+
 , dim_course_run as (
     select courserun_pk, courserun_readable_id, platform
     from {{ ref('dim_course_run') }}
@@ -445,9 +459,6 @@ with mitxonline_enrollments as (
     -- back to the other method if the primary lookup finds no one. The email fallback can't
     -- use dim_user's identity key: if a learner has a mix of enrollments, some with ids and
     -- some without, their key is the student id, so the rows without an id would miss it.
-    -- The Global Alumni id fallback joins only when the email lookup missed: dim_user keeps
-    -- one Global Alumni row per email, so one student id under two emails is two rows, and a
-    -- match the coalesce discards would still repeat the enrollment.
     left join user_lookup as ul_emeritus
         on combined_enrollments.platform = 'emeritus'
         and combined_enrollments.external_user_id = ul_emeritus.emeritus_user_id
@@ -457,9 +468,8 @@ with mitxonline_enrollments as (
     left join user_lookup as ul_global_alumni
         on combined_enrollments.platform = 'global_alumni'
         and lower(combined_enrollments.user_email) = ul_global_alumni.email
-    left join user_lookup as ul_global_alumni_id
+    left join global_alumni_id_lookup as ul_global_alumni_id
         on combined_enrollments.platform = 'global_alumni'
-        and ul_global_alumni.user_pk is null
         and combined_enrollments.external_user_id = ul_global_alumni_id.global_alumni_user_id
     left join dim_course_run
         on combined_enrollments.courserun_readable_id = dim_course_run.courserun_readable_id
