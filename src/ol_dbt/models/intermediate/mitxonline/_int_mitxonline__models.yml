@@ -634,6 +634,12 @@ models:
     grain of an order line. After a learner buys a program, MITx Online creates a
     $0 order for each course run with the program's internal discount. This model
     matches each such order to the program order, by learner and program.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: line_id
     description: int, primary key of the course run order line
@@ -2595,3 +2601,60 @@ unit_tests:
     - {courserun_id: 5, courserun_course_number: "2.01x", courserun_is_enrollable: false,
       courserun_is_fully_enrollable: false, courserun_is_variant: false, courserun_has_verified_mode: false,
       courserun_has_audit_mode: false}
+- name: test_int__mitxonline__program_course_run_orders_matches_program_purchase
+  description: >
+    A course run order with a program's internal discount links to the learner's
+    latest fulfilled or refunded order for that program placed before it. An exact
+    program match wins over a parent program purchase, and a parent purchase matches
+    when there is no exact one. Orders with no earlier program purchase, or with no
+    internal discount, are left out.
+  model: int__mitxonline__program_course_run_orders
+  given:
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows:
+    # user 1: exact match, latest purchase before the run; order 13 comes after it
+    - {line_id: 11, order_id: 11, user_id: 1, order_state: fulfilled, order_created_on: "2026-01-01T00:00:00",
+      product_type: program, program_id: 10}
+    - {line_id: 12, order_id: 12, user_id: 1, order_state: fulfilled, order_created_on: "2026-02-01T00:00:00",
+      product_type: program, program_id: 10}
+    - {line_id: 13, order_id: 13, user_id: 1, order_state: fulfilled, order_created_on: "2026-04-01T00:00:00",
+      product_type: program, program_id: 10}
+    - {line_id: 14, order_id: 14, user_id: 1, order_state: fulfilled, order_created_on: "2026-03-01T00:00:00",
+      product_type: course run, discount_id: 1, discount_redemption_type: internal}
+    - {line_id: 15, order_id: 15, user_id: 1, order_state: fulfilled, order_created_on: "2026-03-01T00:00:00",
+      product_type: course run, discount_id: 9, discount_redemption_type: one-time}
+    # user 2: owns the child (21) and its newer parent (20); the exact child match wins
+    - {line_id: 21, order_id: 21, user_id: 2, order_state: fulfilled, order_created_on: "2026-02-01T00:00:00",
+      product_type: program, program_id: 20}
+    - {line_id: 22, order_id: 22, user_id: 2, order_state: fulfilled, order_created_on: "2026-01-01T00:00:00",
+      product_type: program, program_id: 21}
+    - {line_id: 23, order_id: 23, user_id: 2, order_state: fulfilled, order_created_on: "2026-03-01T00:00:00",
+      product_type: course run, discount_id: 2, discount_redemption_type: internal}
+    # user 3: owns only the parent (20)
+    - {line_id: 31, order_id: 31, user_id: 3, order_state: fulfilled, order_created_on: "2026-01-01T00:00:00",
+      product_type: program, program_id: 20}
+    - {line_id: 32, order_id: 32, user_id: 3, order_state: fulfilled, order_created_on: "2026-02-01T00:00:00",
+      product_type: course run, discount_id: 2, discount_redemption_type: internal}
+    # user 4: only a pending program order, so no match
+    - {line_id: 41, order_id: 41, user_id: 4, order_state: pending, order_created_on: "2026-01-01T00:00:00",
+      product_type: program, program_id: 10}
+    - {line_id: 42, order_id: 42, user_id: 4, order_state: fulfilled, order_created_on: "2026-02-01T00:00:00",
+      product_type: course run, discount_id: 1, discount_redemption_type: internal}
+  - input: ref('stg__mitxonline__app__postgres__ecommerce_discountproduct')
+    rows:
+    - {discount_id: 1, product_id: 100}
+    - {discount_id: 2, product_id: 210}
+    - {discount_id: 9, product_id: 100}
+  - input: ref('int__mitxonline__ecommerce_product')
+    rows:
+    - {product_id: 100, product_type: program, program_id: 10}
+    - {product_id: 210, product_type: program, program_id: 21}
+  - input: ref('stg__mitxonline__app__postgres__courses_programrequirement')
+    rows:
+    - {program_id: 20, required_program_id: 21}
+    - {program_id: 10, required_program_id: null}
+  expect:
+    rows:
+    - {line_id: 14, order_id: 14, program_order_id: 12}
+    - {line_id: 23, order_id: 23, program_order_id: 22}
+    - {line_id: 32, order_id: 32, program_order_id: 31}
