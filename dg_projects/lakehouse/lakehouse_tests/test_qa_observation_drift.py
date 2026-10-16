@@ -8,7 +8,7 @@ import dataclasses
 from pathlib import Path
 
 import pytest
-from dagster import Failure, build_asset_context
+from dagster import build_asset_context
 from lakehouse.assets import qa_observation_drift as module
 from lakehouse.assets.qa_observation_drift import qa_observation_drift
 from lakehouse.lib.scheduled_automation import SCHEDULE_ENVIRONMENTS
@@ -18,6 +18,7 @@ from ol_dbt_cli.lib.qa_observation import (
     TableState,
     load_observation,
 )
+from ol_orchestrate.lib.failures import PermanentFailure
 
 
 def _committed() -> Observation:
@@ -68,7 +69,7 @@ def test_a_table_that_landed_fails_the_run(
     live = dataclasses.replace(COMMITTED, tables={**COMMITTED.tables, empty: landed})
     _observing(monkeypatch, live)
 
-    with pytest.raises(Failure, match="1 QA raw table") as raised:
+    with pytest.raises(PermanentFailure, match="1 QA raw table") as raised:
         qa_observation_drift(build_asset_context())
 
     assert "ol-dbt inventory observe" in str(raised.value)
@@ -81,5 +82,5 @@ def test_a_missing_observation_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     (tmp_path / "units").symlink_to(module.INVENTORY_DIR / "units")
     monkeypatch.setattr(module, "INVENTORY_DIR", tmp_path)
 
-    with pytest.raises(Failure, match=f"No {OBSERVATION_FILENAME}"):
+    with pytest.raises(PermanentFailure, match=f"No {OBSERVATION_FILENAME}"):
         qa_observation_drift(build_asset_context())

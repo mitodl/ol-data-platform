@@ -11,7 +11,9 @@ This compares the file baked into the image with QA's Glue and Iceberg
 metadata now, and fails the run when a table's emptiness differs or the table
 sets do. The failed step reaches Sentry through the failure hook every
 lakehouse asset carries (with_failure_hooks), which is the prompt to
-refresh. It runs in QA, where the Dagster role already reads
+refresh. Every failure here is raised permanent: the committed file is baked
+into the image, so a rerun compares the same file and only repeats the Sentry
+event. It runs in QA, where the Dagster role already reads
 ol_warehouse_qa_raw (iceberg_raw_orphan_files lists the same tables there).
 The mirrors run in production, so a check attached to them would not.
 
@@ -19,7 +21,7 @@ The comparison lives in `ol_dbt_cli.lib.qa_observation`, the same code
 `ol-dbt inventory observe` and `ol-dbt validate` use.
 """
 
-from dagster import AssetExecutionContext, Failure, MetadataValue, Output, asset
+from dagster import AssetExecutionContext, MetadataValue, Output, asset
 from ol_dbt_cli.lib.inventory import load_units
 from ol_dbt_cli.lib.qa_observation import (
     OBSERVATION_FILENAME,
@@ -29,6 +31,7 @@ from ol_dbt_cli.lib.qa_observation import (
     observe_glue,
     observed_tables,
 )
+from ol_orchestrate.lib.failures import permanent_failure
 
 from lakehouse.lib.inventory import INVENTORY_DIR
 
@@ -47,11 +50,11 @@ def qa_observation_drift(context: AssetExecutionContext) -> Output[dict[str, int
     units = load_units(INVENTORY_DIR)
     if not units:
         msg = f"No inventory units found under {INVENTORY_DIR}."
-        raise Failure(description=msg)
+        raise permanent_failure(msg)
     committed = load_observation(INVENTORY_DIR / OBSERVATION_FILENAME)
     if committed is None:
         msg = f"No {OBSERVATION_FILENAME} under {INVENTORY_DIR}."
-        raise Failure(description=msg)
+        raise permanent_failure(msg)
 
     live = observe_glue(observed_tables(units), committed.glue_database)
     findings = observation_drift(committed, live)
@@ -77,5 +80,5 @@ def qa_observation_drift(context: AssetExecutionContext) -> Output[dict[str, int
             "inventory observe`, then `ol-dbt validate --update-qa-baseline`, and "
             "commit both files."
         )
-        raise Failure(description=msg, metadata=metadata)
+        raise permanent_failure(msg, metadata=metadata)
     return Output(counts, metadata=metadata)
