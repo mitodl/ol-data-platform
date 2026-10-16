@@ -175,6 +175,16 @@ ol-dbt fixtures generate --unit xpro/app_postgres --out /tmp/xpro     # /tmp/xpr
 ol-dbt fixtures generate --unit xpro/app_postgres --table raw__xpro__app__postgres__courses_course
 ```
 
+`src/ol_dbt_cli/tests/test_fixture_factories.py` runs every package in CI, with no lake.
+It holds the rows to the package's `models.json` (foreign keys, generic foreign keys,
+`unique`, `unique_together`, treebeard trees) and keeps generated emails on
+`example.com`. It also checks that `scaffold` still writes the committed `_generated.py`,
+so a hand edit there fails CI. It pins each unit's rows to a digest in
+`generated_fixture_digests.json`, the sha256 of `ol-dbt fixtures generate --unit <unit>`. A
+change to a package, the generation runtime, mimesis or factory_boy that changes the rows
+fails that test, because every contributor's lake would change with no fixture diff. When
+the change is intended, the failure prints the new digest to commit in the same PR.
+
 Generated rows are fixture rows to `ol-dbt ingest local`, so "load fixtures first and
 the source second" above still holds.
 
