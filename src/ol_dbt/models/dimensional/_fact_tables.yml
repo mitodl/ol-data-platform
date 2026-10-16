@@ -1898,3 +1898,50 @@ unit_tests:
       order_total_price_paid: 100.00
       order_reference_number: "REF1"
       order_updated_on: "2024-01-15T00:00:00"
+- name: test_tfact_enrollment_order_resolves_program_order_id
+  description: >
+    An xPRO enrollment on a program order carries that order as its program order,
+    and one on a course run order carries none. A MITx Online enrollment picks up
+    the program order matched to its course run order line, and gets none when no
+    match exists.
+  model: tfact_enrollment_order
+  given:
+  - input: ref('tfact_enrollment')
+    rows:
+    - {enrollment_key: "XPRO_PROGRAM", order_id: 7001, user_fk: "U1", courserun_fk: "CR1",
+      program_fk: "PG1", platform_fk: "P_XPRO", platform: "mitxpro"}
+    - {enrollment_key: "XPRO_COURSERUN", order_id: 7002, user_fk: "U2", courserun_fk: "CR2",
+      program_fk: null, platform_fk: "P_XPRO", platform: "mitxpro"}
+    - {enrollment_key: "MITXONLINE_MATCHED", order_id: null, user_fk: "U3", courserun_fk: "CR3",
+      program_fk: null, platform_fk: "P_MITXONLINE", platform: "mitxonline"}
+    - {enrollment_key: "MITXONLINE_UNMATCHED", order_id: null, user_fk: "U4", courserun_fk: "CR4",
+      program_fk: null, platform_fk: "P_MITXONLINE", platform: "mitxonline"}
+  - input: ref('dim_product')
+    rows:
+    - {product_pk: "PROD_XPRO_PROGRAM", product_type: "program", courserun_fk: null,
+      program_fk: "PG1", platform_fk: "P_XPRO", is_current: true}
+    - {product_pk: "PROD_XPRO_CR2", product_type: "course run", courserun_fk: "CR2",
+      program_fk: null, platform_fk: "P_XPRO", is_current: true}
+    - {product_pk: "PROD_MITXONLINE_CR3", product_type: "course run", courserun_fk: "CR3",
+      program_fk: null, platform_fk: "P_MITXONLINE", is_current: true}
+    - {product_pk: "PROD_MITXONLINE_CR4", product_type: "course run", courserun_fk: "CR4",
+      program_fk: null, platform_fk: "P_MITXONLINE", is_current: true}
+  - input: ref('tfact_order')
+    rows:
+    - {order_key: "OK1", order_id: 7001, line_id: "1", user_fk: "U1", product_fk: "PROD_XPRO_PROGRAM",
+      platform_fk: "P_XPRO", platform: "mitxpro", order_state: "fulfilled"}
+    - {order_key: "OK2", order_id: 7002, line_id: "2", user_fk: "U2", product_fk: "PROD_XPRO_CR2",
+      platform_fk: "P_XPRO", platform: "mitxpro", order_state: "fulfilled"}
+    - {order_key: "OK3", order_id: 8001, line_id: "201", user_fk: "U3", product_fk: "PROD_MITXONLINE_CR3",
+      platform_fk: "P_MITXONLINE", platform: "mitxonline", order_state: "fulfilled"}
+    - {order_key: "OK4", order_id: 8002, line_id: "202", user_fk: "U4", product_fk: "PROD_MITXONLINE_CR4",
+      platform_fk: "P_MITXONLINE", platform: "mitxonline", order_state: "fulfilled"}
+  - input: ref('int__mitxonline__program_course_run_orders')
+    rows:
+    - {line_id: 201, program_order_id: 8500}
+  expect:
+    rows:
+    - {enrollment_key: "XPRO_PROGRAM", program_order_id: 7001}
+    - {enrollment_key: "XPRO_COURSERUN", program_order_id: null}
+    - {enrollment_key: "MITXONLINE_MATCHED", program_order_id: 8500}
+    - {enrollment_key: "MITXONLINE_UNMATCHED", program_order_id: null}
