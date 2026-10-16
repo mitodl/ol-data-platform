@@ -86,7 +86,12 @@ models:
         to: ref('dim_course')
         field: course_pk
   - name: is_required
-    description: Boolean indicating if course is required for program completion
+    description: True when the course is a core requirement of the program. False
+      when it is one option in an elective set ("choose N of M"), which MITx Online
+      and MicroMasters programs have; every course in an xPRO program is required.
+      This flags courses, it does not count them; the number of courses a program
+      requires is program_num_required_courses in int__mitxonline__program_requirements
+      and int__micromasters__program_requirements.
     tests:
     - not_null
   - name: course_order
@@ -321,3 +326,53 @@ models:
   - name: observed_on
     description: When the merge was recorded, most recent if merged more than once.
       Null for cross-platform links.
+
+unit_tests:
+- name: test_bridge_program_course_electives_are_not_required
+  description: >
+    A course in an elective set is one option among several, so is_required
+    is false for it on MITx Online and MicroMasters and true for core courses.
+    xPRO has no elective sets, so every xPRO program course is required. A
+    MicroMasters course in two elective sets of one program is one bridge row.
+  model: bridge_program_course
+  given:
+  - input: ref('int__mitxonline__program_requirements')
+    rows:
+    - {program_id: 1, course_id: 10, programrequirement_type: Core, course_order_in_program: 1}
+    - {program_id: 1, course_id: 11, programrequirement_type: Elective, course_order_in_program: 2}
+  - input: ref('int__mitxpro__coursesinprogram')
+    rows:
+    - {program_id: 2, course_id: 20, course_order: 1}
+  - input: ref('int__micromasters__program_requirements')
+    rows:
+    - {program_id: 3, course_id: 30, electiveset_id: null, programrequirement_type: Core,
+      course_position_in_program: 1}
+    - {program_id: 3, course_id: 31, electiveset_id: 7, programrequirement_type: Elective,
+      course_position_in_program: 2}
+    - {program_id: 3, course_id: 31, electiveset_id: 8, programrequirement_type: Elective,
+      course_position_in_program: 2}
+  - input: ref('stg__micromasters__app__postgres__courses_course')
+    rows:
+    - {course_id: 30, course_edx_key: "MITx+MM.1"}
+    - {course_id: 31, course_edx_key: "MITx+MM.2"}
+  - input: ref('dim_program')
+    rows:
+    - {program_pk: p1, source_id: "1", platform_code: mitxonline}
+    - {program_pk: p2, source_id: "2", platform_code: mitxpro}
+    - {program_pk: p3, source_id: "3", platform_code: micromasters}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: c10, source_id: 10, primary_platform: mitxonline, is_current: true}
+    - {course_pk: c11, source_id: 11, primary_platform: mitxonline, is_current: true}
+    - {course_pk: c20, source_id: 20, primary_platform: mitxpro, is_current: true}
+    - {course_pk: c30, course_readable_id: "MITx+MM.1", primary_platform: edxorg,
+      is_current: true}
+    - {course_pk: c31, course_readable_id: "MITx+MM.2", primary_platform: edxorg,
+      is_current: true}
+  expect:
+    rows:
+    - {program_fk: p1, course_fk: c10, is_required: true}
+    - {program_fk: p1, course_fk: c11, is_required: false}
+    - {program_fk: p2, course_fk: c20, is_required: true}
+    - {program_fk: p3, course_fk: c30, is_required: true}
+    - {program_fk: p3, course_fk: c31, is_required: false}
