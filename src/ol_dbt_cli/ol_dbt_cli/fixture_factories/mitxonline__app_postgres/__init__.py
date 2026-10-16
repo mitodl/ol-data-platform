@@ -10,13 +10,16 @@ variant that shares a course's object id).
 What the generated rows add is volume on the main path: live programs, each
 with a requirement tree over a few courses, each course with an open run and
 an ended one, enrollment modes, a live page per course and program with
-topics, instructors and a price, and the departments Learn knows. Off that
-path, each about one in eight to one in thirteen, so the models' filters have
-rows to drop: a course with no page, a draft page, a page left out of the
-Learn catalog, a proctored exam, a run that is not live, a B2B-only run or
-program, a run in a language the course has a non-default variant for, and a
-program that is not live. Every fifth course also has a run that starts in
-2099, which a program's next start reads.
+topics, instructors and a price, and the departments Learn knows. A share of
+rows, one in six to one in thirteen depending on the branch, is left off that
+path so the models' filters have rows to drop: a course with no page, a draft
+page, a page left out of the Learn catalog, a proctored exam, a run that is
+not live, a B2B-only run or program, a run in a language the course has a
+non-default variant for, and a program that is not live. Each cycle's first
+off-path row falls within the default counts, so every branch has a row at
+scale 1. Every fifth course also has a run that starts in 2099, which a
+program's next start reads, and every other one of those is a source run,
+which it does not.
 
 Content types and enrollment modes are not generated: the hand-written rows
 are the two content types a variant points through and the audit and
@@ -186,7 +189,7 @@ class Image(ImageBase):
     description = ""
 
 
-@fg.table(ProgramBase.raw_table, default_count=4)
+@fg.table(ProgramBase.raw_table, default_count=8)
 class Program(ProgramBase):
     class Params:
         # A MicroMasters program: staging splits its title into name and track
@@ -199,9 +202,9 @@ class Program(ProgramBase):
     readable_id = factory.Sequence(lambda n: f"program-v1:MITxT+GEN{n}")
     program_type = factory.LazyAttribute(lambda row: "MicroMasters®" if row.micromasters else "Series")
     # One in eight not live and one in nine B2B-only, both of which the program
-    # models drop.
-    live = factory.Iterator([*[True] * 7, False])
-    b2b_only = factory.Iterator([*[False] * 8, True])
+    # models drop. Placed so the eight programs at scale 1 have one of each.
+    live = factory.Iterator([*[True] * 6, False, True])
+    b2b_only = factory.Iterator([*[False] * 5, True, *[False] * 3])
     availability = factory.Iterator(["anytime", "dated"])
     # Set in generate() on a program another requires, so it is listed as a course.
     display_mode = None
@@ -218,7 +221,7 @@ class Program(ProgramBase):
     updated_on = factory.LazyAttribute(lambda row: row.created_on)
 
 
-@fg.table(CourseBase.raw_table, default_count=12)
+@fg.table(CourseBase.raw_table, default_count=20)
 class Course(CourseBase):
     class Params:
         # A proctored exam, which MIT Learn's ETL drops by its title.
@@ -242,7 +245,7 @@ class CourseRun(CourseRunBase):
         state = "open"
 
     title = factory.LazyAttribute(lambda row: row.course["title"])
-    run_tag = factory.Sequence(lambda n: f"{n % 3 + 1}T{2024 + n // 3}")
+    run_tag = factory.Sequence(lambda n: f"R{n}")
     courseware_id = factory.LazyAttribute(lambda row: f"{row.course['readable_id']}+{row.run_tag}")
     courseware_url_path = factory.LazyAttribute(lambda row: f"/learn/course/{row.courseware_id}/home")
     has_courseware_url = True
@@ -264,8 +267,9 @@ class CourseRun(CourseRunBase):
             "upcoming": UPCOMING_RUN_START,
         }[row.state]
     )
-    # Before today for every run but an upcoming one's, which opened in 2025,
-    # so an open or upcoming run's window is open whenever the model builds.
+    # Thirty days before the start, or in 2025 for an upcoming run: before the
+    # extract either way, so an open or upcoming run's window is open whenever
+    # the model builds.
     enrollment_start = factory.LazyAttribute(
         lambda row: (
             fg.draw("datetime.datetime", start=2025, end=2025)
@@ -362,7 +366,8 @@ def _product_page(**declarations: Any) -> dict[str, Any]:
         "hubspot_form_id": "",
         "show_stay_updated": False,
         # One in nine left out of the Learn catalog, which unpublishes it there.
-        "include_in_learn_catalog": factory.Iterator([*[True] * 8, False]),
+        # The eighth, so the eight programs at scale 1 have one.
+        "include_in_learn_catalog": factory.Iterator([*[True] * 7, False, True]),
         "hyl_choice_learn_by_doing": None,
         "hyl_choice_learn_on_demand": None,
         "hyl_choice_learn_from_others": None,
@@ -464,7 +469,8 @@ def _runs(courses: list[Row], course_type: Row) -> tuple[list[Row], list[Row]]:
     for number, course in enumerate(courses):
         runs += [CourseRun.build(course=course, state="open"), CourseRun.build(course=course, state="closed")]
         if number % 5 == 4:
-            runs.append(CourseRun.build(course=course, state="upcoming"))
+            # Every other one a source run, which a program's next start skips.
+            runs.append(CourseRun.build(course=course, state="upcoming", is_source_run=number % 10 == 4))
         # One in six has a run in a language it has a non-default variant set
         # for: that run is a variant, and unpublished.
         if number % 6 == 5:
@@ -540,8 +546,9 @@ def _product_pages(
     :returns: The wagtail pages and the product pages.
     """
     # One in seven a draft, which the models drop. Seven shares no factor with
-    # the course (10) and program (8) live cycles.
-    lives = [number % 7 != 6 for number in range(len(products))]
+    # the course (10) and program (8) live cycles, and the third product is the
+    # first draft so the eight programs at scale 1 have one.
+    lives = [number % 7 != 2 for number in range(len(products))]
     wagtail = tree.add(
         [
             Page.build(title=product["title"], slug=_slug(product["readable_id"]), content_type=page_type, live=live)
@@ -572,18 +579,20 @@ def generate(hand_written: Mapping[str, list[Row]], scale: float) -> dict[str, l
     images = Image.build_batch(fg.scaled_count(Image, scale))
 
     programs = [Program.build(micromasters=number % 3 == 2) for number in range(fg.scaled_count(Program, scale))]
-    # One in thirteen a proctored exam. One in four outside any program, the
+    # One in eleven a proctored exam. One in four outside any program, the
     # rest drawn among the programs: about two courses to a program.
     course_count = fg.scaled_count(Course, scale)
-    courses = [Course.build(proctored=number % 13 == 12) for number in range(course_count)]
+    courses = [Course.build(proctored=number % 11 == 10) for number in range(course_count)]
     homes = [None if number % 4 == 3 else program for number, program in enumerate(fg.pick(programs, course_count))]
     runs, variants = _runs(courses, course_type)
 
-    # The second program and every fifth after it require the program before
-    # them, which is then listed as a course of theirs.
-    required = {program["id"]: programs[number - 1] for number, program in enumerate(programs) if number % 5 == 1}
-    for required_program in required.values():
-        required_program["display_mode"] = "course"
+    # The second program and every third after it require the program before
+    # them. Every other required program is shown as a course, and the rest
+    # stand for their own courses in the requiring program's list.
+    required = {program["id"]: programs[number - 1] for number, program in enumerate(programs) if number % 3 == 1}
+    for number, required_program in enumerate(required.values()):
+        if number % 2 == 0:
+            required_program["display_mode"] = "course"
     requirement_tree = Tree(
         hand_written[ProgramRequirementBase.raw_table], alphabet=TREE_ALPHABETS[ProgramRequirementBase.raw_table]
     )
@@ -632,8 +641,13 @@ def generate(hand_written: Mapping[str, list[Row]], scale: float) -> dict[str, l
         for order, instructor in enumerate(fg.pair(all_instructors, 1 + number % 2))
     ]
 
-    all_topics = [*hand_written[CoursesTopicBase.raw_table], *topics]
-    all_departments = [*hand_written[DepartmentBase.raw_table], *departments]
+    # Linked from Learn's names only: the hand-written Data Engineering topic
+    # and Local Fixture Studies department are ones Learn drops.
+    learn_topics = {name for parent, children in LEARN_TOPICS.items() for name in (parent, *children)}
+    all_topics = [row for row in [*hand_written[CoursesTopicBase.raw_table], *topics] if row["name"] in learn_topics]
+    all_departments = [
+        row for row in [*hand_written[DepartmentBase.raw_table], *departments] if row["name"] in LEARN_DEPARTMENTS
+    ]
     return {
         CoursesTopicBase.raw_table: topics,
         DepartmentBase.raw_table: departments,
@@ -643,11 +657,13 @@ def generate(hand_written: Mapping[str, list[Row]], scale: float) -> dict[str, l
         CourseRunBase.raw_table: runs,
         SupportedVariantBase.raw_table: variants,
         CourseRunEnrollmentModesBase.raw_table: _modes(runs, audit, verified),
-        # Four in five programs offer the verified mode, which certifies them.
+        # Four in five programs offer the verified mode, which certifies them,
+        # and one in five of those the audit mode too, which adds a free price.
         ProgramEnrollmentModesBase.raw_table: [
-            ProgramEnrollmentModesBase.build(program=program, enrollmentmode=verified)
+            ProgramEnrollmentModesBase.build(program=program, enrollmentmode=mode)
             for number, program in enumerate(programs)
             if number % 5 != 3
+            for mode in ((audit, verified) if number % 5 == 0 else (verified,))
         ],
         ProgramRequirementBase.raw_table: requirements,
         PageBase.raw_table: course_wagtail + program_wagtail + instructor_wagtail,
