@@ -138,5 +138,5 @@ left join combined_users as combined_users2
     on enrollment_detail.user_hashed_id = combined_users2.user_hashed_id
 left join courses_detail
     on enrollment_detail.platform_name = courses_detail.platform
-    and enrollment_detail.program_id is not distinct from courses_detail.program_id
+    and enrollment_detail.program_readable_id = courses_detail.program_readable_id
     and enrollment_detail.user_email = courses_detail.user_email
