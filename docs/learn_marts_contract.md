@@ -230,11 +230,10 @@ the program's requirement tree:
 A course is listed only when its page is live, so positions have gaps. A required program is
 followed one level down: no required program requires another today.
 
-`courses_programrequirement` and `courses_program_departments` are replicated without
-deletes. A deleted tree node whose path another node took is left out (the staging model
-keeps the higher id of a path, which is the wrong row if the path went to an older sibling
-that moved up), and one whose path was not reused still appears as a child. A department
-removed from a program can linger too.
+`courses_programrequirement` and `courses_program_departments` are loaded by full refresh,
+so a deleted tree node or a department removed from a program leaves raw on the next sync.
+The staging model tests the tree path as unique. Two rows with one path are a deleted node
+whose path went to another node, one sign that the table is loaded incrementally again.
 
 Checked on 2026-10-13 against a build on production raw: the models publish the same 157
 courses and 28 programs MIT Learn does, with the same published runs, run dates, prices,
@@ -381,3 +380,4 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-09 | Tobias Macey | The OCW models leave out a bucket directory that no ocw-studio site has as its `url_path` (the old path of a renamed site), which had put two rows with one `readable_id` and `run_id` in `integrations__learn__ocw_courses`. |
 | 2026-10-13 | Tobias Macey | MITx Online models rebuilt on what MIT Learn's MITx Online ETL reads from the MITx Online catalog API. Added `integrations__learn__mitxonline_runs` and `integrations__learn__mitxonline_program_children`. `runs`, `courses`, `url`, `page_slug`, `price`, `length`, `effort`, `instructors` and `program_type` are gone from the courses and programs models; `topics` and `departments` are arrays; `published` follows MIT Learn's rule; B2B-only programs are left out and courses that are not live are included. |
 | 2026-10-15 | Tobias Macey | `integrations__learn__oll_courses` rebuilt on what MIT Learn's OLL ETL writes. OCW-offered rows are included under Learn's `{course_number}+{semester}_{year}` id, with `offered_by` `ocw` (else `mitx`); only Learn's `SKIP_OCW_COURSES` run is left out. Added `run_id`, `course_number`, `offered_by`, `level`, `instructors`, `year`, `semester`, `duration`, `min_weeks`, `max_weeks`, `time_commitment`, `min_weekly_hours` and `max_weekly_hours`; `topics` is an array of the sheet's MITx Online topics; `published` follows the sheet; `runs` is gone. |
+| 2026-10-16 | Tobias Macey | `courses_programrequirement` and `courses_program_departments` load by full refresh, so deleted tree nodes and departments leave `integrations__learn__mitxonline_program_children`, the programs' `departments` and `start_date`, and the courses' `certification_type`. No column changes. |
