@@ -3,7 +3,9 @@
 # +integrations__learn__xpro_courses, _programs and _runs read. Loaded by
 # `ol-dbt fixtures load`. The columns are from `ol-dbt fixtures capture`, which
 # leaves out Airbyte's _airbyte_meta struct. Every row is invented: nothing here
-# is copied from a deployed xPRO.
+# is copied from a deployed xPRO. These rows carry the branches the Learn models
+# take; src/ol_dbt_cli/ol_dbt_cli/fixture_factories/xpro__app_postgres/ adds
+# generated rows around them (`--no-generate` loads these alone).
 schema_version: 1
 tables:
   raw__xpro__app__postgres__cms_certificatepage:
