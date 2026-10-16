@@ -16,10 +16,15 @@ INVENTORY_UNIT = (
 )
 
 # RFC 12711 step 8's pilot slice. dim_organization, dim_contract and
-# bridge_organization_courserun read exactly these three, so a source that
+# bridge_organization_courserun read exactly these four, so a source that
 # drops one silently produces a partial B2B dimensional build.
 B2B_PILOT_TABLES = frozenset(
-    {"b2b_organizationpage", "b2b_contractpage", "courses_courserun"}
+    {
+        "b2b_organizationpage",
+        "b2b_contractpage",
+        "courses_courserun",
+        "courses_courserun_b2b_contracts",
+    }
 )
 
 
@@ -43,6 +48,10 @@ def test_spec_matches_the_inventory_unit() -> None:
 def test_b2b_pilot_upstreams_are_covered() -> None:
     selected = {table.name for table in mitxonline_app.MITXONLINE_APP_SPEC.tables}
     assert B2B_PILOT_TABLES <= selected
+    resources = mitxonline_app.build_source().resources
+    assert {
+        f"raw__mitxonline__app__postgres__{name}" for name in B2B_PILOT_TABLES
+    } <= set(resources)
 
 
 def test_password_hash_is_excluded() -> None:

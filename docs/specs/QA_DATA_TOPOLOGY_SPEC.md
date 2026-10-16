@@ -521,7 +521,7 @@ plan without complaint. So a `where` wrong in that second way still fails from t
 that table's `DROP`, leaving the unit partly refreshed and the failed table absent -- as does
 any CTAS that fails while it runs. `EXPLAIN` plans the query and reads no data.
 
-The `EXPLAIN` runs for every mirrored table, not only the two that declare a `where`. For the
+The `EXPLAIN` runs for every mirrored table, not only the three that declare a `where`. For the
 other 31 what it adds over the declaration check is that the masking expressions themselves
 plan. That is one more connection and one more Vault dynamic credential per table per refresh.
 
@@ -536,7 +536,7 @@ build of that staging model with the column's name, which is loud and in the rig
 
 ### The allowlists
 
-33 tables across 11 units. Each allowlist is the columns the reading models name, found by
+34 tables across 12 units. Each allowlist is the columns the reading models name, found by
 text-matching the production column list against each model and the macros it calls, plus the
 raw metadata column. Unread columns are dropped, which is how `mitx_person_course`'s `ip`,
 `city`, `postalcode` and coordinates never reach QA. Read columns that identify a person are
@@ -568,7 +568,7 @@ masked:
   containing `@`, and the only ones with a run of seven or more digits are 24
   `content_cue_<uuid>` labels.
 
-Two tables are filtered:
+Three tables are filtered:
 
 - `raw__edxorg__program_learner_report`: 14.4B rows, 760 GB. Airbyte re-reads the same report
   files every day (their mtimes stop at 2025-03-13) and appends about 15M rows per sync. The
@@ -577,8 +577,17 @@ Two tables are filtered:
   dedupes on user, course run and program either way.
 - `raw__edxorg__s3__tracking_logs`: 2.2B rows, 245 GB. The mirror keeps 30 days of syncs and
   drops `edx.user.settings.changed` events.
+- `raw__edxorg__s3__tables__courseware_studentmodule`: 13.8B rows, 1,124 GB, in 30,373
+  unpartitioned, unsorted data files (2026-10-15). The mirror keeps the `MITx/14.73x` runs, by
+  a range on `course_id`. Iceberg truncates the file-level `course_id` bounds to 16
+  characters, so a `course-v1:MITx+` id prunes to 19-300 GB of files, while the old-style
+  `MITx/14.73x` range prunes to 42 files and 1.8 GB (read from the manifests, not from a
+  StarRocks plan). Its course-v1 runs are not copied. `state` keeps only `attempts` and
+  `seed`. `student_answers` is what the learner typed, and `correct_map`'s per-part `msg` and
+  `hint` come from the grader, which can quote the answer back. No model reads
+  `stg__edxorg__s3__courseware_studentmodule` yet. The mirror gives its QA build a source.
 
-edxorg/mysql's six declared tables are copied whole. The load appends every export, so raw holds
+edxorg/mysql's other six tables are copied whole. The load appends every export, so raw holds
 each row once per export it appeared in, and the staging models keep the newest by
 `_file_modified_at`. A filter on that column would drop rows rather than duplicates: 312M of
 `auth_user`'s 379M rows sit in data files whose newest `_file_modified_at` falls between
@@ -607,10 +616,6 @@ and are kept, because `tfact_discussion_events` reads them. That text is copied 
 
 Not declared, so not mirrored:
 
-- edxorg/mysql's `courseware_studentmodule`: 13.8B rows in 1,124 GB (current snapshot,
-  2026-10-07). Its `state` column is the learner's saved answer, which
-  `stg__edxorg__s3__courseware_studentmodule` reads and no column mode masks, and no model
-  reads that staging model.
 - Tables absent from production raw: `raw__edxorg__discovery__api__programs` and
   `raw__edxorg__s3__course_xml_blocks`.
 - Unmodeled tables (most of zendesk, salesforce `Account`), which nothing reads.
@@ -641,7 +646,7 @@ tables and a shared one would queue a small unit behind the 760 GB `program_lear
 
 Naming the pool only makes the limit settable. The instance config sets no
 `concurrency.pools.default_limit` (ol-infrastructure `dagster_instance.yaml`), so until each of
-the eleven pools is given a slot limit of 1 under Deployment -> Concurrency, concurrent runs of one
+the twelve pools is given a slot limit of 1 under Deployment -> Concurrency, concurrent runs of one
 unit are still unbounded. Setting those limits is a deploy-time step, not something this repo can
 assert.
 

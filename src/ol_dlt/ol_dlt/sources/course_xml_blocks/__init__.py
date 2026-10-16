@@ -35,12 +35,13 @@ one JSON Lines file of blocks per structure version
         edxorg-raw-data/edxorg/processed_data/course_blocks/
             <course>|{prod,edge}/<structure hash>.json
 
-An Airbyte source-s3 connection loads those into raw__edxorg__s3__course_blocks,
-and on 2026-10-05 that table held 6,466 of the 9,860 landed files. This source
-loads them into raw__edxorg__s3__course_structure_blocks, which is to replace
-it. A re-materialized structure overwrites its file with a new retrieved_at, so
-the landing zone holds only the latest copy of each: the Airbyte table has
-earlier copies of 1,918 files that this source cannot read.
+An Airbyte source-s3 connection loaded the |prod files into
+raw__edxorg__s3__course_blocks until 2026-10. This source loads both instances
+into raw__edxorg__s3__course_structure_blocks, which replaced it, and staging
+keeps prod. A re-materialized structure overwrites its file with a new
+retrieved_at, so the landing zone holds only the latest copy of each: the
+retired Airbyte table has earlier copies of 1,918 files that this source cannot
+read.
 
 The openedx code location writes the same un-nested structure blocks for its
 three deployments (dg_projects/openedx/.../openedx.py::course_structure):

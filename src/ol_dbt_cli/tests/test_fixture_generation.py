@@ -14,7 +14,7 @@ import json
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import factory
 import factory.fuzzy
@@ -29,6 +29,7 @@ from ol_dbt_cli.lib.fixture_generation import (
     draw,
     generate_rows,
     link,
+    or_null,
     pair,
     pick,
     scaled_count,
@@ -36,8 +37,12 @@ from ol_dbt_cli.lib.fixture_generation import (
     table,
     value,
 )
+from ol_dbt_cli.lib.fixture_trees import Tree
 from ol_dbt_cli.lib.inventory import Unit, load_units
 from ol_dbt_cli.lib.raw_fixtures import UnitFactories, UnitFixture, coerce_value, load_fixtures, unit_factories
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
 
 FACTORY_PACKAGES = Path(__file__).parent / "fixtures"
 PREFIX = "raw__demo__app__postgres__"
@@ -158,9 +163,9 @@ def _digest(rows: dict[str, list[dict[str, Any]]]) -> str:
 def test_one_seed_generates_the_same_rows_twice(tmp_path: Path, demo: UnitFactories) -> None:
     fixture, unit = _unit(tmp_path)
 
-    first = generate_rows(fixture, unit, demo)
+    first = generate_rows(fixture, unit, demo).generated
 
-    assert generate_rows(fixture, unit, demo) == first
+    assert generate_rows(fixture, unit, demo).generated == first
     assert [len(first[raw_table]) for raw_table in (COURSES, PAGES, RUNS, USERS, ENROLLMENTS)] == [4, 4, 8, 6, 12]
 
 
@@ -171,16 +176,23 @@ def test_another_seed_generates_other_rows(tmp_path: Path, demo: UnitFactories) 
     assert generate_rows(fixture, unit, reseeded) != generate_rows(fixture, unit, demo)
 
 
+def test_a_seed_given_to_generate_rows_stands_in_for_the_package_seed(tmp_path: Path, demo: UnitFactories) -> None:
+    fixture, unit = _unit(tmp_path)
+    reseeded: Any = SimpleNamespace(SEED=demo.SEED + 1, generate=demo.generate)
+
+    assert generate_rows(fixture, unit, demo, seed=demo.SEED + 1) == generate_rows(fixture, unit, reseeded)
+
+
 def test_a_dependency_bump_that_changes_the_rows_fails_here(tmp_path: Path, demo: UnitFactories) -> None:
     fixture, unit = _unit(tmp_path)
 
-    assert _digest(generate_rows(fixture, unit, demo)) == PINNED_DIGEST
+    assert _digest(generate_rows(fixture, unit, demo).generated) == PINNED_DIGEST
 
 
 def test_each_table_counts_from_past_its_own_hand_written_keys(tmp_path: Path, demo: UnitFactories) -> None:
     fixture, unit = _unit(tmp_path)
 
-    generated = generate_rows(fixture, unit, demo)
+    generated = generate_rows(fixture, unit, demo).generated
 
     assert [row["id"] for row in generated[COURSES]] == [8, 9, 10, 11]
     assert [row["page_ptr_id"] for row in generated[PAGES]] == [4, 5, 6, 7]
@@ -257,7 +269,7 @@ def test_table_rejects_a_default_count_that_is_not_a_positive_integer(default_co
 def test_rows_reference_the_rows_they_were_built_from(tmp_path: Path, demo: UnitFactories) -> None:
     fixture, unit = _unit(tmp_path)
 
-    generated = generate_rows(fixture, unit, demo)
+    generated = generate_rows(fixture, unit, demo).generated
 
     readable_ids = {int(row["id"]): row["readable_id"] for row in HAND_WRITTEN_COURSES + generated[COURSES]}
     assert sorted(page["course_id"] for page in generated[PAGES]) == [8, 9, 10, 11]
@@ -295,7 +307,7 @@ def test_pick_draws_with_repeats() -> None:
 def test_generated_addresses_are_on_the_reserved_domain(tmp_path: Path, demo: UnitFactories) -> None:
     fixture, unit = _unit(tmp_path)
 
-    generated = generate_rows(fixture, unit, demo, scale=10)
+    generated = generate_rows(fixture, unit, demo, scale=10).generated
 
     addresses = [user[column] for user in generated[USERS] for column in ("email", "contact_email")]
     assert all(address.endswith(f"@{RESERVED_DOMAIN}") for address in addresses)
@@ -347,7 +359,7 @@ def test_building_before_seeding_is_an_error(monkeypatch: pytest.MonkeyPatch) ->
 def test_rows_come_back_as_their_columns_hold_them(tmp_path: Path, demo: UnitFactories) -> None:
     fixture, unit = _unit(tmp_path)
 
-    generated = generate_rows(fixture, unit, demo)
+    generated = generate_rows(fixture, unit, demo).generated
 
     course, run, user = generated[COURSES][0], generated[RUNS][0], generated[USERS][0]
     assert isinstance(course["price"], Decimal)
@@ -362,7 +374,7 @@ def test_rows_come_back_as_their_columns_hold_them(tmp_path: Path, demo: UnitFac
 def test_the_loaders_columns_are_filled_where_the_factory_left_them_out(tmp_path: Path, demo: UnitFactories) -> None:
     fixture, unit = _unit(tmp_path)
 
-    generated = generate_rows(fixture, unit, demo)
+    generated = generate_rows(fixture, unit, demo).generated
 
     raw_ids = [course["_airbyte_raw_id"] for course in generated[COURSES]]
     assert len(set(raw_ids)) == len(raw_ids)
@@ -377,7 +389,7 @@ def test_the_loaders_columns_are_filled_where_the_factory_left_them_out(tmp_path
 def test_a_loader_column_the_factory_set_is_kept(tmp_path: Path) -> None:
     fixture, unit = _unit(tmp_path)
 
-    generated = generate_rows(fixture, unit, _stub({COURSES: [{"id": 8, "_airbyte_generation_id": 3}]}))
+    generated = generate_rows(fixture, unit, _stub({COURSES: [{"id": 8, "_airbyte_generation_id": 3}]})).generated
 
     assert generated[COURSES][0]["_airbyte_generation_id"] == 3  # noqa: PLR2004
 
@@ -429,7 +441,7 @@ def test_coerce_value(fixture_type: str, generated: Any, expected: Any) -> None:
 )
 def test_a_value_its_column_cannot_hold_names_the_column(tmp_path: Path, column: str, generated: Any) -> None:
     fixture, unit = _unit(tmp_path)
-    message = f"demo/app_postgres factories: {COURSES} generated row 2 has .* in column {column}, which is not a "
+    message = f"demo/app_postgres factories: {COURSES} generated row 2 has .* in column {column}, which is not a valid "
 
     with pytest.raises(ValueError, match=message):
         generate_rows(fixture, unit, _stub({COURSES: [{"id": 8}, {"id": 9, column: generated}]}))
@@ -453,7 +465,7 @@ def test_generated_rows_are_validated(tmp_path: Path, generated: dict[str, list[
 def test_scale_multiplies_every_default_count(tmp_path: Path, demo: UnitFactories) -> None:
     fixture, unit = _unit(tmp_path)
 
-    generated = generate_rows(fixture, unit, demo, scale=2.5)
+    generated = generate_rows(fixture, unit, demo, scale=2.5).generated
 
     assert [len(generated[raw_table]) for raw_table in (COURSES, PAGES, RUNS, USERS, ENROLLMENTS)] == [
         10,
@@ -462,6 +474,23 @@ def test_scale_multiplies_every_default_count(tmp_path: Path, demo: UnitFactorie
         15,
         30,
     ]
+
+
+@pytest.mark.parametrize(("share", "nulls"), [(0.0, range(0, 1)), (0.5, range(10, 31)), (1.0, range(40, 41))])
+def test_or_null_leaves_a_seeded_share_of_rows_null(share: float, nulls: range) -> None:
+    @table("raw__demo__app__postgres__notes", default_count=1)
+    class Note(RowFactory):
+        id = factory.Sequence(lambda n: n)
+        body = or_null(value("text.word"), share=share)
+
+    def bodies() -> list[Any]:
+        seed_generation(3)
+        return [row["body"] for row in Note.build_batch(40)]
+
+    first = bodies()
+
+    assert bodies() == first
+    assert sum(body is None for body in first) in nulls
 
 
 def test_scaled_count_never_reaches_zero() -> None:
@@ -478,3 +507,117 @@ def test_generate_rows_rejects_a_scale_that_is_not_positive(tmp_path: Path, scal
 
     with pytest.raises(ValueError, match="expected a positive number"):
         generate_rows(fixture, unit, _stub({}), scale=scale)
+
+
+PAGE_TREE = f"{PREFIX}wagtailcore_page"
+TREE_TABLES: dict[str, dict[str, Any]] = {
+    PAGE_TREE: {
+        "primary_key": "id",
+        "columns": {
+            "id": "long",
+            "path": "string",
+            "depth": "long",
+            "numchild": "long",
+            "slug": "string",
+            "url_path": "string",
+        },
+        "rows": [{"id": 1, "path": "0001", "depth": 1, "numchild": 0, "slug": "home", "url_path": "/home/"}],
+    }
+}
+
+
+def _pages_under_the_hand_written_root(hand_written: Mapping[str, list[dict[str, Any]]], scale: float) -> Any:
+    (home,) = hand_written[PAGE_TREE]
+    return {PAGE_TREE: Tree(hand_written[PAGE_TREE]).add([{"id": 2, "slug": "a"}, {"id": 3, "slug": "b"}], under=home)}
+
+
+def test_a_hand_written_parent_loads_as_generate_left_it(tmp_path: Path) -> None:
+    fixture, unit = _unit(tmp_path, TREE_TABLES)
+    package: Any = SimpleNamespace(SEED=1, generate=_pages_under_the_hand_written_root)
+
+    rows = generate_rows(fixture, unit, package)
+
+    assert rows.hand_written[PAGE_TREE][0]["numchild"] == 2
+    assert [row["url_path"] for row in rows.generated[PAGE_TREE]] == ["/home/a/", "/home/b/"]
+    # The parsed fixture is not changed.
+    assert fixture.tables[0].rows[0]["numchild"] == 0
+
+
+def _changing(change: Callable[[list[dict[str, Any]]], Any]) -> Any:
+    def generate(hand_written: Mapping[str, list[dict[str, Any]]], scale: float) -> dict[str, Any]:
+        change(hand_written[PAGE_TREE])
+        return {}
+
+    return SimpleNamespace(SEED=1, generate=generate)
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (
+            lambda rows: rows.append({"id": 2, "path": "0002"}),
+            f"generate left 2 hand-written rows of {PAGE_TREE}, not the file's 1",
+        ),
+        (lambda rows: rows.clear(), "generate left 0 hand-written rows"),
+        (lambda rows: rows[0].update(id=5), "hand-written row 1: generate changed primary key column id"),
+        (lambda rows: rows[0].update(owner=5), "hand-written row 1 sets owner, which the table does not have"),
+        (
+            lambda rows: rows[0].update(numchild="many"),
+            "hand-written row 1 has 'many' in column numchild, which is not a valid long",
+        ),
+    ],
+)
+def test_a_hand_written_row_keeps_its_key_and_its_place(
+    tmp_path: Path, change: Callable[[list[dict[str, Any]]], Any], message: str
+) -> None:
+    fixture, unit = _unit(tmp_path, TREE_TABLES)
+
+    with pytest.raises(ValueError, match=message):
+        generate_rows(fixture, unit, _changing(change))
+
+
+def _keyed_by(key_type: str, key: Any) -> dict[str, dict[str, Any]]:
+    pages = TREE_TABLES[PAGE_TREE]
+    return {
+        PAGE_TREE: {
+            **pages,
+            "columns": {**pages["columns"], "id": key_type},
+            "rows": [{**pages["rows"][0], "id": key}],
+        }
+    }
+
+
+def test_a_key_that_equals_its_old_value_and_is_stored_differently_is_a_new_key(tmp_path: Path) -> None:
+    # 1.0 == 1, and a string key stores them as '1.0' and '1'.
+    fixture, unit = _unit(tmp_path, _keyed_by("string", 1))
+
+    with pytest.raises(ValueError, match="hand-written row 1: generate changed primary key column id"):
+        generate_rows(fixture, unit, _changing(lambda rows: rows[0].update(id=1.0)))
+
+
+def test_a_key_stored_as_it_was_is_the_same_key(tmp_path: Path) -> None:
+    fixture, unit = _unit(tmp_path, _keyed_by("long", "1"))
+
+    rows = generate_rows(fixture, unit, _changing(lambda rows: rows[0].update(id=1)))
+
+    assert rows.hand_written[PAGE_TREE][0]["id"] == 1
+
+
+def test_a_table_keyed_by_a_column_the_file_leaves_out_is_not_compared(tmp_path: Path) -> None:
+    # The fixture may leave a key column out until the unit generates rows for it.
+    tables = {PAGE_TREE: {**TREE_TABLES[PAGE_TREE], "primary_key": "uuid"}}
+    fixture, unit = _unit(tmp_path, tables)
+
+    rows = generate_rows(fixture, unit, _changing(lambda rows: rows[0].update(numchild=1)))
+
+    assert rows.hand_written[PAGE_TREE][0]["numchild"] == 1
+
+
+@pytest.mark.parametrize("changed", ["3", 3.0, 0.0])
+def test_a_changed_hand_written_value_is_held_as_its_column_holds_it(tmp_path: Path, changed: Any) -> None:
+    fixture, unit = _unit(tmp_path, TREE_TABLES)
+
+    rows = generate_rows(fixture, unit, _changing(lambda rows: rows[0].update(numchild=changed)))
+
+    held = rows.hand_written[PAGE_TREE][0]["numchild"]
+    assert (held, type(held)) == (int(changed), int)

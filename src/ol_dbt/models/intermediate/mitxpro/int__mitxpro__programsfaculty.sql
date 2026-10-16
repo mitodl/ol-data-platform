@@ -4,9 +4,7 @@ with programpages as (
 )
 
 , facultymemberspage as (
-    select
-        *
-        , cast(json_parse(cms_facultymemberspage_faculty) as array (json)) as cms_facultymemberspage_faculty_array
+    select *
     from {{ ref('stg__mitxpro__app__postgres__cms_facultymemberspage') }}
 )
 
@@ -18,12 +16,11 @@ with programpages as (
 , unnestedfacultymemberspage as (
     select
         facultymemberspage.wagtail_page_id
-        , json_format(cms_facultymemberspage_facultymember) as cms_facultymemberspage_facultymember -- noqa
+        , {{ json_to_varchar('cms_facultymemberspage_facultymember') }} as cms_facultymemberspage_facultymember -- noqa
 
     from facultymemberspage
     cross join
-        unnest(facultymemberspage.cms_facultymemberspage_faculty_array)
-        as t(cms_facultymemberspage_facultymember) -- noqa
+        {{ unnest_json_array('facultymemberspage.cms_facultymemberspage_faculty', 't', 'cms_facultymemberspage_facultymember') }} -- noqa
 
 )
 

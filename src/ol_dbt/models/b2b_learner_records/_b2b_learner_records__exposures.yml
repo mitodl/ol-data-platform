@@ -1,0 +1,22 @@
+---
+# See b2b_analytics/_b2b_analytics__exposures.yml for what an exposure commits
+# these views to.
+version: 2
+exposures:
+- name: ol_analytics_api_b2b_learner_records
+  label: ol-analytics-api B2B learner records
+  type: application
+  maturity: high
+  url: https://github.com/mitodl/ol-analytics-api/tree/main/src/ol_analytics_api/tenants/b2b_learner_records
+  description: >
+    The b2b_learner_records tenant of ol-analytics-api, which gives a partner
+    organization's systems per-learner enrollment and progress records. It
+    withholds outcome columns from a learner whose outcomes_shared is false.
+  config:
+    enabled: "{{ target.type == 'starrocks' }}"
+  owner:
+    name: data-platform
+  depends_on:
+  - ref('mv_b2b_learner_enrollment')
+  - ref('mv_b2b_learner')
+  - ref('mv_b2b_contract_courserun')

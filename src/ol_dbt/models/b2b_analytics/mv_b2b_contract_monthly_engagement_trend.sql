@@ -37,13 +37,12 @@
 -- contributing_learners counts every learner behind the row (active, enrolling
 -- or certified in the month) and is the cohort the API gates the whole row on.
 --
--- A learner is counted under the contract that owns the course run the
--- activity happened in, so a learner active under two contracts contributes to
--- both rows -- the contract rows therefore do not partition the org's learner
--- count, and summing monthly_active_learners across contracts can exceed the
--- org row.
-with contract_courseruns as (
-{{ b2b_contract_courseruns() }}
+-- A learner is counted under the contract they enrolled in the course run
+-- under, so a learner active under two contracts contributes to both rows --
+-- the contract rows therefore do not partition the org's learner count, and
+-- summing monthly_active_learners across contracts can exceed the org row.
+with contracts as (
+{{ b2b_contracts() }}
 )
 
 , learner_months as (
@@ -71,8 +70,8 @@ select
     count(distinct case when lm.chatbot_interactions > 0 then lm.user_fk end) as chatbot_users,
     count(distinct lm.user_fk)                                                as contributing_learners
 from learner_months lm
-join contract_courseruns cc
-    on lm.courserun_fk = cc.courserun_pk
+join contracts cc
+    on lm.contract_fk = cc.contract_pk
 -- A row with no month is not a month the API can publish.
 where lm.activity_year_and_month is not null
 group by

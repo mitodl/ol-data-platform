@@ -29,12 +29,16 @@ from dagster_dbt import (
     DbtCliResource,
     build_dbt_asset_selection,
 )
-from dagster_dbt.asset_utils import get_asset_key_for_model
+from dagster_dbt.asset_utils import (
+    get_asset_key_for_model,
+    get_manifest_and_translator_from_dbt_assets,
+)
 from ol_dbt_cli.lib.inventory import load_units, render_dagster_intervals
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.failures import with_failure_hooks
 from ol_orchestrate.lib.sentry import init_sentry
 from ol_orchestrate.lib.utils import authenticate_vault, unauthenticated_vault
+from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 
 from lakehouse.assets.airbyte_drift import airbyte_inventory_drift
@@ -69,15 +73,20 @@ from lakehouse.assets.lakehouse.dbt_starrocks import (
 )
 from lakehouse.assets.qa_mirror import build_qa_mirror_assets
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
-from lakehouse.assets.superset import create_superset_asset
+from lakehouse.assets.superset import build_superset_dataset_assets
 from lakehouse.lib.dbt_environment import (
     DBT_AUTOMATION_ENABLED,
     STARROCKS_IS_LOCAL,
 )
+from lakehouse.lib.executor import executor_for_environment
 from lakehouse.lib.inventory import INVENTORY_DIR
 from lakehouse.lib.non_airbyte_staging import (
     non_airbyte_raw_tables,
     staging_models_reading,
+)
+from lakehouse.lib.openmetadata_asset_checks import (
+    TRINO_SERVICE,
+    table_fqns_by_asset_key,
 )
 from lakehouse.lib.scheduled_automation import schedules_for_environment
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
@@ -85,6 +94,7 @@ from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 from lakehouse.resources.starrocks import StarRocksResource
 from lakehouse.resources.superset_api import SupersetApiClientFactory
 from lakehouse.sensors import (
+    build_asset_check_openmetadata_sensor,
     iceberg_snapshot_pointer_lag_sensor,
     iceberg_snapshot_pointer_repair_job,
 )
@@ -363,28 +373,21 @@ if TRINO_SUPERSET_DATABASE_ID == STARROCKS_SUPERSET_DATABASE_ID:
     raise ValueError(msg)
 _schema_base = "ol_warehouse_production"
 
-superset_assets = [
-    create_superset_asset(
-        dbt_asset_group_name=key.path[0],
-        dbt_model_name=key.path[1],
-        database_id=TRINO_SUPERSET_DATABASE_ID,
-        database_name="trino",
-        schema_base=_schema_base,
-    )
-    for key in dbt_model_keys
-    if key.path[0] in dbt_models_for_superset_datasets
+superset_model_keys = [
+    key for key in dbt_model_keys if key.path[0] in dbt_models_for_superset_datasets
 ]
-superset_starrocks_assets = [
-    create_superset_asset(
-        dbt_asset_group_name=key.path[0],
-        dbt_model_name=key.path[1],
-        database_id=STARROCKS_SUPERSET_DATABASE_ID,
-        database_name="starrocks",
-        schema_base=_schema_base,
-    )
-    for key in dbt_model_keys
-    if key.path[0] in dbt_models_for_superset_datasets
-]
+superset_assets = build_superset_dataset_assets(
+    superset_model_keys,
+    database_id=TRINO_SUPERSET_DATABASE_ID,
+    database_name="trino",
+    schema_base=_schema_base,
+)
+superset_starrocks_assets = build_superset_dataset_assets(
+    superset_model_keys,
+    database_id=STARROCKS_SUPERSET_DATABASE_ID,
+    database_name="starrocks",
+    schema_base=_schema_base,
+)
 
 # Iceberg maintenance schedules.
 #
@@ -684,6 +687,13 @@ resources_dict = {
     ),
     "vault": vault,
     "superset_api": SupersetApiClientFactory(deployment="superset", vault=vault),
+    "openmetadata_api": ApiClientFactory(
+        deployment="openmetadata",
+        client_class="OpenMetadataApiClient",
+        mount_point="secret-data",
+        config_path="pipelines/openmetadata",
+        vault=vault,
+    ),
     "starrocks": StarRocksResource(
         vault=vault,
         vault_mount_point=STARROCKS_VAULT_MOUNT,
@@ -721,14 +731,25 @@ dbt_layer_freshness_sensor = build_sensor_for_freshness_checks(
     default_status=DefaultSensorStatus.STOPPED,
 )
 
+# The image's manifest is compiled for the production target, so these are
+# production's table FQNs whatever environment loads this. That is one reason
+# the sensor is registered in production only.
+asset_check_openmetadata_sensor = build_asset_check_openmetadata_sensor(
+    table_fqns_by_asset_key(
+        *get_manifest_and_translator_from_dbt_assets([full_dbt_project])[:2],
+        asset_keys=set(full_dbt_project.keys),
+        service=TRINO_SERVICE,
+    )
+)
+
 defs = Definitions(
     assets=with_failure_hooks(
         [
             *with_source_code_references([full_dbt_project]),
             *with_source_code_references([starrocks_dbt_assets]),
             *airbyte_assets,
-            *superset_assets,
-            *superset_starrocks_assets,
+            superset_assets,
+            superset_starrocks_assets,
             iceberg_dbt_layer_maintenance,
             iceberg_raw_layer_maintenance,
             lake_orphan_sweep,
@@ -740,9 +761,15 @@ defs = Definitions(
     ),
     asset_checks=[*dbt_layer_freshness_checks, *dimensional_schema_change_checks],
     resources=resources_dict,
+    executor=executor_for_environment(
+        DAGSTER_ENV, in_kubernetes="KUBERNETES_SERVICE_HOST" in os.environ
+    ),
     sensors=[
         iceberg_snapshot_pointer_lag_sensor,
         dbt_layer_freshness_sensor,
+        *schedules_for_environment(
+            [("asset_check_openmetadata", asset_check_openmetadata_sensor)]
+        ),
         AutomationConditionSensorDefinition(
             "dbt_automation_sensor",
             minimum_interval_seconds=14400,  # 4 hours - reduced from 1 hour

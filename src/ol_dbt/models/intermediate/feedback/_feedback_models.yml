@@ -87,8 +87,8 @@ models:
         column_list: ["conversation_ref", "turn_index"]
 
 - name: int__feedback__learn_ai_tutor
-  description: One row per user message sent to the AskTIM chatbot. Bot replies are
-    excluded.
+  description: One row per user message sent to the AskTIM chatbot. Bot replies and
+    SearchSummaryBot sessions, which hold search prompts and not feedback, are excluded.
   config:
     meta:
       qa_branches:
@@ -145,8 +145,7 @@ models:
   - name: subject_type
     description: str, what the chat concerns. 'courseware_block' for TutorBot and
       VideoGPTBot, 'course' for SyllabusBot and CanvasSyllabusBot, 'resource' for
-      ResourceRecommendationBot and SearchSummaryBot. 'unspecified' for any other
-      chatsession_agent value.
+      ResourceRecommendationBot. 'unspecified' for any other chatsession_agent value.
   - name: subject_ref
     description: str, the chatsession_object_id - a course id, video transcript asset
       id, or edX module id depending on chatsession_agent.

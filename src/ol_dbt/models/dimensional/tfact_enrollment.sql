@@ -5,6 +5,16 @@
     on_schema_change='append_new_columns'
 ) }}
 
+{#- The first incremental run after contract_fk is added reads a target without the column.
+    In a unit test `this` is the fixture's name, a string, which always has it. -#}
+{%- set target_has_contract_fk = false -%}
+{%- if is_incremental() and this is string -%}
+    {%- set target_has_contract_fk = true -%}
+{%- elif is_incremental() -%}
+    {%- set target_columns = adapter.get_columns_in_relation(this) | map(attribute='name') | map('lower') | list -%}
+    {%- set target_has_contract_fk = 'contract_fk' in target_columns -%}
+{%- endif %}
+
 -- Consolidate enrollments from all platforms
 with mitxonline_enrollments as (
     select
@@ -27,6 +37,7 @@ with mitxonline_enrollments as (
         -- mitxonline has no order FK on the enrollment record; order attribution for
         -- this platform relies on product-matching in downstream consumers.
         , cast(null as bigint) as order_id
+        , b2b_contract_id
     from {{ ref('int__mitxonline__courserunenrollments') }}
 )
 
@@ -68,6 +79,7 @@ with mitxonline_enrollments as (
         -- course run or bundling into a program purchase — downstream consumers should
         -- prefer this over reconstructing order attribution via product-matching.
         , cast(enrollments.ecommerce_order_id as bigint) as order_id
+        , cast(null as bigint) as b2b_contract_id
     from {{ ref('int__mitxpro__courserunenrollments') }} as enrollments
     left join mitxpro_program_enrollments_by_order
         on
@@ -95,6 +107,7 @@ with mitxonline_enrollments as (
         , 'edxorg' as platform_code
         , true as enrollment_is_edx_enrolled
         , cast(null as bigint) as order_id
+        , cast(null as bigint) as b2b_contract_id
     from {{ ref('int__edxorg__mitx_courserun_enrollments') }}
 )
 
@@ -122,6 +135,7 @@ with mitxonline_enrollments as (
         , 'mitxonline' as platform_code
         , cast(null as boolean) as enrollment_is_edx_enrolled
         , cast(null as bigint) as order_id
+        , b2b_contract_id
     from {{ ref('int__mitxonline__programenrollments') }}
 )
 
@@ -144,6 +158,7 @@ with mitxonline_enrollments as (
         , 'residential' as platform_code
         , true as enrollment_is_edx_enrolled
         , cast(null as bigint) as order_id
+        , cast(null as bigint) as b2b_contract_id
     from {{ ref('int__mitxresidential__courserun_enrollments') }}
 )
 
@@ -166,6 +181,7 @@ with mitxonline_enrollments as (
         , 'bootcamps' as platform_code
         , cast(null as boolean) as enrollment_is_edx_enrolled
         , cast(null as bigint) as order_id
+        , cast(null as bigint) as b2b_contract_id
     from {{ ref('int__bootcamps__courserunenrollments') }}
 )
 
@@ -213,6 +229,7 @@ with mitxonline_enrollments as (
         , 'emeritus' as platform_code
         , cast(null as boolean) as enrollment_is_edx_enrolled
         , cast(null as bigint) as order_id
+        , cast(null as bigint) as b2b_contract_id
     from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }} as emeritus_enrollments
     left join mitxpro_external_readable_id_lookup
         on emeritus_enrollments.courserun_external_readable_id
@@ -253,6 +270,7 @@ with mitxonline_enrollments as (
         , 'global_alumni' as platform_code
         , cast(null as boolean) as enrollment_is_edx_enrolled
         , cast(null as bigint) as order_id
+        , cast(null as bigint) as b2b_contract_id
     from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }} as global_alumni_enrollments
     left join mitxpro_external_readable_id_lookup
         on global_alumni_enrollments.courserun_external_readable_id
@@ -348,6 +366,14 @@ with mitxonline_enrollments as (
         and platform is not null
 )
 
+-- MITx Online B2B contracts. An enrollment records the contract it was made under, and
+-- a course run can be offered under several, so the contract is read from the enrollment
+-- rather than from the run.
+, dim_contract as (
+    select contract_pk, contract_id
+    from {{ ref('dim_contract') }}
+)
+
 -- dim_platform not in Phase 1-2
 
 , dim_platform_lookup as (
@@ -384,6 +410,7 @@ with mitxonline_enrollments as (
         , coalesce(dim_course_run.courserun_pk, dim_course_run_mitxpro.courserun_pk) as courserun_fk
         , coalesce(dim_program.program_pk, micromasters_program_lookup.micromasters_program_pk) as program_fk
         , dim_platform_lookup.platform_pk as platform_fk
+        , dim_contract.contract_pk as contract_fk
         , {{ iso8601_to_date_key('enrollment_created_on') }} as enrollment_date_key
     from combined_enrollments
     left join user_lookup as ul_mitxonline
@@ -432,6 +459,9 @@ with mitxonline_enrollments as (
         and combined_enrollments.platform = micromasters_program_lookup.platform
     left join dim_platform_lookup
         on combined_enrollments.platform = dim_platform_lookup.platform_readable_id
+    left join dim_contract
+        on combined_enrollments.platform = 'mitxonline'
+        and combined_enrollments.b2b_contract_id = dim_contract.contract_id
 )
 
 {% if is_incremental() %}
@@ -450,15 +480,17 @@ with mitxonline_enrollments as (
     group by platform, enrollment_type
 )
 
--- Snapshot of the target's current (enrollment_key, user_fk, courserun_fk) triples, used to
--- re-select rows whose user_fk has gone stale after a dim_user re-key, or whose courserun_fk
--- has changed (e.g. an Emeritus run code that gains an xPro match). The source row itself did
--- not change, so the activity-timestamp watermark alone would never catch either.
+-- Snapshot of the target's current foreign keys, used to re-select rows whose user_fk has
+-- gone stale after a dim_user re-key, whose courserun_fk has changed (e.g. an Emeritus run
+-- code that gains an xPro match), or whose contract_fk has (MITx Online backfilled the
+-- enrollment's contract without moving updated_on past our watermark). The source row
+-- itself did not change, so the activity-timestamp watermark alone would never catch these.
 , stale_fk_lookup as (
     select
         enrollment_key
         , user_fk as stored_user_fk
         , courserun_fk as stored_courserun_fk
+        , {% if target_has_contract_fk %}contract_fk{% else %}cast(null as varchar){% endif %} as stored_contract_fk
     from {{ this }}
 )
 {% endif %}
@@ -477,6 +509,7 @@ with mitxonline_enrollments as (
         , ewf.courserun_fk
         , ewf.program_fk
         , ewf.platform_fk
+        , ewf.contract_fk
         , ewf.platform
         , ewf.enrollment_is_active
         , ewf.enrollment_mode
@@ -514,6 +547,8 @@ with mitxonline_enrollments as (
         or sfk.stored_user_fk is distinct from ewf.user_fk
         -- course run re-resolved: re-select rows whose resolved courserun_fk no longer matches
         or sfk.stored_courserun_fk is distinct from ewf.courserun_fk
+        -- contract added or re-resolved, including every B2B row on the run that adds the column
+        or sfk.stored_contract_fk is distinct from ewf.contract_fk
     )
     {% endif %}
 )
@@ -532,6 +567,7 @@ with mitxonline_enrollments as (
         , courserun_fk
         , program_fk
         , platform_fk
+        , contract_fk
         , platform
         , enrollment_is_active
         , enrollment_mode
@@ -556,6 +592,7 @@ select
     , courserun_fk
     , program_fk
     , platform_fk
+    , contract_fk
     , platform
     , enrollment_is_active
     , enrollment_mode

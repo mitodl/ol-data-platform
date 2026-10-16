@@ -21,6 +21,7 @@ materialization moves to a new directory on every build and the sweep collects
 the old one, so the raw layer is where the bytes are.
 """
 
+import os
 from datetime import UTC, datetime
 from typing import Any
 
@@ -34,6 +35,7 @@ from ol_orchestrate.lib.iceberg_maintenance import (
 )
 from ol_orchestrate.lib.iceberg_orphan_files import (
     DatabaseOrphanFiles,
+    S3DeletionManifests,
     S3ObjectStore,
     remove_database_orphan_files,
 )
@@ -54,6 +56,11 @@ ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS = 7
 # Each worker holds one table's reachable-file set and its eligible orphans in
 # memory, so this bounds memory as much as it bounds S3 and Glue request rates.
 ICEBERG_ORPHAN_FILES_WORKERS = 4
+
+# Under the Dagster bucket, not the lake: a prefix in a lake bucket that no Glue
+# table references is what lake_orphan_sweep reports. One run's manifests sit
+# under <prefix>/<run_id>/, one object per table.
+DELETION_MANIFEST_PREFIX = "iceberg-orphan-files/deletions"
 
 # Enough rows to review in the Dagster UI without making the event too large to
 # render. The counts above it are never capped.
@@ -122,6 +129,15 @@ def iceberg_raw_orphan_files(
         raise ValueError(msg)
 
     glue, s3 = _aws_clients()
+    manifests = (
+        S3DeletionManifests(
+            s3,
+            bucket=os.environ["DAGSTER_BUCKET_NAME"],
+            prefix=f"{DELETION_MANIFEST_PREFIX}/{context.run_id}",
+        )
+        if config.delete
+        else None
+    )
     result = remove_database_orphan_files(
         glue,
         get_glue_catalog,
@@ -131,6 +147,7 @@ def iceberg_raw_orphan_files(
         now=datetime.now(UTC),
         delete=config.delete,
         workers=ICEBERG_ORPHAN_FILES_WORKERS,
+        record_deletion=manifests,
         logger=context.log,
     )
     attempted = len(result.tables) + len(result.failures)
@@ -161,8 +178,9 @@ def iceberg_raw_orphan_files(
         eligible_bytes,
         (
             f"ran, {deleted_objects} objects deleted, {delete_sent_bytes} bytes "
-            f"sent for deletion, error count {len(delete_errors)}"
-            if config.delete
+            f"sent for deletion, error count {len(delete_errors)}, keys under "
+            f"{manifests.uri}"
+            if manifests is not None
             else "not run (report only)"
         ),
         sorted(result.unreadable_databases),
@@ -209,9 +227,10 @@ def iceberg_raw_orphan_files(
         # delete with any listed here.
         "unreadable_glue_databases": MetadataValue.json(result.unreadable_databases),
     }
-    if config.delete:
+    if manifests is not None:
         metadata |= {
             "delete_status": MetadataValue.text("ran"),
+            "deletion_manifests": MetadataValue.path(manifests.uri),
             "deleted_objects": MetadataValue.int(deleted_objects),
             "deleted_bytes": MetadataValue.int(delete_sent_bytes),
             "delete_error_count": MetadataValue.int(len(delete_errors)),

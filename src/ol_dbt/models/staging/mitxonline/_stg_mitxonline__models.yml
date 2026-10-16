@@ -68,6 +68,9 @@ models:
     description: bool, indicates whether the user should receive emails from edx
     tests:
     - not_null
+  - name: b2b_contract_id
+    description: int, foreign key to b2b_contractpage. The B2B contract the learner
+      enrolled under, null for a non-B2B enrollment.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -143,6 +146,9 @@ models:
     - not_null
   - name: programenrollment_enrollment_mode
     description: str, enrollment mode for user
+  - name: b2b_contract_id
+    description: int, foreign key to b2b_contractpage. The B2B contract the learner
+      enrolled in the program under, null for a non-B2B enrollment.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -972,6 +978,19 @@ models:
     description: str, either 'anytime' or 'date'
     tests:
     - not_null
+  - name: program_display_mode
+    description: str, 'course' for a program presented to learners as a course, otherwise
+      null
+  - name: program_is_b2b_only
+    description: boolean, whether the program is offered only under a B2B contract
+  - name: program_start_on
+    description: timestamp, when the program starts
+  - name: program_end_on
+    description: timestamp, when the program ends
+  - name: program_enrollment_start_on
+    description: timestamp, when enrollment in the program starts
+  - name: program_enrollment_end_on
+    description: timestamp, when enrollment in the program ends
   - name: program_certification_type
     description: str, either 'MicroMasters Credential' or 'Certificate of Completion'.
       These values are currently set in the application code.
@@ -1028,6 +1047,9 @@ models:
         arguments:
           to: ref('stg__mitxonline__app__postgres__courses_program')
           field: program_id
+  - name: required_program_id
+    description: int, foreign key to courses_program for the program a 'program' node
+      requires
   - name: programrequirement_node_type
     description: str, different types of nodes that exist in a requirement tree -
       program_root (represent a program) - course (represent a reference to a course)
@@ -1042,6 +1064,9 @@ models:
       is root path, 00010001 is the path to a node in this requirement tree
     tests:
     - not_null
+    - unique:
+        config:
+          error_if: "!=0"
   - name: programrequirement_depth
     description: int, depth of a node in the tree. A root node has a depth of 1. (readonly)
     tests:
@@ -1121,8 +1146,21 @@ models:
   - name: courserun_is_self_paced
     description: boolean, indicating whether users can take this course at their own
       pace and earn certificate at any time
-  - name: b2b_contract_id
-    description: int, foreign key to b2b_contract
+  - name: courserun_is_b2b_only
+    description: boolean, whether the run is offered only under a B2B contract
+  - name: courserun_is_source_run
+    description: boolean, whether the run is the source run other runs of the course
+      are cloned from
+  - name: courserun_language
+    description: str, language code of the run, e.g. en or es_419
+  - name: courserun_is_primary_language
+    description: boolean, whether the run is the primary-language run among those
+      sharing its run tag
+  - name: courserun_variant_length
+    description: str, length code of the run's variant. Blank is the full length course,
+      S is short
+  - name: courserun_variant_industry
+    description: str, industry code of the run's variant. Blank is the original course
   - name: courserun_start_on
     description: timestamp, specifying when the course begins
   - name: courserun_end_on
@@ -1195,6 +1233,37 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["coursedepartment_id", "course_id"]
+
+- name: stg__mitxonline__app__postgres__courses_program_to_department
+  columns:
+  - name: programtodepartment_id
+    description: int, primary key representing a single MITx Online program tagged
+      to a department
+    tests:
+    - unique:
+        config:
+          error_if: "!=0"
+    - not_null
+  - name: coursedepartment_id
+    description: int, foreign key to courses_department representing a single department
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_department')
+          field: coursedepartment_id
+  - name: program_id
+    description: int, foreign key to courses_program representing a single program
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_program')
+          field: program_id
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["coursedepartment_id", "program_id"]
 
 - name: stg__mitxonline__app__postgres__courses_blockedcountry
   columns:
@@ -1928,6 +1997,23 @@ models:
   - name: course_feature_image_id
     description: int, foreign key to wagtailimages_image for the course's feature
       image
+  - name: course_min_weeks
+    description: int, shortest length of the course in weeks
+  - name: course_max_weeks
+    description: int, longest length of the course in weeks
+  - name: course_min_weekly_hours
+    description: str, least weekly hours the course takes
+  - name: course_max_weekly_hours
+    description: str, most weekly hours the course takes
+  - name: course_min_price
+    description: double, lowest price of the course's certificate in USD
+  - name: course_max_price
+    description: double, highest price of the course's certificate in USD
+  - name: course_is_in_learn_catalog
+    description: boolean, whether the course is included in the MIT Learn catalog
+  - name: course_ingests_content_files_for_ai
+    description: boolean, whether MIT Learn ingests the course's content files for
+      its AI features even when the course is not in the catalog
 
 - name: stg__mitxonline__app__postgres__cms_programpage
   description: program page metadata sourced from Wagtail CMS
@@ -1979,6 +2065,20 @@ models:
   - name: program_feature_image_id
     description: int, foreign key to wagtailimages_image for the program's feature
       image
+  - name: program_min_weeks
+    description: int, shortest length of the program in weeks
+  - name: program_max_weeks
+    description: int, longest length of the program in weeks
+  - name: program_min_weekly_hours
+    description: str, least weekly hours the program takes
+  - name: program_max_weekly_hours
+    description: str, most weekly hours the program takes
+  - name: program_min_price
+    description: double, lowest price of the program's certificate in USD
+  - name: program_max_price
+    description: double, highest price of the program's certificate in USD
+  - name: program_is_in_learn_catalog
+    description: boolean, whether the program is included in the MIT Learn catalog
 
 - name: stg__mitxonline__app__postgres__courses_coursetopic
   columns:
@@ -2248,6 +2348,33 @@ models:
   - name: sso_organization_id
     data_type: varchar
     description: the UUID for the organization in the SSO provider
+
+- name: stg__mitxonline__app__postgres__courses_courserun_b2b_contracts
+  description: The B2B contracts each MITx Online course run is offered under. A run
+    can belong to several contracts, and a run in no contract has no row.
+  columns:
+  - name: courserun_b2b_contract_id
+    data_type: bigint
+    description: primary key for this table
+    data_tests:
+    - not_null
+    - unique:
+        config:
+          error_if: "!=0"
+  - name: courserun_id
+    data_type: bigint
+    description: foreign key to courses_courserun
+    data_tests:
+    - not_null
+  - name: b2b_contract_id
+    data_type: bigint
+    description: foreign key to b2b_contractpage (page_ptr_id)
+    data_tests:
+    - not_null
+  data_tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["courserun_id", "b2b_contract_id"]
 
 - name: stg__mitxonline__app__postgres__b2b_contractpage
   description: MITx Online B2B contract pages
@@ -2724,6 +2851,144 @@ models:
       arguments:
         column_list: ["courserun_readable_id", "organization_id"]
 
+- name: stg__mitxonline__app__postgres__courses_enrollmentmode
+  description: Enrollment modes a MITx Online course run or program can offer
+  columns:
+  - name: enrollmentmode_id
+    description: int, primary key representing an enrollment mode
+    tests:
+    - unique:
+        config:
+          error_if: "!=0"
+    - not_null
+  - name: enrollmentmode_slug
+    description: str, slug of the enrollment mode, e.g. audit or verified
+    tests:
+    - unique:
+        config:
+          error_if: "!=0"
+    - not_null
+  - name: enrollmentmode_display_name
+    description: str, display name of the enrollment mode
+  - name: enrollmentmode_requires_payment
+    description: boolean, whether enrolling in this mode requires payment
+    tests:
+    - not_null
+
+- name: stg__mitxonline__app__postgres__courses_courserun_enrollment_modes
+  description: Enrollment modes offered by each MITx Online course run
+  columns:
+  - name: courserunenrollmentmode_id
+    description: int, primary key representing a course run offering an enrollment
+      mode
+    tests:
+    - unique:
+        config:
+          error_if: "!=0"
+    - not_null
+  - name: courserun_id
+    description: int, foreign key to courses_courserun
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_courserun')
+          field: courserun_id
+  - name: enrollmentmode_id
+    description: int, foreign key to courses_enrollmentmode
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_enrollmentmode')
+          field: enrollmentmode_id
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["courserun_id", "enrollmentmode_id"]
+
+- name: stg__mitxonline__app__postgres__courses_program_enrollment_modes
+  description: Enrollment modes offered by each MITx Online program
+  columns:
+  - name: programenrollmentmode_id
+    description: int, primary key representing a program offering an enrollment mode
+    tests:
+    - unique:
+        config:
+          error_if: "!=0"
+    - not_null
+  - name: program_id
+    description: int, foreign key to courses_program
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_program')
+          field: program_id
+  - name: enrollmentmode_id
+    description: int, foreign key to courses_enrollmentmode
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_enrollmentmode')
+          field: enrollmentmode_id
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["program_id", "enrollmentmode_id"]
+
+- name: stg__mitxonline__app__postgres__variants_supportedvariant
+  description: Language, length and industry variants supported by a MITx Online course
+    or B2B contract page
+  columns:
+  - name: supportedvariant_id
+    description: int, primary key representing a supported variant
+    tests:
+    - unique:
+        config:
+          error_if: "!=0"
+    - not_null
+  - name: contenttype_id
+    description: int, foreign key to django_content_type. The model supportedvariant_object_id
+      refers to, courses.course or b2b.contractpage
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__django_contenttype')
+          field: contenttype_id
+  - name: supportedvariant_object_id
+    description: int, primary key of the course or contract page the variant belongs
+      to
+    tests:
+    - not_null
+  - name: supportedvariant_language
+    description: str, language code of the variant, e.g. en or es_419
+    tests:
+    - not_null
+  - name: supportedvariant_length
+    description: str, length code of the variant. Blank is the full length course,
+      S is short
+  - name: supportedvariant_industry
+    description: str, industry code of the variant. Blank is the original course
+  - name: supportedvariant_is_active
+    description: boolean, whether the variant is active
+    tests:
+    - not_null
+  - name: supportedvariant_is_b2b_only
+    description: boolean, whether the variant is offered only to B2B learners
+    tests:
+    - not_null
+  - name: supportedvariant_is_default
+    description: boolean, whether this is the default variant of the object
+    tests:
+    - not_null
+  - name: supportedvariant_created_on
+    description: timestamp, when the variant was created
+  - name: supportedvariant_updated_on
+    description: timestamp, when the variant was last updated
+
 unit_tests:
 - name: test_stg__mitxonline__app__postgres__cms_coursepage_reads_price_from_the_streamfield_list
   description: >
@@ -2757,3 +3022,18 @@ unit_tests:
     rows:
     - {wagtail_page_id: 1, program_price: Coming soon}
     - {wagtail_page_id: 2, program_price: null}
+- name: test_stg__mitxonline__app__postgres__courses_programrequirement_keeps_one_node_per_path
+  description: >
+    A deleted node stays in raw and its path goes to another node, so of two rows
+    with one path the higher id is kept.
+  model: stg__mitxonline__app__postgres__courses_programrequirement
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__courses_programrequirement')
+    rows:
+    - {id: 1, program_id: 1, path: "00010001", course_id: 10}
+    - {id: 5, program_id: 1, path: "00010001", course_id: 20}
+    - {id: 2, program_id: 1, path: "00010002", course_id: 30}
+  expect:
+    rows:
+    - {programrequirement_id: 5, programrequirement_path: "00010001", course_id: 20}
+    - {programrequirement_id: 2, programrequirement_path: "00010002", course_id: 30}

@@ -604,7 +604,11 @@ def _finding_a_replication(snapshot: dict[str, Any]) -> list[str]:
     if xmin:
         lines += [
             "",
-            "Needs a replacement cursor column per table before dlt takes over:",
+            (
+                "Each table needs a replacement cursor column, or a decision to "
+                "re-read it whole, before dlt takes over "
+                "(INGESTION_INVENTORY_SPEC.md §3.4):"
+            ),
         ]
         lines += [f"- {r[0]} ({r[1]}, {r[4]} streams)" for r in xmin]
     return lines

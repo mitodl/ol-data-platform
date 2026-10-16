@@ -6,9 +6,10 @@
   news (mitpe_news.py). Learn's own website content news is not here: it is Learn's
   data and its sync is event-driven inside Learn.
 
-  summary and content are the feed's HTML, unsanitized. Learn runs both through
-  nh3 (main.utils.clean_data), the Medium summary with every tag stripped, and
-  the receiver is where that has to happen.
+  summary and content are the feed's HTML, unsanitized except that Medium content
+  loses its embeds' <iframe> tags as Learn's feedparser read does. Learn runs both
+  through nh3 (main.utils.clean_data), the Medium summary with every tag stripped,
+  and the receiver is where that has to happen. Learn does not sanitize title.
 #}
 
 with medium_posts as (
@@ -33,7 +34,11 @@ with medium_posts as (
         -- feedparser reads content:encoded as the summary when an item has no
         -- description, which Medium's never do.
         , {{ regexp_replace_all('coalesce(post_description, post_content)', "'<[^>]*>'", "''") }} as summary
-        , post_content as content
+        -- Learn reads the feed with feedparser, which drops an embed's <iframe>
+        -- tags and keeps the <a> inside. nh3 parses iframe content as text, so
+        -- with the tags left in, Learn's clean_data would escape that <a> and
+        -- the link would show as literal markup.
+        , {{ regexp_replace_all('post_content', "'</?iframe[^>]*>'", "''") }} as content
         -- Learn's image is the <img> that opens the first <figure>, if one does:
         -- the leftmost "<figure>" match takes the <img> only when it follows directly.
         , {{ regexp_extract_or_null(

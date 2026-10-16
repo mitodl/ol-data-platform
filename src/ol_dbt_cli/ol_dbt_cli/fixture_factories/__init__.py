@@ -8,8 +8,10 @@ hand-written rows. The package adds generated rows to those tables.
 A unit package has two modules:
 
 ``_generated.py``
-    Base factories scaffolded from the source application's Django models.
-    Regenerated wholesale, so never edited by hand.
+    Base factories scaffolded from the source application's Django models by
+    ``ol-dbt fixtures scaffold`` (:mod:`ol_dbt_cli.lib.fixture_scaffold`),
+    from the ``models.json`` beside it. Regenerated wholesale, so never edited
+    by hand.
 
 ``__init__.py``
     Written by hand. Subclasses the base factories for what the models cannot
@@ -20,7 +22,8 @@ and exposes what :class:`ol_dbt_cli.lib.raw_fixtures.UnitFactories` describes:
 
 ``SEED``
     The committed seed. The caller seeds with it before calling ``generate``,
-    so the same commit generates the same rows.
+    so the same commit generates the same rows. ``--seed`` on ``ol-dbt
+    fixtures load`` and ``generate`` replaces it for one run.
 
 ``generate(hand_written, scale)``
     Returns the generated rows keyed by raw table name. ``hand_written`` is the
@@ -28,6 +31,15 @@ and exposes what :class:`ol_dbt_cli.lib.raw_fixtures.UnitFactories` describes:
     reference a hand-written parent. Which parents a child draws from,
     one-to-one pairing and tree placement are ordinary Python in this function.
     A column a row leaves out is NULL, as in a hand-written row.
+
+    The hand-written rows are copies, and what ``generate`` leaves in them is
+    what loads: placing a generated page under a hand-written one adds to the
+    parent's ``numchild``. A hand-written row keeps its primary key, and
+    generated rows are returned, not added to ``hand_written``.
+
+Tables that reference themselves use :mod:`ol_dbt_cli.lib.fixture_trees`:
+``Tree`` for a django-treebeard ``MP_Node`` (``path``, ``depth``,
+``numchild``) and ``attach`` for a ``parent_id`` column.
 
 Each factory is a :class:`ol_dbt_cli.lib.fixture_generation.RowFactory` that
 names the table it fills and how many rows it makes at scale 1 with

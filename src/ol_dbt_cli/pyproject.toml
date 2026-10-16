@@ -17,6 +17,7 @@ dependencies = [
     # Exact: the fixture generator's seeded rows are only the same on one mimesis version.
     "mimesis==22.2.0",
     "mysql-connector-python>=9.1",
+    "pydantic>=2.0",
     "pyyaml>=6.0",
     "rich>=13.0",
     "ruamel.yaml>=0.18",
@@ -24,6 +25,11 @@ dependencies = [
     "sqlglot>=25.26",
     "trino>=0.329",
 ]
+
+[dependency-groups]
+# The scaffold test runs ruff on what `ol-dbt fixtures scaffold` writes, since
+# that file is committed and has to pass the prek hooks unchanged.
+dev = ["ruff"]
 
 [project.scripts]
 ol-dbt = "ol_dbt_cli.cli:main"

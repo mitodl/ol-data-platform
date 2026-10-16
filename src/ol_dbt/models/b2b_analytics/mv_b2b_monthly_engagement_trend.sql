@@ -6,7 +6,7 @@
 ) }}
 
 -- Grain: org x year_month. Refreshed by the Dagster b2b_organization MV-refresh asset.
--- Rows come from the dimensional facts through the contract that owns the course run
+-- Rows come from the dimensional facts through the contract each learner enrolled under
 -- (see macros/b2b_engagement.sql), the same learners and counters the learner-records
 -- views publish. Before this it read organization_administration_report, which keys
 -- learners on email, counts showanswer as a problem attempt and counts the day a
@@ -30,8 +30,8 @@
 -- because enrolling_learners and certified_learners are not subsets of
 -- monthly_active_learners and a month can have enough of either without enough
 -- active learners.
-with contract_courseruns as (
-{{ b2b_contract_courseruns() }}
+with contracts as (
+{{ b2b_contracts() }}
 )
 
 , learner_months as (
@@ -56,8 +56,8 @@ select
     count(distinct case when lm.chatbot_interactions > 0 then lm.user_fk end) as chatbot_users,
     count(distinct lm.user_fk)                                                as contributing_learners
 from learner_months lm
-join contract_courseruns cc
-    on lm.courserun_fk = cc.courserun_pk
+join contracts cc
+    on lm.contract_fk = cc.contract_pk
 -- A row with no month is not a month the API can publish.
 where lm.activity_year_and_month is not null
 group by

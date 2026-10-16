@@ -5,12 +5,15 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+from collections.abc import Mapping
 
 from dagster import (
+    AssetKey,
     DefaultSensorStatus,
     Failure,
     MetadataValue,
     RunRequest,
+    SensorDefinition,
     SensorEvaluationContext,
     SensorResult,
     job,
@@ -22,6 +25,13 @@ from ol_orchestrate.lib.iceberg_maintenance import (
     advance_snapshot_pointer,
     find_snapshot_pointer_lag,
 )
+from ol_orchestrate.resources.api_client_factory import ApiClientFactory
+from ol_orchestrate.sensors.failure_notification import (
+    check_evaluation_records,
+    latest_check_evaluation_cursor,
+)
+
+from lakehouse.lib.openmetadata_asset_checks import push_check_evaluations
 
 log = logging.getLogger(__name__)
 
@@ -183,3 +193,46 @@ def iceberg_snapshot_pointer_lag_sensor(
         run_requests=run_requests,
         cursor=json.dumps({"lagging": sorted(currently_lagging)}),
     )
+
+
+def build_asset_check_openmetadata_sensor(
+    table_fqns: Mapping[AssetKey, str],
+) -> SensorDefinition:
+    """Push Dagster asset check evaluations on *table_fqns*' assets to OpenMetadata.
+
+    Reads every check evaluation on the instance, so it sees the checks of other
+    code locations too, but only the assets in *table_fqns* have a table to
+    attach a test case to. See ``lakehouse.lib.openmetadata_asset_checks``.
+    """
+
+    @sensor(
+        name="asset_check_openmetadata_sensor",
+        minimum_interval_seconds=300,
+        default_status=DefaultSensorStatus.RUNNING,
+        description=(
+            "Writes Dagster asset check results (the freshness and column "
+            "schema-change checks; not dbt tests, which arrive through "
+            "run_results.json) to OpenMetadata as test case results on the dbt "
+            "model's table."
+        ),
+    )
+    def asset_check_openmetadata_sensor(
+        context: SensorEvaluationContext, openmetadata_api: ApiClientFactory
+    ) -> None:
+        # Same cursor rules as asset_check_failure_sensor: start after the
+        # existing history, then read the log in ascending batches.
+        if not context.cursor:
+            context.update_cursor(latest_check_evaluation_cursor(context.instance))
+            return
+        records = check_evaluation_records(context.instance, int(context.cursor))
+        if not records:
+            return
+        pushed = push_check_evaluations(
+            records, table_fqns, openmetadata_api.client, context.log
+        )
+        context.log.info(
+            "Pushed %d of %d check evaluations to OpenMetadata", pushed, len(records)
+        )
+        context.update_cursor(str(records[-1].storage_id))
+
+    return asset_check_openmetadata_sensor

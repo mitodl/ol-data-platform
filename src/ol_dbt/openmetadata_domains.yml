@@ -1,0 +1,213 @@
+---
+# OpenMetadata domain for each dbt model, snapshot, seed and source.
+#
+# The lakehouse code applies these rules to manifest.json when it uploads the
+# manifest for OpenMetadata (dg_projects/lakehouse/lakehouse/lib/
+# openmetadata_domains.py), and the nightly om-ingest-dbt job sets each table's
+# domain from the result. They live here rather than in dbt_project.yml because
+# the model folders are split by source platform, not business area, and dbt
+# merges `meta` shallowly: a per-model `openmetadata` override would have to
+# repeat owner and tier.
+#
+# Each node's name is matched against the rules in order, case-insensitively,
+# with shell-style globs, and the first match wins. A node that sets
+# `meta.openmetadata.domain` itself keeps it (it must also repeat owner and
+# tier, see dbt_project.yml). `domain: null` marks a node as deliberately in no
+# domain, e.g. a conformed dimension like dim_date that every domain shares.
+# Nodes no rule matches are logged as unassigned on every upload.
+#
+# `domains` lists the domain names that exist in OpenMetadata. They are created
+# by ol-infrastructure's om_server_config.py (DOMAIN_CONFIG); a name OpenMetadata
+# does not know is skipped by the ingestion with a warning, so add it there first.
+domains:
+- learners-identity
+- courses-content
+- enrollments-progress
+- commerce
+- b2b
+- feedback
+- engagement
+
+rules:
+  # Shared reference data with no single owning business area.
+- domain:
+  match:
+  - dim_date
+  - dim_time
+  - dim_platform
+  - platforms
+  - "*django_content_type"
+  - "*reversion_*"
+  - "*wagtailcore_*"
+  - "*wagtailimages_*"
+  - "*wagtail_page"
+
+  # Names that the broader patterns below would misfile.
+- domain: courses-content
+  match:
+  - dim_course_content_progress_block
+  - bridge_user_courserun_role
+  - user_course_roles
+  - "*course_staff*"
+  - "*courseaccessrole*"
+  - "*instructor*"
+    # Open edX organizations are course publishers (MITx, MITxT), not customers.
+  - "*openedx__mysql__organizations_*"
+  - dim_discussion_topic
+    # Calendar events published to MIT Learn, not tracking events.
+  - "*__api__events"
+- domain: enrollments-progress
+  match:
+  - "*program_entitlement*"
+  - "*edxorg_to_mitxonline_enrollments"
+  - "*edxorg_to_mitxonline_program_certificates"
+  - "*program_learner_report*"
+  - "*student_risk_probability*"
+  - "*micromasters_summary*"
+- domain: learners-identity
+  match:
+  - "*edxorg_to_mitxonline_users"
+  - "*edxorg_mitlearn_user_mapping*"
+  - "*learner_demographics*"
+  - "*gender*"
+- domain: engagement
+  match:
+  - "*user_courseactivit*"
+  - "*userlist*"
+  - "*percolatequery*"
+
+- domain: feedback
+  match:
+  - "*feedback*"
+  - "*sentiment*"
+  - "*zendesk*"
+  - "*chatresponserating*"
+
+- domain: b2b
+  match:
+  - "*b2b*"
+  - "*contract*"
+  - "*organization*"
+  - "*ecommerce_company*"
+    # Salesforce holds xPRO's corporate sales opportunities.
+  - "*salesforce*"
+
+- domain: commerce
+  match:
+  - "*ecommerce*"
+  - "*order*"
+  - "*payment*"
+  - "*discount*"
+  - "*coupon*"
+  - "*product*"
+  - "*receipt*"
+  - "*basket*"
+  - "*transaction*"
+  - "*tax_rate*"
+  - "*taxrate*"
+  - "*flexiblepric*"
+  - "*financial_assistance*"
+  - "*installment*"
+  - "*personalprice*"
+  - "*iso_4217*"
+
+- domain: engagement
+  match:
+  - "*engagement*"
+  - "*_events"
+  - "*tracking*"
+  - "*posthog*"
+  - "*chatbot*"
+  - "*tutorbot*"
+  - "*userchatsession*"
+  - "*djangocheckpoint*"
+  - "*forum*"
+  - "*discussion*"
+  - "*comment_client*"
+  - "*studentmodule*"
+  - "*problem_submission*"
+  - "*problem_summary*"
+  - "*problem_completion*"
+  - "*data_detail_*"
+  - "*video_engagement*"
+  - "*daily_activity*"
+  - "*_activity*"
+  - "*navigation*"
+  - "*page_engagement*"
+  - "*cheating_detection*"
+  - "*teams*"
+  - "*usercoursetag*"
+  - "*anonymoususerid*"
+
+- domain: enrollments-progress
+  match:
+  - "*enrollment*"
+  - "*enrolment*"
+  - "*certificate*"
+  - "*grade*"
+  - "*progress*"
+  - "*completion*"
+  - "*credit_*"
+  - "*submissions_*"
+  - "*assessment*"
+  - "*exam*"
+  - "*cohortmembership*"
+  - "*courseusergroup*"
+  - "*entitlement*"
+  - "*person_course*"
+  - "*application*"
+  - "*bootcamprunenrollment*"
+  - "*courserunselection*"
+  - "*programrequirement*"
+  - "*course_registration*"
+
+- domain: learners-identity
+  match:
+  - "*user*"
+  - "*profile*"
+  - "*legaladdress*"
+  - "*person*"
+  - "*learner*"
+  - "*auth_*"
+  - "*socialauth*"
+  - "*education*"
+  - "*employment*"
+  - "*email*"
+  - "*languageproficiency*"
+  - "*openedxuser*"
+
+- domain: courses-content
+  match:
+  - "*course*"
+  - "*program*"
+  - "*run*"
+  - "*video*"
+  - "*problem*"
+  - "*block*"
+  - "*content*"
+  - "*topic*"
+  - "*department*"
+  - "*ocw*"
+  - "*website*"
+  - "*cms_*"
+  - "*klasses_bootcamp*"
+  - "*platform*"
+  - "*podcast*"
+  - "*episode*"
+  - "*youtube*"
+  - "*playlist*"
+  - "*channel*"
+  - "*article*"
+  - "*news*"
+  - "*event_feed*"
+  - "*posts*"
+  - "*transcript*"
+  - "*edxval*"
+  - "*gdrive*"
+  - "*ui_collection*"
+  - "*encodejob*"
+  - "*edxendpoint*"
+  - "*resource*"
+  - "*offeror*"
+  - "*catalog*"
+  - "*blockedcountry*"

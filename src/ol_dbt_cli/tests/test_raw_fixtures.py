@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import datetime
 import json
+import subprocess
+import sys
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -155,12 +158,72 @@ def test_load_fixtures_reads_a_valid_file(tmp_path: Path) -> None:
         (_fixture({}, []), "fixture", "has no columns"),
         (_fixture({"id": "long"}, []), "omit", "strategies.local: omit, which takes no fixture"),
         ({"schema_version": 2, "tables": {}}, "fixture", "schema_version 2"),
+        (
+            _fixture({"id": "long", "n": "long"}, [{"id": 1}, {"id": 2, "n": "one"}]),
+            "fixture",
+            "things row 2 has 'one' in column n, which is not a valid long",
+        ),
+        (
+            _fixture({"id": "long", "n": "int"}, [{"id": 1, "n": 2**31}]),
+            "fixture",
+            "row 1 has 2147483648 in column n, which is not a valid int",
+        ),
+        (
+            _fixture({"id": "long", "n": "decimal(5,2)"}, [{"id": 1, "n": 1.234}]),
+            "fixture",
+            r"row 1 has 1.234 in column n, which is not a valid decimal\(5,2\)",
+        ),
+        (
+            _fixture({"id": "long", "at": "timestamp"}, [{"id": 1, "at": "yesterday"}]),
+            "fixture",
+            "row 1 has 'yesterday' in column at, which is not a valid timestamp",
+        ),
+        (
+            _fixture({"id": "long"}, [{"id": 1}, {"id": 2}, {"id": "1"}]),
+            "fixture",
+            "things row 3 repeats the primary key of row 1, id='1'",
+        ),
     ],
 )
 def test_load_fixtures_rejects(tmp_path: Path, fixture: dict[str, Any], local: str, message: str) -> None:
     inventory_dir = _inventory(tmp_path, fixture, local=local)
 
     with pytest.raises(ValueError, match=message):
+        load_fixtures(inventory_dir, load_units(inventory_dir))
+
+
+@pytest.mark.parametrize(
+    ("rows", "table"),
+    [
+        # A row that leaves its key out is NULL there, as in any other column.
+        ([{"name": "a"}, {"name": "a"}, {"id": None, "name": "a"}], {}),
+        ([{"id": 1}, {"id": 1}], {"primary_key": []}),
+        ([{"id": 1, "name": "a"}, {"id": 1, "name": "b"}], {"primary_key": [["id"], ["name"]]}),
+        ([{"id": 1}, {"id": 1, "name": "a"}], {"primary_key": [["id"], ["name"]]}),
+        # An append table holds every version of a row.
+        ([{"id": 1, "name": "a"}, {"id": 1, "name": "b"}], {"sync_mode": "incremental_append"}),
+        # Keys a fixture row cannot hold, which `validate_generated` reports.
+        ([{"id": 1}, {"id": 1}], {"primary_key": [["id", "nested"]]}),
+        ([{"id": 1}, {"id": 1}], {"primary_key": [["id"], ["undeclared"]]}),
+    ],
+)
+def test_hand_written_rows_that_are_not_compared_by_key(
+    tmp_path: Path, rows: list[dict[str, Any]], table: dict[str, Any]
+) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long", "name": "string"}, rows))
+    (unit,) = load_units(inventory_dir)
+    unit.tables[0].update(table)
+
+    (loaded,) = load_fixtures(inventory_dir, [unit])
+
+    assert loaded.tables[0].rows == rows
+
+
+def test_a_hand_written_compound_key_is_compared_whole(tmp_path: Path) -> None:
+    rows = [{"id": 1, "name": "a"}, {"id": 2, "name": "a"}, {"id": 1, "name": "a"}]
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long", "name": "string"}, rows), primary_key=("id", "name"))
+
+    with pytest.raises(ValueError, match="row 3 repeats the primary key of row 1, id=1, name='a'"):
         load_fixtures(inventory_dir, load_units(inventory_dir))
 
 
@@ -189,8 +252,9 @@ def test_a_factory_package_without_the_contract_is_an_error(tmp_path: Path, monk
     (package / "_generated.py").write_text("")
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    with pytest.raises(ValueError, match="scaffolded_factories.demo__s3 has no SEED or generate"):
+    with pytest.raises(ValueError, match="scaffolded_factories.demo__s3 has no SEED or generate") as raised:
         unit_factories(unit, package="scaffolded_factories")
+    assert f"delete {package}, or load with --no-generate" in str(raised.value)
 
 
 def test_generated_rows_pass_validation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -229,7 +293,7 @@ def test_generated_rows_pass_validation(tmp_path: Path, monkeypatch: pytest.Monk
         ({RAW_TABLE: [{"id": "1"}]}, "things generated row 1 repeats primary key id='1'"),
         (
             {RAW_TABLE: [{"id": "one"}]},
-            "things generated row 1 has 'one' in primary key column id, which is not a long",
+            "things generated row 1 has 'one' in primary key column id, which is not a valid long",
         ),
     ],
 )
@@ -308,7 +372,7 @@ def test_validate_generated_rejects_a_key_its_column_cannot_hold(tmp_path: Path,
     (unit,) = load_units(inventory_dir)
     (fixture,) = load_fixtures(inventory_dir, [unit])
 
-    with pytest.raises(ValueError, match="generated row 1 has .* in primary key column id, which is not a"):
+    with pytest.raises(ValueError, match="generated row 1 has .* in primary key column id, which is not a valid"):
         validate_generated(fixture, unit, {RAW_TABLE: [{"id": value}]})
 
 
@@ -537,3 +601,193 @@ def test_load_recreates_each_table_on_the_local_catalog(tmp_path: Path, monkeypa
 def test_load_without_fixtures_exits(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         fixtures_command.load(inventory_dir=_inventory(tmp_path, None))
+
+
+@pytest.fixture
+def demo_factories(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give the `demo/s3` unit the test factory package, which continues its ids."""
+    monkeypatch.syspath_prepend(str(FACTORY_PACKAGES))
+    monkeypatch.setattr(
+        fixtures_command, "unit_factories", lambda unit: unit_factories(unit, package="fixture_factories")
+    )
+
+
+def _recording(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fixture: dict[str, Any] | None = None
+) -> tuple[Path, _Recorder]:
+    import mysql.connector  # noqa: PLC0415
+
+    fixture = fixture or _fixture({"id": "long", "name": "string"}, [{"id": 1, "name": "by hand"}])
+    recorder = _Recorder()
+    monkeypatch.setattr(mysql.connector, "connect", recorder.connect)
+    return _inventory(tmp_path, fixture), recorder
+
+
+def _recorded_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **options: Any) -> _Recorder:
+    inventory_dir, recorder = _recording(tmp_path, monkeypatch)
+    fixtures_command.load(inventory_dir=inventory_dir, **options)
+    return recorder
+
+
+def _package(generate: Any) -> Any:
+    return lambda unit: SimpleNamespace(SEED=1, generate=generate)
+
+
+def _inserted(recorder: _Recorder) -> list[tuple[Any, ...]]:
+    (parameters,) = [parameters for statement, parameters in recorder.statements if statement.startswith("INSERT")]
+    return parameters
+
+
+@pytest.mark.usefixtures("demo_factories")
+def test_load_inserts_the_hand_written_rows_then_the_generated_ones(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    recorder = _recorded_load(tmp_path, monkeypatch)
+
+    assert _inserted(recorder) == [(1, "by hand"), (2, None), (3, "thing 3"), (4, None)]
+    assert f"ol_warehouse_local_raw.{RAW_TABLE}: 1 hand-written + 3 generated row(s)" in capsys.readouterr().out
+
+
+@pytest.mark.usefixtures("demo_factories")
+def test_load_scales_the_generated_rows_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _recorded_load(tmp_path, monkeypatch, scale=2)
+
+    assert [row[0] for row in _inserted(recorder)] == [1, 2, 3, 4, 5, 6, 7]
+
+
+@pytest.mark.usefixtures("demo_factories")
+def test_load_with_no_generate_inserts_the_file_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    recorder = _recorded_load(tmp_path, monkeypatch, generate=False)
+
+    assert _inserted(recorder) == [(1, "by hand")]
+    assert f"ol_warehouse_local_raw.{RAW_TABLE}: 1 row(s)" in capsys.readouterr().out
+
+
+def test_load_inserts_a_hand_written_row_as_the_package_left_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # As a treebeard parent's numchild changes when a page is placed under it.
+    def renaming(hand_written: Any, scale: float) -> dict[str, list[dict[str, Any]]]:
+        hand_written[RAW_TABLE][0]["name"] = "changed by generate"
+        return {}
+
+    monkeypatch.setattr(fixtures_command, "unit_factories", _package(renaming))
+
+    assert _inserted(_recorded_load(tmp_path, monkeypatch)) == [(1, "changed by generate")]
+
+
+def test_load_runs_every_factory_package_before_it_connects(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(hand_written: Any, scale: float) -> dict[str, list[dict[str, Any]]]:
+        return {RAW_TABLE: [{"id": 1}]}
+
+    monkeypatch.setattr(fixtures_command, "unit_factories", _package(broken))
+    inventory_dir, recorder = _recording(tmp_path, monkeypatch)
+
+    with pytest.raises(ValueError, match="generated row 1 repeats primary key id=1"):
+        fixtures_command.load(inventory_dir=inventory_dir)
+    assert recorder.connect_kwargs == {}
+    assert recorder.statements == []
+
+
+def test_load_writes_every_row_as_parameters_before_it_connects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A YAML date inside a mapping has no JSON form.
+    fixture = _fixture({"id": "long", "data": "string"}, [{"id": 1, "data": {"seen": datetime.date(2026, 1, 2)}}])
+    inventory_dir, recorder = _recording(tmp_path, monkeypatch, fixture)
+
+    with pytest.raises(TypeError, match="not JSON serializable"):
+        fixtures_command.load(inventory_dir=inventory_dir)
+    assert recorder.statements == []
+
+
+@pytest.mark.parametrize("command", ["load", "generate"])
+def test_scale_and_seed_reach_the_generation_runtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    from ol_dbt_cli.lib import fixture_generation  # noqa: PLC0415
+
+    calls: list[tuple[float, int | None]] = []
+
+    def recorded(fixture: Any, unit: Any, factories: Any, scale: float, seed: int | None) -> Any:
+        calls.append((scale, seed))
+        return fixture_generation.GeneratedRows(hand_written={RAW_TABLE: []}, generated={})
+
+    monkeypatch.setattr(fixture_generation, "generate_rows", recorded)
+    monkeypatch.setattr(fixtures_command, "unit_factories", _package(None))
+    inventory_dir, _ = _recording(tmp_path, monkeypatch, _fixture({"id": "long"}, []))
+    run = fixtures_command.load if command == "load" else fixtures_command.generate_command
+
+    run(unit=["demo/s3"], inventory_dir=inventory_dir, scale=2.5, seed=7)
+
+    assert calls == [(2.5, 7)]
+
+
+@pytest.mark.parametrize("scale", [0, -1, float("nan")])
+def test_a_scale_that_is_not_positive_is_refused_with_no_package(tmp_path: Path, scale: float) -> None:
+    with pytest.raises(SystemExit):
+        fixtures_command.load(inventory_dir=_inventory(tmp_path, _fixture({"id": "long"}, [])), scale=scale)
+
+
+def test_the_cli_does_not_import_the_generation_runtime() -> None:
+    # factory_boy and mimesis take seconds to import, and every command loads this module.
+    probe = "import sys, ol_dbt_cli.cli; print(sorted({'factory', 'mimesis'} & set(sys.modules)))"
+    imported = subprocess.run([sys.executable, "-c", probe], check=True, capture_output=True, text=True)  # noqa: S603
+
+    assert imported.stdout.strip() == "[]"
+
+
+@pytest.mark.usefixtures("demo_factories")
+def test_generate_writes_what_load_would_insert_without_connecting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import mysql.connector  # noqa: PLC0415
+
+    fixture = _fixture(
+        {"id": "long", "name": "string", "seen": "date", "data": "string"},
+        [{"id": 1, "seen": datetime.date(2026, 1, 2), "data": {"a": 1}}],
+    )
+    inventory_dir = _inventory(tmp_path, fixture)
+
+    def no_connection(**_: Any) -> None:
+        raise AssertionError
+
+    monkeypatch.setattr(mysql.connector, "connect", no_connection)
+
+    fixtures_command.generate_command(unit=["demo/s3"], inventory_dir=inventory_dir)
+
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    # Every column, and the mapping as the JSON text load inserts.
+    assert lines == [
+        {"raw_table": RAW_TABLE, "row": {"id": 1, "name": None, "seen": "2026-01-02", "data": '{"a": 1}'}},
+        {"raw_table": RAW_TABLE, "row": {"id": 2, "name": None, "seen": None, "data": None}},
+        {"raw_table": RAW_TABLE, "row": {"id": 3, "name": "thing 3", "seen": None, "data": None}},
+        {"raw_table": RAW_TABLE, "row": {"id": 4, "name": None, "seen": None, "data": None}},
+    ]
+
+
+def test_generate_writes_a_decimal_without_an_exponent() -> None:
+    assert fixtures_command._json_value(Decimal("0E-9")) == "0.000000000"  # noqa: SLF001
+
+
+@pytest.mark.usefixtures("demo_factories")
+def test_generate_writes_a_file_per_table(tmp_path: Path) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long", "name": "string"}, []))
+    out = tmp_path / "rows"
+
+    fixtures_command.generate_command(unit=["demo/s3"], inventory_dir=inventory_dir, table=[RAW_TABLE], out=out)
+
+    assert [json.loads(line) for line in (out / f"{RAW_TABLE}.jsonl").read_text().splitlines()] == [
+        {"id": 1, "name": "thing 1"},
+        {"id": 2, "name": None},
+        {"id": 3, "name": "thing 3"},
+    ]
+
+
+def test_generate_refuses_a_table_the_units_do_not_have(tmp_path: Path) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long"}, []))
+
+    with pytest.raises(SystemExit):
+        fixtures_command.generate_command(unit=["demo/s3"], inventory_dir=inventory_dir, table=["raw__demo__s3__nope"])

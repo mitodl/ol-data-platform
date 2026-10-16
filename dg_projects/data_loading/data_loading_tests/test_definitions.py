@@ -29,11 +29,12 @@ _REPO = defs.get_repository_def()
 # module-level import above cached.
 _ENVIRONMENT_SENSITIVE_ROOTS = frozenset({"data_loading", "ol_orchestrate"})
 
-# The three tables RFC 12711 step 8's pilot slice reads.
+# The four tables RFC 12711 step 8's pilot slice reads.
 _B2B_PILOT_ASSET_KEYS = (
     "ol_warehouse_raw_data/raw__mitxonline__app__postgres__b2b_organizationpage",
     "ol_warehouse_raw_data/raw__mitxonline__app__postgres__b2b_contractpage",
     "ol_warehouse_raw_data/raw__mitxonline__app__postgres__courses_courserun",
+    "ol_warehouse_raw_data/raw__mitxonline__app__postgres__courses_courserun_b2b_contracts",
 )
 
 

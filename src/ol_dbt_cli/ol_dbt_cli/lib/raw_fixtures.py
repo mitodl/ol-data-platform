@@ -81,6 +81,8 @@ STARROCKS_TYPES: dict[str, str] = {
 }
 _DECIMAL = re.compile(r"^decimal\((\d+),\s*(\d+)\)$")
 _INTEGER_BITS = {"int": 32, "long": 64}
+# What `full_refresh_append` and `incremental_append` end in, of a unit table's sync modes.
+_APPEND_SUFFIX = "_append"
 
 # Hive type names as Glue reports them for an Iceberg table.
 _GLUE_TYPES: dict[str, str] = {
@@ -124,7 +126,11 @@ class UnitFactories(Protocol):
     def generate(
         self, hand_written: Mapping[str, list[dict[str, Any]]], scale: float
     ) -> dict[str, list[dict[str, Any]]]:
-        """Return the generated rows of each raw table, the hand-written ones left out."""
+        """Return the generated rows of each raw table, the hand-written ones left out.
+
+        ``hand_written`` holds copies. A change to a value in one (a treebeard
+        parent's ``numchild``) is what loads.
+        """
         ...
 
 
@@ -174,7 +180,8 @@ def parse_fixture(path: Path, unit: Unit) -> UnitFixture:
     :rtype: UnitFixture
     :raises ValueError: If the unit's local strategy takes no fixture, a table is not the
         unit's, a type is not in the format, or a row sets a column the table
-        does not have.
+        does not have, holds a value its column cannot, or repeats the primary
+        key of an earlier row.
     """
     data = yaml.safe_load(path.read_text())
     if data["schema_version"] != SCHEMA_VERSION:
@@ -184,7 +191,7 @@ def parse_fixture(path: Path, unit: Unit) -> UnitFixture:
     if local_strategy not in FIXTURE_STRATEGIES:
         msg = f"{path}: unit {unit.key} has strategies.local: {local_strategy}, which takes no fixture"
         raise ValueError(msg)
-    declared = {table["raw_table"] for table in unit.tables}
+    declared = {table["raw_table"]: table for table in unit.tables}
 
     tables = []
     for raw_table, body in data["tables"].items():
@@ -202,11 +209,41 @@ def parse_fixture(path: Path, unit: Unit) -> UnitFixture:
                 msg = f"{path}: {raw_table}.{column}: {error}"
                 raise ValueError(msg) from error
         rows = body.get("rows") or []
+        table = TableFixture(raw_table=raw_table, columns=dict(columns), rows=list(rows))
+        key_paths = declared[raw_table].get("primary_key") or []
+        key_columns = [path[0] for path in key_paths]
+        # A key the fixture cannot hold (a nested path, a column it does not
+        # declare) is `validate_generated`'s to report: only generating needs it.
+        # An append table keeps every version of a row, so its key repeats.
+        comparable = (
+            bool(key_paths)
+            and all(len(path) == 1 and path[0] in columns for path in key_paths)
+            and not declared[raw_table]["sync_mode"].endswith(_APPEND_SUFFIX)
+        )
+        seen: dict[tuple[Any, ...], int] = {}
         for number, row in enumerate(rows, start=1):
+            label = f"{path}: {raw_table} row {number}"
             if unknown := sorted(set(row) - set(columns)):
-                msg = f"{path}: {raw_table} row {number} sets {', '.join(unknown)}, which the table does not have"
+                msg = f"{label} sets {', '.join(unknown)}, which the table does not have"
                 raise ValueError(msg)
-        tables.append(TableFixture(raw_table=raw_table, columns=dict(columns), rows=list(rows)))
+            for column, value in row.items():
+                if value is None:
+                    continue
+                try:
+                    _stored_value(value, columns[column])
+                except (ValueError, TypeError, ArithmeticError, struct.error) as error:
+                    msg = f"{label} has {value!r} in column {column}, which is not a valid {columns[column]}"
+                    raise ValueError(msg) from error
+            # A row with no key is NULL there, as any column it leaves out is.
+            if not comparable or any(row.get(column) is None for column in key_columns):
+                continue
+            key = stored_key(table, row, key_columns, label)
+            if key in seen:
+                value = ", ".join(f"{column}={row[column]!r}" for column in key_columns)
+                msg = f"{label} repeats the primary key of row {seen[key]}, {value}"
+                raise ValueError(msg)
+            seen[key] = number
+        tables.append(table)
     return UnitFixture(path=path, tables=tables)
 
 
@@ -256,7 +293,11 @@ def unit_factories(unit: Unit, package: str = FACTORY_PACKAGE) -> UnitFactories 
     # A directory holding only `_generated.py`, or a `__pycache__` left by
     # another branch, imports as an empty namespace package.
     if lacking := [attribute for attribute in ("SEED", "generate") if not hasattr(module, attribute)]:
-        msg = f"{name} has no {' or '.join(lacking)}; a unit's factory package defines both in its __init__.py"
+        msg = (
+            f"{name} has no {' or '.join(lacking)}; a unit's factory package defines both in its __init__.py. "
+            f"A directory another branch left holding only __pycache__ imports like this: delete "
+            f"{', '.join(module.__path__)}, or load with --no-generate"
+        )
         raise ValueError(msg)
     return cast("UnitFactories", module)
 
@@ -292,7 +333,7 @@ def validate_generated(fixture: UnitFixture, unit: Unit, generated: Mapping[str,
             msg = f"{where} has primary key column {', '.join(undeclared)}, which {fixture.path} does not declare"
             raise ValueError(msg)
         seen = {
-            _primary_key(table, row, key_columns, f"{where} hand-written row {number}")
+            stored_key(table, row, key_columns, f"{where} hand-written row {number}")
             for number, row in enumerate(table.rows, start=1)
         }
         for number, row in enumerate(rows, start=1):
@@ -304,7 +345,7 @@ def validate_generated(fixture: UnitFixture, unit: Unit, generated: Mapping[str,
             if missing := [column for column in key_columns if row.get(column) is None]:
                 msg = f"{where} generated row {number} has no value for primary key column {', '.join(missing)}"
                 raise ValueError(msg)
-            key = _primary_key(table, row, key_columns, f"{where} generated row {number}")
+            key = stored_key(table, row, key_columns, f"{where} generated row {number}")
             if key in seen:
                 value = ", ".join(f"{column}={row[column]!r}" for column in key_columns)
                 msg = f"{where} generated row {number} repeats primary key {value}"
@@ -312,15 +353,24 @@ def validate_generated(fixture: UnitFixture, unit: Unit, generated: Mapping[str,
             seen.add(key)
 
 
-def _primary_key(table: TableFixture, row: Mapping[str, Any], key_columns: list[str], label: str) -> tuple[Any, ...]:
-    """Return the key of ``row`` as the table will hold it, so `"1"` and `1` in a ``long`` column are one key."""
+def stored_key(table: TableFixture, row: Mapping[str, Any], key_columns: list[str], label: str) -> tuple[Any, ...]:
+    """Return the key of ``row`` as the table will hold it, so `"1"` and `1` in a ``long`` column are one key.
+
+    :param table: The table ``row`` belongs to.
+    :param row: A hand-written or generated row.
+    :param key_columns: The table's primary key columns.
+    :param label: Names the row in an error.
+    :returns: Each key column's value as stored, ``None`` where the row has none.
+    :rtype: tuple[Any, ...]
+    :raises ValueError: If a key column holds a value its type cannot.
+    """
     key = []
     for column in key_columns:
         value, fixture_type = row.get(column), table.columns[column]
         try:
             key.append(None if value is None else _stored_value(value, fixture_type))
         except (ValueError, TypeError, ArithmeticError, struct.error) as error:
-            msg = f"{label} has {value!r} in primary key column {column}, which is not a {fixture_type}"
+            msg = f"{label} has {value!r} in primary key column {column}, which is not a valid {fixture_type}"
             raise ValueError(msg) from error
     return tuple(key)
 

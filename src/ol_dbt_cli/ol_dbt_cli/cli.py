@@ -6,6 +6,7 @@ import cyclopts
 
 from ol_dbt_cli.commands.contracts import contracts_app
 from ol_dbt_cli.commands.diff import diff
+from ol_dbt_cli.commands.exposures import exposures_app
 from ol_dbt_cli.commands.fixtures import fixtures_app
 from ol_dbt_cli.commands.generate import generate_app
 from ol_dbt_cli.commands.impact import impact
@@ -57,9 +58,11 @@ app = cyclopts.App(
       7d. Run dbt unit tests without warehouse credentials:
          $ ol-dbt unit-test
 
-      7e. Fill the local lake's raw schema from committed fixtures, then build on it:
+      7e. Fill the local lake's raw schema from committed fixtures and factory packages
+          (--scale 100 for 100x the generated rows), then build on it:
          $ ol-dbt fixtures load
          $ ol-dbt starrocks build --env dev --select +integrations__learn__ocw_courses
+         $ ol-dbt fixtures generate --unit xpro/app_postgres --out /tmp/xpro  # the rows, no lake
 
       7f. Replace a fixture's rows with the ones in your local-dev app database:
          $ ol-dbt ingest local --unit mitxonline/app_postgres
@@ -82,6 +85,7 @@ app.command(fixtures_app)
 app.command(ingest_app)
 app.command(contracts_app)
 app.command(metrics_app)
+app.command(exposures_app)
 app.command(impact, name="impact")
 app.command(validate, name="validate")
 app.command(diff, name="diff")

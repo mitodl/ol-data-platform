@@ -255,10 +255,13 @@ analysis, and validation. It is installed as part of `uv sync`.
 | `ol-dbt generate all` | Scaffold sources + staging models for a new data source |
 | `ol-dbt impact` | Column-level lineage impact analysis for in-progress changes |
 | `ol-dbt validate` | SQL/YAML consistency checks across model definitions |
+| `ol-dbt exposures export` | Regenerate `exposures/*.json` (what each application exposure reads) after changing a model it depends on |
 | `ol-dbt unit-test` | Run dbt unit tests on DuckDB with no warehouse credentials (also runs in dbt PR CI) |
 | `ol-dbt local setup` | Set up local DuckDB + Iceberg development environment |
 | `ol-dbt local register` | Register AWS Glue Iceberg tables as DuckDB views |
-| `ol-dbt fixtures load` | Create the local lake's raw tables from `ingestion/inventory/fixtures/` (see `docs/LOCAL_LAKE.md`) |
+| `ol-dbt fixtures load` | Create the local lake's raw tables from `ingestion/inventory/fixtures/` and each unit's factory package (see `docs/LOCAL_LAKE.md`) |
+| `ol-dbt fixtures generate` | Write the rows `fixtures load` would insert as JSON lines, with no StarRocks connection |
+| `ol-dbt fixtures scaffold` | Write a unit's base factories from a dump of its Django app's models (`bin/django-model-dump.py`) |
 | `ol-dbt ingest local` | Load the local lake's raw tables from the local-dev app databases, for units with `strategies.local: ingest` |
 
 ### `ol-dbt run` — Incremental State-Based Execution

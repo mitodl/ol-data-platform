@@ -1584,6 +1584,10 @@ models:
     description: string, foreign key to dim_course_run.
     tests:
     - not_null
+  - name: contract_fk
+    description: string, foreign key to dim_contract. The MITx Online B2B contract
+      the reported enrollment was made under (tfact_enrollment.contract_fk). Null
+      for a non-B2B enrollment and on every other platform.
   - name: platform
     description: string, platform of the enrollment (mitxonline, mitxpro, edxorg,
       residential, bootcamps).

@@ -19,7 +19,12 @@ with source as (
         ) as courserun_url
         , run_tag as courserun_tag
         , is_self_paced as courserun_is_self_paced
-        , b2b_contract_id
+        , b2b_only as courserun_is_b2b_only
+        , is_source_run as courserun_is_source_run
+        , language as courserun_language
+        , is_primary_language as courserun_is_primary_language
+        , variant_length as courserun_variant_length
+        , variant_industry as courserun_variant_industry
         , case
             when courseware_id like 'MITx/%' or courseware_id like 'course-v1:MITx+%'
                 then '{{ var("edxorg") }}'

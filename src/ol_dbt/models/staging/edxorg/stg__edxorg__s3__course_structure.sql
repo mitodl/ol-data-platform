@@ -1,5 +1,10 @@
+-- The landing zone holds structures from both edX.org instances, under
+-- <course>|prod/ and <course>|edge/. Edge courses can share a course id with a
+-- prod course, so mixing them would interleave two instances' versions of one
+-- course run. Only prod has ever been modeled here.
 with course_block_source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__course_blocks') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__course_structure_blocks') }}
+    where _source_file like '%|prod/%'
 )
 
 , course_block as (

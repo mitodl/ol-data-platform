@@ -103,6 +103,9 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
         DatabaseTable(name="courses_course", primary_key="id"),
         DatabaseTable(name="courses_course_departments", primary_key="id"),
         DatabaseTable(name="courses_courserun", primary_key="id"),
+        # The contracts a run is offered under. Replaced courses_courserun.b2b_contract
+        # in MITx Online 0104/0105, and a run can now belong to several contracts.
+        DatabaseTable(name="courses_courserun_b2b_contracts", primary_key="id"),
         DatabaseTable(name="courses_courserun_enrollment_modes", primary_key="id"),
         DatabaseTable(name="courses_courseruncertificate", primary_key="id"),
         DatabaseTable(name="courses_courserunenrollment", primary_key="id"),

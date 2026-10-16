@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.14.*"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -2022,6 +2022,7 @@ dependencies = [
     { name = "jsonschema" },
     { name = "markupsafe" },
     { name = "mysql-connector-python" },
+    { name = "pydantic" },
     { name = "pyyaml" },
     { name = "rich" },
     { name = "ruamel-yaml" },
@@ -2039,6 +2040,7 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4.0" },
     { name = "markupsafe", specifier = ">=2.1" },
     { name = "mysql-connector-python", specifier = ">=9.1" },
+    { name = "pydantic", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.0" },
     { name = "ruamel-yaml", specifier = ">=0.18" },

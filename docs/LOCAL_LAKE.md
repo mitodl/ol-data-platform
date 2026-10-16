@@ -34,7 +34,7 @@ their parents read:
 | Fixture | Models |
 |---|---|
 | `ocw__s3.yml`, `ocw__app_postgres.yml` | `integrations__learn__ocw_courses`, `_ocw_content_files` |
-| `mitxonline__app_postgres.yml` | `integrations__learn__mitxonline_courses`, `_programs` |
+| `mitxonline__app_postgres.yml` | `integrations__learn__mitxonline_courses`, `_runs`, `_programs`, `_program_children` |
 | `xpro__app_postgres.yml` | `integrations__learn__xpro_courses`, `_programs`, `_runs` |
 
 The lake holds only what you built, so `--env dev` passes dbt
@@ -98,7 +98,7 @@ fixtures first and the source second when both cover a table. The models then bu
 ol-dbt fixtures load
 ol-dbt ingest local --unit mitxonline/app_postgres
 ol-dbt starrocks build --env dev \
-    --select "+integrations__learn__mitxonline_courses +integrations__learn__mitxonline_programs"
+    --select "+integrations__learn__mitxonline_courses +integrations__learn__mitxonline_programs +integrations__learn__mitxonline_program_children"
 ```
 
 MITx Online's `populate_course_data` seed (`seed-mitxonline-course-data` in Tilt) gives
@@ -150,14 +150,77 @@ tables:
   an error.
 - A mapping or list is stored as JSON text, so a JSON-in-a-string column can be written
   as the structure it holds.
-- `ol-dbt fixtures load` drops and recreates each table, so the file is the whole state.
-  `--unit ocw/s3` limits it to one unit.
+- `ol-dbt fixtures load` drops and recreates each table, so the file and the unit's
+  factory package (below) are the whole state. `--unit ocw/s3` limits it to one unit.
+
+### Generated rows
+
+A unit can also have a factory package, `src/ol_dbt_cli/ol_dbt_cli/fixture_factories/<unit>/`
+(the contract is in that package's `__init__.py`). `ol-dbt fixtures load` runs it and
+inserts the file's rows followed by the generated ones, and prints both counts per table.
+Every package runs before any table is dropped, so one that fails leaves the lake as it was.
+
+```bash
+ol-dbt fixtures load --scale 100      # 100x each factory's default count; the file's rows are not scaled
+ol-dbt fixtures load --seed 7         # another seed than the package's SEED, for this run
+ol-dbt fixtures load --no-generate    # the files' rows only
+```
+
+To see what a package makes without a running lake, `ol-dbt fixtures generate` writes the
+rows `load` would insert as JSON lines:
+
+```bash
+ol-dbt fixtures generate --unit xpro/app_postgres                     # {"raw_table": ..., "row": {...}} per line
+ol-dbt fixtures generate --unit xpro/app_postgres --out /tmp/xpro     # /tmp/xpro/<raw_table>.jsonl
+ol-dbt fixtures generate --unit xpro/app_postgres --table raw__xpro__app__postgres__courses_course
+```
+
+Generated rows are fixture rows to `ol-dbt ingest local`, so "load fixtures first and
+the source second" above still holds.
+
+### Scaffolding a factory package
+
+For a Django app, the base factories come from the app's models. `bin/django-model-dump.py`
+runs with the app's own Python and writes what its models say about each table (keys,
+foreign keys, `unique`, `choices`, nullability, field classes, treebeard trees) as JSON.
+It imports the models and reads no rows, and it refuses a database connection, so an app
+whose startup queried would fail the dump rather than reach a database. Each setting the
+app's `settings.py` marks `required=True` needs a value to import, and a placeholder does
+(`DATABASE_URL` has to parse as a URL, e.g. `postgres://x:x@127.0.0.1/x`):
+
+```bash
+APP=~/code/mit/repos/mitxonline
+# With the app's required settings exported as placeholders:
+"$APP/.venv/bin/python" bin/django-model-dump.py --app-dir "$APP" --app mitxonline \
+    --settings main.settings --commit "$(git -C "$APP" rev-parse HEAD)" > /tmp/mitxonline-models.json
+ol-dbt fixtures scaffold --unit mitxonline/app_postgres --models /tmp/mitxonline-models.json
+```
+
+An app with no environment of its own can get one from its lock file without touching the
+checkout, e.g. `UV_PROJECT_ENVIRONMENT=/tmp/mitxpro-venv uv sync --project "$APP" --frozen --no-dev --no-install-project`.
+
+`scaffold` writes three files in the unit's package:
+
+- `_generated.py`: one base factory per fixture table, parents first, rewritten wholesale
+  on every run. What the models cannot say (a JSON column's shape, a treebeard tree's
+  `path`, a self reference, a generic foreign key's object id) is left unset with a comment.
+- `models.json`: the dump cut down to the unit's fixture tables. A later `scaffold` with
+  no `--models` reads it, so the package can be rescaffolded without the app until the
+  fixture gains a table, which needs a new dump.
+- `__init__.py`, only if there is none: the unit's `SEED` and a `generate` that adds no
+  rows. The hand-written module subclasses the base factories and wires the tables together.
+
+A nullable foreign key is NULL in a row `generate` builds without that parent. Column
+names are matched without case, since Airbyte lowercases them. A column the fixture and
+the models disagree on (Airbyte drops and adds columns) is printed and drawn by its
+fixture type.
 
 ### Adding a fixture
 
-Rows are written by hand and never copied from a deployed environment. Raw application
-tables hold learner data, and no command here reads rows from Glue or a database. Invent
-the few rows that exercise the model: one per branch of its logic is enough.
+Rows are hand-written or generated, never copied from a deployed environment. Raw
+application tables hold learner data, and no command here reads rows from Glue or a
+database. Invent the few rows that exercise the model: one per branch of its logic is
+enough. Rows that only need to exist in number belong in a factory package.
 
 For the columns, a maintainer with AWS credentials captures them from the landed schema
 once:

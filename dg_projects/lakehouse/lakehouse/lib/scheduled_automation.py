@@ -111,8 +111,8 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     "iceberg_raw_maintenance_nightly": frozenset({"qa", "production"}),
     # Deletes table directories no Glue table references, or only reports them
     # where the asset's LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS leaves the
-    # environment out, which today is everywhere. QA only until a QA deletion
-    # list has been reviewed and QA deletes have run clean; production follows.
+    # environment out. It deletes in QA. QA only until QA deletes have run
+    # clean; production follows.
     # Never dev: it resolves to the production warehouse.
     "lake_orphan_sweep_weekly": frozenset({"qa"}),
     # Lists every raw Iceberg table's directory and compares it with what the
@@ -180,6 +180,11 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # exception to "QA does not build" that holds only because none of its
     # models is a cross-source union, which ol-dbt validate enforces on the tag.
     "learn_integrations_qa_daily": frozenset({"qa"}),
+    # A sensor, not a schedule, gated here for the same reason. It writes check
+    # results to OpenMetadata on tables named from the image's manifest, which
+    # is compiled for production, and only the production stack copies the bot
+    # token to secret-data/pipelines/openmetadata.
+    "asset_check_openmetadata": frozenset({"production"}),
 }
 
 _UNDECLARED_ENVIRONMENTS = {

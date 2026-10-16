@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.13, <3.15"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -2611,11 +2611,17 @@ dependencies = [
     { name = "markupsafe" },
     { name = "mimesis" },
     { name = "mysql-connector-python" },
+    { name = "pydantic" },
     { name = "pyyaml" },
     { name = "rich" },
     { name = "ruamel-yaml" },
     { name = "sqlglot" },
     { name = "trino" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "ruff" },
 ]
 
 [package.metadata]
@@ -2630,12 +2636,16 @@ requires-dist = [
     { name = "markupsafe", specifier = ">=2.1" },
     { name = "mimesis", specifier = "==22.2.0" },
     { name = "mysql-connector-python", specifier = ">=9.1" },
+    { name = "pydantic", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.0" },
     { name = "ruamel-yaml", specifier = ">=0.18" },
     { name = "sqlglot", specifier = ">=25.26" },
     { name = "trino", specifier = ">=0.329" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "ruff" }]
 
 [[package]]
 name = "ol-orchestrate-lib"

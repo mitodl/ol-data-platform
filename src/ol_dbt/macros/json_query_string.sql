@@ -23,7 +23,8 @@
 {%- macro duckdb__json_query_string(json_col, json_path) -%}
   {# DuckDB: Use json_extract_string which returns unquoted string values #}
   {# json_path is already a single-quoted SQL string literal (e.g. '$.field'), use it directly #}
-  json_extract_string({{ json_col }}, {{ json_path }})
+  {# NULL for malformed JSON, as Trino's json_query (NULL ON ERROR) gives; json_extract_string raises #}
+  case when json_valid({{ json_col }}) then json_extract_string({{ json_col }}, {{ json_path }}) end
 {%- endmacro -%}
 
 {%- macro starrocks__json_query_string(json_col, json_path) -%}
