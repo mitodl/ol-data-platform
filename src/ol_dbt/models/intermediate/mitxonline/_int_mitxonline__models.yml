@@ -629,6 +629,28 @@ models:
   - name: payment_bill_to_address_country
     description: str, address country from most recent cybersource payment
 
+- name: int__mitxonline__program_course_run_orders
+  description: MITx Online course run orders that a program purchase covered, at the
+    grain of an order line. After a learner buys a program, MITx Online creates a
+    $0 order for each course run with the program's internal discount. This model
+    matches each such order to the program order, by learner and program.
+  columns:
+  - name: line_id
+    description: int, primary key of the course run order line
+    tests:
+    - not_null
+    - unique
+  - name: order_id
+    description: int, the $0 course run order
+    tests:
+    - not_null
+  - name: program_order_id
+    description: int, the learner's latest fulfilled or refunded order, placed before
+      the course run order, for the internal discount's program or its parent program.
+      An exact program match comes first.
+    tests:
+    - not_null
+
 - name: int__mitxonline__ecommerce_product
   description: Intermediate model of MITx Online Products.
   columns:
