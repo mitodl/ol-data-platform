@@ -189,8 +189,8 @@ with mitxonline_enrollments as (
 -- same code (courserun_external_readable_id, as in int__combined__courserun_enrollments),
 -- this lookup resolves it to that run's courserun_readable_id. Codes with no xPro run keep
 -- the external code, which matches the platform's own dim_course_run row.
--- xPro can give two live runs one code (seven pairs since 2026-10-14, e.g. MCPO and MO_MCPO
--- for MO-MCPO-26-12#1). The newest run takes the code, so an enrollment resolves to one run.
+-- xPro can give two runs one code (e.g. MCPO and MO_MCPO both carry MO-MCPO-26-12#1 since
+-- 2026-10-14). The newest run takes the code, so an enrollment resolves to one run.
 , mitxpro_external_readable_id_lookup as (
     select courserun_external_readable_id, courserun_readable_id
     from (
@@ -445,6 +445,9 @@ with mitxonline_enrollments as (
     -- back to the other method if the primary lookup finds no one. The email fallback can't
     -- use dim_user's identity key: if a learner has a mix of enrollments, some with ids and
     -- some without, their key is the student id, so the rows without an id would miss it.
+    -- The Global Alumni id fallback joins only when the email lookup missed: dim_user keeps
+    -- one Global Alumni row per email, so one student id under two emails is two rows, and a
+    -- match the coalesce discards would still repeat the enrollment.
     left join user_lookup as ul_emeritus
         on combined_enrollments.platform = 'emeritus'
         and combined_enrollments.external_user_id = ul_emeritus.emeritus_user_id
@@ -456,6 +459,7 @@ with mitxonline_enrollments as (
         and lower(combined_enrollments.user_email) = ul_global_alumni.email
     left join user_lookup as ul_global_alumni_id
         on combined_enrollments.platform = 'global_alumni'
+        and ul_global_alumni.user_pk is null
         and combined_enrollments.external_user_id = ul_global_alumni_id.global_alumni_user_id
     left join dim_course_run
         on combined_enrollments.courserun_readable_id = dim_course_run.courserun_readable_id

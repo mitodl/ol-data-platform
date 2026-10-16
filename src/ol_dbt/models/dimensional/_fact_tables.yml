@@ -1534,7 +1534,8 @@ unit_tests:
 - name: test_tfact_enrollment_resolves_emeritus_global_alumni_fks
   description: >
     Emeritus learners match dim_user by student id, falling back to email; Global
-    Alumni learners match by email, falling back to student id. Both platforms resolve
+    Alumni learners match by email, falling back to student id only when the email
+    misses (one id can sit on two dim_user rows). Both platforms resolve
     their course run through the xPro run that carries the same external run code
     (the newest, by courserun_id, when two do), or, when no xPro run does, through
     the platform's own dim_course_run row for that code.
@@ -1616,6 +1617,12 @@ unit_tests:
       user_email:
       courserun_external_readable_id: "RUN-A"
       is_enrolled: false
+      # student id under two emails, so two dim_user rows: the email match is used and
+      # the id fallback does not repeat the enrollment
+    - user_id: "G-4"
+      user_email: "g4@example.com"
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: true
       # run code with no xPro run: resolves to the platform-native dim_course_run row
     - user_id: "G-3"
       user_email: "g3@example.com"
@@ -1645,6 +1652,12 @@ unit_tests:
     - user_pk: "USER_E4"
       emeritus_user_id: "E-4"
       email: "e4@example.com"
+    - user_pk: "USER_G4"
+      global_alumni_user_id: "G-4"
+      email: "g4@example.com"
+    - user_pk: "USER_G4_OTHER_EMAIL"
+      global_alumni_user_id: "G-4"
+      email: "g4-other@example.com"
   - input: ref('dim_course_run')
     rows:
     - courserun_pk: "RUN_A_XPRO"
@@ -1719,6 +1732,12 @@ unit_tests:
       user_fk: "USER_E4"
       courserun_fk: "RUN_BX_XPRO"
       platform_fk: "PLATFORM_EMERITUS"
+      enrollment_type: "course"
+      enrollment_is_active: true
+    - platform: "global_alumni"
+      user_fk: "USER_G4"
+      courserun_fk: "RUN_A_XPRO"
+      platform_fk: "PLATFORM_GLOBAL_ALUMNI"
       enrollment_type: "course"
       enrollment_is_active: true
 - name: test_tfact_enrollment_keys_emeritus_enrollment_id_on_the_staging_grain
