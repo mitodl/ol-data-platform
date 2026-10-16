@@ -19,22 +19,21 @@
 
 {% macro wrike_course_codes_of_mitxpro_courses() %}
   {#
-    One row per (Wrike course code, xPro course) pair, from the xPro run records that carry an
-    Emeritus or Global Alumni run code. Emeritus and Global Alumni have no course table, so this
-    is how a run finds an xPro course that already exists for it.
+    One row per Wrike course code, with the xPro course that holds it, from the xPro run records
+    that carry an Emeritus or Global Alumni run code. Emeritus and Global Alumni have no course
+    table, so this is how a run finds an xPro course that already exists for it.
 
     The code keeps its partner prefix: xPro holds a separate course per partner for the same
     code (MO-DL is xPRO+DL, MXP-DL is xPRO+DLx), so a bare code would cross-link them.
 
-    A code that maps to more than one xPro course yields more than one row. That is left in on
-    purpose: assert_wrike_course_codes_map_to_one_mitxpro_course fails on the fan-out instead of
-    one of the courses being picked silently.
+    A code that more than one xPro course holds maps to the course of its earliest-created run.
   #}
-    select distinct
+    select
         {{ wrike_course_code('runs.courserun_external_readable_id') }} as wrike_course_code
-        , courses.course_readable_id as mitxpro_course_readable_id
+        , min_by(courses.course_readable_id, runs.courserun_created_on) as mitxpro_course_readable_id
     from {{ ref('int__mitxpro__course_runs') }} as runs
     inner join {{ ref('int__mitxpro__courses') }} as courses
         on runs.course_id = courses.course_id
     where {{ wrike_course_code('runs.courserun_external_readable_id') }} is not null
+    group by 1
 {% endmacro %}

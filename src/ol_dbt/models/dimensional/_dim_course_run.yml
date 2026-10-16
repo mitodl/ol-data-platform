@@ -500,9 +500,9 @@ unit_tests:
   - input: ref('int__mitxpro__course_runs')
     rows:
     - {courserun_readable_id: "course-v1:xPRO+DL+R1", courserun_external_readable_id: "MO-DL-26-09#1",
-      course_id: 1}
+      course_id: 1, courserun_created_on: "2026-01-01T00:00:00"}
     - {courserun_readable_id: "course-v1:xPRO+DLx+R1", courserun_external_readable_id: "MXP-DL-26-09#1",
-      course_id: 2}
+      course_id: 2, courserun_created_on: "2026-01-01T00:00:00"}
   - input: ref('int__mitxpro__courses')
     rows:
     - {course_id: 1, course_readable_id: "course-v1:xPRO+DL", course_is_external: false}
