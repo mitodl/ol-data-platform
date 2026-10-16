@@ -40,8 +40,11 @@ models:
       Foreign key to dim_course. Null when no matching course exists in dim_course
       —
       edxorg runs attempt a join (extracting course_readable_id from courserun_readable_id)
-      but will be null until edxorg courses are loaded. Non-edxorg nulls indicate
-      courses not yet in dim_course.
+      but will be null until edxorg courses are loaded. emeritus and global_alumni
+      runs link to the xPro course that holds their Wrike course code (partner prefix
+      included), or else to the emeritus or global_alumni course for that code. Other
+      nulls
+      indicate courses not yet in dim_course.
     tests:
     - not_null:
         where: "platform != 'edxorg'"
@@ -83,7 +86,8 @@ models:
   - name: courserun_created_on
     description: >
       Timestamp when the course run was created in the source system. Populated for
-      mitxonline, mitxpro, and residential platforms. Null for edxorg and bootcamps.
+      mitxonline, mitxpro, and residential platforms. Null for edxorg, bootcamps,
+      emeritus and global_alumni.
   - name: courserun_upgrade_deadline
     description: >
       ISO 8601 timestamp of the deadline for upgrading from audit to verified enrollment
@@ -164,6 +168,12 @@ unit_tests:
     rows: []
   - input: ref('int__mitxpro__course_runs')
     rows: []
+  - input: ref('int__mitxpro__courses')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
   - input: ref('int__edxorg__mitx_courseruns')
     rows: []
   - input: ref('int__mitxresidential__courseruns')
@@ -222,6 +232,12 @@ unit_tests:
   - input: ref('stg__mitxonline__app__postgres__courses_course')
     rows: []
   - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('int__mitxpro__courses')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
     rows: []
   - input: ref('int__edxorg__mitx_courseruns')
     rows: []
@@ -292,6 +308,12 @@ unit_tests:
   - input: ref('stg__mitxonline__app__postgres__courses_course')
     rows: []
   - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('int__mitxpro__courses')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
     rows: []
   - input: ref('int__edxorg__mitx_courseruns')
     rows: []
@@ -368,6 +390,12 @@ unit_tests:
     rows: []
   - input: ref('int__mitxpro__course_runs')
     rows: []
+  - input: ref('int__mitxpro__courses')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
   - input: ref('int__edxorg__mitx_courseruns')
     rows: []
   - input: ref('int__mitxresidential__courseruns')
@@ -420,6 +448,12 @@ unit_tests:
     rows: []
   - input: ref('int__mitxpro__course_runs')
     rows: []
+  - input: ref('int__mitxpro__courses')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
   - input: ref('int__edxorg__mitx_courseruns')
     rows: []
   - input: ref('int__mitxresidential__courseruns')
@@ -442,3 +476,125 @@ unit_tests:
       is_current: true
   expect:
     rows: []
+- name: test_dim_course_run_links_emeritus_and_global_alumni_runs_by_prefixed_code
+  description: >
+    An Emeritus or Global Alumni run takes the xPro course that holds its prefixed
+    Wrike
+    code, even when that course is not external (MO-DL is xPRO+DL, not MXP-DL's xPRO+DLx).
+    A code with no xPro course links to the synthesized course for the code. A code
+    that
+    xPro holds as a run is that run, not a run of its own.
+  model: dim_course_run
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('stg__micromasters__app__postgres__courses_courserun')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__exams_examrun')
+    rows: []
+  - input: ref('int__mitxonline__course_runs')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__courses_course')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows:
+    - {courserun_readable_id: "course-v1:xPRO+DL+R1", courserun_external_readable_id: "MO-DL-26-09#1",
+      course_id: 1, courserun_created_on: "2026-01-01T00:00:00"}
+    - {courserun_readable_id: "course-v1:xPRO+DLx+R1", courserun_external_readable_id: "MXP-DL-26-09#1",
+      course_id: 2, courserun_created_on: "2026-01-01T00:00:00"}
+  - input: ref('int__mitxpro__courses')
+    rows:
+    - {course_id: 1, course_readable_id: "course-v1:xPRO+DL", course_is_external: false}
+    - {course_id: 2, course_readable_id: "course-v1:xPRO+DLx", course_is_external: true}
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows:
+    - {courserun_external_readable_id: "MO-DL-26-09#1", courserun_title: "DL (Sep-2026)",
+      enrollment_created_on: "2026-08-01T00:00:00"}
+    - {courserun_external_readable_id: "MO-DL-26-12#1", courserun_title: "DL (Dec-2026)",
+      enrollment_created_on: "2026-08-01T00:00:00"}
+    - {courserun_external_readable_id: "MO-CRT.ES-26-11#1", courserun_title: "CRT\
+        \ ES (Nov-2026)", enrollment_created_on: "2026-08-01T00:00:00"}
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows:
+    - {courserun_external_readable_id: "MXP-DL-26-12#1", courserun_title: "DL (Dec-2026)"}
+  - input: ref('int__edxorg__mitx_courseruns')
+    rows: []
+  - input: ref('int__mitxresidential__courseruns')
+    rows: []
+  - input: ref('int__bootcamps__course_runs')
+    rows: []
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: "xpro_dl", course_readable_id: "course-v1:xPRO+DL", primary_platform: "mitxpro",
+      is_current: true}
+    - {course_pk: "xpro_dlx", course_readable_id: "course-v1:xPRO+DLx", primary_platform: "mitxpro",
+      is_current: true}
+    - {course_pk: "emeritus_crt_es", course_readable_id: "MO-CRT.ES", primary_platform: "emeritus",
+      is_current: true}
+  - input: ref('dim_platform')
+    rows: []
+  expect:
+    rows:
+    - {courserun_readable_id: "MO-DL-26-12#1", platform: "emeritus", course_fk: "xpro_dl"}
+    - {courserun_readable_id: "MO-CRT.ES-26-11#1", platform: "emeritus", course_fk: "emeritus_crt_es"}
+    - {courserun_readable_id: "MXP-DL-26-12#1", platform: "global_alumni", course_fk: "xpro_dlx"}
+    - {courserun_readable_id: "course-v1:xPRO+DL+R1", platform: "mitxpro", course_fk: "xpro_dl"}
+    - {courserun_readable_id: "course-v1:xPRO+DLx+R1", platform: "mitxpro", course_fk: "xpro_dlx"}
+- name: test_dim_course_run_expires_emeritus_run_that_xpro_now_holds
+  description: >
+    An Emeritus run in the target whose code has since become an xPro run drops out
+    of the
+    source. It must be expired, since no replacement row triggers the expiry.
+  model: dim_course_run
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('stg__micromasters__app__postgres__courses_courserun')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__exams_examrun')
+    rows: []
+  - input: ref('int__mitxonline__course_runs')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__courses_course')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows:
+    - {courserun_readable_id: "course-v1:xPRO+DL+R1", courserun_external_readable_id: "MO-DL-26-09#1",
+      course_id: 1}
+    - {courserun_readable_id: "course-v1:xPRO+DL+R2", courserun_external_readable_id: "MO-DL-26-12#1",
+      course_id: 1}
+  - input: ref('int__mitxpro__courses')
+    rows:
+    - {course_id: 1, course_readable_id: "course-v1:xPRO+DL", course_is_external: false}
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows:
+    - {courserun_external_readable_id: "MO-DL-26-09#1", courserun_title: "DL (Sep-2026)",
+      enrollment_created_on: "2026-08-01T00:00:00"}
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('int__edxorg__mitx_courseruns')
+    rows: []
+  - input: ref('int__mitxresidential__courseruns')
+    rows: []
+  - input: ref('int__bootcamps__course_runs')
+    rows: []
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: "xpro_dl", course_readable_id: "course-v1:xPRO+DL", primary_platform: "mitxpro",
+      is_current: true}
+  - input: ref('dim_platform')
+    rows: []
+  - input: this
+    rows:
+    - {courserun_pk: "old_a", courserun_readable_id: "MO-DL-26-12#1", platform: "emeritus",
+      courserun_title: "DL (Dec-2026)", effective_date: "2026-08-11 00:46:01", is_current: true}
+  expect:
+    rows:
+    - {courserun_readable_id: "MO-DL-26-12#1", platform: "emeritus", course_fk: null,
+      is_current: false}
+    - {courserun_readable_id: "course-v1:xPRO+DL+R1", platform: "mitxpro", course_fk: "xpro_dl",
+      is_current: true}
+    - {courserun_readable_id: "course-v1:xPRO+DL+R2", platform: "mitxpro", course_fk: "xpro_dl",
+      is_current: true}
