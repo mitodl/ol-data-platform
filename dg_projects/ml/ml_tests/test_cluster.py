@@ -165,10 +165,10 @@ def _unit(rows: np.ndarray) -> np.ndarray:
     return rows / np.linalg.norm(rows, axis=1, keepdims=True)
 
 
-def test_cluster_new_themes_keeps_only_groups_far_from_existing_clusters() -> None:
+def test_cluster_new_themes_adds_far_groups_and_places_near_ones() -> None:
     rng = np.random.default_rng(0)
-    # Cluster 0 and the first noise group share a direction, so that group is the
-    # loose edge of cluster 0; the second noise group is a new theme.
+    # Cluster 0 has 10 members. The first noise group shares its direction and is
+    # no larger, so it joins cluster 0; the second noise group is a new theme.
     unit_vectors = _unit(
         np.vstack(
             [
@@ -181,20 +181,48 @@ def test_cluster_new_themes_keeps_only_groups_far_from_existing_clusters() -> No
     labels = np.array([0] * 10 + [cluster.NOISE_CLUSTER_ID] * 20)
     probabilities = np.array([1.0] * 10 + [0.0] * 20)
 
-    new_labels, new_probabilities, new_count = cluster.cluster_new_themes(
+    new_labels, new_probabilities, new_count, placed_count = cluster.cluster_new_themes(
         unit_vectors,
         labels,
         probabilities,
         min_cluster_size=5,
         max_centroid_similarity=0.75,
+        group_placement_min_similarity=0.85,
         umap_params=(2, 5),
     )
 
-    assert new_count == 1
-    assert (new_labels[:10] == 0).all()
-    assert (new_labels[10:20] == cluster.NOISE_CLUSTER_ID).all()
+    assert (new_count, placed_count) == (1, 1)
+    assert (new_labels[:20] == 0).all()
     assert (new_labels[20:] == 1).all()
     assert (new_probabilities[20:] > 0).all()
+
+
+def test_cluster_new_themes_keeps_a_near_group_larger_than_its_cluster_as_noise() -> (
+    None
+):
+    rng = np.random.default_rng(0)
+    # The near group (15) is larger than cluster 0 (5): a broader theme, left as noise
+    unit_vectors = _unit(
+        np.vstack(
+            [
+                np.tile([1.0, 0.0, 0.0], (20, 1)),
+                np.tile([0.0, 1.0, 0.0], (10, 1)),
+            ]
+        )
+        + rng.normal(scale=0.01, size=(30, 3))
+    )
+    labels = np.array([0] * 5 + [cluster.NOISE_CLUSTER_ID] * 25)
+
+    new_labels, _, new_count, placed_count = cluster.cluster_new_themes(
+        unit_vectors,
+        labels,
+        np.zeros(30),
+        min_cluster_size=5,
+        umap_params=(2, 5),
+    )
+
+    assert (new_count, placed_count) == (1, 0)
+    assert (new_labels[5:20] == cluster.NOISE_CLUSTER_ID).all()
 
 
 def test_extend_clusters_keeps_live_keys_and_adds_new_themes() -> None:
