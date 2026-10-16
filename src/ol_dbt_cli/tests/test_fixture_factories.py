@@ -2,14 +2,16 @@
 
 Nothing in CI loads a fixture into StarRocks, so a package that generated a
 dangling foreign key or a repeated unique value would only be found on a local
-lake. These run each package in process, at scale 1 and at a scale past where
-one-to-one parents run out, and check its rows against the Django model dump
-committed next to it. Primary keys are not checked here: ``generate_rows``
-refuses a repeated one.
+lake. These run each package in process, at scale 1 and at a scale where fixed
+pools run out, and check its rows against the Django model dump committed next
+to it. Primary keys are not checked here: ``generate_rows`` refuses a repeated
+one.
 
 Rows are generated at load, so a mimesis or factory_boy bump could change what
-every contributor's lake holds with no diff in the repo. The digest test fails
-on that, and the fix is a deliberate digest update in the same PR.
+every contributor's lake holds with no diff in the repo. The digest covers every
+row ``ol-dbt fixtures load`` inserts, hand-written ones too, so it fails on that
+and on any edit to the fixture file or the package. The fix is a deliberate
+digest update in the same PR.
 """
 
 from __future__ import annotations
@@ -39,7 +41,8 @@ if TYPE_CHECKING:
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INVENTORY_DIR = REPO_ROOT / DEFAULT_INVENTORY_DIR
 DIGESTS_FILE = Path(__file__).with_name("generated_fixture_digests.json")
-# Past the default counts of tens, where a one-to-one runs out of parents.
+# Far enough past the default counts that a package drawing from a fixed pool
+# runs out of it: xPRO's 24 Learn topic names are used up from scale 5.
 LARGER_SCALE = 20
 EMAIL = re.compile(r"[\w.+-]+@([\w-]+(?:\.[\w-]+)+)")
 UNITS = sorted(
@@ -76,8 +79,7 @@ def _generation(unit: Unit, scale: float) -> _Generation:
     assert factories is not None
     rows = generate_rows(fixture, unit, factories, scale)
     prefix = str(unit.data["table_prefix"])
-    models_path = FACTORIES_DIR / unit.path.stem / MODELS_FILE
-    dump = json.loads(models_path.read_text()) if models_path.exists() else {"tables": {}}
+    dump = json.loads((FACTORIES_DIR / unit.path.stem / MODELS_FILE).read_text())
     return _Generation(
         unit=unit,
         fixture=fixture,
@@ -112,6 +114,11 @@ def test_every_committed_package_is_guarded() -> None:
 
     assert packages == {unit.path.stem for unit in UNITS}
     assert {"xpro/app_postgres", "mitxonline/app_postgres"} <= {unit.key for unit in UNITS}
+
+
+def test_every_fixture_table_has_a_model(generation: _Generation) -> None:
+    """A table with none would be skipped by every constraint check below."""
+    assert set(generation.tables) - set(generation.models) == set()
 
 
 def test_generated_foreign_keys_reference_rows_that_exist(generation: _Generation) -> None:
@@ -232,10 +239,13 @@ def test_generated_emails_are_on_the_reserved_domain(generation: _Generation) ->
 
 @pytest.mark.parametrize("unit", UNITS, ids=lambda unit: unit.key)
 def test_one_seed_generates_the_same_rows(unit: Unit) -> None:
-    assert _generation(unit, 1).generated == _generation(unit, 1).generated
+    first, second = _generation(unit, 1), _generation(unit, 1)
+
+    # The hand-written rows too: generate changes a parent's numchild in them.
+    assert (first.hand_written, first.generated) == (second.hand_written, second.generated)
 
 
-@pytest.mark.parametrize("unit", [unit for unit in UNITS if (FACTORIES_DIR / unit.path.stem / MODELS_FILE).exists()])
+@pytest.mark.parametrize("unit", UNITS, ids=lambda unit: unit.key)
 def test_the_scaffold_reproduces_the_committed_base_factories(unit: Unit) -> None:
     """A hand edit to _generated.py belongs in __init__.py, where the next scaffold leaves it."""
     package = FACTORIES_DIR / unit.path.stem
@@ -244,8 +254,7 @@ def test_the_scaffold_reproduces_the_committed_base_factories(unit: Unit) -> Non
     written = scaffold(fixture, unit, json.loads((package / MODELS_FILE).read_text())).source
 
     assert written == (package / GENERATED_FILE).read_text(), (
-        f"{package / GENERATED_FILE} is not what `ol-dbt fixtures scaffold --unit {unit.key} "
-        f"--models {package / MODELS_FILE}` writes"
+        f"{unit.path.stem}/{GENERATED_FILE} is not what `ol-dbt fixtures scaffold --unit {unit.key}` writes"
     )
 
 
@@ -261,10 +270,11 @@ def test_generated_rows_match_the_pinned_digest(unit: Unit, capsys: pytest.Captu
     pinned = json.loads(DIGESTS_FILE.read_text())[unit.key]
 
     assert digest == pinned, (
-        f"`ol-dbt fixtures generate --unit {unit.key} | sha256sum` is {digest}, not the pinned {pinned}. "
-        f"With mimesis {importlib.metadata.version('mimesis')} and factory_boy "
-        f"{importlib.metadata.version('factory-boy')}, the rows every contributor's local lake loads have changed. "
-        "If that is intended (a version bump, a runtime or package change), set the digest in "
+        f"The sha256 of `ol-dbt fixtures generate --unit {unit.key}` is {digest}, not the pinned {pinned}: "
+        "the rows every contributor's local lake loads have changed. An edit to the unit's fixture file, its "
+        "factory package or the generation runtime does that, and so does a mimesis or factory_boy version "
+        f"change (installed: mimesis {importlib.metadata.version('mimesis')}, factory_boy "
+        f"{importlib.metadata.version('factory-boy')}). If the change is intended, set the digest in "
         f"{DIGESTS_FILE.name} in the same PR. To see what changed, run "
         f"`ol-dbt fixtures generate --unit {unit.key} --out DIR` on main and on this branch and diff the two."
     )

@@ -180,10 +180,13 @@ It holds the rows to the package's `models.json` (foreign keys, generic foreign 
 `unique`, `unique_together`, treebeard trees) and keeps generated emails on
 `example.com`. It also checks that `scaffold` still writes the committed `_generated.py`,
 so a hand edit there fails CI. It pins each unit's rows to a digest in
-`generated_fixture_digests.json`, the sha256 of `ol-dbt fixtures generate --unit <unit>`. A
-change to a package, the generation runtime, mimesis or factory_boy that changes the rows
-fails that test, because every contributor's lake would change with no fixture diff. When
-the change is intended, the failure prints the new digest to commit in the same PR.
+`generated_fixture_digests.json`, the sha256 of `ol-dbt fixtures generate --unit <unit>`,
+which holds the hand-written rows as well as the generated ones. Any change to what `load`
+inserts for the unit fails that test: an edit to the fixture file or the package, a
+generation runtime change, or a mimesis or factory_boy version that draws different values.
+A version bump changes every contributor's lake with no diff in the repo, and this is
+what makes it visible. When the change is intended, the failure prints the new digest to
+commit in the same PR.
 
 Generated rows are fixture rows to `ol-dbt ingest local`, so "load fixtures first and
 the source second" above still holds.
