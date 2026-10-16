@@ -54,25 +54,24 @@ else:
     database_name = "ol_warehouse_production_intermediate"
 
 
-def _live_cluster_keys(
+def _check_live_run(
     catalog,
-    embedding_provenance: tuple[str, int, str | None],
+    live_run_id: str | None,
     feedback_since: str | None,
     platforms: list[str] | None,
-) -> tuple[str | None, dict[str, str]]:
-    # Another scope would carry no member forward, and identity would then retire
-    # every live key without the continuity floor to stop it.
-    live_run_id = latest_identity_processed_run(catalog, database_name)
+) -> None:
+    if live_run_id is None:
+        return
     # Before assignment rewrites membership, a newly live run's new keys have no
     # members, so this run would leave them empty.
-    if live_run_id is not None and not run_already_applied(
-        catalog, database_name, live_run_id
-    ):
+    if not run_already_applied(catalog, database_name, live_run_id):
         msg = (
             f"feedback_cluster_assignment has not applied the live run {live_run_id} "
             "yet; run this again after it finishes."
         )
         raise permanent_failure(msg)
+    # Another scope would carry no member forward, and identity would then retire
+    # every live key without the continuity floor to stop it.
     live_run = (
         get_dbt_model_as_dataframe(
             database_name=database_name, table_name="feedback_cluster_run"
@@ -93,6 +92,16 @@ def _live_cluster_keys(
             "change the scope only with full_refresh."
         )
         raise permanent_failure(msg)
+
+
+def _live_cluster_keys(
+    catalog,
+    embedding_provenance: tuple[str, int, str | None],
+    feedback_since: str | None,
+    platforms: list[str] | None,
+) -> tuple[str | None, dict[str, str]]:
+    live_run_id = latest_identity_processed_run(catalog, database_name)
+    _check_live_run(catalog, live_run_id, feedback_since, platforms)
     members_by_key = _active_cluster_members(
         catalog, *embedding_provenance, feedback_since, platforms
     )
