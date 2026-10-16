@@ -195,7 +195,7 @@ class TestSourceDrift:
 
     def test_a_changed_replication_method_is_an_error(self, units: list[Any]) -> None:
         # §3.4 records this so `rg replication_method: xmin` answers which
-        # connections need a replacement cursor before dlt. Flipping a source
+        # connections need a replacement cursor or a full re-read before dlt. Flipping a source
         # from xmin to a cursor column changes no stream at all.
         snapshot = live(sourceId="src-1")
         snapshot["sources"] = [
