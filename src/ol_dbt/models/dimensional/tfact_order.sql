@@ -229,12 +229,16 @@ with mitxonline_orders as (
 
 -- Snapshot of the target's current (order_key, user_fk) pairs, used to re-select rows
 -- whose user_fk has gone stale after a dim_user re-key (the source row itself did not
--- change, so the activity-timestamp watermark alone would never catch it).
+-- change, so the activity-timestamp watermark alone would never catch it). One row per
+-- key: a key a past run wrote twice would otherwise match each source row twice and be
+-- written twice again. It is re-selected instead, so delete+insert leaves one copy.
 , stale_user_fk_lookup as (
     select
         order_key
-        , user_fk as stored_user_fk
+        , max(user_fk) as stored_user_fk
+        , count(*) > 1 as stored_has_copies
     from {{ this }}
+    group by order_key
 )
 {% endif %}
 
@@ -283,6 +287,7 @@ with mitxonline_orders as (
         or owf.order_updated_on is null
         -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
         or sufk.stored_user_fk is distinct from owf.user_fk
+        or sufk.stored_has_copies
     )
     {% endif %}
 )

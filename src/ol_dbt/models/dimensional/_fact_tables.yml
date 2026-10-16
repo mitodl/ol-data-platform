@@ -1878,6 +1878,78 @@ unit_tests:
       letter_grade: "A"
       grade_created_on: "2024-01-15T00:00:00"
       grade_updated_on: "2024-01-15T00:00:00"
+- name: test_tfact_grade_rewrites_a_key_the_target_holds_twice_as_one_row
+  description: >
+    A grade a past run wrote twice (before its source was fixed) is re-selected
+    and written once, so delete+insert replaces both copies. Its timestamp is
+    below the watermark and its user_fk has not changed, so nothing else would
+    re-select it, and a snapshot with both copies would write it twice again.
+  model: tfact_grade
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__courserun_grades')
+    rows:
+    - courserungrade_id: 7001
+      user_id: 555
+      courserun_readable_id: "course-v1:MITxT+1"
+      courserun_platform: "MITx Online"
+      courserungrade_grade: 0.95
+      courserungrade_letter_grade: "A"
+      courserungrade_is_passing: true
+      courserungrade_created_on: "2024-01-15T00:00:00"
+      courserungrade_updated_on: "2024-01-15T00:00:00"
+  - input: ref('int__mitxpro__courserun_grades')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_grades')
+    rows: []
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_PK"
+      mitxonline_application_user_id: 555
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_MITXONLINE"
+      platform_readable_id: "mitxonline"
+  - input: this
+    rows:
+    - &stored_copy
+      grade_key: "e466cc3cac58c5170c9703eed3b27a11"  # pragma: allowlist secret
+      grade_id: "7001"
+      grade_date_key: 20240115
+      user_fk: "USER_PK"
+      platform: "mitxonline"
+      grade_value: 0.95
+      is_passing: true
+      letter_grade: "A"
+      grade_created_on: "2024-01-15T00:00:00"
+      grade_updated_on: "2024-01-15T00:00:00"
+    - *stored_copy
+    - grade_key: "unrelated-later-grade"
+      grade_id: "9999"
+      grade_date_key: 20240201
+      user_fk: "SOME_OTHER_USER_PK"
+      platform: "mitxonline"
+      grade_value: 0.80
+      is_passing: true
+      letter_grade: "B"
+      grade_created_on: "2024-02-01T00:00:00"
+      grade_updated_on: "2024-02-01T00:00:00"
+  expect:
+    rows:
+    - grade_key: "e466cc3cac58c5170c9703eed3b27a11"  # pragma: allowlist secret
+      grade_id: "7001"
+      grade_date_key: 20240115
+      user_fk: "USER_PK"
+      platform: "mitxonline"
+      grade_value: 0.95
+      is_passing: true
+      letter_grade: "A"
+      grade_created_on: "2024-01-15T00:00:00"
+      grade_updated_on: "2024-01-15T00:00:00"
 - name: test_tfact_order_refreshes_stale_user_fk_after_dim_user_rekey
   description: >
     Regression test for the dim_user re-key incident: when dim_user.user_pk changes

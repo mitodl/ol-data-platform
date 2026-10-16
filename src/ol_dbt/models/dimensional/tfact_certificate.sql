@@ -279,8 +279,9 @@ with mitxonline_certificates as (
 -- the edxorg and micromasters sources resolve courserun_fk to the same edxorg
 -- course run (see the dim_course_run join above). Their surrogate certificate_ids
 -- differ (user_id-based vs email-based), so the same physical certificate enters
--- as two rows under different certificate_keys. The micromasters copy is dropped when an edxorg record exists for the same
--- (user_fk, courserun_fk, certificate_scope) and both FKs resolved.
+-- as two rows under different certificate_keys. The micromasters copy is dropped when an
+-- edxorg record exists for the same (user_fk, courserun_fk, certificate_scope) and both
+-- FKs resolved.
 -- One platform can also hold two certificates for a (user, course run): MITx Online has
 -- a pair issued two days apart, and a revoked certificate can be followed by a new one.
 -- Those are separate certificates and are all kept. is_current marks the one that stands:
@@ -335,6 +336,24 @@ with mitxonline_certificates as (
     from {{ this }}
     group by platform, certificate_scope)
 
+-- The target, one row per certificate_key. A key a past run wrote twice would otherwise
+-- match each source row twice below and be written twice again. It is re-selected (or
+-- carried forward) instead, so delete+insert leaves one copy.
+, target_one_per_key as (
+    select *
+    from (
+        select
+            *
+            , count(*) over (partition by certificate_key) > 1 as target_has_copies
+            , row_number() over (
+                partition by certificate_key
+                order by certificate_updated_on desc nulls last, user_fk, courserun_fk
+            ) as target_copy_num
+        from {{ this }}
+    ) as target
+    where target_copy_num = 1
+)
+
 -- Snapshot of the target's current user_fk and is_current per certificate_key, used to
 -- re-select rows where either has gone stale: user_fk after a dim_user re-key, is_current
 -- when another certificate takes it. The source row itself did not change in either case,
@@ -344,7 +363,8 @@ with mitxonline_certificates as (
         certificate_key
         , user_fk as stored_user_fk
         , {% if target_has_is_current %}is_current{% else %}cast(null as boolean){% endif %} as stored_is_current
-    from {{ this }}
+        , target_has_copies as stored_has_copies
+    from target_one_per_key
 )
 
 -- If a platform's source model is empty for a run, nothing below treats its certificates
@@ -403,6 +423,7 @@ with mitxonline_certificates as (
         -- A newer certificate can take is_current from a row whose own timestamps did
         -- not move, so re-select any row whose flag no longer matches the target.
         or sufk.stored_is_current is distinct from (cwf._cross_source_row_num = 1)
+        or sufk.stored_has_copies
     )
 
     -- A certificate that has left the source can never be re-selected above, so it would
@@ -427,7 +448,7 @@ with mitxonline_certificates as (
         , target.certificate_updated_on
         , target.certificate_issued_on
         , false as is_current
-    from {{ this }} as target
+    from target_one_per_key as target
     inner join source_platforms
         on target.platform = source_platforms.platform
         and target.certificate_scope = source_platforms.certificate_scope
@@ -439,7 +460,7 @@ with mitxonline_certificates as (
         ]) }}
     where source_certificates.certificate_id is null
     {% if target_has_is_current %}
-    and target.is_current is distinct from false
+    and (target.is_current is distinct from false or target.target_has_copies)
     {% endif %}
     {% endif %}
 )

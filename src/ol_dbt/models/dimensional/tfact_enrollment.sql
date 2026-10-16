@@ -497,13 +497,19 @@ with mitxonline_enrollments as (
 -- code that gains an xPro match), or whose contract_fk has (MITx Online backfilled the
 -- enrollment's contract without moving updated_on past our watermark). The source row
 -- itself did not change, so the activity-timestamp watermark alone would never catch these.
+-- One row per key: a key a past run wrote twice would otherwise match each source row twice
+-- and be written twice again. It is re-selected instead, so delete+insert leaves one copy.
 , stale_fk_lookup as (
     select
         enrollment_key
-        , user_fk as stored_user_fk
-        , courserun_fk as stored_courserun_fk
-        , {% if target_has_contract_fk %}contract_fk{% else %}cast(null as varchar){% endif %} as stored_contract_fk
+        , max(user_fk) as stored_user_fk
+        , max(courserun_fk) as stored_courserun_fk
+        , max(
+            {% if target_has_contract_fk %}contract_fk{% else %}cast(null as varchar){% endif %}
+        ) as stored_contract_fk
+        , count(*) > 1 as stored_has_copies
     from {{ this }}
+    group by enrollment_key
 )
 {% endif %}
 
@@ -561,6 +567,7 @@ with mitxonline_enrollments as (
         or sfk.stored_courserun_fk is distinct from ewf.courserun_fk
         -- contract added or re-resolved, including every B2B row on the run that adds the column
         or sfk.stored_contract_fk is distinct from ewf.contract_fk
+        or sfk.stored_has_copies
     )
     {% endif %}
 )
