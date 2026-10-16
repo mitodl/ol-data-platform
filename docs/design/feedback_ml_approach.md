@@ -362,7 +362,8 @@ conversations, with what outcome (`completed` | `failed`). A failed run changes 
 `is_promoted` decides which runs reach the dashboard: the scheduled runs are promoted, and a manual run that
 adds clusters or re-clusters everything runs unpromoted. After a review, running identity with that run's
 `cluster_run_id` promotes it. An incremental run records the live run it started from, and identity rejects
-it if another run went live in the meantime.
+it if another run went live in the meantime, so turn off the weekly schedule and the growth sensor during a
+review.
 
 **Automated checks, and a review for structural changes.** Placement and re-clustering both emit asset
 metadata: the unplaced share, per-run continuity (the share of conversations that keep their key), and counts

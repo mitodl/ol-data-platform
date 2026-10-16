@@ -37,3 +37,24 @@ def latest_identity_processed_run(catalog, database_name: str) -> str | None:
         .collect()
     )
     return live_df["cluster_run_id"][0] if live_df.height else None
+
+
+def run_already_applied(catalog, database_name: str, cluster_run_id: str) -> bool:
+    """Whether feedback_cluster_assignment has written cluster_run_id's full rewrite
+    to feedback_cluster_membership.
+    """
+    if not table_exists(catalog, f"{database_name}.feedback_cluster_membership"):
+        return False
+    applied_count = (
+        get_dbt_model_as_dataframe(
+            database_name=database_name, table_name="feedback_cluster_membership"
+        )
+        .filter(
+            (pl.col("cluster_run_id") == cluster_run_id)
+            & (pl.col("cluster_assignment_method") == "recluster")
+        )
+        .select(pl.len())
+        .collect()
+        .item()
+    )
+    return applied_count > 0

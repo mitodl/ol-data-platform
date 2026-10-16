@@ -51,8 +51,9 @@ else:
 class FeedbackClusterIdentityConfig(Config):
     cluster_run_id: str | None = Field(
         default=None,
-        description="Process this specific completed run instead of "
-        "auto-selecting the most recent completed run with no lineage yet.",
+        description="Process this specific completed run, such as one promoted after "
+        "a review, instead of auto-selecting the newest unprocessed run after the "
+        "live one.",
     )
     match_threshold: float = Field(
         default=JACCARD_MATCH_THRESHOLD,
@@ -495,9 +496,8 @@ def feedback_cluster_identity(
         },
     )
     if continuity < CONTINUITY_FLOOR:
-        # Fail before writing either output -- feedback_cluster_assignment only
-        # rewrites from a run that has lineage rows, so leaving this run
-        # unresolved keeps it on the prior, still-good cluster_key set.
+        # Fail before writing any output: with no feedback_cluster_identity_run row
+        # this run never goes live, so assignment keeps the prior cluster_key set.
         msg = (
             f"Run {cluster_run_id} continuity {continuity:.2f} is below the "
             f"floor {CONTINUITY_FLOOR:.2f}; a configuration change is needed, "

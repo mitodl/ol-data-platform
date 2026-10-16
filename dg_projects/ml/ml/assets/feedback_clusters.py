@@ -32,7 +32,10 @@ from ml.lib.cluster import (
     filter_conversation_scope,
     platforms_to_run_value,
 )
-from ml.lib.cluster_run_lookup import latest_identity_processed_run
+from ml.lib.cluster_run_lookup import (
+    latest_identity_processed_run,
+    run_already_applied,
+)
 from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.failures import permanent_failure
@@ -60,6 +63,16 @@ def _live_cluster_keys(
     # Another scope would carry no member forward, and identity would then retire
     # every live key without the continuity floor to stop it.
     live_run_id = latest_identity_processed_run(catalog, database_name)
+    # Before assignment rewrites membership, a newly live run's new keys have no
+    # members, so this run would leave them empty.
+    if live_run_id is not None and not run_already_applied(
+        catalog, database_name, live_run_id
+    ):
+        msg = (
+            f"feedback_cluster_assignment has not applied the live run {live_run_id} "
+            "yet; run this again after it finishes."
+        )
+        raise permanent_failure(msg)
     live_run = (
         get_dbt_model_as_dataframe(
             database_name=database_name, table_name="feedback_cluster_run"
@@ -117,7 +130,9 @@ class FeedbackClustersConfig(Config):
         description=(
             "When not a full refresh, also create clusters for new common themes. "
             "Run it with is_promoted false and promote the run after a review. "
-            "Ignored with full_refresh, which builds every cluster from scratch."
+            "Turn off feedback_clusters_schedule and feedback_clusters_growth_sensor "
+            "during the review: identity rejects this run if another run goes live "
+            "first. Ignored with full_refresh, which builds every cluster from scratch."
         ),
     )
     sample_limit: int | None = Field(
@@ -260,7 +275,8 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
     expensive relative to how often new conversations show up, and
     feedback_cluster_assignment (incremental placement) handles those between
     runs. feedback_cluster_identity matches this run's clusters onto stable
-    cluster_keys immediately after; no human approves a run.
+    cluster_keys. A promoted incremental run goes live without a review; a
+    full_refresh or add_new_clusters run waits for one (see is_promoted).
     """
     if config.is_promoted and (config.full_refresh or config.add_new_clusters):
         # The review gate: identity would otherwise take the run live at once
