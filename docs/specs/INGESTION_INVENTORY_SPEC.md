@@ -994,8 +994,9 @@ A unit moves in two steps, and they are separate changes:
    `production` joins that set and the unit flips to `loader: dlt`. A unit can have more than
    one connection (§3.5). Four in the order below have two: the three `mysql` units and
    `irx/bigquery`. One left running is a second writer on the unit's tables. Step 2 also
-   carries the unit's history across (§10.4), and a unit does not cut over until that is
-   in place.
+   carries the unit's history across (§10.4). It is not one change: the connections are
+   paused and the archive is taken and counted first, and the change that adds `production`
+   merges only after that, since a deploy that adds it can load before anyone archives.
 
 Local ingest needs step 1 only. In the `dev` profile `ol_dlt.database` already reads the
 local-dev CloudNativePG cluster with fixed credentials and no Vault. So the order below is
@@ -1107,18 +1108,22 @@ A dlt database source writes the raw table names Airbyte writes
 every load (`build_table_resource` in `ol_dlt.database`). So a unit's first production dlt
 load overwrites its Airbyte tables. Raw expiry then removes the older Iceberg snapshots: 3 days
 for the `mitxonline`, `xpro`, `mitlearn`, `learn_ai` and `ocw` app tables, and 7 days for the
-rest (`RAW_LAYER_GROUP_CONFIGS` in `ol_orchestrate.lib.iceberg_maintenance`). Two kinds of
-data that Airbyte has accrued would go with them:
+other database units (`RAW_LAYER_GROUP_CONFIGS` in `ol_orchestrate.lib.iceberg_maintenance`).
+Two kinds of data that Airbyte has accrued would go with them:
 
 - Keys deleted at the source. An `incremental_deduped_history` table keeps one row per key
   and never drops a key, so it still holds every row deleted upstream since Airbyte first read
   it. Most tables of the Postgres units load this way. A replace drops those rows.
-- Earlier versions. An `incremental_append` table keeps every version Airbyte read.
-  `learn_ai/app_postgres` loads 27 of its 28 tables this way. Measured in production on
-  2026-10-16, counting rows against distinct ids: `ai_chatbots_djangocheckpoint` 1,610,728 and
-  1,242,506, `ai_chatbots_userchatsession` 149,160 and 119,473, `users_user` 28,688 and 17,320,
-  all since 2025-09-24. A history snapshot keeps one version per key, and append tables are
-  outside the snapshot scope, so only a copy of the raw table keeps these.
+- Earlier versions. An `incremental_append` table keeps every version Airbyte read. Among
+  the Postgres units that is `learn_ai/app_postgres`, which loads 27 of its 28 tables this
+  way. Measured in production on 2026-10-16, counting rows against distinct ids:
+  `ai_chatbots_djangocheckpoint` 1,610,728 and 1,242,506, `ai_chatbots_userchatsession`
+  149,160 and 119,473, `users_user` 28,688 and 17,320, all since 2025-09-24. A history
+  snapshot keeps one version per key, and append tables are outside the snapshot scope until
+  their cutover makes them replaced tables, so only a copy of the raw table keeps these. The
+  `mysql` units (the two studentmodule history tables each), tracking logs, the S3 and API
+  units and Zendesk append too. Where their dlt source goes on appending to the same table,
+  that table is already the record and needs no copy.
 
 Neither is backfill in the sense the history design ruled out (rebuilding history from expired
 Iceberg snapshots). Both are rows that exist today, and the cutover is what would delete them.
@@ -1131,9 +1136,12 @@ Each unit therefore takes these steps, in this order:
    dlt source, so they can go live before it is built.
 2. Every production Airbyte connection of the unit is paused.
 3. Each raw table those connections load is copied into the history schema
-   (`tk-archive-a-unit-s-airbyte-raw-tables-into-the-his-97421a`). The copy has the same
-   column exclusions and grants as the snapshots, and row counts are checked against the
-   source table. Archive tables are never rebuilt or dropped.
+   (`tk-archive-a-unit-s-airbyte-raw-tables-into-the-his-97421a`), modeled or not. Snapshots
+   cover modeled tables only, so for the rest this copy is the only record. The copy drops
+   secret columns and the inventory's per-table excludes, as the snapshots do. It keeps the
+   loader columns the snapshots drop, because `_airbyte_extracted_at` is the only order an
+   append table's versions have. It has the history layer's grants, and its row counts are
+   checked against the source table. Archive tables are never rebuilt or dropped.
 4. The unit's cutover time is recorded in its inventory unit, so reports can discount the
    versions that start then. A renamed column, or a type the snapshot compares differently,
    writes one new version of every row.
@@ -1141,8 +1149,10 @@ Each unit therefore takes these steps, in this order:
    Airbyte kept and the source no longer has as deleted, with the cutover time as the delete
    time. That is expected, and it trips the snapshot's missing-key guard
    (`tk-guard-raw-history-snapshots-against-an-empty-or--b6d53b`), so this run uses the
-   guard's per-run override. The missing-key count is first checked against the key
-   difference between the Airbyte table and a dlt shadow load.
+   guard's per-run override. `dbt_automation_sensor` starts that run on its own after the
+   load, so the override is set (or the sensor paused) before the load, not after. The
+   missing-key count is first checked against the key difference between the Airbyte table
+   and a dlt shadow load, which writes outside the raw schema.
 
 A unit whose dlt table has a new name keeps its Airbyte table, which is then the archive.
 `raw__edxorg__s3__course_blocks` is the first (#2986): `retired.yml` lists it, it stays
