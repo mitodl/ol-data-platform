@@ -203,7 +203,3 @@ def test_the_hand_written_rows_load_unchanged() -> None:
     rows = _xpro(1)
 
     assert {table.raw_table: table.rows for table in fixture.tables} == rows.hand_written
-
-
-def test_one_seed_generates_the_same_rows() -> None:
-    assert _xpro(1).generated == _xpro(1).generated

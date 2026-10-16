@@ -56,5 +56,8 @@ which runs a package. It brings every value to its column's fixture type, fills
 the loader's columns, and has
 :func:`ol_dbt_cli.lib.raw_fixtures.validate_generated` check the rows against
 the fixture file's columns and the inventory unit's primary keys. Foreign keys
-are declared in neither, so a unit checks its own references in its tests.
+are declared in neither. ``tests/test_fixture_factories.py`` checks every
+package's rows against its ``models.json`` and pins them to a digest, so a
+change to the rows a package generates fails CI until the digest is updated
+with it.
 """
