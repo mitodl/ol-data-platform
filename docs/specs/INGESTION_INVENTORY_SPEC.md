@@ -1142,11 +1142,12 @@ Each unit therefore takes these steps, in this order:
    loader columns the snapshots drop, because `_airbyte_extracted_at` is the only order an
    append table's versions have. It has the history layer's grants, and its row counts are
    checked against the source table. Archive tables are never rebuilt or dropped.
-4. The unit's cutover time is recorded in its inventory unit, so reports can discount the
-   versions that start then. A renamed column, or a type the snapshot compares differently,
-   writes one new version of every row.
+4. The unit's cutover time is recorded in its inventory unit. Reports use it to discount
+   the versions and deletes from the first snapshot run after it. A renamed column, or a type
+   the snapshot compares differently, writes one new version of every row.
 5. The first production dlt load runs. The snapshot run after it records each key that
-   Airbyte kept and the source no longer has as deleted, with the cutover time as the delete
+   Airbyte kept and the source no longer has as deleted. The snapshot stamps that delete with
+   its own run time, which is neither the source's delete time nor the recorded cutover
    time. That is expected, and it trips the snapshot's missing-key guard
    (`tk-guard-raw-history-snapshots-against-an-empty-or--b6d53b`), so this run uses the
    guard's per-run override. `dbt_automation_sensor` starts that run on its own after the
@@ -1157,8 +1158,8 @@ Each unit therefore takes these steps, in this order:
 A unit whose dlt table has a new name keeps its Airbyte table, which is then the archive.
 `raw__edxorg__s3__course_blocks` is the first (#2986): `retired.yml` lists it, it stays
 registered and read-only, and it holds earlier copies of 1,918 structure files that the dlt
-table does not. A retired table's data is not deleted until someone has checked that no other
-table holds the same history.
+table does not. A retired table's data is deleted only after someone has shown that another
+retained table holds the same history.
 
 `tk-history-gate-for-each-unit-s-production-dlt-cuto-5b7751` tracks these steps and blocks the
 per-source cutover recipe. Unit 1 is the first that has to pass it.
