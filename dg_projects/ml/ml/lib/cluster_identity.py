@@ -307,6 +307,41 @@ def match_clusters(
     return matches, lineage_rows
 
 
+def extend_matches(
+    new_cluster_members: dict[int, frozenset[str]],
+    carried_key_of_cluster_id: dict[int, str],
+    active_cluster_keys: set[str],
+) -> tuple[list[ClusterMatch], list[dict[str, Any]]]:
+    """Resolve an extend run (ml.lib.cluster.extend_clusters) without Jaccard.
+
+    The run already names the key each cluster keeps: placed noise can double a
+    cluster, which Jaccard would read as a split. A cluster_id that carries an
+    active key continues it, and any other cluster_id is new. No key retires: an
+    active key the run has no cluster for stays active, so missing input (such as
+    an upstream outage) cannot empty the live clusters. Retiring a key is a full
+    refresh's job. Returns the same shape as match_clusters.
+    """
+    matches: list[ClusterMatch] = []
+    lineage_rows: list[dict[str, Any]] = []
+    for new_id in new_cluster_members:
+        carried_key = carried_key_of_cluster_id.get(new_id)
+        if carried_key in active_cluster_keys:
+            match = ClusterMatch(new_id, carried_key, "continued", carried_key, None)
+        else:
+            match = ClusterMatch(new_id, new_cluster_key(), "new", None, None)
+        matches.append(match)
+        lineage_rows.append(
+            {
+                "prior_cluster_key": match.prior_cluster_key,
+                "cluster_key": match.cluster_key,
+                "cluster_id": new_id,
+                "relation": match.relation,
+                "jaccard": None,
+            }
+        )
+    return matches, lineage_rows
+
+
 def compute_continuity(
     matches: list[ClusterMatch], new_cluster_members: dict[int, frozenset[str]]
 ) -> float:

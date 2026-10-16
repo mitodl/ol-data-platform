@@ -28,6 +28,7 @@ from ml.lib.cluster_identity import (
     cluster_lineage_pk,
     compute_cluster_stats,
     compute_continuity,
+    extend_matches,
     match_clusters,
 )
 from ml.lib.cluster_run_lookup import latest_identity_processed_run
@@ -50,8 +51,9 @@ else:
 class FeedbackClusterIdentityConfig(Config):
     cluster_run_id: str | None = Field(
         default=None,
-        description="Process this specific completed run instead of "
-        "auto-selecting the most recent completed run with no lineage yet.",
+        description="Process this specific completed run, such as one promoted after "
+        "a review, instead of auto-selecting the newest unprocessed run after the "
+        "live one.",
     )
     match_threshold: float = Field(
         default=JACCARD_MATCH_THRESHOLD,
@@ -102,7 +104,17 @@ def _select_run_to_process(
             & (pl.col("embedding_dim") == EMBEDDING_DIM)
             & (pl.col("embedding_input_filter") == PRODUCTION_EMBEDDING_INPUT)
         )
-        .select(["cluster_run_id", "run_at"])
+        .select(
+            "cluster_run_id",
+            "run_at",
+            # A table written before these columns existed holds full refreshes only
+            *(
+                pl.col(column)
+                if column in runs_lazy.collect_schema().names()
+                else pl.lit(None, dtype=pl.String).alias(column)
+                for column in ("run_type", "base_cluster_run_id")
+            ),
+        )
         .collect()
     )
     if runs_df.height == 0:
@@ -118,9 +130,24 @@ def _select_run_to_process(
             .unique()
             .collect()["cluster_run_id"]
         )
-    unprocessed = runs_df.filter(
-        ~pl.col("cluster_run_id").is_in(already_processed)
-    ).sort("run_at", descending=True)
+    unprocessed = runs_df.filter(~pl.col("cluster_run_id").is_in(already_processed))
+    # Only runs newer than the live one: an older run is promoted by cluster_run_id
+    # after a review, and a stale run identity rejected must not be picked again.
+    live_run_id = latest_identity_processed_run(catalog, database_name)
+    live_run_at_df = (
+        runs_lazy.filter(pl.col("cluster_run_id") == live_run_id)
+        .select("run_at")
+        .collect()
+    )
+    if live_run_at_df.height:
+        unprocessed = unprocessed.filter(pl.col("run_at") > live_run_at_df.item())
+    # An incremental run that finished after another run went live extended the
+    # wrong base; _check_incremental_base would reject it on every selection.
+    unprocessed = unprocessed.filter(
+        pl.col("run_type").ne_missing(pl.lit("incremental"))
+        | pl.col("base_cluster_run_id").eq_missing(pl.lit(live_run_id))
+    )
+    unprocessed = unprocessed.sort("run_at", descending=True)
     if unprocessed.height == 0:
         return None
     return unprocessed["cluster_run_id"][0]
@@ -245,6 +272,41 @@ def _scope_changed(catalog, run_row: dict[str, Any]) -> bool:
     )
 
 
+def _check_incremental_base(catalog, run_row: dict[str, Any]) -> None:
+    # A run held for review resolves against the keys live now: if another run went
+    # live meanwhile, its new keys would retire with no drop in continuity.
+    live_run_id = latest_identity_processed_run(catalog, database_name)
+    if run_row.get("base_cluster_run_id") != live_run_id:
+        msg = (
+            f"Run {run_row['cluster_run_id']} extended "
+            f"{run_row.get('base_cluster_run_id')}, but the live run is now "
+            f"{live_run_id}; start a new feedback_clusters run."
+        )
+        raise permanent_failure(msg)
+
+
+def _resolve_matches(
+    incremental_candidates_df: pl.DataFrame | None,
+    new_cluster_members: dict[int, frozenset[str]],
+    active_cluster_members: dict[str, frozenset[str]],
+    match_threshold: float,
+):
+    # An incremental run names the key each cluster keeps; others match by Jaccard
+    if incremental_candidates_df is None:
+        return match_clusters(
+            new_cluster_members, active_cluster_members, match_threshold
+        )
+    carried_key_of_cluster_id = dict(
+        incremental_candidates_df.select("cluster_id", "cluster_key")
+        .drop_nulls("cluster_key")
+        .unique()
+        .iter_rows()
+    )
+    return extend_matches(
+        new_cluster_members, carried_key_of_cluster_id, set(active_cluster_members)
+    )
+
+
 def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
     """cluster_key -> its current feedback_cluster row, for carrying
     first_seen_run_id forward on a continued/merged key.
@@ -277,7 +339,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
                 "upsert_options": {"join_cols": ["cluster_key"]},
                 "schema_update_mode": "update",
             },
-            code_version="feedback_cluster_identity_v4",
+            code_version="feedback_cluster_identity_v5",
             automation_condition=upstream_or_code_changes(),
         ),
         "feedback_cluster_lineage": AssetOut(
@@ -288,7 +350,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_cluster_identity_v4",
+            code_version="feedback_cluster_identity_v5",
             automation_condition=upstream_or_code_changes(),
             is_required=False,
         ),
@@ -301,7 +363,7 @@ def _existing_cluster_rows(catalog) -> dict[str, dict[str, Any]]:
                 "upsert_options": {"join_cols": ["cluster_run_id"]},
                 "schema_update_mode": "update",
             },
-            code_version="feedback_cluster_identity_v4",
+            code_version="feedback_cluster_identity_v5",
             automation_condition=upstream_or_code_changes(),
             is_required=False,
         ),
@@ -325,7 +387,9 @@ def feedback_cluster_identity(
     any previous run's numbering. This asset compares the new run's clusters
     against every currently-active cluster_key's live membership (from
     feedback_cluster_membership) by Jaccard overlap, and resolves each new cluster
-    to continued/merged/split/new (ml.lib.cluster_identity.match_clusters), writing
+    to continued/merged/split/new (ml.lib.cluster_identity.match_clusters). An
+    extend run names the key each cluster keeps, so it skips Jaccard
+    (ml.lib.cluster_identity.extend_matches). It writes
     one feedback_cluster row per resolved key and one feedback_cluster_lineage row
     per edge (plus one 'retired' row per active key that didn't survive, and one
     per active key from a *different* embedding_model_version/embedding_dim/
@@ -357,6 +421,12 @@ def feedback_cluster_identity(
     embedding_model_version = run_row["embedding_model_version"]
     embedding_dim = run_row["embedding_dim"]
     embedding_input_filter = run_row["embedding_input_filter"]
+    is_extend_run = run_row.get("run_type") == "incremental"
+    candidate_columns = ["feedback_conversation_pk", "cluster_id"]
+    # Only extend runs write cluster_key; an older table may not have the column
+    if is_extend_run:
+        _check_incremental_base(catalog, run_row)
+        candidate_columns.append("cluster_key")
 
     candidates_df = (
         get_dbt_model_as_dataframe(
@@ -366,7 +436,7 @@ def feedback_cluster_identity(
             (pl.col("cluster_run_id") == cluster_run_id)
             & (pl.col("cluster_id") != NOISE_CLUSTER_ID)
         )
-        .select(["feedback_conversation_pk", "cluster_id"])
+        .select(candidate_columns)
         .collect()
     )
     new_cluster_members = {
@@ -388,8 +458,11 @@ def feedback_cluster_identity(
         active_cluster_members = dict.fromkeys(active_cluster_members, frozenset())
     existing_cluster_rows = _existing_cluster_rows(catalog)
 
-    matches, lineage_rows = match_clusters(
-        new_cluster_members, active_cluster_members, config.match_threshold
+    matches, lineage_rows = _resolve_matches(
+        candidates_df if is_extend_run else None,
+        new_cluster_members,
+        active_cluster_members,
+        config.match_threshold,
     )
     lineage_rows.extend(
         {
@@ -423,9 +496,8 @@ def feedback_cluster_identity(
         },
     )
     if continuity < CONTINUITY_FLOOR:
-        # Fail before writing either output -- feedback_cluster_assignment only
-        # rewrites from a run that has lineage rows, so leaving this run
-        # unresolved keeps it on the prior, still-good cluster_key set.
+        # Fail before writing any output: with no feedback_cluster_identity_run row
+        # this run never goes live, so assignment keeps the prior cluster_key set.
         msg = (
             f"Run {cluster_run_id} continuity {continuity:.2f} is below the "
             f"floor {CONTINUITY_FLOOR:.2f}; a configuration change is needed, "

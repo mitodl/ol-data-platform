@@ -161,6 +161,116 @@ def test_reduce_and_cluster_raises_min_cluster_size_to_fit_max_clusters() -> Non
     assert count(capped_labels) <= 2
 
 
+def _unit(rows: np.ndarray) -> np.ndarray:
+    return rows / np.linalg.norm(rows, axis=1, keepdims=True)
+
+
+def test_cluster_new_themes_keeps_only_groups_far_from_existing_clusters() -> None:
+    rng = np.random.default_rng(0)
+    # Cluster 0 and the first noise group share a direction, so that group is the
+    # loose edge of cluster 0; the second noise group is a new theme.
+    unit_vectors = _unit(
+        np.vstack(
+            [
+                np.tile([1.0, 0.0, 0.0], (20, 1)),
+                np.tile([0.0, 1.0, 0.0], (10, 1)),
+            ]
+        )
+        + rng.normal(scale=0.01, size=(30, 3))
+    )
+    labels = np.array([0] * 10 + [cluster.NOISE_CLUSTER_ID] * 20)
+    probabilities = np.array([1.0] * 10 + [0.0] * 20)
+
+    new_labels, new_probabilities, new_count = cluster.cluster_new_themes(
+        unit_vectors,
+        labels,
+        probabilities,
+        min_cluster_size=5,
+        max_centroid_similarity=0.75,
+        umap_params=(2, 5),
+    )
+
+    assert new_count == 1
+    assert (new_labels[:10] == 0).all()
+    assert (new_labels[10:20] == cluster.NOISE_CLUSTER_ID).all()
+    assert (new_labels[20:] == 1).all()
+    assert (new_probabilities[20:] > 0).all()
+
+
+def test_extend_clusters_keeps_live_keys_and_adds_new_themes() -> None:
+    rng = np.random.default_rng(0)
+    vectors = _unit(
+        np.vstack(
+            [
+                np.tile([1.0, 0.0, 0.0], (10, 1)),  # live cluster "a"
+                np.tile([1.0, 0.1, 0.0], (5, 1)),  # noise close to "a"
+                # Two new themes: HDBSCAN never returns its whole input as one
+                # cluster, so a single leftover group would stay noise.
+                np.tile([0.0, 0.0, 1.0], (10, 1)),
+                np.tile([0.0, -1.0, 0.0], (10, 1)),
+            ]
+        )
+        + rng.normal(scale=0.01, size=(35, 3))
+    )
+    pks = [str(i) for i in range(35)]
+    df = pl.DataFrame(
+        {
+            "feedback_conversation_pk": pks,
+            "source_slug": ["zendesk"] * 35,
+            "conversation_ref": pks,
+            "embedding_input": ["summary"] * 35,
+            "embedding_vector": vectors.tolist(),
+        }
+    )
+
+    candidates_df, run_metadata = cluster.extend_clusters(
+        df,
+        ("text-embedding-3-small", 3, "summary"),
+        dict.fromkeys(pks[:10], "a"),
+        umap_params=(2, 5),
+        add_new_clusters=True,
+        new_cluster_min_size=5,
+    )
+
+    carried = candidates_df["cluster_key"].to_list()
+    cluster_ids = candidates_df["cluster_id"].to_list()
+    assert carried[:15] == ["a"] * 15
+    assert carried[15:] == [None] * 20
+    assert len(set(cluster_ids[15:25])) == 1
+    assert len(set(cluster_ids[25:])) == 1
+    assert len({cluster_ids[0], cluster_ids[15], cluster_ids[25]}) == 3
+    assert cluster.NOISE_CLUSTER_ID not in cluster_ids
+    assert run_metadata["run_type"] == "incremental"
+    assert run_metadata["placed_noise_count"] == 5
+    assert run_metadata["new_cluster_count"] == 2
+    assert run_metadata["cluster_count"] == 3
+
+    # A live key with no member in this run keeps its id: "z" sorts after "a", so
+    # the first new theme would otherwise take it and continue "z".
+    gap_df, _ = cluster.extend_clusters(
+        df,
+        ("text-embedding-3-small", 3, "summary"),
+        {**dict.fromkeys(pks[:10], "a"), "missing": "z"},
+        umap_params=(2, 5),
+        add_new_clusters=True,
+        new_cluster_min_size=5,
+    )
+    assert "z" not in gap_df["cluster_key"].to_list()
+    assert gap_df["cluster_key"].to_list()[15:] == [None] * 20
+
+    # The default only places close noise: the new themes stay noise.
+    default_df, default_metadata = cluster.extend_clusters(
+        df,
+        ("text-embedding-3-small", 3, "summary"),
+        dict.fromkeys(pks[:10], "a"),
+        umap_params=(2, 5),
+    )
+    assert default_df["cluster_key"].to_list()[:15] == ["a"] * 15
+    assert set(default_df["cluster_id"].to_list()[15:]) == {cluster.NOISE_CLUSTER_ID}
+    assert default_metadata["new_cluster_count"] is None
+    assert default_metadata["cluster_count"] == 1
+
+
 def test_filter_conversation_scope_drops_conversations_below_source_minimum() -> None:
     embeddings_lf = pl.LazyFrame(
         {"feedback_conversation_pk": ["short", "long", "ticket"]}

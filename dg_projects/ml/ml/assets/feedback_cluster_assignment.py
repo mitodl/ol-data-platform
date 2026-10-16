@@ -11,7 +11,10 @@ from ml.lib.cluster import (
     platforms_from_run_value,
 )
 from ml.lib.cluster_identity import MEMBERSHIP_SCHEMA, nearest_active_cluster
-from ml.lib.cluster_run_lookup import latest_identity_processed_run
+from ml.lib.cluster_run_lookup import (
+    latest_identity_processed_run,
+    run_already_applied,
+)
 from ml.lib.iceberg_helpers import table_exists
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
@@ -23,27 +26,6 @@ if DAGSTER_ENV == "dev":
     database_name = f"ol_warehouse_production_{_schema_suffix}_intermediate"
 else:
     database_name = "ol_warehouse_production_intermediate"
-
-
-def _run_already_applied(catalog, cluster_run_id: str) -> bool:
-    """Whether cluster_run_id's full rewrite has already been written to
-    feedback_cluster_membership by a prior execution of this asset.
-    """
-    if not table_exists(catalog, f"{database_name}.feedback_cluster_membership"):
-        return False
-    applied_count = (
-        get_dbt_model_as_dataframe(
-            database_name=database_name, table_name="feedback_cluster_membership"
-        )
-        .filter(
-            (pl.col("cluster_run_id") == cluster_run_id)
-            & (pl.col("cluster_assignment_method") == "recluster")
-        )
-        .select(pl.len())
-        .collect()
-        .item()
-    )
-    return applied_count > 0
 
 
 def _vector_lookup(embedding_dim: int, pks: pl.Series) -> dict[str, np.ndarray]:
@@ -371,7 +353,7 @@ def _incrementally_place_new_embeddings(  # noqa: PLR0913 -- one filter per scop
 
 
 @asset(
-    code_version="feedback_cluster_assignment_v3",
+    code_version="feedback_cluster_assignment_v4",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_cluster_membership"]),
     deps=[
@@ -422,7 +404,7 @@ def feedback_cluster_assignment(context: AssetExecutionContext) -> pl.DataFrame:
     if (
         cluster_run_id is not None
         and embedding_config is not None
-        and not _run_already_applied(catalog, cluster_run_id)
+        and not run_already_applied(catalog, database_name, cluster_run_id)
     ):
         rewrite_df = _rewrite_from_run(cluster_run_id, now, catalog, embedding_config)
 
