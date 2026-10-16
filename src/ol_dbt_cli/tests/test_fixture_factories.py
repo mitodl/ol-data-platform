@@ -151,9 +151,10 @@ def test_generated_foreign_keys_reference_rows_that_exist(generation: _Generatio
 
 
 def test_generated_generic_foreign_keys_reference_rows_that_exist(generation: _Generation) -> None:
+    """A content type the fixture does not carry is the plain foreign-key check's to report."""
     content_types = {
         row["id"]: f"{row['app_label']}.{row['model']}"
-        for row in generation.hand_written.get("django_content_type", [])
+        for row in (generation.rows("django_content_type") if "django_content_type" in generation.tables else [])
     }
     by_model = {model["model"].lower(): db_table for db_table, model in generation.models.items() if model["model"]}
     dangling = []
@@ -203,7 +204,8 @@ def test_trees_have_one_row_per_path_and_count_their_children(generation: _Gener
         assumed = {row["path"][:-steplen] for row in generation.hand_written[db_table]}
         generated_children = Counter(row["path"][:-steplen] for row in generation.generated.get(db_table, []))
         for row in generation.generated.get(db_table, []):
-            assert row["path"][:-steplen] in paths.keys() | assumed, row["path"]
+            is_root = len(row["path"]) == steplen
+            assert is_root or row["path"][:-steplen] in paths.keys() | assumed, row["path"]
             assert row["depth"] == len(row["path"]) // steplen, row["path"]
             assert row["numchild"] == generated_children[row["path"]], row["path"]
         # A hand-written parent counts children the fixture leaves out, so only its change is checked.
