@@ -16,14 +16,16 @@
 -- Not filtered to the organization's current roster: a learner removed from the
 -- organization keeps their enrollment in its contract runs. Roster history is kept in
 -- snapshot_mitxonline_b2b_userorganization.
--- The enrollment, grade, certificate, last_active_on, completion_status and
--- needs_attention_since come from afact_learner_courserun_progress, which holds one row
--- per (user, course run) and is where those rules are defined. needs_attention_since is
--- a threshold date: the reader compares it against the current UTC date.
+-- The enrollment, grade, certificate, last_active_on, completion_status,
+-- needs_attention_since and content_progress come from afact_learner_courserun_progress,
+-- which holds one row per (user, course run) and is where those rules are defined.
+-- needs_attention_since is a threshold date: the reader compares it against the
+-- current UTC date.
 -- Activity is pre-aggregated to the (user, course run) join key so it cannot fan out.
 -- The counters sum the fact's per-day distinct counts, so a video played on two days
 -- counts twice, as in b2b_analytics' total_videos_watched.
--- Activity does not move record_updated_on; see the column's description.
+-- Activity and content progress do not move record_updated_on; see the column's
+-- description.
 -- Consent is recorded per (learner, contract), which is this view's grain, so it is
 -- joined directly. outcomes_shared is null when the learner has no recorded decision;
 -- the API resolves that against its fail-open setting, while a recorded false is
@@ -72,6 +74,7 @@ select
     p.is_in_progress,
     p.is_not_started,
     p.needs_attention_since,
+    p.content_progress,
     coalesce(a.days_active, 0)                                                          as days_active,
     coalesce(a.videos_played, 0)                                                        as videos_played,
     coalesce(a.problems_attempted, 0)                                                   as problems_attempted,

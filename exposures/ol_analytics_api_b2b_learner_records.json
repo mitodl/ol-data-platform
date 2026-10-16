@@ -34,6 +34,7 @@
         {"name": "is_in_progress"},
         {"name": "is_not_started"},
         {"name": "needs_attention_since"},
+        {"name": "content_progress"},
         {"name": "days_active"},
         {"name": "videos_played"},
         {"name": "problems_attempted"},

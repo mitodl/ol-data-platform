@@ -196,6 +196,16 @@ models:
       not_started, last_active_on plus the needs_attention_quiet_days dbt var
       (30) when in_progress with tracked activity, and null when passed,
       certified, or in_progress on a grade alone.
+  - name: content_progress
+    description: >
+      The share of the run's current course structure the learner has
+      completed, from afact_learner_courserun_progress, between 0 and 1 like
+      grade_value. Times 100 it is the completion percent the Open edX
+      progress page shows, apart from content groups and content type gating.
+      It is null when the run has no units to count. It is not an input to
+      completion_status, so a certified learner can be below 1. It discloses
+      the learner's outcome, so a reader withholds it on outcomes_shared. Like
+      activity, it does not move record_updated_on.
   - name: days_active
     description: >
       The number of distinct days on which the learner had tracked activity in
@@ -235,11 +245,12 @@ models:
       only when every one of those
       timestamps is missing. dim_user (email, name) and course-run metadata
       carry no change timestamp, so edits to them do not move it, and a partner
-      picks those up from a full reload of the bulk export. Activity does not
-      move it either. A day's activity first appears at a refresh that runs
-      after that day has begun, and partners pass the previous refresh's as_of
-      as updated_since, so a cursor taken from last_active_on would already
-      sort below that bound and the change would never be sent.
+      picks those up from a full reload of the bulk export. Activity and
+      content_progress do not move it either. A day's activity first appears
+      at a refresh that runs after that day has begun, and partners pass the
+      previous refresh's as_of as updated_since, so a cursor taken from
+      last_active_on would already sort below that bound and the change would
+      never be sent.
 
 - name: mv_b2b_learner
   description: >
