@@ -1126,6 +1126,9 @@ models:
   - name: verified_courses_taken_in_program
     description: int, count of distinct verified courses the user has taken within
       the program
+  - name: course_certificate_sum
+    description: int, count of distinct courses for which the user has earned a
+     certificate within the program
   - name: courses_taken_in_program
     description: int, compatibility alias for verified_courses_taken_in_program
   - name: verified_courses_passed_in_program

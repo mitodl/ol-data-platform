@@ -6,23 +6,31 @@ with enrollment_detail as (
     select * from {{ ref('marts__combined__users') }}
 )
 
-, courses_in_program as (
-    select * from {{ ref('marts__combined_coursesinprogram') }}
+, course as (
+    select * from {{ ref('dim_course') }}
 )
 
 , course_enrollment_detail as (
     select * from {{ ref('marts__combined_course_enrollment_detail') }}
 )
 
+, program_course as (
+    select * from {{ ref('bridge_program_course') }}
+)
+
+, program as (
+    select * from {{ ref('dim_program') }}
+)
+
 , courses_detail as (
     select
-        courses_in_program.platform
-        , courses_in_program.program_id
+        course_enrollment_detail.platform
+        , program.program_readable_id
         , course_enrollment_detail.user_email
         , count(
             distinct case
                 when course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
-                then courses_in_program.course_readable_id
+                then course.course_readable_id
             end
         ) as verified_courses_taken_in_program
         , count(
@@ -30,30 +38,41 @@ with enrollment_detail as (
                 when
                     course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
                     and course_enrollment_detail.courserungrade_is_passing = true
-                then courses_in_program.course_readable_id
+                then course.course_readable_id
             end
         ) as verified_courses_passed_in_program
         , count(
             distinct case
                 when course_enrollment_detail.courserungrade_is_passing = true
-                then courses_in_program.course_readable_id
+                then course.course_readable_id
             end
         ) as all_courses_passed_in_program
         , sum(
             case
-                when upper(courses_in_program.course_title) like '%CAPSTONE%'
+                when upper(course.course_title) like '%CAPSTONE%'
                 and course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
                 then 1
                 else 0
             end
         ) as capstone_sum
-    from courses_in_program
-    inner join course_enrollment_detail
-        on courses_in_program.course_readable_id = course_enrollment_detail.course_readable_id
-        and courses_in_program.platform = course_enrollment_detail.platform
+        , count(distinct(
+            case
+                when course_enrollment_detail.courseruncertificate_is_earned = true
+                then course.course_readable_id
+                else null
+            end
+        )) as course_certificate_sum
+    from course_enrollment_detail
+        inner join course
+            on course_enrollment_detail.course_readable_id = course.course_readable_id
+            and course.is_current = true
+        inner join program_course
+            on course.course_pk = program_course.course_fk
+        inner join program
+            on program_course.program_fk = program.program_pk
     group by
-        courses_in_program.platform
-        , courses_in_program.program_id
+        course_enrollment_detail.platform
+        , program.program_readable_id
         , course_enrollment_detail.user_email
 )
 
@@ -92,6 +111,7 @@ select
         combined_users.user_address_country, combined_users2.user_address_country
     ) as user_address_country
     , coalesce(courses_detail.verified_courses_taken_in_program, 0) as verified_courses_taken_in_program
+    , coalesce(courses_detail.course_certificate_sum, 0) as course_certificate_sum
     , coalesce(courses_detail.verified_courses_taken_in_program, 0) as courses_taken_in_program
     , coalesce(courses_detail.verified_courses_passed_in_program, 0) as verified_courses_passed_in_program
     , coalesce(courses_detail.all_courses_passed_in_program, 0) as all_courses_passed_in_program
