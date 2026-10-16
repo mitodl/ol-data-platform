@@ -18,8 +18,9 @@
         {"name": "seats_consumed", "cohort": {"role": "primary"}},
         {"name": "active_learners", "cohort": {"role": "secondary", "contained_in": "seats_consumed"}},
         {"name": "learners_certified", "cohort": {"role": "secondary", "contained_in": "seats_consumed"}},
+        {"name": "certified_learners", "cohort": {"role": "secondary", "contained_in": "seats_consumed"}},
         {"name": "seat_utilization_pct", "cohort": {"role": "measure"}},
-        {"name": "completion_rate_pct", "cohort": {"role": "derived", "derived_from": ["learners_certified"]}}
+        {"name": "completion_rate_pct", "cohort": {"role": "derived", "derived_from": ["certified_learners"]}}
       ]
     },
     "mv_b2b_enrollment_completion_funnel": {

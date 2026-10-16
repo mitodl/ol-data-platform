@@ -125,6 +125,14 @@ models:
           role: secondary
           contained_in: seats_consumed
   - name: learners_certified
+    description: Deprecated, the old name for certified_learners and always equal
+      to it. Removed once ol-analytics-api and mit-learn read certified_learners.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          contained_in: seats_consumed
+  - name: certified_learners
     description: Distinct learners enrolled in a course run under this contract who
       hold its non-revoked certificate.
     config:
@@ -139,13 +147,13 @@ models:
         cohort:
           role: measure
   - name: completion_rate_pct
-    description: learners_certified / seats_consumed * 100.
+    description: certified_learners / seats_consumed * 100.
     config:
       meta:
         cohort:
           role: derived
           derived_from:
-          - learners_certified
+          - certified_learners
 
 - name: mv_b2b_enrollment_completion_funnel
   description: >

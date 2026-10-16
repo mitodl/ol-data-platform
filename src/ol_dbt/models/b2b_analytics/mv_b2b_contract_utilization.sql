@@ -8,9 +8,11 @@
 -- Grain: org x contract. Refreshed by the Dagster b2b_organization MV-refresh asset.
 -- A seat is a learner with a course enrollment made under the contract
 -- (afact_learner_courserun_progress.contract_fk, carried from tfact_enrollment), and
--- learners_certified counts those learners who hold the run's certificate (is_certified),
+-- certified_learners counts those learners who hold the run's certificate (is_certified),
 -- as mv_b2b_mit_admin_contract_health's certified_learners does. A program enrollment
 -- also carries the contract, but takes no seat until the learner enrolls in a course.
+-- learners_certified is the old name for certified_learners, kept until ol-analytics-api
+-- and mit-learn read the new one.
 with enrollments as (
     select
         p.contract_fk,
@@ -36,6 +38,7 @@ select
     count(distinct e.user_fk)                                                          as seats_consumed,
     count(distinct case when e.enrollment_is_active then e.user_fk end)                as active_learners,
     count(distinct case when e.is_certified then e.user_fk end)                        as learners_certified,
+    count(distinct case when e.is_certified then e.user_fk end)                        as certified_learners,
     round(100.0 * count(distinct e.user_fk)
         / nullif(c.b2b_contract_max_learners, 0), 1)                                   as seat_utilization_pct,
     round(100.0 * count(distinct case when e.is_certified then e.user_fk end)
