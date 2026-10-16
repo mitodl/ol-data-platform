@@ -23,10 +23,8 @@ loader: dlt
 # what lets the QA mirror copy them: its allowlists have to name the dedup
 # column, and the asset fails on an allowlisted column production lacks.
 #
-# courseware_studentmodule declares no `mirror:` block, so it is not copied.
-# It holds 13.8B rows in 1,124 GB (current snapshot, 2026-10-07), and its
-# `state` column is the learner's saved answer, which the staging model reads
-# and no column mode masks. QA_DATA_TOPOLOGY_SPEC.md §8.
+# courseware_studentmodule is mirrored for the MITx/14.73x runs only. See
+# the comment on its `mirror:` block and QA_DATA_TOPOLOGY_SPEC.md §8.
 #
 # Rows written under the old merge disposition carry a null here and lose the
 # dedup to freshly stamped rows: Trino orders NULLS LAST in both directions,
@@ -101,6 +99,35 @@ tables:
   cursor_field:
   - _file_modified_at
   modeled: true
+  mirror:
+    columns:
+      id: copy
+      course_id: copy
+      module_id: copy
+      module_type: copy
+      student_id: copy
+      # The learner's saved module state. `student_answers` holds what they
+      # typed. `correct_map` is left out too: its per-part `msg` and `hint`
+      # come from the grader (a customresponse script, an xqueue grader),
+      # which can quote the answer back. `grade` and `max_grade` carry the
+      # score without it.
+      state:
+        json_keys:
+        - attempts
+        - seed
+      grade: copy
+      max_grade: copy
+      created: copy
+      modified: copy
+      _file_modified_at: copy
+    # 13.8B rows in 1,124 GB over 30,373 unpartitioned, unsorted data files
+    # (current snapshot, 2026-10-15). Iceberg truncates the course_id bounds to
+    # 16 characters, so a course-v1:MITx+ id prunes to 19-300 GB of files. The
+    # old-style MITx/14.73x range prunes to 42 files, 1.8 GB, measured from the
+    # manifests. A range, not an IN list, so every old-style run of the course
+    # matches without naming it. Its course-v1 runs are not copied.
+    where: >-
+      course_id >= 'MITx/14.73x' AND course_id < 'MITx/14.73y'
 - name: raw__edxorg__s3__tables__grades_persistentcoursegrade
   raw_table: raw__edxorg__s3__tables__grades_persistentcoursegrade
   sync_mode: incremental_append
