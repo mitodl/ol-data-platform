@@ -72,6 +72,7 @@ from lakehouse.assets.lakehouse.dbt_starrocks import (
     starrocks_dbt_cli,
 )
 from lakehouse.assets.qa_mirror import build_qa_mirror_assets
+from lakehouse.assets.qa_observation_drift import qa_observation_drift
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import build_superset_dataset_assets
 from lakehouse.lib.dbt_environment import (
@@ -552,6 +553,30 @@ airbyte_drift_schedules = (
 # is nothing a QA or dev code location could run against production by mistake.
 qa_mirror_assets = build_qa_mirror_assets() if DAGSTER_ENV == "production" else []
 
+# QA only: it describes ol_warehouse_qa_raw, and the QA role is the one already
+# reading those tables (iceberg_raw_orphan_files). Daily, so a load or a
+# hand-run mirror that lands a table is reported within a day.
+qa_observation_drift_assets = [qa_observation_drift] if DAGSTER_ENV == "qa" else []
+qa_observation_drift_schedules = (
+    [
+        (
+            "qa_observation_drift_daily",
+            ScheduleDefinition(
+                name="qa_observation_drift_daily_schedule",
+                job=define_asset_job(
+                    name="qa_observation_drift_daily_job",
+                    selection=AssetSelection.assets(qa_observation_drift),
+                ),
+                cron_schedule="0 12 * * *",
+                execution_timezone="UTC",
+                default_status=DefaultScheduleStatus.RUNNING,
+            ),
+        )
+    ]
+    if qa_observation_drift_assets
+    else []
+)
+
 # The PostHog staging model is fed by a dlt source rather than an Airbyte
 # connection, so no `sync_and_stage_*` job covers it (see non_airbyte_staging).
 # It gets its own hourly schedule because the source lands an hour at a time;
@@ -757,6 +782,7 @@ defs = Definitions(
             refresh_starrocks_analytics_mvs,
             *airbyte_drift_assets,
             *qa_mirror_assets,
+            *qa_observation_drift_assets,
         ]
     ),
     asset_checks=[*dbt_layer_freshness_checks, *dimensional_schema_change_checks],
@@ -831,6 +857,7 @@ defs = Definitions(
             ("dbt_source_freshness_daily", dbt_source_freshness_schedule),
             ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),
             *airbyte_drift_schedules,
+            *qa_observation_drift_schedules,
             ("posthog_staging_hourly", posthog_staging_schedule),
             *non_airbyte_staging_schedules,
             ("learn_integrations_qa_daily", learn_integrations_qa_schedule),

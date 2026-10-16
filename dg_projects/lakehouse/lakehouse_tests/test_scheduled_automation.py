@@ -83,6 +83,8 @@ def test_qa_runs_ingestion_and_the_learn_integrations_build():
 
     The raw orphan-file pass also builds nothing, and only reports until an
     environment is named in the asset's delete set.
+
+    The observation drift check reads QA raw's metadata and writes nothing.
     """
     assert schedules_for_environment(ALL_CANDIDATES, environment="qa") == [
         "daily_sync_and_stage",
@@ -90,6 +92,7 @@ def test_qa_runs_ingestion_and_the_learn_integrations_build():
         "lake_orphan_sweep_weekly",
         "iceberg_raw_orphan_files_weekly",
         "learn_integrations_qa_daily",
+        "qa_observation_drift_daily",
     ]
 
 
@@ -109,16 +112,21 @@ def test_qa_cannot_run_dbt_docs_generate_on_a_timer():
 def test_production_registers_every_schedule_but_the_qa_only_ones():
     """Production's set is what it registered before the map existed.
 
-    Two entries are QA-only. Production builds the Learn integrations models
+    Three entries are QA-only. Production builds the Learn integrations models
     through dbt_automation_sensor, so a schedule there would run them twice.
-    The orphan sweep reaches production once it has run clean in QA.
+    The orphan sweep reaches production once it has run clean in QA. The
+    observation drift check describes QA raw, so it runs in QA.
     """
     kept = schedules_for_environment(ALL_CANDIDATES, environment="production")
     assert kept == [
         schedule_id
         for schedule_id in SCHEDULE_ENVIRONMENTS
         if schedule_id
-        not in {"learn_integrations_qa_daily", "lake_orphan_sweep_weekly"}
+        not in {
+            "learn_integrations_qa_daily",
+            "lake_orphan_sweep_weekly",
+            "qa_observation_drift_daily",
+        }
     ]
 
 

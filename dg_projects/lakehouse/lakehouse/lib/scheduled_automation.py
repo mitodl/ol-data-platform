@@ -185,6 +185,10 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # is compiled for production, and only the production stack copies the bot
     # token to secret-data/pipelines/openmetadata.
     "asset_check_openmetadata": frozenset({"production"}),
+    # Compares QA raw with the committed qa_observation.json and fails when
+    # the file is wrong about which tables hold rows. QA only: it reads
+    # ol_warehouse_qa_raw, and its asset is registered nowhere else.
+    "qa_observation_drift_daily": frozenset({"qa"}),
 }
 
 _UNDECLARED_ENVIRONMENTS = {

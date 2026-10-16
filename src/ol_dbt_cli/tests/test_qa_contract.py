@@ -26,6 +26,7 @@ from ol_dbt_cli.lib.qa_observation import (
     TableState,
     _current_snapshot,
     load_observation,
+    observation_drift,
     observed_tables,
     render_observation,
 )
@@ -497,6 +498,39 @@ class TestObservation:
         }
         with pytest.raises(ValueError, match="has no total-records statistic"):
             _current_snapshot(metadata)
+
+    def test_new_rows_and_new_snapshots_alone_are_not_drift(self) -> None:
+        later = TableState(present=True, iceberg=True, rows=99, snapshot_at=OBSERVED_AT + timedelta(hours=6))
+        live = _observation(raw__mitxonline__app__postgres__users_user=later)
+        assert observation_drift(_observation(), live) == []
+
+    def test_a_table_that_landed_or_emptied_is_drift(self) -> None:
+        committed = _observation(**XPRO_ABSENT)
+        live = _observation(
+            raw__emeritus__bigquery__api_enrollments=TableState(
+                present=True, iceberg=True, rows=0, snapshot_at=OBSERVED_AT
+            )
+        )
+        assert observation_drift(committed, live) == [
+            "raw__emeritus__bigquery__api_enrollments: committed observation holds 10 rows, QA now holds no rows",
+            "raw__xpro__app__postgres__auth_user: committed observation holds no rows, QA now holds 10 rows",
+        ]
+
+    def test_one_kind_of_empty_turning_into_another_is_not_drift(self) -> None:
+        committed = _observation(**XPRO_ABSENT, raw__emeritus__bigquery__api_enrollments=TableState(present=True))
+        live = _observation(
+            raw__xpro__app__postgres__auth_user=TableState(present=True, iceberg=True, rows=0),
+            raw__emeritus__bigquery__api_enrollments=TableState(present=True, iceberg=True),
+        )
+        assert observation_drift(committed, live) == []
+
+    def test_a_table_only_one_side_lists_is_drift(self) -> None:
+        committed = _observation(raw__retired=HAS_ROWS)
+        live = _observation(raw__new=TableState(present=False))
+        assert observation_drift(committed, live) == [
+            "raw__new: not in the committed observation; QA holds no rows",
+            "raw__retired: in the committed observation, no longer an inventory table QA ingests or mirrors",
+        ]
 
 
 class TestValidateGapWiring:
