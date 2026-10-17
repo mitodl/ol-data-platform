@@ -198,6 +198,44 @@ def test_mean_pairwise_cohen_matches_two_rater_kappa():
     )
 
 
+# expected keys of the courseware_label_key macro (src/ol_dbt/macros)
+@pytest.mark.parametrize(
+    ("label", "key"),
+    [
+        ("C", "c"),
+        ("C++", "c plus plus"),
+        ("C#", "c sharp"),
+        ("F#", "f sharp"),
+        (".NET", "dot net"),
+        ("ASP.NET", "asp net"),
+        ("the .csv file", "the dot csv file"),
+        ("a + b", "a b"),
+        ("+ 5", "5"),
+        ("# of rows", "of rows"),
+        ("R", "r"),
+        ("R²", "r²"),
+        ("adjusted R²", "adjusted r²"),
+        ("Schrödinger equation", "schrödinger equation"),
+        ("Naïve Bayes", "naïve bayes"),
+        ("K-Means  Clustering!", "k means clustering"),
+        ("snake_case", "snake case"),
+        ("  area under the ROC curve (AUC) ", "area under the roc curve auc"),
+        ("+", None),
+        ("--", None),
+    ],
+)
+def test_concept_label_key_matches_the_sql_macro(label, key):
+    assert concept_label_key(label) == key
+
+
+def test_labels_without_a_key_match_only_themselves():
+    matcher = LabelMatcher()
+    assert matcher.canonical("+") == matcher.canonical(" + ")
+    assert matcher.canonical("+") != matcher.canonical("#")
+    assert matcher.canonical("C++") != matcher.canonical("C#")
+    assert matcher.canonical("C++") != matcher.canonical("C")
+
+
 def test_label_matcher_rule():
     matcher = LabelMatcher().add_assignments(
         pl.DataFrame(

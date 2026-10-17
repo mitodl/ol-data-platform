@@ -4,7 +4,7 @@ Every agreement and recall number depends on this rule, so it is one function us
 everywhere and reported with every figure. Two labels match when, in order:
 
 1. their normalized keys are equal (case, punctuation and spacing ignored, the same
-   normalization int__courseware__claims applies to concept_label_key);
+   normalization the courseware_label_key macro gives concept_label_key);
 2. a resolution run assigned both keys to the same concept id;
 3. an extra mapping (e.g. a resolution of both models' labels together, or a
    reviewer's label map for gold labels) sends them to the same canonical key.
@@ -18,12 +18,33 @@ from collections.abc import Iterable
 import polars as pl
 
 MATCHING_RULE = "normalized label, then resolved concept id, then supplied label map"
-_NON_ALNUM = re.compile(r"[^a-z0-9]+")
+# the courseware_label_key macro's steps, in its order
+_KEY_STEPS = (
+    # a + or # standing alone is a separator ("a + b", "# of rows")
+    (re.compile(r"^[+#]"), " "),
+    (re.compile(r"\s[+#]"), " "),
+    # any other names something: C++, C#, F#
+    (re.compile(r"[+]"), " plus "),
+    (re.compile(r"#"), " sharp "),
+    # a leading dot too: .NET, .csv
+    (re.compile(r"^[.]"), "dot "),
+    (re.compile(r"\s[.]"), " dot "),
+    # Unicode letters and numbers are kept (R², Schrödinger)
+    (re.compile(r"[\W_]+"), " "),
+)
 
 
-def concept_label_key(label: str) -> str:
-    """Normalize a label the way int__courseware__claims builds concept_label_key."""
-    return _NON_ALNUM.sub(" ", label.lower()).strip()
+def concept_label_key(label: str) -> str | None:
+    """Normalize a label the way the courseware_label_key macro does.
+
+    :param label: any text
+    :returns: the key, or None for a label with no letter or number
+    :rtype: str | None
+    """
+    key = label.lower()
+    for pattern, replacement in _KEY_STEPS:
+        key = pattern.sub(replacement, key)
+    return key.strip() or None
 
 
 class LabelMatcher:
@@ -63,4 +84,6 @@ class LabelMatcher:
 
     def canonical(self, label: str) -> str:
         """Return a label's match class; two labels match exactly when equal."""
-        return self._find(f"key:{concept_label_key(label)}")
+        key = concept_label_key(label)
+        # a label with no key (only symbols) matches nothing but itself
+        return self._find(f"key:{key}" if key else f"label:{label.strip()}")
