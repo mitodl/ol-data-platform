@@ -54,7 +54,9 @@ def _digest(*parts: Any) -> str:
 PROMPT_VERSION = _digest(SYSTEM_PROMPT)[:12]
 SCHEMA_VERSION = _digest(OUTPUT_SCHEMA)[:12]
 # What an extraction key hashes: the extractor version and the scope's own input,
-# all stored on the extraction row, so a stored row's key can be recomputed from it.
+# all stored on the extraction row, so the key of a row extracted without
+# key_on_header can be recomputed from the row (one extracted with it also hashes
+# header_version, and the row does not record which).
 # The course header (title, outline, description) is left out, so editing a
 # course's description or renaming one sequential re-extracts only the scopes whose
 # own text changed; header_version records it on the row instead.
