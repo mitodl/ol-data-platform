@@ -294,6 +294,11 @@ models:
   description: Concept-to-concept edges with their accumulated evidence, one row per
     (from, to, relation). Hierarchy (broader), sequence (builds_on), practice (practiced_with),
     equivalence (close) and association (complements, related).
+  config:
+    meta:
+      # Reads dim_course_run for course keys; no QA form until the Dagster assets
+      # exist, as for bridge_courserun_concept.
+      qa_buildable: false
   columns:
   - name: concept_relation_pk
     description: str, surrogate key of (from, to, relation)
@@ -332,10 +337,15 @@ models:
     description: int, units across those runs that showed the edge
   - name: reverse_courserun_support
     description: int, builds_on only, course runs showing the opposite direction
+  - name: course_scope_support
+    description: int, builds_on only, scope_support with each course's reruns counted
+      once (the run with the most units); the support the publishing rule reads, since
+      reruns of one course have near-identical text
   - name: reverse_scope_support
-    description: int, builds_on only, units showing the opposite direction
+    description: int, builds_on only, course_scope_support of the opposite direction
   - name: direction_consistency
-    description: float, builds_on only, scope_support / (scope_support + reverse_scope_support)
+    description: float, builds_on only, course_scope_support / (course_scope_support
+      + reverse_scope_support)
   - name: co_taught_lift
     description: float, complements only, co-taught unit count over the count expected
       by chance
@@ -355,8 +365,10 @@ models:
     description: str, proposed, accepted or rejected
   - name: is_published
     description: boolean, whether the edge clears the publishing rule; builds_on needs
-      the courseware_prerequisite_* support and direction thresholds, every other
-      relation is published
+      course_scope_support of courseware_prerequisite_min_scope_support and direction_consistency
+      of courseware_prerequisite_min_direction_consistency (no course-count clause,
+      since every supporting course adds at least one unit), every other relation
+      is published
     tests:
     - not_null
   - name: unpublished_reason
@@ -521,9 +533,10 @@ models:
   - name: taught_scope_count
     description: int, inferred requires only, scopes of the run that teach the concept
       (all after the first reliance), the contrary evidence
-  - name: courserun_support
-    description: int, inferred requires only, course runs that require the concept,
-      declared or inferred
+  - name: course_support
+    description: int, inferred requires only, distinct courses (a run with no course
+      counts alone) with a run that declares the concept or infers it with a direction_consistency
+      clearing the threshold, this run included
   - name: direction_consistency
     description: float, inferred requires only, prior_scope_count / (prior_scope_count
       + taught_scope_count)
