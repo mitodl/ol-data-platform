@@ -449,6 +449,20 @@ def test_blind_items_are_half_of_each_stratum_and_stable():
     assert samples.blind_items(grown, 3) - {"v0", "v1"} == blind
 
 
+def _labels(*keys):
+    return pl.DataFrame(
+        {
+            "concept_label_key": list(keys),
+            "preferred_label": list(keys),
+            "concept_kind": ["concept"] * len(keys),
+            "description": [None] * len(keys),
+            "courserun_count": [1] * len(keys),
+            "mention_count": [1] * len(keys),
+        },
+        schema_overrides={"description": pl.String},
+    )
+
+
 def test_pairs_population_uses_the_final_clustering():
     inputs = samples.GoldInputs(
         claims=pl.DataFrame(),
@@ -472,7 +486,7 @@ def test_pairs_population_uses_the_final_clustering():
                 "verdict": ["close", "exact", "narrower"],
             }
         ),
-        labels=pl.DataFrame(),
+        labels=_labels("a", "b", "c", "d", "e"),
         embeddings=pl.DataFrame(
             {
                 "concept_label_key": ["a", "b", "c", "d"],
@@ -573,3 +587,53 @@ def test_score_subsections_reports_blind_recall_separately(tmp_path):
     assert haiku["concept_recall_prefilled"]["strata"]["s"]["labeled_ratio"] == 1.0
     assert haiku["status_recall"]["strata"]["s"]["labeled_ratio"] == pytest.approx(0.25)
     assert sorted(unmatched["item_id"]) == ["u0", "u1"]
+
+
+def test_pairs_leave_out_labels_no_current_claim_uses():
+    # x was a label in an earlier run: its decisions and embedding remain
+    inputs = samples.GoldInputs(
+        claims=pl.DataFrame(),
+        evidence=pl.DataFrame(),
+        sources=pl.DataFrame(),
+        assignments=pl.DataFrame(
+            {
+                "concept_label_key": ["a", "b", "c", "d", "x"],
+                "concept_id": ["k1", "k1", "k2", "k3", "k1"],
+            }
+        ),
+        registry=pl.DataFrame(
+            {"concept_id": ["k1", "k2", "k3"], "merged_into_concept_id": [None] * 3},
+            schema={"concept_id": pl.String, "merged_into_concept_id": pl.String},
+        ),
+        decisions=pl.DataFrame(
+            {
+                "key_a": ["a", "c", "a", "a", "c"],
+                "key_b": ["x", "x", "c", "d", "d"],
+                "query_label_key": ["a", "c", "a", "a", "c"],
+                "verdict": ["exact", "distinct", "distinct", "distinct", "distinct"],
+            }
+        ),
+        labels=_labels("a", "b", "c", "d"),
+        embeddings=pl.DataFrame(
+            {
+                "concept_label_key": ["a", "b", "c", "d", "x"],
+                "embedding": [
+                    [1.0, 0.0],
+                    [0.9, 0.1],
+                    [0.0, 1.0],
+                    [0.1, 0.9],
+                    [0.5, 0.5],
+                ],
+            }
+        ),
+        concepts=pl.DataFrame(),
+        relations=pl.DataFrame(),
+        matcher=LabelMatcher(),
+    )
+    population = samples.pairs_population(inputs)
+    assert not population.filter(
+        (pl.col("key_a") == "x") | (pl.col("key_b") == "x")
+    ).height
+    population, _ = samples.coarsen_strata(population)
+    sample = samples.sample_pairs(inputs, population, size=100, seed=1)
+    assert sample.height == population.height
