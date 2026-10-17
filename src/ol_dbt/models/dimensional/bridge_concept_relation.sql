@@ -52,6 +52,11 @@
     contrary_verdict_support) for adjudicated relations, and 1 otherwise. Adding
     agreeing evidence never lowers the score and adding contrary evidence never
     raises it. The reliabilities are priors until the gold set calibrates them.
+    verdict_support is at least 1: the relation is in the resolver's snapshot
+    because a verdict, or a carried edge's vote, proposed it, even when none of the
+    labels that voted is still assigned, so the proposal counts as one verdict. The
+    score is rounded to 4 places, so the snapshot does not version an edge over a
+    last-bit difference between engines or plans.
 
     Publication (is_published, with unpublished_reason on the rest, which keep their
     rows for review). Every relation other than builds_on and broader is published,
@@ -65,17 +70,23 @@
       this misses. Cross-signal agreement raises its
       confidence but never publishes it: a broader verdict says the two concepts
       are a kind or part of one another, which runs either way in learning order.
-    - broader and builds_on are exclusive per pair, in either direction. Of a
-      broader edge and a builds_on edge that would publish, the one with the higher
-      relation_confidence publishes, and broader on a tie (hierarchy_pair on the
-      builds_on edge, sequence_pair on the broader one).
-    - broader is held to a strict partial order. Edges are ranked by their
-      adjudication score (relation_confidence without the cross-signal term, so the
-      cycle walk reads only the adjudicated table, not the whole pipeline once per
-      step on engines that inline CTEs). An edge whose broader concept leads back to
-      its narrower one through broader edges scoring at least as high is the weakest
-      link of that cycle and is not published (hierarchy_cycle). Every cycle loses
-      its weakest edge, and edges tied for weakest all go.
+    - broader is held to a strict partial order, first. Broader edges are ranked by
+      adjudication score (relation_confidence without the cross-signal term), then
+      by how many broader edges point at the broader concept (an edge into a concept
+      many others sit under is the likelier one), then by concept ids, so the order
+      is total. The ranking reads only the adjudicated table, so the walk does not
+      recompute the whole pipeline once per step on engines that inline CTEs. An
+      edge whose broader concept leads back to its narrower one through edges ranked
+      above it is the lowest-ranked edge of that cycle and is not published
+      (hierarchy_cycle). Every cycle loses exactly its lowest-ranked edge.
+    - then broader and builds_on are exclusive per pair, in either direction. Of the
+      broader edges left and a builds_on edge that would publish, the one with the
+      higher relation_confidence publishes, broader on a tie (hierarchy_pair on the
+      builds_on edge, sequence_pair on the broader one). A broader edge cut by the
+      cycle rule does not contest, so its pair's builds_on edge can publish. Cycles
+      are decided first because a broader edge that loses its pair still counts in
+      the walk: at worst that unpublishes a weaker edge of a cycle that would
+      otherwise not publish, and it never publishes a cycle.
 #}
 {%- set verdict_reliability = 0.5 -%}
 {%- set unit_reliability = 0.3 -%}
@@ -203,18 +214,26 @@ with evidence as (
 )
 
 -- the adjudication terms of relation_confidence: the share of verdicts that agree,
--- and the chance that every agreeing verdict is wrong
+-- and the chance that every agreeing verdict is wrong; the proposal itself is the
+-- floor of one supporting verdict
 , adjudication_scores as (
     select
         from_concept_id
         , to_concept_id
         , relation
-        , supporting_verdict_count
-        , contrary_verdict_count
-        , cast(supporting_verdict_count as double)
-        / (supporting_verdict_count + contrary_verdict_count) as verdict_consistency
-        , power(1.0 - {{ verdict_reliability }}, supporting_verdict_count) as verdict_miss
-    from adjudicated
+        , verdict_support
+        , contrary_verdict_support
+        , cast(verdict_support as double) / (verdict_support + contrary_verdict_support) as verdict_consistency
+        , power(1.0 - {{ verdict_reliability }}, verdict_support) as verdict_miss
+    from (
+        select
+            from_concept_id
+            , to_concept_id
+            , relation
+            , greatest(supporting_verdict_count, 1) as verdict_support
+            , contrary_verdict_count as contrary_verdict_support
+        from adjudicated
+    ) as adjudicated_support
 )
 
 , builds_on_direction as (
@@ -257,8 +276,8 @@ with evidence as (
         , builds_on_support.reverse_scope_support
         , builds_on_support.direction_consistency
         , builds_on_support.unpublished_reason as support_unpublished_reason
-        , adjudication_scores.supporting_verdict_count as verdict_support
-        , adjudication_scores.contrary_verdict_count as contrary_verdict_support
+        , adjudication_scores.verdict_support
+        , adjudication_scores.contrary_verdict_support
         , adjudication_scores.verdict_consistency
         , adjudication_scores.verdict_miss
         , case
@@ -289,80 +308,53 @@ with evidence as (
 , scored as (
     select
         signals.*
-        , case
-            when signals.is_adjudicated then signals.verdict_consistency
-            else coalesce(signals.direction_consistency, 1.0)
-        end
-        * (
-            1.0
-            - case
-                when signals.is_adjudicated then signals.verdict_miss
-                else power(1.0 - {{ unit_reliability }}, signals.scope_support)
+        , round(
+            case
+                when signals.is_adjudicated then signals.verdict_consistency
+                else coalesce(signals.direction_consistency, 1.0)
             end
-            * power(1.0 - {{ cross_signal_reliability }}, signals.cross_signal_support)
+            * (
+                1.0
+                - case
+                    when signals.is_adjudicated then signals.verdict_miss
+                    else power(1.0 - {{ unit_reliability }}, signals.scope_support)
+                end
+                * power(1.0 - {{ cross_signal_reliability }}, signals.cross_signal_support)
+            )
+            , 4
         ) as relation_confidence
     from signals
 )
 
--- broader vs. builds_on on the same pair, either direction; only a builds_on edge
--- that clears its own support rule competes
-, hierarchy_sequence_pairs as (
-    select
-        broader_edges.from_concept_id as broader_from_concept_id
-        , broader_edges.to_concept_id as broader_to_concept_id
-        , builds_on_edges.from_concept_id as builds_on_from_concept_id
-        , builds_on_edges.to_concept_id as builds_on_to_concept_id
-        , builds_on_edges.relation_confidence > broader_edges.relation_confidence as is_builds_on_preferred
-    from scored as broader_edges
-    inner join scored as builds_on_edges
-        on
-            least(broader_edges.from_concept_id, broader_edges.to_concept_id)
-            = least(builds_on_edges.from_concept_id, builds_on_edges.to_concept_id)
-            and greatest(broader_edges.from_concept_id, broader_edges.to_concept_id)
-            = greatest(builds_on_edges.from_concept_id, builds_on_edges.to_concept_id)
-    where
-        broader_edges.relation = 'broader'
-        and builds_on_edges.relation = 'builds_on'
-        and builds_on_edges.support_unpublished_reason is null
-)
-
-, pair_exclusion as (
-    select
-        broader_from_concept_id as from_concept_id
-        , broader_to_concept_id as to_concept_id
-        , 'broader' as relation
-        , 'sequence_pair' as unpublished_reason
-    from hierarchy_sequence_pairs
-    where is_builds_on_preferred
-    union all
-    select
-        builds_on_from_concept_id as from_concept_id
-        , builds_on_to_concept_id as to_concept_id
-        , 'builds_on' as relation
-        , 'hierarchy_pair' as unpublished_reason
-    from hierarchy_sequence_pairs
-    where not is_builds_on_preferred
-)
-
+-- broader edges in cycle-breaking order, lowest first
 , hierarchy_edges as (
     select
         from_concept_id
         , to_concept_id
-        , verdict_consistency * (1.0 - verdict_miss) as adjudication_score
-    from adjudication_scores
-    where relation = 'broader'
+        , row_number() over (
+            order by adjudication_score, to_narrower_count, from_concept_id, to_concept_id
+        ) as cycle_rank
+    from (
+        select
+            from_concept_id
+            , to_concept_id
+            , round(verdict_consistency * (1.0 - verdict_miss), 4) as adjudication_score
+            , count(*) over (partition by to_concept_id) as to_narrower_count
+        from adjudication_scores
+        where relation = 'broader'
+    ) as ranked
 )
 
 {#-
-    Walk from each edge's broader concept along edges scoring at least as high as
-    the edge, as the acyclic test does: a walk that is back at the edge's narrower
-    concept is carried forward, every other walk is extended by one edge per step.
+    Walk from each edge's broader concept along edges ranked above the edge, as the
+    acyclic test does: a walk that is back at the edge's narrower concept is carried
+    forward, every other walk is extended by one edge per step.
 -#}
 , cycle_walk_1 as (
     select
         from_concept_id as start_from_concept_id
         , to_concept_id as start_to_concept_id
-        , adjudication_score as start_score
+        , cycle_rank as start_rank
         , to_concept_id as end_concept_id
     from hierarchy_edges
 )
@@ -371,14 +363,14 @@ with evidence as (
     select distinct
         walk.start_from_concept_id
         , walk.start_to_concept_id
-        , walk.start_score
+        , walk.start_rank
         , coalesce(hierarchy_edges.to_concept_id, walk.end_concept_id) as end_concept_id
     from cycle_walk_{{ step - 1 }} as walk
     left join hierarchy_edges
         on
             walk.end_concept_id = hierarchy_edges.from_concept_id
             and walk.end_concept_id != walk.start_from_concept_id
-            and hierarchy_edges.adjudication_score >= walk.start_score
+            and hierarchy_edges.cycle_rank > walk.start_rank
     where walk.end_concept_id = walk.start_from_concept_id or hierarchy_edges.to_concept_id is not null
 )
 {% endfor %}
@@ -391,6 +383,65 @@ with evidence as (
     where end_concept_id = start_from_concept_id
 )
 
+-- each builds_on edge that clears its own support rule, against the strongest broader
+-- edge left on its pair (either direction)
+, pair_contest as (
+    select
+        builds_on_edges.from_concept_id
+        , builds_on_edges.to_concept_id
+        , builds_on_edges.relation_confidence > max(broader_edges.relation_confidence) as is_builds_on_preferred
+    from scored as builds_on_edges
+    inner join scored as broader_edges
+        on
+            least(builds_on_edges.from_concept_id, builds_on_edges.to_concept_id)
+            = least(broader_edges.from_concept_id, broader_edges.to_concept_id)
+            and greatest(builds_on_edges.from_concept_id, builds_on_edges.to_concept_id)
+            = greatest(broader_edges.from_concept_id, broader_edges.to_concept_id)
+    left join hierarchy_cycle_edges
+        on
+            broader_edges.from_concept_id = hierarchy_cycle_edges.from_concept_id
+            and broader_edges.to_concept_id = hierarchy_cycle_edges.to_concept_id
+    where
+        builds_on_edges.relation = 'builds_on'
+        and builds_on_edges.support_unpublished_reason is null
+        and broader_edges.relation = 'broader'
+        and hierarchy_cycle_edges.from_concept_id is null
+    group by builds_on_edges.from_concept_id, builds_on_edges.to_concept_id, builds_on_edges.relation_confidence
+)
+
+-- one row per losing edge: a builds_on edge appears once in pair_contest, and a
+-- broader edge loses once however many builds_on edges beat it
+, pair_exclusion as (
+    select
+        from_concept_id
+        , to_concept_id
+        , 'builds_on' as relation
+        , 'hierarchy_pair' as unpublished_reason
+    from pair_contest
+    where not is_builds_on_preferred
+    union all
+    select distinct
+        broader_edges.from_concept_id
+        , broader_edges.to_concept_id
+        , 'broader' as relation
+        , 'sequence_pair' as unpublished_reason
+    from pair_contest
+    inner join scored as broader_edges
+        on
+            least(pair_contest.from_concept_id, pair_contest.to_concept_id)
+            = least(broader_edges.from_concept_id, broader_edges.to_concept_id)
+            and greatest(pair_contest.from_concept_id, pair_contest.to_concept_id)
+            = greatest(broader_edges.from_concept_id, broader_edges.to_concept_id)
+    left join hierarchy_cycle_edges
+        on
+            broader_edges.from_concept_id = hierarchy_cycle_edges.from_concept_id
+            and broader_edges.to_concept_id = hierarchy_cycle_edges.to_concept_id
+    where
+        pair_contest.is_builds_on_preferred
+        and broader_edges.relation = 'broader'
+        and hierarchy_cycle_edges.from_concept_id is null
+)
+
 , publication as (
     select
         scored.from_concept_id
@@ -398,20 +449,20 @@ with evidence as (
         , scored.relation
         , coalesce(
             scored.support_unpublished_reason
-            , pair_exclusion.unpublished_reason
             , case when hierarchy_cycle_edges.from_concept_id is not null then 'hierarchy_cycle' end
+            , pair_exclusion.unpublished_reason
         ) as unpublished_reason
     from scored
-    left join pair_exclusion
-        on
-            scored.from_concept_id = pair_exclusion.from_concept_id
-            and scored.to_concept_id = pair_exclusion.to_concept_id
-            and scored.relation = pair_exclusion.relation
     left join hierarchy_cycle_edges
         on
             scored.relation = 'broader'
             and scored.from_concept_id = hierarchy_cycle_edges.from_concept_id
             and scored.to_concept_id = hierarchy_cycle_edges.to_concept_id
+    left join pair_exclusion
+        on
+            scored.from_concept_id = pair_exclusion.from_concept_id
+            and scored.to_concept_id = pair_exclusion.to_concept_id
+            and scored.relation = pair_exclusion.relation
 )
 
 select
