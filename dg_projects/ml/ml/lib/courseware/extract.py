@@ -133,6 +133,20 @@ EVIDENCE_SCHEMA = {
     "char_end": pl.Int64,
 }
 
+# One row per scope part as the extractor last read it. dbt picks each scope's
+# current extraction by matching input_text_checksum and the split, which only
+# Python computes (the sources block and the split by input budget), and which a
+# skipped scope otherwise leaves no trace of.
+SCOPE_INPUT_SCHEMA = {
+    "platform": pl.String,
+    "courserun_readable_id": pl.String,
+    "scope_id": pl.String,
+    "scope_part": pl.Int64,
+    "scope_part_count": pl.Int64,
+    "input_text_checksum": pl.String,
+    "observed_at": pl.Datetime(time_zone="UTC"),
+}
+
 # list field on ScopeExtraction -> claim_kind, and how its items map onto a claim row
 _CLAIM_LISTS = {
     "concepts": "concept",
@@ -240,6 +254,35 @@ def covered_keys(stored: pl.DataFrame) -> set[str]:
         if row["header_version"] is not None:
             keys.add(stored_extraction_key(row, key_on_header=True))
     return keys
+
+
+def scope_inputs(scopes: Iterable[Scope]) -> pl.DataFrame:
+    """Record the input of every scope part as it is now, extracted or not.
+
+    Write it for every scope of each course run read, so dbt can tell which stored
+    extraction matches the current text (e.g. after a scope's text goes back to an
+    earlier version, whose extraction is stored and so is skipped).
+
+    :param scopes: every scope part of the runs read
+    :returns: courseware_scope_input rows, all with one observed_at
+    :rtype: pl.DataFrame
+    """
+    observed_at = datetime.now(tz=UTC)
+    return pl.DataFrame(
+        [
+            {
+                "platform": scope.course.platform,
+                "courserun_readable_id": scope.course.courserun_readable_id,
+                "scope_id": scope.scope_id,
+                "scope_part": scope.part,
+                "scope_part_count": scope.part_count,
+                "input_text_checksum": scope.input_text_checksum,
+                "observed_at": observed_at,
+            }
+            for scope in scopes
+        ],
+        schema=SCOPE_INPUT_SCHEMA,
+    )
 
 
 @dataclass(frozen=True)

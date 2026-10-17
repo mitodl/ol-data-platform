@@ -454,7 +454,10 @@ unit_tests:
     latest structure is retired, but one still in the structure whose text is missing
     from the sources is not, and neither is the context scope. A scope that shrank
     from two parts to one retires its old part 2. A run with no structure keeps its
-    extractions current.
+    extractions current. A scope whose text went A, B, then back to A is current on
+    its older A extraction, which matches the run's latest read, with and without
+    a
+    change of split in between.
   model: int__courseware__extractions
   given:
   - input: source('courseware_intermediate', 'courseware_claim_extraction')
@@ -491,6 +494,39 @@ unit_tests:
       model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: other-run,
       scope_id: seq-1, scope_kind: unit, scope_part: 1, scope_part_count: 1, scope_position: 5,
       extracted_at: '2026-10-16T00:00:00'}
+    - {extraction_key: aba_a, extractor_id: x, prompt_version: p, schema_version: s,
+      model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: run,
+      scope_id: seq-5, scope_kind: unit, scope_part: 1, scope_part_count: 1, scope_position: 7,
+      input_text_checksum: a, extracted_at: '2026-10-14T00:00:00'}
+    - {extraction_key: aba_b, extractor_id: x, prompt_version: p, schema_version: s,
+      model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: run,
+      scope_id: seq-5, scope_kind: unit, scope_part: 1, scope_part_count: 1, scope_position: 7,
+      input_text_checksum: b, extracted_at: '2026-10-15T00:00:00'}
+    - {extraction_key: aba_split_a1, extractor_id: x, prompt_version: p, schema_version: s,
+      model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: run,
+      scope_id: seq-6, scope_kind: unit, scope_part: 1, scope_part_count: 2, scope_position: 7,
+      input_text_checksum: a1, extracted_at: '2026-10-14T00:00:00'}
+    - {extraction_key: aba_split_a2, extractor_id: x, prompt_version: p, schema_version: s,
+      model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: run,
+      scope_id: seq-6, scope_kind: unit, scope_part: 2, scope_part_count: 2, scope_position: 7,
+      input_text_checksum: a2, extracted_at: '2026-10-14T00:00:00'}
+    - {extraction_key: aba_split_b1, extractor_id: x, prompt_version: p, schema_version: s,
+      model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: run,
+      scope_id: seq-6, scope_kind: unit, scope_part: 1, scope_part_count: 1, scope_position: 7,
+      input_text_checksum: b, extracted_at: '2026-10-15T00:00:00'}
+  - input: source('courseware_intermediate', 'courseware_scope_input')
+    rows:
+    # an earlier read saw the B texts; only the latest read counts
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-5, scope_part: 1,
+      scope_part_count: 1, input_text_checksum: b, observed_at: '2026-10-15T00:00:00'}
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-6, scope_part: 1,
+      scope_part_count: 1, input_text_checksum: b, observed_at: '2026-10-15T00:00:00'}
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-5, scope_part: 1,
+      scope_part_count: 1, input_text_checksum: a, observed_at: '2026-10-16T00:00:00'}
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-6, scope_part: 1,
+      scope_part_count: 2, input_text_checksum: a1, observed_at: '2026-10-16T00:00:00'}
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-6, scope_part: 2,
+      scope_part_count: 2, input_text_checksum: a2, observed_at: '2026-10-16T00:00:00'}
   - input: ref('courseware_extraction_promotions')
     rows:
     - {platform: mitxonline, courserun_readable_id: null, extractor_id: x, prompt_version: p,
@@ -510,6 +546,10 @@ unit_tests:
       is_latest: true}
     - {platform: mitxonline, courserun_readable_id: run, block_id: seq-new, block_category: sequential,
       is_latest: true}
+    - {platform: mitxonline, courserun_readable_id: run, block_id: seq-5, block_category: sequential,
+      is_latest: true}
+    - {platform: mitxonline, courserun_readable_id: run, block_id: seq-6, block_category: sequential,
+      is_latest: true}
     - {platform: mitxonline, courserun_readable_id: run, block_id: seq-gone, block_category: sequential,
       is_latest: false}
   expect:
@@ -522,3 +562,8 @@ unit_tests:
     - {extraction_key: shrunk_old_2, scope_position: 4, is_retired: true, is_current: false}
     - {extraction_key: shrunk_new_1, scope_position: 4, is_retired: false, is_current: true}
     - {extraction_key: unlisted_run, scope_position: 5, is_retired: false, is_current: true}
+    - {extraction_key: aba_a, scope_position: 7, is_retired: false, is_current: true}
+    - {extraction_key: aba_b, scope_position: 7, is_retired: false, is_current: false}
+    - {extraction_key: aba_split_a1, scope_position: 7, is_retired: false, is_current: true}
+    - {extraction_key: aba_split_a2, scope_position: 7, is_retired: false, is_current: true}
+    - {extraction_key: aba_split_b1, scope_position: 7, is_retired: false, is_current: false}

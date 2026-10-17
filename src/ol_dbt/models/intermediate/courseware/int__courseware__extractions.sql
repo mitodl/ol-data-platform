@@ -2,9 +2,15 @@
     Which extraction of each scope part is current. A course run reads one promoted
     extractor version from courseware_extraction_promotions (the run's own row, else
     its platform's), so a trial run or a second model's comparison run never becomes
-    current by finishing last. Within the promoted version the newest extraction of a
-    scope part wins: a second one under the same version means the scope's text
-    changed.
+    current by finishing last. Within the promoted version, the extraction whose
+    input matches the scope part as the extractor last read it wins
+    (courseware_scope_input: same input_text_checksum and part count). Only Python
+    computes that checksum (the sources block and the split by input budget), so the
+    extractor records it for every scope part it reads, extracted or skipped. That
+    is what makes a scope whose text goes A, B, then back to A current on A again,
+    though A's extraction is the older one. With no match (a scope part never
+    observed, or one whose new text is not extracted yet) the newest extraction
+    wins.
 
     A scope part with no extraction under its run's promoted version (or on a
     platform with no promotion) has no current extraction and drops out of the
@@ -20,7 +26,8 @@
     An extraction is retired, and never current, when its scope part is gone from
     the course: a unit scope whose sequential the run's latest course structure
     (dim_course_content) no longer has, or a part past the part count of the
-    scope's newest promoted extraction (a scope that shrank from two parts to one).
+    scope's matching promoted extraction, else its newest (a scope that shrank from
+    two parts to one).
     Deletion is read from the structure, not from extraction_sources, because a
     scope with no readable text this build (e.g. a failed Tika parse) is missing
     from the sources too and must keep its claims. Runs with no Open edX structure
@@ -32,6 +39,30 @@ with extractions as (
 
 , promotions as (
     select * from {{ ref('courseware_extraction_promotions') }}
+)
+
+, scope_inputs as (
+    select * from {{ source('courseware_intermediate', 'courseware_scope_input') }}
+)
+
+, latest_reads as (
+    select
+        platform
+        , courserun_readable_id
+        , max(observed_at) as observed_at
+    from scope_inputs
+    group by platform, courserun_readable_id
+)
+
+-- each run's latest read, which lists every scope part the extractor read
+, latest_scope_inputs as (
+    select scope_inputs.*
+    from scope_inputs
+    inner join latest_reads
+        on
+            scope_inputs.platform = latest_reads.platform
+            and scope_inputs.courserun_readable_id = latest_reads.courserun_readable_id
+            and scope_inputs.observed_at = latest_reads.observed_at
 )
 
 , current_scopes as (
@@ -110,6 +141,11 @@ with extractions as (
         and structure_sequentials.scope_id is null as is_deleted_scope
         , extractions.extracted_at
         , coalesce(
+            extractions.input_text_checksum = latest_scope_inputs.input_text_checksum
+            and extractions.scope_part_count = latest_scope_inputs.scope_part_count
+            , false
+        ) as matches_current_input
+        , coalesce(
             extractions.extractor_id = run_promotions.extractor_id
             and extractions.prompt_version = run_promotions.prompt_version
             and extractions.schema_version = run_promotions.schema_version
@@ -136,10 +172,16 @@ with extractions as (
             extractions.platform = structure_sequentials.platform
             and extractions.courserun_readable_id = structure_sequentials.courserun_readable_id
             and extractions.scope_id = structure_sequentials.scope_id
+    left join latest_scope_inputs
+        on
+            extractions.platform = latest_scope_inputs.platform
+            and extractions.courserun_readable_id = latest_scope_inputs.courserun_readable_id
+            and extractions.scope_id = latest_scope_inputs.scope_id
+            and extractions.scope_part = latest_scope_inputs.scope_part
 )
 
--- A changed split re-extracts every part, so the newest promoted extraction carries
--- the scope's current part count.
+-- A changed split re-extracts every part, so the matching promoted extraction (else
+-- the newest) carries the scope's current part count.
 , current_part_counts as (
     select
         platform
@@ -154,7 +196,10 @@ with extractions as (
             , scope_part_count
             , row_number() over (
                 partition by platform, courserun_readable_id, scope_id
-                order by extracted_at desc, scope_part_count desc
+                order by
+                    case when matches_current_input then 0 else 1 end
+                    , extracted_at desc
+                    , scope_part_count desc
             ) as newest_rank
         from versioned
         where is_promoted_version
@@ -169,7 +214,10 @@ with extractions as (
         or versioned.scope_part > current_part_counts.scope_part_count as is_retired
         , row_number() over (
             partition by versioned.platform, versioned.courserun_readable_id, versioned.scope_id, versioned.scope_part
-            order by case when versioned.is_promoted_version then 0 else 1 end, versioned.extracted_at desc
+            order by
+                case when versioned.is_promoted_version then 0 else 1 end
+                , case when versioned.matches_current_input then 0 else 1 end
+                , versioned.extracted_at desc
         ) as version_rank
         , max(case when versioned.is_promoted_version then 1 else 0 end) over (
             partition by versioned.platform, versioned.courserun_readable_id, versioned.scope_id, versioned.scope_part

@@ -76,6 +76,29 @@ sources:
       description: int, input tokens written to the prompt cache
     - name: extracted_at
       description: timestamp, when the call returned
+  - name: courseware_scope_input
+    description: One row per scope part each time the extractor reads a course run,
+      extracted or skipped, with the input it computed. int__courseware__extractions
+      matches extractions to a run's latest rows to pick the current one.
+    columns:
+    - name: platform
+      description: str, mitxonline, mitxpro or residential
+    - name: courserun_readable_id
+      description: str, the run
+    - name: scope_id
+      description: str, the sequential block id, or 'context' or 'materials'
+    - name: scope_part
+      description: int, which part of the scope, from 1
+    - name: scope_part_count
+      description: int, how many parts the scope was split into
+    - name: input_text_checksum
+      description: str, sha256 of the source text the part's call would read
+    - name: observed_at
+      description: timestamp, when the extractor read the run; one value per read
+    tests:
+    - dbt_expectations.expect_compound_columns_to_be_unique:
+        arguments:
+          column_list: [platform, courserun_readable_id, scope_id, scope_part, observed_at]
   - name: courseware_claim
     description: One row per claim in an extraction, as the model returned it.
     columns:
