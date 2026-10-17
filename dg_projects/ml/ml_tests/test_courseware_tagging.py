@@ -304,3 +304,28 @@ def test_labels_without_an_ascii_token_are_skipped_and_counted():
     assert set(result.aliases["concept_id"]) == {"c2"}
     assert result.run["label_count"].item() == 2
     assert result.run["tokenless_label_count"].item() == 1
+
+
+def test_non_ascii_letters_at_the_edges_must_be_the_aliases_own():
+    # the keys are "fianc" and "clair": the edge letters are not in any token
+    dictionary = ConceptDictionary(aliases(("Fiancé", "c1"), ("Éclair", "c2")))
+    text = "Fiancé, fiancé, fianc, fiancée; an Éclair, an éclair, a clair"
+    assert found(dictionary, text) == [
+        ("fianc", "Fiancé"),
+        ("fianc", "fiancé"),
+        ("clair", "Éclair"),
+        ("clair", "éclair"),
+    ]
+
+
+def test_non_ascii_letters_between_tokens_must_be_the_aliases_own():
+    dictionary = ConceptDictionary(aliases(("naïve Bayes", "c1")))
+    assert found(dictionary, "naïve Bayes, na ve Bayes, naüve Bayes, NAÏVE BAYES") == [
+        ("na ve bayes", "naïve Bayes"),
+        ("na ve bayes", "NAÏVE BAYES"),
+    ]
+
+
+def test_a_non_ascii_lowercase_letter_rules_out_an_acronym():
+    dictionary = ConceptDictionary(aliases(("NAïVE", "c1")))
+    assert [p.match_mode for p in dictionary.patterns] == ["caseless"]
