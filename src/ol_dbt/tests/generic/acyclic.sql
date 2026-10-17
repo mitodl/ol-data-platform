@@ -12,6 +12,9 @@
 #}
 {% test acyclic(model, column_name, to_column, max_length=32) %}
 
+{#- One node on a cycle breaks the order, so fail at one row, not the project's ten. -#}
+{{ config(error_if='!=0') }}
+
 with edges as (
     select distinct
         {{ column_name }} as from_id
