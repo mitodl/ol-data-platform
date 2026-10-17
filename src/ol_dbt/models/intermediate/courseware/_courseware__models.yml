@@ -364,3 +364,49 @@ models:
     tests:
     - unique
     - not_null
+
+unit_tests:
+- name: test_int__courseware__extraction_sources_scopes_ocw_course
+  description: >
+    "Review of Aqueous Solutions" and a lecture opening "Solution of dynamic
+    equilibrium equations" name topics, so they stay in materials; ps1_key and "Mock
+    Exam Key" are answer keys and are left out.
+  model: int__courseware__extraction_sources
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
+        the course.</p>}
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/mit5_111f08_lec3/,
+      content_type: pdf, title: Review of Aqueous Solutions, file_extension: .pdf,
+      content_tags: null, content: Review of aqueous solutions. An aqueous solution
+        is a solute in water.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/mit2_092f09_lec15/,
+      content_type: pdf, title: mit2_092f09_lec15.pdf, file_extension: .pdf, content_tags: null,
+      content: Solution of dynamic equilibrium equations by direct integration.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ps1_key/,
+      content_type: pdf, title: ps1_key, file_extension: .pdf, content_tags: null,
+      content: 1. The force is 3 N.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/mock_exam/,
+      content_type: pdf, title: Mock Exam Key, file_extension: .pdf, content_tags: null,
+      content: 1. Beowulf is an epic.}
+  expect:
+    rows:
+    - {scope_id: context, scope_kind: context, scope_title: Course context, source_ref: courses/c1/,
+      source_kind: course_description}
+    - {scope_id: materials, scope_kind: materials, scope_title: Course materials,
+      source_ref: courses/c1/resources/mit5_111f08_lec3/, source_kind: document}
+    - {scope_id: materials, scope_kind: materials, scope_title: Course materials,
+      source_ref: courses/c1/resources/mit2_092f09_lec15/, source_kind: document}
