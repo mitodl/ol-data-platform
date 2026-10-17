@@ -246,3 +246,56 @@ seeds:
       it (e.g. course-v1:UAI_SOURCE+UAI.4); empty for a run or platform row
   - name: courserun_readable_id
     description: str, the run this row approves; empty for a course or platform row
+
+- name: courseware_extraction_promotions
+  description: >
+    The courseware claim extractor version whose claims are current, per platform
+    with an optional per-run override. A run reads the row for its own
+    courserun_readable_id, else its platform's row (courserun_readable_id empty).
+    Every other extraction stays queryable but out of the rollups, so a trial run
+    or a second model's comparison run never becomes current by running last. The
+    version values are the ones dim_courseware_extraction shows. Promote by editing
+    this file.
+  config:
+    column_types:
+      platform: varchar
+      courserun_readable_id: varchar
+      extractor_id: varchar
+      prompt_version: varchar
+      schema_version: varchar
+      model_id: varchar
+      effort: varchar
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - platform
+        - courserun_readable_id
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the run this row overrides the platform's version for; empty
+      for the platform's version
+  - name: extractor_id
+    description: str, the promoted extractor, e.g. courseware_claims_v1
+    tests:
+    - not_null
+  - name: prompt_version
+    description: str, the promoted hash of the system prompt
+    tests:
+    - not_null
+  - name: schema_version
+    description: str, the promoted hash of the output JSON schema
+    tests:
+    - not_null
+  - name: model_id
+    description: str, the promoted model id as sent to the provider
+    tests:
+    - not_null
+  - name: effort
+    description: str, the promoted output_config.effort
+    tests:
+    - not_null
