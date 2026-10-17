@@ -97,26 +97,41 @@ class AdjudicationFailure(PermanentFailure):
     """
 
 
-def assignment_churn(previous: pl.DataFrame, current: pl.DataFrame) -> tuple[int, int]:
-    """Count labels in both runs, and those whose concept id changed between them.
+def assignment_churn(
+    previous: pl.DataFrame, current: pl.DataFrame, label_keys: set[str]
+) -> tuple[int, int]:
+    """Count current labels in both runs, and those whose concept id changed.
 
-    :returns: (labels in both runs, labels whose concept_id differs)
+    Incremental runs carry the assignments of labels that are no longer current,
+    so both snapshots are restricted to label_keys first; otherwise the carried
+    rows pad the count.
+
+    :param label_keys: the run's current concept_label_keys
+    :returns: (current labels in both runs, those whose concept_id differs)
     :rtype: tuple[int, int]
     """
-    joined = previous.select("concept_label_key", "concept_id").join(
-        current.select("concept_label_key", "concept_id"),
-        on="concept_label_key",
-        suffix="_current",
+    joined = (
+        previous.select("concept_label_key", "concept_id")
+        .join(
+            current.select("concept_label_key", "concept_id"),
+            on="concept_label_key",
+            suffix="_current",
+        )
+        .filter(pl.col("concept_label_key").is_in(label_keys))
     )
     changed = joined.filter(pl.col("concept_id") != pl.col("concept_id_current"))
     return joined.height, changed.height
 
 
 def churn_check(
-    previous: pl.DataFrame, current: pl.DataFrame, max_churn: float, **metadata: int
+    previous: pl.DataFrame,
+    current: pl.DataFrame,
+    label_keys: set[str],
+    max_churn: float,
+    **metadata: int,
 ) -> AssetCheckResult:
     """Pass when few enough carried labels moved to a different concept id."""
-    common, changed = assignment_churn(previous, current)
+    common, changed = assignment_churn(previous, current, label_keys)
     share = changed / common if common else 0.0
     return AssetCheckResult(
         asset_key=RUN_KEY,
@@ -193,15 +208,20 @@ def courseware_resolution(
     if cached is not None:
         state.embeddings = cached.select(state.embeddings.columns).collect()
 
-    assigned = set(state.assignments["concept_label_key"])
-    if not config.rebuild and set(labels["concept_label_key"]) == assigned:
+    # Membership, not equality: the snapshot also carries the assignments of
+    # labels that are no longer current, and those never need resolving.
+    label_keys = set(labels["concept_label_key"])
+    if not config.rebuild and label_keys <= set(state.assignments["concept_label_key"]):
         context.log.info(
             "All %d labels already have an assignment in run %s; nothing to resolve",
             labels.height,
             last_run,
         )
         yield churn_check(
-            state.assignments, state.assignments, config.max_assignment_churn
+            state.assignments,
+            state.assignments,
+            label_keys,
+            config.max_assignment_churn,
         )
         return
 
@@ -225,9 +245,11 @@ def courseware_resolution(
         rebuild=config.rebuild,
     )
     run = result.run.row(0, named=True)
-    # Labels in a failed batch that still have no concept. In a rebuild a failed
-    # label keeps its previous concept, so only labels new to this run count.
-    unassigned = labels.height - result.assignments.height
+    # Current labels in a failed batch that still have no concept. In a rebuild a
+    # failed label keeps its previous concept, so only labels new to this run
+    # count; the assignments also carry labels that are no longer current, so
+    # this is set membership, not a difference of counts.
+    unassigned = len(label_keys - set(result.assignments["concept_label_key"]))
     context.log.info("Resolution run %s", run)
     for table, frame in (
         ("courseware_concept_registry", result.registry),
@@ -261,6 +283,7 @@ def courseware_resolution(
     yield churn_check(
         state.assignments,
         result.assignments,
+        label_keys,
         config.max_assignment_churn,
         concepts_merged=run["concepts_merged"],
         concepts_deprecated=run["concepts_deprecated"],
