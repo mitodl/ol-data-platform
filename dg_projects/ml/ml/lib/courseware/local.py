@@ -27,7 +27,7 @@ from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
 from ml.lib.courseware.resolve import EMBEDDING_DIM as RESOLUTION_EMBEDDING_DIM
 from ml.lib.courseware.resolve import ResolutionState, resolve_concepts
 from ml.lib.courseware.scopes import CHARS_PER_TOKEN, build_scopes
-from ml.lib.courseware.tagging import ConceptDictionary, tag_sources, tagging_run_id
+from ml.lib.courseware.tagging import ConceptDictionary, tag_sources, tagging_input_key
 from ml.lib.embed import BedrockEmbeddingClient, build_embedding_client
 from ml.resources.llm import LLMClientFactory
 
@@ -300,9 +300,10 @@ def tag(sources: Path, aliases: Path, output_dir: Path) -> None:
     source_rows = pl.read_parquet(sources)
     alias_rows = pl.read_parquet(aliases)
     runs = _existing(output_dir, "courseware_concept_tagging_run")
-    run_id = tagging_run_id(ConceptDictionary(alias_rows), source_rows)
-    if runs is not None and run_id in set(runs["tagging_run_id"]):
-        print(f"tagging run {run_id} is already stored")  # noqa: T201
+    input_key = tagging_input_key(ConceptDictionary(alias_rows), source_rows)
+    # only the newest run counts: after A, B, A the warehouse must move back to A
+    if runs is not None and runs.sort("tagged_at")["input_key"][-1] == input_key:
+        print("the newest tagging run already has these inputs")  # noqa: T201
         return
     result = tag_sources(source_rows, alias_rows)
     output_dir.mkdir(parents=True, exist_ok=True)

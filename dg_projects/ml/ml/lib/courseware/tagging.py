@@ -4,21 +4,32 @@ The dictionary is dim_concept_alias: every normalized label key that resolution 
 assigned to a concept. Text is normalized the way int__courseware__claims builds
 `concept_label_key` (lowercase, each run of characters outside a-z and 0-9 becomes
 one separator), so an alias matches wherever its words appear in order with a token
-boundary on both sides: "art" never matches inside "smart". One Aho-Corasick pass
-per source, leftmost-longest, so "decision tree" wins over "tree" at the same place
-and a nested alias is not reported a second time.
+boundary on both sides: "art" never matches inside "smart", and a letter outside
+a-z (the "ï" of "naïve", the "é" of "intérieur") counts as part of the word next to
+it, not as a boundary. Two Aho-Corasick automata report every candidate, one over the
+lowercased text for caseless phrases and one over the original case for
+case-sensitive spellings. The candidates are then resolved leftmost-longest, so
+"decision tree" wins over "tree" at the same place, a nested alias is not reported a
+second time, and a spelling rejected for its case never hides a shorter match.
+
+Python's lower() and the SQL engines' differ on a few characters whose lowercase
+form is ASCII (the Kelvin sign, a dotted capital I), so a label containing one can
+normalize to a different key here than in SQL. No label on the pilot has one.
 
 Besides the label itself, a few variants are matched, none of which may replace an
 alias that is a label of its own (an explicit label always keeps its assignment):
 
-- plural: the last word plus "s" ("decision trees").
-- abbreviation: a one-word parenthetical that is uppercase, at most
-  ABBREVIATION_MAX_CHARS long or code ("MSE" from "mean squared error (MSE)", "int",
-  "__init__"), and full_name, the label without it ("mean squared error").
+- plural: the last word plus "s" ("decision trees"), matched the way its base is
+  ("Gits" for "Git", never "gits").
+- abbreviation: a one-word parenthetical whose letters abbreviate the rest of the
+  label, by the Schwartz-Hearst rule (each character occurs in the long form in
+  order, and the first starts a word): "MSE" from "mean squared error (MSE)",
+  "CART", "int" from "integer (int)". full_name is the label without it.
 - without_qualifier: the label without any other parenthetical ("entropy" from
-  "entropy (information theory)"). The qualifier is there because the head alone is
-  ambiguous, so these phrases are flagged and matched case-sensitively ("None" from
-  "None (special object)" is not "none").
+  "entropy (information theory)", "bias" from "bias (ML)"). The qualifier is there
+  because the head alone is ambiguous, so these phrases are flagged and matched
+  case-sensitively ("None" from "None (special object)" is not "none"), unless some
+  other label also gives the phrase as a full name. An empty "()" is ignored.
 
 Each distinct phrase gets a match mode:
 
@@ -45,6 +56,7 @@ import hashlib
 import json
 import re
 import time
+import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -55,14 +67,11 @@ from typing import Literal
 import ahocorasick_rs
 import polars as pl
 
-TAGGER_ID = "courseware_dictionary_tagger_v1"
+TAGGER_ID = "courseware_dictionary_tagger_v2"
 MIN_ALIAS_CHARS = 2
 CASE_SENSITIVE_BELOW_CHARS = 4
 # a plural variant is only added for a last word at least this long
 PLURAL_MIN_WORD_CHARS = 3
-# a lowercase one-word parenthetical up to this long is a short name ("int", "cp"),
-# not a qualifier ("programming")
-ABBREVIATION_MAX_CHARS = 4
 
 MatchMode = Literal["caseless", "case_sensitive", "skipped"]
 Variant = Literal["label", "full_name", "abbreviation", "without_qualifier", "plural"]
@@ -122,6 +131,7 @@ ALIAS_SCHEMA = {
 }
 RUN_SCHEMA = {
     "tagging_run_id": pl.String,
+    "input_key": pl.String,
     "tagger_id": pl.String,
     "parameters_json": pl.String,
     "dictionary_checksum": pl.String,
@@ -136,6 +146,7 @@ RUN_SCHEMA = {
     "tagged_source_count": pl.Int64,
     "mention_count": pl.Int64,
     "match_seconds": pl.Float64,
+    "elapsed_seconds": pl.Float64,
     "tagged_at": pl.Datetime(time_zone="UTC"),
 }
 
@@ -160,6 +171,8 @@ class Entry:
     surface: str
     # a head without its qualifier, or that head's plural
     is_qualified: bool = False
+    # for a plural, the normalized phrase it is the plural of
+    base_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -175,7 +188,11 @@ class Pattern:
 
     @property
     def is_short(self) -> bool:
-        return len(self.key) < CASE_SENSITIVE_BELOW_CHARS
+        """The phrase, or the phrase a plural comes from, is short."""
+        return (
+            min(len(entry.base_key or self.key) for entry in self.entries)
+            < CASE_SENSITIVE_BELOW_CHARS
+        )
 
     @property
     def match_mode(self) -> MatchMode:
@@ -187,7 +204,8 @@ class Pattern:
 
     @property
     def is_qualified(self) -> bool:
-        return any(entry.is_qualified for entry in self.entries)
+        """Every entry is a head without its qualifier, none a name in its own right."""
+        return all(entry.is_qualified for entry in self.entries)
 
     @property
     def is_acronym(self) -> bool:
@@ -230,17 +248,16 @@ class Pattern:
         )
 
     @cached_property
-    def surface_tokens(self) -> frozenset[tuple[str, ...]] | None:
-        """The spellings the text must have, for a case_sensitive pattern."""
-        if self.match_mode != "case_sensitive":
-            return None
+    def spellings(self) -> frozenset[tuple[str, ...]]:
+        """The spellings a case_sensitive pattern matches, as tokens."""
         return frozenset(tuple(_TOKEN.findall(e.surface)) for e in self.entries)
 
 
 def _plural(surface: str) -> str | None:
     last = _TOKEN.findall(surface)[-1]
     if (
-        last.isalpha()
+        surface.endswith(last)
+        and last.isalpha()
         and len(last) >= PLURAL_MIN_WORD_CHARS
         and not last.lower().endswith("s")
     ):
@@ -248,32 +265,49 @@ def _plural(surface: str) -> str | None:
     return None
 
 
+def _abbreviates(short: str, long: str) -> bool:
+    """Whether `short` abbreviates `long` by the Schwartz-Hearst rule.
+
+    Every alphanumeric character of `short` occurs in `long` in order (matched from
+    the right), and the first one starts a word of `long`.
+    """
+    characters = [char.lower() for char in short if char.isalnum()]
+    text = long.lower()
+    position = len(text) - 1
+    for index in range(len(characters) - 1, -1, -1):
+        while position >= 0 and (
+            text[position] != characters[index]
+            or (index == 0 and position > 0 and text[position - 1].isalnum())
+        ):
+            position -= 1
+        if position < 0:
+            return False
+        position -= 1
+    return bool(characters)
+
+
 def _entries(concept_label_key: str, concept_id: str, alias: str) -> list[Entry]:
     names: list[Entry] = [Entry(concept_label_key, concept_id, "label", alias)]
-    parentheticals = _PARENTHETICAL.findall(alias)
-    if parentheticals:
+    parentheticals = [
+        inner.strip() for inner in _PARENTHETICAL.findall(alias) if _TOKEN.search(inner)
+    ]
+    head = " ".join(_PARENTHETICAL.sub(" ", alias).split())
+    if parentheticals and _TOKEN.search(head):
         abbreviations = [
-            inner.strip()
+            inner
             for inner in parentheticals
-            if len(_TOKEN.findall(inner)) == 1
-            and (
-                _ACRONYM.fullmatch(inner.strip())
-                or len(inner.strip()) <= ABBREVIATION_MAX_CHARS
-                or "_" in inner
-            )
+            if len(_TOKEN.findall(inner)) == 1 and _abbreviates(inner, head)
         ]
         qualified = len(abbreviations) < len(parentheticals)
-        head = " ".join(_PARENTHETICAL.sub(" ", alias).split())
-        if _TOKEN.search(head):
-            names.append(
-                Entry(
-                    concept_label_key,
-                    concept_id,
-                    "without_qualifier" if qualified else "full_name",
-                    head,
-                    is_qualified=qualified,
-                )
+        names.append(
+            Entry(
+                concept_label_key,
+                concept_id,
+                "without_qualifier" if qualified else "full_name",
+                head,
+                is_qualified=qualified,
             )
+        )
         names.extend(
             Entry(concept_label_key, concept_id, "abbreviation", abbreviation)
             for abbreviation in abbreviations
@@ -285,11 +319,10 @@ def _entries(concept_label_key: str, concept_id: str, alias: str) -> list[Entry]
             "plural",
             plural,
             is_qualified=name.is_qualified,
+            base_key=label_key(name.surface),
         )
         for name in names
-        # a label with a parenthetical never appears verbatim, so it gets no plural
-        if not (name.variant == "label" and parentheticals)
-        and (plural := _plural(name.surface))
+        if (plural := _plural(name.surface))
     ]
     return names + plurals
 
@@ -317,10 +350,22 @@ class ConceptDictionary:
             Pattern(phrase, tuple(sorted(entries, key=_entry_order)))
             for phrase, entries in sorted(by_phrase.items())
         ]
-        self._matched = [p for p in self.patterns if p.match_mode != "skipped"]
-        self._automaton = ahocorasick_rs.AhoCorasick(
-            [f" {p.key.replace(' ', _SEPARATOR)} " for p in self._matched],
-            matchkind=ahocorasick_rs.MatchKind.LeftmostLongest,
+        # (pattern, token count) per automaton pattern: caseless keys, exact spellings
+        self._caseless = [
+            (p, p.token_count) for p in self.patterns if p.match_mode == "caseless"
+        ]
+        exact = [
+            (pattern, spelling)
+            for pattern in self.patterns
+            if pattern.match_mode == "case_sensitive"
+            for spelling in sorted(pattern.spellings)
+        ]
+        self._exact = [(pattern, len(spelling)) for pattern, spelling in exact]
+        self._caseless_automaton = ahocorasick_rs.AhoCorasick(
+            [f" {p.key.replace(' ', _SEPARATOR)} " for p, _ in self._caseless]
+        )
+        self._exact_automaton = ahocorasick_rs.AhoCorasick(
+            [f" {_SEPARATOR.join(spelling)} " for _, spelling in exact]
         )
         self.checksum = hashlib.sha256(json.dumps(rows).encode()).hexdigest()
 
@@ -334,25 +379,39 @@ class ConceptDictionary:
         spans = [match.span() for match in _TOKEN.finditer(text)]
         if not spans:
             return []
-        tokens = [text[start:end] for start, end in spans]
-        normalized = f" {_SEPARATOR.join(tokens).lower()} "
-        # where each token starts in `normalized`
+        joined = f" {_SEPARATOR.join(text[start:end] for start, end in spans)} "
+        # where each token starts in `joined`
         token_offsets = list(
             accumulate(
-                (len(token) + len(_SEPARATOR) for token in tokens[:-1]), initial=1
+                (end - start + len(_SEPARATOR) for start, end in spans[:-1]), initial=1
             )
         )
-        found = []
-        for index, start, _end in self._automaton.find_matches_as_indexes(normalized):
-            pattern = self._matched[index]
-            first = bisect.bisect_left(token_offsets, start + 1)
-            last = first + pattern.token_count - 1
-            if (
-                pattern.surface_tokens is not None
-                and tuple(tokens[first : last + 1]) not in pattern.surface_tokens
+        candidates: list[tuple[int, int, Pattern]] = []
+        for patterns, haystack, automaton in (
+            (self._caseless, joined.lower(), self._caseless_automaton),
+            (self._exact, joined, self._exact_automaton),
+        ):
+            for index, start, _end in automaton.find_matches_as_indexes(
+                haystack, overlapping=True
             ):
-                continue
-            found.append((pattern, spans[first][0], spans[last][1]))
+                pattern, token_count = patterns[index]
+                first = bisect.bisect_left(token_offsets, start + 1)
+                last = first + token_count - 1
+                char_start, char_end = spans[first][0], spans[last][1]
+                # [A-Za-z0-9] tokens stop at a non-ASCII letter, which is still a word
+                if (char_start > 0 and text[char_start - 1].isalnum()) or (
+                    char_end < len(text) and text[char_end].isalnum()
+                ):
+                    continue
+                candidates.append((first, last, pattern))
+        # leftmost-longest over every valid candidate
+        candidates.sort(key=lambda candidate: (candidate[0], -candidate[1]))
+        found = []
+        covered_until = -1
+        for first, last, pattern in candidates:
+            if first > covered_until:
+                found.append((pattern, spans[first][0], spans[last][1]))
+                covered_until = last
         return found
 
 
@@ -382,7 +441,6 @@ def _parameters() -> str:
             "min_alias_chars": MIN_ALIAS_CHARS,
             "case_sensitive_below_chars": CASE_SENSITIVE_BELOW_CHARS,
             "plural_min_word_chars": PLURAL_MIN_WORD_CHARS,
-            "abbreviation_max_chars": ABBREVIATION_MAX_CHARS,
         },
         sort_keys=True,
     )
@@ -395,19 +453,24 @@ def _sources_checksum(sources: pl.DataFrame) -> str:
     return digest.hexdigest()
 
 
-def tagging_run_id(dictionary: ConceptDictionary, sources: pl.DataFrame) -> str:
-    """Derive the id a run over these sources with this dictionary gets.
+def tagging_input_key(dictionary: ConceptDictionary, sources: pl.DataFrame) -> str:
+    """Derive the key of everything a run over these sources depends on.
 
-    A caller skips a run whose id is already stored.
+    A caller skips a run whose key equals the newest stored run's. An older run
+    with the same key is not enough, since a run in between replaced it.
 
     :param dictionary: the concept dictionary
     :param sources: int__courseware__extraction_sources rows
     :returns: a sha256 hex digest of the tagger, its parameters and both inputs
     :rtype: str
     """
+    return _input_key(dictionary.checksum, _sources_checksum(sources))
+
+
+def _input_key(dictionary_checksum: str, sources_checksum: str) -> str:
     return hashlib.sha256(
         json.dumps(
-            [TAGGER_ID, _parameters(), dictionary.checksum, _sources_checksum(sources)]
+            [TAGGER_ID, _parameters(), dictionary_checksum, sources_checksum]
         ).encode()
     ).hexdigest()
 
@@ -421,8 +484,10 @@ def tag_sources(sources: pl.DataFrame, aliases: pl.DataFrame) -> TaggingResult:
     :rtype: TaggingResult
     """
     tagged_at = datetime.now(tz=UTC)
+    began = time.perf_counter()
     dictionary = ConceptDictionary(aliases)
-    run_id = tagging_run_id(dictionary, sources)
+    run_id = str(uuid.uuid4())
+    sources_checksum = _sources_checksum(sources)
 
     mentions: list[dict[str, object]] = []
     tagged_sources = 0
@@ -472,12 +537,15 @@ def tag_sources(sources: pl.DataFrame, aliases: pl.DataFrame) -> TaggingResult:
         for entry in pattern.concept_entries
     ]
     modes = [pattern.match_mode for pattern in dictionary.patterns]
+    mention_frame = pl.DataFrame(mentions, schema=MENTION_SCHEMA)
+    alias_frame = pl.DataFrame(alias_rows, schema=ALIAS_SCHEMA)
     run = {
         "tagging_run_id": run_id,
+        "input_key": _input_key(dictionary.checksum, sources_checksum),
         "tagger_id": TAGGER_ID,
         "parameters_json": _parameters(),
         "dictionary_checksum": dictionary.checksum,
-        "sources_checksum": _sources_checksum(sources),
+        "sources_checksum": sources_checksum,
         "label_count": dictionary.label_count,
         "pattern_count": len(dictionary.patterns),
         "case_sensitive_pattern_count": modes.count("case_sensitive"),
@@ -488,10 +556,11 @@ def tag_sources(sources: pl.DataFrame, aliases: pl.DataFrame) -> TaggingResult:
         "tagged_source_count": tagged_sources,
         "mention_count": len(mentions),
         "match_seconds": match_seconds,
+        "elapsed_seconds": time.perf_counter() - began,
         "tagged_at": tagged_at,
     }
     return TaggingResult(
-        mentions=pl.DataFrame(mentions, schema=MENTION_SCHEMA),
-        aliases=pl.DataFrame(alias_rows, schema=ALIAS_SCHEMA),
+        mentions=mention_frame,
+        aliases=alias_frame,
         run=pl.DataFrame([run], schema=RUN_SCHEMA),
     )
