@@ -294,7 +294,8 @@ models:
   description: Concept-to-concept edges with their accumulated evidence, a combined
     relation_confidence and a publishing decision, one row per (from, to, relation).
     Hierarchy (broader), sequence (builds_on), practice (practiced_with), equivalence
-    (close) and association (complements, related).
+    (close) and association (complements, related). snapshot_bridge_concept_relation
+    keeps each edge's history.
   config:
     meta:
       # Reads dim_course_run for course keys; no QA form until the Dagster assets

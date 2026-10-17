@@ -1,0 +1,60 @@
+---
+version: 2
+snapshots:
+- name: snapshot_bridge_concept_relation
+  relation: ref('bridge_concept_relation')
+  description: >
+    History of concept-to-concept edges, one row per version of an edge's strength
+    or publishing decision. bridge_concept_relation is rebuilt from the current
+    evidence on every run, so without this an edge's support, relation_confidence
+    and is_published leave no trace once they change. Read it beside
+    afact_concept_graph_run (graph runs) by time. A new version is recorded when a
+    support count, the consistency, relation_confidence, review_status or the
+    publishing decision changes. co_taught_lift is left out of the check, because
+    its denominator counts every taught unit, so each extracted course would version
+    every complements edge without its own evidence changing. Resolution is one
+    run, and history starts at the first run. An edge whose evidence disappears has
+    its current version closed (dbt_valid_to set).
+  config:
+    schema: dimensional
+    unique_key: concept_relation_pk
+    strategy: check
+    check_cols:
+    - courserun_support
+    - scope_support
+    - reverse_courserun_support
+    - reverse_scope_support
+    - direction_consistency
+    - verdict_support
+    - contrary_verdict_support
+    - cross_signal_support
+    - relation_confidence
+    - review_status
+    - is_published
+    - unpublished_reason
+    hard_deletes: invalidate
+  columns:
+  - name: concept_relation_pk
+    description: str, bridge_concept_relation.concept_relation_pk, a surrogate key
+      of (from, to, relation)
+  - name: from_concept_fk
+    description: str, dim_concept.concept_pk of the narrower, dependent or lower-id
+      concept
+  - name: to_concept_fk
+    description: str, dim_concept.concept_pk of the broader, built-on or higher-id
+      concept
+  - name: relation
+    description: str, the relation
+  - name: relation_confidence
+    description: float, the edge's relation_confidence in this version
+  - name: is_published
+    description: boolean, whether the edge was published in this version
+  - name: dbt_scd_id
+    description: Unique id of this version of the edge.
+  - name: dbt_updated_at
+    description: When dbt recorded this version.
+  - name: dbt_valid_from
+    description: When this version was first observed.
+  - name: dbt_valid_to
+    description: When this version stopped being current (changed, or its evidence
+      disappeared). Null for the current version.
