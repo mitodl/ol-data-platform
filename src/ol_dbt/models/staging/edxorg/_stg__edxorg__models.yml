@@ -745,8 +745,9 @@ models:
     tests:
     - not_null
   - name: coursestructure_xml_block_id
-    description: str, unique identifier for the block from XML url_name attribute
-      or filename
+    description: str, the block's id within the course run, its XML file name without
+      .xml, which is the last part of its block-v1 usage key. Not the url_name attribute
+      inside the file, which a library_content child carries from its source library
     tests:
     - not_null
   - name: coursestructure_xml_block_type
