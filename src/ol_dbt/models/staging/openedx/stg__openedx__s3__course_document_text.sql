@@ -17,6 +17,7 @@ select
     , content                               as content_file_text
     , extraction_status                     as content_file_extraction_status
     , _file_modified_at                     as content_file_extracted_at
+    , static_references                     as content_file_static_references
 from source
 -- An empty snapshot loads as one marker row so it can become the newest file;
 -- the marker itself is not a file.

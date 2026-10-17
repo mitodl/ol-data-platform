@@ -5,9 +5,9 @@
     Scopes:
       unit       one per sequential, its leaf blocks in course-tree order (dim_course_content)
       context    the about pages, reachable tabs and course info pages
-      materials  the run's static documents (slides, PDFs). The html bodies Tika extracts
-                 keep no hrefs, so a document cannot be placed in the sequential that links
-                 it; they are read together instead.
+      materials  the run's static documents (slides, PDFs) that no unit's html links to.
+                 A document an html block links to (content_file_static_references) is
+                 read in that block's unit instead.
 
     Problem text is the question side only (courseware_problem_question_text). A
     library_content block contributes its first problem, since its children are
@@ -104,6 +104,7 @@ with content as (
         , documents.content_file_path
         , documents.content_file_extension
         , documents.content_file_text
+        , documents.content_file_static_references
     from {{ ref('stg__openedx__s3__course_document_text') }} as documents
     where
         documents.content_file_extraction_status = 'extracted'
@@ -234,6 +235,54 @@ with content as (
     where excluded_paths.content_file_path is null
 )
 
+, html_links as (
+    select
+        unit_blocks.platform
+        , unit_blocks.courserun_readable_id
+        , unit_blocks.sequential_block_id
+        , unit_blocks.block_index
+        -- Studio stores "my file.pdf" under the asset name my_file.pdf, which is what
+        -- a link spells, so names are compared without their punctuation.
+        , {{ regexp_replace_all(
+            "lower(" ~ json_extract_scalar('linked.static_path', "'$'") ~ ")", "'[^a-z0-9./-]'", "''"
+        ) }} as content_file_key
+    from unit_blocks
+    inner join documents as html_body
+        on
+            unit_blocks.block_category = 'html'
+            and unit_blocks.platform = html_body.platform
+            and unit_blocks.courserun_readable_id = html_body.courserun_readable_id
+            and html_body.content_file_path = concat('html/', unit_blocks.html_filename, '.html')
+    cross join {{ unnest_json_array('html_body.content_file_static_references', 'linked', 'static_path') }}
+)
+
+-- A linked document is read right after the html block that links it: it takes the
+-- block's source_order, and its static/ path sorts after the block's block-v1 key. One
+-- linked from several units is read in the first, so its claims are not extracted twice.
+, linked_documents as (
+    select
+        html_links.platform
+        , html_links.courserun_readable_id
+        , html_links.sequential_block_id as scope_id
+        , html_links.block_index as source_order
+        , documents.content_file_path as source_ref
+        , 'document' as source_kind
+        , {{ regexp_replace_all('documents.content_file_path', "'^static/'", "''") }} as source_title
+        , documents.content_file_text as source_text
+        , row_number() over (
+            partition by html_links.platform, html_links.courserun_readable_id, documents.content_file_path
+            order by html_links.block_index
+        ) as link_rank
+    from html_links
+    inner join unscoped_documents as documents
+        on
+            html_links.platform = documents.platform
+            and html_links.courserun_readable_id = documents.courserun_readable_id
+            and html_links.content_file_key
+            = {{ regexp_replace_all("lower(documents.content_file_path)", "'[^a-z0-9./-]'", "''") }}
+    where documents.content_file_extension in ('{{ document_extensions | join("', '") }}')
+)
+
 , context_sources as (
     select
         platform
@@ -254,20 +303,28 @@ with content as (
 
 , material_sources as (
     select
-        platform
-        , courserun_readable_id
+        unscoped_documents.platform
+        , unscoped_documents.courserun_readable_id
         , 'materials' as scope_id
         , row_number() over (
-            partition by platform, courserun_readable_id order by content_file_path
+            partition by unscoped_documents.platform, unscoped_documents.courserun_readable_id
+            order by unscoped_documents.content_file_path
         ) as source_order
-        , content_file_path as source_ref
+        , unscoped_documents.content_file_path as source_ref
         , 'document' as source_kind
-        , {{ regexp_replace_all('content_file_path', "'^static/'", "''") }} as source_title
-        , content_file_text as source_text
+        , {{ regexp_replace_all('unscoped_documents.content_file_path', "'^static/'", "''") }} as source_title
+        , unscoped_documents.content_file_text as source_text
     from unscoped_documents
+    left join linked_documents
+        on
+            unscoped_documents.platform = linked_documents.platform
+            and unscoped_documents.courserun_readable_id = linked_documents.courserun_readable_id
+            and unscoped_documents.content_file_path = linked_documents.source_ref
+            and linked_documents.link_rank = 1
     where
-        content_file_path like 'static/%'
-        and content_file_extension in ('{{ document_extensions | join("', '") }}')
+        unscoped_documents.content_file_path like 'static/%'
+        and unscoped_documents.content_file_extension in ('{{ document_extensions | join("', '") }}')
+        and linked_documents.source_ref is null
 )
 
 , scoped_sources as (
@@ -282,6 +339,28 @@ with content as (
             unit_sources.platform = units.platform
             and unit_sources.courserun_readable_id = units.courserun_readable_id
             and unit_sources.scope_id = units.scope_id
+
+    union all
+
+    select
+        linked_documents.platform
+        , linked_documents.courserun_readable_id
+        , linked_documents.scope_id
+        , linked_documents.source_order
+        , linked_documents.source_ref
+        , linked_documents.source_kind
+        , linked_documents.source_title
+        , linked_documents.source_text
+        , 'unit' as scope_kind
+        , units.scope_title
+        , units.scope_position
+    from linked_documents
+    inner join units
+        on
+            linked_documents.platform = units.platform
+            and linked_documents.courserun_readable_id = units.courserun_readable_id
+            and linked_documents.scope_id = units.scope_id
+    where linked_documents.link_rank = 1
 
     union all
 
