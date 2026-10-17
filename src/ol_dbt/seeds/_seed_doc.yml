@@ -244,6 +244,16 @@ seeds:
   - name: courserun_readable_id
     description: str, the run this row overrides the platform's version for; empty
       for the platform's version
+    tests:
+    # A mistyped run id would otherwise fall back to the platform's version unseen.
+    # Empty (platform) rows are skipped: relationships ignores null child values.
+    - relationships:
+        arguments:
+          to: ref('dim_course_run')
+          field: courserun_readable_id
+        config:
+          # The project only errors above 10 failing rows; this seed has a handful.
+          error_if: '!=0'
   - name: extractor_id
     description: str, the promoted extractor, e.g. courseware_claims_v1
     tests:
