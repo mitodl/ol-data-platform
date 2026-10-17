@@ -48,12 +48,15 @@ import numpy as np
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock, APIError
 from ml.lib.courseware.schemas import Strict
-from ml.lib.embed import BedrockEmbeddingClient
+from ml.lib.embed import EmbeddingClient
 from pydantic import ValidationError
 
 log = logging.getLogger(__name__)
 
 RESOLVER_ID = "courseware_resolution_v2"
+# Adjudication batches are short and many, so the small model is the default.
+ADJUDICATION_MODEL = "claude-haiku-5-5"
+BEDROCK_ADJUDICATION_MODEL = "us.anthropic.claude-haiku-5-5"
 EMBEDDING_DIM = 512
 # Candidates per new label from each blocker; the union goes to the model.
 EMBEDDING_NEIGHBOURS = 8
@@ -168,6 +171,8 @@ RUN_SCHEMA = {
     "label_count": pl.Int64,
     "resolved_label_count": pl.Int64,
     "adjudication_calls": pl.Int64,
+    "failed_batch_count": pl.Int64,
+    "failed_label_count": pl.Int64,
     "concepts_minted": pl.Int64,
     "concepts_merged": pl.Int64,
     "concepts_deprecated": pl.Int64,
@@ -275,7 +280,7 @@ def embedding_neighbours(
 def embed_labels(
     labels: pl.DataFrame,
     cached: pl.DataFrame,
-    client: BedrockEmbeddingClient,
+    client: EmbeddingClient,
     max_workers: int = 16,
 ) -> tuple[np.ndarray, pl.DataFrame]:
     """Embed every label whose text changed since it was cached.
@@ -393,16 +398,17 @@ def adjudicate(
     candidates: dict[str, list[str]],
     rows: dict[str, dict[str, Any]],
     max_workers: int = 6,
-) -> tuple[list[tuple[str, str, str]], int, set[str]]:
+) -> tuple[list[tuple[str, str, str]], int, list[list[str]]]:
     """Adjudicate every query's candidates in small batches.
 
-    :returns: the decisions, how many calls were made, and the query keys whose
-        batch failed (left unassigned, so the next run retries them)
+    :returns: the decisions, how many calls were made, and the query keys of each
+        batch that failed (left unassigned, so the next run retries them; a
+        rebuild keeps their previous concept)
     """
     work = [(query, found) for query, found in candidates.items() if found]
     batches = [list(batch) for batch in batched(work, QUERIES_PER_CALL)]
     decisions: list[tuple[str, str, str]] = []
-    failed: set[str] = set()
+    failed: list[list[str]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [
             pool.submit(_adjudicate_batch, client, model_id, batch, rows)
@@ -413,7 +419,7 @@ def adjudicate(
                 decisions.extend(future.result())
             except (ValueError, APIError):
                 log.exception("Adjudication batch of %d labels failed", len(batch))
-                failed.update(query for query, _ in batch)
+                failed.append([query for query, _ in batch])
     return decisions, len(batches), failed
 
 
@@ -494,7 +500,7 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     labels: pl.DataFrame,
     state: ResolutionState,
     client: Anthropic | AnthropicBedrock,
-    embedding_client: BedrockEmbeddingClient,
+    embedding_client: EmbeddingClient,
     *,
     model_id: str,
     rebuild: bool = False,
@@ -547,7 +553,8 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     candidates = {
         key: list(dict.fromkeys(by_embedding[key] + by_trigram[key])) for key in pending
     }
-    decisions, calls, failed = adjudicate(client, model_id, candidates, rows)
+    decisions, calls, failed_batches = adjudicate(client, model_id, candidates, rows)
+    failed = {key for batch in failed_batches for key in batch}
 
     components, rejected = accepted_components(
         [key for key in keys if key not in failed or key in carried], decisions
@@ -779,6 +786,8 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
                     "label_count": len(keys),
                     "resolved_label_count": len(pending),
                     "adjudication_calls": calls,
+                    "failed_batch_count": len(failed_batches),
+                    "failed_label_count": len(failed),
                     "concepts_minted": minted,
                     "concepts_merged": merged,
                     "concepts_deprecated": deprecated,

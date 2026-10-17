@@ -56,7 +56,7 @@ def verdicts(monkeypatch):
             for query, found in candidates.items()
             for candidate in found
         ]
-        return decided, 1, set()
+        return decided, 1, []
 
     monkeypatch.setattr(resolve, "adjudicate", fake_adjudicate)
     return table
@@ -192,7 +192,7 @@ def test_rebuild_keeps_a_failed_label_on_its_previous_concept(verdicts, monkeypa
             if query != "pandas"
             for candidate in found
         ]
-        return decided, 1, {"pandas"}
+        return decided, 1, [["pandas"]]
 
     monkeypatch.setattr(resolve, "adjudicate", adjudicate_failing_pandas)
     rebuilt = run(
@@ -205,6 +205,8 @@ def test_rebuild_keeps_a_failed_label_on_its_previous_concept(verdicts, monkeypa
     }
     assert registry[pandas]["concept_status"] == "active"
     assert rebuilt.run["concepts_deprecated"][0] == 0
+    assert rebuilt.run["failed_batch_count"][0] == 1
+    assert rebuilt.run["failed_label_count"][0] == 1
 
 
 def test_concepts_bridged_twice_merge_one_way(verdicts):
