@@ -662,6 +662,28 @@ def test_static_references_cover_both_link_spellings():
     ]
 
 
+def test_static_references_cover_relative_and_legacy_links():
+    """Hand-written html links static files relatively, and old courses by c4x URL."""
+    html = (
+        b'<a href="static/a.pdf">a</a>'
+        b'<a href=" /static/b.pdf">b</a>'
+        b'<a href="../static/c.pdf">c</a>'
+        b'<a href="./static/d.pdf">d</a>'
+        b'<a href="/c4x/MITx/6.002x/asset/e%20notes.pdf">e</a>'
+        b'<a href="https://courses.edx.org/c4x/MITx/6.002x/asset/f.pdf">f</a>'
+        b'<a href="/statics/g.pdf">not static/</a>'
+    )
+
+    assert static_references(html) == [
+        "static/a.pdf",
+        "static/b.pdf",
+        "static/c.pdf",
+        "static/d.pdf",
+        "static/e notes.pdf",
+        "static/f.pdf",
+    ]
+
+
 def test_html_rows_carry_their_static_references():
     """Tika's text drops hrefs, so the row is the only record of what a page links."""
     rows, _ = rows_for(

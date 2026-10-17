@@ -187,11 +187,15 @@ def _content_type(relative_path: str) -> str:
 HTML_CONTENT_TYPE = "text/html"
 
 # How an html body links a file in the course's static/ directory. Studio writes
-# /static/<name>, which the LMS rewrites per request; a link copied from a
-# rendered page carries the asset key instead, sometimes of another run, and
-# behind a /assets/courseware/v1/<hash>/ prefix when it came from Studio's CDN.
-_STATIC_PATH_PATTERN = re.compile(r"^/static/([^?#]+)")
-_ASSET_KEY_PATTERN = re.compile(r"asset-v1:[^/?#]+?\+type@asset\+block@([^/?#]+)")
+# /static/<name>, which the LMS rewrites per request, and hand-written html also
+# has static/<name> and ../static/<name>. A link copied from a rendered page
+# carries the asset key instead, sometimes of another run, behind a
+# /assets/courseware/v1/<hash>/ prefix when it came from Studio's CDN, or the
+# old-style /c4x/<org>/<course>/asset/<name> form.
+_STATIC_PATH_PATTERN = re.compile(r"^(?:\.{1,2}/)*/?static/([^?#]+)")
+_ASSET_KEY_PATTERN = re.compile(
+    r"asset-v1:[^/?#]+?\+type@asset\+block@([^/?#]+)|/c4x/[^/]+/[^/]+/asset/([^?#]+)"
+)
 
 
 class _LinkedUrls(HTMLParser):
@@ -223,9 +227,12 @@ def static_references(html_bytes: bytes) -> list[str]:
     parser.close()
     names: set[str] = set()
     for url in parser.urls:
-        match = _STATIC_PATH_PATTERN.match(url) or _ASSET_KEY_PATTERN.search(url)
+        stripped = url.strip()
+        match = _STATIC_PATH_PATTERN.match(stripped) or _ASSET_KEY_PATTERN.search(
+            stripped
+        )
         if match:
-            names.add(unquote(match.group(1)))
+            names.add(unquote(next(group for group in match.groups() if group)))
     return sorted(f"static/{name}" for name in names)
 
 
