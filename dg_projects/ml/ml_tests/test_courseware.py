@@ -277,6 +277,38 @@ def test_extract_refuses_keys_that_need_rekey(tmp_path, capsys):
     assert capsys.readouterr().out.count(" stored\n") == 1
 
 
+def _stored_marks(tmp_path, capsys, description: str, *, key_on_header: bool) -> int:
+    sources = tmp_path / "sources.parquet"
+    _course_rows(description, "Lecture 2", "some text").write_parquet(sources)
+    local.extract(
+        sources,
+        tmp_path / "out",
+        model_id="model",
+        effort="medium",
+        key_on_header=key_on_header,
+        dry_run=True,
+    )
+    return capsys.readouterr().out.count(" stored\n")
+
+
+@pytest.mark.parametrize("stored_on_header", [False, True])
+def test_either_key_scheme_skips_what_the_other_extracted(
+    tmp_path, capsys, stored_on_header
+):
+    scope = _lecture_one(_course_rows("About it.", "Lecture 2", "some text"))
+    key = extraction_key(scope, "model", "medium", key_on_header=stored_on_header)
+    extraction, _, _ = _rows_for(scope, key, "model", "medium", _result())
+    (tmp_path / "out").mkdir()
+    pl.DataFrame([extraction]).write_parquet(
+        tmp_path / "out" / "courseware_claim_extraction.parquet"
+    )
+    assert _stored_marks(tmp_path, capsys, "About it.", key_on_header=False) == 1
+    assert _stored_marks(tmp_path, capsys, "About it.", key_on_header=True) == 1
+    # a header change is re-extracted only when asked for
+    assert _stored_marks(tmp_path, capsys, "Edited.", key_on_header=False) == 1
+    assert _stored_marks(tmp_path, capsys, "Edited.", key_on_header=True) == 0
+
+
 def _golden_scope() -> scopes.Scope:
     course = scopes.Course(
         platform="mitxonline",
