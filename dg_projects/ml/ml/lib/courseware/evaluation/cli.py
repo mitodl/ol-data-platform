@@ -283,11 +283,15 @@ def score_gold(  # noqa: PLR0913
             [Path(path) for path in paths["label_map"]],
         )
         if gold_label_map:
-            inputs.matcher.add_mapping(
+            keys = [
                 (concept_label_key(label), concept_label_key(model_label))
                 for label, model_label in pl.read_parquet(gold_label_map)
                 .select("label", "model_label")
                 .iter_rows()
+            ]
+            # a label of only symbols has no key to map
+            inputs.matcher.add_mapping(
+                (key, model_key) for key, model_key in keys if key and model_key
             )
         model_concepts = samples.scope_concepts(inputs)
         report["subsections"], unmatched = score.score_subsections(
