@@ -31,8 +31,11 @@
     and every pilot course that uses it also requires it.
 
     course_key decides which runs are the same course: dim_course.course_readable_id,
-    or the run id without its run tag when course_fk is null (edxorg runs until edxorg
-    courses load, and courses missing from dim_course). It leaves out the platform:
+    or, when course_fk is null (edxorg runs until edxorg courses load, and courses
+    missing from dim_course), the run id less its last segment, as dim_course_run
+    derives the id it joins dim_course on. extract_course_readable_id is not used
+    because it stops at an underscore (MITx+15.390.1x_KOR becomes MITx+15.390.1x)
+    and returns 'course-v1:' for ids in neither format. It leaves out the platform:
     dim_course keys a course on (primary_platform, course_readable_id), so course_fk
     alone would let an edxorg and a mitxonline copy with the same readable id cover
     each other. Copies whose readable ids differ (e.g. by org) still do.
@@ -65,8 +68,23 @@ with run_concepts as (
         , dim_course_run.courserun_readable_id
         , coalesce(
             courses.course_readable_id
-            , nullif({{ extract_course_readable_id('dim_course_run.courserun_readable_id') }}, '')
-            , dim_course_run.courserun_readable_id
+            , case
+                when dim_course_run.courserun_readable_id like 'course-v1:%'
+                    then substring(
+                        dim_course_run.courserun_readable_id
+                        , 1
+                        , length(dim_course_run.courserun_readable_id)
+                        - strpos(reverse(dim_course_run.courserun_readable_id), '+')
+                    )
+                when {{ regexp_like('dim_course_run.courserun_readable_id', "'^[^/]+/[^/]+/[^/]+'") }}
+                    then substring(
+                        dim_course_run.courserun_readable_id
+                        , 1
+                        , length(dim_course_run.courserun_readable_id)
+                        - strpos(reverse(dim_course_run.courserun_readable_id), '/')
+                    )
+                else dim_course_run.courserun_readable_id
+            end
         ) as course_key
     from {{ ref('dim_course_run') }} as dim_course_run
     left join courses
