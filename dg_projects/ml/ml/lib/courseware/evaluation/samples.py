@@ -717,10 +717,10 @@ def _label_info(inputs: GoldInputs) -> dict[str, dict[str, Any]]:
 
 
 def _unblocked_pairs(
-    inputs: GoldInputs, decided: set[tuple[str, str]]
+    embeddings: pl.DataFrame, decided: set[tuple[str, str]]
 ) -> list[tuple[str, str]]:
-    keys = inputs.embeddings["concept_label_key"].to_list()
-    vectors = np.array(inputs.embeddings["embedding"].to_list(), dtype=np.float32)
+    keys = embeddings["concept_label_key"].to_list()
+    vectors = np.array(embeddings["embedding"].to_list(), dtype=np.float32)
     vectors /= np.linalg.norm(vectors, axis=1, keepdims=True)
     pairs = set()
     for start in range(0, len(keys), 1024):
@@ -747,6 +747,10 @@ def pairs_population(inputs: GoldInputs) -> pl.DataFrame:
     key_a to key_b: exact when merged, the verdict's relation otherwise, and
     distinct where nothing links the two (an unmerged exact verdict included).
 
+    Only current labels (inputs.labels) pair up. The decision and embedding tables
+    accumulate over runs and keep labels no current claim uses, which the samplers
+    have no text for.
+
     :param inputs: loaded gold-set inputs
     :returns: one row per unordered label pair (key_a < key_b)
     :rtype: pl.DataFrame
@@ -756,14 +760,21 @@ def pairs_population(inputs: GoldInputs) -> pl.DataFrame:
         .select("concept_label_key", "concept_id")
         .iter_rows()
     )
-    decided_rows = inputs.decisions.select(
-        "key_a", "key_b", "query_label_key", "verdict"
-    )
+    current = set(inputs.labels["concept_label_key"])
+    decided_rows = inputs.decisions.filter(
+        pl.col("key_a").is_in(current) & pl.col("key_b").is_in(current)
+    ).select("key_a", "key_b", "query_label_key", "verdict")
     decided = set(decided_rows.select("key_a", "key_b").iter_rows())
-    unblocked = set(_unblocked_pairs(inputs, decided))
+    unblocked = set(
+        _unblocked_pairs(
+            inputs.embeddings.filter(pl.col("concept_label_key").is_in(current)),
+            decided,
+        )
+    )
     members: dict[str, list[str]] = defaultdict(list)
     for key, concept in concept_of.items():
-        members[concept].append(key)
+        if key in current:
+            members[concept].append(key)
     merged_only = {
         pair
         for keys in members.values()
