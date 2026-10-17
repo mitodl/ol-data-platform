@@ -46,6 +46,8 @@ I propose the third. The extraction is expensive enough (thousands of courses, t
 
 ## 4. The model
 
+Sections 4 to 6 are the proposal as first written. Where they differ from what the proof of concept built, sections 9 to 11 are current: the built table names (section 9), concept identity and resolution (section 10, "Identity" and "Batched, incremental resolution") and the concept-to-concept relation types (section 10, "Relationships between concepts").
+
 Grain and keys follow `src/ol_dbt/models/dimensional/README.md`: surrogate `*_pk` via `generate_surrogate_key`, every course join carries `platform`, `platform` plus `courserun_readable_id` identifies a run.
 
 ### Claims and evidence (facts)
@@ -104,6 +106,8 @@ Derived by dbt from the claims, filtered to accepted concepts and verified evide
 
 ## 5. The pipeline
 
+Steps 3 and 4 changed in the proof of concept: extraction is one call per scope (section 9), and resolution is the batched resolver in section 10.
+
 Dagster assets in `dg_projects/ml` (the LLM resources and the Iceberg IO manager are there), partitioned by `(platform, courserun_readable_id)` like the openedx content assets, with `code_version` tied to the prompt and schema versions.
 
 1. Scope assembly (dbt). One row per unit with its ordered text: the sequential's blocks for Open edX, the week or lecture page group for OCW (`int__ocw__pages` plus the resources that page links), the chapter boundaries course-profile derives for standalone videos. The unit, not the block, is the extraction scope, because telling "taught here" from "used here" needs the surrounding lesson; blocks are the evidence locator. The platform's `course_file_exclusions` and the answer split are applied before any text reaches a model.
@@ -116,6 +120,8 @@ Dagster assets in `dg_projects/ml` (the LLM resources and the Iceberg IO manager
 Cost shape. At the prototype's usage (about 500k input and 200k output tokens per course on Opus), 3,011 Learn courses is roughly 1.5 billion input and 0.6 billion output tokens for a full backfill. Which tier runs which step is a pilot question; the claim and evidence tables make a cheaper extractor directly comparable to the expensive one on the same courses, which is the point of keying everything by `extraction_run_fk`.
 
 ## 6. Vocabularies and ontologies
+
+Concept identity at the end of this section is superseded by section 10: a concept is an opaque UUID, and a Wikidata QID is linked to it (fast-follow 8 in section 11) rather than being its id.
 
 The structure (course, instance, module, learning object, video, problem) already exists as tables, so the ontology question is only about the semantic layer: which property and relationship vocabulary to emit, which controlled vocabularies to align to, and what to use as concept identity. Findings, checked against the sources on 2026-10-16:
 
@@ -182,7 +188,7 @@ Measured, on `us.anthropic.claude-opus-5-5` at medium effort over Bedrock:
 | scopes (calls) | 10 | 15 | 17 |
 | claims | 385 | 439 | 523 |
 | input / output tokens | 173k / 53k | 145k / 69k | 222k / 82k |
-| cost at first-party list price | $1.59 | $1.74 | $2.35 |
+| cost at first-party list price | $1.59 | $1.74 | $2.38 |
 
 Wall clock was 2 to 3 minutes per course at six concurrent calls. Of 1,949 evidence passages across both prompt versions, 1,928 (98.9%) matched the source exactly and the rest were near matches; none were unverified. One scope failed once because the model added an undeclared key, and validation now ignores extra keys. The first, single-call resolution merged 106 of 456 label keys into 48 concepts (e.g. recall, sensitivity and true positive rate) and proposed 61 broader links (e.g. Gini impurity under decision tree), giving 398 concepts, 53 of them in more than one course. Some of its merges were wrong ("random module" with "random number generation").
 
@@ -200,10 +206,10 @@ Reproducing it:
 
 ```bash
 ol-dbt local register --all-layers
-cd src/ol_dbt && dbt run --target dev_local --select int__courseware__extraction_sources \
-  --vars '{courseware_courseruns: ["course-v1:UAI_SOURCE+UAI.4+1T2026"]}'
+(cd src/ol_dbt && dbt run --target dev_local --select int__courseware__extraction_sources \
+  --vars '{courseware_courseruns: ["course-v1:UAI_SOURCE+UAI.4+1T2026"]}')
 duckdb ~/.ol-dbt/local.duckdb -c "copy main_intermediate.int__courseware__extraction_sources to 'sources.parquet'"
-cd dg_projects/ml && .venv/bin/python -m ml.lib.courseware.local extract sources.parquet out/ --dry-run
+cd dg_projects/ml && .venv/bin/python -m ml.lib.courseware.local extract ../../sources.parquet out/ --dry-run
 ```
 
 Then register `out/*.parquet` as `glue__ol_warehouse_production_intermediate__<table>` views, build `+int__courseware__concept_labels`, export it, run `ml.lib.courseware.local resolve`, register the two resolution tables and build `int__courseware__claims+`.
@@ -218,8 +224,10 @@ UAI.4 was extracted a second time with `us.anthropic.claude-haiku-5-5`, using th
 | evidence exact / fuzzy / unverified | 537 / 7 / 0 | 580 / 6 / 2 |
 | distinct concepts (concept + assumed) | 147 | 152 |
 | taught concepts | 100 | 101 |
-| input / output tokens | 222k / 82k | 153k / 198k |
-| cost at first-party list price | $2.35 | about $0.11 |
+| input / output tokens | 222k / 82k | 222k / 198k |
+| cost at first-party list price | $2.38 | about $0.12 |
+
+Input tokens include 25k cache writes and 45k cache reads in both runs. Costs use Anthropic's published prices, checked 2026-10-17: Opus 5.5 at $4 input, $5 cache write, $0.20 cache read and $20 output per million tokens; Haiku 5.5 at $0.10, $0.125, $0.01 and $0.50 (every call's prompt was under the 100k tokens where Haiku's higher tier starts). The runs went through Bedrock, whose prices can differ.
 
 Haiku found 82% of the concepts Opus marked as taught (and Opus 78% of Haiku's overall). Where both named a concept in the same scope, they agreed on teaching status 88% of the time; most disagreements are taught vs. reviewed and used vs. reviewed. What Opus has and Haiku lacks is mostly peripheral ("Markdown", "survey data", "distance matrix"). Haiku produced more assessment claims (70 vs. 42) and fewer stated learning outcomes (34 vs. 44). Neither model is ground truth here. A small gold set annotated by people is what decides between them, and it is also what DSPy or prompt tuning would need. On this evidence, Haiku is the bulk extractor for a backfill. Opus runs on a sample to keep a second extractor's rows next to it for drift checks, and wherever the claims feed a decision (prerequisites on a product page).
 
@@ -245,7 +253,7 @@ The useful CPU job is propagation, not discovery. The UAI.4 dictionary, matched 
 No maintained Wikidata linker fits this. ReFinED, REL, BLINK and spacy-entity-linker are stale, and ReLiK has no weight license. GLinker (Knowledgator, Apache-2.0, 2026) is new and unbenchmarked. Linking belongs at the concept level instead: a few thousand `dim_concept` rows resolved once against a local Wikidata label and alias dump, with an embedding or LLM rerank. Mentions then inherit the QID through the dictionary.
 
 So for the "Haiku 5.5 for NER" question, the split is:
-- Haiku 5.5 does the reading and judgment (claims with teaching status, about $0.11 a course).
+- Haiku 5.5 does the reading and judgment (claims with teaching status, about $0.12 a course).
 - Aho-Corasick does the corpus-wide locating of known concepts (effectively free).
 - The resolution and description steps keep the dictionary clean.
 
@@ -257,7 +265,7 @@ Claim descriptions are scope-specific by design ("used here to compare two model
 
 The edge tables stay the system of record and the graph is an export of them. One dbt model per node label and per edge type (`integrations__graph__node__concept`, `integrations__graph__edge__courserun_concept`, ...), because that is the shape every bulk loader takes. A thin union view of nodes and edges serves QA and RDF generation.
 
-- Ids reuse the `_pk` keys (`course_pk`, `courserun_pk`, `concept_pk`, `program_pk`, `topic_pk`). The exception is `content_block_pk`, which hashes `block_id` with `retrieved_at` and so changes on every structure retrieval. Block and unit nodes key on a hash of `block_id` instead.
+- Ids reuse the `_pk` keys (`course_pk`, `courserun_pk`, `concept_pk`, `program_pk`, `topic_pk`). The exception is `content_block_pk`, which hashes `block_id` with `retrieved_at` and so changes on every structure retrieval. Block and unit nodes key on a hash of `platform`, `courserun_readable_id` and `block_id` instead, the key `dim_course_content` holds unique for its latest rows, because the same block can exist on two platforms.
 - Edges: PART_OF (block, unit, chapter, run), RUN_OF, IN_PROGRAM, the six run-to-concept relations with `claim_count` and `requirement_source`, ASSESSES from problems, BROADER, PREREQUISITE_OF and RELATED between concepts, ALIGNS_TO vocabulary terms with SKOS match type, and IN_TOPIC.
 - Every edge carries `status` and its source row's key. Evidence passages stay in `tfact_courseware_claim_evidence` and are joined by key when a citation is needed. The review state lives in the warehouse, so engine-side branching would duplicate it.
 - Two exports from the same models: `published` (accepted concepts, verified evidence) for Learn, the tutor and JSON-LD, and `review` with everything. Learner edges (enrollment, attempts, a derived per-concept mastery) come later, as a separate export under a separate access policy.
