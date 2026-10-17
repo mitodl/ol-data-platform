@@ -3,6 +3,7 @@ import pytest
 from ml.lib.courseware import local, scopes
 from ml.lib.courseware.describe import _concept_inputs
 from ml.lib.courseware.extract import (
+    EXTRACTOR_ID,
     _claim_row,
     _ModelResult,
     extraction_key,
@@ -10,6 +11,7 @@ from ml.lib.courseware.extract import (
     stored_extraction_key,
 )
 from ml.lib.courseware.extract import _rows as _rows_for
+from ml.lib.courseware.prompts import scope_message
 from ml.lib.courseware.schemas import (
     AudienceClaim,
     ConceptClaim,
@@ -196,27 +198,140 @@ def test_stored_extraction_rows_recompute_their_key():
     assert extraction["header_version"] == header_version(scope.course)
 
 
-def test_rekey_recomputes_keys_without_re_extracting(tmp_path):
+def _old_style_outputs(output_dir) -> scopes.Scope:
+    """Write one extraction keyed the old way, with a claim and its evidence."""
     scope = _lecture_one(_course_rows("About it.", "Lecture 2", "some text"))
     extraction, _, _ = _rows_for(scope, "old-key", "model", "medium", _result())
     del extraction["header_version"]
     pl.DataFrame([extraction]).write_parquet(
-        tmp_path / "courseware_claim_extraction.parquet"
+        output_dir / "courseware_claim_extraction.parquet"
     )
     claims = pl.DataFrame({"extraction_key": ["old-key"], "claim_ordinal": [1]})
-    claims.write_parquet(tmp_path / "courseware_claim.parquet")
+    claims.write_parquet(output_dir / "courseware_claim.parquet")
     claims.with_columns(evidence_ordinal=pl.lit(1)).write_parquet(
-        tmp_path / "courseware_claim_evidence.parquet"
+        output_dir / "courseware_claim_evidence.parquet"
     )
+    return scope
+
+
+def _stored_keys(output_dir) -> list[list[str]]:
+    return [
+        pl.read_parquet(output_dir / f"{table}.parquet")["extraction_key"].to_list()
+        for table in local.OUTPUT_TABLES
+    ]
+
+
+def test_rekey_recomputes_keys_without_re_extracting(tmp_path):
+    scope = _old_style_outputs(tmp_path)
     local.rekey(tmp_path)
     local.rekey(tmp_path)  # idempotent
     key = extraction_key(scope, "model", "medium")
-    for table in local.OUTPUT_TABLES:
-        assert pl.read_parquet(tmp_path / f"{table}.parquet")[
-            "extraction_key"
-        ].to_list() == [key]
+    assert _stored_keys(tmp_path) == [[key]] * 3
     stored = pl.read_parquet(tmp_path / "courseware_claim_extraction.parquet")
     assert stored["header_version"].to_list() == [None]
+
+
+def test_rekey_recovers_from_a_crash_after_the_first_write(tmp_path, monkeypatch):
+    scope = _old_style_outputs(tmp_path)
+    write = local._write
+    written: list[str] = []
+
+    def crash_after_first(rows, output_dir, table):
+        if written:
+            raise KeyboardInterrupt
+        write(rows, output_dir, table)
+        written.append(table)
+
+    monkeypatch.setattr(local, "_write", crash_after_first)
+    with pytest.raises(KeyboardInterrupt):
+        local.rekey(tmp_path)
+    # the extraction table still holds the old keys, so the mapping survives
+    assert _stored_keys(tmp_path)[0] == ["old-key"]
+    monkeypatch.setattr(local, "_write", write)
+    local.rekey(tmp_path)
+    assert _stored_keys(tmp_path) == [[extraction_key(scope, "model", "medium")]] * 3
+
+
+def test_extract_refuses_keys_that_need_rekey(tmp_path, capsys):
+    sources = tmp_path / "sources.parquet"
+    _course_rows("About it.", "Lecture 2", "some text").write_parquet(sources)
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    _old_style_outputs(output_dir)
+
+    def dry_run():
+        local.extract(
+            sources, output_dir, model_id="model", effort="medium", dry_run=True
+        )
+
+    with pytest.raises(ValueError, match="local rekey"):
+        dry_run()  # no header_version column
+    extractions = pl.read_parquet(output_dir / "courseware_claim_extraction.parquet")
+    extractions.with_columns(header_version=pl.lit(None, pl.String)).write_parquet(
+        output_dir / "courseware_claim_extraction.parquet"
+    )
+    with pytest.raises(ValueError, match="local rekey"):
+        dry_run()  # the column, but a null-header row on an old key
+    local.rekey(output_dir)
+    dry_run()
+    assert capsys.readouterr().out.count(" stored\n") == 1
+
+
+def _golden_scope() -> scopes.Scope:
+    course = scopes.Course(
+        platform="mitxonline",
+        courserun_readable_id="course-v1:X+Y+Z",
+        title="Course",
+        outline=("Lecture 1", "Lecture 2"),
+        description="",
+    )
+    source = scopes.Source(
+        source_id="S01",
+        source_ref="block-1",
+        source_kind="html",
+        title="Intro",
+        text="Some text.",
+        total_chars=10,
+    )
+    return scopes.Scope(
+        course=course,
+        scope_id="seq-2",
+        scope_kind="unit",
+        scope_title="Lecture 2",
+        scope_position=2,
+        part=1,
+        part_count=2,
+        sources=(source,),
+    )
+
+
+GOLDEN_SCOPE_MESSAGE = """COURSE: Course
+
+OUTLINE (> marks this scope)
+- Lecture 1
+> Lecture 2
+
+DESCRIPTION
+None available.
+
+SCOPE: Lecture 2 (kind=unit)
+This is part 1 of 2 of the scope; the other parts are extracted separately.
+
+=== SOURCE S01 | kind=html | title='Intro' ===
+Some text.
+=== END S01 ==="""
+
+
+def test_scope_message_layout_is_pinned_to_the_extractor_id():
+    # The key hashes the scope's inputs, not the message, so a layout change under
+    # the same EXTRACTOR_ID would reuse every stored key.
+    assert (EXTRACTOR_ID, scope_message(_golden_scope())) == (
+        "courseware_claims_v1",
+        GOLDEN_SCOPE_MESSAGE,
+    ), (
+        "scope_message changed: bump EXTRACTOR_ID in ml.lib.courseware.extract, "
+        "then update EXTRACTOR_ID and GOLDEN_SCOPE_MESSAGE here"
+    )
 
 
 def test_claim_rows_use_statement_as_label():

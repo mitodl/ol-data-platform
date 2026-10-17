@@ -47,6 +47,29 @@ def _existing(output_dir: Path, table: str) -> pl.DataFrame | None:
     return pl.read_parquet(path) if path.exists() else None
 
 
+def _write(rows: pl.DataFrame, output_dir: Path, table: str) -> None:
+    """Replace a table's file whole, so a crash leaves the old file or the new one."""
+    path = output_dir / f"{table}.parquet"
+    staged = path.with_suffix(".parquet.tmp")
+    rows.write_parquet(staged)
+    staged.replace(path)
+
+
+def _require_current_keys(stored: pl.DataFrame) -> None:
+    """Refuse a directory whose extractions still carry keys of the old scheme.
+
+    Their keys would all miss, so every scope would be extracted and billed again.
+
+    :raises ValueError: when the directory needs ``local rekey`` first
+    """
+    msg = "extraction keys predate the current scheme; run `local rekey` first"
+    if "header_version" not in stored.columns:
+        raise ValueError(msg)
+    for row in stored.filter(pl.col("header_version").is_null()).iter_rows(named=True):
+        if stored_extraction_key(row) != row["extraction_key"]:
+            raise ValueError(msg)
+
+
 @app.command
 def extract(  # noqa: PLR0913
     sources: Path,
@@ -71,7 +94,9 @@ def extract(  # noqa: PLR0913
     :param effort: output_config.effort
     :param aws_region: Bedrock region
     :param max_workers: concurrent model calls
-    :param key_on_header: re-extract scopes whose course header changed (extraction_key)
+    :param key_on_header: hash the course header into the keys (extraction_key). The
+        first such run re-extracts every selected scope; a repeat under the same
+        header skips them
     :param dry_run: print the scopes and their estimated input size, call nothing
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -86,6 +111,8 @@ def extract(  # noqa: PLR0913
     ]
     output_dir.mkdir(parents=True, exist_ok=True)
     stored = _existing(output_dir, "courseware_claim_extraction")
+    if stored is not None:
+        _require_current_keys(stored)
     existing_keys = set(stored["extraction_key"]) if stored is not None else set()
 
     if dry_run:
@@ -140,9 +167,14 @@ def extract(  # noqa: PLR0913
 def rekey(output_dir: Path) -> None:
     """Re-key extractions stored before keys left out the course header.
 
-    Their keys hashed the whole message. The current key is a function of stored
-    columns, so it is recomputed exactly and nothing is re-extracted. Their
-    header_version stays null, because the header they read was not stored.
+    Their keys hashed the whole message. Their rows hold every column the current
+    key hashes (stored_extraction_key without key_on_header), so it is recomputed
+    exactly and nothing is re-extracted. Their header_version stays null, because
+    the header they read was not stored. Rows written since record header_version
+    and are left alone.
+
+    Claims and evidence are written before the extraction table, which holds the
+    old keys until last, so a re-run after a crash finishes the job.
 
     :param output_dir: the directory holding the three extraction tables
     """
@@ -171,8 +203,13 @@ def rekey(output_dir: Path) -> None:
     if rekeyed["courseware_claim_extraction"]["extraction_key"].is_duplicated().any():
         msg = "extractions that differ only in their course header share a new key"
         raise ValueError(msg)
-    for table, rows in rekeyed.items():
-        rows.write_parquet(output_dir / f"{table}.parquet")
+    for table in ("courseware_claim", "courseware_claim_evidence"):
+        _write(rekeyed[table], output_dir, table)
+    _write(
+        rekeyed["courseware_claim_extraction"],
+        output_dir,
+        "courseware_claim_extraction",
+    )
     changed = sum(old != new for old, new in new_keys.items())
     print(f"{changed} of {extractions.height} extractions re-keyed")  # noqa: T201
 
