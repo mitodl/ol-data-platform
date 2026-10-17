@@ -116,10 +116,13 @@ with run_concepts as (
     where run_concepts.relation in ('teaches', 'reviews')
 )
 
+-- bridge_courserun_concept leaves courserun_fk null for a run that is not current
 , corpus_concepts as (
-    select distinct concept_fk
+    select distinct run_concepts.concept_fk
     from run_concepts
-    where is_published
+    inner join course_runs
+        on run_concepts.courserun_fk = course_runs.courserun_pk
+    where run_concepts.is_published
 )
 
 , broader_edges as (
