@@ -48,12 +48,15 @@ import numpy as np
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock, APIError
 from ml.lib.courseware.schemas import Strict
-from ml.lib.embed import BedrockEmbeddingClient
+from ml.lib.embed import EmbeddingClient
 from pydantic import ValidationError
 
 log = logging.getLogger(__name__)
 
 RESOLVER_ID = "courseware_resolution_v2"
+# Adjudication batches are short and many, so the small model is the default.
+ADJUDICATION_MODEL = "claude-haiku-5-5"
+BEDROCK_ADJUDICATION_MODEL = "us.anthropic.claude-haiku-5-5"
 EMBEDDING_DIM = 512
 # Candidates per new label from each blocker; the union goes to the model.
 EMBEDDING_NEIGHBOURS = 8
@@ -275,7 +278,7 @@ def embedding_neighbours(
 def embed_labels(
     labels: pl.DataFrame,
     cached: pl.DataFrame,
-    client: BedrockEmbeddingClient,
+    client: EmbeddingClient,
     max_workers: int = 16,
 ) -> tuple[np.ndarray, pl.DataFrame]:
     """Embed every label whose text changed since it was cached.
@@ -494,7 +497,7 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     labels: pl.DataFrame,
     state: ResolutionState,
     client: Anthropic | AnthropicBedrock,
-    embedding_client: BedrockEmbeddingClient,
+    embedding_client: EmbeddingClient,
     *,
     model_id: str,
     rebuild: bool = False,

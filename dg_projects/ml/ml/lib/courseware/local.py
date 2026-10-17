@@ -14,7 +14,7 @@ from pathlib import Path
 import cyclopts
 import polars as pl
 from anthropic import AnthropicBedrock
-from ml.lib.courseware.describe import describe_concepts
+from ml.lib.courseware.describe import BEDROCK_DESCRIPTION_MODEL, describe_concepts
 from ml.lib.courseware.extract import (
     BEDROCK_DEFAULT_MODEL,
     DEFAULT_EFFORT,
@@ -24,15 +24,17 @@ from ml.lib.courseware.extract import (
 )
 from ml.lib.courseware.graph import compute_graph, previous_membership
 from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
+from ml.lib.courseware.resolve import (
+    BEDROCK_ADJUDICATION_MODEL,
+    ResolutionState,
+    resolve_concepts,
+)
 from ml.lib.courseware.resolve import EMBEDDING_DIM as RESOLUTION_EMBEDDING_DIM
-from ml.lib.courseware.resolve import ResolutionState, resolve_concepts
 from ml.lib.courseware.scopes import CHARS_PER_TOKEN, build_scopes
 from ml.lib.embed import BedrockEmbeddingClient, build_embedding_client
 from ml.resources.llm import LLMClientFactory
 
 app = cyclopts.App(help=__doc__)
-# Descriptions are short, batched and many; the small model is the default.
-BEDROCK_DESCRIPTION_MODEL = "us.anthropic.claude-haiku-5-5"
 OUTPUT_TABLES = (
     "courseware_claim_extraction",
     "courseware_claim",
@@ -151,7 +153,7 @@ def resolve(
     concept_labels: Path,
     output_dir: Path,
     *,
-    model_id: str = BEDROCK_DESCRIPTION_MODEL,
+    model_id: str = BEDROCK_ADJUDICATION_MODEL,
     aws_region: str = "us-east-1",
     rebuild: bool = False,
 ) -> None:
