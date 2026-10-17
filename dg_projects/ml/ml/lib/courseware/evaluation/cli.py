@@ -16,6 +16,7 @@ import cyclopts
 import polars as pl
 from ml.lib.courseware.evaluation import labelstudio, samples, score
 from ml.lib.courseware.evaluation.matching import MATCHING_RULE, concept_label_key
+from ml.lib.courseware.evaluation.metrics import MIN_LABELS_PER_STRATUM
 
 gold = cyclopts.App(name="gold", help=__doc__)
 SETS = ("claims", "subsections", "pairs", "clusters", "prerequisites")
@@ -43,6 +44,25 @@ def _write_set(  # noqa: PLR0913
         .select("set", "stratum", "population", "sampled")
         .sort("stratum")
     )
+
+
+def _coarsened(
+    name: str,
+    population: pl.DataFrame,
+    dropped: list[pl.DataFrame],
+    min_size: int = MIN_LABELS_PER_STRATUM,
+) -> pl.DataFrame:
+    """Merge strata too small to estimate, recording any dropped from the set."""
+    population, small = samples.coarsen_strata(population, min_size)
+    dropped.append(
+        small.select(
+            pl.lit(name).alias("set"),
+            pl.format("(dropped) {}", "stratum").alias("stratum"),
+            pl.col("population").cast(pl.UInt32),
+            pl.lit(0, dtype=pl.UInt32).alias("sampled"),
+        )
+    )
+    return population
 
 
 @gold.command
@@ -85,9 +105,10 @@ def sample(  # noqa: PLR0913
         extraction, sources, identity, concept_labels, concepts, relations, label_map
     )
     output_dir.mkdir(parents=True, exist_ok=True)
-    built = []
+    built: list[pl.DataFrame] = []
+    dropped: list[pl.DataFrame] = []
 
-    population = samples.claims_population(inputs)
+    population = _coarsened("claims", samples.claims_population(inputs), dropped)
     drawn = samples.sample_claims(inputs, population, size=claims, seed=seed)
     built.append(
         _write_set(
@@ -99,7 +120,12 @@ def sample(  # noqa: PLR0913
             labelstudio.CLAIMS_CONFIG,
         )
     )
-    population = samples.subsections_population(inputs)
+    population = _coarsened(
+        "subsections",
+        samples.subsections_population(inputs),
+        dropped,
+        samples.SUBSECTIONS_MIN_PER_STRATUM,
+    )
     drawn = samples.sample_subsections(inputs, population, size=subsections, seed=seed)
     built.append(
         _write_set(
@@ -111,7 +137,7 @@ def sample(  # noqa: PLR0913
             labelstudio.SUBSECTIONS_CONFIG,
         )
     )
-    population = samples.pairs_population(inputs)
+    population = _coarsened("pairs", samples.pairs_population(inputs), dropped)
     drawn = samples.sample_pairs(inputs, population, size=pairs, seed=seed)
     built.append(
         _write_set(
@@ -123,11 +149,11 @@ def sample(  # noqa: PLR0913
             labelstudio.PAIRS_CONFIG,
         )
     )
-    population = samples.clusters_population(inputs)
+    population = _coarsened("clusters", samples.clusters_population(inputs), dropped)
     drawn = samples.sample_clusters(inputs, population, size=clusters, seed=seed)
     groups = min(
         labelstudio.MAX_CLUSTER_GROUPS,
-        max(2, int(population["size"].max())),
+        max(2, int(population.select(pl.col("size").max()).item())),
     )
     built.append(
         _write_set(
@@ -139,7 +165,9 @@ def sample(  # noqa: PLR0913
             labelstudio.clusters_config(groups),
         )
     )
-    population = samples.prerequisites_population(inputs)
+    population = _coarsened(
+        "prerequisites", samples.prerequisites_population(inputs), dropped
+    )
     drawn = samples.sample_prerequisites(
         inputs, population, size=prerequisites, seed=seed
     )
@@ -154,7 +182,7 @@ def sample(  # noqa: PLR0913
         )
     )
 
-    strata = pl.concat(built)
+    strata = pl.concat(built + dropped)
     strata.write_csv(output_dir / "strata.csv")
     (output_dir / MANIFEST).write_text(
         json.dumps(

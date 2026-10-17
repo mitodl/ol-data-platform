@@ -9,6 +9,7 @@ sorted by id, so adding a stratum does not reshuffle the others.
 
 import hashlib
 import json
+import math
 import re
 from collections import defaultdict
 from dataclasses import dataclass
@@ -19,7 +20,7 @@ from typing import Any
 import numpy as np
 import polars as pl
 from ml.lib.courseware.evaluation.matching import LabelMatcher, concept_label_key
-from ml.lib.courseware.evaluation.metrics import allocate
+from ml.lib.courseware.evaluation.metrics import MIN_LABELS_PER_STRATUM, allocate
 from ml.lib.courseware.scopes import build_scopes
 
 # Claim kinds whose label names a concept, so two models' claims can be matched.
@@ -33,17 +34,20 @@ EVIDENCE_CONTEXT_CHARS = 1_500
 # Unit scopes below this many characters are "short"; above, "long". The POC
 # median is about 16k characters (a lecture with its transcript).
 SHORT_SUBSECTION_CHARS = 20_000
-SUBSECTIONS_MIN_PER_STRATUM = 2
+# Blind and prefilled halves are estimated separately, so each needs two labels.
+SUBSECTIONS_MIN_PER_STRATUM = 2 * MIN_LABELS_PER_STRATUM
 BLIND_SHARE = 0.5
 # Resolver verdicts that merge are the costly mistakes; oversample them.
 PAIR_VERDICT_WEIGHTS = {
-    "exact": 6.0,
+    "merged": 6.0,
+    "exact": 3.0,
     "close": 3.0,
     "broader": 2.0,
     "narrower": 2.0,
     "related": 1.0,
     "distinct": 1.0,
     "unblocked": 0.05,
+    "unadjudicated": 1.0,
 }
 PAIRS_MIN_PER_STRATUM = 20
 # Near-neighbour pairs the resolver never adjudicated, by embedding rank, measure
@@ -82,6 +86,47 @@ def model_family(model_id: str) -> str:
 def _rng(seed: int, *parts: str) -> np.random.Generator:
     digest = hashlib.sha256("|".join([str(seed), *parts]).encode()).digest()
     return np.random.default_rng(int.from_bytes(digest[:8], "big"))
+
+
+def _unit(seed: int, *parts: str) -> float:
+    """Return a number in [0, 1) fixed by the seed and the parts (e.g. an item id)."""
+    digest = hashlib.sha256("|".join([str(seed), *parts]).encode()).digest()
+    return int.from_bytes(digest[:8], "big") / 2**64
+
+
+SMALL_STRATA = "small_strata"
+
+
+def coarsen_strata(
+    population: pl.DataFrame, min_size: int = MIN_LABELS_PER_STRATUM
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Merge strata too small to estimate into one, and drop it if still too small.
+
+    A stratum needs MIN_LABELS_PER_STRATUM labels for its variance, so a stratum
+    with fewer items can never be estimated. Every such stratum joins SMALL_STRATA
+    (any partition is a valid stratification); if that is still below min_size its
+    items leave the population, and the estimates exclude them.
+
+    :param population: items with a stratum column
+    :param min_size: smallest stratum kept as is
+    :returns: the population with small strata merged, and the dropped strata
+        with their sizes
+    :rtype: tuple[pl.DataFrame, pl.DataFrame]
+    """
+    sizes = population.group_by("stratum").agg(pl.len().alias("population"))
+    small = sizes.filter(pl.col("population") < min_size)
+    population = population.with_columns(
+        pl.when(pl.col("stratum").is_in(small["stratum"].implode()))
+        .then(pl.lit(SMALL_STRATA))
+        .otherwise(pl.col("stratum"))
+        .alias("stratum")
+    )
+    if 0 < small["population"].sum() < min_size:
+        return (
+            population.filter(pl.col("stratum") != SMALL_STRATA),
+            small.sort("stratum"),
+        )
+    return population, small.clear()
 
 
 def stratified_sample(  # noqa: PLR0913
@@ -555,6 +600,26 @@ def subsections_population(inputs: GoldInputs) -> pl.DataFrame:
     )
 
 
+def blind_items(sample: pl.DataFrame, seed: int) -> set[str]:
+    """Choose the blind half of each stratum by a hash of seed and item id.
+
+    Per stratum, so both halves can be estimated per stratum, and per item, so
+    adding a stratum or an item elsewhere moves no flag.
+
+    :param sample: sampled items with item_id and stratum
+    :param seed: sampling seed
+    :returns: the item ids annotated without pre-annotations
+    :rtype: set[str]
+    """
+    blind = set()
+    for (_,), members in sample.group_by("stratum"):
+        ranked = sorted(
+            members["item_id"], key=lambda item: _unit(seed, "subsections-blind", item)
+        )
+        blind.update(ranked[: math.ceil(len(ranked) * BLIND_SHARE)])
+    return blind
+
+
 def sample_subsections(
     inputs: GoldInputs, population: pl.DataFrame, *, size: int, seed: int
 ) -> pl.DataFrame:
@@ -576,8 +641,7 @@ def sample_subsections(
     sample = stratified_sample(
         population, allocation, seed=seed, set_name="subsections"
     )
-    order = _rng(seed, "subsections", "blind").permutation(sample.height)
-    blind = set(order[: round(sample.height * BLIND_SHARE)].tolist())
+    blind = blind_items(sample, seed)
     claims = _with_canonical(inputs)
     evidence = inputs.evidence.filter(pl.col("char_start").is_not_null())
     titles = dict(
@@ -586,7 +650,7 @@ def sample_subsections(
         .iter_rows()
     )
     rows = []
-    for index, unit in enumerate(sample.iter_rows(named=True)):
+    for unit in sample.iter_rows(named=True):
         run_sources = inputs.sources.filter(
             pl.col("courserun_readable_id") == unit["courserun_readable_id"]
         )
@@ -607,7 +671,7 @@ def sample_subsections(
                 position += len(piece)
         text = "".join(pieces)
         regions: list[dict[str, Any]] = []
-        if index not in blind:
+        if unit["item_id"] not in blind:
             scope_claims = claims.filter(
                 (pl.col("courserun_readable_id") == unit["courserun_readable_id"])
                 & (pl.col("scope_id") == unit["scope_id"])
@@ -635,7 +699,7 @@ def sample_subsections(
             {
                 "item_id": unit["item_id"],
                 "stratum": unit["stratum"],
-                "blind": index in blind,
+                "blind": unit["item_id"] in blind,
                 "heading": (
                     f"{titles[unit['courserun_readable_id']]} / {unit['scope_title']}"
                 ),
@@ -672,37 +736,69 @@ def _unblocked_pairs(
 
 
 def pairs_population(inputs: GoldInputs) -> pl.DataFrame:
-    """Every adjudicated label pair by verdict, plus unblocked near neighbours.
+    """Every adjudicated pair, merged pair and unblocked near-neighbour pair.
 
-    autorater is 1 when the resolver judged the pair exact (merged), else 0.
+    A pair is merged when both labels are assigned to the same surviving concept,
+    which is the resolver's output: an exact verdict merges only if its component
+    passes the size and distinct checks, and merges made through other labels or in
+    earlier runs count too. Merged pairs are their own stratum, and every other
+    pair is stratified by its verdict ("unblocked" if never adjudicated). autorater
+    is 1 for merged pairs. resolver_relation is the resolver's final relation of
+    key_a to key_b: exact when merged, the verdict's relation otherwise, and
+    distinct where nothing links the two (an unmerged exact verdict included).
 
     :param inputs: loaded gold-set inputs
     :returns: one row per unordered label pair (key_a < key_b)
     :rtype: pl.DataFrame
     """
+    concept_of = dict(
+        _active_assignments(inputs)
+        .select("concept_label_key", "concept_id")
+        .iter_rows()
+    )
     decided_rows = inputs.decisions.select(
-        "key_a",
-        "key_b",
-        "query_label_key",
-        "verdict",
+        "key_a", "key_b", "query_label_key", "verdict"
     )
     decided = set(decided_rows.select("key_a", "key_b").iter_rows())
-    unblocked = pl.DataFrame(
-        _unblocked_pairs(inputs, decided),
-        schema=["key_a", "key_b"],
+    unblocked = set(_unblocked_pairs(inputs, decided))
+    members: dict[str, list[str]] = defaultdict(list)
+    for key, concept in concept_of.items():
+        members[concept].append(key)
+    merged_only = {
+        pair
+        for keys in members.values()
+        for pair in combinations(sorted(keys), 2)
+        if pair not in decided and pair not in unblocked
+    }
+    extra = pl.DataFrame(
+        [(*pair, pair[0], "unblocked") for pair in sorted(unblocked)]
+        + [(*pair, pair[0], "unadjudicated") for pair in sorted(merged_only)],
+        schema=["key_a", "key_b", "query_label_key", "verdict"],
         orient="row",
-    ).with_columns(
-        pl.col("key_a").alias("query_label_key"), pl.lit("unblocked").alias("verdict")
     )
-    return (
-        pl.concat([decided_rows, unblocked])
-        .with_columns(
-            pl.format("{}||{}", "key_a", "key_b").alias("item_id"),
-            pl.col("verdict").alias("stratum"),
-            (pl.col("verdict") == "exact").cast(pl.Float64).alias("autorater"),
+    rows = []
+    for pair in pl.concat([decided_rows, extra]).iter_rows(named=True):
+        concept_a = concept_of.get(pair["key_a"])
+        merged = concept_a is not None and concept_a == concept_of.get(pair["key_b"])
+        if merged:
+            relation = "exact"
+        elif pair["verdict"] in ("exact", "unblocked", "unadjudicated"):
+            relation = "distinct"
+        else:
+            relation = pair_relation(
+                pair["verdict"], query_is_a=pair["query_label_key"] == pair["key_a"]
+            )
+        rows.append(
+            {
+                **pair,
+                "item_id": f"{pair['key_a']}||{pair['key_b']}",
+                "merged": merged,
+                "stratum": "merged" if merged else pair["verdict"],
+                "autorater": float(merged),
+                "resolver_relation": relation,
+            }
         )
-        .sort("item_id")
-    )
+    return pl.DataFrame(rows).sort("item_id")
 
 
 _FLIPPED_RELATION = {"a_broader": "a_narrower", "a_narrower": "a_broader"}
@@ -741,10 +837,10 @@ def sample_pairs(
         sizes, size, weights=PAIR_VERDICT_WEIGHTS, minimum=PAIRS_MIN_PER_STRATUM
     )
     sample = stratified_sample(population, allocation, seed=seed, set_name="pairs")
-    flips = _rng(seed, "pairs", "orientation").random(sample.height) < 0.5  # noqa: PLR2004
     info = _label_info(inputs)
     rows = []
-    for pair, flip in zip(sample.iter_rows(named=True), flips, strict=True):
+    for pair in sample.iter_rows(named=True):
+        flip = _unit(seed, "pairs-orientation", pair["item_id"]) < 0.5  # noqa: PLR2004
         key_a, key_b = (
             (pair["key_b"], pair["key_a"]) if flip else (pair["key_a"], pair["key_b"])
         )
@@ -758,9 +854,11 @@ def sample_pairs(
                 "label_b": info[key_b]["preferred_label"],
                 "text_a": _label_text(info[key_a]),
                 "text_b": _label_text(info[key_b]),
-                "resolver_relation": pair_relation(
-                    pair["verdict"], query_is_a=pair["query_label_key"] == key_a
-                ),
+                "resolver_relation": _FLIPPED_RELATION.get(
+                    pair["resolver_relation"], pair["resolver_relation"]
+                )
+                if flip
+                else pair["resolver_relation"],
             }
         )
     return pl.DataFrame(rows)
@@ -989,11 +1087,11 @@ def sample_prerequisites(
     sample = stratified_sample(
         population, allocation, seed=seed, set_name="prerequisites"
     )
-    flips = _rng(seed, "prerequisites", "orientation").random(sample.height) < 0.5  # noqa: PLR2004
     concepts = {row["concept_pk"]: row for row in inputs.concepts.iter_rows(named=True)}
     swapped = {"a_before_b": "b_before_a", "b_before_a": "a_before_b"}
     rows = []
-    for pair, flip in zip(sample.iter_rows(named=True), flips, strict=True):
+    for pair in sample.iter_rows(named=True):
+        flip = _unit(seed, "prerequisites-orientation", pair["item_id"]) < 0.5  # noqa: PLR2004
         a, b = (
             (pair["concept_b"], pair["concept_a"])
             if flip

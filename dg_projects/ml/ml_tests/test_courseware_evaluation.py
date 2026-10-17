@@ -402,3 +402,174 @@ def test_score_clusters_reads_ranker_buckets(tmp_path):
 def test_majority_ties_return_none():
     assert labelstudio.majority(["a", "a", "b"]) == "a"
     assert labelstudio.majority(["a", "b"]) is None
+
+
+def test_allocate_rejects_floors_over_budget_and_tiny_strata():
+    with pytest.raises(ValueError, match="more than the budget"):
+        allocate({f"s{n}": 100 for n in range(24)}, 400, minimum=20)
+    with pytest.raises(ValueError, match="smaller than 2"):
+        allocate({"big": 100, "one": 1}, 50)
+    # every stratum gets at least the two labels stratified_ppi needs
+    assert min(allocate({"big": 1_000, "small": 3}, 20).values()) >= 2
+
+
+def test_coarsen_strata_merges_then_drops():
+    population = pl.DataFrame(
+        {"item_id": list("abcdefg"), "stratum": ["x"] * 4 + ["y", "z", "w"]}
+    )
+    merged, dropped = samples.coarsen_strata(population)
+    assert dropped.is_empty()
+    assert merged.filter(pl.col("stratum") == samples.SMALL_STRATA).height == 3
+    kept, dropped = samples.coarsen_strata(population.head(5))
+    assert kept.height == 4
+    assert dropped.to_dicts() == [{"stratum": "y", "population": 1}]
+
+
+def test_one_unlabeled_item_gets_lambda_zero():
+    y = np.array([1, 0, 1, 1], dtype=float)
+    one_left = Stratum(
+        "s", 5, y, y_hat=np.array([1, 0, 1, 0.0]), y_hat_unlabeled=np.array([1.0])
+    )
+    estimate = stratified_ppi([one_left])
+    assert np.isfinite(estimate.std_error)
+    assert estimate.lambdas == {"s": 0.0}
+    assert estimate.point == pytest.approx(y.mean())
+
+
+def test_blind_items_are_half_of_each_stratum_and_stable():
+    sample = pl.DataFrame(
+        {"item_id": [f"u{n}" for n in range(9)], "stratum": ["a"] * 4 + ["b"] * 5}
+    )
+    blind = samples.blind_items(sample, 3)
+    assert len(blind & {"u0", "u1", "u2", "u3"}) == 2
+    assert len(blind - {"u0", "u1", "u2", "u3"}) == 3
+    grown = pl.concat(
+        [sample, pl.DataFrame({"item_id": ["v0", "v1"], "stratum": ["c", "c"]})]
+    )
+    assert samples.blind_items(grown, 3) - {"v0", "v1"} == blind
+
+
+def test_pairs_population_uses_the_final_clustering():
+    inputs = samples.GoldInputs(
+        claims=pl.DataFrame(),
+        evidence=pl.DataFrame(),
+        sources=pl.DataFrame(),
+        assignments=pl.DataFrame(
+            {
+                "concept_label_key": ["a", "b", "c", "d", "e"],
+                "concept_id": ["k1", "k1", "k2", "k3", "k1"],
+            }
+        ),
+        registry=pl.DataFrame(
+            {"concept_id": ["k1", "k2", "k3"], "merged_into_concept_id": [None] * 3},
+            schema={"concept_id": pl.String, "merged_into_concept_id": pl.String},
+        ),
+        decisions=pl.DataFrame(
+            {
+                "key_a": ["a", "c", "a"],
+                "key_b": ["b", "d", "c"],
+                "query_label_key": ["a", "c", "a"],
+                "verdict": ["close", "exact", "narrower"],
+            }
+        ),
+        labels=pl.DataFrame(),
+        embeddings=pl.DataFrame(
+            {
+                "concept_label_key": ["a", "b", "c", "d"],
+                "embedding": [[1.0, 0.0], [0.9, 0.1], [0.0, 1.0], [0.1, 0.9]],
+            }
+        ),
+        concepts=pl.DataFrame(),
+        relations=pl.DataFrame(),
+        matcher=LabelMatcher(),
+    )
+    population = samples.pairs_population(inputs)
+    by_pair = {
+        row["item_id"]: (row["stratum"], row["resolver_relation"], row["autorater"])
+        for row in population.iter_rows(named=True)
+    }
+    # judged close but merged through another label: counted as merged
+    assert by_pair["a||b"] == ("merged", "exact", 1.0)
+    # judged exact but not merged (e.g. a rejected component): nothing links them
+    assert by_pair["c||d"] == ("exact", "distinct", 0.0)
+    assert by_pair["a||c"] == ("narrower", "a_narrower", 0.0)
+    # co-assigned but neither adjudicated nor embedded
+    assert by_pair["a||e"] == ("merged", "exact", 1.0)
+
+
+def _span_task(item_id, concepts):
+    return {
+        "data": {"item_id": item_id},
+        "annotations": [
+            {
+                "completed_by": 1,
+                "created_at": "2026-10-17T00:00:00+00:00",
+                "result": [
+                    result
+                    for index, (label, status) in enumerate(concepts)
+                    for result in (
+                        {
+                            "id": f"r{index}",
+                            "from_name": "concept",
+                            "type": "labels",
+                            "value": {
+                                "start": 0,
+                                "end": 1,
+                                "text": "x",
+                                "labels": [status],
+                            },
+                        },
+                        {
+                            "id": f"r{index}",
+                            "from_name": "concept_label",
+                            "type": "textarea",
+                            "value": {"start": 0, "end": 1, "text": [label]},
+                        },
+                    )
+                ],
+            }
+        ],
+    }
+
+
+def test_score_subsections_reports_blind_recall_separately(tmp_path):
+    items = [f"u{n}" for n in range(4)]
+    population = pl.DataFrame(
+        {
+            "item_id": items,
+            "scope_id": items,
+            "stratum": ["s"] * 4,
+            "models": ["haiku"] * 4,
+            "found_hat_haiku": [1, 1, 2, 2],
+            "gold_hat": [2, 2, 2, 2],
+        }
+    )
+    sample = pl.DataFrame({"item_id": items, "blind": [True, True, False, False]})
+    model_concepts = pl.DataFrame(
+        {
+            "scope_id": items,
+            "model": ["haiku"] * 4,
+            "canonical": [LabelMatcher().canonical("pandas")] * 4,
+            "status": ["taught"] * 4,
+        }
+    )
+    tasks = [
+        # blind: annotators find a concept the model missed
+        _span_task("u0", [("pandas", "taught"), ("numpy", "used")]),
+        _span_task("u1", [("pandas", "used"), ("numpy", "used")]),
+        _span_task("u2", [("pandas", "taught")]),
+        _span_task("u3", [("pandas", "taught")]),
+    ]
+    report, unmatched = score.score_subsections(
+        population,
+        sample,
+        _export(tmp_path, tasks),
+        model_concepts,
+        LabelMatcher(),
+        alpha=0.05,
+    )
+    haiku = report["models"]["haiku"]
+    assert haiku["concept_recall"]["strata"]["s"]["labeled_ratio"] == pytest.approx(0.5)
+    assert haiku["concept_recall_prefilled"]["strata"]["s"]["labeled_ratio"] == 1.0
+    assert haiku["status_recall"]["strata"]["s"]["labeled_ratio"] == pytest.approx(0.25)
+    assert sorted(unmatched["item_id"]) == ["u0", "u1"]
