@@ -2,16 +2,22 @@
 version: 2
 
 sources:
-# Written by the courseware claim extractor (dg_projects/ml, ml.lib.courseware) into
-# the intermediate schema, the same way the feedback assets write theirs. Rows are
-# never updated: a new prompt, schema, model or input text adds rows under a new
-# extraction_key.
+# Written by the courseware assets in dg_projects/ml (ml.assets.courseware_*) into
+# the intermediate schema through the Iceberg IO manager, the same way the feedback
+# assets write theirs; database/schema resolve to what ml.lib.courseware.warehouse
+# writes. dev_local reads them as the glue__ views `ol-dbt local register` creates.
+# Rows are never updated: a new prompt, schema, model or input text adds rows under
+# a new extraction_key.
 - name: courseware_intermediate
   loader: dagster
   database: '{{ target.database | default(none) }}'
   schema: '{{ target.schema }}_intermediate'
   tables:
   - name: courseware_claim_extraction
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_claim_extraction]
     description: One row per model call, i.e. one scope part of a course run read
       by one extractor version and model.
     columns:
@@ -73,6 +79,10 @@ sources:
     - name: extracted_at
       description: timestamp, when the call returned
   - name: courseware_claim
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_claim]
     description: One row per claim in an extraction, as the model returned it.
     columns:
     - name: extraction_key
@@ -81,6 +91,10 @@ sources:
       - not_null
     - name: claim_ordinal
       description: int, the claim's position in the extraction, from 1
+    - name: platform
+      description: str, the extraction's platform; the table is partitioned by it
+    - name: courserun_readable_id
+      description: str, the extraction's course run; the table is partitioned by it
     - name: claim_kind
       description: str, concept, skill, assumed_knowledge, assessment_expectation,
         learning_outcome, declared_prerequisite or audience
@@ -111,6 +125,10 @@ sources:
     - dbt_expectations.expect_compound_columns_to_be_unique:
         column_list: [extraction_key, claim_ordinal]
   - name: courseware_claim_evidence
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_claim_evidence]
     description: One row per evidence passage, verified against the source text the
       call read (int__courseware__extraction_sources.source_text).
     columns:
@@ -120,6 +138,10 @@ sources:
       - not_null
     - name: claim_ordinal
       description: int, the claim within the extraction
+    - name: platform
+      description: str, the extraction's platform; the table is partitioned by it
+    - name: courserun_readable_id
+      description: str, the extraction's course run; the table is partitioned by it
     - name: evidence_ordinal
       description: int, the passage's position within the claim, from 1
     - name: source_id
@@ -139,6 +161,10 @@ sources:
   # rows are full snapshots per resolution run; the newest run in
   # courseware_resolution_run is current, and earlier runs are history.
   - name: courseware_resolution_run
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_resolution_run]
     description: One row per resolution run, with its mode, models and churn counts.
     columns:
     - name: resolution_run_id
@@ -176,6 +202,10 @@ sources:
     - name: started_at
       description: timestamp, when the run started
   - name: courseware_concept_registry
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_registry]
     description: Every concept id ever minted, per resolution run.
     columns:
     - name: resolution_run_id
@@ -194,6 +224,10 @@ sources:
     - name: minted_at
       description: timestamp, when the id was minted
   - name: courseware_concept_assignment
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_assignment]
     description: Which concept each normalized label belongs to, per resolution run.
     columns:
     - name: resolution_run_id
@@ -207,6 +241,10 @@ sources:
     - name: assigned_run_id
       description: str, the run that first made this assignment
   - name: courseware_concept_relation
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_relation]
     description: Concept-to-concept relations proposed by adjudication, per run, carried
       forward and redirect-resolved.
     columns:
@@ -221,6 +259,10 @@ sources:
     - name: proposed_run_id
       description: str, the run that first proposed the relation
   - name: courseware_resolution_decision
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_resolution_decision]
     description: Every adjudication verdict, append-only, for review and evaluation.
     columns:
     - name: resolution_run_id
@@ -236,6 +278,10 @@ sources:
       description: str, the adjudication model
   # Concept graph topology (ml.lib.courseware.graph), one set of rows per graph run.
   - name: courseware_concept_graph_run
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_graph_run]
     description: One row per graph run with the graph's size, density, sparsity, components,
       communities, modularity and cycle counts.
     columns:
@@ -251,6 +297,10 @@ sources:
     - name: parameters_json
       description: str, the thresholds and weights the run used
   - name: courseware_concept_graph_node
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_graph_node]
     description: Each active concept's position in a graph run.
     columns:
     - name: graph_run_id
@@ -260,6 +310,10 @@ sources:
     - name: community_id
       description: str, the concept's Leiden community, carried across runs
   - name: courseware_concept_graph_community
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_graph_community]
     description: Communities found in a graph run, with stable ids carried forward
       by member overlap.
     columns:
@@ -270,6 +324,10 @@ sources:
     - name: first_seen_run_id
       description: str, the graph run the community first appeared in
   - name: courseware_concept_graph_edge
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_graph_edge]
     description: The edges a graph run kept after thresholds, with weight and backbone
       score.
     columns:
@@ -279,6 +337,10 @@ sources:
       description: float, local-degree sparsification score; keep edges above a threshold
         to draw a sparse backbone
   - name: courseware_concept_description
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_description]
     description: Learner-facing descriptions of concepts (ml.lib.courseware.describe),
       one row per concept per description version and input checksum.
     columns:
