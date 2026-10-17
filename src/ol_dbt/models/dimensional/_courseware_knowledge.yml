@@ -291,9 +291,11 @@ models:
     description: str, the resolution run that first assigned the label to the concept
 
 - name: bridge_concept_relation
-  description: Concept-to-concept edges with their accumulated evidence, one row per
-    (from, to, relation). Hierarchy (broader), sequence (builds_on), practice (practiced_with),
-    equivalence (close) and association (complements, related).
+  description: Concept-to-concept edges with their accumulated evidence, a combined
+    relation_confidence and a publishing decision, one row per (from, to, relation).
+    Hierarchy (broader), sequence (builds_on), practice (practiced_with), equivalence
+    (close) and association (complements, related). snapshot_bridge_concept_relation
+    keeps each edge's history.
   config:
     meta:
       # Reads dim_course_run for course keys; no QA form until the Dagster assets
@@ -317,6 +319,12 @@ models:
         to_column: to_concept_fk
         config:
           where: relation = 'builds_on' and is_published
+    # and so is the hierarchy
+    - acyclic:
+        name: bridge_concept_relation_published_broader_acyclic
+        to_column: to_concept_fk
+        config:
+          where: relation = 'broader' and is_published
   - name: to_concept_fk
     description: str, the broader concept, the concept or tool built on, or the higher
       id
@@ -338,10 +346,11 @@ models:
   - name: reverse_courserun_support
     description: int, builds_on only, course runs showing the opposite direction
   - name: course_scope_support
-    description: int, builds_on only, scope_support with each course's reruns counted
-      once (the run with the most units; a run without a course_fk is keyed by the
-      run id less its run segment); the support the publishing rule reads, since reruns
-      of one course have near-identical text
+    description: int, course relations only, scope_support with each course's reruns
+      counted once (the run with the most units; a run without a course_fk is keyed
+      by the run id less its run segment); the support the builds_on publishing rule
+      and relation_confidence read, since reruns of one course have near-identical
+      text
   - name: reverse_scope_support
     description: int, builds_on only, course_scope_support of the opposite direction
   - name: direction_consistency
@@ -350,6 +359,39 @@ models:
   - name: co_taught_lift
     description: float, complements only, co-taught unit count over the count expected
       by chance
+  - name: verdict_support
+    description: int, adjudicated relations only, the newest resolution verdict per
+      label pair agreeing with the relation (for broader, those placing from under
+      to; for related, related or either hierarchy direction), and at least 1, since
+      the proposal itself is one even when none of the labels that voted is still
+      assigned
+  - name: contrary_verdict_support
+    description: int, adjudicated relations only, distinct verdicts on the pair, plus
+      for broader those placing to under from
+  - name: cross_signal_support
+    description: int, evidence for the pair from the other source. For an adjudicated
+      relation, unit observations of the pair in course evidence (co-taught, co-assessed
+      or sequenced, either direction, each course's reruns counted once); for a course
+      relation, verdicts saying the pair is connected (close, related, broader or
+      narrower)
+  - name: relation_confidence
+    description: >-
+      float in [0, 1], noisy-OR of the edge's evidence scaled by its consistency:
+      consistency * (1 - (1 - r) ^ own_support * 0.8 ^ cross_signal_support), where
+      own_support is verdict_support with r = 0.5 for adjudicated relations and
+      course_scope_support with r = 0.3 for course relations, and consistency is
+      direction_consistency for builds_on, verdict_support / (verdict_support +
+      contrary_verdict_support) for adjudicated relations, and 1 otherwise. Agreeing
+      evidence never lowers it and contrary evidence never raises it. One unit gives
+      0.3, two units 0.51, one verdict 0.5; a co-taught pair adjudicated related once
+      gets 0.44 on complements. Rounded to 4 places so the snapshot does not version
+      an edge over a last-bit float difference. The reliabilities are priors until
+      the gold set calibrates them, and it is not a probability yet.
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_values_to_be_between:
+        min_value: 0
+        max_value: 1
   - name: is_adjudicated
     description: boolean, whether resolution adjudication proposed the edge
   - name: has_sequence_evidence
@@ -365,19 +407,25 @@ models:
   - name: review_status
     description: str, proposed, accepted or rejected
   - name: is_published
-    description: boolean, whether the edge clears the publishing rule; builds_on needs
+    description: boolean, whether the edge clears the publishing rule. builds_on needs
       course_scope_support of courseware_prerequisite_min_scope_support and direction_consistency
       of courseware_prerequisite_min_direction_consistency (no course-count clause,
-      since every supporting course adds at least one unit), every other relation
-      is published
+      since every supporting course adds at least one unit). Each broader cycle loses
+      its lowest-ranked edge (by adjudication score, then the number of broader edges
+      into its broader concept, then concept ids). Then broader and builds_on are
+      exclusive per pair among the edges left (the higher relation_confidence publishes,
+      broader on a tie). Every other relation is published
     tests:
     - not_null
   - name: unpublished_reason
-    description: str, builds_on only, insufficient_support or contested_direction
-      when the edge is not published
+    description: str, why the edge is not published. builds_on, insufficient_support
+      or contested_direction, or hierarchy_pair when it lost its pair to a broader
+      edge; broader, hierarchy_cycle when it is the lowest-ranked edge of a broader
+      cycle, or sequence_pair when it lost its pair to a builds_on edge
     tests:
     - accepted_values:
-        values: [insufficient_support, contested_direction]
+        values: [insufficient_support, contested_direction, hierarchy_pair, sequence_pair,
+          hierarchy_cycle]
 
 - name: dim_concept_community
   description: Neighbourhoods of related concepts from the newest graph run, with
@@ -554,3 +602,200 @@ models:
     tests:
     - accepted_values:
         values: [insufficient_support, contested_direction]
+
+unit_tests:
+- name: test_bridge_concept_relation_publishes_one_edge_per_hierarchy_pair_and_no_hierarchy_cycle
+  description: >
+    a < b < c < a is a broader cycle, and c < a has the fewest verdicts, so it is
+    the one left unpublished. j < k < l < j ties j < k and k < l on verdicts; more
+    broader edges point at k (j and z sit under it) than at l, so k < l ranks lower
+    and is the only edge cut. g < h < i < g is a cycle whose weakest edge g < h
+    would beat its pair's builds_on edge h -> g on confidence; the cycle rule runs
+    first, so g < h is cut and h -> g publishes instead of neither. x < y and p <
+    q
+    are broader pairs that also have a builds_on edge clearing its own support
+    rule: on x, y the builds_on edge has the higher relation_confidence (four units
+    against one verdict) and publishes instead of broader; on p, q broader (two
+    verdicts) beats a two-unit builds_on in the opposite direction. m and n are
+    co-taught and adjudicated related, so each edge carries the other source as
+    cross-signal support. s and t are related with no verdict left to count, so the
+    proposal counts as one. u and v are co-taught in run1 and in run3, a rerun of
+    the same course, which counts once, so complements scores one unit's 0.3.
+  model: bridge_concept_relation
+  given:
+  - input: ref('int__courseware__concept_relation_evidence')
+    rows:
+    - {from_concept_id: a, to_concept_id: b, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: b, to_concept_id: c, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: c, to_concept_id: a, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: x, to_concept_id: y, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: p, to_concept_id: q, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: g, to_concept_id: h, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h, to_concept_id: i, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: i, to_concept_id: g, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: j, to_concept_id: k, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: k, to_concept_id: l, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: l, to_concept_id: j, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: z, to_concept_id: k, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: x, to_concept_id: y, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: run1, scope_count: 2, observed_at: '2026-10-01'}
+    - {from_concept_id: x, to_concept_id: y, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: run2, scope_count: 2, observed_at: '2026-10-01'}
+    - {from_concept_id: q, to_concept_id: p, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: run1, scope_count: 2, observed_at: '2026-10-01'}
+    - {from_concept_id: h, to_concept_id: g, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: run1, scope_count: 2, observed_at: '2026-10-01'}
+    - {from_concept_id: m, to_concept_id: n, relation: related, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: m, to_concept_id: n, relation: complements, evidence_source: co_taught,
+      platform: mitxonline, courserun_readable_id: run1, scope_count: 1, observed_at: '2026-10-01'}
+    - {from_concept_id: s, to_concept_id: t, relation: related, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: u, to_concept_id: v, relation: complements, evidence_source: co_taught,
+      platform: mitxonline, courserun_readable_id: run1, scope_count: 1, observed_at: '2026-10-01'}
+    - {from_concept_id: u, to_concept_id: v, relation: complements, evidence_source: co_taught,
+      platform: mitxonline, courserun_readable_id: run3, scope_count: 1, observed_at: '2026-10-01'}
+  - input: ref('dim_course_run')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run1, course_fk: course1, is_current: true}
+    - {platform: mitxonline, courserun_readable_id: run2, course_fk: course2, is_current: true}
+    - {platform: mitxonline, courserun_readable_id: run3, course_fk: course1, is_current: true}
+  - input: ref('int__courseware__adjudicated_concept_relations')
+    rows:
+    - {from_concept_id: a, to_concept_id: b, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: b, to_concept_id: c, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: c, to_concept_id: a, relation: broader, supporting_verdict_count: 1,
+      contrary_verdict_count: 0, pair_verdict_count: 1}
+    - {from_concept_id: x, to_concept_id: y, relation: broader, supporting_verdict_count: 1,
+      contrary_verdict_count: 0, pair_verdict_count: 1}
+    - {from_concept_id: p, to_concept_id: q, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: g, to_concept_id: h, relation: broader, supporting_verdict_count: 1,
+      contrary_verdict_count: 0, pair_verdict_count: 1}
+    - {from_concept_id: h, to_concept_id: i, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: i, to_concept_id: g, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: j, to_concept_id: k, relation: broader, supporting_verdict_count: 1,
+      contrary_verdict_count: 0, pair_verdict_count: 1}
+    - {from_concept_id: k, to_concept_id: l, relation: broader, supporting_verdict_count: 1,
+      contrary_verdict_count: 0, pair_verdict_count: 1}
+    - {from_concept_id: l, to_concept_id: j, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: z, to_concept_id: k, relation: broader, supporting_verdict_count: 1,
+      contrary_verdict_count: 0, pair_verdict_count: 1}
+    - {from_concept_id: m, to_concept_id: n, relation: related, supporting_verdict_count: 1,
+      contrary_verdict_count: 0, pair_verdict_count: 1}
+    - {from_concept_id: s, to_concept_id: t, relation: related, supporting_verdict_count: 0,
+      contrary_verdict_count: 0, pair_verdict_count: 0}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run1, scope_id: u1, concept_id: m,
+      claim_kind: concept, teaching_status: taught, scope_kind: unit}
+    - {platform: mitxonline, courserun_readable_id: run1, scope_id: u1, concept_id: n,
+      claim_kind: concept, teaching_status: taught, scope_kind: unit}
+  expect:
+    rows:
+    - {from_concept_fk: a, to_concept_fk: b, relation: broader, verdict_support: 2,
+      cross_signal_support: 0, relation_confidence: 0.75, is_published: true, unpublished_reason: null}
+    - {from_concept_fk: b, to_concept_fk: c, relation: broader, verdict_support: 2,
+      cross_signal_support: 0, relation_confidence: 0.75, is_published: true, unpublished_reason: null}
+    - {from_concept_fk: c, to_concept_fk: a, relation: broader, verdict_support: 1,
+      cross_signal_support: 0, relation_confidence: 0.5, is_published: false, unpublished_reason: hierarchy_cycle}
+    - {from_concept_fk: x, to_concept_fk: y, relation: broader, verdict_support: 1,
+      cross_signal_support: 4, relation_confidence: 0.7952, is_published: false, unpublished_reason: sequence_pair}
+    - {from_concept_fk: x, to_concept_fk: y, relation: builds_on, verdict_support: null,
+      cross_signal_support: 1, relation_confidence: 0.8079, is_published: true, unpublished_reason: null}
+    - {from_concept_fk: p, to_concept_fk: q, relation: broader, verdict_support: 2,
+      cross_signal_support: 2, relation_confidence: 0.84, is_published: true, unpublished_reason: null}
+    - {from_concept_fk: q, to_concept_fk: p, relation: builds_on, verdict_support: null,
+      cross_signal_support: 2, relation_confidence: 0.6864, is_published: false, unpublished_reason: hierarchy_pair}
+    - {from_concept_fk: g, to_concept_fk: h, relation: broader, verdict_support: 1,
+      cross_signal_support: 2, relation_confidence: 0.68, is_published: false, unpublished_reason: hierarchy_cycle}
+    - {from_concept_fk: h, to_concept_fk: i, relation: broader, verdict_support: 2,
+      cross_signal_support: 0, relation_confidence: 0.75, is_published: true, unpublished_reason: null}
+    - {from_concept_fk: i, to_concept_fk: g, relation: broader, verdict_support: 2,
+      cross_signal_support: 0, relation_confidence: 0.75, is_published: true, unpublished_reason: null}
+    - {from_concept_fk: h, to_concept_fk: g, relation: builds_on, verdict_support: null,
+      cross_signal_support: 1, relation_confidence: 0.608, is_published: true, unpublished_reason: null}
+    - {from_concept_fk: j, to_concept_fk: k, relation: broader, verdict_support: 1,
+      cross_signal_support: 0, relation_confidence: 0.5, is_published: true, unpublished_reason: null}
+    - {from_concept_fk: k, to_concept_fk: l, relation: broader, verdict_support: 1,
+      cross_signal_support: 0, relation_confidence: 0.5, is_published: false, unpublished_reason: hierarchy_cycle}
+    - {from_concept_fk: l, to_concept_fk: j, relation: broader, verdict_support: 2,
+      cross_signal_support: 0, relation_confidence: 0.75, is_published: true, unpublished_reason: null}
+    - {from_concept_fk: z, to_concept_fk: k, relation: broader, verdict_support: 1,
+      cross_signal_support: 0, relation_confidence: 0.5, is_published: true, unpublished_reason: null}
+    - {from_concept_fk: m, to_concept_fk: n, relation: related, verdict_support: 1,
+      cross_signal_support: 1, relation_confidence: 0.6, is_published: true, unpublished_reason: null}
+    - {from_concept_fk: m, to_concept_fk: n, relation: complements, verdict_support: null,
+      cross_signal_support: 1, relation_confidence: 0.44, is_published: true, unpublished_reason: null}
+    - {from_concept_fk: s, to_concept_fk: t, relation: related, verdict_support: 1,
+      cross_signal_support: 0, relation_confidence: 0.5, is_published: true, unpublished_reason: null}
+    - {from_concept_fk: u, to_concept_fk: v, relation: complements, verdict_support: null,
+      cross_signal_support: 0, relation_confidence: 0.3, is_published: true, unpublished_reason: null}
+- name: test_bridge_concept_relation_cuts_every_cycle_lowest_edge_in_one_pass
+  description: >
+    z < x < y < z and x < y < w < x overlap on x < y. x < y is the lowest edge of
+    x <
+    y < w < x and z < x the lowest of z < x < y < z, so both are cut in the one pass,
+    although cutting x < y already broke z < x < y < z and an exact pass would keep
+    z <
+    x. This pins the conservative rule;
+    assert_bridge_concept_relation_hierarchy_cycle_overprune counts such edges.
+  model: bridge_concept_relation
+  given:
+  - input: ref('int__courseware__concept_relation_evidence')
+    rows:
+    - {from_concept_id: z, to_concept_id: x, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: x, to_concept_id: y, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: y, to_concept_id: w, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: w, to_concept_id: x, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: y, to_concept_id: z, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('int__courseware__adjudicated_concept_relations')
+    rows:
+    - {from_concept_id: z, to_concept_id: x, relation: broader, supporting_verdict_count: 1,
+      contrary_verdict_count: 0, pair_verdict_count: 1}
+    - {from_concept_id: x, to_concept_id: y, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: y, to_concept_id: w, relation: broader, supporting_verdict_count: 3,
+      contrary_verdict_count: 0, pair_verdict_count: 3}
+    - {from_concept_id: w, to_concept_id: x, relation: broader, supporting_verdict_count: 3,
+      contrary_verdict_count: 0, pair_verdict_count: 3}
+    - {from_concept_id: y, to_concept_id: z, relation: broader, supporting_verdict_count: 3,
+      contrary_verdict_count: 0, pair_verdict_count: 3}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows: []
+  expect:
+    rows:
+    - {from_concept_fk: z, to_concept_fk: x, relation: broader, relation_confidence: 0.5,
+      is_published: false, unpublished_reason: hierarchy_cycle}
+    - {from_concept_fk: x, to_concept_fk: y, relation: broader, relation_confidence: 0.75,
+      is_published: false, unpublished_reason: hierarchy_cycle}
+    - {from_concept_fk: y, to_concept_fk: w, relation: broader, relation_confidence: 0.875,
+      is_published: true, unpublished_reason: null}
+    - {from_concept_fk: w, to_concept_fk: x, relation: broader, relation_confidence: 0.875,
+      is_published: true, unpublished_reason: null}
+    - {from_concept_fk: y, to_concept_fk: z, relation: broader, relation_confidence: 0.875,
+      is_published: true, unpublished_reason: null}
