@@ -329,3 +329,19 @@ def test_non_ascii_letters_between_tokens_must_be_the_aliases_own():
 def test_a_non_ascii_lowercase_letter_rules_out_an_acronym():
     dictionary = ConceptDictionary(aliases(("NAïVE", "c1")))
     assert [p.match_mode for p in dictionary.patterns] == ["caseless"]
+
+
+@pytest.mark.parametrize(
+    ("label", "text", "surface"),
+    [
+        # casefold turns "ß" into "ss" and "İ" into "i" plus a combining dot
+        ("Strauß", "a Strauß waltz", "Strauß"),
+        ("İstanbul", "in İstanbul today", "İstanbul"),
+        ("Großmann method", "the GROßMANN METHOD works", "GROßMANN METHOD"),
+    ],
+)
+def test_offsets_hold_when_casefolding_changes_a_letters_length(label, text, surface):
+    result = tag_sources(sources(text), aliases((label, "c1")))
+    [mention] = result.mentions.iter_rows(named=True)
+    assert text[mention["char_start"] : mention["char_end"]] == surface
+    assert mention["matched_text"] == surface
