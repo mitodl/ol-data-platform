@@ -98,7 +98,6 @@ with content as (
         , documents.content_file_path
         , documents.content_file_extension
         , documents.content_file_text
-        , documents.content_file_static_references
     from {{ ref('stg__openedx__s3__course_document_text') }} as documents
     where
         documents.content_file_extraction_status = 'extracted'
@@ -227,19 +226,33 @@ with content as (
     where excluded_paths.content_file_path is null
 )
 
+-- every html body's links, including those of a body Tika failed on or found empty
+, html_bodies as (
+    select
+        case content_file_source_system
+            when 'xpro' then 'mitxpro'
+            when 'mitx' then 'residential'
+            else content_file_source_system
+        end as platform
+        , courserun_readable_id
+        , content_file_path
+        , content_file_static_references
+    from {{ ref('stg__openedx__s3__course_document_text') }}
+    where
+        content_file_static_references is not null
+        {% if courserun_filter %}and courserun_readable_id in {{ courserun_filter }}{% endif %}
+)
+
 , html_links as (
     select
         unit_blocks.platform
         , unit_blocks.courserun_readable_id
         , unit_blocks.sequential_block_id
+        , unit_blocks.block_id
         , unit_blocks.block_index
-        -- Studio stores "my file.pdf" under the asset name my_file.pdf, which is what
-        -- a link spells, so names are compared without their punctuation.
-        , {{ regexp_replace_all(
-            "lower(" ~ json_extract_scalar('linked.static_path', "'$'") ~ ")", "'[^a-z0-9./-]'", "''"
-        ) }} as content_file_key
+        , {{ json_extract_scalar('linked.static_path', "'$'") }} as linked_path
     from unit_blocks
-    inner join documents as html_body
+    inner join html_bodies as html_body
         on
             unit_blocks.block_category = 'html'
             and unit_blocks.platform = html_body.platform
@@ -248,31 +261,57 @@ with content as (
     cross join {{ unnest_json_array('html_body.content_file_static_references', 'linked', 'static_path') }}
 )
 
--- A linked document is read right after the html block that links it: it takes the
--- block's source_order, and its static/ path sorts after the block's block-v1 key. One
--- linked from several units is read in the first, so its claims are not extracted twice.
-, linked_documents as (
+-- Studio stores "my file.pdf" under the asset name my_file.pdf, which is what a link
+-- spells, so a link is matched to a document by its name without punctuation. That
+-- key also merges distinct files (LectureSlides_15.pdf, Lecture_Slides_15.pdf), so an
+-- exact path wins, and the key is used only when it names one document.
+, link_matches as (
     select
-        html_links.platform
-        , html_links.courserun_readable_id
-        , html_links.sequential_block_id as scope_id
-        , html_links.block_index as source_order
-        , documents.content_file_path as source_ref
-        , 'document' as source_kind
-        , {{ regexp_replace_all('documents.content_file_path', "'^static/'", "''") }} as source_title
-        , documents.content_file_text as source_text
-        , row_number() over (
-            partition by html_links.platform, html_links.courserun_readable_id, documents.content_file_path
-            order by html_links.block_index
-        ) as link_rank
+        html_links.*
+        , documents.content_file_path
+        , documents.content_file_text
+        , case when html_links.linked_path = documents.content_file_path then 1 else 0 end as is_exact
     from html_links
     inner join unscoped_documents as documents
         on
             html_links.platform = documents.platform
             and html_links.courserun_readable_id = documents.courserun_readable_id
-            and html_links.content_file_key
+            and {{ regexp_replace_all("lower(html_links.linked_path)", "'[^a-z0-9./-]'", "''") }}
             = {{ regexp_replace_all("lower(documents.content_file_path)", "'[^a-z0-9./-]'", "''") }}
     where documents.content_file_extension in ('{{ document_extensions | join("', '") }}')
+)
+
+, counted_link_matches as (
+    select
+        *
+        , sum(is_exact) over (
+            partition by platform, courserun_readable_id, block_id, linked_path
+        ) as exact_matches
+        , count(*) over (
+            partition by platform, courserun_readable_id, block_id, linked_path
+        ) as key_matches
+    from link_matches
+)
+
+-- A linked document is read right after the html block that links it: it takes the
+-- block's source_order, and its static/ path sorts after the block's block-v1 key. One
+-- linked from several units is read in the first, so its claims are not extracted twice.
+, linked_documents as (
+    select
+        platform
+        , courserun_readable_id
+        , sequential_block_id as scope_id
+        , block_index as source_order
+        , content_file_path as source_ref
+        , 'document' as source_kind
+        , {{ regexp_replace_all('content_file_path', "'^static/'", "''") }} as source_title
+        , content_file_text as source_text
+        , row_number() over (
+            partition by platform, courserun_readable_id, content_file_path
+            order by block_index
+        ) as link_rank
+    from counted_link_matches
+    where is_exact = 1 or (exact_matches = 0 and key_matches = 1)
 )
 
 , context_sources as (
