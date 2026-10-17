@@ -3,6 +3,11 @@
     dictionary tagging run (ml.lib.courseware.tagging over int__courseware__extraction_sources
     and dim_concept_alias), with the matched phrase's mode and ambiguity flags. These
     are mentions only. Whether a source teaches the concept is the extractor's call.
+
+    A run tags with the concept ids current when it ran. concept_id follows the
+    newest resolution run's redirects (a concept merged since then becomes its
+    survivor), so it joins to the extractor's resolved mentions; tagged_concept_id
+    is the id as tagged, which the run's dictionary rows are keyed by.
 #}
 with runs as (
     select * from {{ source('courseware_intermediate', 'courseware_concept_tagging_run') }}
@@ -33,6 +38,10 @@ with runs as (
         on alias.tagging_run_id = latest_run.tagging_run_id
 )
 
+, registry as (
+    select * from {{ ref('int__courseware__concept_registry') }}
+)
+
 select
     mentions.tagging_run_id
     , mentions.platform
@@ -41,7 +50,8 @@ select
     , mentions.scope_kind
     , mentions.source_ref
     , mentions.source_kind
-    , mentions.concept_id
+    , coalesce(registry.merged_into_concept_id, mentions.concept_id) as concept_id
+    , mentions.concept_id as tagged_concept_id
     , mentions.pattern_key
     , aliases.concept_label_key
     , aliases.variant
@@ -59,3 +69,5 @@ inner join aliases
     on
         mentions.pattern_key = aliases.pattern_key
         and mentions.concept_id = aliases.concept_id
+left join registry
+    on mentions.concept_id = registry.concept_id

@@ -379,9 +379,12 @@ models:
   - name: source_kind
     description: str, html, problem, video_transcript, document or a page kind
   - name: concept_id
-    description: str, the concept's UUID
+    description: str, the concept's UUID as of the newest resolution run, following
+      the redirect of a concept merged since the tagging run
     tests:
     - not_null
+  - name: tagged_concept_id
+    description: str, the concept's UUID as the tagging run recorded it
   - name: pattern_key
     description: str, the normalized phrase that matched
   - name: concept_label_key
@@ -442,7 +445,11 @@ models:
   - name: pattern_key
     description: str, the normalized phrase
   - name: concept_id
-    description: str, the concept's UUID
+    description: str, the concept's UUID as of the newest resolution run, following
+      the redirect of a concept merged since the tagging run
+  - name: tagged_concept_id
+    description: str, the concept's UUID as the tagging run's dictionary recorded
+      it
   - name: concept_label_key
     description: str, the label the phrase comes from
   - name: variant
@@ -489,4 +496,80 @@ models:
       concept
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: [pattern_key, concept_id]
+      column_list: [pattern_key, tagged_concept_id]
+
+unit_tests:
+- name: test_int__courseware__concept_tags_follows_merges_since_the_run
+  description: >
+    A tag recorded under a concept that a later resolution run merged into another
+    reads as the survivor, and keeps the id it was tagged with.
+  model: int__courseware__concept_tags
+  given:
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_run')
+    rows:
+    - {tagging_run_id: r1, tagged_at: '2026-10-01T00:00:00'}
+  - input: source('courseware_intermediate', 'courseware_concept_mention')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      scope_kind: unit, source_ref: b1, source_kind: html, pattern_key: random library,
+      concept_id: merged, matched_text: random library, char_start: 0, char_end: 14}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      scope_kind: unit, source_ref: b1, source_kind: html, pattern_key: pandas, concept_id: kept,
+      matched_text: pandas, char_start: 20, char_end: 26}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_alias')
+    rows:
+    - {tagging_run_id: r1, pattern_key: random library, concept_id: merged, concept_label_key: random
+        library, variant: label, match_mode: caseless, is_short: false, is_qualified: false,
+      is_single_word: false, has_multiple_concepts: false, is_ambiguous: false}
+    - {tagging_run_id: r1, pattern_key: pandas, concept_id: kept, concept_label_key: pandas,
+      variant: label, match_mode: caseless, is_short: false, is_qualified: false,
+      is_single_word: true, has_multiple_concepts: false, is_ambiguous: true}
+  - input: ref('int__courseware__concept_registry')
+    rows:
+    - {concept_id: merged, concept_status: merged, merged_into_concept_id: survivor}
+    - {concept_id: survivor, concept_status: active, merged_into_concept_id: null}
+    - {concept_id: kept, concept_status: active, merged_into_concept_id: null}
+  expect:
+    rows:
+    - {pattern_key: random library, concept_id: survivor, tagged_concept_id: merged}
+    - {pattern_key: pandas, concept_id: kept, tagged_concept_id: kept}
+
+- name: test_int__courseware__concept_tagging_fan_out_agrees_through_a_later_merge
+  description: >
+    A phrase tagged under a concept merged since the run counts the extractor's
+    claims about the survivor as agreement, and its label count is the survivor's.
+  model: int__courseware__concept_tagging_fan_out
+  given:
+  - input: ref('int__courseware__concept_tags')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: random library, concept_id: survivor, tagged_concept_id: merged}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_alias')
+    rows:
+    - {tagging_run_id: r1, pattern_key: random library, concept_id: merged, concept_label_key: random
+        library, variant: label, surface: random library, match_mode: caseless, is_short: false,
+      is_qualified: false, is_single_word: false, has_multiple_concepts: false, is_ambiguous: false}
+  - input: ref('int__courseware__concept_registry')
+    rows:
+    - {concept_id: merged, concept_status: merged, merged_into_concept_id: survivor}
+    - {concept_id: survivor, concept_status: active, merged_into_concept_id: null}
+  - input: ref('int__courseware__concept_assignments')
+    rows:
+    - {concept_label_key: random module, concept_id: survivor}
+    - {concept_label_key: random library, concept_id: survivor}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s1, concept_label_key: random
+        module, concept_id: survivor}
+  - input: ref('int__courseware__claims')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s1, is_current: true}
+  - input: ref('int__courseware__cited_concept_sources')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s1, source_ref: b1,
+      concept_id: survivor}
+  expect:
+    rows:
+    - {pattern_key: random library, concept_id: survivor, tagged_concept_id: merged,
+      is_merged_label: true, tagged_source_count: 1, compared_source_count: 1, source_agreement_rate: 1.0,
+      scope_agreement_rate: 1.0}
