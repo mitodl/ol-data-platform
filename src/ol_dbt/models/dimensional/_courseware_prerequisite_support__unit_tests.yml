@@ -1,0 +1,76 @@
+---
+unit_tests:
+- name: test_bridge_concept_relation_counts_a_courses_reruns_once
+  description: >
+    Runs r1 and r2 are reruns of residential course 6.1, which has no course_fk, and
+    each shows a builds_on b in one unit, so the edge has one course of support and
+    stays unpublished. c builds_on d in one unit each of 6.1 and 6.2, two courses,
+    so it publishes.
+  model: bridge_concept_relation
+  given:
+  - input: ref('int__courseware__concept_relation_evidence')
+    rows:
+    - {from_concept_id: a, to_concept_id: b, relation: builds_on, evidence_source: course_sequence,
+      platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2025_Spring",
+      scope_count: 1}
+    - {from_concept_id: a, to_concept_id: b, relation: builds_on, evidence_source: course_sequence,
+      platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2026_Spring",
+      scope_count: 1}
+    - {from_concept_id: c, to_concept_id: d, relation: builds_on, evidence_source: course_sequence,
+      platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2025_Spring",
+      scope_count: 1}
+    - {from_concept_id: c, to_concept_id: d, relation: builds_on, evidence_source: course_sequence,
+      platform: residential, courserun_readable_id: "course-v1:MITx+6.2+2025_Spring",
+      scope_count: 1}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: r1, course_fk: null, platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2025_Spring",
+      is_current: true}
+    - {courserun_pk: r2, course_fk: null, platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2026_Spring",
+      is_current: true}
+    - {courserun_pk: r3, course_fk: null, platform: residential, courserun_readable_id: "course-v1:MITx+6.2+2025_Spring",
+      is_current: true}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows: []
+  expect:
+    rows:
+    - {from_concept_fk: a, to_concept_fk: b, scope_support: 2, course_scope_support: 1,
+      is_published: false, unpublished_reason: insufficient_support}
+    - {from_concept_fk: c, to_concept_fk: d, scope_support: 2, course_scope_support: 2,
+      is_published: true, unpublished_reason: null}
+
+- name: test_bridge_courserun_concept_counts_a_courses_reruns_once
+  description: >
+    x is assumed in one unit of each rerun of residential course 6.1 (no course_fk),
+    one course, so neither run publishes it. y is assumed in one unit of 6.1 and one
+    of 6.2, two courses, so both publish it.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2025_Spring",
+      scope_id: u1, scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge,
+      concept_id: x}
+    - {platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2026_Spring",
+      scope_id: u1, scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge,
+      concept_id: x}
+    - {platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2025_Spring",
+      scope_id: u2, scope_kind: unit, scope_position: 2, claim_kind: assumed_knowledge,
+      concept_id: y}
+    - {platform: residential, courserun_readable_id: "course-v1:MITx+6.2+2025_Spring",
+      scope_id: u1, scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge,
+      concept_id: y}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: r1, course_fk: null, platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2025_Spring",
+      is_current: true}
+    - {courserun_pk: r2, course_fk: null, platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2026_Spring",
+      is_current: true}
+    - {courserun_pk: r3, course_fk: null, platform: residential, courserun_readable_id: "course-v1:MITx+6.2+2025_Spring",
+      is_current: true}
+  expect:
+    rows:
+    - {courserun_fk: r1, concept_fk: x, course_support: 1, is_published: false}
+    - {courserun_fk: r2, concept_fk: x, course_support: 1, is_published: false}
+    - {courserun_fk: r1, concept_fk: y, course_support: 2, is_published: true}
+    - {courserun_fk: r3, concept_fk: y, course_support: 2, is_published: true}
