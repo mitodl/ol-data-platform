@@ -14,6 +14,7 @@
     randomized variants of one question. Files are dropped by the export's own exclusion
     rules, except about_page: Learn leaves the about pages out of search, but the
     description and prerequisites stated there are what the context scope is for.
+    Answer keys and solution sets (courseware_answer_document) are never read.
 
     The build covers the runs int__courseware__extraction_allowlist approves.
     var('courseware_courseruns') replaces that with a list of runs, for local
@@ -223,6 +224,7 @@ with content as (
             ))
 )
 
+-- answer keys and solution sets are never read (courseware_answer_document)
 , unscoped_documents as (
     select documents.*
     from documents
@@ -231,7 +233,9 @@ with content as (
             documents.platform = excluded_paths.platform
             and documents.courserun_readable_id = excluded_paths.courserun_readable_id
             and documents.content_file_path = excluded_paths.content_file_path
-    where excluded_paths.content_file_path is null
+    where
+        excluded_paths.content_file_path is null
+        and not {{ courseware_answer_document('documents.content_file_path') }}
 )
 
 -- every html body's links, including those of a body Tika failed on or found empty
