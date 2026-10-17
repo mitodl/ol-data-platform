@@ -138,6 +138,20 @@ def test_build_scopes_splits_at_source_boundaries(monkeypatch):
     )
 
 
+def test_course_description_from_about_page_or_ocw_description():
+    about = _rows(["The about page."], scope_kind="context").with_columns(
+        pl.lit("about/overview.html").alias("source_ref"),
+        pl.lit("about_page").alias("source_kind"),
+    )
+    assert scopes.build_scopes(about)[0].course.description == "The about page."
+    ocw = _rows(["An OCW course."], scope_kind="context").with_columns(
+        pl.lit("ocw").alias("platform"),
+        pl.lit("courses/18-06-linear-algebra-spring-2010/").alias("source_ref"),
+        pl.lit("course_description").alias("source_kind"),
+    )
+    assert scopes.build_scopes(ocw)[0].course.description == "An OCW course."
+
+
 def test_extraction_key_changes_with_input_text():
     first = scopes.build_scopes(_rows(["some text"]))[0]
     second = scopes.build_scopes(_rows(["other text"]))[0]

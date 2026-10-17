@@ -6,6 +6,8 @@ models:
   description: The text the courseware claim extractor reads, one row per source item
     of each scope (a sequential, the course context, or the course documents) of an
     Open edX course run, in reading order. Problem text is the question side only.
+    OCW courses are scoped by page group, section page or calendar session, with answer
+    keys left out.
   config:
     meta:
       # The text it reads (raw__openedx__s3__course_transcript_text and
@@ -13,17 +15,19 @@ models:
       qa_buildable: false
   columns:
   - name: platform
-    description: str, mitxonline, mitxpro or residential
+    description: str, mitxonline, mitxpro, residential or ocw
     tests:
     - not_null
   - name: courserun_readable_id
-    description: str, the course run
+    description: str, the course run; for OCW, Learn's run id
     tests:
     - not_null
   - name: course_title
-    description: str, the course block's title from dim_course_content
+    description: str, the course block's title from dim_course_content, or the OCW
+      course title
   - name: scope_id
-    description: str, the sequential's block id, or 'context' or 'materials'
+    description: str, the sequential's block id, an OCW page key or session-N / week-N,
+      or 'context' or 'materials'
     tests:
     - not_null
   - name: scope_kind
@@ -38,12 +42,13 @@ models:
   - name: source_position
     description: int, the source's order within its scope, from 1
   - name: source_ref
-    description: str, the block id for blocks, the export path for files
+    description: str, the block id for blocks, the export path for files, the OCW
+      content file key
     tests:
     - not_null
   - name: source_kind
-    description: str, html, problem, video_transcript, document, about_page, tabs_page
-      or info_page
+    description: str, html, problem, video_transcript, document, about_page, tabs_page,
+      info_page, page (OCW) or course_description (OCW)
   - name: source_title
     description: str, the block's display name or the file's path
   - name: source_text
