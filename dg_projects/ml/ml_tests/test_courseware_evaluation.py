@@ -766,3 +766,38 @@ def test_subsections_population_with_a_model_that_named_no_concept():
     [row] = samples.subsections_population(inputs).to_dicts()
     assert (row["found_hat_haiku"], row["found_hat_opus"], row["gold_hat"]) == (0, 1, 1)
     assert row["models"] == "haiku+opus"
+
+
+def test_score_subsections_scores_a_model_that_named_nothing(tmp_path):
+    items = [f"u{n}" for n in range(4)]
+    population = pl.DataFrame(
+        {
+            "item_id": items,
+            "scope_id": items,
+            "stratum": ["s"] * 4,
+            "models": ["haiku+opus"] * 4,
+            "found_hat_haiku": [1] * 4,
+            "found_hat_opus": [0] * 4,
+            "gold_hat": [1] * 4,
+        }
+    )
+    sample = pl.DataFrame({"item_id": items, "blind": [True, True, False, False]})
+    model_concepts = pl.DataFrame(
+        {
+            "scope_id": items,
+            "model": ["haiku"] * 4,
+            "canonical": [LabelMatcher().canonical("pandas")] * 4,
+            "status": ["taught"] * 4,
+        }
+    )
+    tasks = [_span_task(item, [("pandas", "taught")]) for item in items]
+    report, _ = score.score_subsections(
+        population,
+        sample,
+        _export(tmp_path, tasks),
+        model_concepts,
+        LabelMatcher(),
+        alpha=0.05,
+    )
+    assert report["models"]["haiku"]["concept_recall"]["point"] == 1.0
+    assert report["models"]["opus"]["concept_recall"]["point"] == 0.0
