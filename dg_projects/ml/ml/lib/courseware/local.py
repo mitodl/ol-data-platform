@@ -23,13 +23,14 @@ from ml.lib.courseware.extract import (
     covered_keys,
     extract_scopes,
     extraction_key,
+    scope_inputs,
     stored_extraction_key,
 )
 from ml.lib.courseware.graph import compute_graph, previous_membership
 from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
 from ml.lib.courseware.resolve import EMBEDDING_DIM as RESOLUTION_EMBEDDING_DIM
 from ml.lib.courseware.resolve import ResolutionState, resolve_concepts
-from ml.lib.courseware.scopes import CHARS_PER_TOKEN, build_scopes
+from ml.lib.courseware.scopes import CHARS_PER_TOKEN, Scope, build_scopes
 from ml.lib.embed import BedrockEmbeddingClient, build_embedding_client
 from ml.resources.llm import LLMClientFactory
 
@@ -71,6 +72,36 @@ def _require_current_keys(stored: pl.DataFrame) -> None:
             raise ValueError(msg)
 
 
+def _read_scopes(sources: Path, courserun: list[str] | None) -> list[Scope]:
+    rows = pl.read_parquet(sources)
+    if courserun:
+        rows = rows.filter(pl.col("courserun_readable_id").is_in(courserun))
+    return [
+        scope
+        for _, run_rows in rows.group_by("platform", "courserun_readable_id")
+        for scope in build_scopes(run_rows)
+    ]
+
+
+@app.command
+def observe(
+    sources: Path, output_dir: Path, *, courserun: list[str] | None = None
+) -> None:
+    """Record every scope part's current input without extracting anything.
+
+    extract records it too; this is for a directory whose extractions are all
+    stored, e.g. after `rekey`.
+
+    :param sources: int__courseware__extraction_sources exported to parquet
+    :param output_dir: where courseware_scope_input is appended
+    :param courserun: limit to these courserun_readable_ids
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    observed = scope_inputs(_read_scopes(sources, courserun))
+    _append(output_dir, "courseware_scope_input", observed)
+    print(f"{observed.height} scope parts observed")  # noqa: T201
+
+
 @app.command
 def extract(  # noqa: PLR0913
     sources: Path,
@@ -100,13 +131,10 @@ def extract(  # noqa: PLR0913
     :param dry_run: print the scopes and their estimated input size, call nothing
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
-    rows = pl.read_parquet(sources)
-    if courserun:
-        rows = rows.filter(pl.col("courserun_readable_id").is_in(courserun))
+    run_scopes = _read_scopes(sources, courserun)
     scopes = [
         scope
-        for _, run_rows in rows.group_by("platform", "courserun_readable_id")
-        for scope in build_scopes(run_rows)
+        for scope in run_scopes
         if not scope_title or scope.scope_title in scope_title
     ]
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -134,6 +162,7 @@ def extract(  # noqa: PLR0913
         print(f"{len(scopes)} scopes, ~{total:,} input tokens to send")  # noqa: T201
         return
 
+    _append(output_dir, "courseware_scope_input", scope_inputs(run_scopes))
     client = LLMClientFactory(
         client_class="bedrock", aws_region=aws_region
     ).get_client()
