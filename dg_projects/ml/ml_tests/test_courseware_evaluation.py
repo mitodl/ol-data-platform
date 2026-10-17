@@ -1,3 +1,4 @@
+import dataclasses
 import json
 from datetime import UTC, datetime
 
@@ -741,3 +742,27 @@ def test_clusters_leave_out_labels_no_current_claim_uses():
     ]
     sample = samples.sample_clusters(inputs, population, size=10, seed=1)
     assert sorted(sample["item_id"]) == ["k1", "k2", "k4", "k5"]
+
+
+def test_subsections_population_with_a_model_that_named_no_concept():
+    claims = pl.DataFrame(
+        [
+            _claim("opus", "u1", 1, "Linear regression"),
+            _claim("haiku", "u1", 1, "Fit a model", kind="skill"),
+        ]
+    )
+    sources = pl.DataFrame(
+        {
+            "platform": ["mitxonline"],
+            "courserun_readable_id": ["course-v1:UAI_SOURCE+UAI.4+1T2026"],
+            "scope_id": ["u1"],
+            "scope_kind": ["unit"],
+            "scope_title": ["u1"],
+            "scope_position": [1],
+            "source_text": ["text"],
+        }
+    )
+    inputs = dataclasses.replace(_inputs(claims), sources=sources)
+    [row] = samples.subsections_population(inputs).to_dicts()
+    assert (row["found_hat_haiku"], row["found_hat_opus"], row["gold_hat"]) == (0, 1, 1)
+    assert row["models"] == "haiku+opus"
