@@ -50,6 +50,9 @@ not the notes. Do not state facts the notes and general knowledge do not support
 Call record_descriptions once with one entry per id.
 """
 
+# Descriptions are short, batched and many; the small model is the default.
+DESCRIPTION_MODEL = "claude-haiku-5-5"
+BEDROCK_DESCRIPTION_MODEL = "us.anthropic.claude-haiku-5-5"
 DESCRIPTION_BATCH_SIZE = 40
 DESCRIPTION_MAX_TOKENS = 32_000
 
@@ -148,6 +151,13 @@ def _describe_batch(
         raise ValueError(msg) from error
 
 
+def description_version(model_id: str, effort: str) -> str:
+    """Hash of the prompt, model and effort; a change describes every concept again."""
+    return hashlib.sha256(
+        json.dumps([DESCRIPTION_PROMPT, model_id, effort]).encode()
+    ).hexdigest()[:12]
+
+
 def describe_concepts(  # noqa: PLR0913
     rows: pl.DataFrame,
     client: Anthropic | AnthropicBedrock,
@@ -168,9 +178,7 @@ def describe_concepts(  # noqa: PLR0913
     :returns: the new description rows
     :rtype: pl.DataFrame
     """
-    version = hashlib.sha256(
-        json.dumps([DESCRIPTION_PROMPT, model_id, effort]).encode()
-    ).hexdigest()[:12]
+    version = description_version(model_id, effort)
     done: set[tuple[str, str]] = set()
     if existing is not None:
         done = set(

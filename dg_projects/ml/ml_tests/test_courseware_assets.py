@@ -1,0 +1,604 @@
+"""Materialize the courseware assets against an in-memory warehouse and a fake model.
+
+Tables live in a dict keyed by table name. The IO manager appends to it as the
+Iceberg IO manager's append mode does, so a second materialization reads what the
+first wrote. The model is an Anthropic client whose messages.stream answers each
+tool the courseware library offers, so the library's own parsing and validation run.
+"""
+
+import re
+from collections.abc import Iterator
+from types import SimpleNamespace
+from typing import Any
+from unittest.mock import MagicMock
+
+import numpy as np
+import polars as pl
+import pytest
+from anthropic import Anthropic
+from dagster import (
+    DagsterInstance,
+    Definitions,
+    IOManager,
+    MultiPartitionKey,
+    build_sensor_context,
+    define_asset_job,
+    materialize,
+)
+from dagster_iceberg.config import IcebergCatalogConfig
+from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
+from ml.assets import courseware_extraction as extraction_module
+from ml.assets import courseware_resolution as resolution_module
+from ml.assets.courseware_description import courseware_concept_description
+from ml.assets.courseware_extraction import (
+    EXTRACTION_TEXT_KEY,
+    courseware_extraction,
+    courseware_extraction_text,
+)
+from ml.assets.courseware_graph import courseware_concept_graph
+from ml.assets.courseware_resolution import (
+    assignment_churn,
+    courseware_resolution,
+)
+from ml.lib.courseware import warehouse
+from ml.resources.llm import LLMClientFactory
+from ml.sensors import courseware as sensor_module
+from ml.sensors.courseware import courseware_extraction_text_sensor
+from pyiceberg.catalog.sql import SqlCatalog
+from pyiceberg.exceptions import NoSuchTableError
+
+PLATFORM = "mitxonline"
+COURSERUN = "course-v1:MITx+UAI.4+1T2026"
+PARTITION = MultiPartitionKey({"platform": PLATFORM, "courserun": COURSERUN})
+
+
+# ---------------------------------------------------------------- fake warehouse
+class Warehouse(IOManager):
+    def __init__(self, tables: dict[str, pl.DataFrame]) -> None:
+        self.tables = tables
+
+    def handle_output(self, context, obj: pl.DataFrame) -> None:
+        table = context.asset_key.path[-1]
+        previous = self.tables.get(table)
+        self.tables[table] = (
+            obj if previous is None else pl.concat([previous, obj], how="diagonal")
+        )
+
+    def load_input(self, context) -> None:
+        raise NotImplementedError
+
+
+@pytest.fixture
+def tables(monkeypatch) -> dict[str, pl.DataFrame]:
+    store: dict[str, pl.DataFrame] = {}
+
+    def read(database_name: str, table_name: str) -> pl.LazyFrame:
+        assert database_name.startswith("ol_warehouse_production_test_")
+        if table_name not in store:
+            raise NoSuchTableError(table_name)
+        return store[table_name].lazy()
+
+    monkeypatch.setattr(warehouse, "get_dbt_model_as_dataframe", read)
+    return store
+
+
+# -------------------------------------------------------------------- fake model
+def _response(tool: str, tool_input: dict[str, Any] | None) -> SimpleNamespace:
+    content = (
+        [SimpleNamespace(type="tool_use", name=tool, input=tool_input)]
+        if tool_input is not None
+        else []
+    )
+    return SimpleNamespace(
+        stop_reason="tool_use" if content else "end_turn",
+        stop_details=None,
+        content=content,
+        usage=SimpleNamespace(
+            input_tokens=100,
+            output_tokens=20,
+            cache_read_input_tokens=0,
+            cache_creation_input_tokens=0,
+        ),
+    )
+
+
+def extraction_input(message: str, *, quote: bool = True) -> dict[str, Any] | None:
+    """One taught concept per scope, quoting the first ten words of source S01."""
+    text = message.split("=== SOURCE S01", 1)[1].split("===\n", 1)[1]
+    scope = re.search(r"^SCOPE: (.+) \(kind=", message, re.MULTILINE)
+    assert scope is not None
+    title = scope[1]
+    if title == "Broken scope":
+        return None
+    passage = " ".join(text.split()[:10]) if quote else "words that appear nowhere"
+    return {
+        "summary": f"About {title}.",
+        "concepts": [
+            {
+                "label": f"{title.lower()} concept",
+                "description": f"What {title} teaches.",
+                "concept_kind": "concept",
+                "teaching_status": "taught",
+                "evidence": [{"source_id": "S01", "passage": passage}],
+            }
+        ],
+        "skills": [],
+        "assumed_knowledge": [],
+        "assessment_expectations": [],
+        "learning_outcomes": [],
+        "declared_prerequisites": [],
+        "audience": [],
+        "notes": [],
+    }
+
+
+def verdicts_input(listing: str) -> dict[str, Any]:
+    """Every candidate distinct, so each label becomes its own concept."""
+    queries: list[dict[str, Any]] = []
+    for line in listing.splitlines():
+        if line.startswith("Q"):
+            queries.append({"query_id": len(queries), "verdicts": []})
+        elif line.startswith("  c"):
+            candidate = int(line.split(":", 1)[0].strip()[1:])
+            queries[-1]["verdicts"].append(
+                {"candidate_id": candidate, "verdict": "distinct"}
+            )
+    return {"queries": queries}
+
+
+def descriptions_input(listing: str) -> dict[str, Any]:
+    ids = [int(match) for match in re.findall(r"^(\d+) \|", listing, re.MULTILINE)]
+    return {
+        "descriptions": [
+            {
+                "concept_id": concept_id,
+                "short_description": "a thing to learn",
+                "description": "A thing learners study.",
+                "is_learner_facing": True,
+            }
+            for concept_id in ids
+        ]
+    }
+
+
+class FakeMessages:
+    def __init__(self, calls: list[str], *, quote: bool) -> None:
+        self.calls = calls
+        self.quote = quote
+
+    def stream(self, **request: Any) -> Iterator[SimpleNamespace]:
+        tool = request["tools"][0]["name"]
+        self.calls.append(tool)
+        content = request["messages"][0]["content"]
+        tool_input = {
+            "record_extraction": lambda: extraction_input(content, quote=self.quote),
+            "record_verdicts": lambda: verdicts_input(content),
+            "record_descriptions": lambda: descriptions_input(content),
+        }[tool]()
+        stream = MagicMock()
+        stream.__enter__.return_value.get_final_message.return_value = _response(
+            tool, tool_input
+        )
+        return stream
+
+
+CALLS: list[str] = []
+
+
+class FakeLLM(LLMClientFactory):
+    quote: bool = True
+
+    def get_client(self) -> Anthropic:
+        client = Anthropic(api_key="test")  # pragma: allowlist secret
+        client.messages = FakeMessages(CALLS, quote=self.quote)
+        return client
+
+
+@pytest.fixture(autouse=True)
+def calls() -> list[str]:
+    CALLS.clear()
+    return CALLS
+
+
+class FakeEmbedder:
+    model_version = "fake-embed"
+    max_request_batch_size = 16
+    dim = 26
+    max_input_chars = None
+
+    def embed_batch(self, texts, *, trace_metadata=None):  # noqa: ARG002
+        return [
+            list(np.eye(26, dtype=np.float32)[ord(text[0].lower()) - 97] + 0.01)
+            for text in texts
+        ]
+
+
+# -------------------------------------------------------------------- extraction
+def sources(*scope_titles: str) -> pl.DataFrame:
+    rows = [
+        {
+            "platform": PLATFORM,
+            "courserun_readable_id": COURSERUN,
+            "course_title": "Supervised Learning",
+            "scope_id": f"seq-{position}",
+            "scope_kind": "unit",
+            "scope_title": title,
+            "scope_position": position,
+            "source_position": 1,
+            "source_ref": f"block-{position}",
+            "source_kind": "html",
+            "source_title": None,
+            "source_text": (
+                f"In {title} we study how a model learns from labelled examples "
+                "and how to measure the error it makes on new data."
+            ),
+        }
+        for position, title in enumerate(scope_titles, 1)
+    ]
+    return pl.DataFrame(rows)
+
+
+def extract(tables, *, llm: LLMClientFactory | None = None):
+    instance = DagsterInstance.ephemeral()
+    instance.add_dynamic_partitions("courseware_courserun", [COURSERUN])
+    return materialize(
+        [courseware_extraction],
+        partition_key=PARTITION,
+        instance=instance,
+        resources={
+            "courseware_io_manager": Warehouse(tables),
+            "llm": llm or FakeLLM(),
+        },
+        raise_on_error=False,
+    )
+
+
+def check_result(result, name: str):
+    return next(
+        evaluation
+        for evaluation in result.get_asset_check_evaluations()
+        if evaluation.check_name == name
+    )
+
+
+@pytest.fixture
+def catalog(monkeypatch) -> MagicMock:
+    fake = MagicMock()
+    monkeypatch.setattr(extraction_module, "get_glue_catalog", lambda: fake)
+    return fake
+
+
+def test_extraction_writes_each_scope_once(tables, calls, catalog):
+    tables["int__courseware__extraction_sources"] = sources("Lecture 1", "Lecture 2")
+
+    first = extract(tables)
+
+    assert first.success
+    assert tables["courseware_claim_extraction"].height == 2
+    claims = tables["courseware_claim"]
+    assert set(claims["courserun_readable_id"]) == {COURSERUN}
+    assert set(claims["platform"]) == {PLATFORM}
+    assert set(tables["courseware_claim_evidence"]["verification_status"]) == {"exact"}
+    check = check_result(first, "evidence_verification_rate")
+    assert check.passed
+    assert check.metadata["exact_share"].value == 1.0
+    # leftovers of an earlier attempt under the new keys are cleared first
+    assert catalog.load_table.return_value.delete.call_count == 2
+
+    second = extract(tables)
+
+    assert second.success
+    assert calls == ["record_extraction", "record_extraction"]
+    assert tables["courseware_claim_extraction"].height == 2
+
+
+def test_extraction_writes_partitioned_iceberg_tables(calls, tmp_path, monkeypatch):
+    """Through the Iceberg IO manager the deployment configures, on a local catalog."""
+    properties = {
+        "type": "sql",
+        "uri": f"sqlite:///{tmp_path}/catalog.db",
+        "warehouse": f"file://{tmp_path}",
+    }
+    catalog = SqlCatalog("default", **properties)
+    database = warehouse.warehouse_database("intermediate")
+    catalog.create_namespace(database)
+    monkeypatch.setattr(extraction_module, "get_glue_catalog", lambda: catalog)
+    source_rows = sources("Lecture 1", "Lecture 2")
+
+    def read(database_name: str, table_name: str) -> pl.LazyFrame:
+        if table_name == "int__courseware__extraction_sources":
+            return source_rows.lazy()
+        table = catalog.load_table(f"{database_name}.{table_name}")
+        return pl.DataFrame(table.scan().to_arrow()).lazy()
+
+    monkeypatch.setattr(warehouse, "get_dbt_model_as_dataframe", read)
+    instance = DagsterInstance.ephemeral()
+    instance.add_dynamic_partitions("courseware_courserun", [COURSERUN])
+    io_manager = PolarsIcebergIOManager(
+        name="default",
+        config=IcebergCatalogConfig(properties=properties),
+        db_io_manager="custom",
+    )
+
+    for _ in range(2):
+        result = materialize(
+            [courseware_extraction],
+            partition_key=PARTITION,
+            instance=instance,
+            resources={"courseware_io_manager": io_manager, "llm": FakeLLM()},
+        )
+        assert result.success
+
+    assert calls == ["record_extraction", "record_extraction"]
+    for table in ("courseware_claim_extraction", "courseware_claim"):
+        written = catalog.load_table(f"{database}.{table}")
+        assert written.scan().to_arrow().num_rows == 2
+        assert [field.name for field in written.spec().fields] == [
+            "part_courserun_readable_id",
+            "part_platform",
+        ]
+
+
+@pytest.mark.usefixtures("catalog")
+def test_extraction_check_fails_on_unquoted_evidence(tables):
+    tables["int__courseware__extraction_sources"] = sources("Lecture 1")
+
+    result = extract(tables, llm=FakeLLM(quote=False))
+
+    assert result.success
+    check = check_result(result, "evidence_verification_rate")
+    assert not check.passed
+    assert check.metadata["unverified"].value == 1
+
+
+@pytest.mark.usefixtures("catalog")
+def test_extraction_stores_successes_and_fails_the_run(tables, calls):
+    tables["int__courseware__extraction_sources"] = sources("Lecture 1", "Broken scope")
+
+    result = extract(tables)
+
+    assert not result.success
+    assert tables["courseware_claim_extraction"]["scope_title"].to_list() == [
+        "Lecture 1"
+    ]
+    # the broken scope was asked for twice (one retry), the good one once
+    assert calls.count("record_extraction") == 3
+
+    extract(tables)
+
+    assert calls.count("record_extraction") == 5
+
+
+def test_extraction_text_observes_one_run(tables):
+    tables["int__courseware__extraction_source_checksums"] = pl.DataFrame(
+        {
+            "platform": [PLATFORM, PLATFORM],
+            "courserun_readable_id": [COURSERUN, "course-v1:MITx+OTHER+1T"],
+            "source_count": [3, 4],
+            "text_checksum": ["abc", "def"],
+        }
+    )
+    instance = DagsterInstance.ephemeral()
+    instance.add_dynamic_partitions("courseware_courserun", [COURSERUN])
+
+    job = Definitions(
+        assets=[courseware_extraction_text],
+        jobs=[define_asset_job("observe", selection=[EXTRACTION_TEXT_KEY])],
+    ).resolve_job_def("observe")
+    result = job.execute_in_process(instance=instance, partition_key=PARTITION)
+
+    (observation,) = [
+        event.asset_observation_data.asset_observation
+        for event in result.all_events
+        if event.is_asset_observation
+    ]
+    assert observation.partition == PARTITION
+    assert observation.data_version == "abc"
+
+
+# ------------------------------------------------------------------------ sensor
+def test_sensor_registers_then_observes_then_rests(tables):
+    tables["int__courseware__extraction_source_checksums"] = pl.DataFrame(
+        {
+            "platform": [PLATFORM],
+            "courserun_readable_id": [COURSERUN],
+            "source_count": [3],
+            "text_checksum": ["abc"],
+        }
+    )
+    instance = DagsterInstance.ephemeral()
+
+    first = courseware_extraction_text_sensor(build_sensor_context(instance=instance))
+
+    assert first.asset_events == []
+    assert first.dynamic_partitions_requests[0].partition_keys == [COURSERUN]
+    assert first.cursor is None
+
+    instance.add_dynamic_partitions("courseware_courserun", [COURSERUN])
+    second = courseware_extraction_text_sensor(
+        build_sensor_context(instance=instance, cursor=first.cursor)
+    )
+
+    assert [
+        (event.partition, event.tags[sensor_module.DATA_VERSION_TAG])
+        for event in second.asset_events
+    ] == [(PARTITION, "abc")]
+    assert second.dynamic_partitions_requests == []
+
+    third = courseware_extraction_text_sensor(
+        build_sensor_context(instance=instance, cursor=second.cursor)
+    )
+
+    assert third.asset_events == []
+    assert third.cursor is None
+
+
+# -------------------------------------------------------------------- resolution
+def labels(*keys: str) -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "concept_label_key": list(keys),
+            "preferred_label": list(keys),
+            "concept_kind": ["concept"] * len(keys),
+            "description": [f"about {key}" for key in keys],
+            "mention_count": [1] * len(keys),
+            "courserun_count": [1] * len(keys),
+            "taught_mention_count": [1] * len(keys),
+        }
+    )
+
+
+def resolve(tables):
+    return materialize(
+        [courseware_resolution],
+        resources={
+            "io_manager": Warehouse(tables),
+            "llm": FakeLLM(),
+            "embedding_llm": FakeLLM(),
+        },
+    )
+
+
+@pytest.fixture
+def embedder(monkeypatch) -> None:
+    monkeypatch.setattr(
+        resolution_module, "build_embedding_client", lambda *_, **__: FakeEmbedder()
+    )
+
+
+@pytest.mark.usefixtures("embedder")
+def test_resolution_resolves_only_new_labels(tables, calls):
+    tables["int__courseware__concept_labels"] = labels("auc", "accuracy", "bias")
+
+    first = resolve(tables)
+
+    assert check_result(first, "resolution_churn").passed
+    assert tables["courseware_resolution_run"].height == 1
+    assert tables["courseware_concept_assignment"].height == 3
+    first_ids = dict(
+        tables["courseware_concept_assignment"]
+        .select("concept_label_key", "concept_id")
+        .iter_rows()
+    )
+
+    # nothing new: no adjudication and no new run
+    calls.clear()
+    resolve(tables)
+    assert calls == []
+    assert tables["courseware_resolution_run"].height == 1
+
+    tables["int__courseware__concept_labels"] = labels(
+        "auc", "accuracy", "bias", "boosting"
+    )
+    third = resolve(tables)
+
+    runs = tables["courseware_resolution_run"].sort("started_at")
+    assert runs["resolved_label_count"].to_list() == [3, 1]
+    latest = tables["courseware_concept_assignment"].filter(
+        pl.col("resolution_run_id") == runs["resolution_run_id"][-1]
+    )
+    assert {
+        key: concept_id
+        for key, concept_id in latest.select(
+            "concept_label_key", "concept_id"
+        ).iter_rows()
+        if key in first_ids
+    } == first_ids
+    churn = check_result(third, "resolution_churn")
+    assert churn.passed
+    assert churn.metadata["labels_in_both_runs"].value == 3
+    assert churn.metadata["labels_with_changed_id"].value == 0
+
+
+def test_assignment_churn_counts_changed_ids():
+    previous = pl.DataFrame(
+        {"concept_label_key": ["a", "b", "c"], "concept_id": ["1", "2", "3"]}
+    )
+    current = pl.DataFrame(
+        {"concept_label_key": ["a", "b", "d"], "concept_id": ["1", "1", "4"]}
+    )
+    assert assignment_churn(previous, current) == (2, 1)
+
+
+# ------------------------------------------------------------------- description
+def test_description_describes_each_concept_once(tables, calls):
+    tables["int__courseware__concept_description_inputs"] = pl.DataFrame(
+        {
+            "concept_id": ["c1", "c2"],
+            "label": ["auc", "bias"],
+            "concept_kind": ["concept", "concept"],
+            "description": ["used to rank models", "what a model gets wrong"],
+            "course_title": ["Supervised Learning", "Supervised Learning"],
+            "context_rank": [1, 1],
+        }
+    )
+    resources = {"io_manager": Warehouse(tables), "llm": FakeLLM()}
+
+    materialize([courseware_concept_description], resources=resources)
+    materialize([courseware_concept_description], resources=resources)
+
+    assert calls == ["record_descriptions"]
+    assert tables["courseware_concept_description"]["concept_id"].to_list() == [
+        "c1",
+        "c2",
+    ]
+
+
+# ------------------------------------------------------------------------- graph
+def test_graph_reports_cycles_and_skips_unchanged_input(tables):
+    names = ["a", "b", "c"]
+    tables["dim_concept"] = pl.DataFrame(
+        {
+            "concept_pk": names,
+            "preferred_label": names,
+            "lifecycle_status": ["active"] * 3,
+        }
+    )
+    tables["bridge_concept_relation"] = pl.DataFrame(
+        [
+            {
+                "from_concept_fk": source,
+                "to_concept_fk": target,
+                "relation": "builds_on",
+                "courserun_support": 2,
+                "direction_consistency": 1.0,
+                "co_taught_lift": None,
+                "is_adjudicated": False,
+                "has_co_assessed_evidence": False,
+            }
+            for source, target in (("a", "b"), ("b", "a"), ("b", "c"))
+        ],
+        schema_overrides={"co_taught_lift": pl.Float64},
+    )
+    resources = {"io_manager": Warehouse(tables)}
+
+    first = materialize([courseware_concept_graph], resources=resources)
+
+    check = check_result(first, "graph_cycles")
+    assert not check.passed
+    assert check.metadata["sequence_cycle_concepts"].value == ["a", "b"]
+    assert tables["courseware_concept_graph_run"].height == 1
+
+    second = materialize([courseware_concept_graph], resources=resources)
+
+    assert tables["courseware_concept_graph_run"].height == 1
+    assert not check_result(second, "graph_cycles").passed
+
+
+def test_courseware_definitions_load():
+    Definitions(
+        assets=[
+            courseware_extraction_text,
+            courseware_extraction,
+            courseware_resolution,
+            courseware_concept_description,
+            courseware_concept_graph,
+        ],
+        sensors=[courseware_extraction_text_sensor],
+        resources={
+            "io_manager": Warehouse({}),
+            "courseware_io_manager": Warehouse({}),
+            "llm": FakeLLM(),
+            "embedding_llm": FakeLLM(),
+        },
+    ).resolve_all_job_defs()

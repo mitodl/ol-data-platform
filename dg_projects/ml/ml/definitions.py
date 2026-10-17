@@ -10,6 +10,13 @@ from dagster import (
 from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
+from ml.assets.courseware_description import courseware_concept_description
+from ml.assets.courseware_extraction import (
+    courseware_extraction,
+    courseware_extraction_text,
+)
+from ml.assets.courseware_graph import courseware_concept_graph
+from ml.assets.courseware_resolution import courseware_resolution
 from ml.assets.feedback_category_proposals import feedback_category_proposals
 from ml.assets.feedback_cluster_assignment import feedback_cluster_assignment
 from ml.assets.feedback_cluster_identity import feedback_cluster_identity
@@ -21,6 +28,7 @@ from ml.assets.feedback_summaries import feedback_summaries
 from ml.assets.risk_probability import student_risk_probability
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import configure_opik_keycloak_auth
+from ml.sensors.courseware import courseware_extraction_text_sensor
 from ml.sensors.feedback_clusters import feedback_clusters_growth_sensor
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
@@ -102,6 +110,37 @@ feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
     default_status=DefaultSensorStatus.STOPPED,
 )
 
+# Extraction (per course run) and the corpus-wide steps after it. Every one of
+# them calls a model except the graph, and extraction re-runs for every course run
+# when its prompt or schema version changes, so this is enabled deliberately
+# (after courseware_extraction_text_sensor has observed the runs). Stopped by
+# default.
+courseware_automation_sensor = AutomationConditionSensorDefinition(
+    name="courseware_automation_sensor",
+    target=AssetSelection.assets(
+        courseware_extraction,
+        courseware_resolution,
+        courseware_concept_description,
+        courseware_concept_graph,
+    ),
+    default_status=DefaultSensorStatus.STOPPED,
+)
+
+iceberg_catalog = IcebergCatalogConfig(
+    properties={
+        "type": "glue",
+        "glue.region": "us-east-1",
+        # Write/commit via fsspec/s3fs (aiobotocore) instead of the
+        # default PyArrow S3 FileIO, whose native threads deadlock on
+        # K8s in handle_output and ignore the configured S3 timeouts.
+        # reader_override below only covers the Polars read path.
+        "py-io-impl": "pyiceberg.io.fsspec.FsspecFileIO",
+        "s3.region": "us-east-1",
+        "s3.connect-timeout": "10",
+        "s3.request-timeout": "120",
+    }
+)
+
 # Create unified definitions
 defs = Definitions(
     resources={
@@ -116,21 +155,18 @@ defs = Definitions(
         # force both assets to the same schema.
         "io_manager": PolarsIcebergIOManager(
             name="iceberg_io_manager",
-            config=IcebergCatalogConfig(
-                properties={
-                    "type": "glue",
-                    "glue.region": "us-east-1",
-                    # Write/commit via fsspec/s3fs (aiobotocore) instead of the
-                    # default PyArrow S3 FileIO, whose native threads deadlock on
-                    # K8s in handle_output and ignore the configured S3 timeouts.
-                    # reader_override above only covers the Polars read path.
-                    "py-io-impl": "pyiceberg.io.fsspec.FsspecFileIO",
-                    "s3.region": "us-east-1",
-                    "s3.connect-timeout": "10",
-                    "s3.request-timeout": "120",
-                }
-            ),
+            config=iceberg_catalog,
             reader_override="pyiceberg",
+        ),
+        # The same catalog for courseware extraction, whose partitions have a
+        # dynamic dimension. Dagster's default DbIOManager resolves a multi-partition
+        # key range without the instance, which a dynamic dimension needs, so
+        # writing fails; dagster-iceberg's custom one reads the run's keys directly.
+        "courseware_io_manager": PolarsIcebergIOManager(
+            name="iceberg_io_manager",
+            config=iceberg_catalog,
+            reader_override="pyiceberg",
+            db_io_manager="custom",
         ),
         "s3file_io_manager": default_file_object_io_manager(
             dagster_env=DAGSTER_ENV,
@@ -180,6 +216,11 @@ defs = Definitions(
             feedback_cluster_assignment,
             feedback_category_proposals,
             feedback_sentiment_eval,
+            courseware_extraction_text,
+            courseware_extraction,
+            courseware_resolution,
+            courseware_concept_description,
+            courseware_concept_graph,
         ]
     ),
     jobs=[
@@ -190,5 +231,10 @@ defs = Definitions(
         feedback_clusters_job,
         feedback_sentiment_eval_job,
     ],
-    sensors=[feedback_pipeline_automation_sensor, feedback_clusters_growth_sensor],
+    sensors=[
+        feedback_pipeline_automation_sensor,
+        feedback_clusters_growth_sensor,
+        courseware_extraction_text_sensor,
+        courseware_automation_sensor,
+    ],
 )
