@@ -696,3 +696,48 @@ def test_pairs_leave_out_labels_no_current_claim_uses():
     population, _ = samples.coarsen_strata(population)
     sample = samples.sample_pairs(inputs, population, size=100, seed=1)
     assert sample.height == population.height
+
+
+def test_clusters_leave_out_labels_no_current_claim_uses():
+    # x was a label of k1 in an earlier extraction; k3 has no current label at all
+    keys = ["a", "b", "c", "d", "e", "f"]
+    inputs = samples.GoldInputs(
+        claims=pl.DataFrame(),
+        evidence=pl.DataFrame(),
+        sources=pl.DataFrame(),
+        assignments=pl.DataFrame(
+            {
+                "concept_label_key": [*keys, "x", "y"],
+                "concept_id": ["k1", "k1", "k2", "k4", "k5", "k5", "k1", "k3"],
+            }
+        ),
+        registry=pl.DataFrame(
+            {
+                "concept_id": ["k1", "k2", "k3", "k4", "k5"],
+                "merged_into_concept_id": [None] * 5,
+            },
+            schema={"concept_id": pl.String, "merged_into_concept_id": pl.String},
+        ),
+        decisions=pl.DataFrame(),
+        labels=_labels(*keys),
+        embeddings=pl.DataFrame(
+            {
+                "concept_label_key": [*keys, "x", "y"],
+                "embedding": [[1.0, float(n)] for n in range(len(keys) + 2)],
+            }
+        ),
+        concepts=pl.DataFrame(
+            {"concept_pk": ["k1", "k2", "k4", "k5"], "preferred_label": list("ACDE")}
+        ),
+        relations=pl.DataFrame(),
+        matcher=LabelMatcher(),
+    )
+    population = samples.clusters_population(inputs)
+    assert population.select("item_id", "members", "stratum").to_dicts() == [
+        {"item_id": "k1", "members": ["a", "b"], "stratum": "multi"},
+        {"item_id": "k2", "members": ["c"], "stratum": "singleton"},
+        {"item_id": "k4", "members": ["d"], "stratum": "singleton"},
+        {"item_id": "k5", "members": ["e", "f"], "stratum": "multi"},
+    ]
+    sample = samples.sample_clusters(inputs, population, size=10, seed=1)
+    assert sorted(sample["item_id"]) == ["k1", "k2", "k4", "k5"]

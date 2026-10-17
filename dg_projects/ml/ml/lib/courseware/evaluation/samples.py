@@ -809,8 +809,7 @@ def pairs_population(inputs: GoldInputs) -> pl.DataFrame:
     )
     members: dict[str, list[str]] = defaultdict(list)
     for key, concept in concept_of.items():
-        if key in current:
-            members[concept].append(key)
+        members[concept].append(key)
     merged_only = {
         pair
         for keys in members.values()
@@ -912,7 +911,11 @@ def sample_pairs(
 
 
 def _active_assignments(inputs: GoldInputs) -> pl.DataFrame:
-    """Follow merged concept ids in the assignments to their survivors."""
+    """Return the current labels' assignments, merged ids followed to survivors.
+
+    The newest run's assignments carry every label key resolution has seen, so a
+    label no current claim uses (absent from inputs.labels) is left out.
+    """
     redirects = {
         row["concept_id"]: row["merged_into_concept_id"]
         for row in inputs.registry.iter_rows(named=True)
@@ -924,9 +927,9 @@ def _active_assignments(inputs: GoldInputs) -> pl.DataFrame:
             concept_id = redirects[concept_id]
         return concept_id
 
-    return inputs.assignments.with_columns(
-        pl.col("concept_id").map_elements(survivor, return_dtype=pl.String)
-    )
+    return inputs.assignments.filter(
+        pl.col("concept_label_key").is_in(set(inputs.labels["concept_label_key"]))
+    ).with_columns(pl.col("concept_id").map_elements(survivor, return_dtype=pl.String))
 
 
 def clusters_population(inputs: GoldInputs) -> pl.DataFrame:
