@@ -29,14 +29,16 @@
       context    the course description and the syllabus pages, with what they link
       materials  documents no page links
 
-    Answer keys are left out: a page or resource whose learning resource types name
-    solutions, whose file name carries a sol, soln or ans token, whose title reads as an
-    answer key ("Solutions to", "Problem Set 3 Solutions", "soln"), or that says
-    solution or answer next to an assessment word (exam, problem, quiz), and what only
-    such a page links. A solution page with child pages keeps them as a unit, unread
-    itself. Quiz solutions, correctness icons and "View/hide answer" blocks are cut from
-    page HTML before its links are read. A document linked from more than one scope is
-    read once, in the first unit.
+    Answer keys are left out: a resource whose learning resource types name solutions,
+    that courseware_answer_key reads as one from its file name, title and opening text,
+    that a table links in a column headed Solutions (or Answers, Key), or whose text is
+    the same as such a resource's; a page the same way by its name and title, except one
+    that holds problems and solutions together ("Problem Sets and Solutions"), whose
+    solution resources go instead. What only a solution page links is not read, and not
+    counted as linked for materials. A solution page with child pages keeps them as a
+    unit, unread itself. Quiz solutions, correctness icons and answer, hint and sample
+    answer reveal blocks are cut from page HTML before its links are read. A document
+    linked from more than one scope is read once, in the first unit.
 
     var('courseware_ocw_courses') limits OCW to a list of course slugs. Setting either
     selector alone builds only what it selects.
@@ -53,10 +55,8 @@
 {% set ocw_skipped_sections = ['calendar', 'related-resources', 'instructor-insights', 'download', 'resource-index'] %}
 {% set ocw_transcript_extensions = ['.srt', '.vtt', '.webvtt'] %}
 {% set ocw_resource_href = "'href=\"/(courses/[^/\"]+/resources/[^/\"#?]+)'" %}
-{# "Solutions" alone names chemistry and ODE topics too, so the weak signals count only with an assessment word #}
-{% set ocw_solution_slug = "'(^|[^a-z])(sols?|solns?|ans|answers?)([^a-z]|$)|[0-9_-]sol(ns?|s)?(pdf)?([0-9_-]|$)|[0-9][_-]?solutions?([^a-z]|$)|solutions?[_-][0-9]|(ps|pset|hw|rec|exam|quiz)sol'" %}
-{% set ocw_solution_title = "'(^|[^a-z])(solns?|answer keys?)([^a-z]|$)|(^|[^a-z])solutions? (to|for|key)([^a-z]|$)|^solutions?([^a-z]|$)|\\(solutions?\\)|[0-9]:? solutions?( |$)|solutions? #?[0-9]'" %}
-{% set ocw_assessment_words = "'problem|pset|ps[0-9]|homework|hw[0-9 _-]|exam|quiz|midterm|final|assignment|assn|recitation|rec[0-9]|exercise|question|practice|review|key|tutorial|lab[0-9 _-]|test|worksheet|studio|video|in-class|drill|sample|instructor|qu[0-9]'" %}
+{# a table column of answer keys: "Solutions", "Exam Solutions", "Answer Key"; not "Problem Sets and Solutions" #}
+{% set ocw_solution_column = "'^((problem sets?|psets?|exams?|quiz(zes)?|labs?|homeworks?|assignments?|practice exams?|exam review|sample|recitations?|midterms?|finals?|final exam) )?(solutions?|answers?|answer keys?|keys?|solns?)$'" %}
 {% set ocw_table_cell = "'(?s)<t[dh](?:\\s[^>]*)?>(.*?)</t[dh]>'" %}
 
 with content as (
@@ -323,7 +323,17 @@ with content as (
         , files.content
         , coalesce(files.content_tags, '') as content_tags
         , lower(coalesce(files.title, '')) as title_lower
-        , {{ regexp_extract_or_null('files.content_file_key', "'([^/]+)/$'", 1) }} as slug
+        -- the resource's directory name, without the -1 OCW adds to a copy or a _pdf suffix
+        , {{ regexp_replace_all(
+            regexp_replace_all(regexp_extract_or_null('files.content_file_key', "'([^/]+)/$'", 1), "'-[0-9]+$'", "''")
+            , "'[_-]pdf$'", "''"
+        ) }} as file_name
+        , case
+            when files.content_type = 'page'
+                then {{ courseware_text_head(regexp_replace_all('substr(files.content, 1, 3000)', "'<[^>]*>'", "' '")) }}
+            else {{ courseware_text_head('files.content') }}
+        end as text_head
+        , {{ courseware_answer_markers('files.content') }} as answer_markers
     from {{ ref('int__ocw__content_files') }} as files
     inner join ocw_courses
         on files.course_slug = ocw_courses.course_slug
@@ -341,24 +351,33 @@ with content as (
         , {{ regexp_extract_or_null('content_file_key', "'/pages/(.+)$'", 1) }} as page_path
         , {{ regexp_extract_or_null('content_file_key', "'/pages/([^/]+)/'", 1) }} as section
         , {{ regexp_replace_all('content_file_key', "'[^/]+/$'", "''") }} as parent_key
-        , content_tags like '%Solutions%'
-        or (
-            -- a lecture video titled "... Iterative Solutions" is not an answer key
-            content_type != 'video'
-            and coalesce(file_extension, '') not in ('{{ ocw_transcript_extensions | join("', '") }}')
-            and content_tags not like '%Videos%'
-            and not {{ regexp_like('title_lower', "'(transcript|captions)$'") }}
-            and (
-                {{ regexp_like('slug', ocw_solution_slug) }}
-                or {{ regexp_like('title_lower', ocw_solution_title) }}
-                or (
-                    (
-                        {{ regexp_like('title_lower', "'(^|[^a-z])(solutions?|answers?)([^a-z]|$)'") }}
-                        or {{ regexp_like('slug', "'solution|soln|answer|sol[0-9_-]|[0-9_-]sol'") }}
+        , (
+            content_tags like '%Solutions%'
+            or (
+                -- a lecture video titled "... Iterative Solutions" is not an answer key
+                content_type != 'video'
+                and coalesce(file_extension, '') not in ('{{ ocw_transcript_extensions | join("', '") }}')
+                and content_tags not like '%Videos%'
+                and not {{ regexp_like('title_lower', "'(transcript|captions)$'") }}
+                and (
+                    -- a section page's opening lists its problem sets and their solutions
+                    {{ courseware_answer_key(
+                        'file_name', 'title_lower', "case when content_type != 'page' then text_head end", 'answer_markers'
+                    ) }}
+                    -- a page of "Answer:" entries on homework, e.g. virtual office hours
+                    or (
+                        content_type = 'page'
+                        and coalesce(answer_markers, 0) >= 3
+                        and {{ regexp_like('text_head', "'problem sets?|psets?|homework|exams?|quiz|midterm'") }}
                     )
-                    and {{ regexp_like("concat(title_lower, ' ', slug)", ocw_assessment_words) }}
                 )
             )
+        )
+        -- a page of problems and their solutions keeps its problems; its solution
+        -- resources are left out on their own
+        and not (
+            content_type = 'page'
+            and {{ regexp_like("concat(title_lower, ' ', file_name)", "'(and|&|with|/)[ _-]solutions?|solutions?[ _-](and|&)'") }}
         ) as is_solution
         , case
             when content_type = 'page' then {{ courseware_ocw_answers_removed('content') }}
@@ -413,29 +432,6 @@ with content as (
     where page_role = 'unit'
 )
 
-, ocw_resources as (
-    select
-        courserun_readable_id
-        , content_file_key
-        , content_type
-        , file_extension
-        , title
-        , body as resource_text
-        , case
-            when
-                content_type = 'video'
-                or file_extension in ('{{ ocw_transcript_extensions | join("', '") }}')
-                or lower(title) like '%transcript'
-                then 'video_transcript'
-            else 'document'
-        end as source_kind
-    from ocw_files
-    where
-        content_type != 'page'
-        and not is_solution
-        and body is not null
-)
-
 , ocw_page_hrefs as (
     select
         courserun_readable_id
@@ -457,21 +453,20 @@ with content as (
     cross join {{ unnest_sequence(array_length('page_hrefs.hrefs'), 'links', 'link_index') }}
 )
 
--- Tables on top-level section pages and the calendar, one row per table row. A row
--- whose first cell is a number, in a table whose first header names sessions, lectures
--- or weeks, is that session's row.
+-- Every page's tables, one row per table row. On top-level section pages and the
+-- calendar, a row whose first cell is a number, in a table whose first header names
+-- sessions, lectures or weeks, is that session's row.
 , ocw_row_pages as (
     select
         pages.courserun_readable_id
         , pages.page_key
         , pages.section
+        , coalesce(unit_pages.is_flat_section, false) or pages.section = 'calendar' as reads_sessions
         , {{ regexp_split('pages.body', "'<table'") }} as tables
     from ocw_pages as pages
     left join ocw_unit_pages as unit_pages
         on pages.page_key = unit_pages.page_key
-    where
-        pages.body is not null
-        and (coalesce(unit_pages.is_flat_section, false) or pages.section = 'calendar')
+    where pages.body like '%<table%'
 )
 
 , ocw_tables as (
@@ -479,6 +474,7 @@ with content as (
         row_pages.courserun_readable_id
         , row_pages.page_key
         , row_pages.section
+        , row_pages.reads_sessions
         , page_tables.table_index
         , {{ regexp_split(
             "split_part(" ~ element_at_array('row_pages.tables', 'page_tables.table_index') ~ ", '</table>', 1)"
@@ -494,6 +490,7 @@ with content as (
         tables.courserun_readable_id
         , tables.page_key
         , tables.section
+        , tables.reads_sessions
         , tables.table_index
         , table_rows.row_index
         , {{ element_at_array('tables.table_rows', 'table_rows.row_index') }} as row_html
@@ -502,6 +499,111 @@ with content as (
     from ocw_tables as tables
     cross join {{ unnest_sequence(array_length('tables.table_rows'), 'table_rows', 'row_index') }}
     where table_rows.row_index > 1
+)
+
+-- the header cells of each table's first row, and the columns among them that hold
+-- answer keys
+, ocw_table_headers as (
+    select
+        courserun_readable_id
+        , page_key
+        , table_index
+        , {{ regexp_extract_all(element_at_array('table_rows', 2), ocw_table_cell, 1) }} as header_cells
+    from ocw_tables
+    where {{ array_length('table_rows') }} > 1
+)
+
+, ocw_table_columns as (
+    select
+        headers.courserun_readable_id
+        , headers.page_key
+        , headers.table_index
+        , {{ array_length('headers.header_cells') }} as column_count
+        , columns.column_index
+        , lower({{ courseware_html_text(element_at_array('headers.header_cells', 'columns.column_index')) }})
+            as header_text
+    from ocw_table_headers as headers
+    cross join {{ unnest_sequence(array_length('headers.header_cells'), 'columns', 'column_index') }}
+    where {{ array_length('headers.header_cells') }} > 0
+)
+
+-- a row whose cells line up with the header's; rows spanning columns are left out
+, ocw_solution_cells as (
+    select
+        table_rows.courserun_readable_id
+        , {{ regexp_extract_all(
+            element_at_array(regexp_extract_all('table_rows.row_html', ocw_table_cell, 1), 'columns.column_index')
+            , ocw_resource_href
+            , 1
+        ) }} as hrefs
+    from ocw_table_rows as table_rows
+    inner join ocw_table_columns as columns
+        on
+            table_rows.page_key = columns.page_key
+            and table_rows.table_index = columns.table_index
+    where
+        table_rows.row_index > 2
+        and {{ regexp_like("replace(columns.header_text, '&amp;', '&')", ocw_solution_column) }}
+        and {{ array_length(regexp_extract_all('table_rows.row_html', ocw_table_cell, 1)) }} = columns.column_count
+)
+
+, ocw_solution_resources as (
+    select distinct
+        solution_cells.courserun_readable_id
+        , concat({{ element_at_array('solution_cells.hrefs', 'links.link_index') }}, '/') as content_file_key
+    from ocw_solution_cells as solution_cells
+    cross join {{ unnest_sequence(array_length('solution_cells.hrefs'), 'links', 'link_index') }}
+    where {{ array_length('solution_cells.hrefs') }} > 0
+
+    union
+
+    select
+        courserun_readable_id
+        , content_file_key
+    from ocw_files
+    where content_type != 'page' and is_solution
+)
+
+-- OCW publishes one file under several resources; a copy of a key is a key
+, ocw_solution_texts as (
+    select distinct
+        files.courserun_readable_id
+        , {{ dbt.hash('files.body') }} as text_hash
+    from ocw_files as files
+    inner join ocw_solution_resources as solution_resources
+        on files.content_file_key = solution_resources.content_file_key
+    -- a scan with no text layer reads as its file name, which a problem set can share
+    where length(files.body) > 200
+)
+
+, ocw_resources as (
+    select
+        files.courserun_readable_id
+        , files.content_file_key
+        , files.content_type
+        , files.file_extension
+        , files.title
+        , files.body as resource_text
+        , case
+            when
+                files.content_type = 'video'
+                or files.file_extension in ('{{ ocw_transcript_extensions | join("', '") }}')
+                or lower(files.title) like '%transcript'
+                then 'video_transcript'
+            else 'document'
+        end as source_kind
+    from ocw_files as files
+    left join ocw_solution_resources as solution_resources
+        on files.content_file_key = solution_resources.content_file_key
+    left join ocw_solution_texts as solution_texts
+        on
+            files.courserun_readable_id = solution_texts.courserun_readable_id
+            and {{ dbt.hash('files.body') }} = solution_texts.text_hash
+    where
+        files.content_type != 'page'
+        and files.body is not null
+        and solution_resources.content_file_key is null
+        and solution_texts.text_hash is null
 )
 
 , ocw_table_cells as (
@@ -518,6 +620,7 @@ with content as (
         , {{ courseware_html_text(element_at_array(regexp_extract_all('row_html', ocw_table_cell, 1), 2)) }}
             as second_cell_text
     from ocw_table_rows
+    where reads_sessions
 )
 
 , ocw_session_rows as (
@@ -818,7 +921,7 @@ with content as (
     left join (
         select distinct target_key
         from ocw_page_links
-        where page_role != 'skipped'
+        where page_role not in ('skipped', 'solution')
     ) as linked
         on resources.content_file_key = linked.target_key
     left join (select distinct target_key from ocw_session_links) as session_linked
