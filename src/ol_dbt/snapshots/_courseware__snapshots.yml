@@ -22,6 +22,7 @@ snapshots:
     check_cols:
     - courserun_support
     - scope_support
+    - course_scope_support
     - reverse_courserun_support
     - reverse_scope_support
     - direction_consistency
@@ -52,6 +53,9 @@ snapshots:
       version
   - name: scope_support
     description: int, units across those runs that showed the edge
+  - name: course_scope_support
+    description: int, course relations only, scope_support with each course's reruns
+      counted once
   - name: reverse_courserun_support
     description: int, builds_on only, course runs showing the opposite direction
   - name: reverse_scope_support
