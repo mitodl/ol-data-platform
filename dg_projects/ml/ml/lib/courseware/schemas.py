@@ -6,7 +6,8 @@ numeric constraints, and every field is required (nullable where it can be absen
 """
 
 import json
-from typing import Any, Literal
+from types import UnionType
+from typing import Any, Literal, Union, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -15,6 +16,16 @@ BloomProcess = Literal[
     "remember", "understand", "apply", "analyze", "evaluate", "create"
 ]
 KnowledgeType = Literal["factual", "conceptual", "procedural", "metacognitive"]
+
+
+def _takes_container(annotation: Any) -> bool:
+    """Whether a field accepts a list, a dict or a nested model."""
+    origin = get_origin(annotation)
+    if origin in (Union, UnionType):
+        return any(_takes_container(arg) for arg in get_args(annotation))
+    if origin in (list, dict):
+        return True
+    return isinstance(annotation, type) and issubclass(annotation, BaseModel)
 
 
 class Strict(BaseModel):
@@ -37,6 +48,10 @@ class Strict(BaseModel):
             return data
         decoded = dict(data)
         for key, value in data.items():
+            # a string field keeps its text even when that text parses as JSON
+            field = cls.model_fields.get(key)
+            if field is None or not _takes_container(field.annotation):
+                continue
             if isinstance(value, str) and value.lstrip()[:1] in ("[", "{"):
                 try:
                     decoded[key] = json.loads(value)

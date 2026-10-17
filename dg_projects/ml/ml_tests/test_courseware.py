@@ -182,3 +182,19 @@ def test_extraction_ignores_extra_keys_the_model_adds():
     )
     assert extraction.audience[0].evidence[0].source_id == "S01"
     assert ScopeExtraction.model_json_schema()["additionalProperties"] is False
+
+
+def test_string_fields_keep_text_that_parses_as_json():
+    evidence = Evidence.model_validate({"source_id": "S01", "passage": "[1, 2, 3]"})
+    assert evidence.passage == "[1, 2, 3]"
+    claim = ConceptClaim.model_validate(
+        {
+            "label": '{"a": 1}',
+            "description": "A dict literal.",
+            "concept_kind": "concept",
+            "teaching_status": "taught",
+            "evidence": '[{"source_id": "S01", "passage": "a b c"}]',
+        }
+    )
+    assert claim.label == '{"a": 1}'
+    assert claim.evidence == [Evidence(source_id="S01", passage="a b c")]
