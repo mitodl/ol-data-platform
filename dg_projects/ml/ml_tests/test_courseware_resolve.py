@@ -255,3 +255,13 @@ def test_relations_of_a_deprecated_concept_are_dropped(verdicts):
     assert first.relations.height == 1
     rebuilt = run(labels("decision tree"), state_from(first), rebuild=True)
     assert rebuilt.relations.height == 0
+
+
+@pytest.mark.usefixtures("verdicts")
+def test_an_empty_label_list_resolves_to_nothing():
+    first = run(labels("auc", "pandas"))
+    empty = labels().cast({"mention_count": pl.Int64})
+    second = run(empty, state_from(first))
+    assert second.assignments.height == 0
+    assert second.registry.height == first.registry.height
+    assert second.run["concepts_minted"][0] == 0

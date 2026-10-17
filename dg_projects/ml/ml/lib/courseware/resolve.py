@@ -278,6 +278,8 @@ def embed_labels(
 
     :returns: an L2-normalized matrix in `labels` row order, and the new cache rows
     """
+    if labels.is_empty():
+        return np.zeros((0, 0), dtype=np.float32), pl.DataFrame(schema=EMBEDDING_SCHEMA)
     texts = {
         row["concept_label_key"]: _label_text(row)
         for row in labels.iter_rows(named=True)
