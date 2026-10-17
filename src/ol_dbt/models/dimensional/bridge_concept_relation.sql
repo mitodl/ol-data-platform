@@ -16,14 +16,26 @@
     deciding one:
       courserun_support         distinct course runs with course evidence
       reverse_courserun_support builds_on only: runs where the opposite direction
-                                was observed; direction_consistency is
-                                support / (support + reverse)
+                                was observed
+      reverse_scope_support     builds_on only: units where it was observed;
+                                direction_consistency is scope_support /
+                                (scope_support + reverse_scope_support)
       co_taught_lift            complements only: observed co-taught unit count
                                 over the count expected if the two were taught
                                 independently across all taught units
     first_observed_at and last_observed_at show how the edge has evolved; an edge
     whose evidence disappears (an extraction version replaced) drops out on the
     next build.
+
+    builds_on is the one relation this model publishes by rule, because one unit's
+    extraction is one model call and LLMs over-predict prerequisites. An edge is
+    published (is_published) when scope_support reaches
+    courseware_prerequisite_min_scope_support or courserun_support reaches
+    courseware_prerequisite_min_courserun_support, and direction_consistency reaches
+    courseware_prerequisite_min_direction_consistency, so only the dominant direction
+    of a contested pair can publish. Unpublished edges keep their rows, with
+    unpublished_reason, for review. Every other relation is is_published, and its
+    consumers apply their own thresholds to the support columns as before.
 #}
 with evidence as (
     select * from {{ ref('int__courseware__concept_relation_evidence') }}
@@ -82,6 +94,39 @@ with evidence as (
     group by from_concept_id, to_concept_id, relation
 )
 
+, builds_on_direction as (
+    select
+        edges.from_concept_id
+        , edges.to_concept_id
+        , coalesce(reverse_edges.scope_support, 0) as reverse_scope_support
+        , cast(edges.scope_support as double)
+        / (edges.scope_support + coalesce(reverse_edges.scope_support, 0)) as direction_consistency
+        , edges.scope_support >= {{ var('courseware_prerequisite_min_scope_support') }}
+        or edges.courserun_support >= {{ var('courseware_prerequisite_min_courserun_support') }}
+        as has_min_support
+    from edges
+    left join edges as reverse_edges
+        on
+            reverse_edges.relation = 'builds_on'
+            and edges.from_concept_id = reverse_edges.to_concept_id
+            and edges.to_concept_id = reverse_edges.from_concept_id
+    where edges.relation = 'builds_on'
+)
+
+, builds_on_publication as (
+    select
+        from_concept_id
+        , to_concept_id
+        , reverse_scope_support
+        , direction_consistency
+        , case
+            when not has_min_support then 'insufficient_support'
+            when direction_consistency < {{ var('courseware_prerequisite_min_direction_consistency') }}
+                then 'contested_direction'
+        end as unpublished_reason
+    from builds_on_direction
+)
+
 select
     {{ dbt_utils.generate_surrogate_key(['edges.from_concept_id', 'edges.to_concept_id', 'edges.relation']) }}
     as concept_relation_pk
@@ -98,11 +143,8 @@ select
     , edges.courserun_support
     , edges.scope_support
     , coalesce(reverse_edges.courserun_support, 0) as reverse_courserun_support
-    , case
-        when edges.relation = 'builds_on'
-            then cast(edges.courserun_support as double)
-            / nullif(edges.courserun_support + coalesce(reverse_edges.courserun_support, 0), 0)
-    end as direction_consistency
+    , builds_on_publication.reverse_scope_support
+    , builds_on_publication.direction_consistency
     , case
         when edges.relation = 'complements' and edges.co_taught_unit_count > 0
             then edges.co_taught_unit_count * cast(unit_totals.taught_unit_count as double)
@@ -115,6 +157,8 @@ select
     , edges.first_observed_at
     , edges.last_observed_at
     , 'proposed' as review_status
+    , builds_on_publication.unpublished_reason is null as is_published
+    , builds_on_publication.unpublished_reason
 from edges
 cross join unit_totals
 left join edges as reverse_edges
@@ -123,6 +167,11 @@ left join edges as reverse_edges
         and reverse_edges.relation = 'builds_on'
         and edges.from_concept_id = reverse_edges.to_concept_id
         and edges.to_concept_id = reverse_edges.from_concept_id
+left join builds_on_publication
+    on
+        edges.relation = 'builds_on'
+        and edges.from_concept_id = builds_on_publication.from_concept_id
+        and edges.to_concept_id = builds_on_publication.to_concept_id
 left join concept_unit_counts as from_units
     on edges.from_concept_id = from_units.concept_id
 left join concept_unit_counts as to_units
