@@ -140,8 +140,13 @@ def extraction_input(message: str, *, quote: bool = True) -> dict[str, Any] | No
     }
 
 
-def verdicts_input(listing: str) -> dict[str, Any]:
-    """Every candidate distinct, so each label becomes its own concept."""
+def verdicts_input(listing: str, fail_label: str | None) -> dict[str, Any] | None:
+    """Every candidate distinct, so each label becomes its own concept.
+
+    A batch with fail_label among its queries gets no tool call, so it fails.
+    """
+    if fail_label and re.search(rf"^Q\d+: {fail_label} \|", listing, re.MULTILINE):
+        return None
     queries: list[dict[str, Any]] = []
     for line in listing.splitlines():
         if line.startswith("Q"):
@@ -154,8 +159,15 @@ def verdicts_input(listing: str) -> dict[str, Any]:
     return {"queries": queries}
 
 
-def descriptions_input(listing: str) -> dict[str, Any]:
-    ids = [int(match) for match in re.findall(r"^(\d+) \|", listing, re.MULTILINE)]
+def descriptions_input(listing: str, fail_label: str | None) -> dict[str, Any]:
+    """Describe every entry except the one labelled fail_label."""
+    ids = [
+        int(index)
+        for index, labels in re.findall(
+            r"^(\d+) \| labels: (.+?) \|", listing, re.MULTILINE
+        )
+        if labels != fail_label
+    ]
     return {
         "descriptions": [
             {
@@ -170,9 +182,12 @@ def descriptions_input(listing: str) -> dict[str, Any]:
 
 
 class FakeMessages:
-    def __init__(self, calls: list[str], *, quote: bool) -> None:
+    def __init__(
+        self, calls: list[str], *, quote: bool, fail_label: str | None
+    ) -> None:
         self.calls = calls
         self.quote = quote
+        self.fail_label = fail_label
 
     def stream(self, **request: Any) -> Iterator[SimpleNamespace]:
         tool = request["tools"][0]["name"]
@@ -180,8 +195,8 @@ class FakeMessages:
         content = request["messages"][0]["content"]
         tool_input = {
             "record_extraction": lambda: extraction_input(content, quote=self.quote),
-            "record_verdicts": lambda: verdicts_input(content),
-            "record_descriptions": lambda: descriptions_input(content),
+            "record_verdicts": lambda: verdicts_input(content, self.fail_label),
+            "record_descriptions": lambda: descriptions_input(content, self.fail_label),
         }[tool]()
         stream = MagicMock()
         stream.__enter__.return_value.get_final_message.return_value = _response(
@@ -195,10 +210,13 @@ CALLS: list[str] = []
 
 class FakeLLM(LLMClientFactory):
     quote: bool = True
+    fail_label: str | None = None
 
     def get_client(self) -> Anthropic:
         client = Anthropic(api_key="test")  # pragma: allowlist secret
-        client.messages = FakeMessages(CALLS, quote=self.quote)
+        client.messages = FakeMessages(
+            CALLS, quote=self.quote, fail_label=self.fail_label
+        )
         return client
 
 
@@ -564,15 +582,35 @@ def labels(*keys: str) -> pl.DataFrame:
     )
 
 
-def resolve(tables):
+def resolve(
+    tables,
+    *,
+    llm: LLMClientFactory | None = None,
+    rebuild: bool = False,
+    instance: DagsterInstance | None = None,
+):
+    (hooked,) = with_failure_hooks([courseware_resolution])
     return materialize(
-        [courseware_resolution],
+        [hooked],
+        instance=instance,
         resources={
             "io_manager": Warehouse(tables),
-            "llm": FakeLLM(),
+            "llm": llm or FakeLLM(),
             "embedding_llm": FakeLLM(),
         },
+        run_config={"ops": {"courseware_resolution": {"config": {"rebuild": rebuild}}}},
+        raise_on_error=False,
     )
+
+
+def failure_class(result) -> str:
+    error = next(
+        event.step_failure_data.error
+        for event in result.all_events
+        if event.is_step_failure
+    )
+    assert error is not None
+    return error.cls_name
 
 
 @pytest.fixture
@@ -626,6 +664,71 @@ def test_resolution_resolves_only_new_labels(tables, calls):
     assert churn.metadata["labels_with_changed_id"].value == 0
 
 
+@pytest.mark.usefixtures("embedder")
+def test_resolution_stores_what_succeeded_and_fails_on_a_failed_batch(tables, calls):
+    tables["int__courseware__concept_labels"] = labels("auc", "accuracy", "bias")
+    resolve(tables)
+    tables["int__courseware__concept_labels"] = labels(
+        "auc", "accuracy", "bias", "boosting"
+    )
+    instance = DagsterInstance.ephemeral()
+
+    failed = resolve(tables, llm=FakeLLM(fail_label="boosting"), instance=instance)
+
+    assert not failed.success
+    assert failure_class(failed) == "AdjudicationFailure"
+    run = instance.get_run_by_id(failed.run_id)
+    assert run is not None
+    assert run.tags[RETRY_ON_ASSET_OR_OP_FAILURE_TAG] == "false"
+    latest = tables["courseware_resolution_run"].sort("started_at").row(-1, named=True)
+    assert (latest["failed_batch_count"], latest["failed_label_count"]) == (1, 1)
+    assert "boosting" not in set(
+        tables["courseware_concept_assignment"].filter(
+            pl.col("resolution_run_id") == latest["resolution_run_id"]
+        )["concept_label_key"]
+    )
+    materialization = next(
+        event
+        for event in failed.get_asset_materialization_events()
+        if event.asset_key.path[-1] == "courseware_resolution_run"
+    )
+    assert materialization.materialization.metadata["unassigned_label_count"].value == 1
+
+    # the retry asks only for the label still without a concept
+    calls.clear()
+    retried = resolve(tables)
+
+    assert retried.success
+    assert calls == ["record_verdicts"]
+    latest = tables["courseware_resolution_run"].sort("started_at").row(-1, named=True)
+    assert latest["resolved_label_count"] == 1
+
+
+@pytest.mark.usefixtures("embedder")
+def test_a_failed_rebuild_batch_keeps_concepts_and_leaves_none_unassigned(tables):
+    tables["int__courseware__concept_labels"] = labels("auc", "accuracy", "bias")
+    resolve(tables)
+
+    rebuilt = resolve(tables, llm=FakeLLM(fail_label="auc"), rebuild=True)
+
+    assert failure_class(rebuilt) == "AdjudicationFailure"
+    materialization = next(
+        event
+        for event in rebuilt.get_asset_materialization_events()
+        if event.asset_key.path[-1] == "courseware_resolution_run"
+    )
+    metadata = materialization.materialization.metadata
+    assert metadata["failed_label_count"].value == 3
+    # the failed labels kept their concepts, so nothing is left for a retry
+    assert metadata["unassigned_label_count"].value == 0
+    assert (
+        check_result(rebuilt, "resolution_churn")
+        .metadata["labels_with_changed_id"]
+        .value
+        == 0
+    )
+
+
 def test_assignment_churn_counts_changed_ids():
     previous = pl.DataFrame(
         {"concept_label_key": ["a", "b", "c"], "concept_id": ["1", "2", "3"]}
@@ -656,6 +759,49 @@ def test_description_describes_each_concept_once(tables, calls):
     assert calls == ["record_descriptions"]
     # nothing new, so no output and no empty snapshot
     assert second.get_asset_materialization_events() == []
+    assert tables["courseware_concept_description"]["concept_id"].to_list() == [
+        "c1",
+        "c2",
+    ]
+
+
+def test_description_stores_what_succeeded_and_fails_on_missing_ones(tables, calls):
+    tables["int__courseware__concept_description_inputs"] = pl.DataFrame(
+        {
+            "concept_id": ["c1", "c2"],
+            "label": ["auc", "bias"],
+            "concept_kind": ["concept", "concept"],
+            "description": ["used to rank models", "what a model gets wrong"],
+            "course_title": ["Supervised Learning", "Supervised Learning"],
+            "context_rank": [1, 1],
+        }
+    )
+    instance = DagsterInstance.ephemeral()
+    (hooked,) = with_failure_hooks([courseware_concept_description])
+
+    failed = materialize(
+        [hooked],
+        instance=instance,
+        resources={
+            "io_manager": Warehouse(tables),
+            "llm": FakeLLM(fail_label="bias"),
+        },
+        raise_on_error=False,
+    )
+
+    assert failure_class(failed) == "DescriptionFailure"
+    run = instance.get_run_by_id(failed.run_id)
+    assert run is not None
+    assert run.tags[RETRY_ON_ASSET_OR_OP_FAILURE_TAG] == "false"
+    assert tables["courseware_concept_description"]["concept_id"].to_list() == ["c1"]
+
+    calls.clear()
+    materialize(
+        [courseware_concept_description],
+        resources={"io_manager": Warehouse(tables), "llm": FakeLLM()},
+    )
+
+    assert calls == ["record_descriptions"]
     assert tables["courseware_concept_description"]["concept_id"].to_list() == [
         "c1",
         "c2",

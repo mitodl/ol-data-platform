@@ -188,6 +188,11 @@ sources:
       description: int, labels the run adjudicated
     - name: adjudication_calls
       description: int, model calls made
+    - name: failed_batch_count
+      description: int, adjudication calls that failed; their labels are retried by
+        the next run (a rebuild keeps their previous concept)
+    - name: failed_label_count
+      description: int, labels in the failed calls
     - name: concepts_minted
       description: int, new concept ids
     - name: concepts_merged

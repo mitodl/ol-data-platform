@@ -158,6 +158,31 @@ def description_version(model_id: str, effort: str) -> str:
     ).hexdigest()[:12]
 
 
+def pending_concepts(
+    rows: pl.DataFrame, existing: pl.DataFrame | None, version: str
+) -> list[dict[str, Any]]:
+    """Return the concepts whose current inputs have no description at version.
+
+    :param rows: int__courseware__concept_description_inputs rows
+    :param existing: descriptions already stored
+    :param version: description_version for the run's model and effort
+    :returns: one entry per concept to describe, with its input_checksum
+    :rtype: list[dict[str, Any]]
+    """
+    done: set[tuple[str, str]] = set()
+    if existing is not None:
+        done = set(
+            existing.filter(pl.col("description_version") == version)
+            .select("concept_id", "input_checksum")
+            .iter_rows()
+        )
+    return [
+        entry
+        for entry in _concept_inputs(rows)
+        if (entry["concept_id"], entry["input_checksum"]) not in done
+    ]
+
+
 def describe_concepts(  # noqa: PLR0913
     rows: pl.DataFrame,
     client: Anthropic | AnthropicBedrock,
@@ -179,18 +204,7 @@ def describe_concepts(  # noqa: PLR0913
     :rtype: pl.DataFrame
     """
     version = description_version(model_id, effort)
-    done: set[tuple[str, str]] = set()
-    if existing is not None:
-        done = set(
-            existing.filter(pl.col("description_version") == version)
-            .select("concept_id", "input_checksum")
-            .iter_rows()
-        )
-    pending = [
-        entry
-        for entry in _concept_inputs(rows)
-        if (entry["concept_id"], entry["input_checksum"]) not in done
-    ]
+    pending = pending_concepts(rows, existing, version)
     batches = [list(batch) for batch in batched(pending, DESCRIPTION_BATCH_SIZE)]
     described_at = datetime.now(tz=UTC)
     output: list[dict[str, Any]] = []
