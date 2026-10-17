@@ -305,11 +305,14 @@ sources:
       is a full snapshot.
     columns:
     - name: tagging_run_id
-      description: str, sha256 of the tagger, its parameters, the dictionary and the
-        source text
+      description: str, the run's UUID; re-running old inputs gets a new one, so the
+        newest run is always the one to read
       tests:
       - unique
       - not_null
+    - name: input_key
+      description: str, sha256 of the tagger, its parameters, the dictionary and the
+        source text; a run is skipped when the newest run has the same key
     - name: tagger_id
       description: str, the tagger version
     - name: parameters_json
@@ -338,6 +341,9 @@ sources:
       description: int, mention rows written
     - name: match_seconds
       description: float, wall time of the matching loop
+    - name: elapsed_seconds
+      description: float, wall time of the whole run, building the dictionary and
+        the output frames included
     - name: tagged_at
       description: timestamp, when the run started
   - name: courseware_concept_mention
