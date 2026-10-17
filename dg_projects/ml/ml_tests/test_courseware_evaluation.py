@@ -407,11 +407,68 @@ def test_majority_ties_return_none():
 
 def test_allocate_rejects_floors_over_budget_and_tiny_strata():
     with pytest.raises(ValueError, match="more than the budget"):
-        allocate({f"s{n}": 100 for n in range(24)}, 400, minimum=20)
+        allocate({f"s{n}": 100 for n in range(24)}, 40, minimum=20)
+    with pytest.raises(ValueError, match="floor of 4 need 72"):
+        allocate({f"s{n}": 6 for n in range(18)}, 30, minimum=4, required=4)
     with pytest.raises(ValueError, match="smaller than 2"):
         allocate({"big": 100, "one": 1}, 50)
     # every stratum gets at least the two labels stratified_ppi needs
     assert min(allocate({"big": 1_000, "small": 3}, 20).values()) >= 2
+
+
+def test_allocate_lowers_the_wanted_floor_to_fit_the_budget():
+    allocation = allocate({f"s{n}": 100 for n in range(24)}, 400, minimum=20)
+    assert sum(allocation.values()) == 400
+    assert min(allocation.values()) == 16
+
+
+def _subsection_strata(families):
+    rows = [
+        (f"F{family}", band, models)
+        for family in range(families)
+        for band in ("short", "long")
+        for models in ("haiku", "opus", "haiku+opus")
+        for _ in range(6)
+    ]
+    return pl.DataFrame(
+        {
+            "item_id": [f"u{n:03d}" for n in range(len(rows))],
+            "course_family": [family for family, _, _ in rows],
+            "size_band": [band for _, band, _ in rows],
+            "models": [models for _, _, models in rows],
+        }
+    ).with_columns(
+        pl.format("{}|{}|{}", "course_family", "size_band", "models").alias("stratum")
+    )
+
+
+def test_fit_strata_pools_course_families_when_the_floors_exceed_the_budget():
+    population = _subsection_strata(3)
+    floor = samples.SUBSECTIONS_MIN_PER_STRATUM
+    # one family fits as is: 6 strata at 4 labels each
+    one, _ = samples.fit_strata(_subsection_strata(1), "subsections", 30, floor)
+    assert one["stratum"].n_unique() == 6
+    # three families need 72 labels, so they are pooled into 6 strata again
+    pooled, dropped = samples.fit_strata(population, "subsections", 30, floor)
+    assert dropped.is_empty()
+    assert set(pooled["stratum"]) == {
+        f"{band}|{models}"
+        for band in ("short", "long")
+        for models in ("haiku", "opus", "haiku+opus")
+    }
+    sizes = dict(pooled.group_by("stratum").len().iter_rows())
+    allocation = allocate(sizes, 30, minimum=floor, required=floor)
+    assert sum(allocation.values()) == 30
+    # a budget no stratification fits still fails loudly
+    coarsest, _ = samples.fit_strata(population, "subsections", 10, floor)
+    assert coarsest["stratum"].n_unique() == 3
+    with pytest.raises(ValueError, match="more than the budget of 10"):
+        allocate(
+            dict(coarsest.group_by("stratum").len().iter_rows()),
+            10,
+            minimum=floor,
+            required=floor,
+        )
 
 
 def test_coarsen_strata_merges_then_drops():

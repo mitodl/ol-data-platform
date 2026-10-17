@@ -50,12 +50,11 @@ def _coarsened(
     name: str,
     population: pl.DataFrame,
     dropped: list[pl.DataFrame],
+    budget: int,
     min_size: int = MIN_LABELS_PER_STRATUM,
 ) -> pl.DataFrame:
-    """Merge strata too small to estimate, recording any dropped from the set."""
-    population, small = samples.coarsen_strata(
-        population, min_size, samples.SCORING_GROUPS[name]
-    )
+    """Fit the set's strata to its budget, recording any dropped from the set."""
+    population, small = samples.fit_strata(population, name, budget, min_size)
     dropped.append(
         small.select(
             pl.lit(name).alias("set"),
@@ -110,7 +109,9 @@ def sample(  # noqa: PLR0913
     built: list[pl.DataFrame] = []
     dropped: list[pl.DataFrame] = []
 
-    population = _coarsened("claims", samples.claims_population(inputs), dropped)
+    population = _coarsened(
+        "claims", samples.claims_population(inputs), dropped, claims
+    )
     drawn = samples.sample_claims(inputs, population, size=claims, seed=seed)
     built.append(
         _write_set(
@@ -126,6 +127,7 @@ def sample(  # noqa: PLR0913
         "subsections",
         samples.subsections_population(inputs),
         dropped,
+        subsections,
         samples.SUBSECTIONS_MIN_PER_STRATUM,
     )
     drawn = samples.sample_subsections(inputs, population, size=subsections, seed=seed)
@@ -139,7 +141,7 @@ def sample(  # noqa: PLR0913
             labelstudio.SUBSECTIONS_CONFIG,
         )
     )
-    population = _coarsened("pairs", samples.pairs_population(inputs), dropped)
+    population = _coarsened("pairs", samples.pairs_population(inputs), dropped, pairs)
     drawn = samples.sample_pairs(inputs, population, size=pairs, seed=seed)
     built.append(
         _write_set(
@@ -151,7 +153,9 @@ def sample(  # noqa: PLR0913
             labelstudio.PAIRS_CONFIG,
         )
     )
-    population = _coarsened("clusters", samples.clusters_population(inputs), dropped)
+    population = _coarsened(
+        "clusters", samples.clusters_population(inputs), dropped, clusters
+    )
     drawn = samples.sample_clusters(inputs, population, size=clusters, seed=seed)
     groups = min(
         labelstudio.MAX_CLUSTER_GROUPS,
@@ -168,7 +172,10 @@ def sample(  # noqa: PLR0913
         )
     )
     population = _coarsened(
-        "prerequisites", samples.prerequisites_population(inputs), dropped
+        "prerequisites",
+        samples.prerequisites_population(inputs),
+        dropped,
+        prerequisites,
     )
     drawn = samples.sample_prerequisites(
         inputs, population, size=prerequisites, seed=seed
