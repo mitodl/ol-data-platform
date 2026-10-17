@@ -132,7 +132,6 @@ def extract(  # noqa: PLR0913
     )
 
 
-@app.command
 def _latest_run(
     output_dir: Path, table: str, run_id: str | None
 ) -> pl.DataFrame | None:

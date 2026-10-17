@@ -565,6 +565,7 @@ def test_graph_reports_cycles_and_skips_unchanged_input(tables):
                 "co_taught_lift": None,
                 "is_adjudicated": False,
                 "has_co_assessed_evidence": False,
+                "is_published": True,
             }
             for source, target in (("a", "b"), ("b", "a"), ("b", "c"))
         ],
