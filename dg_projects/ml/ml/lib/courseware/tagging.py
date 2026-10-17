@@ -1,24 +1,22 @@
 """Tag courseware text with the known concepts it mentions, by dictionary matching.
 
 The dictionary is dim_concept_alias: every normalized label key that resolution has
-assigned to a concept. Text is normalized the way int__courseware__claims builds
-`concept_label_key` (lowercase, each run of characters outside a-z and 0-9 becomes
-one separator), so an alias matches wherever its words appear in order with a token
-boundary on both sides: "art" never matches inside "smart". The keys hold only
-a-z and 0-9, as concept_label_key does, so a letter outside them (the "ï" of
-"naïve", the "é" of "fiancé") is not part of any token. Such letters must still
-agree: the ones at the edges of a match and between its tokens have to be the
-alias's own, so "intérieur" does not match `int`, "fiancé" matches "Fiancé" (key
-"fianc") but "fianc" does not, and "naïve" does not match "na ve". Two Aho-Corasick
-automata report every candidate, one over the lowercased text for caseless phrases
-and one over the original case for case-sensitive spellings. The candidates are
-then resolved leftmost-longest, so "decision tree" wins over "tree" at the same
-place, a nested alias is not reported a second time, and a spelling rejected for its
-case never hides a shorter match.
+assigned to a concept. Text is tokenized by the rule that builds concept_label_key
+(the courseware_label_key macro, and label_key here): lowercase runs of Unicode
+letters and numbers, with an attached + or # spelled out as "plus" or "sharp" and a
+leading dot as "dot". So "C++" in text is the phrase "c plus plus", ".NET" is "dot
+net", and "Schrödinger" one token. An alias matches wherever its tokens appear in
+order, so "art" never matches inside "smart" and "intérieur" never matches `int`.
+Two Aho-Corasick automata report every candidate, one over the lowercase tokens for
+caseless phrases and one over the tokens as spelled for case-sensitive spellings.
+The candidates are then resolved leftmost-longest, so "decision tree" wins over
+"tree" at the same place, a nested alias is not reported a second time, and a
+spelling rejected for its case never hides a shorter match. Each mention's offsets
+cover the source characters its tokens came from.
 
-Python's lower() and the SQL engines' differ on a few characters whose lowercase
-form is ASCII (the Kelvin sign, a dotted capital I), so a label containing one can
-normalize to a different key here than in SQL. No label on the pilot has one.
+Python's lower() and the SQL engines' differ on a few characters (the Kelvin sign,
+a dotted capital I), so a label containing one can normalize to a different key
+here than in SQL. No label on the pilot has one.
 
 Besides the label itself, a few variants are matched, none of which may replace an
 alias that is a label of its own (an explicit label always keeps its assignment):
@@ -55,7 +53,6 @@ the extractor's corroboration.
 These are mentions only. Whether a block teaches a concept is the extractor's call.
 """
 
-import bisect
 import hashlib
 import json
 import re
@@ -65,13 +62,13 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import cached_property
-from itertools import accumulate, pairwise
 from typing import Literal
 
 import ahocorasick_rs
+import numpy as np
 import polars as pl
 
-TAGGER_ID = "courseware_dictionary_tagger_v3"
+TAGGER_ID = "courseware_dictionary_tagger_v4"
 MIN_ALIAS_CHARS = 2
 CASE_SENSITIVE_BELOW_CHARS = 4
 # a plural variant is only added for a last word at least this long
@@ -88,8 +85,16 @@ _VARIANT_ORDER: dict[Variant, int] = {
     "plural": 4,
 }
 
-# concept_label_key's token class: int__courseware__claims splits lower() on [^a-z0-9]+
-_TOKEN = re.compile(r"[A-Za-z0-9]+")
+# runs of Unicode letters and numbers, the courseware_label_key macro's \p{L}\p{N}
+_WORD = re.compile(r"[^\W_]+")
+_TEXT_ITEM = re.compile(r"[^\W_]+|[+#.]")
+# the SQL engines' \s (RE2), which is ASCII only
+_WHITESPACE = " \t\n\f\r"
+_SPELLED_SYMBOLS = {"+": "plus", "#": "sharp"}
+_NON_WORD = re.compile(r"[\W_]")
+_WORD_SPLIT = re.compile(r"([^\W_]+)")
+_ATTACHED_SYMBOL = re.compile(rf"[^{_WHITESPACE}][+#]")
+_DOT_AFTER = tuple(f"{char}." for char in f"{_WHITESPACE}+#")
 _PARENTHETICAL = re.compile(r"\(([^)]*)\)")
 # tokens are joined by two spaces and padded by one, so every pattern (" a  b ")
 # starts and ends on a boundary and adjacent mentions do not compete for a separator
@@ -155,14 +160,134 @@ RUN_SCHEMA = {
 }
 
 
-def label_key(label: str) -> str:
-    """Normalize a label the way concept_label_key is built in SQL.
+def label_key(label: str) -> str | None:
+    """Normalize a label exactly as the courseware_label_key macro does.
 
     :param label: any text
-    :returns: lowercase alphanumeric tokens joined by single spaces
-    :rtype: str
+    :returns: the key, or None when no letter or number is left
+    :rtype: str | None
     """
-    return " ".join(_TOKEN.findall(label)).lower()
+    key = label.lower()
+    key = re.sub(r"^[+#]", " ", key)
+    key = re.sub(rf"[{_WHITESPACE}][+#]", " ", key)
+    key = key.replace("+", " plus ").replace("#", " sharp ")
+    key = re.sub(r"^[.]", "dot ", key)
+    key = re.sub(rf"[{_WHITESPACE}][.]", " dot ", key)
+    return re.sub(r"[\W_]+", " ", key).strip() or None
+
+
+@dataclass(frozen=True)
+class _Tokenized:
+    """A text's tokens as the two haystacks the automata scan, with where each token
+    starts in each haystack and in the text.
+    """
+
+    caseless: str
+    exact: str
+    caseless_offsets: np.ndarray
+    exact_offsets: np.ndarray
+    starts: np.ndarray
+    ends: np.ndarray
+
+
+def _haystack_offsets(words_lengths: np.ndarray) -> np.ndarray:
+    # each token follows the leading space, or the previous token and a separator
+    offsets = np.ones(len(words_lengths), dtype=np.int64)
+    np.cumsum(words_lengths[:-1] + len(_SEPARATOR), out=offsets[1:])
+    offsets[1:] += 1
+    return offsets
+
+
+def _spells_out_symbols(text: str) -> bool:
+    """Whether label_key would spell a symbol out somewhere in the text.
+
+    A + or # attached to what precedes it, or a dot at the start or after whitespace
+    or a symbol. It may say yes when the answer is no (the full tokenizer is exact
+    either way), and uses substring tests so the common text is cheap to rule out.
+    """
+    if ("+" in text or "#" in text) and _ATTACHED_SYMBOL.search(text):
+        return True
+    return text.startswith(".") or any(pair in text for pair in _DOT_AFTER)
+
+
+def _tokenize(text: str) -> _Tokenized | None:
+    """Tokenize text as _tokens does, into haystacks; None when it has no tokens.
+
+    Text with no symbol label_key spells out (most courseware) takes a fast path:
+    its tokens are its runs of letters and numbers, found and measured in C, unless
+    a run's lowercase form splits ("İ").
+    """
+    if not _spells_out_symbols(text):
+        # separators and words alternate, starting and ending with a separator
+        parts = _WORD_SPLIT.split(text)
+        spelled = parts[1::2]
+        if not spelled:
+            return None
+        joined = _SEPARATOR.join(spelled)
+        lowered = joined.lower()
+        # only "İ" changes length when lowercased, and it splits
+        if lowered.isascii() or not _NON_WORD.search(lowered.replace(_SEPARATOR, "")):
+            bounds = np.cumsum(np.fromiter(map(len, parts), np.int64, len(parts)))
+            starts, ends = bounds[0:-1:2], bounds[1::2]
+            offsets = _haystack_offsets(ends - starts)
+            return _Tokenized(
+                f" {lowered} ", f" {joined} ", offsets, offsets, starts, ends
+            )
+    tokens = _tokens(text)
+    if not tokens:
+        return None
+    lows = [low for low, _, _, _ in tokens]
+    spelled = [spelled for _, spelled, _, _ in tokens]
+    return _Tokenized(
+        f" {_SEPARATOR.join(lows)} ",
+        f" {_SEPARATOR.join(spelled)} ",
+        _haystack_offsets(np.fromiter(map(len, lows), np.int64, len(lows))),
+        _haystack_offsets(np.fromiter(map(len, spelled), np.int64, len(spelled))),
+        np.array([start for _, _, start, _ in tokens], dtype=np.int64),
+        np.array([end for _, _, _, end in tokens], dtype=np.int64),
+    )
+
+
+def _tokens(text: str) -> list[tuple[str, str, int, int]]:
+    """Tokenize text by the label_key rule, keeping where each token came from.
+
+    " ".join of the lowercase tokens equals label_key(text) (or "" for None). A
+    symbol spelled out becomes its own token ("plus"), and a word whose lowercase
+    form splits ("İ" lowers to "i" and a combining dot) gives each part the whole
+    word's span.
+
+    :param text: any text
+    :returns: (lowercase token, token as spelled, char_start, char_end) per token
+    :rtype: list[tuple[str, str, int, int]]
+    """
+    tokens = []
+    for match in _TEXT_ITEM.finditer(text):
+        item, start = match.group(), match.start()
+        # a symbol right after whitespace or at the start is a separator, and so is
+        # one right after a leading one, as the macro's first two passes leave it
+        after_space = start == 0 or text[start - 1] in _WHITESPACE
+        if item in _SPELLED_SYMBOLS:
+            if not (after_space or (start == 1 and text[0] in _SPELLED_SYMBOLS)):
+                word = _SPELLED_SYMBOLS[item]
+                tokens.append((word, word, start, start + 1))
+        elif item == ".":
+            # spelled symbols, separators and a leading "dot " all leave a space
+            if (
+                after_space
+                or text[start - 1] in _SPELLED_SYMBOLS
+                or (start == 1 and text[0] == ".")
+            ):
+                tokens.append(("dot", "dot", start, start + 1))
+        elif item.isascii():
+            tokens.append((item.lower(), item, start, match.end()))
+        else:
+            lowered = _WORD.findall(item.lower())
+            spelled = [item] if len(lowered) == 1 else lowered
+            tokens.extend(
+                (low, spell, start, match.end())
+                for low, spell in zip(lowered, spelled, strict=True)
+            )
+    return tokens
 
 
 @dataclass(frozen=True)
@@ -253,62 +378,10 @@ class Pattern:
     @cached_property
     def spellings(self) -> frozenset[tuple[str, ...]]:
         """The spellings a case_sensitive pattern matches, as tokens."""
-        return frozenset(tuple(_TOKEN.findall(e.surface)) for e in self.entries)
-
-    @cached_property
-    def outside_letters(self) -> frozenset[tuple[str, ...]]:
-        """The letters outside a-z and 0-9 each entry has around and between tokens.
-
-        Casefolded unless the pattern is case-sensitive.
-        """
-        fold = self.match_mode != "case_sensitive"
         return frozenset(
-            _outside_letters(
-                entry.surface,
-                [match.span() for match in _TOKEN.finditer(entry.surface)],
-                fold=fold,
-            )
+            tuple(spelled for _, spelled, _, _ in _tokens(entry.surface))
             for entry in self.entries
         )
-
-    @cached_property
-    def has_plain_spelling(self) -> bool:
-        """Some entry has no letter outside a-z around or between its tokens."""
-        return _plain_spelling(self.token_count) in self.outside_letters
-
-
-def _plain_spelling(token_count: int) -> tuple[str, ...]:
-    return ("",) * (token_count + 1)
-
-
-def _word_bounds(text: str, start: int, end: int) -> tuple[int, int]:
-    """Widen a span of [A-Za-z0-9] tokens over the alphanumerics adjoining it."""
-    while start > 0 and text[start - 1].isalnum():
-        start -= 1
-    while end < len(text) and text[end].isalnum():
-        end += 1
-    return start, end
-
-
-def _outside_letters(
-    text: str, spans: list[tuple[int, int]], *, fold: bool
-) -> tuple[str, ...]:
-    """List the alphanumerics a run of [A-Za-z0-9] tokens leaves out.
-
-    Those adjoining its first token, those in each gap between tokens, and those
-    adjoining its last.
-    """
-    start, end = spans[0][0], spans[-1][1]
-    before, after = _word_bounds(text, start, end)
-    parts = [
-        text[before:start],
-        *(
-            "".join(char for char in text[left[1] : right[0]] if char.isalnum())
-            for left, right in pairwise(spans)
-        ),
-        text[end:after],
-    ]
-    return tuple(part.casefold() for part in parts) if fold else tuple(parts)
 
 
 def _is_acronym(surface: str) -> bool:
@@ -319,7 +392,7 @@ def _is_acronym(surface: str) -> bool:
 
 
 def _plural(surface: str) -> str | None:
-    last = _TOKEN.findall(surface)[-1]
+    last = _WORD.findall(surface)[-1]
     if (
         surface.endswith(last)
         and last.isalpha()
@@ -354,14 +427,14 @@ def _abbreviates(short: str, long: str) -> bool:
 def _entries(concept_label_key: str, concept_id: str, alias: str) -> list[Entry]:
     names: list[Entry] = [Entry(concept_label_key, concept_id, "label", alias)]
     parentheticals = [
-        inner.strip() for inner in _PARENTHETICAL.findall(alias) if _TOKEN.search(inner)
+        inner.strip() for inner in _PARENTHETICAL.findall(alias) if _WORD.search(inner)
     ]
     head = " ".join(_PARENTHETICAL.sub(" ", alias).split())
-    if parentheticals and _TOKEN.search(head):
+    if parentheticals and _WORD.search(head):
         abbreviations = [
             inner
             for inner in parentheticals
-            if len(_TOKEN.findall(inner)) == 1 and _abbreviates(inner, head)
+            if len(_WORD.findall(inner)) == 1 and _abbreviates(inner, head)
         ]
         qualified = len(abbreviations) < len(parentheticals)
         names.append(
@@ -400,16 +473,18 @@ class ConceptDictionary:
 
         :param aliases: rows with concept_label_key, concept_fk and alias
         """
+        # a label with no letter or number has a null key since courseware_label_key
         rows = sorted(
-            aliases.select("concept_label_key", "concept_fk", "alias").iter_rows()
+            aliases.select("concept_label_key", "concept_fk", "alias").iter_rows(),
+            key=lambda row: (row[0] or "", row[1], row[2]),
         )
         explicit = {key for key, _, _ in rows}
         self.label_count = len(explicit)
         self.tokenless_label_count = 0
         by_phrase: dict[str, set[Entry]] = defaultdict(set)
         for key, concept_id, alias in rows:
-            # an alias with no [A-Za-z0-9] token ("∇", "π") has nothing to match on
-            if not _TOKEN.search(alias):
+            # an alias with no letter or number ("∇") has no key and nothing to match
+            if key is None or label_key(alias) is None:
                 self.tokenless_label_count += 1
                 continue
             for entry in _entries(key, concept_id, alias):
@@ -446,61 +521,45 @@ class ConceptDictionary:
         :returns: (pattern, char_start, char_end) per mention, offsets into `text`
         :rtype: list[tuple[Pattern, int, int]]
         """
-        spans = [match.span() for match in _TOKEN.finditer(text)]
-        if not spans:
+        tokenized = _tokenize(text)
+        if tokenized is None:
             return []
-        joined = f" {_SEPARATOR.join(text[start:end] for start, end in spans)} "
-        # where each token starts in `joined`
-        token_offsets = list(
-            accumulate(
-                (end - start + len(_SEPARATOR) for start, end in spans[:-1]), initial=1
-            )
-        )
-        # (first token, last token, pattern, char_start, char_end)
-        candidates: list[tuple[int, int, Pattern, int, int]] = []
-        for patterns, haystack, automaton in (
-            (self._caseless, joined.lower(), self._caseless_automaton),
-            (self._exact, joined, self._exact_automaton),
+        # (first token, last token, pattern)
+        candidates: list[tuple[int, int, Pattern]] = []
+        for patterns, haystack, offsets, automaton in (
+            (
+                self._caseless,
+                tokenized.caseless,
+                tokenized.caseless_offsets,
+                self._caseless_automaton,
+            ),
+            (
+                self._exact,
+                tokenized.exact,
+                tokenized.exact_offsets,
+                self._exact_automaton,
+            ),
         ):
-            for index, start, _end in automaton.find_matches_as_indexes(
-                haystack, overlapping=True
-            ):
+            matches = automaton.find_matches_as_indexes(haystack, overlapping=True)
+            if not matches:
+                continue
+            # a match starts on the separator before its first token
+            match_starts = np.fromiter(
+                (start for _, start, _ in matches), np.int64, len(matches)
+            )
+            firsts = np.searchsorted(offsets, match_starts + 1).tolist()
+            for (index, _start, _end), first in zip(matches, firsts, strict=True):
                 pattern, token_count = patterns[index]
-                first = bisect.bisect_left(token_offsets, start + 1)
-                last = first + token_count - 1
-                char_start, char_end = spans[first][0], spans[last][1]
-                if (
-                    text[char_start:char_end].isascii()
-                    and not (char_start > 0 and text[char_start - 1].isalnum())
-                    and not (char_end < len(text) and text[char_end].isalnum())
-                ):
-                    # the common case, no letter outside a-z anywhere near the match
-                    if pattern.has_plain_spelling:
-                        candidates.append((first, last, pattern, char_start, char_end))
-                    continue
-                letters = _outside_letters(
-                    text,
-                    spans[first : last + 1],
-                    fold=pattern.match_mode != "case_sensitive",
-                )
-                if letters in pattern.outside_letters:
-                    # offsets from the source, since casefolding can change lengths
-                    # ("ß" folds to "ss")
-                    candidates.append(
-                        (
-                            first,
-                            last,
-                            pattern,
-                            *_word_bounds(text, char_start, char_end),
-                        )
-                    )
-        # leftmost-longest over every valid candidate
+                candidates.append((first, first + token_count - 1, pattern))
+        # leftmost-longest over every candidate
         candidates.sort(key=lambda candidate: (candidate[0], -candidate[1]))
         found = []
         covered_until = -1
-        for first, last, pattern, char_start, char_end in candidates:
+        for first, last, pattern in candidates:
             if first > covered_until:
-                found.append((pattern, char_start, char_end))
+                found.append(
+                    (pattern, int(tokenized.starts[first]), int(tokenized.ends[last]))
+                )
                 covered_until = last
         return found
 
