@@ -281,6 +281,15 @@ def _plain_spelling(token_count: int) -> tuple[str, ...]:
     return ("",) * (token_count + 1)
 
 
+def _word_bounds(text: str, start: int, end: int) -> tuple[int, int]:
+    """Widen a span of [A-Za-z0-9] tokens over the alphanumerics adjoining it."""
+    while start > 0 and text[start - 1].isalnum():
+        start -= 1
+    while end < len(text) and text[end].isalnum():
+        end += 1
+    return start, end
+
+
 def _outside_letters(
     text: str, spans: list[tuple[int, int]], *, fold: bool
 ) -> tuple[str, ...]:
@@ -290,12 +299,7 @@ def _outside_letters(
     adjoining its last.
     """
     start, end = spans[0][0], spans[-1][1]
-    before = start
-    while before > 0 and text[before - 1].isalnum():
-        before -= 1
-    after = end
-    while after < len(text) and text[after].isalnum():
-        after += 1
+    before, after = _word_bounds(text, start, end)
     parts = [
         text[before:start],
         *(
@@ -452,7 +456,7 @@ class ConceptDictionary:
                 (end - start + len(_SEPARATOR) for start, end in spans[:-1]), initial=1
             )
         )
-        # (first token, last token, pattern, letters before, letters after)
+        # (first token, last token, pattern, char_start, char_end)
         candidates: list[tuple[int, int, Pattern, int, int]] = []
         for patterns, haystack, automaton in (
             (self._caseless, joined.lower(), self._caseless_automaton),
@@ -472,7 +476,7 @@ class ConceptDictionary:
                 ):
                     # the common case, no letter outside a-z anywhere near the match
                     if pattern.has_plain_spelling:
-                        candidates.append((first, last, pattern, 0, 0))
+                        candidates.append((first, last, pattern, char_start, char_end))
                     continue
                 letters = _outside_letters(
                     text,
@@ -480,18 +484,23 @@ class ConceptDictionary:
                     fold=pattern.match_mode != "case_sensitive",
                 )
                 if letters in pattern.outside_letters:
+                    # offsets from the source, since casefolding can change lengths
+                    # ("ß" folds to "ss")
                     candidates.append(
-                        (first, last, pattern, len(letters[0]), len(letters[-1]))
+                        (
+                            first,
+                            last,
+                            pattern,
+                            *_word_bounds(text, char_start, char_end),
+                        )
                     )
         # leftmost-longest over every valid candidate
         candidates.sort(key=lambda candidate: (candidate[0], -candidate[1]))
         found = []
         covered_until = -1
-        for first, last, pattern, before, after in candidates:
+        for first, last, pattern, char_start, char_end in candidates:
             if first > covered_until:
-                found.append(
-                    (pattern, spans[first][0] - before, spans[last][1] + after)
-                )
+                found.append((pattern, char_start, char_end))
                 covered_until = last
         return found
 
