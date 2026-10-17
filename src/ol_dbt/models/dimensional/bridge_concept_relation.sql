@@ -102,7 +102,24 @@ with evidence as (
     group by from_concept_id, to_concept_id, relation
 )
 
--- a run with no course counts as its own course
+-- a run with no course_fk (e.g. residential) is keyed by its course's readable id
+, builds_on_course_runs as (
+    select
+        evidence.from_concept_id
+        , evidence.to_concept_id
+        , evidence.scope_count
+        , coalesce(
+            course_runs.course_fk
+            , concat(evidence.platform, '|', {{ courserun_course_readable_id('evidence.courserun_readable_id') }})
+        ) as course_key
+    from evidence
+    left join course_runs
+        on
+            evidence.platform = course_runs.platform
+            and evidence.courserun_readable_id = course_runs.courserun_readable_id
+    where evidence.relation = 'builds_on'
+)
+
 , builds_on_course_support as (
     select
         from_concept_id
@@ -110,21 +127,12 @@ with evidence as (
         , sum(scope_count) as course_scope_support
     from (
         select
-            evidence.from_concept_id
-            , evidence.to_concept_id
-            , coalesce(course_runs.course_fk, concat(evidence.platform, '|', evidence.courserun_readable_id))
-            as course_key
-            , max(evidence.scope_count) as scope_count
-        from evidence
-        left join course_runs
-            on
-                evidence.platform = course_runs.platform
-                and evidence.courserun_readable_id = course_runs.courserun_readable_id
-        where evidence.relation = 'builds_on'
-        group by
-            evidence.from_concept_id
-            , evidence.to_concept_id
-            , coalesce(course_runs.course_fk, concat(evidence.platform, '|', evidence.courserun_readable_id))
+            from_concept_id
+            , to_concept_id
+            , course_key
+            , max(scope_count) as scope_count
+        from builds_on_course_runs
+        group by from_concept_id, to_concept_id, course_key
     ) as per_course
     group by from_concept_id, to_concept_id
 )

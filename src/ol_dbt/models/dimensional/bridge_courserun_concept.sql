@@ -143,13 +143,15 @@ with mentions as (
 )
 
 -- courses that require each concept, for cross-course support: declared, or inferred
--- by a run whose own evidence points the right way. A run with no course counts alone.
+-- by a run whose own evidence points the right way. A run with no course_fk (e.g.
+-- residential) is keyed by its course's readable id.
 , requiring_courses as (
     select
         requiring.concept_id
         , count(
             distinct coalesce(
-                course_runs.course_fk, concat(requiring.platform, '|', requiring.courserun_readable_id)
+                course_runs.course_fk
+                , concat(requiring.platform, '|', {{ courserun_course_readable_id('requiring.courserun_readable_id') }})
             )
         ) as course_support
     from (
