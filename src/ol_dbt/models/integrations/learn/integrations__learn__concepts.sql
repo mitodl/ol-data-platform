@@ -16,6 +16,7 @@ with concepts as (
 
 , run_bridge as (
     select * from {{ ref('bridge_courserun_concept') }}
+    where is_published
 )
 
 , course_runs as (
