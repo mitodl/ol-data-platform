@@ -198,7 +198,7 @@ with run_concepts as (
         , close_matches.concept_fk is not null as is_close
         , coalesce(narrower_counts.narrower_concept_count, 0) as narrower_concept_count
         , coalesce(narrower_matches.narrower_taught_count, 0) as narrower_taught_count
-        , cast(narrower_matches.narrower_taught_count as double)
+        , cast(coalesce(narrower_matches.narrower_taught_count, 0) as double)
         / narrower_counts.narrower_concept_count as narrower_coverage
         , coalesce(
             narrower_matches.narrower_taught_count >= {{ var('courseware_prerequisite_min_narrower_taught') }}
