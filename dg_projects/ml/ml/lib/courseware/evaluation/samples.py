@@ -257,6 +257,24 @@ class GoldInputs:
     matcher: LabelMatcher
 
 
+def _follow_merges(assignments: pl.DataFrame, registry: pl.DataFrame) -> pl.DataFrame:
+    """Replace each assigned concept id merged into another by its survivor."""
+    redirects = {
+        row["concept_id"]: row["merged_into_concept_id"]
+        for row in registry.iter_rows(named=True)
+        if row["merged_into_concept_id"] is not None
+    }
+
+    def survivor(concept_id: str) -> str:
+        while concept_id in redirects:
+            concept_id = redirects[concept_id]
+        return concept_id
+
+    return assignments.with_columns(
+        pl.col("concept_id").map_elements(survivor, return_dtype=pl.String)
+    )
+
+
 def _newest_run(table: pl.DataFrame, runs: pl.DataFrame) -> pl.DataFrame:
     last = runs.sort("started_at")["resolution_run_id"][-1]
     return table.filter(pl.col("resolution_run_id") == last)
@@ -362,7 +380,7 @@ def load_inputs(  # noqa: PLR0913
         .unique("concept_label_key", keep="first")
         .select("concept_label_key", "embedding")
     )
-    matcher = LabelMatcher().add_assignments(assignments)
+    matcher = LabelMatcher().add_assignments(_follow_merges(assignments, registry))
     for path in label_maps or []:
         mapping = pl.read_parquet(path)
         matcher.add_mapping(
@@ -960,20 +978,12 @@ def _active_assignments(inputs: GoldInputs) -> pl.DataFrame:
     The newest run's assignments carry every label key resolution has seen, so a
     label no current claim uses (absent from inputs.labels) is left out.
     """
-    redirects = {
-        row["concept_id"]: row["merged_into_concept_id"]
-        for row in inputs.registry.iter_rows(named=True)
-        if row["merged_into_concept_id"] is not None
-    }
-
-    def survivor(concept_id: str) -> str:
-        while concept_id in redirects:
-            concept_id = redirects[concept_id]
-        return concept_id
-
-    return inputs.assignments.filter(
-        pl.col("concept_label_key").is_in(set(inputs.labels["concept_label_key"]))
-    ).with_columns(pl.col("concept_id").map_elements(survivor, return_dtype=pl.String))
+    return _follow_merges(
+        inputs.assignments.filter(
+            pl.col("concept_label_key").is_in(set(inputs.labels["concept_label_key"]))
+        ),
+        inputs.registry,
+    )
 
 
 def clusters_population(inputs: GoldInputs) -> pl.DataFrame:
