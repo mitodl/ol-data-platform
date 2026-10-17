@@ -56,6 +56,10 @@ models:
   description: One row per courseware claim extraction, with whether its version is
     the one promoted for its run (courseware_extraction_promotions) and whether it
     is the current extraction of its scope part.
+  config:
+    meta:
+      # Positions come from int__courseware__extraction_sources, which QA cannot build.
+      qa_buildable: false
   columns:
   - name: extraction_key
     description: str, the extraction
@@ -70,6 +74,9 @@ models:
     description: str, the sequential's block id, or 'context' or 'materials'
   - name: scope_part
     description: int, which part of a split scope, from 1
+  - name: scope_position
+    description: int, the scope's order in the course as it is now (int__courseware__extraction_sources),
+      or as it was at extraction when the sources no longer list the scope
   - name: is_promoted_version
     description: boolean, whether the extraction's extractor, prompt, schema, model
       and effort are the ones promoted for its run
@@ -97,6 +104,11 @@ models:
 - name: int__courseware__claims
   description: Every extracted claim with its scope, extractor version, evidence counts
     and normalized concept label key.
+  config:
+    meta:
+      # Reads scope positions from int__courseware__extraction_sources (through
+      # int__courseware__extractions), which QA cannot build.
+      qa_buildable: false
   columns:
   - name: extraction_key
     description: str, the extraction the claim came from
@@ -115,7 +127,7 @@ models:
   - name: scope_title
     description: str, the sequential's title or the scope's name
   - name: scope_position
-    description: int, the scope's order in the course
+    description: int, the scope's order in the course as it is now (int__courseware__extractions)
   - name: scope_part
     description: int, which part of a split scope the claim came from, from 1
   - name: extractor_id
@@ -173,6 +185,11 @@ models:
 - name: int__courseware__concept_mentions
   description: One row per (current verified claim, concept label) it names, including
     the concept labels assessments and learning outcomes list.
+  config:
+    meta:
+      # Reads scope positions from int__courseware__extraction_sources (through
+      # int__courseware__extractions), which QA cannot build.
+      qa_buildable: false
   columns:
   - name: platform
     description: str, mitxonline, mitxpro or residential
@@ -213,6 +230,11 @@ models:
 - name: int__courseware__concept_labels
   description: One row per normalized concept label key across every course, with
     its most used surface form, kind and description. The input to concept resolution.
+  config:
+    meta:
+      # Reads scope positions from int__courseware__extraction_sources (through
+      # int__courseware__extractions), which QA cannot build.
+      qa_buildable: false
   columns:
   - name: concept_label_key
     description: str, the normalized label key
@@ -262,6 +284,11 @@ models:
 - name: int__courseware__concept_assignments
   description: Which concept each normalized label belongs to, from the newest resolution
     run. Labels extracted since that run have a null concept_id until the next run.
+  config:
+    meta:
+      # Reads scope positions from int__courseware__extraction_sources (through
+      # int__courseware__extractions), which QA cannot build.
+      qa_buildable: false
   columns:
   - name: concept_label_key
     description: str, the normalized label key
@@ -310,6 +337,11 @@ models:
 
 - name: int__courseware__resolved_concept_mentions
   description: Concept mentions with the concept id their label is assigned to.
+  config:
+    meta:
+      # Reads scope positions from int__courseware__extraction_sources (through
+      # int__courseware__extractions), which QA cannot build.
+      qa_buildable: false
   columns:
   - name: platform
     description: str, mitxonline, mitxpro or residential
@@ -368,6 +400,11 @@ models:
 - name: int__courseware__concept_relation_evidence
   description: Every observation that two concepts are related, per relation, evidence
     source (adjudication, course_sequence, co_taught, co_assessed) and course run.
+  config:
+    meta:
+      # Reads scope positions from int__courseware__extraction_sources (through
+      # int__courseware__extractions), which QA cannot build.
+      qa_buildable: false
   columns:
   - name: from_concept_id
     description: str, the narrower, dependent or lower-id concept, as in bridge_concept_relation
@@ -401,3 +438,32 @@ models:
     tests:
     - unique
     - not_null
+
+unit_tests:
+- name: test_int__courseware__extractions_takes_position_from_the_current_course
+  description: >
+    The extraction key leaves position out, so a reordered course keeps its stored
+    extractions. A scope the sources still list takes its position from them; one
+    they no longer list keeps the position stored at extraction.
+  model: int__courseware__extractions
+  given:
+  - input: source('courseware_intermediate', 'courseware_claim_extraction')
+    rows:
+    - {extraction_key: moved, extractor_id: x, prompt_version: p, schema_version: s,
+      model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: run,
+      scope_id: seq-1, scope_part: 1, scope_position: 1, extracted_at: '2026-10-16T00:00:00'}
+    - {extraction_key: removed, extractor_id: x, prompt_version: p, schema_version: s,
+      model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: run,
+      scope_id: seq-gone, scope_part: 1, scope_position: 2, extracted_at: '2026-10-16T00:00:00'}
+  - input: ref('courseware_extraction_promotions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: null, extractor_id: x, prompt_version: p,
+      schema_version: s, model_id: m, effort: medium}
+  - input: ref('int__courseware__extraction_sources')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-1, scope_position: 3}
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-new, scope_position: 1}
+  expect:
+    rows:
+    - {extraction_key: moved, scope_position: 3, is_current: true}
+    - {extraction_key: removed, scope_position: 2, is_current: true}
