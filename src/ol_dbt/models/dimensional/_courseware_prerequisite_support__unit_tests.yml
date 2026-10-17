@@ -32,6 +32,8 @@ unit_tests:
       is_current: true}
   - input: ref('int__courseware__resolved_concept_mentions')
     rows: []
+  - input: ref('int__courseware__adjudicated_concept_relations')
+    rows: []
   expect:
     rows:
     - {from_concept_fk: a, to_concept_fk: b, scope_support: 2, course_scope_support: 1,
