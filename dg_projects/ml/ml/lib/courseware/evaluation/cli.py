@@ -9,6 +9,7 @@ python -m ml.lib.courseware.local gold score gold/ --claims-export claims.json
 """
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,20 @@ from ml.lib.courseware.evaluation.metrics import MIN_LABELS_PER_STRATUM
 gold = cyclopts.App(name="gold", help=__doc__)
 SETS = ("claims", "subsections", "pairs", "clusters", "prerequisites")
 MANIFEST = "manifest.json"
+
+
+def _skipped(report: Any, path: str = "") -> list[str]:
+    """List every estimate in a report that was skipped, with its reason."""
+    if not isinstance(report, dict):
+        return []
+    if "skipped" in report:
+        strata = report.get("under_filled_strata")
+        return [f"{path}: {report['skipped']}" + (f" {strata}" if strata else "")]
+    return [
+        line
+        for key, value in report.items()
+        for line in _skipped(value, f"{path}.{key}" if path else key)
+    ]
 
 
 def _write_set(  # noqa: PLR0913
@@ -298,3 +313,5 @@ def score_gold(  # noqa: PLR0913
             )
     (sample_dir / "scores.json").write_text(json.dumps(report, indent=1))
     print(json.dumps(report, indent=1))  # noqa: T201
+    for line in _skipped(report):
+        print(f"skipped {line}", file=sys.stderr)  # noqa: T201

@@ -6,7 +6,7 @@ from itertools import combinations
 import numpy as np
 import polars as pl
 import pytest
-from ml.lib.courseware.evaluation import labelstudio, samples, score
+from ml.lib.courseware.evaluation import cli, labelstudio, samples, score
 from ml.lib.courseware.evaluation.matching import LabelMatcher, concept_label_key
 from ml.lib.courseware.evaluation.metrics import (
     Stratum,
@@ -1058,3 +1058,45 @@ def test_label_quality_only_judges_concept_claims(tmp_path):
     report = score.score_claims(population, _export(tmp_path, tasks), alpha=0.05)
     assert report["models"]["haiku"]["correct"]["point"] == pytest.approx(0.75)
     assert "not_applicable" in labelstudio.LABEL_JUDGMENTS
+
+
+def test_an_estimate_its_labels_cannot_support_is_skipped_with_the_reason(tmp_path):
+    population = pl.DataFrame(
+        {
+            "item_id": [f"c{n}" for n in range(8)],
+            "model": ["haiku"] * 8,
+            "claim_kind": ["concept"] * 8,
+            "stratum": ["a"] * 4 + ["b"] * 4,
+            "autorater": [None] * 8,
+        },
+        schema_overrides={"autorater": pl.Float64},
+    )
+    good = {"verdict": "supported", "status": "correct", "label_quality": "good"}
+    bad = {**good, "verdict": "unsupported"}
+    tasks = [
+        _choice_task("c0", [(1, good)]),
+        _choice_task("c1", [(1, bad)]),
+        # b: one decided label, and a tie
+        _choice_task("c4", [(1, good)]),
+        _choice_task("c5", [(1, good), (2, bad)]),
+    ]
+    report = score.score_claims(population, _export(tmp_path, tasks), alpha=0.05)
+    correct = report["models"]["haiku"]["correct"]
+    assert "point" not in correct
+    assert correct["under_filled_strata"] == {"b": 1}
+    assert correct["strata"]["a"]["labeled"] == 2
+    reason = (
+        "strata with fewer than 2 decided labels; "
+        "annotate more of their items or break their ties {'b': 1}"
+    )
+    assert cli._skipped({"claims": report}) == [
+        f"claims.models.haiku.correct: {reason}",
+        f"claims.models.haiku.supported: {reason}",
+    ]
+
+
+def test_recall_with_no_labelled_denominator_is_skipped():
+    strata = [Stratum("s", 10, np.zeros(3), g=np.zeros(3))]
+    assert score._estimate(strata, alpha=0.05)["skipped"] == (
+        "no labelled item counts toward the denominator"
+    )
