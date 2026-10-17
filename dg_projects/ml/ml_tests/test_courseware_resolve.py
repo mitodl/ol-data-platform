@@ -1,3 +1,6 @@
+import itertools
+import uuid
+
 import numpy as np
 import polars as pl
 import pytest
@@ -265,3 +268,23 @@ def test_an_empty_label_list_resolves_to_nothing():
     assert second.assignments.height == 0
     assert second.registry.height == first.registry.height
     assert second.run["concepts_minted"][0] == 0
+
+
+def test_carried_related_edges_are_keyed_in_id_order(verdicts, monkeypatch):
+    # ids rise in mint order, so bias < cart < zeta; merging bias into zeta turns
+    # the carried (bias, cart) edge into (zeta, cart), the mirror of (cart, zeta)
+    counter = itertools.count(1)
+    monkeypatch.setattr(resolve.uuid, "uuid4", lambda: uuid.UUID(int=next(counter)))
+    verdicts[("bias", "cart")] = "related"
+    verdicts[("cart", "zeta")] = "related"
+    mentions = {"zeta": 5}
+    first = run(labels("bias", "cart", "zeta", mentions=mentions))
+    assert first.relations.height == 2
+    verdicts[("new", "bias")] = "exact"
+    verdicts[("new", "zeta")] = "exact"
+    second = run(
+        labels("bias", "cart", "new", "zeta", mentions=mentions), state_from(first)
+    )
+    rows = list(second.relations.iter_rows(named=True))
+    assert [row["relation"] for row in rows] == ["related"]
+    assert rows[0]["from_concept_id"] < rows[0]["to_concept_id"]

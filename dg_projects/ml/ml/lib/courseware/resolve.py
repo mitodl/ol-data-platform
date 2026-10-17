@@ -656,14 +656,23 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     def resolved(concept_id: str) -> str:
         return active(concept_id)
 
-    relations = {
-        (
-            resolved(row["from_concept_id"]),
-            resolved(row["to_concept_id"]),
-            row["relation"],
-        ): row["proposed_run_id"]
-        for row in state.relations.iter_rows(named=True)
-    }
+    def relation_key(left: str, right: str, relation: str) -> tuple[str, str, str]:
+        # only broader has a direction; the others are keyed in id order, which a
+        # merge can reverse for a carried edge
+        if relation != "broader":
+            left, right = sorted((left, right))
+        return left, right, relation
+
+    relations: dict[tuple[str, str, str], str] = {}
+    for row in state.relations.iter_rows(named=True):
+        relations.setdefault(
+            relation_key(
+                resolved(row["from_concept_id"]),
+                resolved(row["to_concept_id"]),
+                row["relation"],
+            ),
+            row["proposed_run_id"],
+        )
     # A pair is often judged from both sides, and the two answers can disagree on
     # direction, which would put a cycle in the hierarchy. Direction is decided by
     # votes over (narrower, broader), with carried edges voting too so a later run
@@ -684,8 +693,7 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
         elif verdict == "narrower":
             direction_votes[left, right] += 1
         else:
-            low, high = sorted((left, right))
-            relations.setdefault((low, high, verdict), run_id)
+            relations.setdefault(relation_key(left, right, verdict), run_id)
     for narrower, broader in list(direction_votes):
         forward = direction_votes[narrower, broader]
         backward = direction_votes[broader, narrower]
@@ -694,8 +702,7 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
             relations.pop((broader, narrower, "broader"), None)
         elif forward == backward:
             relations.pop((narrower, broader, "broader"), None)
-            low, high = sorted((narrower, broader))
-            relations.setdefault((low, high, "related"), run_id)
+            relations.setdefault(relation_key(narrower, broader, "related"), run_id)
 
     def frame(
         records: Iterable[dict[str, Any]], schema: dict[str, Any]
