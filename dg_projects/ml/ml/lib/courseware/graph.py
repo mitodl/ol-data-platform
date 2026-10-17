@@ -221,7 +221,8 @@ def compute_graph(  # noqa: PLR0915
 ) -> GraphResult:
     """Compute the concept graph's topology.
 
-    :param concepts: dim_concept rows; only lifecycle_status 'active' are nodes
+    :param concepts: dim_concept rows; active concepts that some current claim names
+        (label_count above 0) are nodes
     :param relations: bridge_concept_relation rows
     :param previous_nodes: the previous run's node rows joined to its community
         rows (concept_id, community_id, first_seen_run_id), to carry community ids
@@ -235,7 +236,10 @@ def compute_graph(  # noqa: PLR0915
     run_id = str(uuid.uuid4())
     computed_at = datetime.now(tz=UTC)
 
-    active = concepts.filter(pl.col("lifecycle_status") == "active")
+    # resolution keeps a concept whose labels have dropped out active until a rebuild
+    active = concepts.filter(
+        (pl.col("lifecycle_status") == "active") & (pl.col("label_count") > 0)
+    )
     concept_ids = sorted(active["concept_pk"])
     index = {concept_id: position for position, concept_id in enumerate(concept_ids)}
     labels = dict(zip(active["concept_pk"], active["preferred_label"], strict=True))

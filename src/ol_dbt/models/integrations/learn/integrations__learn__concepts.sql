@@ -10,6 +10,8 @@ with concepts as (
     where
         lifecycle_status = 'active'
         and coalesce(is_learner_facing, false)
+        -- a concept whose labels no current claim names stays active until a rebuild
+        and label_count > 0
 )
 
 , run_bridge as (

@@ -8,6 +8,7 @@ def concepts(*names):
             "concept_pk": list(names),
             "preferred_label": list(names),
             "lifecycle_status": ["active"] * len(names),
+            "label_count": [1] * len(names),
         }
     )
 
@@ -104,9 +105,17 @@ def test_a_graph_with_no_active_concepts_is_empty():
             "concept_pk": pl.String,
             "preferred_label": pl.String,
             "lifecycle_status": pl.String,
+            "label_count": pl.Int64,
         }
     )
     result = compute_graph(no_concepts, relations())
     assert result.nodes.height == 0
     assert result.edges.height == 0
     assert result.run["node_count"][0] == 0
+
+
+def test_a_concept_with_no_current_labels_is_not_a_node():
+    kept = concepts("pandas", "numpy")
+    dropped = concepts("bluebikes").with_columns(label_count=pl.lit(0, dtype=pl.Int64))
+    result = compute_graph(pl.concat([kept, dropped]), relations())
+    assert sorted(result.nodes["concept_id"]) == ["numpy", "pandas"]
