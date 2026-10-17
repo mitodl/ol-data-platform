@@ -53,7 +53,9 @@ def _coarsened(
     min_size: int = MIN_LABELS_PER_STRATUM,
 ) -> pl.DataFrame:
     """Merge strata too small to estimate, recording any dropped from the set."""
-    population, small = samples.coarsen_strata(population, min_size)
+    population, small = samples.coarsen_strata(
+        population, min_size, samples.SCORING_GROUPS[name]
+    )
     dropped.append(
         small.select(
             pl.lit(name).alias("set"),

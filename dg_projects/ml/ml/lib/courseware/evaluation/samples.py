@@ -95,38 +95,74 @@ def _unit(seed: int, *parts: str) -> float:
 
 
 SMALL_STRATA = "small_strata"
+# What score.py estimates each set over, one value per subpopulation: every stratum,
+# merged ones included, must lie wholly inside or outside each of them, or one can
+# get fewer than MIN_LABELS_PER_STRATUM of the stratum's labels. Claims are scored
+# per model; subsections per model over the scopes it extracted, so a stratum keeps
+# to one set of models; pair precision is over merged pairs and prerequisite
+# precision over edges.
+SCORING_GROUPS: dict[str, pl.Expr | None] = {
+    "claims": pl.col("model"),
+    "subsections": pl.col("models"),
+    "pairs": pl.when(pl.col("merged"))
+    .then(pl.lit("merged"))
+    .otherwise(pl.lit("unmerged")),
+    "clusters": None,
+    "prerequisites": pl.when(pl.col("edge_direction") == "none")
+    .then(pl.lit("non_edge"))
+    .otherwise(pl.lit("edge")),
+}
 
 
 def coarsen_strata(
-    population: pl.DataFrame, min_size: int = MIN_LABELS_PER_STRATUM
+    population: pl.DataFrame,
+    min_size: int = MIN_LABELS_PER_STRATUM,
+    within: pl.Expr | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
-    """Merge strata too small to estimate into one, and drop it if still too small.
+    """Merge strata too small to estimate, and drop a merged one still too small.
 
     A stratum needs MIN_LABELS_PER_STRATUM labels for its variance, so a stratum
-    with fewer items can never be estimated. Every such stratum joins SMALL_STRATA
-    (any partition is a valid stratification); if that is still below min_size its
-    items leave the population, and the estimates exclude them.
+    with fewer items can never be estimated. Every such stratum joins SMALL_STRATA,
+    or with `within` the "small_strata|<group>" of its group (any partition is a
+    valid stratification); a merged stratum still below min_size leaves the
+    population with its items, and the estimates exclude them.
 
     :param population: items with a stratum column
     :param min_size: smallest stratum kept as is
+    :param within: the scoring group of an item (SCORING_GROUPS), constant within
+        each stratum; small strata only merge within a group
     :returns: the population with small strata merged, and the dropped strata
         with their sizes
     :rtype: tuple[pl.DataFrame, pl.DataFrame]
     """
-    sizes = population.group_by("stratum").agg(pl.len().alias("population"))
+    merged_name = (
+        pl.lit(SMALL_STRATA)
+        if within is None
+        else pl.format("{}|{}", pl.lit(SMALL_STRATA), within)
+    )
+    population = population.with_columns(merged_name.alias("_merged_stratum"))
+    sizes = population.group_by("stratum", "_merged_stratum").agg(
+        pl.len().alias("population")
+    )
     small = sizes.filter(pl.col("population") < min_size)
+    too_small = (
+        small.group_by("_merged_stratum")
+        .agg(pl.col("population").sum())
+        .filter(pl.col("population") < min_size)["_merged_stratum"]
+        .implode()
+    )
     population = population.with_columns(
         pl.when(pl.col("stratum").is_in(small["stratum"].implode()))
-        .then(pl.lit(SMALL_STRATA))
+        .then(pl.col("_merged_stratum"))
         .otherwise(pl.col("stratum"))
         .alias("stratum")
     )
-    if 0 < small["population"].sum() < min_size:
-        return (
-            population.filter(pl.col("stratum") != SMALL_STRATA),
-            small.sort("stratum"),
-        )
-    return population, small.clear()
+    return (
+        population.filter(~pl.col("stratum").is_in(too_small)).drop("_merged_stratum"),
+        small.filter(pl.col("_merged_stratum").is_in(too_small))
+        .select("stratum", "population")
+        .sort("stratum"),
+    )
 
 
 def stratified_sample(  # noqa: PLR0913
