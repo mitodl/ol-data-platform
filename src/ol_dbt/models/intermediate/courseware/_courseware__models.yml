@@ -412,7 +412,8 @@ models:
     tests:
     - not_null
   - name: tagged_concept_id
-    description: str, the concept's UUID as the tagging run recorded it
+    description: str, the concept's UUID as the tagging run recorded it; the lowest
+      one when the run tagged the span for several concepts that have since merged
   - name: pattern_key
     description: str, the normalized phrase that matched
   - name: concept_label_key
@@ -477,7 +478,7 @@ models:
       the redirect of a concept merged since the tagging run
   - name: tagged_concept_id
     description: str, the concept's UUID as the tagging run's dictionary recorded
-      it
+      it; the lowest one when concepts the run kept apart have since merged
   - name: concept_label_key
     description: str, the label the phrase comes from
   - name: variant
@@ -524,7 +525,7 @@ models:
       concept
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: [pattern_key, tagged_concept_id]
+      column_list: [pattern_key, concept_id]
 
 unit_tests:
 - name: test_int__courseware__concept_tags_follows_merges_since_the_run
@@ -601,3 +602,99 @@ unit_tests:
     - {pattern_key: random library, concept_id: survivor, tagged_concept_id: merged,
       is_merged_label: true, tagged_source_count: 1, compared_source_count: 1, source_agreement_rate: 1.0,
       scope_agreement_rate: 1.0}
+
+- name: test_int__courseware__concept_tags_keeps_one_span_per_merged_concept
+  description: >
+    A phrase the run gave to two concepts that have since merged into one keeps a
+    single row per span, under the lower tagged id.
+  model: int__courseware__concept_tags
+  given:
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_run')
+    rows:
+    - {tagging_run_id: r1, tagged_at: '2026-10-01T00:00:00'}
+  - input: source('courseware_intermediate', 'courseware_concept_mention')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      scope_kind: unit, source_ref: b1, source_kind: html, pattern_key: csv, concept_id: b_csv,
+      matched_text: CSV, char_start: 0, char_end: 3}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      scope_kind: unit, source_ref: b1, source_kind: html, pattern_key: csv, concept_id: a_csv,
+      matched_text: CSV, char_start: 0, char_end: 3}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_alias')
+    rows:
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: a_csv, concept_label_key: comma
+        separated values csv, variant: abbreviation, match_mode: case_sensitive, is_short: true,
+      is_qualified: false, is_single_word: false, has_multiple_concepts: true, is_ambiguous: true}
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: b_csv, concept_label_key: csv
+        file csv, variant: abbreviation, match_mode: case_sensitive, is_short: true,
+      is_qualified: false, is_single_word: false, has_multiple_concepts: true, is_ambiguous: true}
+  - input: ref('int__courseware__concept_registry')
+    rows:
+    - {concept_id: a_csv, concept_status: merged, merged_into_concept_id: csv}
+    - {concept_id: b_csv, concept_status: merged, merged_into_concept_id: csv}
+    - {concept_id: csv, concept_status: active, merged_into_concept_id: null}
+  expect:
+    rows:
+    - {source_ref: b1, char_start: 0, concept_id: csv, tagged_concept_id: a_csv}
+
+- name: test_bridge_course_content_concept_counts_a_merged_span_once
+  description: >
+    With the tags of two merged concepts deduplicated, the bridge counts the span
+    once under the survivor.
+  model: bridge_course_content_concept
+  given:
+  - input: ref('int__courseware__concept_tags')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      scope_kind: unit, source_ref: b1, source_kind: html, concept_id: csv, tagged_concept_id: a_csv,
+      pattern_key: csv, is_ambiguous: true, char_start: 0, char_end: 3}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      scope_kind: unit, source_ref: b1, source_kind: html, concept_id: csv, tagged_concept_id: a_csv,
+      pattern_key: comma separated values, is_ambiguous: false, char_start: 10, char_end: 32}
+  - input: ref('int__courseware__cited_concept_sources')
+    rows: []
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows: []
+  - input: ref('dim_course_content')
+    rows: []
+  expect:
+    rows:
+    - {source_ref: b1, concept_fk: csv, mention_count: 2, phrase_count: 2, first_char_start: 0,
+      is_ambiguous: false}
+
+- name: test_int__courseware__concept_tagging_fan_out_folds_merged_dictionary_rows
+  description: >
+    Two dictionary rows of one phrase whose concepts have since merged give one
+    fan-out row under the survivor, carrying the phrase's mentions.
+  model: int__courseware__concept_tagging_fan_out
+  given:
+  - input: ref('int__courseware__concept_tags')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: csv, concept_id: csv, tagged_concept_id: a_csv}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_alias')
+    rows:
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: a_csv, concept_label_key: comma
+        separated values csv, variant: abbreviation, surface: CSV, match_mode: case_sensitive,
+      is_short: true, is_qualified: false, is_single_word: false, has_multiple_concepts: true,
+      is_ambiguous: true}
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: b_csv, concept_label_key: csv
+        file csv, variant: abbreviation, surface: CSV, match_mode: case_sensitive,
+      is_short: true, is_qualified: false, is_single_word: false, has_multiple_concepts: true,
+      is_ambiguous: true}
+  - input: ref('int__courseware__concept_registry')
+    rows:
+    - {concept_id: a_csv, concept_status: merged, merged_into_concept_id: csv}
+    - {concept_id: b_csv, concept_status: merged, merged_into_concept_id: csv}
+  - input: ref('int__courseware__concept_assignments')
+    rows: []
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows: []
+  - input: ref('int__courseware__claims')
+    rows: []
+  - input: ref('int__courseware__cited_concept_sources')
+    rows: []
+  expect:
+    rows:
+    - {pattern_key: csv, concept_id: csv, tagged_concept_id: a_csv, tagged_mention_count: 1,
+      tagged_source_count: 1, share_of_tagged_mentions: 1.0}
