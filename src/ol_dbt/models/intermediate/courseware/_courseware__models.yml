@@ -324,9 +324,10 @@ models:
   - name: proposed_at
     description: timestamp, when that run started
   - name: supporting_verdict_count
-    description: int, verdicts across every run that agree with the relation, by the
-      newest run's label assignments (for broader, those placing from under to; for
-      related, related or either hierarchy direction)
+    description: int, the newest verdict per (query label, candidate label) across
+      every run, where it agrees with the relation, by the newest run's label assignments
+      (for broader, those placing from under to; for related, related or either hierarchy
+      direction)
   - name: contrary_verdict_count
     description: int, distinct verdicts on the pair, plus for broader those placing
       to under from

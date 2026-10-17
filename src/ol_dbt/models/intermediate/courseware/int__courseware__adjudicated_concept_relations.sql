@@ -3,11 +3,13 @@
     from the newest run's snapshot, with when each was first proposed and the
     verdicts behind them.
 
-    Verdicts come from the append-only decision log across every run, mapped from
-    labels onto concepts by the newest run's assignments, so a verdict about two
-    labels counts for whichever concepts those labels now belong to. A pair is often
-    judged more than once (from both sides, and again for each new label of either
-    concept).
+    Verdicts come from the append-only decision log, mapped from labels onto
+    concepts by the newest run's assignments, so a verdict about two labels counts
+    for whichever concepts those labels now belong to. Only the newest verdict per
+    (query label, candidate label) counts: a rebuild re-adjudicates every label, and
+    counting its verdicts again would double the support with no new evidence. A
+    concept pair is still often judged more than once (from both sides, and for each
+    label of either concept).
       supporting_verdict_count  verdicts that agree with the relation: for broader,
                                 those placing from under to; for close, close; for
                                 related, related or either hierarchy direction (a
@@ -48,13 +50,34 @@ with runs as (
         on assignment.resolution_run_id = latest_run.resolution_run_id
 )
 
+, latest_decisions as (
+    select
+        query_label_key
+        , candidate_label_key
+        , verdict
+    from (
+        select
+            decision.query_label_key
+            , decision.candidate_label_key
+            , decision.verdict
+            , row_number() over (
+                partition by decision.query_label_key, decision.candidate_label_key
+                order by runs.started_at desc, decision.verdict asc
+            ) as decision_rank
+        from {{ source('courseware_intermediate', 'courseware_resolution_decision') }} as decision
+        inner join runs
+            on decision.resolution_run_id = runs.resolution_run_id
+    ) as ranked
+    where decision_rank = 1
+)
+
 -- each verdict as (narrower, broader) for the hierarchy verdicts, query first otherwise
 , verdicts as (
     select
         case when decision.verdict = 'broader' then candidate.concept_id else query.concept_id end as left_concept_id
         , case when decision.verdict = 'broader' then query.concept_id else candidate.concept_id end as right_concept_id
         , decision.verdict
-    from {{ source('courseware_intermediate', 'courseware_resolution_decision') }} as decision
+    from latest_decisions as decision
     inner join assignments as query
         on decision.query_label_key = query.concept_label_key
     inner join assignments as candidate
