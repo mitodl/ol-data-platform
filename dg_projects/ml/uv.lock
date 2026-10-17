@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.14.*"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -567,6 +567,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/10/bf/8d6ebc7dded797bd0f0160d52188021211f011a2b164ef0ae1dac4587465/cryptography-50.0.2-cp39-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:7a8701d6b584d76e909e3d305b7d126b41439876a5aaf76cddc67fc230eafa2e", size = 4897738, upload-time = "2026-09-30T15:29:43.106Z" },
     { url = "https://files.pythonhosted.org/packages/d4/aa/f3f6e0de7e6253b8baa8b2d8fb9d50924fa75cee3d4624bd4bc1208ee923/cryptography-50.0.2-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:ce47f66801c20ec6c6632453bb5960fe38939e9306970b48b3a5a26de7745d94", size = 5058280, upload-time = "2026-09-30T15:29:44.827Z" },
     { url = "https://files.pythonhosted.org/packages/f6/b6/a1faf3a27ae9405fb34b1713cc73b2d8a26b04d5c561578fa2e6ef3e5bb9/cryptography-50.0.2-cp39-abi3-win_amd64.whl", hash = "sha256:4e81d95e5bafc2d6e34e4bed780e53e4d5b9a2f928573428aa4d35fbec1eb0de", size = 3854095, upload-time = "2026-09-30T15:29:46.782Z" },
+]
+
+[[package]]
+name = "cyclopts"
+version = "5.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "docstring-parser" },
+    { name = "rich" },
+    { name = "rich-rst" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/28/c1/3debeeb6e0eb74a51d6f8cf1f273ed7c479e3321631cbf89fb9700e65e28/cyclopts-5.2.0.tar.gz", hash = "sha256:b63c1b1beaadf3ead19214385a0f90b990f152c4107c174e1724c45dc71e9541", size = 246542, upload-time = "2026-10-06T15:02:39.212Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d4/dd/3f73d04c95f6acc6a54700011637e49362e337139b518be895edf4786f87/cyclopts-5.2.0-py3-none-any.whl", hash = "sha256:5da2a5d65164e03008621fc4795946b88a722b881398b5dfa58afa6218342cff", size = 289196, upload-time = "2026-10-06T15:02:37.57Z" },
 ]
 
 [[package]]
@@ -1774,6 +1789,7 @@ dependencies = [
     { name = "google-genai" },
     { name = "httpx" },
     { name = "httpx2" },
+    { name = "networkit" },
     { name = "ol-orchestrate-lib" },
     { name = "openai" },
     { name = "opik" },
@@ -1787,6 +1803,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "cyclopts" },
     { name = "dagster-dg-cli" },
     { name = "dagster-webserver" },
     { name = "pytest" },
@@ -1805,6 +1822,7 @@ requires-dist = [
     { name = "google-genai" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "httpx2", specifier = ">=2.2.0" },
+    { name = "networkit", specifier = ">=11.2" },
     { name = "ol-orchestrate-lib", editable = "../../packages/ol-orchestrate-lib" },
     { name = "openai" },
     { name = "opik", specifier = ">=2.2.58" },
@@ -1818,6 +1836,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "cyclopts", specifier = ">=5.2.0" },
     { name = "dagster-dg-cli", specifier = ">=1.12.10" },
     { name = "dagster-webserver" },
     { name = "pytest", specifier = ">=9.0.1,<10" },
@@ -1990,6 +2009,23 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/bf/21/f64d6b2dbea7bf3f8c38cdc786dcc6ef012ca3d173ad208c782c9a7bedf6/narwhals-2.27.1.tar.gz", hash = "sha256:aed93076a3ea42d9c32c88e4eb5ea422a21937011cbe1f480f9572a523c82094", size = 735013, upload-time = "2026-10-10T06:52:18.113Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/89/5d4c86da1130d9059681e5b6cd7645df5c10279a6a079c5c37dcb2cc6f3f/narwhals-2.27.1-py3-none-any.whl", hash = "sha256:d057df13f5852b8e157596e82eb5e955fad267425df5e420e0ee9863da483b31", size = 483211, upload-time = "2026-10-10T06:52:16.32Z" },
+]
+
+[[package]]
+name = "networkit"
+version = "11.2.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "scipy" },
+    { name = "tabulate" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fa/2c/9d8629d1f5c1f22a2392e021271a38702c77bff5a169bb73e0c2cb99d0b0/networkit-11.2.2.tar.gz", hash = "sha256:94e3c64d7ef704a7e86a3d4a53f5c9baa7c880bc0f2d48e974878ccc40d52092", size = 8125843, upload-time = "2026-09-14T11:59:41.965Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c4/39/e61460e66026d98776b1560b20ec1cf7f0a3a1d167ddb63bf6b6392ec691/networkit-11.2.2-cp314-cp314-macosx_26_0_arm64.whl", hash = "sha256:c0f8860d531a613d3d73705c2700325f7bc3ca52feaa738046cbc3bc781844ee", size = 9687327, upload-time = "2026-09-14T11:59:23.925Z" },
+    { url = "https://files.pythonhosted.org/packages/4b/9f/cedf240dc259641eb57ddcaceb6834b79ba07122851f7ce5880292dbf183/networkit-11.2.2-cp314-cp314-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:98b5d53f025717640ec5a5c344c85192baa10cf96eb0aa2cc6b4fbc10ee19369", size = 11178461, upload-time = "2026-09-14T11:59:26.174Z" },
+    { url = "https://files.pythonhosted.org/packages/40/81/f8fdc1db2f606c7c87aa4703db9631f277a454d24be7ce363148f4e8f952/networkit-11.2.2-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:164e7caf9f48d76642e99585ae57eb920b118d00a92856c4a8a83fba2c3418a4", size = 11517385, upload-time = "2026-09-14T11:59:29.902Z" },
+    { url = "https://files.pythonhosted.org/packages/23/45/f88f089ebc74e3fd650acb50409acb0afc4a78201a80febab331a76ba49f/networkit-11.2.2-cp314-cp314-win_amd64.whl", hash = "sha256:fff3c5b4380a42eb1ece54bffd3019ddb3bf4d7a2dd267e44e7886fa4f7e588c", size = 30547139, upload-time = "2026-09-14T11:59:33.141Z" },
 ]
 
 [[package]]
@@ -3029,6 +3065,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c0/8f/0722ca900cc807c13a6a0c696dacf35430f72e0ec571c4275d2371fca3e9/rich-15.0.0.tar.gz", hash = "sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36", size = 230680, upload-time = "2026-04-12T08:24:00.75Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl", hash = "sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb", size = 310654, upload-time = "2026-04-12T08:24:02.83Z" },
+]
+
+[[package]]
+name = "rich-rst"
+version = "2.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pygments" },
+    { name = "rich" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cf/0e/faf7c7e36630561e3e9611730c47510cd972dd5fde8f95941ff78f76accd/rich_rst-2.2.0.tar.gz", hash = "sha256:b1e6a67f8f694a6f36035624bf73e2b1a0a4be13edaf3ba5e654d9758b61073a", size = 326270, upload-time = "2026-09-27T19:12:42.163Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d1/4e/716b42bf066e180c1235783b46f095a5d871d05dca7006d2295aac29c491/rich_rst-2.2.0-py3-none-any.whl", hash = "sha256:1ea1c43813dc4a8d86475fce27ffb74e0ada3d4656c9f8130ba2a59868055fe9", size = 279274, upload-time = "2026-09-27T19:12:40.548Z" },
 ]
 
 [[package]]
