@@ -7,12 +7,16 @@
     Written for OCW's resources and pages, and for any (name, title, text) triple.
 
     The name signals are tokens a solution file carries even glued to other letters
-    (pset3sol, 034pfsoln, hw5sampleans, exam2_key). "Solution" on its own names a topic
-    as often as a key (aqueous solutions, ODE solutions, solving), so a bare
-    solution/answer/key in the name or title counts only with an assessment word, and
-    in a title only where a key puts it: at the end, before a number or "to/for/set/key",
-    or after the assessment word. The text signals catch keys whose name and title say
-    nothing: an opening that announces solutions to an assessment, or "Solution:" /
+    (pset3sol, 034pfsoln, hw5sampleans), and "key" at the end after a number or an
+    assessment (exam2_key, pract_final_key; not key_ideas or lec_mathle_key).
+    "Solution" on its own names a topic as often as a key (aqueous solutions, solution
+    of dynamic equilibrium equations, solving), so a bare solution/answer/key in the
+    name or title counts only with an assessment word, and in a title only where a key
+    puts it: after the assessment word with no "of/on/in/with/as/about" between ("Exam 2
+    Solutions", not "Review of Aqueous Solutions"), alone or after a number or a colon,
+    or before an assessment ("Solutions to Problem Set 3", not "Solutions to Square
+    Systems"). The text signals catch keys whose name and title say nothing: an opening
+    that announces solutions to an assessment or to a course number, or "Solution:" /
     "Answer:" markers in a document named as an assessment.
 
     A name and text heuristic is not complete; docs/design/courseware_knowledge_extraction.md
@@ -24,26 +28,33 @@
     {#- worked examples in readings, reviews and recitation notes carry "Solution:" too, so markers count only on graded work -#}
     {%- set marked = 'problem sets?|psets?|ps[ _-]?[0-9]+|homework|hw ?[0-9]*|exams?([^a-z]|$)|quiz|midterms?|mid[_ -]?[0-9]|finals?([^a-z]|$)|assignments?|tests?([^a-z]|$)|worksheets?' -%}
     {%- set name_key = (
-        "'soln|(sols?|anskey)[0-9]*$|sol[0-9]|(^|[^a-z])(sols?|ans|answers?)([^a-z]|$)|_keys?$|[0-9][_-]?keys?([^a-z]|$)"
+        "'soln|(sols?|anskey)[0-9]*$|sol[0-9]|(^|[^a-z])(sols?|ans|answers?)([^a-z]|$)|([0-9]|exam|xam|quiz|qz|pset|ps|hw|midterm|final|test|prob)[_-]?keys?$"
         ~ "|sampleans|anssh|quizans|ans_?sheet|answer_?sheet|[0-9]ans([^a-z]|$)"
-        ~ "|[0-9][_-]?solutions?([^a-z-]|$)|solutions?[_-]?[0-9]|^solutions?([0-9_]|$)|^answers?|(^|[0-9_-])sol[a-z]?[0-9]|(exam|quiz|ps|pset|hw|rec|midterm|final|test)sols?([^a-z]|$)'"
+        ~ "|[0-9][_-]?solutions?([^a-z-]|$)|solutions?[_-]?[0-9]|^solutions?([0-9]|_[^o]|$)|^answers?|(^|[0-9_-])sol[a-z]?[0-9]|(exam|quiz|ps|pset|hw|rec|midterm|final|test)sols?([^a-z]|$)'"
     ) -%}
     {%- set name_weak = "'solution|answer|[0-9_-]sol([^a-z]|$|ns?([^a-z]|$)|s([^a-z]|$)|utions?)'" -%}
     {%- set title_key = (
         "'(^|[^a-z])(solns?|answer keys?|answer sheets?)([^a-z]|$)|\\(solutions?\\)|with (solutions|answers)"
-        ~ "|video solutions?|solutions? manuals?|(and|&) (solutions|answers)"
-        ~ "|(" ~ graded ~ ")[^:]*(solutions?|answers|keys?)([^a-z]|$)'"
+        ~ "|video solutions?|solutions? manuals?|(and|&) (solutions|answers)'"
     ) -%}
-    {%- set title_weak = "'(solutions?|answers?|keys?)($| ?#?[0-9]| (to|for|set|key)([^a-z]|$))'" -%}
+    {#- read on the title with its prepositions replaced by '|', which the gap cannot cross -#}
+    {%- set title_graded = "'(" ~ graded ~ ")[^:|]*(and|[^a-z|])((solutions?|answers)([^a-z|]|$)|keys?( ?[^a-z |]| ?$))'" -%}
+    {%- set title_topic = regexp_replace_all(title, "'(^|[^a-z])(of|on|in|with|as|about)([^a-z-]|$)'", "'|'") -%}
+    {%- set title_weak = (
+        "'(^|[0-9:(,#.-] ?|(^|[^a-z])(" ~ graded ~ "|problems?|exercises?|questions?|tutorials?|projects?|sample) ?)"
+        ~ "(solutions?|answers?|keys?)($| ?#?[0-9]| (set|key)([^a-z]|$))"
+        ~ "|(^|[^a-z])(solutions?|answers?|keys?) (to|for) [^:]*(" ~ graded ~ "|projects?|problems? ?[0-9])'"
+    ) -%}
     {%- set head_key = (
         "'solutions? (to|for) (the )?([0-9.]+ )?(selected |practice |sample |in-class |additional )?(" ~ graded ~ ")"
         ~ "|(" ~ graded ~ "|section)[ _]?#?[0-9]*[a-z]?:?[ _](solutions?|answers|answer key|key)([^a-z]|$)"
         ~ "|answer key|with (answers|solutions)|solution (outlines?|key|set|sheet)|sample (answers|solutions)"
-        ~ "|answers? to (the )?(exercises|questions|problems|problem sets?)|question [0-9]+:? answer|problems? [0-9][0-9.-]* solutions?|^solutions?([^a-z]|$)'"
+        ~ "|answers? to (the )?(exercises|questions|problems|problem sets?)|question [0-9]+:? answer|problems? [0-9][0-9.-]* solutions?|^solutions?( (to|for))?:? ?([^a-z ]|$)'"
     ) -%}
     (
         {{ regexp_like(name, name_key) }}
         or {{ regexp_like(title, title_key) }}
+        or {{ regexp_like(title_topic, title_graded) }}
         or (
             {{ regexp_like("concat(" ~ title ~ ", ' ', " ~ name ~ ")", "'" ~ assessment ~ "'") }}
             and (
