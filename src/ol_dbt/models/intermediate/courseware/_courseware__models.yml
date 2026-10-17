@@ -372,8 +372,8 @@ unit_tests:
     is a unit of its own and its notes are read there, not dropped. "Review of Aqueous
     Solutions" and a lecture opening "Solution of dynamic equilibrium equations" name
     topics, so they stay in materials; ps1_key and "Mock Exam Key" are answer keys
-    and
-    are left out.
+    and are left out. c2's readings page links c1's aqueous solutions notes, which
+    stay c1's: c2 does not read them and they still count as unlinked in c1.
   model: int__courseware__extraction_sources
   given:
   - input: ref('dim_course_content')
@@ -390,8 +390,13 @@ unit_tests:
     rows:
     - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
         the course.</p>}
+    - {course_slug: c2, courserun_readable_id: run2, course_title: Course Two, course_description_html: <p>Another
+        course.</p>}
   - input: ref('int__ocw__content_files')
     rows:
+    - {courserun_readable_id: run2, course_slug: c2, content_file_key: courses/c2/pages/readings/,
+      content_type: page, title: Readings, file_extension: null, content_tags: null,
+      content: '<p>Readings.</p><a href="/courses/c1/resources/mit5_111f08_lec3">Aqueous</a>'}
     - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/visualizations/light1/,
       content_type: page, title: Light, file_extension: null, content_tags: null,
       content: '<p>Light and optics.</p><a href="/courses/c1/resources/light_notes">Notes</a>'}
@@ -413,6 +418,10 @@ unit_tests:
       content: 1. Beowulf is an epic.}
   expect:
     rows:
+    - {scope_id: context, scope_kind: context, scope_title: Course context, source_ref: courses/c2/,
+      source_kind: course_description}
+    - {scope_id: courses/c2/pages/readings/, scope_kind: unit, scope_title: Readings,
+      source_ref: courses/c2/pages/readings/, source_kind: page}
     - {scope_id: context, scope_kind: context, scope_title: Course context, source_ref: courses/c1/,
       source_kind: course_description}
     - {scope_id: courses/c1/pages/visualizations/light1/, scope_kind: unit, scope_title: Light,
