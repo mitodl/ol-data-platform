@@ -81,7 +81,11 @@
       recompute the whole pipeline once per step on engines that inline CTEs. An
       edge whose broader concept leads back to its narrower one through edges ranked
       above it is the lowest-ranked edge of that cycle and is not published
-      (hierarchy_cycle). Every cycle loses exactly its lowest-ranked edge.
+      (hierarchy_cycle). Every cycle loses its lowest-ranked edge, in one pass over
+      all broader edges, so where cycles overlap an edge can be cut for a cycle a cut
+      above it already broke (z < x for z < x < y < z, when x < y is cut for x < y <
+      w < x). assert_bridge_concept_relation_hierarchy_cycle_overprune counts the cut
+      edges a second pass over the survivors would keep, an upper bound on that.
     - then broader and builds_on are exclusive per pair, in either direction. Of the
       broader edges left and a builds_on edge that would publish, the one with the
       higher relation_confidence publishes, broader on a tie (hierarchy_pair on the
@@ -91,7 +95,7 @@
       the walk: at worst that unpublishes a weaker edge of a cycle that would
       otherwise not publish, and it never publishes a cycle.
 #}
-{%- set verdict_reliability = 0.5 -%}
+{%- set verdict_reliability = courseware_verdict_reliability() -%}
 {%- set unit_reliability = 0.3 -%}
 {%- set cross_signal_reliability = 0.2 -%}
 {#- the acyclic test's default bound -#}
@@ -350,60 +354,10 @@ with evidence as (
 
 -- broader edges in cycle-breaking order, lowest first
 , hierarchy_edges as (
-    select
-        from_concept_id
-        , to_concept_id
-        , row_number() over (
-            order by adjudication_score, to_narrower_count, from_concept_id, to_concept_id
-        ) as cycle_rank
-    from (
-        select
-            from_concept_id
-            , to_concept_id
-            , round(verdict_consistency * (1.0 - verdict_miss), 4) as adjudication_score
-            , count(*) over (partition by to_concept_id) as to_narrower_count
-        from adjudication_scores
-        where relation = 'broader'
-    ) as ranked
+    {{ courseware_hierarchy_edges("(select * from adjudication_scores where relation = 'broader')") }}
 )
 
-{#-
-    Walk from each edge's broader concept along edges ranked above the edge, as the
-    acyclic test does: a walk that is back at the edge's narrower concept is carried
-    forward, every other walk is extended by one edge per step.
--#}
-, cycle_walk_1 as (
-    select
-        from_concept_id as start_from_concept_id
-        , to_concept_id as start_to_concept_id
-        , cycle_rank as start_rank
-        , to_concept_id as end_concept_id
-    from hierarchy_edges
-)
-{% for step in range(2, max_cycle_length + 1) %}
-, cycle_walk_{{ step }} as (
-    select distinct
-        walk.start_from_concept_id
-        , walk.start_to_concept_id
-        , walk.start_rank
-        , coalesce(hierarchy_edges.to_concept_id, walk.end_concept_id) as end_concept_id
-    from cycle_walk_{{ step - 1 }} as walk
-    left join hierarchy_edges
-        on
-            walk.end_concept_id = hierarchy_edges.from_concept_id
-            and walk.end_concept_id != walk.start_from_concept_id
-            and hierarchy_edges.cycle_rank > walk.start_rank
-    where walk.end_concept_id = walk.start_from_concept_id or hierarchy_edges.to_concept_id is not null
-)
-{% endfor %}
-
-, hierarchy_cycle_edges as (
-    select distinct
-        start_from_concept_id as from_concept_id
-        , start_to_concept_id as to_concept_id
-    from cycle_walk_{{ max_cycle_length }}
-    where end_concept_id = start_from_concept_id
-)
+{{ courseware_hierarchy_cycle_cuts('hierarchy_cycle_edges', 'hierarchy_edges', 'hierarchy_edges', max_cycle_length) }}
 
 -- each builds_on edge that clears its own support rule, against the strongest broader
 -- edge left on its pair (either direction)
