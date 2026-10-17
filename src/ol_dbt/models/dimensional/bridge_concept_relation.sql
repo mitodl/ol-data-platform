@@ -17,9 +17,10 @@
       courserun_support         distinct course runs with course evidence
       reverse_courserun_support builds_on only: runs where the opposite direction
                                 was observed
-      course_scope_support      builds_on only: scope_support with each course's
-                                reruns counted once (its run with the most units),
-                                since reruns of one course have near-identical text
+      course_scope_support      course relations only: scope_support with each
+                                course's reruns counted once (its run with the most
+                                units), since reruns of one course have
+                                near-identical text
       reverse_scope_support     builds_on only: the same for the opposite direction;
                                 direction_consistency is course_scope_support /
                                 (course_scope_support + reverse_scope_support)
@@ -32,7 +33,8 @@
       cross_signal_support      evidence for the pair from the other source: for
                                 an adjudicated relation, course evidence (units
                                 co-teaching, co-assessing or sequencing the pair,
-                                either direction); for a course relation,
+                                either direction, reruns counted once); for a
+                                course relation,
                                 verdicts saying the pair is connected
     first_observed_at and last_observed_at show how the edge has evolved; an edge
     whose evidence disappears (an extraction version replaced) drops out on the
@@ -45,8 +47,9 @@
         * (1 - (1 - own_reliability) ^ own_support
              * (1 - cross_signal_reliability) ^ cross_signal_support)
     own_support is verdict_support for adjudicated relations (reliability 0.5 each,
-    a direct pairwise judgement) and scope_support for course relations (0.3 each,
-    one extraction call implying the edge). Cross-signal evidence counts 0.2 each,
+    a direct pairwise judgement) and course_scope_support for course relations (0.3
+    each, one extraction call implying the edge; a rerun of a course adds nothing,
+    as for publication). Cross-signal evidence counts 0.2 each,
     because it says the pair is connected, not that this relation holds. consistency
     is direction_consistency for builds_on, verdict_support / (verdict_support +
     contrary_verdict_support) for adjudicated relations, and 1 otherwise. Adding
@@ -159,11 +162,15 @@ with evidence as (
     group by from_concept_id, to_concept_id, relation
 )
 
--- a run with no course_fk (e.g. residential) is keyed by its course's readable id
-, builds_on_course_runs as (
+-- units per course relation with each course's reruns counted once, per evidence
+-- source; a run with no course_fk (e.g. residential) is keyed by its course's
+-- readable id
+, course_relation_runs as (
     select
         evidence.from_concept_id
         , evidence.to_concept_id
+        , evidence.relation
+        , evidence.evidence_source
         , evidence.scope_count
         , coalesce(
             course_runs.course_fk
@@ -174,33 +181,44 @@ with evidence as (
         on
             evidence.platform = course_runs.platform
             and evidence.courserun_readable_id = course_runs.courserun_readable_id
-    where evidence.relation = 'builds_on'
+    where evidence.evidence_source != 'adjudication'
+)
+
+, course_support as (
+    select
+        from_concept_id
+        , to_concept_id
+        , relation
+        , sum(scope_count) as course_scope_support
+    from (
+        select
+            from_concept_id
+            , to_concept_id
+            , relation
+            , evidence_source
+            , course_key
+            , max(scope_count) as scope_count
+        from course_relation_runs
+        group by from_concept_id, to_concept_id, relation, evidence_source, course_key
+    ) as per_course
+    group by from_concept_id, to_concept_id, relation
 )
 
 , builds_on_course_support as (
     select
         from_concept_id
         , to_concept_id
-        , sum(scope_count) as course_scope_support
-    from (
-        select
-            from_concept_id
-            , to_concept_id
-            , course_key
-            , max(scope_count) as scope_count
-        from builds_on_course_runs
-        group by from_concept_id, to_concept_id, course_key
-    ) as per_course
-    group by from_concept_id, to_concept_id
+        , course_scope_support
+    from course_support
+    where relation = 'builds_on'
 )
 
 , pair_course_support as (
     select
         least(from_concept_id, to_concept_id) as low_concept_id
         , greatest(from_concept_id, to_concept_id) as high_concept_id
-        , sum(scope_count) as course_unit_count
-    from evidence
-    where evidence_source != 'adjudication'
+        , sum(course_scope_support) as course_unit_count
+    from course_support
     group by least(from_concept_id, to_concept_id), greatest(from_concept_id, to_concept_id)
 )
 
@@ -258,7 +276,6 @@ with evidence as (
     select
         from_concept_id
         , to_concept_id
-        , course_scope_support
         , reverse_scope_support
         , direction_consistency
         , case
@@ -272,7 +289,7 @@ with evidence as (
 , signals as (
     select
         edges.*
-        , builds_on_support.course_scope_support
+        , course_support.course_scope_support
         , builds_on_support.reverse_scope_support
         , builds_on_support.direction_consistency
         , builds_on_support.unpublished_reason as support_unpublished_reason
@@ -290,6 +307,11 @@ with evidence as (
             edges.relation = 'builds_on'
             and edges.from_concept_id = builds_on_support.from_concept_id
             and edges.to_concept_id = builds_on_support.to_concept_id
+    left join course_support
+        on
+            edges.from_concept_id = course_support.from_concept_id
+            and edges.to_concept_id = course_support.to_concept_id
+            and edges.relation = course_support.relation
     left join adjudication_scores
         on
             edges.from_concept_id = adjudication_scores.from_concept_id
@@ -317,7 +339,7 @@ with evidence as (
                 1.0
                 - case
                     when signals.is_adjudicated then signals.verdict_miss
-                    else power(1.0 - {{ unit_reliability }}, signals.scope_support)
+                    else power(1.0 - {{ unit_reliability }}, signals.course_scope_support)
                 end
                 * power(1.0 - {{ cross_signal_reliability }}, signals.cross_signal_support)
             )

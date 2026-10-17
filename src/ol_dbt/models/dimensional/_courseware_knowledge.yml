@@ -352,10 +352,11 @@ models:
   - name: reverse_courserun_support
     description: int, builds_on only, course runs showing the opposite direction
   - name: course_scope_support
-    description: int, builds_on only, scope_support with each course's reruns counted
-      once (the run with the most units; a run without a course_fk is keyed by the
-      run id less its run segment); the support the publishing rule reads, since reruns
-      of one course have near-identical text
+    description: int, course relations only, scope_support with each course's reruns
+      counted once (the run with the most units; a run without a course_fk is keyed
+      by the run id less its run segment); the support the builds_on publishing rule
+      and relation_confidence read, since reruns of one course have near-identical
+      text
   - name: reverse_scope_support
     description: int, builds_on only, course_scope_support of the opposite direction
   - name: direction_consistency
@@ -376,14 +377,15 @@ models:
   - name: cross_signal_support
     description: int, evidence for the pair from the other source. For an adjudicated
       relation, unit observations of the pair in course evidence (co-taught, co-assessed
-      or sequenced, either direction); for a course relation, verdicts saying the
-      pair is connected (close, related, broader or narrower)
+      or sequenced, either direction, each course's reruns counted once); for a course
+      relation, verdicts saying the pair is connected (close, related, broader or
+      narrower)
   - name: relation_confidence
     description: >-
       float in [0, 1], noisy-OR of the edge's evidence scaled by its consistency:
       consistency * (1 - (1 - r) ^ own_support * 0.8 ^ cross_signal_support), where
       own_support is verdict_support with r = 0.5 for adjudicated relations and
-      scope_support with r = 0.3 for course relations, and consistency is
+      course_scope_support with r = 0.3 for course relations, and consistency is
       direction_consistency for builds_on, verdict_support / (verdict_support +
       contrary_verdict_support) for adjudicated relations, and 1 otherwise. Agreeing
       evidence never lowers it and contrary evidence never raises it. One unit gives
@@ -417,8 +419,8 @@ models:
       since every supporting course adds at least one unit). Each broader cycle loses
       its lowest-ranked edge (by adjudication score, then the number of broader edges
       into its broader concept, then concept ids). Then broader and builds_on are
-      exclusive per pair among the edges left (the higher relation_confidence
-      publishes, broader on a tie). Every other relation is published
+      exclusive per pair among the edges left (the higher relation_confidence publishes,
+      broader on a tie). Every other relation is published
     tests:
     - not_null
   - name: unpublished_reason
@@ -623,7 +625,8 @@ unit_tests:
     verdicts) beats a two-unit builds_on in the opposite direction. m and n are
     co-taught and adjudicated related, so each edge carries the other source as
     cross-signal support. s and t are related with no verdict left to count, so the
-    proposal counts as one.
+    proposal counts as one. u and v are co-taught in run1 and in run3, a rerun of
+    the same course, which counts once, so complements scores one unit's 0.3.
   model: bridge_concept_relation
   given:
   - input: ref('int__courseware__concept_relation_evidence')
@@ -666,6 +669,15 @@ unit_tests:
       platform: mitxonline, courserun_readable_id: run1, scope_count: 1, observed_at: '2026-10-01'}
     - {from_concept_id: s, to_concept_id: t, relation: related, evidence_source: adjudication,
       platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: u, to_concept_id: v, relation: complements, evidence_source: co_taught,
+      platform: mitxonline, courserun_readable_id: run1, scope_count: 1, observed_at: '2026-10-01'}
+    - {from_concept_id: u, to_concept_id: v, relation: complements, evidence_source: co_taught,
+      platform: mitxonline, courserun_readable_id: run3, scope_count: 1, observed_at: '2026-10-01'}
+  - input: ref('dim_course_run')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run1, course_fk: course1, is_current: true}
+    - {platform: mitxonline, courserun_readable_id: run2, course_fk: course2, is_current: true}
+    - {platform: mitxonline, courserun_readable_id: run3, course_fk: course1, is_current: true}
   - input: ref('int__courseware__adjudicated_concept_relations')
     rows:
     - {from_concept_id: a, to_concept_id: b, relation: broader, supporting_verdict_count: 2,
@@ -740,3 +752,5 @@ unit_tests:
       cross_signal_support: 1, relation_confidence: 0.44, is_published: true, unpublished_reason: null}
     - {from_concept_fk: s, to_concept_fk: t, relation: related, verdict_support: 1,
       cross_signal_support: 0, relation_confidence: 0.5, is_published: true, unpublished_reason: null}
+    - {from_concept_fk: u, to_concept_fk: v, relation: complements, verdict_support: null,
+      cross_signal_support: 0, relation_confidence: 0.3, is_published: true, unpublished_reason: null}
