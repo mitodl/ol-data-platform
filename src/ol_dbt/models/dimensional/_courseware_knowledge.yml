@@ -748,3 +748,54 @@ unit_tests:
       cross_signal_support: 0, relation_confidence: 0.5, is_published: true, unpublished_reason: null}
     - {from_concept_fk: u, to_concept_fk: v, relation: complements, verdict_support: null,
       cross_signal_support: 0, relation_confidence: 0.3, is_published: true, unpublished_reason: null}
+- name: test_bridge_concept_relation_cuts_every_cycle_lowest_edge_in_one_pass
+  description: >
+    z < x < y < z and x < y < w < x overlap on x < y. x < y is the lowest edge of
+    x <
+    y < w < x and z < x the lowest of z < x < y < z, so both are cut in the one pass,
+    although cutting x < y already broke z < x < y < z and an exact pass would keep
+    z <
+    x. This pins the conservative rule;
+    assert_bridge_concept_relation_hierarchy_cycle_overprune counts such edges.
+  model: bridge_concept_relation
+  given:
+  - input: ref('int__courseware__concept_relation_evidence')
+    rows:
+    - {from_concept_id: z, to_concept_id: x, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: x, to_concept_id: y, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: y, to_concept_id: w, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: w, to_concept_id: x, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: y, to_concept_id: z, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('int__courseware__adjudicated_concept_relations')
+    rows:
+    - {from_concept_id: z, to_concept_id: x, relation: broader, supporting_verdict_count: 1,
+      contrary_verdict_count: 0, pair_verdict_count: 1}
+    - {from_concept_id: x, to_concept_id: y, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: y, to_concept_id: w, relation: broader, supporting_verdict_count: 3,
+      contrary_verdict_count: 0, pair_verdict_count: 3}
+    - {from_concept_id: w, to_concept_id: x, relation: broader, supporting_verdict_count: 3,
+      contrary_verdict_count: 0, pair_verdict_count: 3}
+    - {from_concept_id: y, to_concept_id: z, relation: broader, supporting_verdict_count: 3,
+      contrary_verdict_count: 0, pair_verdict_count: 3}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows: []
+  expect:
+    rows:
+    - {from_concept_fk: z, to_concept_fk: x, relation: broader, relation_confidence: 0.5,
+      is_published: false, unpublished_reason: hierarchy_cycle}
+    - {from_concept_fk: x, to_concept_fk: y, relation: broader, relation_confidence: 0.75,
+      is_published: false, unpublished_reason: hierarchy_cycle}
+    - {from_concept_fk: y, to_concept_fk: w, relation: broader, relation_confidence: 0.875,
+      is_published: true, unpublished_reason: null}
+    - {from_concept_fk: w, to_concept_fk: x, relation: broader, relation_confidence: 0.875,
+      is_published: true, unpublished_reason: null}
+    - {from_concept_fk: y, to_concept_fk: z, relation: broader, relation_confidence: 0.875,
+      is_published: true, unpublished_reason: null}
