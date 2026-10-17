@@ -40,14 +40,19 @@ with
     {{
         deduplicate_raw_table(
             raw_table="raw__openedx__s3__course_xml_blocks",
-            partition_columns="source_system, course_id, block_id, block_type",
+            partition_columns="source_system, course_id, xml_path",
         )
     }},
     cleaned as (
         select
             course_id as courserun_readable_id,
             source_system as coursestructure_xml_source_system,
-            block_id as coursestructure_xml_block_id,
+            -- The block's id is its file name, which is what the parent's pointer and the
+            -- course structure API name it by. The parser takes the url_name attribute
+            -- first, and a library_content child keeps the url_name of the library
+            -- problem it was copied from, so several children of one course can share
+            -- it; keyed on that, the deduplication above kept one and dropped the rest.
+            {{ regexp_extract_or_null("xml_path", "'([^/]+)\\.xml$'", 1) }} as coursestructure_xml_block_id,
             block_type as coursestructure_xml_block_type,
             block_display_name as coursestructure_xml_block_display_name,
             xml_attributes as coursestructure_xml_block_attributes,

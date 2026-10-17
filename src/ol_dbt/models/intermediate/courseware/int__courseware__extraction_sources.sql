@@ -42,8 +42,7 @@ with content as (
             else coursestructure_xml_source_system
         end as platform
         , coursestructure_xml_block_type as block_type
-        -- the export-relative path, as the exclusions and document text spell it
-        , {{ regexp_replace_all('coursestructure_xml_block_path', "'^course/'", "''") }} as export_path
+        , coursestructure_xml_block_id as block_name
         , coursestructure_xml_raw_xml as raw_xml
         , video_edx_id
         , coursestructure_xml_retrieved_at as retrieved_at
@@ -173,14 +172,12 @@ with content as (
             'latest_xml_blocks.raw_xml', "'&quot;en&quot;: &quot;([^&]+)&quot;'", 1
         ) }} as english_transcript_filename
     from leaf_blocks
-    -- problems inside library_content are named by their file, not their url_name, so
-    -- the join is on the export path for every block type
     inner join latest_xml_blocks
         on
             leaf_blocks.platform = latest_xml_blocks.platform
             and leaf_blocks.courserun_readable_id = latest_xml_blocks.courserun_readable_id
-            and latest_xml_blocks.export_path
-            = concat(leaf_blocks.block_category, '/', leaf_blocks.block_name, '.xml')
+            and leaf_blocks.block_category = latest_xml_blocks.block_type
+            and leaf_blocks.block_name = latest_xml_blocks.block_name
     where leaf_blocks.parent_category != 'library_content' or leaf_blocks.sibling_position = 1
 )
 

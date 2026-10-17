@@ -198,7 +198,7 @@ Findings:
 - Label normalization alone is not resolution. Before the resolution step, "AUC", "AUC / ROC curve" and "logarithm"/"logarithms" each produced a false requirement. Some proposed merges are wrong ("random module" with "random number generation"), so `proposed` status and review matter.
 - Prompt v1 produced course-internal pointers ("concepts from Lecture 3") as assumed knowledge and "Lectures 2-4" as a declared prerequisite. v2 forbids both, and both versions' rows stay queryable side by side.
 - The Tika text of an html body keeps no hrefs, so a slide deck cannot be placed in the sequential that links it, which is why the materials scope exists. Recording `/static/` references in the document-text asset would fix it.
-- Problems inside `library_content` join to the OLX export by file name, not by the staged `coursestructure_xml_block_id` (the inner `url_name`). That should be corrected in staging.
+- Problems inside `library_content` joined to the OLX export by file name, not by the staged `coursestructure_xml_block_id` (the inner `url_name`, which a child keeps from its source library). Staging now takes the id from the file name, so all 342 of UAI.4's problems join by id (28 before), and the deduplication keyed on it no longer drops children that share a `url_name`.
 - The rendered context document is too long: every taught concept, near-duplicate outcomes. Ranking and capping are SQL changes with no re-extraction.
 - mit-learn#4111's unit prompt invites "answers and explanations when the platform provides them" into the model's input. The SQL macro here removes them before any text leaves the warehouse.
 
