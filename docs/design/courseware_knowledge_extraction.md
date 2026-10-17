@@ -374,7 +374,7 @@ What it costs: AskTIM tool calls make one more network hop and depend on one mor
 
 ## 11. Fast-follow work (accepted from the practice review)
 
-1. Human gold set. 300 to 500 claims, stratified by course family and by model agreement (both models, one only), plus 20 to 40 exhaustively annotated subsections for recall, double-annotated in part, with precision estimated by stratified prediction-powered inference. Same-family model agreement overstates recall, because shared misses are invisible. A few hundred labelled concept pairs and about 100 sampled clusters for resolution, scored with B-cubed.
+1. Human gold set. 300 to 500 claims, stratified by course family and by model agreement (both models, one only), plus 20 to 40 exhaustively annotated subsections for recall, double-annotated in part, with precision estimated by stratified prediction-powered inference. Same-family model agreement overstates recall, because shared misses are invisible. A few hundred labelled concept pairs and about 100 sampled clusters for resolution, scored with B-cubed. Sampling, export and scoring are built (section 12); the annotation itself is open.
 2. Claim-quote support check. Run a sampled NLI or LLM-judge check that each verified passage supports its claim, with a per-claim confidence built from match tier, cross-scope and cross-model agreement, and calibrated on the gold set.
 3. Explicit promotion of extraction versions. Replace "newest extraction wins" (`is_current`) with a promoted extractor version per scope, so a trial run or a second model never becomes current by running last.
 4. Support threshold for inferred prerequisites. `requires` and `builds_on` from a single claim let the model's known bias toward predicting prerequisites through. Require support across scopes or runs, enforce a strict partial order (no cycles) as a dbt test, and evaluate against sampled annotated pairs.
@@ -385,6 +385,26 @@ What it costs: AskTIM tool calls make one more network hop and depend on one mor
 9. Dagster assets. Wrap `extract_scopes`, `resolve_concepts`, `describe_concepts` and `compute_graph` as assets in `dg_projects/ml`, writing the same tables to Iceberg through the existing IO manager. Prompt versions go in Opik.
 10. Dictionary propagation. Aho-Corasick tagging of every block with known concept aliases, with a case-sensitive pass and an ambiguity flag for short aliases, and a check that resolution errors are not multiplied across the corpus.
 11. Scale paths. Use an ANN index (Qdrant or hnswlib) for blocking past tens of thousands of labels, and multithreaded Leiden with a fixed partition seed for large graphs.
+
+## 12. Evaluation: the human gold set
+
+`ml.lib.courseware.evaluation` builds four annotation sets from the extraction, resolution and dimensional outputs, exports them as Label Studio tasks, and scores Label Studio's JSON export. `python -m ml.lib.courseware.local gold sample` writes each set's population, sample, tasks and labeling config; `gold score` takes the exports. Samples are deterministic by seed, per stratum.
+
+| set | strata | POC population | sampled |
+|---|---|---|---|
+| claims (precision) | course family x model x agreement (both, one model only, unpaired, not compared) | 2,530 | 400 |
+| subsections (recall, exhaustive, half blind) | course family x size (under or over 20k characters) x models that extracted it | 51 | 30 |
+| label pairs (merges) | resolver verdict, plus unblocked pairs within the 20 nearest embedding neighbours | 8,616 | 300 |
+| clusters (B-cubed) | singleton vs. multi-member | 586 | 100 |
+| prerequisite pairs (three-way, 3 annotators) | edge relation x support, bidirectional, non-edges by other relation | 50,965 | 200 |
+
+Generated with seed 20261017 from the five-course POC (Opus on UAI.2 to UAI.4, Haiku on UAI.1, UAI.4 and UAI.5). Course family is degenerate here (everything is UAI); it comes from the course number's prefix, so the full corpus stratifies by department. Only UAI.4 has both models, so the agreement strata come from 17 scopes. The 30 subsections are 666k characters of text (median 19k), which is the expensive part of the annotation.
+
+Two models' labels match by one frozen rule, reported with every number: normalized label, then the same resolved concept id, then a supplied label map (e.g. the joint resolution of both models' labels). Precision and recall are estimated with stratified prediction-powered inference (Fisch et al., NeurIPS 2024) over PPI++ power tuning. The tuning weight is cross-fitted across two folds of each stratum's labels, because tuning on the same 40 or so labels biased the estimate: in simulation the same-sample interval covered 88% at a nominal 90% and the cross-fitted one 90%, with a standard error 15% below the classical estimator's. The point estimate and weight match `ppi_py` on the same data. We do not depend on it, because it has no stratified estimator and pulls in numba, statsmodels and gdown. The autorater today is the other model, which only varies inside the "both" strata (same status or not); the disagreement strata reduce to classical stratified estimates. The sampled claim-support judge (section 11, item 2) plugs in as `gold score --autorater`. Recall is sum(found) / sum(gold) over subsections, with the pooled concepts of every model as the proxy. B-cubed recall only sees true members among the eight nearest concepts shown, so it is an upper bound. Kappa is mean pairwise Cohen's plus Fleiss' at the modal rater count.
+
+Annotation tool: Label Studio Community, checked 2026-10-17 against its repository and docs. It is Apache-2.0 (1.23.2 released 2026-09-29, active), has a Helm chart (`heartex/label-studio`, Postgres backed), and its tags cover every task. Per-region `TextArea` and `Choices` let an annotator highlight a concept and name it, which exhaustive annotation needs. `Ranker` with buckets sorts a cluster's members into concepts. JSON import accepts pre-annotations and the export keeps each annotator's result. What Community lacks is in the Enterprise tier: agreement metrics, the overlap setting in the UI, SSO and role-based access. We compute agreement ourselves; the project API's `maximum_annotations` and `overlap_cohort_percentage` fields are in the open-source model and its next-task queue reads them (not yet tried on a deployment); and the instance goes behind our gateway with local annotator accounts. Argilla is also Apache-2.0 and has built-in task distribution (`min_submitted`), but its last release was v2.8.0 on 2025-03-11 and its README says no new features are planned. Its span question takes a fixed label set with no text per span, and its documented self-hosting is docker compose with Elasticsearch, with no Helm chart.
+
+Still open: deploying Label Studio, writing the annotation guideline, and the annotation (2 annotators on a quarter of claims, subsections and pairs; 3 on every prerequisite pair). The guideline and the gold set then fix the labels that DSPy or prompt tuning would need.
 
 ## References
 
