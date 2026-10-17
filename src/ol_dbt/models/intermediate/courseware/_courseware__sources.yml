@@ -324,8 +324,8 @@ sources:
     - name: label_count
       description: int, concept label keys in the dictionary
     - name: tokenless_label_count
-      description: int, labels skipped because they have no a-z or 0-9 character to
-        match on (e.g. "∇")
+      description: int, labels skipped because they have no letter or number, so no
+        key to match on (e.g. "∇")
     - name: pattern_count
       description: int, distinct phrases (labels and their variants)
     - name: case_sensitive_pattern_count

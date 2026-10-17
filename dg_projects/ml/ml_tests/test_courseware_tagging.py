@@ -1,7 +1,12 @@
+import random
+import re
+
 import polars as pl
 import pytest
 from ml.lib.courseware.tagging import (
     ConceptDictionary,
+    _tokenize,
+    _tokens,
     label_key,
     tag_sources,
     tagging_input_key,
@@ -37,21 +42,6 @@ def found(dictionary, text):
     return [
         (pattern.key, text[start:end]) for pattern, start, end in dictionary.find(text)
     ]
-
-
-@pytest.mark.parametrize(
-    ("label", "key"),
-    [
-        ("K-Means", "k means"),
-        ("  area under the ROC curve (AUC) ", "area under the roc curve auc"),
-        ("Naïve Bayes", "na ve bayes"),
-        ("R²", "r"),
-        ("scikit-learn", "scikit learn"),
-    ],
-)
-def test_label_key_matches_the_sql_normalization(label, key):
-    # lower(), then each run of [^a-z0-9] becomes one space, trimmed
-    assert label_key(label) == key
 
 
 def test_matches_respect_token_boundaries():
@@ -291,11 +281,11 @@ def test_non_ascii_letters_are_part_of_the_word():
     )
     assert found(dictionary, "intérieur, naïve, int, a naïve Bayes model") == [
         ("int", "int"),
-        ("na ve bayes", "naïve Bayes"),
+        ("naïve bayes", "naïve Bayes"),
     ]
 
 
-def test_labels_without_an_ascii_token_are_skipped_and_counted():
+def test_labels_without_a_letter_or_number_are_skipped_and_counted():
     result = tag_sources(
         sources("∇, then the variance"),
         aliases(("∇", "c1"), ("variance", "c2")),
@@ -306,29 +296,115 @@ def test_labels_without_an_ascii_token_are_skipped_and_counted():
     assert result.run["tokenless_label_count"].item() == 1
 
 
-def test_non_ascii_letters_at_the_edges_must_be_the_aliases_own():
-    # the keys are "fianc" and "clair": the edge letters are not in any token
-    dictionary = ConceptDictionary(aliases(("Fiancé", "c1"), ("Éclair", "c2")))
-    text = "Fiancé, fiancé, fianc, fiancée; an Éclair, an éclair, a clair"
+def test_non_ascii_letters_are_part_of_their_token():
+    dictionary = ConceptDictionary(
+        aliases(("Fiancé", "c1"), ("Éclair", "c2"), ("Schrödinger equation", "c3"))
+    )
+    text = (
+        "Fiancé, fiancé, fianc, fiancée; an Éclair, a clair; the Schrödinger "
+        "equation, not the Schrodinger equation"
+    )
     assert found(dictionary, text) == [
-        ("fianc", "Fiancé"),
-        ("fianc", "fiancé"),
-        ("clair", "Éclair"),
-        ("clair", "éclair"),
+        ("fiancé", "Fiancé"),
+        ("fiancé", "fiancé"),
+        ("éclair", "Éclair"),
+        ("schrödinger equation", "Schrödinger equation"),
     ]
 
 
 def test_non_ascii_letters_between_tokens_must_be_the_aliases_own():
     dictionary = ConceptDictionary(aliases(("naïve Bayes", "c1")))
     assert found(dictionary, "naïve Bayes, na ve Bayes, naüve Bayes, NAÏVE BAYES") == [
-        ("na ve bayes", "naïve Bayes"),
-        ("na ve bayes", "NAÏVE BAYES"),
+        ("naïve bayes", "naïve Bayes"),
+        ("naïve bayes", "NAÏVE BAYES"),
     ]
 
 
 def test_a_non_ascii_lowercase_letter_rules_out_an_acronym():
     dictionary = ConceptDictionary(aliases(("NAïVE", "c1")))
-    assert [p.match_mode for p in dictionary.patterns] == ["caseless"]
+    [pattern] = [p for p in dictionary.patterns if p.key == "naïve"]
+    assert pattern.match_mode == "caseless"
+
+
+def test_spelled_out_symbols_match_the_text_that_has_them():
+    dictionary = ConceptDictionary(
+        aliases(("C++", "c1"), ("C#", "c2"), (".NET", "c3"), ("F# language", "c4"))
+    )
+    text = "C++ and C# on .NET; not C + or # of rows; the F# language; ASP.NET"
+    assert found(dictionary, text) == [
+        ("c plus plus", "C++"),
+        ("c sharp", "C#"),
+        ("dot net", ".NET"),
+        ("f sharp language", "F# language"),
+    ]
+
+
+def _sql_label_key(label):
+    """Apply the courseware_label_key macro's eight passes, transcribed one for one."""
+    key = label.lower()
+    key = re.sub(r"^[+#]", " ", key)
+    key = re.sub(r"[ \t\n\f\r][+#]", " ", key)
+    key = re.sub(r"[+]", " plus ", key)
+    key = re.sub(r"#", " sharp ", key)
+    key = re.sub(r"^[.]", "dot ", key)
+    key = re.sub(r"[ \t\n\f\r][.]", " dot ", key)
+    key = re.sub(r"[\W_]+", " ", key).strip()
+    return key or None
+
+
+# the macro's unit-test cases (_courseware_label_key__unit_tests.yml), then edge cases
+LABEL_KEY_CASES = [
+    ("C", "c"),
+    ("C++", "c plus plus"),
+    ("C#", "c sharp"),
+    (".NET", "dot net"),
+    ("# of rows", "of rows"),
+    ("adjusted R²", "adjusted r²"),
+    ("K-Means  Clustering!", "k means clustering"),
+    ("+", None),
+    ("F#", "f sharp"),
+    ("ASP.NET", "asp net"),
+    ("the .csv file", "the dot csv file"),
+    ("Schrödinger", "schrödinger"),
+    ("a + b", "a b"),
+    ("++x", "x"),
+    ("a ++b", "a plus b"),
+    ("c+.net", "c plus dot net"),
+    ("x +# y", "x sharp y"),
+    ("..net", "dot dot net"),
+    ("snake_case name", "snake case name"),
+    ("∇", None),
+    ("İstanbul", "i stanbul"),
+    ("Naïve Bayes", "naïve bayes"),
+]
+
+
+@pytest.mark.parametrize(("label", "key"), LABEL_KEY_CASES)
+def test_label_key_matches_the_courseware_label_key_macro(label, key):
+    assert label_key(label) == key
+    assert _sql_label_key(label) == key
+
+
+def test_text_tokens_join_to_the_label_key():
+    alphabet = "aZ9ö²İ_ .+#-\t,"
+    rng = random.Random(0)  # noqa: S311 - fixed fuzz inputs, not security
+    texts = [label for label, _ in LABEL_KEY_CASES] + [
+        "".join(rng.choice(alphabet) for _ in range(rng.randint(0, 12)))
+        for _ in range(5000)
+    ]
+    for text in texts:
+        tokens = _tokens(text)
+        joined = " ".join(low for low, _, _, _ in tokens)
+        assert joined == (label_key(text) or ""), text
+        # the fast path gives the same haystacks and spans as the full tokenizer
+        tokenized = _tokenize(text)
+        if not tokens:
+            assert tokenized is None, text
+            continue
+        assert tokenized.caseless == f" {'  '.join(t[0] for t in tokens)} ", text
+        assert tokenized.exact == f" {'  '.join(t[1] for t in tokens)} ", text
+        assert tokenized.starts.tolist() == [t[2] for t in tokens], text
+        assert tokenized.ends.tolist() == [t[3] for t in tokens], text
 
 
 @pytest.mark.parametrize(
