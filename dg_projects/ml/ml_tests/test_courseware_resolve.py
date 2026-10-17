@@ -201,3 +201,27 @@ def test_rebuild_keeps_a_failed_label_on_its_previous_concept(verdicts, monkeypa
     }
     assert registry[pandas]["concept_status"] == "active"
     assert rebuilt.run["concepts_deprecated"][0] == 0
+
+
+def test_concepts_bridged_twice_merge_one_way(verdicts):
+    # s1 and s2 form one concept, l1 and l2 another; the mention counts make each
+    # bridging component prefer a different survivor
+    mentions = {"s1": 5, "s2": 1, "l1": 1, "l2": 5}
+    verdicts[("s1", "s2")] = "exact"
+    verdicts[("l1", "l2")] = "exact"
+    first = run(labels("l1", "l2", "s1", "s2", mentions=mentions))
+    verdicts[("n1", "s1")] = "exact"
+    verdicts[("n1", "l1")] = "exact"
+    verdicts[("o2", "s2")] = "exact"
+    verdicts[("o2", "l2")] = "exact"
+    second = run(
+        labels("l1", "l2", "n1", "o2", "s1", "s2", mentions=mentions),
+        state_from(first),
+    )
+    registry = {row["concept_id"]: row for row in second.registry.iter_rows(named=True)}
+    previous = {concept_of(first, "s1"), concept_of(first, "l1")}
+    statuses = sorted(registry[concept_id]["concept_status"] for concept_id in previous)
+    assert statuses == ["active", "merged"]
+    resolved = {concept_of(second, key) for key in ("l1", "l2", "n1", "o2", "s1", "s2")}
+    assert len(resolved) == 1
+    assert registry[resolved.pop()]["concept_status"] == "active"

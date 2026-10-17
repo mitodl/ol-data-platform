@@ -522,12 +522,11 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     }
 
     def active(concept_id: str) -> str:
-        record = registry[concept_id]
-        return (
-            record["merged_into_concept_id"]
-            if record["concept_status"] == "merged"
-            else concept_id
-        )
+        # follows merges made earlier in this run too, so a later component sees
+        # two concepts an earlier one joined as one
+        while registry[concept_id]["concept_status"] == "merged":
+            concept_id = registry[concept_id]["merged_into_concept_id"]
+        return concept_id
 
     carried = (
         {}
@@ -576,7 +575,8 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     taken: set[str] = set()
 
     for component in components:
-        existing = {carried[key] for key in component if key in carried}
+        current = {key: active(carried[key]) for key in component if key in carried}
+        existing = set(current.values())
         if existing:
             # the most-mentioned existing concept survives; the others redirect to it
             survivor = max(
@@ -585,7 +585,7 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
                     sum(
                         mentions[key]
                         for key in component
-                        if carried.get(key) == concept_id
+                        if current.get(key) == concept_id
                     ),
                     concept_id,
                 ),
@@ -597,7 +597,7 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
             for key in component:
                 assignments[key] = (
                     survivor,
-                    "carried" if carried.get(key) == survivor else "exact_match",
+                    "carried" if current.get(key) == survivor else "exact_match",
                 )
             continue
         concept_id = None
