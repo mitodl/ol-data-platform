@@ -736,7 +736,50 @@ def test_assignment_churn_counts_changed_ids():
     current = pl.DataFrame(
         {"concept_label_key": ["a", "b", "d"], "concept_id": ["1", "1", "4"]}
     )
-    assert assignment_churn(previous, current) == (2, 1)
+    assert assignment_churn(previous, current, {"a", "b", "c", "d"}) == (2, 1)
+    # a carried label that is no longer current is left out of both counts
+    assert assignment_churn(previous, current, {"a", "d"}) == (1, 0)
+
+
+@pytest.mark.usefixtures("embedder")
+def test_resolution_ignores_carried_labels_that_dropped_out(tables, calls):
+    tables["int__courseware__concept_labels"] = labels("auc", "accuracy", "bias")
+    resolve(tables)
+    # bias drops out; the next run carries its assignment
+    tables["int__courseware__concept_labels"] = labels("auc", "accuracy", "boosting")
+    resolve(tables)
+    runs = tables["courseware_resolution_run"]
+    assert runs.height == 2
+    latest_id = runs.sort("started_at")["resolution_run_id"][-1]
+    assert "bias" in set(
+        tables["courseware_concept_assignment"].filter(
+            pl.col("resolution_run_id") == latest_id
+        )["concept_label_key"]
+    )
+
+    # every current label is assigned, so nothing runs despite the carried bias row
+    calls.clear()
+    skipped = resolve(tables)
+
+    assert calls == []
+    assert tables["courseware_resolution_run"].height == 2
+    churn = check_result(skipped, "resolution_churn")
+    assert churn.metadata["labels_in_both_runs"].value == 3
+
+    # a failed batch leaves the new label unassigned, whatever bias carries
+    tables["int__courseware__concept_labels"] = labels(
+        "auc", "accuracy", "boosting", "cnn"
+    )
+    failed = resolve(tables, llm=FakeLLM(fail_label="cnn"))
+
+    materialization = next(
+        event
+        for event in failed.get_asset_materialization_events()
+        if event.asset_key.path[-1] == "courseware_resolution_run"
+    )
+    assert materialization.materialization.metadata["unassigned_label_count"].value == 1
+    churn = check_result(failed, "resolution_churn")
+    assert churn.metadata["labels_in_both_runs"].value == 3
 
 
 # ------------------------------------------------------------------- description
