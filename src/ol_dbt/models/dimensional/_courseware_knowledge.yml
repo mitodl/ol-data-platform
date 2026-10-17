@@ -527,7 +527,8 @@ models:
     description: str, dim_course_content.content_block_pk of the latest retrieval;
       null when the source is an exported file rather than a block
   - name: concept_fk
-    description: str, dim_concept.concept_pk
+    description: str, dim_concept.concept_pk of the concept as of the newest resolution
+      run; a concept merged since the tagging run reads as its survivor
     tests:
     - not_null
     - relationships:

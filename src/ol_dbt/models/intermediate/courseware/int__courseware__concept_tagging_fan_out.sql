@@ -12,6 +12,10 @@
     because the extractor's own mentions of a merged label resolve through the same
     merge. is_merged_label and amplification (tagged scopes per scope where the
     extractor used the label itself) show how far tagging spreads each merge decision.
+
+    The run's dictionary rows carry the concept ids current when it ran
+    (tagged_concept_id); concept_id follows the newest resolution run's redirects,
+    which is what the extractor's mentions and the label counts are keyed by.
 #}
 with tags as (
     select * from {{ ref('int__courseware__concept_tags') }}
@@ -22,6 +26,10 @@ with tags as (
     from {{ source('courseware_intermediate', 'courseware_concept_tagging_alias') }} as alias
     inner join (select distinct tagging_run_id from tags) as latest_run
         on alias.tagging_run_id = latest_run.tagging_run_id
+)
+
+, registry as (
+    select * from {{ ref('int__courseware__concept_registry') }}
 )
 
 , assignments as (
@@ -74,7 +82,7 @@ with tags as (
 , tagged_sources as (
     select
         tags.pattern_key
-        , tags.concept_id
+        , tags.tagged_concept_id
         , tags.platform
         , tags.courserun_readable_id
         , tags.scope_id
@@ -104,7 +112,7 @@ with tags as (
             and tags.concept_id = named_in_scope.concept_id
     group by
         tags.pattern_key
-        , tags.concept_id
+        , tags.tagged_concept_id
         , tags.platform
         , tags.courserun_readable_id
         , tags.scope_id
@@ -114,7 +122,7 @@ with tags as (
 , phrase_stats as (
     select
         pattern_key
-        , concept_id
+        , tagged_concept_id
         , sum(mention_count) as tagged_mention_count
         , count(*) as tagged_source_count
         , count(distinct concat(platform, '|', courserun_readable_id, '|', scope_id)) as tagged_scope_count
@@ -123,7 +131,7 @@ with tags as (
         , sum(is_compared * is_cited) as cited_source_count
         , sum(is_compared * is_named_in_scope) as named_in_scope_source_count
     from tagged_sources
-    group by pattern_key, concept_id
+    group by pattern_key, tagged_concept_id
 )
 
 , totals as (
@@ -134,7 +142,8 @@ with tags as (
 select
     aliases.tagging_run_id
     , aliases.pattern_key
-    , aliases.concept_id
+    , coalesce(registry.merged_into_concept_id, aliases.concept_id) as concept_id
+    , aliases.concept_id as tagged_concept_id
     , aliases.concept_label_key
     , aliases.variant
     , aliases.surface
@@ -164,8 +173,10 @@ cross join totals
 left join phrase_stats
     on
         aliases.pattern_key = phrase_stats.pattern_key
-        and aliases.concept_id = phrase_stats.concept_id
+        and aliases.concept_id = phrase_stats.tagged_concept_id
+left join registry
+    on aliases.concept_id = registry.concept_id
 left join concept_label_counts
-    on aliases.concept_id = concept_label_counts.concept_id
+    on coalesce(registry.merged_into_concept_id, aliases.concept_id) = concept_label_counts.concept_id
 left join label_scopes
     on aliases.concept_label_key = label_scopes.concept_label_key
