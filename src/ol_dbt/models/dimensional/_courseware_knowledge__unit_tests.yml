@@ -12,7 +12,7 @@ unit_tests:
     has no course_fk, is another course, and teaches u but none of its
     parts (coverage 0). rb covers both of s's parts, below the minimum
     count. ra2, rf (no course_fk) and rg (an edxorg copy with the same
-    readable id) are course A.
+    readable id) are course A; rh (no course_fk, A.1_2) is another course.
   model: bridge_courserun_prerequisite_coverage
   overrides:
     vars:
@@ -42,6 +42,8 @@ unit_tests:
       is_current: true}
     - {courserun_pk: rg, course_fk: A_edx, platform: edxorg, courserun_readable_id: "course-v1:ORG+A.1+1T2025",
       is_current: true}
+    - {courserun_pk: rh, course_fk: null, platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1_2+1T2026",
+      is_current: true}
     - {courserun_pk: rb, course_fk: B, platform: mitxonline, courserun_readable_id: "course-v1:ORG+B.1+1T2026",
       is_current: true}
     - {courserun_pk: rc, course_fk: C, platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026",
@@ -67,6 +69,8 @@ unit_tests:
     - {courserun_concept_pk: rf-x, courserun_fk: rf, concept_fk: x, relation: teaches,
       is_published: true}
     - {courserun_concept_pk: rg-x, courserun_fk: rg, concept_fk: x, relation: teaches,
+      is_published: true}
+    - {courserun_concept_pk: rh-x, courserun_fk: rh, concept_fk: x, relation: teaches,
       is_published: true}
     - {courserun_concept_pk: re-x, courserun_fk: re, concept_fk: x, relation: teaches,
       is_published: true}
@@ -131,6 +135,9 @@ unit_tests:
       match_type: direct, narrower_concept_count: 0, narrower_taught_count: 0, narrower_coverage: null,
       is_satisfied: true}
     - {courserun_concept_fk: ra-x, provider_courserun_fk: re, requirement_is_published: true,
+      match_type: direct, narrower_concept_count: 0, narrower_taught_count: 0, narrower_coverage: null,
+      is_satisfied: true}
+    - {courserun_concept_fk: ra-x, provider_courserun_fk: rh, requirement_is_published: true,
       match_type: direct, narrower_concept_count: 0, narrower_taught_count: 0, narrower_coverage: null,
       is_satisfied: true}
     - {courserun_concept_fk: ra-y, provider_courserun_fk: rb, requirement_is_published: true,
