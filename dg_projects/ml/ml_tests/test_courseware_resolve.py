@@ -175,3 +175,29 @@ def test_broader_and_narrower_verdicts_become_directed_relations(verdicts):
     assert relation["relation"] == "broader"
     assert relation["from_concept_id"] == concept_of(result, "gini impurity")
     assert relation["to_concept_id"] == concept_of(result, "decision tree")
+
+
+def test_rebuild_keeps_a_failed_label_on_its_previous_concept(verdicts, monkeypatch):
+    verdicts[("auc", "area under the curve")] = "exact"
+    first = run(labels("auc", "area under the curve", "pandas"))
+
+    def adjudicate_failing_pandas(_client, _model_id, candidates, _rows):
+        decided = [
+            (query, candidate, verdicts.get((query, candidate), "distinct"))
+            for query, found in candidates.items()
+            if query != "pandas"
+            for candidate in found
+        ]
+        return decided, 1, {"pandas"}
+
+    monkeypatch.setattr(resolve, "adjudicate", adjudicate_failing_pandas)
+    rebuilt = run(
+        labels("auc", "area under the curve", "pandas"), state_from(first), rebuild=True
+    )
+    pandas = concept_of(first, "pandas")
+    assert concept_of(rebuilt, "pandas") == pandas
+    registry = {
+        row["concept_id"]: row for row in rebuilt.registry.iter_rows(named=True)
+    }
+    assert registry[pandas]["concept_status"] == "active"
+    assert rebuilt.run["concepts_deprecated"][0] == 0

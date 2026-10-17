@@ -625,6 +625,10 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
 
     deprecated = 0
     if rebuild:
+        # a label whose batch failed was not re-resolved, so it keeps its concept
+        for key in failed - assignments.keys():
+            if key in previous:
+                assignments[key] = (active(previous[key]["concept_id"]), "carried")
         assigned_ids = {concept_id for concept_id, _ in assignments.values()}
         for previous_id, members in previous_members.items():
             if previous_id in assigned_ids:
