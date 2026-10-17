@@ -96,3 +96,17 @@ def test_communities_keep_their_ids_across_runs():
         assert after[name]["community_id"] == before[name]["community_id"]
     assert after["silhouette"]["community_id"] == after["kmeans"]["community_id"]
     assert 0 < second.run["density"][0] < 1
+
+
+def test_a_graph_with_no_active_concepts_is_empty():
+    no_concepts = pl.DataFrame(
+        schema={
+            "concept_pk": pl.String,
+            "preferred_label": pl.String,
+            "lifecycle_status": pl.String,
+        }
+    )
+    result = compute_graph(no_concepts, relations())
+    assert result.nodes.height == 0
+    assert result.edges.height == 0
+    assert result.run["node_count"][0] == 0

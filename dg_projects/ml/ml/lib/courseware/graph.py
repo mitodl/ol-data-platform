@@ -164,6 +164,9 @@ def _longest_chain(graph: nk.Graph, blocked: set[int]) -> dict[int, int]:
     prerequisite chain beneath a concept; for broader it is the depth of the
     hierarchy above it.
     """
+    if not graph.numberOfNodes():
+        # topologicalSort rejects a graph with no nodes
+        return {}
     acyclic = nk.Graph(graph.numberOfNodes(), directed=True)
     for source, target in graph.iterEdges():
         if source not in blocked and target not in blocked:
@@ -275,9 +278,12 @@ def compute_graph(  # noqa: PLR0915
     components.run()
     component_sizes = components.getComponentSizes()
 
-    pagerank = nk.centrality.PageRank(sequence, damp=0.85, normalized=True)
-    pagerank.run()
-    foundation = pagerank.scores()
+    # NetworKit's PageRank crashes the process on a graph with no nodes
+    foundation: list[float] = []
+    if node_count:
+        pagerank = nk.centrality.PageRank(sequence, damp=0.85, normalized=True)
+        pagerank.run()
+        foundation = pagerank.scores()
 
     sequence_cycles = _cycle_nodes(sequence)
     hierarchy_cycles = _cycle_nodes(hierarchy)
