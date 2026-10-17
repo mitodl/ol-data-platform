@@ -3,7 +3,7 @@ name = "ol-dbt-cli"
 version = "0.1.0"
 description = "CLI for dbt project analysis, validation, and impact assessment"
 authors = [{ name = "MIT Open Learning Engineering", email = "ol-data@mit.edu" }]
-requires-python = "~=3.13,<3.15"
+requires-python = "~=3.15,<3.16"
 license = "BSD-3-Clause"
 dependencies = [
     "boto3>=1.35",
