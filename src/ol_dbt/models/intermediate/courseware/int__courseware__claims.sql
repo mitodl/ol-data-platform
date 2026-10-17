@@ -2,9 +2,10 @@
     Every extracted claim with its extraction's scope and version, its evidence counts,
     and the key that groups its label with the same label elsewhere.
 
-    is_current marks the newest extraction of each scope part, so rollups read one
-    extractor version per scope while older versions stay comparable. A claim is
-    verified when at least one of its passages was found in the source text.
+    is_current comes from int__courseware__extractions: the newest extraction of each
+    scope part under its run's promoted extractor version, so rollups read one
+    version per scope while the others stay comparable. A claim is verified when at
+    least one of its passages was found in the source text.
 
     concept_label_key is a string normalization only (the courseware_label_key macro).
     Resolving synonyms and variants across courses ("k-means" and "k-means
@@ -22,14 +23,18 @@ with extractions as (
     select * from {{ source('courseware_intermediate', 'courseware_claim_evidence') }}
 )
 
+, extraction_status as (
+    select * from {{ ref('int__courseware__extractions') }}
+)
+
 , ranked_extractions as (
     select
-        *
-        , row_number() over (
-            partition by platform, courserun_readable_id, scope_id, scope_part
-            order by extracted_at desc
-        ) = 1 as is_current
+        extractions.*
+        , extraction_status.scope_position as current_scope_position
+        , extraction_status.is_current
     from extractions
+    inner join extraction_status
+        on extractions.extraction_key = extraction_status.extraction_key
 )
 
 , evidence_counts as (
@@ -48,7 +53,7 @@ select
     , ranked_extractions.scope_id
     , ranked_extractions.scope_kind
     , ranked_extractions.scope_title
-    , ranked_extractions.scope_position
+    , ranked_extractions.current_scope_position as scope_position
     , ranked_extractions.scope_part
     , ranked_extractions.extraction_key
     , ranked_extractions.extractor_id

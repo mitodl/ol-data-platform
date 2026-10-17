@@ -17,7 +17,8 @@ models:
     - unique
     - not_null
   - name: extraction_key
-    description: str, sha256 of everything the call depended on
+    description: str, sha256 of the extractor version and the scope's own input, not
+      the course header
   - name: courserun_fk
     description: str, dim_course_run.courserun_pk
     tests:
@@ -38,7 +39,8 @@ models:
   - name: scope_title
     description: str, the sequential's title or the scope's name
   - name: scope_position
-    description: int, the scope's order in the course; 0 for context, 9999 for materials
+    description: int, the scope's order in the course as it is now; 0 for context,
+      9999 for materials
   - name: scope_part
     description: int, which part of a split scope the call read, from 1
   - name: scope_part_count
@@ -55,6 +57,10 @@ models:
     description: str, the effort setting for the call
   - name: input_text_checksum
     description: str, sha256 of the source text the call read
+  - name: header_version
+    description: str, hash of the course header the call read (title, outline, description);
+      null for extractions recorded before it was. A run whose current header differs
+      can be re-extracted on purpose (ml.lib.courseware extraction_key, key_on_header)
   - name: source_count
     description: int, sources the call read
   - name: truncated_source_count
@@ -75,8 +81,15 @@ models:
     description: int, input tokens written to the prompt cache
   - name: extracted_at
     description: timestamp, when the call returned
+  - name: is_promoted_version
+    description: boolean, whether the extraction's extractor, prompt, schema, model
+      and effort are the ones promoted for its run (courseware_extraction_promotions)
   - name: is_current
     description: boolean, whether this is the newest extraction of its scope part
+      under the promoted version
+  - name: has_promoted_extraction
+    description: boolean, whether its scope part has any extraction under the promoted
+      version; false means the scope part has no current extraction
 
 - name: tfact_courseware_claim
   description: One row per extracted claim (concept, skill, assumed knowledge, assessment
@@ -153,8 +166,8 @@ models:
   - name: is_verified
     description: boolean, whether at least one passage was found in the source
   - name: is_current
-    description: boolean, whether the claim's extraction is the newest for its scope
-      part
+    description: boolean, whether the claim's extraction is current for its scope
+      part (dim_courseware_extraction.is_current)
   - name: extracted_at
     description: timestamp, when the extraction returned
 
@@ -204,6 +217,11 @@ models:
 - name: dim_concept
   description: Every concept id the resolver has minted, active or retired, with its
     display label, descriptions and lifecycle. review_status is 'proposed' until reviewed.
+  config:
+    meta:
+      # Reads scope positions from int__courseware__extraction_sources (through
+      # int__courseware__extractions), which QA cannot build.
+      qa_buildable: false
   columns:
   - name: concept_pk
     description: str, opaque UUID minted once by the resolver; never derived from
@@ -265,6 +283,11 @@ models:
 
 - name: dim_concept_alias
   description: Every normalized label a concept was extracted under.
+  config:
+    meta:
+      # Reads scope positions from int__courseware__extraction_sources (through
+      # int__courseware__extractions), which QA cannot build.
+      qa_buildable: false
   columns:
   - name: concept_alias_pk
     description: str, surrogate key of the label key
@@ -294,6 +317,11 @@ models:
   description: Concept-to-concept edges with their accumulated evidence, one row per
     (from, to, relation). Hierarchy (broader), sequence (builds_on), practice (practiced_with),
     equivalence (close) and association (complements, related).
+  config:
+    meta:
+      # Reads scope positions from int__courseware__extraction_sources (through
+      # int__courseware__extractions), which QA cannot build.
+      qa_buildable: false
   columns:
   - name: concept_relation_pk
     description: str, surrogate key of (from, to, relation)
