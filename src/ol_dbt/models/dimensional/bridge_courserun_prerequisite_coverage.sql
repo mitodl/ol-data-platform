@@ -6,7 +6,7 @@
     have no rows.
 
     A providing run is a current run of a different course, and match_type is the
-    first of these that applies:
+    first of these that applies (see course_key below for "different course"):
       direct    it teaches or reviews the concept
       close     it teaches or reviews a close equivalent (bridge_concept_relation
                 close: nearly interchangeable, not merged)
@@ -30,6 +30,13 @@
     forest, grid search) are methods it implements, adjudicated related, not broader,
     and every pilot course that uses it also requires it.
 
+    course_key decides which runs are the same course: dim_course.course_readable_id,
+    or the run id without its run tag when course_fk is null (edxorg runs until edxorg
+    courses load, and courses missing from dim_course). It leaves out the platform:
+    dim_course keys a course on (primary_platform, course_readable_id), so course_fk
+    alone would let an edxorg and a mitxonline copy with the same readable id cover
+    each other. Copies whose readable ids differ (e.g. by org) still do.
+
     Rows below the thresholds stay, with is_satisfied false, so the thresholds can be
     reviewed. The walk is unrolled, as in the acyclic test, because recursive CTEs are
     not portable across Trino and StarRocks; a broader cycle cannot loop it, since the
@@ -46,9 +53,25 @@ with run_concepts as (
     where is_published
 )
 
-, course_runs as (
-    select * from {{ ref('dim_course_run') }}
+, courses as (
+    select * from {{ ref('dim_course') }}
     where is_current
+)
+
+, course_runs as (
+    select
+        dim_course_run.courserun_pk
+        , dim_course_run.platform
+        , dim_course_run.courserun_readable_id
+        , coalesce(
+            courses.course_readable_id
+            , nullif({{ extract_course_readable_id('dim_course_run.courserun_readable_id') }}, '')
+            , dim_course_run.courserun_readable_id
+        ) as course_key
+    from {{ ref('dim_course_run') }} as dim_course_run
+    left join courses
+        on dim_course_run.course_fk = courses.course_pk
+    where dim_course_run.is_current
 )
 
 , requirements as (
@@ -57,7 +80,7 @@ with run_concepts as (
         , run_concepts.platform
         , run_concepts.courserun_readable_id
         , run_concepts.courserun_fk
-        , course_runs.course_fk
+        , course_runs.course_key
         , run_concepts.concept_fk
         , run_concepts.requirement_source
         , run_concepts.is_published
@@ -250,4 +273,4 @@ inner join judged
     on requirements.concept_fk = judged.concept_fk
 inner join course_runs as provider_runs
     on judged.provider_courserun_fk = provider_runs.courserun_pk
-where requirements.course_fk != provider_runs.course_fk
+where requirements.course_key != provider_runs.course_key
