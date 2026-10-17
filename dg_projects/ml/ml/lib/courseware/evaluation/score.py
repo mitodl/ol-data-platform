@@ -25,7 +25,7 @@ from ml.lib.courseware.evaluation.metrics import (
     mean_pairwise_cohen_kappa,
     stratified_ppi,
 )
-from ml.lib.courseware.evaluation.samples import STATUS_ORDER, pair_relation
+from ml.lib.courseware.evaluation.samples import STATUS_ORDER
 
 # Labels per item (y, g); g is 1 for a mean.
 Labels = Mapping[str, tuple[float, float]]
@@ -196,6 +196,17 @@ def _status(statuses: list[str]) -> str:
     return min(counts, key=lambda status: (-counts[status], STATUS_ORDER.index(status)))
 
 
+def _found(
+    gold: Mapping[str, str], emitted: Mapping[str, str], *, by_status: bool
+) -> tuple[float, float]:
+    """(gold concepts the model named, gold concepts) for one subsection."""
+    found = sum(
+        canonical in emitted and (not by_status or emitted[canonical] == status)
+        for canonical, status in gold.items()
+    )
+    return float(found), float(len(gold))
+
+
 def score_subsections(  # noqa: PLR0913
     population: pl.DataFrame,
     sample: pl.DataFrame,
@@ -211,7 +222,9 @@ def score_subsections(  # noqa: PLR0913
     concept's gold status is their majority. Recall for a model is the share of gold
     concepts it named in that scope; status-aware recall also needs its strongest
     status there to equal the gold status. Each is sum(found) / sum(gold) over
-    subsections, with the pooled model concepts as the autorater.
+    subsections, with the pooled model concepts as the autorater. concept_recall
+    and status_recall use the blind subsections only; the *_prefilled estimates use
+    the subsections annotated from the models' pre-annotations, for comparison.
 
     :param population: subsections_population output
     :param sample: sample_subsections output (for the blind flag)
@@ -275,24 +288,27 @@ def score_subsections(  # noqa: PLR0913
         "annotator_f1": float(np.mean(agreement)) if agreement else None,
         "models": {},
     }
+    # Pre-annotations anchor annotators on what the models found, which inflates
+    # recall, so the blind subsections give the headline number.
+    subsets = {"": True, "_prefilled": False}
     for model in models:
         rows = population.filter(pl.col("models").str.split("+").list.contains(model))
+        in_population = set(rows["item_id"])
         for criterion in ("concept", "status"):
-            labels = {}
-            for item, gold_concepts in gold.items():
-                if item not in set(rows["item_id"]):
-                    continue
-                emitted = named.get((scope_of[item], model), {})
-                found = sum(
-                    canonical in emitted
-                    and (criterion == "concept" or emitted[canonical] == status)
-                    for canonical, status in gold_concepts.items()
-                )
-                labels[item] = (float(found), float(len(gold_concepts)))
-            strata = _strata(rows, labels, f"found_hat_{model}", "gold_hat")
-            report["models"].setdefault(model, {})[f"{criterion}_recall"] = _report(
-                stratified_ppi(strata, alpha=alpha), strata
-            )
+            for suffix, is_blind in subsets.items():
+                labels = {
+                    item: _found(
+                        gold_concepts,
+                        named.get((scope_of[item], model), {}),
+                        by_status=criterion == "status",
+                    )
+                    for item, gold_concepts in gold.items()
+                    if item in in_population and blind[item] == is_blind
+                }
+                strata = _strata(rows, labels, f"found_hat_{model}", "gold_hat")
+                report["models"].setdefault(model, {})[
+                    f"{criterion}_recall{suffix}"
+                ] = _report(stratified_ppi(strata, alpha=alpha), strata)
     return report, pl.DataFrame(
         unmatched,
         schema={
@@ -315,7 +331,13 @@ def score_pairs(
     *,
     alpha: float,
 ) -> dict[str, Any]:
-    """Estimate merge precision and recall and verdict agreement on label pairs.
+    """Estimate merge precision and recall and relation agreement on label pairs.
+
+    A pair counts as merged by the resolver when both labels belong to the same
+    surviving concept (pairs_population), not when the adjudicator said exact.
+    Precision is over merged pairs; recall is the share of pairs annotators call
+    exact that the resolver merged; relation agreement compares annotators with the
+    resolver's final relation of each pair.
 
     :param population: pairs_population output
     :param sample: sample_pairs output (for the order each pair was shown in)
@@ -337,17 +359,10 @@ def score_pairs(
         return _FLIP.get(value, value)
 
     decided, ties = _consensus(items, relation)
-    resolver = {
-        row["item_id"]: "distinct"
-        if row["verdict"] == "unblocked"
-        else pair_relation(
-            row["verdict"], query_is_a=row["query_label_key"] == row["key_a"]
-        )
-        for row in population.iter_rows(named=True)
-    }
-    exact = population.filter(pl.col("stratum") == "exact")
+    resolver = dict(population.select("item_id", "resolver_relation").iter_rows())
+    merged = population.filter(pl.col("merged"))
     precision_strata = _strata(
-        exact, {item: (float(decided[item] == "exact"), 1.0) for item in decided}
+        merged, {item: (float(decided[item] == "exact"), 1.0) for item in decided}
     )
     recall_strata = _strata(
         population,
@@ -373,7 +388,7 @@ def score_pairs(
         "merge_recall": _report(
             stratified_ppi(recall_strata, alpha=alpha), recall_strata
         ),
-        "verdict_agreement": _report(
+        "relation_agreement": _report(
             stratified_ppi(agreement_strata, alpha=alpha), agreement_strata
         ),
         "ties": ties,

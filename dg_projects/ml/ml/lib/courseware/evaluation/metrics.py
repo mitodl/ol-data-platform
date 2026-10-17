@@ -32,11 +32,17 @@ stratified estimator for that stratum.
 One departure from the paper: lam is cross-fitted. The labelled items of a stratum
 are split into two folds and each fold's rectifier uses the lam tuned on the other
 fold. Tuning lam on the same items it weights biases the estimate at the stratum
-sizes we label (40 or so). In 2,000 simulated trials (three strata, n_k = 40,
-alpha = 0.1) the same-sample PPI++ interval covered 88% of the time and the
-cross-fitted one 90%, with a standard error 15% below the classical estimator's.
-The point estimate and lam match ppi_py on the same data; the interval is slightly
-wider because variances here use ddof=1.
+sizes we label (40 or so). Over 8,000 simulated trials (four seeds, three strata,
+n_k = 40, alpha = 0.1) the same-sample PPI++ interval covered 86.8% of the time and
+the cross-fitted one 88.8%, against 89.1% for the classical interval, with a
+standard error about 15% below the classical estimator's. Coverage is still
+slightly below nominal at these sizes, as it is for the classical normal interval.
+lam tuned on all of a stratum's rows matches ppi_py's on the same data, and with
+lam = 1 so does the point estimate. The cross-fitted estimate differs from ppi_py's
+by design, and the interval is slightly wider because variances here use ddof=1.
+
+A stratum with fewer than two unlabelled items has no estimable autorater
+variance and gets lam = 0.
 """
 
 from collections import Counter
@@ -87,11 +93,11 @@ class Stratum:
 
     @property
     def has_autorater(self) -> bool:
-        """Return whether there are predictions on labelled and unlabelled items."""
+        """Return whether there are predictions on labels and on two or more others."""
         return (
             self.y_hat is not None
             and self.y_hat_unlabeled is not None
-            and len(self.y_hat_unlabeled) > 0
+            and len(self.y_hat_unlabeled) >= MIN_LABELS_PER_STRATUM
         )
 
     def predicted(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -242,36 +248,55 @@ def allocate(
 ) -> dict[str, int]:
     """Split a labelling budget across strata.
 
-    Each stratum first gets min(minimum, size). The rest is split in proportion to
-    size times weight (proportional allocation when every weight is 1; a weight
-    above 1 oversamples a stratum the autorater is expected to be worse on, the
-    direction Proposition 3 of the StratPPI paper points). No stratum gets more than
-    its size, and the split is by largest remainder, so it is deterministic.
+    Each stratum first gets max(minimum, MIN_LABELS_PER_STRATUM) labels, or all of
+    its items if it has fewer. The rest is split in proportion to size times weight
+    (proportional allocation when every weight is 1; a weight above 1 oversamples a
+    stratum the autorater is expected to be worse on, the direction Proposition 3 of
+    the StratPPI paper points). No stratum gets more than its size. Each round grants
+    the whole-label part of every share; the last few labels, once no share reaches
+    a whole label, go one each to the strata with the largest weighted size. The
+    split is deterministic.
 
-    :param sizes: population size per stratum
+    :param sizes: population size per stratum, each at least MIN_LABELS_PER_STRATUM
+        (merge smaller strata first, see samples.coarsen_strata)
     :param total: labels to allocate; capped at the population size
     :param weights: oversampling weight per stratum, default 1
-    :param minimum: floor per stratum, so each stratum's variance is estimable
+    :param minimum: floor per stratum
     :returns: labels per stratum
     :rtype: dict[str, int]
+    :raises ValueError: when a stratum is too small to estimate or the floors
+        exceed the budget
     """
+    small = sorted(
+        name for name, size in sizes.items() if size < MIN_LABELS_PER_STRATUM
+    )
+    if small:
+        msg = f"strata smaller than {MIN_LABELS_PER_STRATUM} items: {small}"
+        raise ValueError(msg)
     total = min(total, sum(sizes.values()))
-    allocation = {name: min(minimum, size) for name, size in sizes.items()}
+    floor = max(minimum, MIN_LABELS_PER_STRATUM)
+    allocation = {name: min(floor, size) for name, size in sizes.items()}
+    if sum(allocation.values()) > total:
+        msg = (
+            f"{len(sizes)} strata at a floor of {floor} need "
+            f"{sum(allocation.values())} labels, more than the budget of {total}"
+        )
+        raise ValueError(msg)
     while (remaining := total - sum(allocation.values())) > 0:
-        open_strata = {
+        weighted = {
             name: size * (weights or {}).get(name, 1.0)
             for name, size in sizes.items()
             if allocation[name] < size
         }
-        mass = sum(open_strata.values())
-        shares = {name: remaining * value / mass for name, value in open_strata.items()}
+        mass = sum(weighted.values())
         granted = {
-            name: min(int(share), sizes[name] - allocation[name])
-            for name, share in shares.items()
+            name: min(int(remaining * value / mass), sizes[name] - allocation[name])
+            for name, value in weighted.items()
         }
         if not any(granted.values()):
-            # every share is below one label: give one to the largest remainders
-            for name in sorted(shares, key=lambda key: (-shares[key], key))[:remaining]:
+            for name in sorted(weighted, key=lambda key: (-weighted[key], key))[
+                :remaining
+            ]:
                 granted[name] = 1
         for name, count in granted.items():
             allocation[name] += count
@@ -318,9 +343,18 @@ def cluster_bcubed_terms(
     the same concept, and counts, per group, the labels outside the cluster that
     are the same concept too. A member r of group h then has |C n T(r)| = |h| and
     |T(r)| = |h| + outside_h. Summed over members, divided by summed cluster sizes,
-    these give B-cubed precision and recall, so a stratified sample of clusters
-    estimates both with stratified_ppi (numerator these sums, denominator |C|), the
-    sampling estimator of Binette et al. (arXiv 2404.05622).
+    these give B-cubed precision and recall, so a stratified sample of predicted
+    clusters estimates both with stratified_ppi (numerator these sums, denominator
+    |C|): a stratified ratio estimator over predicted clusters.
+
+    Precision is exact per cluster, since it needs only the cluster's own members.
+    Recall is not: outside_h only counts labels in the nearby concepts the reviewer
+    was shown, so true members elsewhere are missed and recall reads high; but a
+    neighbour placed in a group counts with all its labels, even ones that are not
+    that concept, which reads low. So recall is an upper bound only roughly, not
+    strictly. Binette et al. (arXiv 2404.05622) estimate both metrics without this
+    gap by sampling true clusters with probability proportional to size, which
+    needs reviewers to assemble true clusters from the whole corpus; this does not.
 
     :param groups: size of each group of the cluster's members
     :param outside: per group, labels outside the cluster in the same true concept
