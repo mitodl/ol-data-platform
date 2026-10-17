@@ -4,13 +4,17 @@ The dictionary is dim_concept_alias: every normalized label key that resolution 
 assigned to a concept. Text is normalized the way int__courseware__claims builds
 `concept_label_key` (lowercase, each run of characters outside a-z and 0-9 becomes
 one separator), so an alias matches wherever its words appear in order with a token
-boundary on both sides: "art" never matches inside "smart", and a letter outside
-a-z (the "ï" of "naïve", the "é" of "intérieur") counts as part of the word next to
-it, not as a boundary. Two Aho-Corasick automata report every candidate, one over the
-lowercased text for caseless phrases and one over the original case for
-case-sensitive spellings. The candidates are then resolved leftmost-longest, so
-"decision tree" wins over "tree" at the same place, a nested alias is not reported a
-second time, and a spelling rejected for its case never hides a shorter match.
+boundary on both sides: "art" never matches inside "smart". The keys hold only
+a-z and 0-9, as concept_label_key does, so a letter outside them (the "ï" of
+"naïve", the "é" of "fiancé") is not part of any token. Such letters must still
+agree: the ones at the edges of a match and between its tokens have to be the
+alias's own, so "intérieur" does not match `int`, "fiancé" matches "Fiancé" (key
+"fianc") but "fianc" does not, and "naïve" does not match "na ve". Two Aho-Corasick
+automata report every candidate, one over the lowercased text for caseless phrases
+and one over the original case for case-sensitive spellings. The candidates are
+then resolved leftmost-longest, so "decision tree" wins over "tree" at the same
+place, a nested alias is not reported a second time, and a spelling rejected for its
+case never hides a shorter match.
 
 Python's lower() and the SQL engines' differ on a few characters whose lowercase
 form is ASCII (the Kelvin sign, a dotted capital I), so a label containing one can
@@ -61,13 +65,13 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import cached_property
-from itertools import accumulate
+from itertools import accumulate, pairwise
 from typing import Literal
 
 import ahocorasick_rs
 import polars as pl
 
-TAGGER_ID = "courseware_dictionary_tagger_v2"
+TAGGER_ID = "courseware_dictionary_tagger_v3"
 MIN_ALIAS_CHARS = 2
 CASE_SENSITIVE_BELOW_CHARS = 4
 # a plural variant is only added for a last word at least this long
@@ -87,7 +91,6 @@ _VARIANT_ORDER: dict[Variant, int] = {
 # concept_label_key's token class: int__courseware__claims splits lower() on [^a-z0-9]+
 _TOKEN = re.compile(r"[A-Za-z0-9]+")
 _PARENTHETICAL = re.compile(r"\(([^)]*)\)")
-_ACRONYM = re.compile(r"[^a-z]*[A-Z][^a-z]*")
 # tokens are joined by two spaces and padded by one, so every pattern (" a  b ")
 # starts and ends on a boundary and adjacent mentions do not compete for a separator
 _SEPARATOR = "  "
@@ -212,8 +215,7 @@ class Pattern:
     def is_acronym(self) -> bool:
         """Every spelling is uppercase, apart from a plural "s"."""
         return all(
-            _ACRONYM.fullmatch(entry.surface.removesuffix("s"))
-            for entry in self.entries
+            _is_acronym(entry.surface.removesuffix("s")) for entry in self.entries
         )
 
     @property
@@ -252,6 +254,64 @@ class Pattern:
     def spellings(self) -> frozenset[tuple[str, ...]]:
         """The spellings a case_sensitive pattern matches, as tokens."""
         return frozenset(tuple(_TOKEN.findall(e.surface)) for e in self.entries)
+
+    @cached_property
+    def outside_letters(self) -> frozenset[tuple[str, ...]]:
+        """The letters outside a-z and 0-9 each entry has around and between tokens.
+
+        Casefolded unless the pattern is case-sensitive.
+        """
+        fold = self.match_mode != "case_sensitive"
+        return frozenset(
+            _outside_letters(
+                entry.surface,
+                [match.span() for match in _TOKEN.finditer(entry.surface)],
+                fold=fold,
+            )
+            for entry in self.entries
+        )
+
+    @cached_property
+    def has_plain_spelling(self) -> bool:
+        """Some entry has no letter outside a-z around or between its tokens."""
+        return _plain_spelling(self.token_count) in self.outside_letters
+
+
+def _plain_spelling(token_count: int) -> tuple[str, ...]:
+    return ("",) * (token_count + 1)
+
+
+def _outside_letters(
+    text: str, spans: list[tuple[int, int]], *, fold: bool
+) -> tuple[str, ...]:
+    """List the alphanumerics a run of [A-Za-z0-9] tokens leaves out.
+
+    Those adjoining its first token, those in each gap between tokens, and those
+    adjoining its last.
+    """
+    start, end = spans[0][0], spans[-1][1]
+    before = start
+    while before > 0 and text[before - 1].isalnum():
+        before -= 1
+    after = end
+    while after < len(text) and text[after].isalnum():
+        after += 1
+    parts = [
+        text[before:start],
+        *(
+            "".join(char for char in text[left[1] : right[0]] if char.isalnum())
+            for left, right in pairwise(spans)
+        ),
+        text[end:after],
+    ]
+    return tuple(part.casefold() for part in parts) if fold else tuple(parts)
+
+
+def _is_acronym(surface: str) -> bool:
+    # any lowercase letter counts, not only a-z, so "NAïVE" is not an acronym
+    return any(char.isupper() for char in surface) and not any(
+        char.islower() for char in surface
+    )
 
 
 def _plural(surface: str) -> str | None:
@@ -392,7 +452,8 @@ class ConceptDictionary:
                 (end - start + len(_SEPARATOR) for start, end in spans[:-1]), initial=1
             )
         )
-        candidates: list[tuple[int, int, Pattern]] = []
+        # (first token, last token, pattern, letters before, letters after)
+        candidates: list[tuple[int, int, Pattern, int, int]] = []
         for patterns, haystack, automaton in (
             (self._caseless, joined.lower(), self._caseless_automaton),
             (self._exact, joined, self._exact_automaton),
@@ -404,19 +465,33 @@ class ConceptDictionary:
                 first = bisect.bisect_left(token_offsets, start + 1)
                 last = first + token_count - 1
                 char_start, char_end = spans[first][0], spans[last][1]
-                # [A-Za-z0-9] tokens stop at a non-ASCII letter, which is still a word
-                if (char_start > 0 and text[char_start - 1].isalnum()) or (
-                    char_end < len(text) and text[char_end].isalnum()
+                if (
+                    text[char_start:char_end].isascii()
+                    and not (char_start > 0 and text[char_start - 1].isalnum())
+                    and not (char_end < len(text) and text[char_end].isalnum())
                 ):
+                    # the common case, no letter outside a-z anywhere near the match
+                    if pattern.has_plain_spelling:
+                        candidates.append((first, last, pattern, 0, 0))
                     continue
-                candidates.append((first, last, pattern))
+                letters = _outside_letters(
+                    text,
+                    spans[first : last + 1],
+                    fold=pattern.match_mode != "case_sensitive",
+                )
+                if letters in pattern.outside_letters:
+                    candidates.append(
+                        (first, last, pattern, len(letters[0]), len(letters[-1]))
+                    )
         # leftmost-longest over every valid candidate
         candidates.sort(key=lambda candidate: (candidate[0], -candidate[1]))
         found = []
         covered_until = -1
-        for first, last, pattern in candidates:
+        for first, last, pattern, before, after in candidates:
             if first > covered_until:
-                found.append((pattern, spans[first][0], spans[last][1]))
+                found.append(
+                    (pattern, spans[first][0] - before, spans[last][1] + after)
+                )
                 covered_until = last
         return found
 
