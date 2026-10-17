@@ -114,8 +114,10 @@ models:
   - name: related_concept_labels_json
     description: str, JSON list of concept labels an assessment or outcome names
   - name: concept_label_key
-    description: str, lowercased label with punctuation collapsed, for concept, assumed
-      knowledge and declared prerequisite claims
+    description: str, the label as normalized by the courseware_label_key macro (lowercase,
+      plus and hash signs spelled out, separators collapsed), for concept, assumed
+      knowledge and declared prerequisite claims; null for a label with no letters
+      or numbers
   - name: evidence_count
     description: int, evidence passages quoted for the claim
   - name: verified_evidence_count

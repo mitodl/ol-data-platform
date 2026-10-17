@@ -85,6 +85,8 @@ select
     , concept_kind
     , description
     , label
-    , {{ strip_whitespace(regexp_replace_all('lower(label)', "'[^a-z0-9]+'", "' '")) }} as concept_label_key
+    , {{ courseware_label_key('label') }} as concept_label_key
     , prerequisite_kind
 from referenced_labels
+-- a label of only symbols has no key, like the own labels above
+where {{ courseware_label_key('label') }} is not null
