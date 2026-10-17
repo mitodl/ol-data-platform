@@ -6,7 +6,7 @@ Sources read on 2026-10-16: this repo at `07eadd990`, mit-learn at `d2eef5677`, 
 
 ## 1. The problem, and what is already in flight
 
-MIT Learn search embeds a short markdown rendering of each resource (title, description, topics, price, instructors, runs) plus a concatenation of its content files. A query like "courses where students implement a neural network" has nothing to match against except whatever phrasing happens to appear in that text. Learn has no structured record of what a course teaches, assumes, or assesses: no concept, skill, outcome or prerequisite field exists on `LearningResource`, `LearningResourceRun` or `ContentFile`. The nearest things are free-text CMS sections folded into `full_description`, `CredentialMetadata.criteria` (LLM-written badge criteria, one skill per bullet), and `ContentFile.summary`/`flashcards`. The topic taxonomy is two levels deep (11 parents, 98 children) and is applied per resource, never per unit, video or problem.
+MIT Learn search embeds a short markdown rendering of each resource (title, description, topics, price, instructors, runs) plus a concatenation of its content files. A query like "courses where students implement a neural network" has nothing to match against except whatever phrasing happens to appear in that text. Learn has no structured record of what a course teaches, assumes, or assesses: no concept, skill, outcome or prerequisite field exists on `LearningResource`, `LearningResourceRun` or `ContentFile`. The nearest things are free-text CMS sections folded into `full_description`, `CredentialMetadata.criteria` (LLM-written badge criteria, one skill per bullet), and `ContentFile.summary`/`flashcards`. The topic taxonomy is two levels deep (11 parents, 101 children) and is applied per resource, never per unit, video or problem.
 
 Two efforts are addressing this, and they do not share a destination:
 
@@ -25,7 +25,7 @@ The structure is done. The text is mostly done. The semantic layer is absent.
 | Block bodies, problem XML included | `int__combined__course_xml_blocks.coursestructure_xml_raw_xml` for edxorg, mitx, mitxonline, xpro. 782 problems in one 14.310x export. Nothing in the dimensional layer reads it. | `src/ol_dbt/models/intermediate/combined/` |
 | Document and transcript text | `course_document_text` (Tika), `course_transcript_text` (SRT, SJSON, VTT), `course_file_exclusions` (staff-only, unreferenced) for mitx, mitxonline, xpro; `raw__ocw__s3__course_content` for OCW pages, resources and transcripts; `raw__youtube__api__transcripts` (no staging model yet) | `dg_projects/openedx/openedx/assets/{content_files,transcripts,content_file_exclusions}.py`, `src/ol_dlt/ol_dlt/sources/ocw_content/` |
 | Learn-shaped content files | `integrations__learn__content_files` (mitxonline, xpro), `integrations__learn__ocw_content_files`, keyed by `(etl_source, run_readable_id, key)` | `src/ol_dbt/models/integrations/learn/` |
-| Learn taxonomy | `seeds/learn_topics.csv` (112 rows with uuids) and `learn_topic_offeror_mappings.csv` (540), kept equal to Learn's `topics.yaml` by a dbt test | `src/ol_dbt/seeds/` |
+| Learn taxonomy | `seeds/learn_topics.csv` (112 rows with uuids) and `learn_topic_offeror_mappings.csv` (540), generated from Learn's production tables as replicated to the warehouse (not `topics.yaml`) and kept equal to them by `tests/assert_learn_topic_seeds_match_mitlearn.sql` | `src/ol_dbt/seeds/` |
 | Free-text outcomes and prerequisites | `int__mitxonline__courses.course_what_you_learn` / `course_prerequisites`, `stg__edxorg__api__course.course_prerequisites_text`, OCW syllabus pages | intermediate, staging |
 | LLM plumbing | `LLMClientFactory` (anthropic, bedrock, gemini, openai), Opik prompt library and tracing, `PolarsIcebergIOManager` upsert, embedding clients with model-versioned upsert keys | `dg_projects/ml/ml/resources/llm.py`, `ml/lib/embed.py` |
 | A curated-vocabulary precedent | `dim_feedback_category`: LLM-proposed categories with `category_status` and `category_source`, promoted by a human | `docs/design/feedback_dimensional_model.md` |
@@ -48,7 +48,7 @@ I propose the third. The extraction is expensive enough (thousands of courses, t
 
 Sections 4 to 6 are the proposal as first written. Where they differ from what the proof of concept built, sections 9 to 11 are current: the built table names (section 9), concept identity and resolution (section 10, "Identity" and "Batched, incremental resolution") and the concept-to-concept relation types (section 10, "Relationships between concepts").
 
-Grain and keys follow `src/ol_dbt/models/dimensional/README.md`: surrogate `*_pk` via `generate_surrogate_key`, every course join carries `platform`, `platform` plus `courserun_readable_id` identifies a run.
+Grain and keys follow `src/ol_dbt/models/dimensional/README.md`: surrogate `*_pk` via `generate_surrogate_key`, every course join carries `platform`, `platform` plus `courserun_readable_id` identifies a run. The Open edX XML and text assets record the deployment instead (`xpro`, `mitx`), so `int__courseware__extraction_sources` maps those to `mitxpro` and `residential` before it joins them to `dim_course_content`.
 
 ### Claims and evidence (facts)
 
