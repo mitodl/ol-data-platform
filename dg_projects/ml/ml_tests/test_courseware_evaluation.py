@@ -425,6 +425,65 @@ def test_coarsen_strata_merges_then_drops():
     assert dropped.to_dicts() == [{"stratum": "y", "population": 1}]
 
 
+def test_coarsen_strata_merges_only_within_a_scoring_group():
+    population = pl.DataFrame(
+        {
+            "item_id": [f"i{n}" for n in range(9)],
+            "models": ["haiku"] * 4
+            + ["haiku", "haiku+opus", "haiku+opus", "opus"]
+            + ["opus"],
+            "stratum": ["UAI|long|haiku"] * 4
+            + ["6|long|haiku", "UAI|short|haiku+opus", "6|short|haiku+opus"]
+            + ["UAI|long|opus", "6|long|opus"],
+        }
+    )
+    merged, dropped = samples.coarsen_strata(
+        population, 2, samples.SCORING_GROUPS["subsections"]
+    )
+    assert dict(merged.group_by("stratum").len().sort("stratum").iter_rows()) == {
+        "UAI|long|haiku": 4,
+        "small_strata|haiku+opus": 2,
+        "small_strata|opus": 2,
+    }
+    assert dropped.to_dicts() == [{"stratum": "6|long|haiku", "population": 1}]
+
+
+def test_score_claims_on_a_sample_of_cross_model_small_strata(tmp_path):
+    strata = (
+        ["UAI|opus|both"] * 30
+        + ["UAI|haiku|both"] * 30
+        + ["UAI|opus|opus_only", "UAI|opus|not_compared", "UAI|haiku|haiku_only"]
+    )
+    population = pl.DataFrame(
+        {
+            "item_id": [f"c{n:02d}" for n in range(len(strata))],
+            "model": [stratum.split("|")[1] for stratum in strata],
+            "stratum": strata,
+            "autorater": [None] * len(strata),
+        },
+        schema_overrides={"autorater": pl.Float64},
+    )
+    population, dropped = samples.coarsen_strata(
+        population, within=samples.SCORING_GROUPS["claims"]
+    )
+    sizes = dict(population.group_by("stratum").len().iter_rows())
+    allocation = allocate(sizes, 60, minimum=samples.CLAIMS_MIN_PER_STRATUM)
+    sample = samples.stratified_sample(
+        population, allocation, seed=1, set_name="claims"
+    )
+    good = {"verdict": "supported", "status": "correct", "label_quality": "good"}
+    tasks = [_choice_task(item, [(1, good)]) for item in sample["item_id"]]
+    # merged across models, the opus and haiku halves of one stratum would get
+    # two labels and one, and haiku's could not be estimated
+    report = score.score_claims(population, _export(tmp_path, tasks), alpha=0.05)
+    assert set(report["models"]["opus"]["correct"]["strata"]) == {
+        "UAI|opus|both",
+        "small_strata|opus",
+    }
+    assert set(report["models"]["haiku"]["correct"]["strata"]) == {"UAI|haiku|both"}
+    assert dropped["stratum"].to_list() == ["UAI|haiku|haiku_only"]
+
+
 def test_one_unlabeled_item_gets_lambda_zero():
     y = np.array([1, 0, 1, 1], dtype=float)
     one_left = Stratum(
