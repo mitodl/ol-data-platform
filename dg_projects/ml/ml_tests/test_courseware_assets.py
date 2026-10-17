@@ -40,7 +40,7 @@ from ml.assets.courseware_resolution import (
     assignment_churn,
     courseware_resolution,
 )
-from ml.lib.courseware import warehouse
+from ml.lib.courseware import graph, warehouse
 from ml.resources.llm import LLMClientFactory
 from ml.sensors import courseware as sensor_module
 from ml.sensors.courseware import courseware_extraction_text_sensor
@@ -611,7 +611,7 @@ def test_description_describes_each_concept_once(tables, calls):
 
 
 # ------------------------------------------------------------------------- graph
-def test_graph_reports_cycles_and_skips_unchanged_input(tables):
+def test_graph_reports_cycles_and_skips_unchanged_input(tables, monkeypatch):
     names = ["a", "b", "c"]
     tables["dim_concept"] = pl.DataFrame(
         {
@@ -650,6 +650,15 @@ def test_graph_reports_cycles_and_skips_unchanged_input(tables):
 
     assert tables["courseware_concept_graph_run"].height == 1
     assert not check_result(second, "graph_cycles").passed
+
+    # a new algorithm version over the same input is a new run
+    monkeypatch.setattr(graph, "GRAPH_VERSION", "courseware_concept_graph_test")
+    materialize([courseware_concept_graph], resources=resources)
+
+    assert tables["courseware_concept_graph_run"]["graph_version"].to_list() == [
+        "courseware_concept_graph_v1",
+        "courseware_concept_graph_test",
+    ]
 
 
 def test_courseware_definitions_load():

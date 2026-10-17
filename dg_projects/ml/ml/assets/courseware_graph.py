@@ -128,7 +128,8 @@ def courseware_concept_graph(
 
     Calls ml.lib.courseware.graph.compute_graph on dim_concept and
     bridge_concept_relation, carrying community ids from the newest run. A run
-    whose input checksum matches the newest run's is not written again.
+    whose input checksum and graph version match the newest run's is not written
+    again.
     """
     runs = read_table("intermediate", RUN_KEY.path[-1])
     last_run = (
@@ -154,9 +155,16 @@ def courseware_concept_graph(
         ),
     )
     run = result.run.row(0, named=True)
-    if last_run and last_run["input_checksum"] == run["input_checksum"]:
+    # The checksum covers the input and parameters, not the algorithm, so a
+    # GRAPH_VERSION bump (the asset's code version) must still write a run.
+    if (
+        last_run
+        and last_run["input_checksum"] == run["input_checksum"]
+        and last_run["graph_version"] == run["graph_version"]
+    ):
         context.log.info(
-            "Graph input is unchanged since run %s; nothing written", last_run_id
+            "Graph input and version are unchanged since run %s; nothing written",
+            last_run_id,
         )
         last_nodes = (
             require_table("intermediate", GRAPH_TABLES[0])
