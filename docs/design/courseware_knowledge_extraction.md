@@ -28,7 +28,7 @@ The structure is done. The text is mostly done. The semantic layer is absent.
 | Learn taxonomy | `seeds/learn_topics.csv` (112 rows with uuids) and `learn_topic_offeror_mappings.csv` (540), generated from Learn's production tables as replicated to the warehouse (not `topics.yaml`) and kept equal to them by `tests/assert_learn_topic_seeds_match_mitlearn.sql` | `src/ol_dbt/seeds/` |
 | Free-text outcomes and prerequisites | `int__mitxonline__courses.course_what_you_learn` / `course_prerequisites`, `stg__edxorg__api__course.course_prerequisites_text`, OCW syllabus pages | intermediate, staging |
 | LLM plumbing | `LLMClientFactory` (anthropic, bedrock, gemini, openai), Opik prompt library and tracing, `PolarsIcebergIOManager` upsert, embedding clients with model-versioned upsert keys | `dg_projects/ml/ml/resources/llm.py`, `ml/lib/embed.py` |
-| A curated-vocabulary precedent | `dim_feedback_category`: LLM-proposed categories with `category_status` and `category_source`, promoted by a human | `docs/design/feedback_dimensional_model.md` |
+| An LLM-proposed vocabulary precedent | `dim_feedback_category`: LLM-proposed categories with `category_status` and `category_source`. Every category stays `proposed` and is used as soon as it exists; a person corrects it afterward, and nothing waits on approval | `docs/design/feedback_dimensional_model.md` |
 
 Gaps that matter here: edxorg has block XML but no document or transcript extraction; Canvas has archives but no text at all; `dim_problem` has `markdown` but no parsed question, choices or solution; there is no `dim_content_file`, so text is not joinable to `dim_course_content` by `content_block_fk`; `bridge_course_topic` omits OCW and edxorg; `dim_topic` is per-platform names and does not carry the Learn uuids. Those are prerequisites for this work, not part of it, and most are already tracked under the Learn ETL migration project.
 
@@ -76,7 +76,7 @@ Assessment claims from Open edX problems are extracted from the question side on
 
 ### Entities (dimensions)
 
-`dim_concept`: the resolved, cross-course entity. `concept_pk`, `preferred_label`, `definition`, `concept_kind` (`concept`, `method`, `skill`, `tool`, `application`), `status` (`proposed`, `accepted`, `merged_into`, `rejected`), `merged_into_concept_fk`, `wikidata_qid`, `created_by_run_fk`, `reviewed_by`, `reviewed_at`. Status follows `dim_feedback_category`: the extractor proposes, a person accepts, and only accepted concepts reach Learn-facing views. A `skill` is a concept phrased as an ability; the kind column keeps them queryable together for a knowledge graph and apart for a skills report.
+`dim_concept`: the resolved, cross-course entity. `concept_pk`, `preferred_label`, `definition`, `concept_kind` (`concept`, `method`, `skill`, `tool`, `application`), `status` (`proposed`, `accepted`, `merged_into`, `rejected`), `merged_into_concept_fk`, `wikidata_qid`, `created_by_run_fk`, `reviewed_by`, `reviewed_at`. The status values follow `dim_feedback_category`, but the gate is new: feedback categories are used while still `proposed`, whereas here the extractor proposes, a person accepts, and only accepted concepts reach Learn-facing views. A `skill` is a concept phrased as an ability; the kind column keeps them queryable together for a knowledge graph and apart for a skills report.
 
 `dim_concept_alias`: `concept_fk`, `alias`, `alias_source` (`extracted`, `wikidata`, `esco`, `openalex`, `acm_ccs`, `physh`, `manual`). This is the label index that resolution retrieves against.
 
