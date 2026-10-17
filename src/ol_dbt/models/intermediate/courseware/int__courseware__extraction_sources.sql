@@ -634,7 +634,7 @@ with content as (
         , top.page_key as sort_key
         , case
             when units.depth = 1 then 0
-            else nullif({{ dbt.position("concat('/', units.page_key)", 'top.body') }}, 0)
+            else nullif({{ string_position("concat('/', units.page_key)", 'top.body') }}, 0)
         end as sort_offset
     from ocw_unit_pages as units
     left join ocw_pages as parent
@@ -692,7 +692,7 @@ with content as (
         , unit_pages.is_solution
         , case
             when unit_pages.page_key = unit_pages.unit_key then 0
-            else coalesce(nullif({{ dbt.position("concat('/', unit_pages.page_key)", 'units.body') }}, 0), 1000000000)
+            else coalesce(nullif({{ string_position("concat('/', unit_pages.page_key)", 'units.body') }}, 0), 1000000000)
         end as member_order
     from ocw_unit_pages as unit_pages
     inner join ocw_pages as units
