@@ -34,6 +34,7 @@ from ml.lib.embed import build_embedding_client
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import publish_prompt_version
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.failures import PermanentFailure
 from pydantic import Field
 
 LABELS_KEY = AssetKey(["intermediate", "int__courseware__concept_labels"])
@@ -86,6 +87,14 @@ class CoursewareResolutionConfig(Config):
             "previous run assigned now belong to a different concept."
         ),
     )
+
+
+class AdjudicationFailure(PermanentFailure):
+    """Some adjudication batches failed; the run's other results are stored.
+
+    Permanent so stop_run_retries keeps run_retries from re-running the whole
+    resolution; see ScopeExtractionFailure for the same reasoning.
+    """
 
 
 def assignment_churn(previous: pl.DataFrame, current: pl.DataFrame) -> tuple[int, int]:
@@ -216,6 +225,9 @@ def courseware_resolution(
         rebuild=config.rebuild,
     )
     run = result.run.row(0, named=True)
+    # Labels in a failed batch that still have no concept. In a rebuild a failed
+    # label keeps its previous concept, so only labels new to this run count.
+    unassigned = labels.height - result.assignments.height
     context.log.info("Resolution run %s", run)
     for table, frame in (
         ("courseware_concept_registry", result.registry),
@@ -239,6 +251,9 @@ def courseware_resolution(
             "resolved_label_count": MetadataValue.int(run["resolved_label_count"]),
             "concepts_minted": MetadataValue.int(run["concepts_minted"]),
             "concepts_merged": MetadataValue.int(run["concepts_merged"]),
+            "failed_batch_count": MetadataValue.int(run["failed_batch_count"]),
+            "failed_label_count": MetadataValue.int(run["failed_label_count"]),
+            "unassigned_label_count": MetadataValue.int(unassigned),
             "prompt_version": MetadataValue.text(PROMPT_VERSION),
             "opik_prompt_version": MetadataValue.text(opik_prompt_version),
         },
@@ -251,3 +266,22 @@ def courseware_resolution(
         concepts_deprecated=run["concepts_deprecated"],
         concepts_minted=run["concepts_minted"],
     )
+
+    # What succeeded is stored. The failure is permanent for run_retries, which
+    # would pay for every batch again; automation re-requests once, and that run
+    # adjudicates only the labels still unassigned.
+    if run["failed_batch_count"]:
+        raise AdjudicationFailure(
+            description=(
+                f"{run['failed_batch_count']} of {run['adjudication_calls']} "
+                f"adjudication batches failed ({run['failed_label_count']} labels, "
+                f"{unassigned} left without a concept)"
+            ),
+            metadata={
+                "retryable": False,
+                "failed_batch_count": run["failed_batch_count"],
+                "failed_label_count": run["failed_label_count"],
+                "unassigned_label_count": unassigned,
+            },
+            allow_retries=False,
+        )

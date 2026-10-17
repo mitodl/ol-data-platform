@@ -18,6 +18,7 @@ from ml.lib.courseware.describe import (
     DESCRIPTION_PROMPT,
     describe_concepts,
     description_version,
+    pending_concepts,
 )
 from ml.lib.courseware.extract import DEFAULT_EFFORT, Effort
 from ml.lib.courseware.warehouse import (
@@ -29,11 +30,19 @@ from ml.lib.courseware.warehouse import (
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import publish_prompt_version
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.failures import PermanentFailure
 from pydantic import Field
 
 INPUTS_KEY = AssetKey(["intermediate", "int__courseware__concept_description_inputs"])
 DESCRIPTION_KEY = AssetKey(["intermediate", "courseware_concept_description"])
 DESCRIPTION_PROMPT_NAME = "courseware-concept-description"
+
+
+class DescriptionFailure(PermanentFailure):
+    """Some concepts got no description; the others are stored.
+
+    Permanent so stop_run_retries keeps run_retries from re-running every batch.
+    """
 
 
 class CoursewareDescriptionConfig(Config):
@@ -95,24 +104,36 @@ def courseware_concept_description(
     opik_prompt_version = publish_prompt_version(
         DESCRIPTION_PROMPT_NAME, DESCRIPTION_PROMPT
     )
+    version = description_version(model_id, config.effort)
+    pending = {
+        entry["concept_id"] for entry in pending_concepts(inputs, existing, version)
+    }
     described = describe_concepts(
         inputs, client, model_id=model_id, effort=config.effort, existing=existing
     )
+    failed = len(pending - set(described["concept_id"]))
     concept_count = inputs["concept_id"].n_unique()
     context.log.info(
         "Described %d of %d concepts", described["concept_id"].n_unique(), concept_count
     )
-    if described.height == 0:
-        return
-    yield Output(
-        described,
-        metadata={
-            "row_count": MetadataValue.int(described.height),
-            "concept_count": MetadataValue.int(concept_count),
-            "model_id": MetadataValue.text(model_id),
-            "description_version": MetadataValue.text(
-                description_version(model_id, config.effort)
-            ),
-            "opik_prompt_version": MetadataValue.text(opik_prompt_version),
-        },
-    )
+    if described.height:
+        yield Output(
+            described,
+            metadata={
+                "row_count": MetadataValue.int(described.height),
+                "concept_count": MetadataValue.int(concept_count),
+                "model_id": MetadataValue.text(model_id),
+                "description_version": MetadataValue.text(version),
+                "failed_concept_count": MetadataValue.int(failed),
+                "opik_prompt_version": MetadataValue.text(opik_prompt_version),
+            },
+        )
+
+    # What succeeded is stored. Permanent so run_retries does not pay for every
+    # batch again; automation re-requests once and describes only what is missing.
+    if failed:
+        raise DescriptionFailure(
+            description=f"{failed} of {len(pending)} concepts got no description",
+            metadata={"retryable": False, "failed_concept_count": failed},
+            allow_retries=False,
+        )
