@@ -816,6 +816,7 @@ def test_graph_reports_cycles_and_skips_unchanged_input(tables, monkeypatch):
             "concept_pk": names,
             "preferred_label": names,
             "lifecycle_status": ["active"] * 3,
+            "label_count": [1] * 3,
         }
     )
     tables["bridge_concept_relation"] = pl.DataFrame(
