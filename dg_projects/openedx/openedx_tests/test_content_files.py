@@ -21,6 +21,7 @@ from openedx.assets.content_files import (
     build_document_rows,
     file_extension,
     open_bundle_members,
+    static_references,
     write_text_snapshot,
 )
 from upath import UPath
@@ -634,3 +635,83 @@ def test_extensionless_files_report_an_empty_extension():
     """A bare `LICENSE` has no suffix; it must not become the whole filename."""
     assert file_extension("course/static/LICENSE") == ""
     assert file_extension("course/static/subs_abc.srt.sjson") == ".sjson"
+
+
+def test_static_references_cover_both_link_spellings():
+    """Studio writes /static/<name>; a link copied from the LMS has the asset key.
+
+    The asset key can name another run (a copied link), and a Studio CDN link
+    puts a hash prefix before it. Both resolve to the name in this bundle.
+    """
+    html = (
+        b'<p><a href="/static/Lecture%201_FNL.pdf#page=2">Slides</a>'
+        b'<img src="/static/chart.png"/>'
+        b'<a href="https://courses.learn.mit.edu/asset-v1:UAI_SOURCE+UAI.1+2T2025'
+        b'+type@asset+block@loans.csv">data</a>'
+        b'<a href="https://studio.mitxonline.mit.edu/assets/courseware/v1/abc123/'
+        b'asset-v1:UAI_SOURCE+UAI.4+1T2026+type@asset+block@notes.pdf?raw">notes</a>'
+        b'<a href="/static/chart.png">again</a>'
+        b'<a href="https://example.com/static/elsewhere.pdf">not ours</a></p>'
+    )
+
+    assert static_references(html) == [
+        "static/Lecture 1_FNL.pdf",
+        "static/chart.png",
+        "static/loans.csv",
+        "static/notes.pdf",
+    ]
+
+
+def test_static_references_cover_relative_and_legacy_links():
+    """Hand-written html links static files relatively, and old courses by c4x URL."""
+    html = (
+        b'<a href="static/a.pdf">a</a>'
+        b'<a href=" /static/b.pdf">b</a>'
+        b'<a href="../static/c.pdf">c</a>'
+        b'<a href="./static/d.pdf">d</a>'
+        b'<a href="/c4x/MITx/6.002x/asset/e%20notes.pdf">e</a>'
+        b'<a href="https://courses.edx.org/c4x/MITx/6.002x/asset/f.pdf">f</a>'
+        b'<a href="/statics/g.pdf">not static/</a>'
+    )
+
+    assert static_references(html) == [
+        "static/a.pdf",
+        "static/b.pdf",
+        "static/c.pdf",
+        "static/d.pdf",
+        "static/e notes.pdf",
+        "static/f.pdf",
+    ]
+
+
+def test_html_rows_carry_their_static_references():
+    """Tika's text drops hrefs, so the row is the only record of what a page links."""
+    rows, _ = rows_for(
+        [
+            ("html/intro.html", b'<a href="/static/slides.pdf">Slides</a>'),
+            ("html/plain.html", b"<p>No links</p>"),
+            ("static/slides.pdf", b"%PDF-fake"),
+            ("html/empty.html", b""),
+        ]
+    )
+
+    assert [r["static_references"] for r in rows] == [
+        ["static/slides.pdf"],
+        [],
+        None,
+        None,
+    ]
+
+
+def test_failed_html_rows_keep_their_static_references():
+    def always_fails(_file_bytes, _content_type):
+        msg = "Tika exploded"
+        raise ValueError(msg)
+
+    rows, _ = rows_for(
+        [("html/intro.html", b'<a href="/static/slides.pdf">Slides</a>')],
+        extract=always_fails,
+    )
+
+    assert rows[0]["extraction_status"] == "failed"
+    assert rows[0]["static_references"] == ["static/slides.pdf"]

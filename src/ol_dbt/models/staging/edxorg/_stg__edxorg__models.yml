@@ -745,8 +745,11 @@ models:
     tests:
     - not_null
   - name: coursestructure_xml_block_id
-    description: str, unique identifier for the block from XML url_name attribute
-      or filename
+    description: str, the block's id within the course run, as its block-v1 usage
+      key and the parent's pointer name it, taken from the XML file's path below <root>/<block_type>/
+      without .xml, with each '/' read as ':' (e.g. PP1/P4_Q3a.xml is PP1:P4_Q3a).
+      Not the url_name attribute inside the file, which a library_content child carries
+      from its source library
     tests:
     - not_null
   - name: coursestructure_xml_block_type
