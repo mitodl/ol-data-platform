@@ -80,6 +80,9 @@ models:
   - name: is_promoted_version
     description: boolean, whether the extraction's extractor, prompt, schema, model
       and effort are the ones promoted for its run
+  - name: matches_current_input
+    description: boolean, whether the extraction's input_text_checksum and part count
+      are the ones the run's latest read recorded for its scope part
   - name: is_retired
     description: boolean, whether the scope part is gone from the course (its sequential
       is no longer in the run's latest structure, or the part is past the scope's
@@ -106,6 +109,71 @@ models:
       arguments:
         column_list: [platform, courserun_readable_id, scope_id, scope_part]
         row_condition: is_current
+
+- name: int__courseware__latest_scope_inputs
+  description: Each course run's latest read by the courseware extractor, one row
+    per scope part it read (courseware_scope_input).
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the sequential's block id, or 'context' or 'materials'
+  - name: scope_part
+    description: int, which part of the scope, from 1
+  - name: scope_part_count
+    description: int, how many parts the scope was split into
+  - name: input_text_checksum
+    description: str, sha256 of the source text the part's call reads
+  - name: observed_at
+    description: timestamp, when the extractor read the run
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [platform, courserun_readable_id, scope_id, scope_part]
+
+- name: int__courseware__scope_part_coverage
+  description: One row per scope part the extractor's latest read of a run expects,
+    with whether a promoted extraction covers it. A failed part has no extraction
+    row, so this is where it shows up. Runs with no recorded read are not listed.
+  config:
+    meta:
+      # Reads int__courseware__extractions, which QA cannot build.
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the sequential's block id, or 'context' or 'materials'
+  - name: scope_part
+    description: int, which part of the scope, from 1
+  - name: scope_part_count
+    description: int, how many parts the latest read split the scope into
+  - name: observed_at
+    description: timestamp, when the extractor read the run
+  - name: promoted_extraction_count
+    description: int, extractions of the part under the run's promoted version
+  - name: has_promoted_extraction
+    description: boolean, whether the part has any extraction under the promoted version
+  - name: has_current_input_extraction
+    description: boolean, whether one of those matches the part's current input; false
+      for a part that failed to extract, or whose changed text did
+    tests:
+    # A warning, like has_promoted_extraction on int__courseware__extractions: one
+    # failed scope should not skip every courseware rollup in the build.
+    - accepted_values:
+        arguments:
+          values: [true]
+          quote: false
+        config:
+          severity: warn
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [platform, courserun_readable_id, scope_id, scope_part]
 
 - name: int__courseware__claims
   description: Every extracted claim with its scope, extractor version, evidence counts
@@ -542,13 +610,8 @@ unit_tests:
       model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: run,
       scope_id: seq-6, scope_kind: unit, scope_part: 1, scope_part_count: 1, scope_position: 7,
       input_text_checksum: b, extracted_at: '2026-10-15T00:00:00'}
-  - input: source('courseware_intermediate', 'courseware_scope_input')
+  - input: ref('int__courseware__latest_scope_inputs')
     rows:
-    # an earlier read saw the B texts; only the latest read counts
-    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-5, scope_part: 1,
-      scope_part_count: 1, input_text_checksum: b, observed_at: '2026-10-15T00:00:00'}
-    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-6, scope_part: 1,
-      scope_part_count: 1, input_text_checksum: b, observed_at: '2026-10-15T00:00:00'}
     - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-5, scope_part: 1,
       scope_part_count: 1, input_text_checksum: a, observed_at: '2026-10-16T00:00:00'}
     - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-6, scope_part: 1,
@@ -595,3 +658,62 @@ unit_tests:
     - {extraction_key: aba_split_a1, scope_position: 7, is_retired: false, is_current: true}
     - {extraction_key: aba_split_a2, scope_position: 7, is_retired: false, is_current: true}
     - {extraction_key: aba_split_b1, scope_position: 7, is_retired: false, is_current: false}
+
+- name: test_int__courseware__latest_scope_inputs_keeps_only_each_runs_latest_read
+  description: >
+    An earlier read of a run is dropped, and each run keeps its own latest read.
+  model: int__courseware__latest_scope_inputs
+  given:
+  - input: source('courseware_intermediate', 'courseware_scope_input')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-1, scope_part: 1,
+      scope_part_count: 1, input_text_checksum: old, observed_at: '2026-10-15T00:00:00'}
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-1, scope_part: 1,
+      scope_part_count: 1, input_text_checksum: new, observed_at: '2026-10-16T00:00:00'}
+    - {platform: mitxonline, courserun_readable_id: other-run, scope_id: seq-1, scope_part: 1,
+      scope_part_count: 1, input_text_checksum: only, observed_at: '2026-10-14T00:00:00'}
+  expect:
+    rows:
+    - {courserun_readable_id: run, input_text_checksum: new}
+    - {courserun_readable_id: other-run, input_text_checksum: only}
+
+- name: test_int__courseware__scope_part_coverage_flags_a_failed_part
+  description: >
+    seq-7 grew from one part to two and part 2 failed, so part 2 has no extraction
+    and
+    is flagged. seq-8's text changed and its re-extraction failed, so it has only
+    an
+    older promoted extraction and is flagged too. A matching extraction under a
+    version nobody promoted covers nothing.
+  model: int__courseware__scope_part_coverage
+  given:
+  - input: ref('int__courseware__latest_scope_inputs')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-7, scope_part: 1,
+      scope_part_count: 2, input_text_checksum: g1, observed_at: '2026-10-16T00:00:00'}
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-7, scope_part: 2,
+      scope_part_count: 2, input_text_checksum: g2, observed_at: '2026-10-16T00:00:00'}
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-8, scope_part: 1,
+      scope_part_count: 1, input_text_checksum: changed, observed_at: '2026-10-16T00:00:00'}
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-9, scope_part: 1,
+      scope_part_count: 1, input_text_checksum: t, observed_at: '2026-10-16T00:00:00'}
+  - input: ref('int__courseware__extractions')
+    rows:
+    - {extraction_key: grown_old_1, platform: mitxonline, courserun_readable_id: run,
+      scope_id: seq-7, scope_part: 1, is_promoted_version: true, matches_current_input: false}
+    - {extraction_key: grown_new_1, platform: mitxonline, courserun_readable_id: run,
+      scope_id: seq-7, scope_part: 1, is_promoted_version: true, matches_current_input: true}
+    - {extraction_key: stale, platform: mitxonline, courserun_readable_id: run, scope_id: seq-8,
+      scope_part: 1, is_promoted_version: true, matches_current_input: false}
+    - {extraction_key: trial, platform: mitxonline, courserun_readable_id: run, scope_id: seq-9,
+      scope_part: 1, is_promoted_version: false, matches_current_input: true}
+  expect:
+    rows:
+    - {scope_id: seq-7, scope_part: 1, promoted_extraction_count: 2, has_promoted_extraction: true,
+      has_current_input_extraction: true}
+    - {scope_id: seq-7, scope_part: 2, promoted_extraction_count: 0, has_promoted_extraction: false,
+      has_current_input_extraction: false}
+    - {scope_id: seq-8, scope_part: 1, promoted_extraction_count: 1, has_promoted_extraction: true,
+      has_current_input_extraction: false}
+    - {scope_id: seq-9, scope_part: 1, promoted_extraction_count: 0, has_promoted_extraction: false,
+      has_current_input_extraction: false}

@@ -41,28 +41,8 @@ with extractions as (
     select * from {{ ref('courseware_extraction_promotions') }}
 )
 
-, scope_inputs as (
-    select * from {{ source('courseware_intermediate', 'courseware_scope_input') }}
-)
-
-, latest_reads as (
-    select
-        platform
-        , courserun_readable_id
-        , max(observed_at) as observed_at
-    from scope_inputs
-    group by platform, courserun_readable_id
-)
-
--- each run's latest read, which lists every scope part the extractor read
 , latest_scope_inputs as (
-    select scope_inputs.*
-    from scope_inputs
-    inner join latest_reads
-        on
-            scope_inputs.platform = latest_reads.platform
-            and scope_inputs.courserun_readable_id = latest_reads.courserun_readable_id
-            and scope_inputs.observed_at = latest_reads.observed_at
+    select * from {{ ref('int__courseware__latest_scope_inputs') }}
 )
 
 , current_scopes as (
@@ -238,6 +218,7 @@ select
     , scope_part
     , scope_position
     , is_promoted_version
+    , matches_current_input
     , coalesce(is_retired, false) as is_retired
     , is_promoted_version and version_rank = 1 and not coalesce(is_retired, false) as is_current
     , has_promoted_extraction
