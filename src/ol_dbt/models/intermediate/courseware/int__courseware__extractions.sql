@@ -18,11 +18,13 @@
     limits them).
 
     An extraction is retired, and never current, when its scope part is gone from
-    the course: the run is in the sources but the scope is not (a deleted
-    sequential), or the part is past the part count of the scope's newest promoted
-    extraction (a scope that shrank from two parts to one). A run the sources do not
-    list at all is left as it is, since var('courseware_courseruns') may only have
-    left it out.
+    the course: a unit scope whose sequential the run's latest course structure
+    (dim_course_content) no longer has, or a part past the part count of the
+    scope's newest promoted extraction (a scope that shrank from two parts to one).
+    Deletion is read from the structure, not from extraction_sources, because a
+    scope with no readable text this build (e.g. a failed Tika parse) is missing
+    from the sources too and must keep its claims. Runs with no Open edX structure
+    (OCW) and the context and materials scopes are never retired as deleted.
 #}
 with extractions as (
     select * from {{ source('courseware_intermediate', 'courseware_claim_extraction') }}
@@ -41,11 +43,30 @@ with extractions as (
     from {{ ref('int__courseware__extraction_sources') }}
 )
 
-, current_runs as (
+, structure as (
+    select
+        platform
+        , courserun_readable_id
+        , block_id
+        , block_category
+    from {{ ref('dim_course_content') }}
+    where is_latest
+)
+
+, structure_runs as (
     select distinct
         platform
         , courserun_readable_id
-    from current_scopes
+    from structure
+)
+
+, structure_sequentials as (
+    select distinct
+        platform
+        , courserun_readable_id
+        , block_id as scope_id
+    from structure
+    where block_category = 'sequential'
 )
 
 , runs as (
@@ -84,8 +105,9 @@ with extractions as (
         , extractions.scope_part
         , extractions.scope_part_count
         , coalesce(current_scopes.scope_position, extractions.scope_position) as scope_position
-        , current_runs.courserun_readable_id is not null
-        and current_scopes.scope_id is null as is_deleted_scope
+        , extractions.scope_kind = 'unit'
+        and structure_runs.courserun_readable_id is not null
+        and structure_sequentials.scope_id is null as is_deleted_scope
         , extractions.extracted_at
         , coalesce(
             extractions.extractor_id = run_promotions.extractor_id
@@ -105,10 +127,15 @@ with extractions as (
             extractions.platform = current_scopes.platform
             and extractions.courserun_readable_id = current_scopes.courserun_readable_id
             and extractions.scope_id = current_scopes.scope_id
-    left join current_runs
+    left join structure_runs
         on
-            extractions.platform = current_runs.platform
-            and extractions.courserun_readable_id = current_runs.courserun_readable_id
+            extractions.platform = structure_runs.platform
+            and extractions.courserun_readable_id = structure_runs.courserun_readable_id
+    left join structure_sequentials
+        on
+            extractions.platform = structure_sequentials.platform
+            and extractions.courserun_readable_id = structure_sequentials.courserun_readable_id
+            and extractions.scope_id = structure_sequentials.scope_id
 )
 
 -- A changed split re-extracts every part, so the newest promoted extraction carries
