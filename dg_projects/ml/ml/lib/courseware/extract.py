@@ -1,6 +1,7 @@
 """Extract claims from courseware scopes and flatten them into warehouse rows.
 
-One model call per scope part. The output is three tables keyed by extraction_key:
+One model call per scope part. The output is three tables keyed by extraction_key,
+a hash of the extractor version and the scope's own input (not the course header):
 courseware_claim_extraction (one row per call), courseware_claim and
 courseware_claim_evidence. dbt builds the dimensional facts, concepts and bridges
 from them; nothing here resolves labels across scopes or courses.
@@ -9,7 +10,7 @@ from them; nothing here resolves labels across scopes or courses.
 import hashlib
 import json
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -19,12 +20,14 @@ import polars as pl
 from anthropic import Anthropic, AnthropicBedrock, APIError
 from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
 from ml.lib.courseware.schemas import ScopeExtraction
-from ml.lib.courseware.scopes import Scope
+from ml.lib.courseware.scopes import Course, Scope
 from ml.lib.courseware.verify import verify_passage
 from pydantic import BaseModel, ValidationError
 
 log = logging.getLogger(__name__)
 
+# Bump when scope_message's layout changes: the extraction key does not hash the
+# message, only the scope's own inputs (KEY_COLUMNS).
 EXTRACTOR_ID = "courseware_claims_v1"
 DEFAULT_MODEL = "claude-opus-5-5"
 BEDROCK_DEFAULT_MODEL = "us.anthropic.claude-opus-5-5"
@@ -50,6 +53,26 @@ def _digest(*parts: Any) -> str:
 
 PROMPT_VERSION = _digest(SYSTEM_PROMPT)[:12]
 SCHEMA_VERSION = _digest(OUTPUT_SCHEMA)[:12]
+# What an extraction key hashes: the extractor version and the scope's own input,
+# all stored on the extraction row, so a stored row's key can be recomputed from it.
+# The course header (title, outline, description) is left out, so editing a
+# course's description or renaming one sequential re-extracts only the scopes whose
+# own text changed; header_version records it on the row instead.
+KEY_COLUMNS = (
+    "extractor_id",
+    "prompt_version",
+    "schema_version",
+    "model_id",
+    "effort",
+    "platform",
+    "courserun_readable_id",
+    "scope_id",
+    "scope_kind",
+    "scope_title",
+    "scope_part",
+    "scope_part_count",
+    "input_text_checksum",
+)
 
 EXTRACTION_SCHEMA = {
     "extraction_key": pl.String,
@@ -67,6 +90,7 @@ EXTRACTION_SCHEMA = {
     "scope_part": pl.Int64,
     "scope_part_count": pl.Int64,
     "input_text_checksum": pl.String,
+    "header_version": pl.String,
     "source_count": pl.Int64,
     "truncated_source_count": pl.Int64,
     "sources_json": pl.String,
@@ -130,23 +154,69 @@ class ExtractionTables:
     evidence: pl.DataFrame
 
 
-def extraction_key(scope: Scope, model_id: str, effort: str) -> str:
-    """Key one call by everything that determines its output.
+def header_version(course: Course) -> str:
+    """Hash the course header that every scope's message carries.
 
-    A change to the prompt, the schema, the model, the effort, or any text the call
-    reads (outline and description included) gives a new key, so a new extraction
-    is added next to the old one rather than replacing it.
+    :param course: the scope's course
+    :returns: a 12-character version of the title, outline and description
+    :rtype: str
     """
-    return _digest(
-        EXTRACTOR_ID,
-        PROMPT_VERSION,
-        SCHEMA_VERSION,
-        model_id,
-        effort,
-        scope.course.platform,
-        scope.course.courserun_readable_id,
-        scope.scope_key,
-        hashlib.sha256(scope_message(scope).encode()).hexdigest(),
+    return _digest(course.title, course.outline, course.description)[:12]
+
+
+def _key_fields(scope: Scope, model_id: str, effort: str) -> dict[str, Any]:
+    return {
+        "extractor_id": EXTRACTOR_ID,
+        "prompt_version": PROMPT_VERSION,
+        "schema_version": SCHEMA_VERSION,
+        "model_id": model_id,
+        "effort": effort,
+        "platform": scope.course.platform,
+        "courserun_readable_id": scope.course.courserun_readable_id,
+        "scope_id": scope.scope_id,
+        "scope_kind": scope.scope_kind,
+        "scope_title": scope.scope_title,
+        "scope_part": scope.part,
+        "scope_part_count": scope.part_count,
+        "input_text_checksum": scope.input_text_checksum,
+        "header_version": header_version(scope.course),
+    }
+
+
+def stored_extraction_key(
+    row: Mapping[str, Any], *, key_on_header: bool = False
+) -> str:
+    """Compute an extraction's key from its courseware_claim_extraction columns.
+
+    :param row: a stored extraction row, or the fields of a new one
+    :param key_on_header: also hash header_version (see extraction_key)
+    :returns: the extraction key
+    :rtype: str
+    """
+    columns = (*KEY_COLUMNS, "header_version") if key_on_header else KEY_COLUMNS
+    return _digest(*(row[column] for column in columns))
+
+
+def extraction_key(
+    scope: Scope, model_id: str, effort: str, *, key_on_header: bool = False
+) -> str:
+    """Key one call by the extractor version and the scope's own input.
+
+    A change to the prompt, the schema, the model, the effort, or the scope's title,
+    split or source text gives a new key, so a new extraction is added next to the
+    old one rather than replacing it. A change to the course header does not.
+
+    :param scope: the scope part
+    :param model_id: the model id the client expects
+    :param effort: output_config.effort
+    :param key_on_header: also hash the header version, to re-extract a run on
+        purpose after its header changed; a repeat under the same header has the
+        same key and is skipped
+    :returns: the extraction key
+    :rtype: str
+    """
+    return stored_extraction_key(
+        _key_fields(scope, model_id, effort), key_on_header=key_on_header
     )
 
 
@@ -285,20 +355,8 @@ def _rows(
     ]
     extraction = {
         "extraction_key": key,
-        "extractor_id": EXTRACTOR_ID,
-        "prompt_version": PROMPT_VERSION,
-        "schema_version": SCHEMA_VERSION,
-        "model_id": model_id,
-        "effort": effort,
-        "platform": scope.course.platform,
-        "courserun_readable_id": scope.course.courserun_readable_id,
-        "scope_id": scope.scope_id,
-        "scope_kind": scope.scope_kind,
-        "scope_title": scope.scope_title,
+        **_key_fields(scope, model_id, effort),
         "scope_position": scope.scope_position,
-        "scope_part": scope.part,
-        "scope_part_count": scope.part_count,
-        "input_text_checksum": scope.input_text_checksum,
         "source_count": len(scope.sources),
         "truncated_source_count": sum(source.truncated for source in scope.sources),
         "sources_json": json.dumps(
@@ -332,6 +390,7 @@ def extract_scopes(  # noqa: PLR0913
     effort: Effort = DEFAULT_EFFORT,
     existing_keys: set[str] | frozenset[str] = frozenset(),
     max_workers: int = 8,
+    key_on_header: bool = False,
 ) -> ExtractionTables:
     """Extract every scope whose key is not already stored.
 
@@ -343,13 +402,15 @@ def extract_scopes(  # noqa: PLR0913
     :param effort: output_config.effort for every call
     :param existing_keys: extraction keys already stored, which are skipped
     :param max_workers: concurrent model calls
+    :param key_on_header: hash the header version into the keys (extraction_key)
     :returns: the new rows
     :rtype: ExtractionTables
     """
     pending = [
         (scope, key)
         for scope in scopes
-        if (key := extraction_key(scope, model_id, effort)) not in existing_keys
+        if (key := extraction_key(scope, model_id, effort, key_on_header=key_on_header))
+        not in existing_keys
     ]
     extractions, claims, evidence = [], [], []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:

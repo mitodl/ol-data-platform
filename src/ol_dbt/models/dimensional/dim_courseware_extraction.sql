@@ -39,6 +39,7 @@ select
     , extractions.model_id
     , extractions.effort
     , extractions.input_text_checksum
+    , extractions.header_version
     , extractions.source_count
     , extractions.truncated_source_count
     , extractions.summary

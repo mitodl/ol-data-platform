@@ -19,7 +19,8 @@ models:
     - unique
     - not_null
   - name: extraction_key
-    description: str, sha256 of everything the call depended on
+    description: str, sha256 of the extractor version and the scope's own input, not
+      the course header
   - name: courserun_fk
     description: str, dim_course_run.courserun_pk
     tests:
@@ -57,6 +58,10 @@ models:
     description: str, the effort setting for the call
   - name: input_text_checksum
     description: str, sha256 of the source text the call read
+  - name: header_version
+    description: str, hash of the course header the call read (title, outline, description);
+      null for extractions recorded before it was. A run whose current header differs
+      can be re-extracted on purpose (ml.lib.courseware extraction_key, key_on_header)
   - name: source_count
     description: int, sources the call read
   - name: truncated_source_count

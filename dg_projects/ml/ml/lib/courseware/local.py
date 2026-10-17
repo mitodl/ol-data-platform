@@ -18,9 +18,11 @@ from ml.lib.courseware.describe import describe_concepts
 from ml.lib.courseware.extract import (
     BEDROCK_DEFAULT_MODEL,
     DEFAULT_EFFORT,
+    EXTRACTION_SCHEMA,
     Effort,
     extract_scopes,
     extraction_key,
+    stored_extraction_key,
 )
 from ml.lib.courseware.graph import compute_graph, previous_membership
 from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
@@ -56,6 +58,7 @@ def extract(  # noqa: PLR0913
     effort: Effort = DEFAULT_EFFORT,
     aws_region: str = "us-east-1",
     max_workers: int = 6,
+    key_on_header: bool = False,
     dry_run: bool = False,
 ) -> None:
     """Extract claims for every scope of the runs in a sources parquet file.
@@ -68,6 +71,7 @@ def extract(  # noqa: PLR0913
     :param effort: output_config.effort
     :param aws_region: Bedrock region
     :param max_workers: concurrent model calls
+    :param key_on_header: re-extract scopes whose course header changed (extraction_key)
     :param dry_run: print the scopes and their estimated input size, call nothing
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -91,7 +95,8 @@ def extract(  # noqa: PLR0913
             tokens = system_tokens + len(scope_message(scope)) // CHARS_PER_TOKEN
             stored_marker = (
                 "stored"
-                if extraction_key(scope, model_id, effort) in existing_keys
+                if extraction_key(scope, model_id, effort, key_on_header=key_on_header)
+                in existing_keys
                 else ""
             )
             total += 0 if stored_marker else tokens
@@ -115,6 +120,7 @@ def extract(  # noqa: PLR0913
         effort=effort,
         existing_keys=existing_keys,
         max_workers=max_workers,
+        key_on_header=key_on_header,
     )
     for table, new_rows in zip(
         OUTPUT_TABLES, (tables.extractions, tables.claims, tables.evidence), strict=True
@@ -128,6 +134,47 @@ def extract(  # noqa: PLR0913
         f"{tables.extractions['input_tokens'].sum():,} in / "
         f"{tables.extractions['output_tokens'].sum():,} out tokens"
     )
+
+
+@app.command
+def rekey(output_dir: Path) -> None:
+    """Re-key extractions stored before keys left out the course header.
+
+    Their keys hashed the whole message. The current key is a function of stored
+    columns, so it is recomputed exactly and nothing is re-extracted. Their
+    header_version stays null, because the header they read was not stored.
+
+    :param output_dir: the directory holding the three extraction tables
+    """
+    extractions = pl.read_parquet(output_dir / "courseware_claim_extraction.parquet")
+    if "header_version" not in extractions.columns:
+        extractions = extractions.with_columns(
+            header_version=pl.lit(None, dtype=pl.String)
+        )
+    new_keys = {
+        row["extraction_key"]: stored_extraction_key(row)
+        for row in extractions.filter(pl.col("header_version").is_null()).iter_rows(
+            named=True
+        )
+    }
+    rekeyed = {
+        "courseware_claim_extraction": extractions.select(list(EXTRACTION_SCHEMA)),
+        "courseware_claim": pl.read_parquet(output_dir / "courseware_claim.parquet"),
+        "courseware_claim_evidence": pl.read_parquet(
+            output_dir / "courseware_claim_evidence.parquet"
+        ),
+    }
+    rekeyed = {
+        table: rows.with_columns(pl.col("extraction_key").replace(new_keys))
+        for table, rows in rekeyed.items()
+    }
+    if rekeyed["courseware_claim_extraction"]["extraction_key"].is_duplicated().any():
+        msg = "extractions that differ only in their course header share a new key"
+        raise ValueError(msg)
+    for table, rows in rekeyed.items():
+        rows.write_parquet(output_dir / f"{table}.parquet")
+    changed = sum(old != new for old, new in new_keys.items())
+    print(f"{changed} of {extractions.height} extractions re-keyed")  # noqa: T201
 
 
 @app.command
