@@ -282,7 +282,10 @@ def score_subsections(  # noqa: PLR0913
             for canonical, (status, label) in concepts.items()
             if canonical not in found_any
         )
-    models = sorted({model for _, model in named})
+    # every model that extracted a scope, including one that named no concept
+    models = sorted(
+        {model for value in population["models"] for model in value.split("+")}
+    )
     report: dict[str, Any] = {
         "matching_rule": MATCHING_RULE,
         "annotator_f1": float(np.mean(agreement)) if agreement else None,
