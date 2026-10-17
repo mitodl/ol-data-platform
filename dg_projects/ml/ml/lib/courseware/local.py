@@ -20,6 +20,7 @@ from ml.lib.courseware.extract import (
     DEFAULT_EFFORT,
     EXTRACTION_SCHEMA,
     Effort,
+    covered_keys,
     extract_scopes,
     extraction_key,
     stored_extraction_key,
@@ -94,9 +95,8 @@ def extract(  # noqa: PLR0913
     :param effort: output_config.effort
     :param aws_region: Bedrock region
     :param max_workers: concurrent model calls
-    :param key_on_header: hash the course header into the keys (extraction_key). The
-        first such run re-extracts every selected scope; a repeat under the same
-        header skips them
+    :param key_on_header: re-extract scopes whose course header changed since they
+        were extracted, or whose header was never recorded (extraction_key)
     :param dry_run: print the scopes and their estimated input size, call nothing
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -113,7 +113,7 @@ def extract(  # noqa: PLR0913
     stored = _existing(output_dir, "courseware_claim_extraction")
     if stored is not None:
         _require_current_keys(stored)
-    existing_keys = set(stored["extraction_key"]) if stored is not None else set()
+    existing_keys = covered_keys(stored) if stored is not None else set()
 
     if dry_run:
         system_tokens = len(SYSTEM_PROMPT) // CHARS_PER_TOKEN

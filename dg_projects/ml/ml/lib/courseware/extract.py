@@ -211,15 +211,35 @@ def extraction_key(
     :param scope: the scope part
     :param model_id: the model id the client expects
     :param effort: output_config.effort
-    :param key_on_header: also hash the header version, to re-extract a run on
-        purpose after its header changed; a repeat under the same header has the
-        same key and is skipped
+    :param key_on_header: also hash the header version, to re-extract on purpose the
+        scopes whose header changed since they were extracted (see covered_keys)
     :returns: the extraction key
     :rtype: str
     """
     return stored_extraction_key(
         _key_fields(scope, model_id, effort), key_on_header=key_on_header
     )
+
+
+def covered_keys(stored: pl.DataFrame) -> set[str]:
+    """Return every key the stored extractions already answer, under either scheme.
+
+    A stored row's key says nothing of which scheme made it, so each row covers its
+    header-free key and, when it records header_version, its header-keyed one too.
+    A run under either scheme then skips a scope that the other already extracted
+    with the same text (and, for key_on_header, the same header). A row from before
+    header_version was recorded covers only its header-free key.
+
+    :param stored: courseware_claim_extraction rows, with header_version
+    :returns: the keys to pass to extract_scopes as existing_keys
+    :rtype: set[str]
+    """
+    keys = set(stored["extraction_key"])
+    for row in stored.iter_rows(named=True):
+        keys.add(stored_extraction_key(row))
+        if row["header_version"] is not None:
+            keys.add(stored_extraction_key(row, key_on_header=True))
+    return keys
 
 
 @dataclass(frozen=True)
@@ -402,7 +422,7 @@ def extract_scopes(  # noqa: PLR0913
     :param client: an Anthropic or AnthropicBedrock client (LLMClientFactory)
     :param model_id: the model id the client expects
     :param effort: output_config.effort for every call
-    :param existing_keys: extraction keys already stored, which are skipped
+    :param existing_keys: keys already stored, which are skipped (covered_keys)
     :param max_workers: concurrent model calls
     :param key_on_header: hash the header version into the keys (extraction_key)
     :returns: the new rows
