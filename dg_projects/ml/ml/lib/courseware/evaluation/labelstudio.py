@@ -23,7 +23,7 @@ import polars as pl
 
 CLAIM_VERDICTS = ("supported", "partially_supported", "unsupported")
 STATUS_JUDGMENTS = ("correct", "wrong", "not_applicable")
-LABEL_JUDGMENTS = ("good", "too_broad", "too_narrow", "not_a_concept")
+LABEL_JUDGMENTS = ("good", "too_broad", "too_narrow", "not_a_concept", "not_applicable")
 GOLD_STATUSES = ("taught", "reviewed", "used", "mentioned", "assumed")
 PAIR_RELATIONS = ("exact", "close", "a_narrower", "a_broader", "related", "distinct")
 PREREQUISITE_LABELS = ("b_before_a", "a_before_b", "neither")
@@ -67,7 +67,8 @@ CLAIMS_CONFIG = f"""<View>
         "label_quality",
         "claim",
         LABEL_JUDGMENTS,
-        "Is the label a concept another course would name the same way?",
+        "Is the label a concept another course would name the same way "
+        "(not_applicable for claim kinds that are not concepts)?",
     )
 }
 </View>

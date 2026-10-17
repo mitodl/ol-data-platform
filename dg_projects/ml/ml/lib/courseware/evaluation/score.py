@@ -25,7 +25,7 @@ from ml.lib.courseware.evaluation.metrics import (
     mean_pairwise_cohen_kappa,
     stratified_ppi,
 )
-from ml.lib.courseware.evaluation.samples import STATUS_ORDER
+from ml.lib.courseware.evaluation.samples import CONCEPT_CLAIM_KINDS, STATUS_ORDER
 
 # Labels per item (y, g); g is 1 for a mean.
 Labels = Mapping[str, tuple[float, float]]
@@ -129,11 +129,12 @@ def _kappa(
     return report
 
 
-def _is_correct(annotation: Annotation) -> bool:
+def _is_correct(annotation: Annotation, *, is_concept: bool) -> bool:
+    # label quality only judges concept labels; a skill or outcome is not one
     return (
         annotation.choice("verdict") == "supported"
         and annotation.choice("status") != "wrong"
-        and annotation.choice("label_quality") != "not_a_concept"
+        and not (is_concept and annotation.choice("label_quality") == "not_a_concept")
     )
 
 
@@ -147,7 +148,8 @@ def score_claims(
     """Estimate per-model claim precision with stratified PPI.
 
     A claim is correct when the source supports it, its teaching status is not
-    wrong, and its label is a concept. "supported" counts support alone.
+    wrong, and, for a concept claim kind, its label is a concept. "supported"
+    counts support alone.
 
     :param population: claims_population output
     :param annotations: the claims project's export
@@ -162,9 +164,12 @@ def score_claims(
             autorater.select("item_id", "autorater"), on="item_id", how="left"
         )
     items = by_item(annotations)
+    concept_items = set(
+        population.filter(pl.col("claim_kind").is_in(CONCEPT_CLAIM_KINDS))["item_id"]
+    )
     report: dict[str, Any] = {"matching_rule": MATCHING_RULE, "models": {}}
     for criterion, label in (
-        ("correct", _is_correct),
+        ("correct", lambda a: _is_correct(a, is_concept=a.item_id in concept_items)),
         ("supported", lambda a: a.choice("verdict") == "supported"),
     ):
         decided, ties = _consensus(items, label)

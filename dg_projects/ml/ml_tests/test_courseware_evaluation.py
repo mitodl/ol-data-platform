@@ -330,6 +330,7 @@ def test_score_claims_from_an_export(tmp_path):
         {
             "item_id": [f"c{n}" for n in range(8)],
             "model": ["haiku"] * 8,
+            "claim_kind": ["concept"] * 8,
             "stratum": ["a"] * 4 + ["b"] * 4,
             "autorater": [1.0, 0.0, 1.0, 1.0, None, None, None, None],
         }
@@ -517,6 +518,7 @@ def test_score_claims_on_a_sample_of_cross_model_small_strata(tmp_path):
         {
             "item_id": [f"c{n:02d}" for n in range(len(strata))],
             "model": [stratum.split("|")[1] for stratum in strata],
+            "claim_kind": ["concept"] * len(strata),
             "stratum": strata,
             "autorater": [None] * len(strata),
         },
@@ -1027,3 +1029,32 @@ def test_pairs_do_not_depend_on_the_order_decisions_are_read_in(tmp_path):
         drawn.append(samples.sample_pairs(inputs, population, size=10, seed=1))
     assert drawn[0].equals(drawn[1])
     assert drawn[0].equals(drawn[2])
+
+
+def test_label_quality_only_judges_concept_claims(tmp_path):
+    population = pl.DataFrame(
+        {
+            "item_id": [f"c{n}" for n in range(4)],
+            "model": ["haiku"] * 4,
+            "claim_kind": ["skill", "skill", "concept", "concept"],
+            "stratum": ["s"] * 4,
+            "autorater": [None] * 4,
+        },
+        schema_overrides={"autorater": pl.Float64},
+    )
+    supported = {"verdict": "supported", "status": "not_applicable"}
+    tasks = [
+        # a skill is not a concept, whichever label judgment the annotator gave
+        _choice_task("c0", [(1, {**supported, "label_quality": "not_a_concept"})]),
+        _choice_task("c1", [(1, {**supported, "label_quality": "not_applicable"})]),
+        _choice_task(
+            "c2", [(1, {**supported, "status": "correct", "label_quality": "good"})]
+        ),
+        _choice_task(
+            "c3",
+            [(1, {**supported, "status": "correct", "label_quality": "not_a_concept"})],
+        ),
+    ]
+    report = score.score_claims(population, _export(tmp_path, tasks), alpha=0.05)
+    assert report["models"]["haiku"]["correct"]["point"] == pytest.approx(0.75)
+    assert "not_applicable" in labelstudio.LABEL_JUDGMENTS
