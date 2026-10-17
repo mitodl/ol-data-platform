@@ -30,7 +30,7 @@ select
     , extractions.scope_id
     , extractions.scope_kind
     , extractions.scope_title
-    , extractions.scope_position
+    , extraction_status.scope_position
     , extractions.scope_part
     , extractions.scope_part_count
     , extractions.extractor_id

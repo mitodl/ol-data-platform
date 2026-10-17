@@ -41,7 +41,8 @@ models:
   - name: scope_title
     description: str, the sequential's title or the scope's name
   - name: scope_position
-    description: int, the scope's order in the course; 0 for context, 9999 for materials
+    description: int, the scope's order in the course as it is now; 0 for context,
+      9999 for materials
   - name: scope_part
     description: int, which part of a split scope the call read, from 1
   - name: scope_part_count
@@ -222,6 +223,11 @@ models:
 - name: dim_concept
   description: Every concept id the resolver has minted, active or retired, with its
     display label, descriptions and lifecycle. review_status is 'proposed' until reviewed.
+  config:
+    meta:
+      # Reads scope positions from int__courseware__extraction_sources (through
+      # int__courseware__extractions), which QA cannot build.
+      qa_buildable: false
   columns:
   - name: concept_pk
     description: str, opaque UUID minted once by the resolver; never derived from
@@ -283,6 +289,11 @@ models:
 
 - name: dim_concept_alias
   description: Every normalized label a concept was extracted under.
+  config:
+    meta:
+      # Reads scope positions from int__courseware__extraction_sources (through
+      # int__courseware__extractions), which QA cannot build.
+      qa_buildable: false
   columns:
   - name: concept_alias_pk
     description: str, surrogate key of the label key
@@ -312,6 +323,11 @@ models:
   description: Concept-to-concept edges with their accumulated evidence, one row per
     (from, to, relation). Hierarchy (broader), sequence (builds_on), practice (practiced_with),
     equivalence (close) and association (complements, related).
+  config:
+    meta:
+      # Reads scope positions from int__courseware__extraction_sources (through
+      # int__courseware__extractions), which QA cannot build.
+      qa_buildable: false
   columns:
   - name: concept_relation_pk
     description: str, surrogate key of (from, to, relation)

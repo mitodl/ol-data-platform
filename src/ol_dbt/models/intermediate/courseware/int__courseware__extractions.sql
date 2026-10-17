@@ -9,6 +9,13 @@
     A scope part with no extraction under its run's promoted version (or on a
     platform with no promotion) has no current extraction and drops out of the
     rollups; has_promoted_extraction is false on its rows so that is visible.
+
+    scope_position is the scope's position in the course as it is now, from
+    int__courseware__extraction_sources. The extraction key leaves position out,
+    because reordering a course changes nothing a scope's call reads except the
+    outline, so the position stored at extraction time goes stale. It is kept only
+    for a scope the sources no longer list (or leave out, when var('courseware_courseruns')
+    limits them).
 #}
 with extractions as (
     select * from {{ source('courseware_intermediate', 'courseware_claim_extraction') }}
@@ -16,6 +23,15 @@ with extractions as (
 
 , promotions as (
     select * from {{ ref('courseware_extraction_promotions') }}
+)
+
+, current_positions as (
+    select distinct
+        platform
+        , courserun_readable_id
+        , scope_id
+        , scope_position
+    from {{ ref('int__courseware__extraction_sources') }}
 )
 
 , runs as (
@@ -52,6 +68,7 @@ with extractions as (
         , extractions.courserun_readable_id
         , extractions.scope_id
         , extractions.scope_part
+        , coalesce(current_positions.scope_position, extractions.scope_position) as scope_position
         , extractions.extracted_at
         , coalesce(
             extractions.extractor_id = run_promotions.extractor_id
@@ -66,6 +83,11 @@ with extractions as (
         on
             extractions.platform = run_promotions.platform
             and extractions.courserun_readable_id = run_promotions.courserun_readable_id
+    left join current_positions
+        on
+            extractions.platform = current_positions.platform
+            and extractions.courserun_readable_id = current_positions.courserun_readable_id
+            and extractions.scope_id = current_positions.scope_id
 )
 
 , ranked as (
@@ -87,6 +109,7 @@ select
     , courserun_readable_id
     , scope_id
     , scope_part
+    , scope_position
     , is_promoted_version
     , is_promoted_version and version_rank = 1 as is_current
     , has_promoted_extraction

@@ -30,6 +30,7 @@ with extractions as (
 , ranked_extractions as (
     select
         extractions.*
+        , extraction_status.scope_position as current_scope_position
         , extraction_status.is_current
     from extractions
     inner join extraction_status
@@ -52,7 +53,7 @@ select
     , ranked_extractions.scope_id
     , ranked_extractions.scope_kind
     , ranked_extractions.scope_title
-    , ranked_extractions.scope_position
+    , ranked_extractions.current_scope_position as scope_position
     , ranked_extractions.scope_part
     , ranked_extractions.extraction_key
     , ranked_extractions.extractor_id
