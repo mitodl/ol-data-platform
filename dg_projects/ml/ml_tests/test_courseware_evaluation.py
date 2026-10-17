@@ -906,3 +906,83 @@ def test_few_labels_are_not_their_own_neighbours():
         shown = {item["id"] for item in json.loads(row["items_json"])}
         assert f"n:{row['item_id']}" not in shown
         assert row["item_id"] not in json.loads(row["neighbour_sizes_json"])
+
+
+def _write_gold_inputs(directory, *, assignments, registry, decisions):
+    """Write the parquet files load_inputs reads; one run, no claims."""
+    extraction = directory / "extraction"
+    identity = directory / "identity"
+    extraction.mkdir(parents=True)
+    identity.mkdir()
+    pl.DataFrame(
+        {
+            "extraction_key": ["e1"],
+            "model_id": ["us.anthropic.claude-opus-5-5"],
+            "prompt_version": ["v1"],
+            "platform": ["mitxonline"],
+            "courserun_readable_id": ["course-v1:UAI_SOURCE+UAI.4+1T2026"],
+            "scope_id": ["u1"],
+            "scope_kind": ["unit"],
+            "scope_title": ["u1"],
+            "scope_position": [1],
+            "scope_part": [1],
+            "extracted_at": [datetime(2026, 10, 17, tzinfo=UTC)],
+        }
+    ).write_parquet(extraction / "courseware_claim_extraction.parquet")
+    pl.DataFrame({"extraction_key": ["e1"], "claim_ordinal": [1]}).write_parquet(
+        extraction / "courseware_claim.parquet"
+    )
+    pl.DataFrame(
+        {"extraction_key": ["e1"], "claim_ordinal": [1], "evidence_ordinal": [1]}
+    ).write_parquet(extraction / "courseware_claim_evidence.parquet")
+    run = "r1"
+    pl.DataFrame(
+        {"resolution_run_id": [run], "started_at": [datetime(2026, 10, 17, tzinfo=UTC)]}
+    ).write_parquet(identity / "courseware_resolution_run.parquet")
+    for table, frame in (
+        ("courseware_concept_assignment", assignments),
+        ("courseware_concept_registry", registry),
+        ("courseware_resolution_decision", decisions),
+    ):
+        frame.with_columns(pl.lit(run).alias("resolution_run_id")).write_parquet(
+            identity / f"{table}.parquet"
+        )
+    keys = assignments["concept_label_key"].to_list()
+    pl.DataFrame(
+        {
+            "concept_label_key": keys,
+            "embedding": [[1.0, float(n)] for n in range(len(keys))],
+        }
+    ).write_parquet(identity / "courseware_concept_label_embedding.parquet")
+    _labels(*keys).write_parquet(directory / "concept_labels.parquet")
+    empty = pl.DataFrame({"unused": [None]})
+    for name in ("sources", "concepts", "relations"):
+        empty.write_parquet(directory / f"{name}.parquet")
+    return samples.load_inputs(
+        [extraction],
+        directory / "sources.parquet",
+        identity,
+        directory / "concept_labels.parquet",
+        directory / "concepts.parquet",
+        directory / "relations.parquet",
+    )
+
+
+def test_matcher_follows_merged_concepts_to_their_survivor(tmp_path):
+    inputs = _write_gold_inputs(
+        tmp_path,
+        assignments=pl.DataFrame(
+            {"concept_label_key": ["recall", "sensitivity"], "concept_id": ["k1", "k2"]}
+        ),
+        registry=pl.DataFrame(
+            {"concept_id": ["k1", "k2"], "merged_into_concept_id": [None, "k1"]}
+        ),
+        decisions=pl.DataFrame(
+            {
+                "query_label_key": ["recall"],
+                "candidate_label_key": ["sensitivity"],
+                "verdict": ["exact"],
+            }
+        ),
+    )
+    assert inputs.matcher.canonical("Recall") == inputs.matcher.canonical("sensitivity")
