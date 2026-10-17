@@ -5,6 +5,7 @@ import polars as pl
 import pytest
 from ml.lib.courseware.tagging import (
     ConceptDictionary,
+    _plural,
     _tokenize,
     _tokens,
     label_key,
@@ -294,6 +295,25 @@ def test_labels_without_a_letter_or_number_are_skipped_and_counted():
     assert set(result.aliases["concept_id"]) == {"c2"}
     assert result.run["label_count"].item() == 2
     assert result.run["tokenless_label_count"].item() == 1
+
+
+@pytest.mark.parametrize("label", [".", "..", ".+", "+."])
+def test_symbol_only_labels_are_skipped_though_they_have_a_key(label):
+    # label_key spells these out ("dot", "dot plus"), but "dot" alone would tag
+    # every sentence after a stray period, and the word "dot" in "dot plot"
+    assert label_key(label) is not None
+    result = tag_sources(
+        sources(". The dot plot shows variance. .. and .+ too"),
+        aliases((label, "c1"), ("variance", "c2")),
+    )
+    assert result.mentions["concept_id"].to_list() == ["c2"]
+    assert result.run["tokenless_label_count"].item() == 1
+
+
+def test_plural_needs_a_word_at_the_end():
+    assert _plural(".+") is None
+    assert _plural("C++") is None
+    assert _plural("decision tree") == "decision trees"
 
 
 def test_non_ascii_letters_are_part_of_their_token():

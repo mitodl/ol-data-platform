@@ -392,7 +392,10 @@ def _is_acronym(surface: str) -> bool:
 
 
 def _plural(surface: str) -> str | None:
-    last = _WORD.findall(surface)[-1]
+    words = _WORD.findall(surface)
+    if not words:
+        return None
+    last = words[-1]
     if (
         surface.endswith(last)
         and last.isalpha()
@@ -483,8 +486,10 @@ class ConceptDictionary:
         self.tokenless_label_count = 0
         by_phrase: dict[str, set[Entry]] = defaultdict(set)
         for key, concept_id, alias in rows:
-            # an alias with no letter or number ("∇") has no key and nothing to match
-            if key is None or label_key(alias) is None:
+            # An alias with no letter or number has nothing to match: "∇" has no key,
+            # and "." or ".+" spell out to "dot" or "dot plus", which would tag the
+            # word "dot" and every stray period after a space.
+            if key is None or not _WORD.search(alias):
                 self.tokenless_label_count += 1
                 continue
             for entry in _entries(key, concept_id, alias):
