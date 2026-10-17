@@ -387,3 +387,31 @@ models:
     tests:
     - unique
     - not_null
+
+- name: int__courseware__extraction_source_checksums
+  description: One row per course run in int__courseware__extraction_sources with
+    a checksum of the text its extraction scopes are built from. The courseware extraction
+    sensor reports it as the run's data version, so a run is re-extracted only when
+    its text changes.
+  config:
+    meta:
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the course run
+    tests:
+    - not_null
+  - name: source_count
+    description: int, number of source rows the run's scopes read
+  - name: text_checksum
+    description: str, md5 over every source row's title, position, reference and text,
+      in reading order
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [platform, courserun_readable_id]
