@@ -25,6 +25,7 @@ with claims as (
         , description
         , label
         , concept_label_key
+        , prerequisite_kind
     from claims
     where concept_label_key is not null
 )
@@ -44,6 +45,7 @@ with claims as (
         , cast(null as varchar) as concept_kind
         , cast(null as varchar) as description
         , {{ json_extract_scalar('referenced.concept_label', "'$'") }} as label
+        , cast(null as varchar) as prerequisite_kind
     from claims
     cross join {{ unnest_json_array('claims.related_concept_labels_json', 'referenced', 'concept_label') }} -- noqa
     where claims.claim_kind in ('assessment_expectation', 'learning_outcome')
@@ -64,6 +66,7 @@ select
     , description
     , label
     , concept_label_key
+    , prerequisite_kind
 from own_labels
 
 union all
@@ -83,4 +86,5 @@ select
     , description
     , label
     , {{ strip_whitespace(regexp_replace_all('lower(label)', "'[^a-z0-9]+'", "' '")) }} as concept_label_key
+    , prerequisite_kind
 from referenced_labels

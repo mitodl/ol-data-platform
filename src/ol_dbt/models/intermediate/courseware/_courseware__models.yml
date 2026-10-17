@@ -162,6 +162,9 @@ models:
     description: str, the normalized label key
     tests:
     - not_null
+  - name: prerequisite_kind
+    description: str, prerequisite, corequisite, recommended or explicitly_none for
+      declared prerequisites; null otherwise
 
 - name: int__courseware__concept_labels
   description: One row per normalized concept label key across every course, with
@@ -296,6 +299,9 @@ models:
     description: str, the concept's UUID
     tests:
     - not_null
+  - name: prerequisite_kind
+    description: str, prerequisite, corequisite, recommended or explicitly_none for
+      declared prerequisites; null otherwise
 
 - name: int__courseware__adjudicated_concept_relations
   description: Broader, close and related proposals from resolution adjudication,

@@ -483,9 +483,12 @@ models:
     description: str, the relation
     tests:
     - accepted_values:
-        values: [teaches, reviews, uses, mentions, assesses, requires]
+        values: [teaches, reviews, uses, mentions, assesses, requires, requires_concurrently,
+          recommends]
   - name: requirement_source
-    description: str, declared or inferred for requires; null otherwise
+    description: str, declared or inferred for requires, declared for requires_concurrently
+      (a stated corequisite) and recommends (stated recommended background); null
+      otherwise. A statement that a run has no prerequisites gives no row
   - name: first_scope_position
     description: int, the earliest scope with the relation; for inferred requires,
       the first scope that relies on the concept

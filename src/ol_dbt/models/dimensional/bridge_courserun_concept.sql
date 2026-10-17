@@ -19,6 +19,7 @@ with mentions as (
         , teaching_status
         , concept_kind
         , concept_id
+        , prerequisite_kind
     from {{ ref('int__courseware__resolved_concept_mentions') }}
 )
 
@@ -38,13 +39,19 @@ with mentions as (
             when claim_kind = 'concept' and teaching_status = 'used' then 'uses'
             when claim_kind = 'concept' and teaching_status = 'mentioned' then 'mentions'
             when claim_kind = 'assessment_expectation' then 'assesses'
-            when claim_kind = 'declared_prerequisite' then 'requires'
+            -- a recommendation or a corequisite is not something to have before the run
+            when claim_kind = 'declared_prerequisite' and prerequisite_kind = 'prerequisite' then 'requires'
+            when claim_kind = 'declared_prerequisite' and prerequisite_kind = 'corequisite' then 'requires_concurrently'
+            when claim_kind = 'declared_prerequisite' and prerequisite_kind = 'recommended' then 'recommends'
         end as relation
         , case when claim_kind = 'declared_prerequisite' then 'declared' end as requirement_source
         , scope_position
         , scope_id
     from mentions
-    where claim_kind in ('concept', 'assessment_expectation', 'declared_prerequisite')
+    where
+        claim_kind in ('concept', 'assessment_expectation', 'declared_prerequisite')
+        -- "no prerequisites": its label names what is not required
+        and coalesce(prerequisite_kind, '') != 'explicitly_none'
 )
 
 , first_taught as (
