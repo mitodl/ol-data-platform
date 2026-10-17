@@ -1,8 +1,8 @@
 """Topology of the concept graph: communities, sequencing, hierarchy and sparsity.
 
 Reads bridge_concept_relation (edges with their evidence) and dim_concept (active
-concepts), keeps the edges that clear the support thresholds, and computes on three
-views of the graph with NetworKit:
+concepts), keeps the edges that clear the support thresholds (for builds_on, the ones
+dbt publishes), and computes on three views of the graph with NetworKit:
 
 - association: undirected and weighted, every relation family. Leiden communities,
   connected components, degree, density and sparsity, and a local-degree backbone
@@ -31,8 +31,6 @@ import networkit as nk
 import polars as pl
 
 GRAPH_VERSION = "courseware_concept_graph_v1"
-# A builds_on edge needs this share of its course runs to agree on its direction.
-MIN_DIRECTION_CONSISTENCY = 0.6
 # A co-taught complements edge needs at least this lift over chance.
 MIN_CO_TAUGHT_LIFT = 2.0
 MIN_COURSERUN_SUPPORT = 1
@@ -117,11 +115,9 @@ def select_edges(relations: pl.DataFrame) -> pl.DataFrame:
     """
     support = pl.col("courserun_support")
     keep = (
+        # bridge_concept_relation owns the builds_on support and direction rule
         pl.when(pl.col("relation") == "builds_on")
-        .then(
-            (support >= MIN_COURSERUN_SUPPORT)
-            & (pl.col("direction_consistency") >= MIN_DIRECTION_CONSISTENCY)
-        )
+        .then(pl.col("is_published"))
         .when(pl.col("relation") == "practiced_with")
         .then(support >= MIN_COURSERUN_SUPPORT)
         .when(pl.col("relation") == "complements")
@@ -354,7 +350,6 @@ def compute_graph(  # noqa: PLR0915
     possible = node_count * (node_count - 1) / 2
     density = edge_count / possible if possible else 0.0
     parameters = {
-        "min_direction_consistency": MIN_DIRECTION_CONSISTENCY,
         "min_co_taught_lift": MIN_CO_TAUGHT_LIFT,
         "min_courserun_support": MIN_COURSERUN_SUPPORT,
         "relation_weights": RELATION_WEIGHTS,

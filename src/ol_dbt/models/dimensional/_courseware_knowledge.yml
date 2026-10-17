@@ -307,6 +307,11 @@ models:
     - relationships:
         to: ref('dim_concept')
         field: concept_pk
+    # learning order is a strict partial order, so published builds_on has no cycles
+    - acyclic:
+        to_column: to_concept_fk
+        config:
+          where: relation = 'builds_on' and is_published
   - name: to_concept_fk
     description: str, the broader concept, the concept or tool built on, or the higher
       id
@@ -327,8 +332,10 @@ models:
     description: int, units across those runs that showed the edge
   - name: reverse_courserun_support
     description: int, builds_on only, course runs showing the opposite direction
+  - name: reverse_scope_support
+    description: int, builds_on only, units showing the opposite direction
   - name: direction_consistency
-    description: float, builds_on only, support / (support + reverse support)
+    description: float, builds_on only, scope_support / (scope_support + reverse_scope_support)
   - name: co_taught_lift
     description: float, complements only, co-taught unit count over the count expected
       by chance
@@ -346,6 +353,18 @@ models:
     description: timestamp, the latest evidence for the edge
   - name: review_status
     description: str, proposed, accepted or rejected
+  - name: is_published
+    description: boolean, whether the edge clears the publishing rule; builds_on needs
+      the courseware_prerequisite_* support and direction thresholds, every other
+      relation is published
+    tests:
+    - not_null
+  - name: unpublished_reason
+    description: str, builds_on only, insufficient_support or contested_direction
+      when the edge is not published
+    tests:
+    - accepted_values:
+        values: [insufficient_support, contested_direction]
 
 - name: dim_concept_community
   description: Neighbourhoods of related concepts from the newest graph run, with
@@ -496,3 +515,27 @@ models:
     description: int, claims behind the relation
   - name: scope_count
     description: int, distinct scopes behind the relation
+  - name: prior_scope_count
+    description: int, inferred requires only, units relying on the concept before
+      the run teaches it
+  - name: taught_scope_count
+    description: int, inferred requires only, scopes of the run that teach the concept
+      (all after the first reliance), the contrary evidence
+  - name: courserun_support
+    description: int, inferred requires only, course runs that require the concept,
+      declared or inferred
+  - name: direction_consistency
+    description: float, inferred requires only, prior_scope_count / (prior_scope_count
+      + taught_scope_count)
+  - name: is_published
+    description: boolean, whether the relation clears the publishing rule; inferred
+      requires needs the courseware_prerequisite_* support and direction thresholds,
+      every other relation is published
+    tests:
+    - not_null
+  - name: unpublished_reason
+    description: str, inferred requires only, insufficient_support or contested_direction
+      when the requirement is not published
+    tests:
+    - accepted_values:
+        values: [insufficient_support, contested_direction]
