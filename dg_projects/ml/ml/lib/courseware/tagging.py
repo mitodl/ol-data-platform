@@ -137,6 +137,7 @@ RUN_SCHEMA = {
     "dictionary_checksum": pl.String,
     "sources_checksum": pl.String,
     "label_count": pl.Int64,
+    "tokenless_label_count": pl.Int64,
     "pattern_count": pl.Int64,
     "case_sensitive_pattern_count": pl.Int64,
     "skipped_pattern_count": pl.Int64,
@@ -340,8 +341,13 @@ class ConceptDictionary:
         )
         explicit = {key for key, _, _ in rows}
         self.label_count = len(explicit)
+        self.tokenless_label_count = 0
         by_phrase: dict[str, set[Entry]] = defaultdict(set)
         for key, concept_id, alias in rows:
+            # an alias with no [A-Za-z0-9] token ("∇", "π") has nothing to match on
+            if not _TOKEN.search(alias):
+                self.tokenless_label_count += 1
+                continue
             for entry in _entries(key, concept_id, alias):
                 phrase = key if entry.variant == "label" else label_key(entry.surface)
                 if phrase and (entry.variant == "label" or phrase not in explicit):
@@ -547,6 +553,7 @@ def tag_sources(sources: pl.DataFrame, aliases: pl.DataFrame) -> TaggingResult:
         "dictionary_checksum": dictionary.checksum,
         "sources_checksum": sources_checksum,
         "label_count": dictionary.label_count,
+        "tokenless_label_count": dictionary.tokenless_label_count,
         "pattern_count": len(dictionary.patterns),
         "case_sensitive_pattern_count": modes.count("case_sensitive"),
         "skipped_pattern_count": modes.count("skipped"),

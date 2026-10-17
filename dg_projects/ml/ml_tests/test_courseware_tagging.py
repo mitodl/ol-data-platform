@@ -293,3 +293,14 @@ def test_non_ascii_letters_are_part_of_the_word():
         ("int", "int"),
         ("na ve bayes", "naïve Bayes"),
     ]
+
+
+def test_labels_without_an_ascii_token_are_skipped_and_counted():
+    result = tag_sources(
+        sources("∇, then the variance"),
+        aliases(("∇", "c1"), ("variance", "c2")),
+    )
+    assert result.mentions["concept_id"].to_list() == ["c2"]
+    assert set(result.aliases["concept_id"]) == {"c2"}
+    assert result.run["label_count"].item() == 2
+    assert result.run["tokenless_label_count"].item() == 1
