@@ -113,6 +113,14 @@ SCORING_GROUPS: dict[str, pl.Expr | None] = {
     .otherwise(pl.lit("edge")),
 }
 
+# Coarser stratifications, finest first, for when the floors of the set's own do
+# not fit the budget: each course family adds a full set of strata, so a corpus of
+# many families pools them. Each keeps its SCORING_GROUPS column.
+STRATA_FALLBACKS: dict[str, tuple[pl.Expr, ...]] = {
+    "claims": (pl.format("{}|{}", "model", "agreement"),),
+    "subsections": (pl.format("{}|{}", "size_band", "models"), pl.col("models")),
+}
+
 
 def coarsen_strata(
     population: pl.DataFrame,
@@ -163,6 +171,36 @@ def coarsen_strata(
         .select("stratum", "population")
         .sort("stratum"),
     )
+
+
+def fit_strata(
+    population: pl.DataFrame, set_name: str, budget: int, min_size: int
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Coarsen a set's strata, falling back to coarser ones until the floors fit.
+
+    The first stratification whose strata, once coarsened, need at most `budget`
+    labels at min_size each (or all of a smaller stratum) is used, so a corpus with
+    many course families pools them (STRATA_FALLBACKS). If even the coarsest does
+    not fit, it is returned as is and allocate raises for the budget.
+
+    :param population: items with a stratum column
+    :param set_name: the gold set, a key of SCORING_GROUPS
+    :param budget: labels the set will allocate
+    :param min_size: smallest stratum kept as is, and the floor per stratum
+    :returns: the coarsened population and the dropped strata, as coarsen_strata
+    :rtype: tuple[pl.DataFrame, pl.DataFrame]
+    """
+    fallbacks = STRATA_FALLBACKS.get(set_name, ())
+    for stratification in (pl.col("stratum"), *fallbacks):
+        coarsened, dropped = coarsen_strata(
+            population.with_columns(stratification.alias("stratum")),
+            min_size,
+            SCORING_GROUPS[set_name],
+        )
+        sizes = coarsened.group_by("stratum").len()["len"]
+        if sizes.clip(upper_bound=min_size).sum() <= budget:
+            break
+    return coarsened, dropped
 
 
 def stratified_sample(  # noqa: PLR0913
@@ -671,7 +709,12 @@ def sample_subsections(
     :rtype: pl.DataFrame
     """
     sizes = dict(population.group_by("stratum").len().iter_rows())
-    allocation = allocate(sizes, size, minimum=SUBSECTIONS_MIN_PER_STRATUM)
+    allocation = allocate(
+        sizes,
+        size,
+        minimum=SUBSECTIONS_MIN_PER_STRATUM,
+        required=SUBSECTIONS_MIN_PER_STRATUM,
+    )
     sample = stratified_sample(
         population, allocation, seed=seed, set_name="subsections"
     )

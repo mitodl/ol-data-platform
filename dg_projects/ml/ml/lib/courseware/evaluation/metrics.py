@@ -245,14 +245,17 @@ def allocate(
     *,
     weights: Mapping[str, float] | None = None,
     minimum: int = 0,
+    required: int = MIN_LABELS_PER_STRATUM,
 ) -> dict[str, int]:
     """Split a labelling budget across strata.
 
-    Each stratum first gets max(minimum, MIN_LABELS_PER_STRATUM) labels, or all of
-    its items if it has fewer. The rest is split in proportion to size times weight
-    (proportional allocation when every weight is 1; a weight above 1 oversamples a
-    stratum the autorater is expected to be worse on, the direction Proposition 3 of
-    the StratPPI paper points). No stratum gets more than its size. Each round grants
+    Each stratum first gets a floor of labels, or all of its items if it has
+    fewer: `minimum` where the budget has room for it, otherwise the largest floor
+    the budget fits, but never below `required`. The rest is split in proportion to
+    size times weight (proportional allocation when every weight is 1; a weight
+    above 1 oversamples a stratum the autorater is expected to be worse on, the
+    direction Proposition 3 of the StratPPI paper points). No stratum gets more
+    than its size. Each round grants
     the whole-label part of every share; the last few labels, once no share reaches
     a whole label, go one each to the strata with the largest weighted size. The
     split is deterministic.
@@ -261,11 +264,13 @@ def allocate(
         (merge smaller strata first, see samples.coarsen_strata)
     :param total: labels to allocate; capped at the population size
     :param weights: oversampling weight per stratum, default 1
-    :param minimum: floor per stratum
+    :param minimum: the floor per stratum wanted, lowered to fit the budget
+    :param required: the floor per stratum the estimates need
+        (MIN_LABELS_PER_STRATUM; more where a stratum is split, as subsections are)
     :returns: labels per stratum
     :rtype: dict[str, int]
-    :raises ValueError: when a stratum is too small to estimate or the floors
-        exceed the budget
+    :raises ValueError: when a stratum is too small to estimate or the required
+        floors exceed the budget
     """
     small = sorted(
         name for name, size in sizes.items() if size < MIN_LABELS_PER_STRATUM
@@ -274,7 +279,9 @@ def allocate(
         msg = f"strata smaller than {MIN_LABELS_PER_STRATUM} items: {small}"
         raise ValueError(msg)
     total = min(total, sum(sizes.values()))
-    floor = max(minimum, MIN_LABELS_PER_STRATUM)
+    floor = max(minimum, required)
+    while floor > required and sum(min(floor, size) for size in sizes.values()) > total:
+        floor -= 1
     allocation = {name: min(floor, size) for name, size in sizes.items()}
     if sum(allocation.values()) > total:
         msg = (
