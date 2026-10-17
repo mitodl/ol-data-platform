@@ -18,7 +18,7 @@ import polars as pl
 from ml.lib.courseware.evaluation.labelstudio import Annotation, by_item, majority
 from ml.lib.courseware.evaluation.matching import MATCHING_RULE, LabelMatcher
 from ml.lib.courseware.evaluation.metrics import (
-    Estimate,
+    MIN_LABELS_PER_STRATUM,
     Stratum,
     cluster_bcubed_terms,
     fleiss_kappa,
@@ -72,9 +72,31 @@ def _strata(
     return strata
 
 
-def _report(estimate: Estimate, strata: list[Stratum]) -> dict[str, Any]:
+def _estimate(strata: list[Stratum], *, alpha: float) -> dict[str, Any]:
+    """Estimate with stratified PPI, or say why the labels cannot support one.
+
+    Ties and unannotated items can leave a stratum with fewer than
+    MIN_LABELS_PER_STRATUM labels, which has no variance estimate. Merging it into
+    another stratum here would pool items sampled at different rates as if they
+    were one simple random sample, so the estimate is skipped instead, naming the
+    strata that need more annotations or a tie-breaking one. An estimate whose
+    labelled items all have a zero denominator (e.g. no pair an annotator called
+    exact, for merge recall) is undefined and skipped too.
+    """
+    report: dict[str, Any] = {}
+    short = {s.name: s.n for s in strata if s.n < MIN_LABELS_PER_STRATUM}
+    if short:
+        report["skipped"] = (
+            f"strata with fewer than {MIN_LABELS_PER_STRATUM} decided labels; "
+            "annotate more of their items or break their ties"
+        )
+        report["under_filled_strata"] = short
+    elif not any(stratum.denominators.sum() for stratum in strata):
+        report["skipped"] = "no labelled item counts toward the denominator"
+    else:
+        report.update(asdict(stratified_ppi(strata, alpha=alpha)))
     return {
-        **asdict(estimate),
+        **report,
         "strata": {
             stratum.name: {
                 "population": stratum.population,
@@ -176,8 +198,8 @@ def score_claims(
         labels = {item: (float(value), 1.0) for item, value in decided.items()}
         for (model,), rows in population.group_by("model"):
             strata = _strata(rows, labels, "autorater")
-            report["models"].setdefault(model, {})[criterion] = _report(
-                stratified_ppi(strata, alpha=alpha), strata
+            report["models"].setdefault(model, {})[criterion] = _estimate(
+                strata, alpha=alpha
             )
         report[f"{criterion}_ties"] = ties
     report["kappa_verdict"] = _kappa(items, lambda a: a.choice("verdict"))
@@ -316,7 +338,7 @@ def score_subsections(  # noqa: PLR0913
                 strata = _strata(rows, labels, f"found_hat_{model}", "gold_hat")
                 report["models"].setdefault(model, {})[
                     f"{criterion}_recall{suffix}"
-                ] = _report(stratified_ppi(strata, alpha=alpha), strata)
+                ] = _estimate(strata, alpha=alpha)
     return report, pl.DataFrame(
         unmatched,
         schema={
@@ -390,15 +412,9 @@ def score_pairs(
         },
     )
     return {
-        "merge_precision": _report(
-            stratified_ppi(precision_strata, alpha=alpha), precision_strata
-        ),
-        "merge_recall": _report(
-            stratified_ppi(recall_strata, alpha=alpha), recall_strata
-        ),
-        "relation_agreement": _report(
-            stratified_ppi(agreement_strata, alpha=alpha), agreement_strata
-        ),
+        "merge_precision": _estimate(precision_strata, alpha=alpha),
+        "merge_recall": _estimate(recall_strata, alpha=alpha),
+        "relation_agreement": _estimate(agreement_strata, alpha=alpha),
         "ties": ties,
         "kappa": _kappa(items, relation),
     }
@@ -461,12 +477,8 @@ def score_clusters(
     precision_strata = _strata(population, precision_labels)
     recall_strata = _strata(population, recall_labels)
     return {
-        "bcubed_precision": _report(
-            stratified_ppi(precision_strata, alpha=alpha), precision_strata
-        ),
-        "bcubed_recall_upper_bound": _report(
-            stratified_ppi(recall_strata, alpha=alpha), recall_strata
-        ),
+        "bcubed_precision": _estimate(precision_strata, alpha=alpha),
+        "bcubed_recall_upper_bound": _estimate(recall_strata, alpha=alpha),
     }
 
 
@@ -524,12 +536,8 @@ def score_prerequisites(
         for item, value in decided.items()
     )
     return {
-        "edge_precision": _report(
-            stratified_ppi(precision_strata, alpha=alpha), precision_strata
-        ),
-        "edge_recall": _report(
-            stratified_ppi(recall_strata, alpha=alpha), recall_strata
-        ),
+        "edge_precision": _estimate(precision_strata, alpha=alpha),
+        "edge_recall": _estimate(recall_strata, alpha=alpha),
         "labelled_edges_reversed": reversed_edges,
         "ties": ties,
         "kappa": _kappa(items, direction),
