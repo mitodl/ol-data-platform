@@ -1,6 +1,7 @@
 """Learner-facing descriptions for every resolved concept."""
 
 import hashlib
+from collections.abc import Iterator
 
 import polars as pl
 from dagster import (
@@ -60,13 +61,16 @@ class CoursewareDescriptionConfig(Config):
     },
     code_version=hashlib.sha256(DESCRIPTION_PROMPT.encode()).hexdigest()[:12],
     automation_condition=upstream_or_code_changes(),
+    # Nothing is written when every concept is already described, so an upstream
+    # rebuild does not commit an empty snapshot.
+    output_required=False,
     pool="courseware_description",
 )
 def courseware_concept_description(
     context: AssetExecutionContext,
     config: CoursewareDescriptionConfig,
     llm: LLMClientFactory,
-) -> Output[pl.DataFrame]:
+) -> Iterator[Output[pl.DataFrame]]:
     """Describe every concept whose description inputs have no description yet.
 
     Calls ml.lib.courseware.describe.describe_concepts against the stored
@@ -93,7 +97,9 @@ def courseware_concept_description(
     context.log.info(
         "Described %d of %d concepts", described["concept_id"].n_unique(), concept_count
     )
-    return Output(
+    if described.height == 0:
+        return
+    yield Output(
         described,
         metadata={
             "row_count": MetadataValue.int(described.height),

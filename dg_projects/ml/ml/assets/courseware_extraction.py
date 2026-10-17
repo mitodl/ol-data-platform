@@ -18,7 +18,6 @@ from dagster import (
     AssetSpec,
     Config,
     DataVersion,
-    Failure,
     MetadataValue,
     ObserveResult,
     Output,
@@ -50,8 +49,10 @@ from ml.lib.courseware.warehouse import (
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import publish_prompt_version
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.failures import PermanentFailure
 from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
 from pydantic import Field
+from pyiceberg.exceptions import CommitFailedException
 from pyiceberg.expressions import And, EqualTo, In
 from pyiceberg.table import Table
 
@@ -64,6 +65,8 @@ EXTRACTION_KEY = AssetKey(["intermediate", "courseware_claim_extraction"])
 CLAIM_KEY = AssetKey(["intermediate", "courseware_claim"])
 EVIDENCE_KEY = AssetKey(["intermediate", "courseware_claim_evidence"])
 EXTRACTION_PROMPT_NAME = "courseware-claim-extraction"
+# Tries per delete commit before the run fails on a concurrent writer.
+DELETE_COMMIT_ATTEMPTS = 3
 # The POC measured 98.9% of 1,949 passages as exact matches, none unverified.
 DEFAULT_MIN_EXACT_EVIDENCE_SHARE = 0.95
 
@@ -141,21 +144,39 @@ class CoursewareExtractionConfig(Config):
     )
 
 
+class ScopeExtractionFailure(PermanentFailure):
+    """Some of a run's scopes got no valid extraction after the library's retry.
+
+    Permanent so stop_run_retries keeps run_retries from re-running the whole
+    partition (each attempt pays for every failed scope again).
+    upstream_or_code_changes still re-requests a newly failed partition once, and
+    that run asks only for the scopes still missing.
+    """
+
+
 def _clear_partial_write(
     table: Table, platform: str, courserun: str, keys: list[str]
 ) -> None:
     """Delete claim or evidence rows an earlier, failed attempt wrote for these keys.
 
     The extraction row is written last and is what marks a key as done, so rows
-    under a key with no extraction row are leftovers that would be duplicated.
+    under a key with no extraction row are leftovers that would be duplicated. A
+    commit that loses to a concurrent writer is retried on the refreshed table.
     """
-    table.delete(
-        And(
-            EqualTo("platform", platform),
-            EqualTo("courserun_readable_id", courserun),
-            In("extraction_key", keys),
-        )
+    row_filter = And(
+        EqualTo("platform", platform),
+        EqualTo("courserun_readable_id", courserun),
+        In("extraction_key", keys),
     )
+    for attempt in range(1, DELETE_COMMIT_ATTEMPTS + 1):
+        try:
+            table.delete(row_filter)
+        except CommitFailedException:
+            if attempt == DELETE_COMMIT_ATTEMPTS:
+                raise
+            table.refresh()
+        else:
+            return
 
 
 def evidence_check(evidence: pl.DataFrame, min_exact_share: float) -> AssetCheckResult:
@@ -254,11 +275,21 @@ def courseware_extraction(
         default_model=DEFAULT_MODEL,
         default_bedrock_model=BEDROCK_DEFAULT_MODEL,
     )
-    pending = [
-        scope
+    pending_keys = [
+        key
         for scope in scopes
-        if extraction_key(scope, model_id, config.effort) not in existing_keys
+        if (key := extraction_key(scope, model_id, config.effort)) not in existing_keys
     ]
+    # Before any model call, so a catalog error fails the run before it spends.
+    if pending_keys:
+        catalog = get_glue_catalog()
+        for key in (CLAIM_KEY, EVIDENCE_KEY):
+            identifier = f"{_OUTPUT_METADATA['schema']}.{key.path[-1]}"
+            if catalog.table_exists(identifier):
+                _clear_partial_write(
+                    catalog.load_table(identifier), platform, courserun, pending_keys
+                )
+
     tables = extract_scopes(
         scopes,
         client,
@@ -267,26 +298,16 @@ def courseware_extraction(
         existing_keys=existing_keys,
         max_workers=config.max_workers,
     )
-    failed = len(pending) - tables.extractions.height
+    failed = len(pending_keys) - tables.extractions.height
     context.log.info(
         "%s %s: %d scopes, %d already stored, %d extracted, %d failed",
         platform,
         courserun,
         len(scopes),
-        len(scopes) - len(pending),
+        len(scopes) - len(pending_keys),
         tables.extractions.height,
         failed,
     )
-
-    new_keys = tables.extractions["extraction_key"].to_list()
-    if new_keys:
-        catalog = get_glue_catalog()
-        for key in (CLAIM_KEY, EVIDENCE_KEY):
-            identifier = f"{_OUTPUT_METADATA['schema']}.{key.path[-1]}"
-            if catalog.table_exists(identifier):
-                _clear_partial_write(
-                    catalog.load_table(identifier), platform, courserun, new_keys
-                )
 
     partition_columns = [
         pl.lit(platform).alias("platform"),
@@ -325,8 +346,14 @@ def courseware_extraction(
     )
     yield evidence_check(tables.evidence, config.min_exact_evidence_share)
 
-    # The successful scopes are stored; failing the run gets the rest one retry
-    # (upstream_or_code_changes re-requests a newly failed partition once).
+    # The successful scopes are stored. The failure is permanent for run_retries;
+    # automation re-requests the partition once (see ScopeExtractionFailure).
     if failed:
-        msg = f"{failed} of {len(pending)} scopes failed to extract for {courserun}"
-        raise Failure(msg)
+        raise ScopeExtractionFailure(
+            description=(
+                f"{failed} of {len(pending_keys)} scopes failed to extract for "
+                f"{platform} {courserun}"
+            ),
+            metadata={"retryable": False, "failed_scope_count": failed},
+            allow_retries=False,
+        )

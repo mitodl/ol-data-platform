@@ -115,7 +115,10 @@ feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
 # them calls a model except the graph, and extraction re-runs for every course run
 # when its prompt or schema version changes, so this is enabled deliberately
 # (after courseware_extraction_text_sensor has observed the runs). Stopped by
-# default.
+# default. Before enabling it, set a concurrency limit for the
+# courseware_extraction pool in ol-infrastructure's Dagster instance config: the
+# instance has no concurrency block, so the pool is unlimited and a first
+# observation would launch one run per course run at once.
 courseware_automation_sensor = AutomationConditionSensorDefinition(
     name="courseware_automation_sensor",
     target=AssetSelection.assets(
