@@ -1,6 +1,7 @@
 import dataclasses
 import json
 from datetime import UTC, datetime
+from itertools import combinations
 
 import numpy as np
 import polars as pl
@@ -986,3 +987,43 @@ def test_matcher_follows_merged_concepts_to_their_survivor(tmp_path):
         ),
     )
     assert inputs.matcher.canonical("Recall") == inputs.matcher.canonical("sensitivity")
+
+
+def test_pairs_do_not_depend_on_the_order_decisions_are_read_in(tmp_path):
+    keys = [f"l{n}" for n in range(6)]
+    # each pair judged both ways in one run, with verdicts that disagree
+    decisions = pl.DataFrame(
+        [
+            (query, candidate, verdict)
+            for index, (a, b) in enumerate(combinations(keys, 2))
+            for query, candidate, verdict in (
+                (a, b, ("broader", "close", "distinct")[index % 3]),
+                (b, a, ("related", "distinct", "close")[index % 3]),
+            )
+        ],
+        schema=["query_label_key", "candidate_label_key", "verdict"],
+        orient="row",
+    )
+    frames = {
+        "assignments": pl.DataFrame(
+            {"concept_label_key": keys, "concept_id": [f"k{n}" for n in range(6)]}
+        ),
+        "registry": pl.DataFrame(
+            {
+                "concept_id": [f"k{n}" for n in range(6)],
+                "merged_into_concept_id": [None] * 6,
+            },
+            schema={"concept_id": pl.String, "merged_into_concept_id": pl.String},
+        ),
+    }
+    drawn = []
+    for name, rows in (
+        ("read_forward", decisions),
+        ("read_reversed", decisions.reverse()),
+        ("read_shuffled", decisions.sample(fraction=1.0, shuffle=True, seed=3)),
+    ):
+        inputs = _write_gold_inputs(tmp_path / name, decisions=rows, **frames)
+        population, _ = samples.coarsen_strata(samples.pairs_population(inputs))
+        drawn.append(samples.sample_pairs(inputs, population, size=10, seed=1))
+    assert drawn[0].equals(drawn[1])
+    assert drawn[0].equals(drawn[2])

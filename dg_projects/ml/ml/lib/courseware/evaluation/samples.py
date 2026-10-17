@@ -276,7 +276,7 @@ def _follow_merges(assignments: pl.DataFrame, registry: pl.DataFrame) -> pl.Data
 
 
 def _newest_run(table: pl.DataFrame, runs: pl.DataFrame) -> pl.DataFrame:
-    last = runs.sort("started_at")["resolution_run_id"][-1]
+    last = runs.sort("started_at", "resolution_run_id")["resolution_run_id"][-1]
     return table.filter(pl.col("resolution_run_id") == last)
 
 
@@ -312,7 +312,7 @@ def load_inputs(  # noqa: PLR0913
         how="diagonal_relaxed",
     ).unique("extraction_key", keep="first")
     current = (
-        extractions.sort("extracted_at", descending=True)
+        extractions.sort(["extracted_at", "extraction_key"], descending=True)
         .unique(
             ["platform", "courserun_readable_id", "scope_id", "scope_part", "model_id"],
             keep="first",
@@ -370,7 +370,12 @@ def load_inputs(  # noqa: PLR0913
             pl.min_horizontal("query_label_key", "candidate_label_key").alias("key_a"),
             pl.max_horizontal("query_label_key", "candidate_label_key").alias("key_b"),
         )
-        .sort("run_started_at", descending=True)
+        # a run adjudicates mutual neighbours both ways at one started_at, so the
+        # keys settle which direction is kept, whatever order the rows were read in
+        .sort(
+            ["run_started_at", "query_label_key", "candidate_label_key", "verdict"],
+            descending=[True, False, False, False],
+        )
         .unique(["key_a", "key_b"], keep="first")
     )
     embeddings = (
