@@ -26,6 +26,10 @@ labels that have no assignment yet:
 each new cluster takes the id of the previous concept it shares the most members
 with (Jaccard at least CARRY_FORWARD_MIN_JACCARD), so a full re-run does not churn
 the ids every downstream join depends on.
+
+A label no current claim names keeps its assignment through incremental runs, so it
+gets the same id back if it returns. A rebuild drops such labels and retires any
+concept they leave with no members.
 """
 
 import hashlib
@@ -518,11 +522,10 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
         row["concept_id"]: dict(row, resolution_run_id=run_id)
         for row in state.registry.iter_rows(named=True)
     }
-    previous = {
-        row["concept_label_key"]: row
-        for row in state.assignments.iter_rows(named=True)
-        if row["concept_label_key"] in rows
+    previous_all = {
+        row["concept_label_key"]: row for row in state.assignments.iter_rows(named=True)
     }
+    previous = {key: row for key, row in previous_all.items() if key in rows}
 
     def active(concept_id: str) -> str:
         # follows merges made earlier in this run too, so a later component sees
@@ -626,6 +629,13 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
                 source if len(component) == 1 else "exact_match",
             )
 
+    if not rebuild:
+        # a label no current claim names keeps its concept, so it gets the same id
+        # back if it returns; only a rebuild retires a concept left without labels
+        for key, row in previous_all.items():
+            if key not in rows:
+                assignments[key] = (row["concept_id"], "carried")
+
     deprecated = 0
     if rebuild:
         # a label whose batch failed was not re-resolved, so it keeps its concept
@@ -718,8 +728,8 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
                     "concept_label_key": key,
                     "concept_id": resolved(concept_id),
                     "assignment_source": source,
-                    "assigned_run_id": previous[key]["assigned_run_id"]
-                    if source == "carried" and key in previous
+                    "assigned_run_id": previous_all[key]["assigned_run_id"]
+                    if source == "carried" and key in previous_all
                     else run_id,
                 }
                 for key, (concept_id, source) in sorted(assignments.items())

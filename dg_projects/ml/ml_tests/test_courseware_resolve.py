@@ -265,7 +265,9 @@ def test_an_empty_label_list_resolves_to_nothing():
     first = run(labels("auc", "pandas"))
     empty = labels().cast({"mention_count": pl.Int64})
     second = run(empty, state_from(first))
-    assert second.assignments.height == 0
+    # an incremental run carries every assignment of a label it no longer sees
+    kept = ["concept_label_key", "concept_id", "assigned_run_id"]
+    assert second.assignments.select(kept).equals(first.assignments.select(kept))
     assert second.registry.height == first.registry.height
     assert second.run["concepts_minted"][0] == 0
 
@@ -288,3 +290,23 @@ def test_carried_related_edges_are_keyed_in_id_order(verdicts, monkeypatch):
     rows = list(second.relations.iter_rows(named=True))
     assert [row["relation"] for row in rows] == ["related"]
     assert rows[0]["from_concept_id"] < rows[0]["to_concept_id"]
+
+
+@pytest.mark.usefixtures("verdicts")
+def test_a_label_that_drops_out_keeps_its_id_until_a_rebuild():
+    first = run(labels("auc", "pandas"))
+    pandas = concept_of(first, "pandas")
+    # pandas has no claims in this run, so its assignment is carried, not lost
+    dropped = run(labels("auc"), state_from(first))
+    assert concept_of(dropped, "pandas") == pandas
+    returned = run(labels("auc", "pandas"), state_from(dropped))
+    assert concept_of(returned, "pandas") == pandas
+    assert returned.run["concepts_minted"][0] == 0
+    assert returned.run["resolved_label_count"][0] == 0
+    # a rebuild is what retires the concept a dropped label leaves without members
+    rebuilt = run(labels("auc"), state_from(dropped), rebuild=True)
+    assert "pandas" not in rebuilt.assignments["concept_label_key"].to_list()
+    registry = {
+        row["concept_id"]: row for row in rebuilt.registry.iter_rows(named=True)
+    }
+    assert registry[pandas]["concept_status"] == "deprecated"
