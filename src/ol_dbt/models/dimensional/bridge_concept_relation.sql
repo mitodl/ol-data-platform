@@ -17,9 +17,12 @@
       courserun_support         distinct course runs with course evidence
       reverse_courserun_support builds_on only: runs where the opposite direction
                                 was observed
-      reverse_scope_support     builds_on only: units where it was observed;
-                                direction_consistency is scope_support /
-                                (scope_support + reverse_scope_support)
+      course_scope_support      builds_on only: scope_support with each course's
+                                reruns counted once (its run with the most units),
+                                since reruns of one course have near-identical text
+      reverse_scope_support     builds_on only: the same for the opposite direction;
+                                direction_consistency is course_scope_support /
+                                (course_scope_support + reverse_scope_support)
       co_taught_lift            complements only: observed co-taught unit count
                                 over the count expected if the two were taught
                                 independently across all taught units
@@ -29,16 +32,21 @@
 
     builds_on is the one relation this model publishes by rule, because one unit's
     extraction is one model call and LLMs over-predict prerequisites. An edge is
-    published (is_published) when scope_support reaches
-    courseware_prerequisite_min_scope_support or courserun_support reaches
-    courseware_prerequisite_min_courserun_support, and direction_consistency reaches
+    published (is_published) when course_scope_support reaches
+    courseware_prerequisite_min_scope_support and direction_consistency reaches
     courseware_prerequisite_min_direction_consistency, so only the dominant direction
-    of a contested pair can publish. Unpublished edges keep their rows, with
+    of a contested pair can publish. Every supporting course contributes at least one
+    unit, so a course count could never publish an edge this misses. Unpublished edges keep their rows, with
     unpublished_reason, for review. Every other relation is is_published, and its
     consumers apply their own thresholds to the support columns as before.
 #}
 with evidence as (
     select * from {{ ref('int__courseware__concept_relation_evidence') }}
+)
+
+, course_runs as (
+    select * from {{ ref('dim_course_run') }}
+    where is_current
 )
 
 , mentions as (
@@ -94,29 +102,56 @@ with evidence as (
     group by from_concept_id, to_concept_id, relation
 )
 
+-- a run with no course counts as its own course
+, builds_on_course_support as (
+    select
+        from_concept_id
+        , to_concept_id
+        , sum(scope_count) as course_scope_support
+    from (
+        select
+            evidence.from_concept_id
+            , evidence.to_concept_id
+            , coalesce(course_runs.course_fk, concat(evidence.platform, '|', evidence.courserun_readable_id))
+            as course_key
+            , max(evidence.scope_count) as scope_count
+        from evidence
+        left join course_runs
+            on
+                evidence.platform = course_runs.platform
+                and evidence.courserun_readable_id = course_runs.courserun_readable_id
+        where evidence.relation = 'builds_on'
+        group by
+            evidence.from_concept_id
+            , evidence.to_concept_id
+            , coalesce(course_runs.course_fk, concat(evidence.platform, '|', evidence.courserun_readable_id))
+    ) as per_course
+    group by from_concept_id, to_concept_id
+)
+
 , builds_on_direction as (
     select
-        edges.from_concept_id
-        , edges.to_concept_id
-        , coalesce(reverse_edges.scope_support, 0) as reverse_scope_support
-        , cast(edges.scope_support as double)
-        / (edges.scope_support + coalesce(reverse_edges.scope_support, 0)) as direction_consistency
-        , edges.scope_support >= {{ var('courseware_prerequisite_min_scope_support') }}
-        or edges.courserun_support >= {{ var('courseware_prerequisite_min_courserun_support') }}
+        support.from_concept_id
+        , support.to_concept_id
+        , support.course_scope_support
+        , coalesce(reverse_support.course_scope_support, 0) as reverse_scope_support
+        , cast(support.course_scope_support as double)
+        / (support.course_scope_support + coalesce(reverse_support.course_scope_support, 0))
+        as direction_consistency
+        , support.course_scope_support >= {{ var('courseware_prerequisite_min_scope_support') }}
         as has_min_support
-    from edges
-    left join edges as reverse_edges
+    from builds_on_course_support as support
+    left join builds_on_course_support as reverse_support
         on
-            reverse_edges.relation = 'builds_on'
-            and edges.from_concept_id = reverse_edges.to_concept_id
-            and edges.to_concept_id = reverse_edges.from_concept_id
-    where edges.relation = 'builds_on'
+            support.from_concept_id = reverse_support.to_concept_id
+            and support.to_concept_id = reverse_support.from_concept_id
 )
 
 , builds_on_publication as (
     select
         from_concept_id
         , to_concept_id
+        , course_scope_support
         , reverse_scope_support
         , direction_consistency
         , case
@@ -143,6 +178,7 @@ select
     , edges.courserun_support
     , edges.scope_support
     , coalesce(reverse_edges.courserun_support, 0) as reverse_courserun_support
+    , builds_on_publication.course_scope_support
     , builds_on_publication.reverse_scope_support
     , builds_on_publication.direction_consistency
     , case
