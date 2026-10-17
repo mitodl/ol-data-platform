@@ -275,6 +275,9 @@ def courseware_extraction(
         default_model=DEFAULT_MODEL,
         default_bedrock_model=BEDROCK_DEFAULT_MODEL,
     )
+    # Before any model call, so nothing Opik does can fail the run after outputs
+    # start being written.
+    opik_prompt_version = publish_prompt_version(EXTRACTION_PROMPT_NAME, SYSTEM_PROMPT)
     pending_keys = [
         key
         for scope in scopes
@@ -333,9 +336,7 @@ def courseware_extraction(
             "model_id": MetadataValue.text(model_id),
             "effort": MetadataValue.text(config.effort),
             "prompt_version": MetadataValue.text(PROMPT_VERSION),
-            "opik_prompt_version": MetadataValue.text(
-                publish_prompt_version(EXTRACTION_PROMPT_NAME, SYSTEM_PROMPT)
-            ),
+            "opik_prompt_version": MetadataValue.text(opik_prompt_version),
             "input_tokens": MetadataValue.int(
                 tables.extractions["input_tokens"].sum() or 0
             ),

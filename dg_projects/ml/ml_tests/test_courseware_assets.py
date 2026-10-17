@@ -27,6 +27,7 @@ from dagster import (
 )
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
+from ml.assets import courseware_description as description_module
 from ml.assets import courseware_extraction as extraction_module
 from ml.assets import courseware_resolution as resolution_module
 from ml.assets.courseware_description import courseware_concept_description
@@ -41,6 +42,7 @@ from ml.assets.courseware_resolution import (
     courseware_resolution,
 )
 from ml.lib.courseware import graph, warehouse
+from ml.resources import opik_auth
 from ml.resources.llm import LLMClientFactory
 from ml.sensors import courseware as sensor_module
 from ml.sensors.courseware import courseware_extraction_text_sensor
@@ -419,6 +421,56 @@ def test_extraction_retries_a_lost_delete_commit(tables, catalog):
     assert result.success
     assert table.delete.call_count == 3
     assert table.refresh.call_count == 1
+
+
+def _fail_publish(_name: str, _template: str) -> str:
+    msg = "Opik is down"
+    raise RuntimeError(msg)
+
+
+@pytest.mark.usefixtures("catalog")
+def test_extraction_publishes_its_prompt_before_any_call(tables, calls, monkeypatch):
+    tables["int__courseware__extraction_sources"] = sources("Lecture 1")
+    monkeypatch.setattr(extraction_module, "publish_prompt_version", _fail_publish)
+
+    result = extract(tables)
+
+    assert not result.success
+    assert calls == []
+    assert "courseware_claim" not in tables
+
+
+def test_description_publishes_its_prompt_before_any_call(tables, calls, monkeypatch):
+    tables["int__courseware__concept_description_inputs"] = pl.DataFrame(
+        {
+            "concept_id": ["c1"],
+            "label": ["auc"],
+            "concept_kind": ["concept"],
+            "description": ["used to rank models"],
+            "course_title": ["Supervised Learning"],
+            "context_rank": [1],
+        }
+    )
+    monkeypatch.setattr(description_module, "publish_prompt_version", _fail_publish)
+
+    result = materialize(
+        [courseware_concept_description],
+        resources={"io_manager": Warehouse(tables), "llm": FakeLLM()},
+        raise_on_error=False,
+    )
+
+    assert not result.success
+    assert calls == []
+
+
+def test_publish_prompt_version_never_raises(monkeypatch):
+    # a Prompt without the attributes this SDK version has
+    client = SimpleNamespace(create_prompt=lambda **_: object())
+    monkeypatch.setattr(opik_auth, "get_opik_client", lambda: client)
+
+    assert opik_auth.publish_prompt_version("name", "template") == (
+        opik_auth.LOCAL_PROMPT_VERSION
+    )
 
 
 def test_reads_refuse_a_dev_redirect(monkeypatch, tmp_path):

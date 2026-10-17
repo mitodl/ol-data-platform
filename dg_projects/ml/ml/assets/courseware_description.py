@@ -90,6 +90,11 @@ def courseware_concept_description(
         default_model=DESCRIPTION_MODEL,
         default_bedrock_model=BEDROCK_DESCRIPTION_MODEL,
     )
+    # Before any model call, so nothing Opik does can fail the run after outputs
+    # start being written.
+    opik_prompt_version = publish_prompt_version(
+        DESCRIPTION_PROMPT_NAME, DESCRIPTION_PROMPT
+    )
     described = describe_concepts(
         inputs, client, model_id=model_id, effort=config.effort, existing=existing
     )
@@ -108,8 +113,6 @@ def courseware_concept_description(
             "description_version": MetadataValue.text(
                 description_version(model_id, config.effort)
             ),
-            "opik_prompt_version": MetadataValue.text(
-                publish_prompt_version(DESCRIPTION_PROMPT_NAME, DESCRIPTION_PROMPT)
-            ),
+            "opik_prompt_version": MetadataValue.text(opik_prompt_version),
         },
     )
