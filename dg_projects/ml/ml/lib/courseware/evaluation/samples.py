@@ -599,11 +599,9 @@ def subsections_population(inputs: GoldInputs) -> pl.DataFrame:
         .agg(pl.col("source_text").str.len_chars().sum().alias("chars"))
     )
     models = sorted(claims["model"].unique())
-    per_model = (
-        concepts.group_by(*scope, "model")
-        .agg(pl.len().alias("found_hat"))
-        .pivot(on="model", index=scope, values="found_hat")
-        .rename({model: f"found_hat_{model}" for model in models})
+    # a column per model that extracted anything, named a concept or not
+    per_model = concepts.group_by(scope).agg(
+        (pl.col("model") == model).sum().alias(f"found_hat_{model}") for model in models
     )
     pooled = concepts.group_by(scope).agg(
         pl.col("canonical").n_unique().alias("gold_hat")
