@@ -44,8 +44,14 @@ from ml.lib.courseware import warehouse
 from ml.resources.llm import LLMClientFactory
 from ml.sensors import courseware as sensor_module
 from ml.sensors.courseware import courseware_extraction_text_sensor
+from ol_orchestrate.lib.failures import (
+    RETRY_ON_ASSET_OR_OP_FAILURE_TAG,
+    PermanentFailure,
+    with_failure_hooks,
+)
+from ol_orchestrate.lib.glue_helper import FIXTURE_DIR_VARIABLE
 from pyiceberg.catalog.sql import SqlCatalog
-from pyiceberg.exceptions import NoSuchTableError
+from pyiceberg.exceptions import CommitFailedException, NoSuchTableError
 
 PLATFORM = "mitxonline"
 COURSERUN = "course-v1:MITx+UAI.4+1T2026"
@@ -238,11 +244,19 @@ def sources(*scope_titles: str) -> pl.DataFrame:
     return pl.DataFrame(rows)
 
 
-def extract(tables, *, llm: LLMClientFactory | None = None):
-    instance = DagsterInstance.ephemeral()
-    instance.add_dynamic_partitions("courseware_courserun", [COURSERUN])
+def extract(
+    tables,
+    *,
+    llm: LLMClientFactory | None = None,
+    instance: DagsterInstance | None = None,
+):
+    if instance is None:
+        instance = DagsterInstance.ephemeral()
+        instance.add_dynamic_partitions("courseware_courserun", [COURSERUN])
+    # With the hooks definitions.py attaches, so stop_run_retries runs.
+    (hooked,) = with_failure_hooks([courseware_extraction])
     return materialize(
-        [courseware_extraction],
+        [hooked],
         partition_key=PARTITION,
         instance=instance,
         resources={
@@ -355,9 +369,23 @@ def test_extraction_check_fails_on_unquoted_evidence(tables):
 def test_extraction_stores_successes_and_fails_the_run(tables, calls):
     tables["int__courseware__extraction_sources"] = sources("Lecture 1", "Broken scope")
 
-    result = extract(tables)
+    instance = DagsterInstance.ephemeral()
+    instance.add_dynamic_partitions("courseware_courserun", [COURSERUN])
+
+    result = extract(tables, instance=instance)
 
     assert not result.success
+    failure = next(
+        event.step_failure_data.error
+        for event in result.all_events
+        if event.is_step_failure
+    )
+    assert failure is not None
+    assert failure.cls_name == "ScopeExtractionFailure"
+    # permanent, so run_retries does not re-run the partition and pay again
+    run = instance.get_run_by_id(result.run_id)
+    assert run is not None
+    assert run.tags[RETRY_ON_ASSET_OR_OP_FAILURE_TAG] == "false"
     assert tables["courseware_claim_extraction"]["scope_title"].to_list() == [
         "Lecture 1"
     ]
@@ -367,6 +395,42 @@ def test_extraction_stores_successes_and_fails_the_run(tables, calls):
     extract(tables)
 
     assert calls.count("record_extraction") == 5
+
+
+def test_extraction_fails_before_any_call_when_the_catalog_fails(
+    tables, calls, catalog
+):
+    tables["int__courseware__extraction_sources"] = sources("Lecture 1")
+    catalog.load_table.side_effect = OSError("Glue unreachable")
+
+    result = extract(tables)
+
+    assert not result.success
+    assert calls == []
+
+
+def test_extraction_retries_a_lost_delete_commit(tables, catalog):
+    tables["int__courseware__extraction_sources"] = sources("Lecture 1")
+    table = catalog.load_table.return_value
+    table.delete.side_effect = [CommitFailedException("concurrent write"), None, None]
+
+    result = extract(tables)
+
+    assert result.success
+    assert table.delete.call_count == 3
+    assert table.refresh.call_count == 1
+
+
+def test_reads_refuse_a_dev_redirect(monkeypatch, tmp_path):
+    monkeypatch.setenv(FIXTURE_DIR_VARIABLE, str(tmp_path))
+    with pytest.raises(PermanentFailure, match=FIXTURE_DIR_VARIABLE):
+        warehouse.read_table("intermediate", "courseware_claim_extraction")
+
+
+def test_an_empty_schema_suffix_is_refused(monkeypatch):
+    monkeypatch.setenv("DBT_SCHEMA_SUFFIX", "")
+    with pytest.raises(ValueError, match="DBT_SCHEMA_SUFFIX"):
+        warehouse.warehouse_database("intermediate")
 
 
 def test_extraction_text_observes_one_run(tables):
@@ -535,9 +599,11 @@ def test_description_describes_each_concept_once(tables, calls):
     resources = {"io_manager": Warehouse(tables), "llm": FakeLLM()}
 
     materialize([courseware_concept_description], resources=resources)
-    materialize([courseware_concept_description], resources=resources)
+    second = materialize([courseware_concept_description], resources=resources)
 
     assert calls == ["record_descriptions"]
+    # nothing new, so no output and no empty snapshot
+    assert second.get_asset_materialization_events() == []
     assert tables["courseware_concept_description"]["concept_id"].to_list() == [
         "c1",
         "c2",

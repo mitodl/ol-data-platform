@@ -13,7 +13,12 @@ from dagster import (
 )
 from ml.resources.llm import LLMClientFactory
 from ol_orchestrate.lib.constants import DAGSTER_ENV
-from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
+from ol_orchestrate.lib.failures import permanent_failure
+from ol_orchestrate.lib.glue_helper import (
+    FIXTURE_DIR_VARIABLE,
+    LOCAL_LAKE_VARIABLE,
+    get_dbt_model_as_dataframe,
+)
 from pyiceberg.exceptions import NoSuchTableError
 
 # The platforms int__courseware__extraction_sources reads.
@@ -46,7 +51,13 @@ def warehouse_database(layer: str) -> str:
     :rtype: str
     """
     if DAGSTER_ENV == "dev":
-        return f"ol_warehouse_production_{os.environ['DBT_SCHEMA_SUFFIX']}_{layer}"
+        # docker-compose passes the variable through empty when it is unset,
+        # which would name the shared ol_warehouse_production__<layer> database.
+        suffix = os.environ["DBT_SCHEMA_SUFFIX"]
+        if not suffix:
+            msg = "DBT_SCHEMA_SUFFIX is empty; set it to your dev schema suffix"
+            raise ValueError(msg)
+        return f"ol_warehouse_production_{suffix}_{layer}"
     return f"ol_warehouse_{DAGSTER_ENV}_{layer}"
 
 
@@ -57,7 +68,23 @@ def read_table(layer: str, table: str) -> pl.LazyFrame | None:
     :param table: the table name
     :returns: the table, lazily
     :rtype: pl.LazyFrame | None
+    :raises PermanentFailure: when a dev read redirect is set (see below)
     """
+    # These redirect the read to fixtures or the local lake, while the courseware
+    # assets always write to Glue. Each asset reads its own earlier output to know
+    # what is stored, so a redirected read finds nothing and pays for the whole
+    # corpus again.
+    redirects = [
+        variable
+        for variable in (FIXTURE_DIR_VARIABLE, LOCAL_LAKE_VARIABLE)
+        if DAGSTER_ENV == "dev" and os.environ.get(variable)
+    ]
+    if redirects:
+        msg = (
+            f"Unset {' and '.join(redirects)}: the courseware assets write to Glue "
+            "and must read what they stored from there."
+        )
+        raise permanent_failure(msg)
     try:
         return get_dbt_model_as_dataframe(
             database_name=warehouse_database(layer), table_name=table
