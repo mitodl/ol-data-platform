@@ -76,7 +76,7 @@ Assessment claims from Open edX problems are extracted from the question side on
 
 ### Entities (dimensions)
 
-`dim_concept`: the resolved, cross-course entity. `concept_pk`, `preferred_label`, `definition`, `concept_kind` (`concept`, `method`, `skill`, `tool`, `application`), `status` (`proposed`, `accepted`, `merged_into`, `rejected`), `merged_into_concept_fk`, `wikidata_qid`, `created_by_run_fk`, `reviewed_by`, `reviewed_at`. The status values follow `dim_feedback_category`, but the gate is new: feedback categories are used while still `proposed`, whereas here the extractor proposes, a person accepts, and only accepted concepts reach Learn-facing views. A `skill` is a concept phrased as an ability; the kind column keeps them queryable together for a knowledge graph and apart for a skills report.
+`dim_concept`: the resolved, cross-course entity. `concept_pk`, `preferred_label`, `definition`, `concept_kind` (`concept`, `method`, `skill`, `tool`, `application`), `status` (`proposed`, `accepted`, `merged_into`, `rejected`), `merged_into_concept_fk`, `wikidata_qid`, `created_by_run_fk`, `reviewed_by`, `reviewed_at`. The status column follows the `dim_feedback_category` pattern, but the gate is new: feedback categories are used while still `proposed`, whereas here the extractor proposes, a person accepts, and only accepted concepts reach Learn-facing views. A `skill` is a concept phrased as an ability; the kind column keeps them queryable together for a knowledge graph and apart for a skills report.
 
 `dim_concept_alias`: `concept_fk`, `alias`, `alias_source` (`extracted`, `wikidata`, `esco`, `openalex`, `acm_ccs`, `physh`, `manual`). This is the label index that resolution retrieves against.
 
