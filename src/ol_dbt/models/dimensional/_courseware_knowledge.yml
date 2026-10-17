@@ -554,3 +554,67 @@ models:
     tests:
     - accepted_values:
         values: [insufficient_support, contested_direction]
+
+- name: bridge_courserun_prerequisite_coverage
+  description: Which other course runs cover each concept a course run requires, directly,
+    through a close equivalent, or by teaching enough of its narrower concepts (an
+    umbrella requirement such as Python programming), one row per requirement and
+    providing run.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: courserun_prerequisite_coverage_pk
+    description: str, surrogate key of (courserun_concept_fk, provider_courserun_fk)
+    tests:
+    - unique
+    - not_null
+  - name: courserun_concept_fk
+    description: str, the requires row, bridge_courserun_concept.courserun_concept_pk
+    tests:
+    - not_null
+    - relationships:
+        to: ref('bridge_courserun_concept')
+        field: courserun_concept_pk
+  - name: platform
+    description: str, the requiring run's platform
+  - name: courserun_readable_id
+    description: str, the requiring run
+  - name: courserun_fk
+    description: str, dim_course_run.courserun_pk of the requiring run
+  - name: concept_fk
+    description: str, dim_concept.concept_pk, the required concept
+  - name: requirement_source
+    description: str, declared or inferred
+  - name: requirement_is_published
+    description: boolean, bridge_courserun_concept.is_published of the requirement
+  - name: provider_platform
+    description: str, the providing run's platform
+  - name: provider_courserun_readable_id
+    description: str, a current run of another course that covers the concept
+  - name: provider_courserun_fk
+    description: str, dim_course_run.courserun_pk of the providing run
+    tests:
+    - not_null
+  - name: match_type
+    description: str, direct (teaches or reviews the concept), close (teaches or reviews
+      a close equivalent) or narrower (teaches or reviews some of its narrower concepts),
+      the first that applies
+    tests:
+    - not_null
+    - accepted_values:
+        values: [direct, close, narrower]
+  - name: narrower_concept_count
+    description: int, narrower concepts of the required concept, within courseware_prerequisite_max_narrower_hops
+      published broader edges, that appear in any current course run
+  - name: narrower_taught_count
+    description: int, of those, the ones the providing run teaches or reviews
+  - name: narrower_coverage
+    description: float, narrower_taught_count / narrower_concept_count; null when
+      the concept has no narrower concepts
+  - name: is_satisfied
+    description: boolean, a direct or close match, or a narrower match with at least
+      courseware_prerequisite_min_narrower_coverage and courseware_prerequisite_min_narrower_taught
+    tests:
+    - not_null

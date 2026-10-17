@@ -1,0 +1,90 @@
+---
+unit_tests:
+- name: test_bridge_courserun_prerequisite_coverage_rolls_up_narrower_concepts
+  description: >
+    Run ra (course A) requires x, y, u and s. Run rb (course B) teaches x,
+    a close equivalent of y, and n1, n2 and n3 under the umbrella u (n3 two
+    hops down), so it covers all four, u at 3 of 5. u's narrower concepts
+    are n1 to n5: n6 appears in no course run, n7 hangs on an unpublished
+    edge, and the u to n2 cycle does not count u as its own part. rc
+    teaches only n4, 1 of 5, below the coverage threshold. rb teaches both
+    of s's parts, below the minimum count. ra2, another run of course A,
+    teaches x but is the same course.
+  model: bridge_courserun_prerequisite_coverage
+  overrides:
+    vars:
+      courseware_prerequisite_max_narrower_hops: 3
+      courseware_prerequisite_min_narrower_coverage: 0.5
+      courseware_prerequisite_min_narrower_taught: 3
+  given:
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: ra, course_fk: A, platform: mitxonline, courserun_readable_id: run-a,
+      is_current: true}
+    - {courserun_pk: ra2, course_fk: A, platform: mitxonline, courserun_readable_id: run-a2,
+      is_current: true}
+    - {courserun_pk: rb, course_fk: B, platform: mitxonline, courserun_readable_id: run-b,
+      is_current: true}
+    - {courserun_pk: rc, course_fk: C, platform: mitxonline, courserun_readable_id: run-c,
+      is_current: true}
+  - input: ref('bridge_courserun_concept')
+    rows:
+    - {courserun_concept_pk: ra-x, courserun_fk: ra, concept_fk: x, relation: requires,
+      requirement_source: inferred, is_published: true}
+    - {courserun_concept_pk: ra-y, courserun_fk: ra, concept_fk: y, relation: requires,
+      requirement_source: inferred, is_published: true}
+    - {courserun_concept_pk: ra-u, courserun_fk: ra, concept_fk: u, relation: requires,
+      requirement_source: inferred, is_published: true}
+    - {courserun_concept_pk: ra-s, courserun_fk: ra, concept_fk: s, relation: requires,
+      requirement_source: declared, is_published: true}
+    - {courserun_concept_pk: ra2-x, courserun_fk: ra2, concept_fk: x, relation: teaches,
+      is_published: true}
+    - {courserun_concept_pk: rb-x, courserun_fk: rb, concept_fk: x, relation: teaches,
+      is_published: true}
+    - {courserun_concept_pk: rb-y2, courserun_fk: rb, concept_fk: y2, relation: reviews,
+      is_published: true}
+    - {courserun_concept_pk: rb-n1, courserun_fk: rb, concept_fk: n1, relation: teaches,
+      is_published: true}
+    - {courserun_concept_pk: rb-n2, courserun_fk: rb, concept_fk: n2, relation: teaches,
+      is_published: true}
+    - {courserun_concept_pk: rb-n3, courserun_fk: rb, concept_fk: n3, relation: teaches,
+      is_published: true}
+    - {courserun_concept_pk: rb-n7, courserun_fk: rb, concept_fk: n7, relation: teaches,
+      is_published: true}
+    - {courserun_concept_pk: rb-s1, courserun_fk: rb, concept_fk: s1, relation: teaches,
+      is_published: true}
+    - {courserun_concept_pk: rb-s2, courserun_fk: rb, concept_fk: s2, relation: teaches,
+      is_published: true}
+    - {courserun_concept_pk: rc-n4, courserun_fk: rc, concept_fk: n4, relation: teaches,
+      is_published: true}
+    - {courserun_concept_pk: rc-n5, courserun_fk: rc, concept_fk: n5, relation: uses,
+      is_published: true}
+  - input: ref('bridge_concept_relation')
+    rows:
+    - {from_concept_fk: y, to_concept_fk: y2, relation: close, is_published: true}
+    - {from_concept_fk: n1, to_concept_fk: u, relation: broader, is_published: true}
+    - {from_concept_fk: n2, to_concept_fk: u, relation: broader, is_published: true}
+    - {from_concept_fk: n3, to_concept_fk: n1, relation: broader, is_published: true}
+    - {from_concept_fk: n4, to_concept_fk: u, relation: broader, is_published: true}
+    - {from_concept_fk: n5, to_concept_fk: u, relation: broader, is_published: true}
+    - {from_concept_fk: n6, to_concept_fk: u, relation: broader, is_published: true}
+    - {from_concept_fk: n7, to_concept_fk: u, relation: broader, is_published: false}
+    - {from_concept_fk: u, to_concept_fk: n2, relation: broader, is_published: true}
+    - {from_concept_fk: s1, to_concept_fk: s, relation: broader, is_published: true}
+    - {from_concept_fk: s2, to_concept_fk: s, relation: broader, is_published: true}
+  expect:
+    rows:
+    - {courserun_concept_fk: ra-x, provider_courserun_fk: rb, match_type: direct,
+      narrower_concept_count: 0, narrower_taught_count: 0, narrower_coverage: null,
+      is_satisfied: true}
+    - {courserun_concept_fk: ra-y, provider_courserun_fk: rb, match_type: close, narrower_concept_count: 0,
+      narrower_taught_count: 0, narrower_coverage: null, is_satisfied: true}
+    - {courserun_concept_fk: ra-u, provider_courserun_fk: rb, match_type: narrower,
+      narrower_concept_count: 5, narrower_taught_count: 3, narrower_coverage: 0.6,
+      is_satisfied: true}
+    - {courserun_concept_fk: ra-u, provider_courserun_fk: rc, match_type: narrower,
+      narrower_concept_count: 5, narrower_taught_count: 1, narrower_coverage: 0.2,
+      is_satisfied: false}
+    - {courserun_concept_fk: ra-s, provider_courserun_fk: rb, match_type: narrower,
+      narrower_concept_count: 2, narrower_taught_count: 2, narrower_coverage: 1.0,
+      is_satisfied: false}
