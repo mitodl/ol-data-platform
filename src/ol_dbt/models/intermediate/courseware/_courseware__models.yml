@@ -1,0 +1,353 @@
+---
+version: 2
+
+models:
+- name: int__courseware__extraction_sources
+  description: The text the courseware claim extractor reads, one row per source item
+    of each scope (a sequential, the course context, or the course documents) of an
+    Open edX course run, in reading order. Problem text is the question side only.
+  config:
+    meta:
+      # The text it reads (raw__openedx__s3__course_transcript_text and
+      # course_document_text, raw__edxorg__s3__course_xml_blocks) is absent from QA raw.
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the course run
+    tests:
+    - not_null
+  - name: course_title
+    description: str, the course block's title from dim_course_content
+  - name: scope_id
+    description: str, the sequential's block id, or 'context' or 'materials'
+    tests:
+    - not_null
+  - name: scope_kind
+    description: str, unit, context or materials
+    tests:
+    - accepted_values:
+        values: [unit, context, materials]
+  - name: scope_title
+    description: str, the sequential's title or the scope's name
+  - name: scope_position
+    description: int, the scope's order in the course; 0 for context, 9999 for materials
+  - name: source_position
+    description: int, the source's order within its scope, from 1
+  - name: source_ref
+    description: str, the block id for blocks, the export path for files
+    tests:
+    - not_null
+  - name: source_kind
+    description: str, html, problem, video_transcript, document, about_page, tabs_page
+      or info_page
+  - name: source_title
+    description: str, the block's display name or the file's path
+  - name: source_text
+    description: str, the text as the extractor reads it
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [platform, courserun_readable_id, scope_id, source_ref]
+
+- name: int__courseware__claims
+  description: Every extracted claim with its scope, extractor version, evidence counts
+    and normalized concept label key.
+  columns:
+  - name: extraction_key
+    description: str, the extraction the claim came from
+    tests:
+    - not_null
+  - name: claim_ordinal
+    description: int, the claim's position in the extraction
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run the scope belongs to
+  - name: scope_id
+    description: str, the sequential's block id, or 'context' or 'materials'
+  - name: scope_kind
+    description: str, unit, context or materials
+  - name: scope_title
+    description: str, the sequential's title or the scope's name
+  - name: scope_position
+    description: int, the scope's order in the course
+  - name: scope_part
+    description: int, which part of a split scope the claim came from, from 1
+  - name: extractor_id
+    description: str, the extractor version
+  - name: prompt_version
+    description: str, hash of the system prompt
+  - name: model_id
+    description: str, the model that made the claim
+  - name: extracted_at
+    description: timestamp, when the extraction returned
+  - name: is_current
+    description: boolean, whether the claim's extraction is the newest for its scope
+      part
+  - name: claim_kind
+    description: str, concept, skill, assumed_knowledge, assessment_expectation, learning_outcome,
+      declared_prerequisite or audience
+  - name: label
+    description: str, the model's canonical label; the statement for outcomes and
+      audience
+  - name: description
+    description: str, the model's description of how the scope treats the claim
+  - name: concept_kind
+    description: str, concept, method, tool, dataset or application (concepts only)
+  - name: teaching_status
+    description: str, taught, reviewed, used or mentioned (concepts and skills)
+  - name: how_used
+    description: str, where the material relies on assumed knowledge
+  - name: flagged_as_prior
+    description: boolean, whether the material frames assumed knowledge as prior
+  - name: bloom_process
+    description: str, Bloom revised cognitive process (assessments and outcomes)
+  - name: knowledge_type
+    description: str, Bloom revised knowledge type (outcomes)
+  - name: prerequisite_kind
+    description: str, prerequisite, corequisite, recommended or explicitly_none
+  - name: course_ref
+    description: str, a course a declared prerequisite names
+  - name: related_concept_labels_json
+    description: str, JSON list of concept labels an assessment or outcome names
+  - name: concept_label_key
+    description: str, lowercased label with punctuation collapsed, for concept, assumed
+      knowledge and declared prerequisite claims
+  - name: evidence_count
+    description: int, evidence passages quoted for the claim
+  - name: verified_evidence_count
+    description: int, passages found in the source text (exact or fuzzy)
+  - name: is_verified
+    description: boolean, whether at least one evidence passage was found in the source
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [extraction_key, claim_ordinal]
+
+- name: int__courseware__concept_mentions
+  description: One row per (current verified claim, concept label) it names, including
+    the concept labels assessments and learning outcomes list.
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the scope the claim came from
+  - name: scope_kind
+    description: str, unit, context or materials
+  - name: scope_position
+    description: int, the scope's order in the course
+  - name: extraction_key
+    description: str, the extraction the claim came from
+  - name: claim_ordinal
+    description: int, the claim within the extraction
+  - name: extracted_at
+    description: timestamp, when the extraction returned
+  - name: claim_kind
+    description: str, the claim's kind; assessment_expectation and learning_outcome
+      rows are the labels those claims list
+  - name: teaching_status
+    description: str, taught, reviewed, used or mentioned; null for listed labels
+  - name: concept_kind
+    description: str, concept, method, tool, dataset or application; null for listed
+      labels
+  - name: description
+    description: str, the claim's description; null for listed labels
+  - name: label
+    description: str, the label as extracted
+  - name: concept_label_key
+    description: str, the normalized label key
+    tests:
+    - not_null
+
+- name: int__courseware__concept_labels
+  description: One row per normalized concept label key across every course, with
+    its most used surface form, kind and description. The input to concept resolution.
+  columns:
+  - name: concept_label_key
+    description: str, the normalized label key
+    tests:
+    - unique
+    - not_null
+  - name: preferred_label
+    description: str, the label's most used surface form
+  - name: concept_kind
+    description: str, the label's most used concept kind
+  - name: description
+    description: str, one claim description, from a taught mention where there is
+      one
+  - name: mention_count
+    description: int, mentions of the label
+  - name: taught_mention_count
+    description: int, mentions with teaching_status taught or reviewed
+  - name: courserun_count
+    description: int, distinct course runs that mention the label
+
+- name: int__courseware__concept_description_inputs
+  description: What the concept describer reads, up to five claim descriptions per
+    resolved concept from different course runs, taught ones first, with the course
+    title each came from.
+  config:
+    meta:
+      # It reads claims only the courseware extractor writes, which no QA run produces
+      # until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: concept_id
+    description: str, the concept's UUID
+    tests:
+    - not_null
+  - name: context_rank
+    description: int, the row's position within its concept, 1 to 5
+  - name: label
+    description: str, the label the claim used
+  - name: concept_kind
+    description: str, the claim's concept kind
+  - name: description
+    description: str, the claim's description of how its scope treats the concept
+  - name: course_title
+    description: str, the course the claim came from, for telling senses of a label
+      apart
+
+- name: int__courseware__concept_assignments
+  description: Which concept each normalized label belongs to, from the newest resolution
+    run. Labels extracted since that run have a null concept_id until the next run.
+  columns:
+  - name: concept_label_key
+    description: str, the normalized label key
+    tests:
+    - unique
+    - not_null
+  - name: preferred_label
+    description: str, the label's most used surface form
+  - name: mention_count
+    description: int, mentions of the label
+  - name: courserun_count
+    description: int, distinct course runs that mention the label
+  - name: concept_id
+    description: str, the opaque UUID of the active concept the label belongs to
+  - name: assignment_source
+    description: str, carried, exact_match, minted or rebuild_carried
+  - name: assigned_run_id
+    description: str, the resolution run that first made the assignment
+  - name: resolution_run_id
+    description: str, the newest resolution run, whose snapshot this is
+
+- name: int__courseware__concept_registry
+  description: Every concept id ever minted, as of the newest resolution run, with
+    its lifecycle status and redirect.
+  columns:
+  - name: concept_id
+    description: str, opaque UUID, minted once
+    tests:
+    - unique
+    - not_null
+  - name: concept_status
+    description: str, active, merged or deprecated
+    tests:
+    - accepted_values:
+        values: [active, merged, deprecated]
+  - name: merged_into_concept_id
+    description: str, the active concept a merged one redirects to
+  - name: minted_label
+    description: str, the label the concept was minted under
+  - name: minted_run_id
+    description: str, the resolution run that minted the id
+  - name: minted_at
+    description: timestamp, when the id was minted
+  - name: resolution_run_id
+    description: str, the newest resolution run, whose snapshot this is
+
+- name: int__courseware__resolved_concept_mentions
+  description: Concept mentions with the concept id their label is assigned to.
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the scope the claim came from
+  - name: scope_kind
+    description: str, unit, context or materials
+  - name: scope_position
+    description: int, the scope's order in the course
+  - name: extraction_key
+    description: str, the extraction the claim came from
+  - name: claim_ordinal
+    description: int, the claim within the extraction
+  - name: extracted_at
+    description: timestamp, when the extraction returned
+  - name: claim_kind
+    description: str, the claim's kind
+  - name: teaching_status
+    description: str, taught, reviewed, used or mentioned; null for listed labels
+  - name: concept_kind
+    description: str, the claim's concept kind; null for listed labels
+  - name: description
+    description: str, the claim's description; null for listed labels
+  - name: label
+    description: str, the label as extracted
+  - name: concept_label_key
+    description: str, the normalized label key
+  - name: concept_id
+    description: str, the concept's UUID
+    tests:
+    - not_null
+
+- name: int__courseware__adjudicated_concept_relations
+  description: Broader, close and related proposals from resolution adjudication,
+    as of the newest run, with when each was first proposed.
+  columns:
+  - name: from_concept_id
+    description: str, the narrower concept for broader; the lower id otherwise
+  - name: to_concept_id
+    description: str, the broader concept for broader; the higher id otherwise
+  - name: relation
+    description: str, broader, close or related
+    tests:
+    - accepted_values:
+        values: [broader, close, related]
+  - name: proposed_run_id
+    description: str, the resolution run that first proposed the relation
+  - name: proposed_at
+    description: timestamp, when that run started
+
+- name: int__courseware__concept_relation_evidence
+  description: Every observation that two concepts are related, per relation, evidence
+    source (adjudication, course_sequence, co_taught, co_assessed) and course run.
+  columns:
+  - name: from_concept_id
+    description: str, the narrower, dependent or lower-id concept, as in bridge_concept_relation
+  - name: to_concept_id
+    description: str, the broader, built-on or higher-id concept
+  - name: relation
+    description: str, broader, close, related, builds_on, practiced_with or complements
+    tests:
+    - accepted_values:
+        values: [broader, close, related, builds_on, practiced_with, complements]
+  - name: evidence_source
+    description: str, adjudication, course_sequence, co_taught or co_assessed
+    tests:
+    - accepted_values:
+        values: [adjudication, course_sequence, co_taught, co_assessed]
+  - name: platform
+    description: str, the course run's platform; null for adjudication
+  - name: courserun_readable_id
+    description: str, the course run that showed the relation; null for adjudication
+  - name: scope_count
+    description: int, units in the course run that showed the relation; 0 for adjudication
+  - name: observed_at
+    description: timestamp, the earliest extraction or resolution that showed it
+
+- name: int__courseware__latest_concept_graph_run
+  description: The newest concept graph run, which the graph-position and community
+    models read.
+  columns:
+  - name: graph_run_id
+    description: str, the newest graph run's UUID
+    tests:
+    - unique
+    - not_null
