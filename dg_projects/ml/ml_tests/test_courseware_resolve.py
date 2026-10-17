@@ -234,3 +234,24 @@ def test_embedding_neighbours_never_include_the_query():
     found = embedding_neighbours(keys, vectors, keys, k=8)
     assert all(key not in found[key] for key in keys)
     assert set(found["auc"]) == {"bias", "cart"}
+
+
+@pytest.mark.usefixtures("verdicts")
+def test_rebuild_deprecates_a_concept_whose_labels_are_all_gone():
+    first = run(labels("auc", "pandas"))
+    pandas = concept_of(first, "pandas")
+    rebuilt = run(labels("auc"), state_from(first), rebuild=True)
+    registry = {
+        row["concept_id"]: row for row in rebuilt.registry.iter_rows(named=True)
+    }
+    assert registry[pandas]["concept_status"] == "deprecated"
+    assert registry[pandas]["merged_into_concept_id"] is None
+    assert rebuilt.run["concepts_deprecated"][0] == 1
+
+
+def test_relations_of_a_deprecated_concept_are_dropped(verdicts):
+    verdicts[("gini impurity", "decision tree")] = "narrower"
+    first = run(labels("gini impurity", "decision tree"))
+    assert first.relations.height == 1
+    rebuilt = run(labels("decision tree"), state_from(first), rebuild=True)
+    assert rebuilt.relations.height == 0

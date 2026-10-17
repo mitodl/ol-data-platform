@@ -631,11 +631,14 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
             if key in previous:
                 assignments[key] = (active(previous[key]["concept_id"]), "carried")
         assigned_ids = {concept_id for concept_id, _ in assignments.values()}
-        for previous_id, members in previous_members.items():
-            if previous_id in assigned_ids:
+        # every active concept, including one whose labels are all gone from `labels`
+        for previous_id, record in registry.items():
+            if record["concept_status"] != "active" or previous_id in assigned_ids:
                 continue
             # retire it into whichever concept took most of its members
-            successor = Counter(assignments[key][0] for key in members).most_common(1)
+            successor = Counter(
+                assignments[key][0] for key in previous_members[previous_id]
+            ).most_common(1)
             registry[previous_id]["concept_status"] = (
                 "merged" if successor else "deprecated"
             )
@@ -724,7 +727,10 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
                     "proposed_run_id": proposed,
                 }
                 for (left, right, relation), proposed in sorted(relations.items())
+                # a deprecated concept has no labels left to relate
                 if left != right
+                and registry[left]["concept_status"] == "active"
+                and registry[right]["concept_status"] == "active"
             ),
             RELATION_SCHEMA,
         ),
