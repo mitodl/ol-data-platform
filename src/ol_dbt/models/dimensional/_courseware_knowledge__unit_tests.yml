@@ -6,13 +6,14 @@ unit_tests:
     B) teaches x and z, reviews a close equivalent of y, and teaches or
     reviews n1, n2, n3 and n8 under the umbrella u, so u is covered at 4 of
     8. u's narrower concepts are n1 to n5, n8, n10 and n11: n9 is 4 hops
-    down, n6 appears in no course run, n7 hangs on an unpublished edge, and
-    the u to n2 cycle does not count u as its own part. rc teaches only n4,
-    1 of 8. rd teaches u itself and two of its parts, so it is direct. re
-    has no course_fk, is another course, and teaches u but none of its
-    parts (coverage 0). rb covers both of s's parts, below the minimum
-    count. ra2, rf (no course_fk) and rg (an edxorg copy with the same
-    readable id) are course A; rh (no course_fk, A.1_2) is another course.
+    down, n6 appears in no course run, n12 only in a run that is not
+    current, n7 hangs on an unpublished edge, and the u to n2 cycle does
+    not count u as its own part. rc teaches only n4, 1 of 8. rd teaches u
+    itself and two of its parts, so it is direct. re has no course_fk, is
+    another course, and teaches u but none of its parts (coverage 0). rb
+    covers both of s's parts, below the minimum count. ra2, rf (no
+    course_fk) and rg (an edxorg copy with the same readable id) are
+    course A; rh (no course_fk, A.1_2) is another course.
   model: bridge_courserun_prerequisite_coverage
   overrides:
     vars:
@@ -98,6 +99,8 @@ unit_tests:
       is_published: true}
     - {courserun_concept_pk: rb-s2, courserun_fk: rb, concept_fk: s2, relation: teaches,
       is_published: true}
+    - {courserun_concept_pk: old-n12, courserun_fk: null, concept_fk: n12, relation: uses,
+      is_published: true}
     - {courserun_concept_pk: rc-n4, courserun_fk: rc, concept_fk: n4, relation: teaches,
       is_published: true}
     - {courserun_concept_pk: rc-n5, courserun_fk: rc, concept_fk: n5, relation: uses,
@@ -125,6 +128,7 @@ unit_tests:
     - {from_concept_fk: n10, to_concept_fk: u, relation: broader, is_published: true}
     - {from_concept_fk: n11, to_concept_fk: u, relation: broader, is_published: true}
     - {from_concept_fk: n6, to_concept_fk: u, relation: broader, is_published: true}
+    - {from_concept_fk: n12, to_concept_fk: u, relation: broader, is_published: true}
     - {from_concept_fk: n7, to_concept_fk: u, relation: broader, is_published: false}
     - {from_concept_fk: u, to_concept_fk: n2, relation: broader, is_published: true}
     - {from_concept_fk: s1, to_concept_fk: s, relation: broader, is_published: true}
