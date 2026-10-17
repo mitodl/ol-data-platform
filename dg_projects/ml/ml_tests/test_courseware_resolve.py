@@ -5,6 +5,7 @@ from ml.lib.courseware import resolve
 from ml.lib.courseware.resolve import (
     ResolutionState,
     accepted_components,
+    embedding_neighbours,
     lexical_neighbours,
     resolve_concepts,
 )
@@ -225,3 +226,11 @@ def test_concepts_bridged_twice_merge_one_way(verdicts):
     resolved = {concept_of(second, key) for key in ("l1", "l2", "n1", "o2", "s1", "s2")}
     assert len(resolved) == 1
     assert registry[resolved.pop()]["concept_status"] == "active"
+
+
+def test_embedding_neighbours_never_include_the_query():
+    keys = ["auc", "bias", "cart"]
+    vectors = np.eye(3, dtype=np.float32)
+    found = embedding_neighbours(keys, vectors, keys, k=8)
+    assert all(key not in found[key] for key in keys)
+    assert set(found["auc"]) == {"bias", "cart"}

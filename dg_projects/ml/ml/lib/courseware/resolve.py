@@ -263,7 +263,8 @@ def embedding_neighbours(
         top = np.argpartition(-scores, min(k, len(keys) - 1), axis=1)[:, :k]
         for row_index, key in enumerate(chunk):
             ordered = sorted(top[row_index], key=lambda col: -scores[row_index, col])
-            neighbours[key] = [keys[col] for col in ordered]
+            # with k or fewer other labels the slice also holds the query's own column
+            neighbours[key] = [keys[col] for col in ordered if col != rows[row_index]]
     return neighbours
 
 
