@@ -23,7 +23,8 @@
 
       unit       a page that has child pages, with its children (a week of an OCW Scholar
                  course, a part of a unit); a top-level section page (Lecture Notes,
-                 Assignments, Exams); and, in a flat course, one per session: the
+                 Assignments, Exams); a page whose parent page is not published;
+                 and, in a flat course, one per session: the
                  resources linked in row N of any table keyed by SES #, LEC # or WEEK #,
                  titled from the calendar
       context    the course description and the syllabus pages, with what they link
@@ -422,14 +423,20 @@ with content as (
 )
 
 -- A page with children is a unit, and so is a top-level section page; any other page
--- belongs to its parent's unit.
+-- belongs to its parent's unit. A page whose parent the site does not publish is a unit
+-- of its own (8.02T's visualizations/ pages have no visualizations page).
 , ocw_unit_pages as (
     select
-        *
-        , case when has_children or depth = 1 then page_key else parent_key end as unit_key
-        , depth = 1 and not has_children as is_flat_section
-    from ocw_pages
-    where page_role = 'unit'
+        pages.*
+        , case
+            when pages.has_children or pages.depth = 1 or parents.page_key is null then pages.page_key
+            else pages.parent_key
+        end as unit_key
+        , pages.depth = 1 and not pages.has_children as is_flat_section
+    from ocw_pages as pages
+    left join ocw_pages as parents
+        on pages.parent_key = parents.page_key
+    where pages.page_role = 'unit'
 )
 
 , ocw_page_hrefs as (
@@ -718,7 +725,7 @@ with content as (
         units.courserun_readable_id
         , units.page_key as scope_id
         , case
-            when units.depth = 1 then units.title
+            when units.depth = 1 or parent.title is null then units.title
             else concat(parent.title, ' / ', units.title)
         end as scope_title
         , case when units.is_flat_section then 2 else 1 end as group_order
