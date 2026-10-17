@@ -16,8 +16,9 @@ sources:
       by one extractor version and model.
     columns:
     - name: extraction_key
-      description: str, sha256 of everything the call depended on (extractor, prompt
-        and schema versions, model, effort, run, scope and the full message text)
+      description: str, sha256 of the extractor version (extractor, prompt and schema
+        versions, model, effort) and the scope's own input (run, scope, title, part
+        and input_text_checksum); not of the course header
       tests:
       - unique
       - not_null
@@ -50,6 +51,9 @@ sources:
       description: int, how many parts the scope was split into
     - name: input_text_checksum
       description: str, sha256 of the source text the call read
+    - name: header_version
+      description: str, hash of the course header the call read (title, outline, description);
+        null for extractions recorded before it was
     - name: source_count
       description: int, number of sources the call read
     - name: truncated_source_count

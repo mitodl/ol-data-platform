@@ -1,8 +1,15 @@
 import polars as pl
 import pytest
-from ml.lib.courseware import scopes
+from ml.lib.courseware import local, scopes
 from ml.lib.courseware.describe import _concept_inputs
-from ml.lib.courseware.extract import _claim_row, extraction_key
+from ml.lib.courseware.extract import (
+    _claim_row,
+    _ModelResult,
+    extraction_key,
+    header_version,
+    stored_extraction_key,
+)
+from ml.lib.courseware.extract import _rows as _rows_for
 from ml.lib.courseware.schemas import (
     AudienceClaim,
     ConceptClaim,
@@ -115,6 +122,101 @@ def test_extraction_key_changes_with_input_text():
     assert extraction_key(first, "model", "medium") != extraction_key(
         first, "model", "high"
     )
+
+
+def _course_rows(description: str, second_title: str, text: str) -> pl.DataFrame:
+    units = pl.concat(
+        [
+            _rows([text]),
+            _rows(["second lecture"]).with_columns(
+                scope_id=pl.lit("seq-2"),
+                scope_title=pl.lit(second_title),
+                scope_position=pl.lit(2),
+            ),
+        ]
+    )
+    context = _rows([description], scope_kind="context").with_columns(
+        scope_id=pl.lit("context"),
+        scope_title=pl.lit("Course context"),
+        scope_position=pl.lit(0),
+        source_ref=pl.lit("about/overview.html"),
+    )
+    return pl.concat([context, units])
+
+
+def _lecture_one(rows: pl.DataFrame) -> scopes.Scope:
+    return next(
+        scope for scope in scopes.build_scopes(rows) if scope.scope_id == "seq-1"
+    )
+
+
+def test_extraction_key_ignores_the_course_header():
+    base = _lecture_one(_course_rows("About it.", "Lecture 2", "some text"))
+    new_description = _lecture_one(_course_rows("Edited.", "Lecture 2", "some text"))
+    renamed_other = _lecture_one(_course_rows("About it.", "Renamed", "some text"))
+    edited_text = _lecture_one(_course_rows("About it.", "Lecture 2", "new text"))
+    key = extraction_key(base, "model", "medium")
+    assert extraction_key(new_description, "model", "medium") == key
+    assert extraction_key(renamed_other, "model", "medium") == key
+    assert extraction_key(edited_text, "model", "medium") != key
+    # the header is recorded, and keyed on only when asked
+    assert header_version(new_description.course) != header_version(base.course)
+    assert header_version(renamed_other.course) != header_version(base.course)
+    assert extraction_key(
+        new_description, "model", "medium", key_on_header=True
+    ) != extraction_key(base, "model", "medium", key_on_header=True)
+
+
+def _result() -> _ModelResult:
+    return _ModelResult(
+        extraction=ScopeExtraction(
+            summary="s",
+            concepts=[],
+            skills=[],
+            assumed_knowledge=[],
+            assessment_expectations=[],
+            learning_outcomes=[],
+            declared_prerequisites=[],
+            audience=[],
+            notes=[],
+        ),
+        stop_reason="tool_use",
+        input_tokens=1,
+        output_tokens=1,
+        cache_read_input_tokens=0,
+        cache_creation_input_tokens=0,
+    )
+
+
+def test_stored_extraction_rows_recompute_their_key():
+    scope = _lecture_one(_course_rows("About it.", "Lecture 2", "some text"))
+    key = extraction_key(scope, "model", "medium")
+    extraction, _, _ = _rows_for(scope, key, "model", "medium", _result())
+    assert stored_extraction_key(extraction) == key
+    assert extraction["header_version"] == header_version(scope.course)
+
+
+def test_rekey_recomputes_keys_without_re_extracting(tmp_path):
+    scope = _lecture_one(_course_rows("About it.", "Lecture 2", "some text"))
+    extraction, _, _ = _rows_for(scope, "old-key", "model", "medium", _result())
+    del extraction["header_version"]
+    pl.DataFrame([extraction]).write_parquet(
+        tmp_path / "courseware_claim_extraction.parquet"
+    )
+    claims = pl.DataFrame({"extraction_key": ["old-key"], "claim_ordinal": [1]})
+    claims.write_parquet(tmp_path / "courseware_claim.parquet")
+    claims.with_columns(evidence_ordinal=pl.lit(1)).write_parquet(
+        tmp_path / "courseware_claim_evidence.parquet"
+    )
+    local.rekey(tmp_path)
+    local.rekey(tmp_path)  # idempotent
+    key = extraction_key(scope, "model", "medium")
+    for table in local.OUTPUT_TABLES:
+        assert pl.read_parquet(tmp_path / f"{table}.parquet")[
+            "extraction_key"
+        ].to_list() == [key]
+    stored = pl.read_parquet(tmp_path / "courseware_claim_extraction.parquet")
+    assert stored["header_version"].to_list() == [None]
 
 
 def test_claim_rows_use_statement_as_label():
