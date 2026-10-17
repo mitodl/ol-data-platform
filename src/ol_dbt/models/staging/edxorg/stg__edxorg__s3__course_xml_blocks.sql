@@ -47,12 +47,16 @@ with
         select
             course_id as courserun_readable_id,
             source_system as coursestructure_xml_source_system,
-            -- The block's id is its file name, which is what the parent's pointer and the
-            -- course structure API name it by. The parser takes the url_name attribute
-            -- first, and a library_content child keeps the url_name of the library
-            -- problem it was copied from, so several children of one course can share
-            -- it; keyed on that, the deduplication above kept one and dropped the rest.
-            {{ regexp_extract_or_null("xml_path", "'([^/]+)\\.xml$'", 1) }} as coursestructure_xml_block_id,
+            -- The block's id is its file's path below <root>/<block_type>/, which is what
+            -- the parent's pointer and the course structure API name it by. The parser
+            -- takes the url_name attribute first, and a library_content child keeps the
+            -- url_name of the library problem it was copied from, so several children of
+            -- one course can share it; keyed on that, the deduplication above kept one and
+            -- dropped the rest. Open edX exports a ':' in a url_name as a directory
+            -- (name_to_pathname), so PP1/P4_Q3a.xml is the block PP1:P4_Q3a.
+            replace(
+                {{ regexp_extract_or_null("xml_path", "'^[^/]+/[^/]+/(.+)\\.xml$'", 1) }}, '/', ':'
+            ) as coursestructure_xml_block_id,
             block_type as coursestructure_xml_block_type,
             block_display_name as coursestructure_xml_block_display_name,
             xml_attributes as coursestructure_xml_block_attributes,
