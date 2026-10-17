@@ -858,3 +858,51 @@ def test_score_subsections_scores_a_model_that_named_nothing(tmp_path):
     )
     assert report["models"]["haiku"]["concept_recall"]["point"] == 1.0
     assert report["models"]["opus"]["concept_recall"]["point"] == 0.0
+
+
+def test_few_labels_are_not_their_own_neighbours():
+    # with no more labels than the neighbour count, the top ranks hold the query too
+    keys = ["a", "b", "c", "d"]
+    inputs = samples.GoldInputs(
+        claims=pl.DataFrame(),
+        evidence=pl.DataFrame(),
+        sources=pl.DataFrame(),
+        assignments=pl.DataFrame(
+            {"concept_label_key": keys, "concept_id": ["k1", "k2", "k3", "k3"]}
+        ),
+        registry=pl.DataFrame(
+            {"concept_id": ["k1", "k2", "k3"], "merged_into_concept_id": [None] * 3},
+            schema={"concept_id": pl.String, "merged_into_concept_id": pl.String},
+        ),
+        decisions=pl.DataFrame(
+            schema={
+                "key_a": pl.String,
+                "key_b": pl.String,
+                "query_label_key": pl.String,
+                "verdict": pl.String,
+            }
+        ),
+        labels=_labels(*keys),
+        embeddings=pl.DataFrame(
+            {
+                "concept_label_key": keys,
+                "embedding": [[1.0, 0.0], [0.9, 0.1], [0.0, 1.0], [0.1, 0.9]],
+            }
+        ),
+        concepts=pl.DataFrame(
+            {"concept_pk": ["k1", "k2", "k3"], "preferred_label": list("ABC")}
+        ),
+        relations=pl.DataFrame(),
+        matcher=LabelMatcher(),
+    )
+    pairs = samples.pairs_population(inputs)
+    assert pairs.filter(pl.col("key_a") == pl.col("key_b")).is_empty()
+    assert pairs.height == 6
+    clusters = samples.clusters_population(inputs)
+    sample = samples.sample_clusters(
+        inputs, clusters.with_columns(pl.lit("s").alias("stratum")), size=3, seed=1
+    )
+    for row in sample.iter_rows(named=True):
+        shown = {item["id"] for item in json.loads(row["items_json"])}
+        assert f"n:{row['item_id']}" not in shown
+        assert row["item_id"] not in json.loads(row["neighbour_sizes_json"])

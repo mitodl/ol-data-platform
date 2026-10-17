@@ -806,6 +806,9 @@ def _unblocked_pairs(
             query = start + offset
             row[query] = -np.inf
             for neighbour in np.argsort(-row)[:UNBLOCKED_MAX_RANK]:
+                # with UNBLOCKED_MAX_RANK or fewer other labels the query is ranked too
+                if neighbour == query:
+                    continue
                 pair = tuple(sorted((keys[query], keys[int(neighbour)])))
                 if pair not in decided:
                     pairs.add(pair)
@@ -1040,9 +1043,15 @@ def sample_clusters(
     labels = dict(inputs.concepts.select("concept_pk", "preferred_label").iter_rows())
     rows = []
     for cluster in sample.iter_rows(named=True):
-        similarity = centroids @ centroids[index[cluster["item_id"]]]
-        similarity[index[cluster["item_id"]]] = -np.inf
-        neighbours = [ids[int(i)] for i in np.argsort(-similarity)[:CLUSTER_NEIGHBOURS]]
+        own = index[cluster["item_id"]]
+        similarity = centroids @ centroids[own]
+        similarity[own] = -np.inf
+        # with CLUSTER_NEIGHBOURS or fewer other concepts the cluster is ranked too
+        neighbours = [
+            ids[int(i)]
+            for i in np.argsort(-similarity)[:CLUSTER_NEIGHBOURS]
+            if i != own
+        ]
         items = [
             {
                 "id": f"m:{key}",
