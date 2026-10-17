@@ -3,11 +3,13 @@
     gives answers away, so neither its text nor the links read from it reach a solution.
 
     OCW quizzes render the solution as a "multiple-choice-solution" div after the choices,
-    and mark each choice with a correctness icon ("check" or "close"). "View/hide answer"
-    blocks are a revealN label followed by a toggleN div. The solution div holds a video
-    embed with nested divs, and RE2 and Java regex have no backreferences to balance them,
-    so it is cut up to the next question (its heading or its quiz div) or the end of the
-    page; a list item cannot end it, because the video's download menu is a list.
+    and mark each choice with a correctness icon ("check" or "close"). The solution div
+    holds a video embed with nested divs, and RE2 and Java regex have no backreferences to
+    balance them, so it is cut up to the next question (its heading or its quiz div) or
+    the end of the page; a list item cannot end it, because the video's download menu is
+    a list. "View/hide answer" blocks are a revealN label followed by a toggleN div; only
+    those whose label names an answer, solution, hint, sample response or spoiler are
+    cut, not "Read more".
 #}
 {% macro courseware_ocw_answers_removed(html) -%}
     {%- set solution = "(?s)<div class=\"toggle multiple-choice-solution\">.*?" -%}
@@ -16,8 +18,14 @@
         html, "'" ~ solution ~ "(<h[1-6]\\b|<div class=\"multiple-choice-question)'", "' <'"
     ) -%}
     {%- set text = regexp_replace_all(text, "'" ~ solution ~ "$'", "' '") -%}
+    {%- set text = regexp_replace_all(text, "'(?s)<span[^>]*correctness-icon[^>]*>.*?</span>'", "' '") -%}
+    {#- a reveal label is a few inline tags around its words; matching only those keeps the cut inside one block -#}
     {{ regexp_replace_all(
-        text, "'(?s)<span[^>]*correctness-icon[^>]*>.*?</span>|<div class=\"(reveal|toggle)[0-9]+\">.*?</div>'", "' '"
+        text
+        , "'(?is)<div class=\"reveal[0-9]+\">[^<]*(</?(p|em|strong|b|i|span)\\b[^>]*>[^<]*)*?"
+        ~ "(answer|solution|hint|sample respons|spoiler)[^<]*(</?(p|em|strong|b|i|span)\\b[^>]*>[^<]*)*?</div>"
+        ~ "\\s*<div class=\"toggle[0-9]+\">.*?</div>'"
+        , "' '"
     ) }}
 {%- endmacro %}
 
