@@ -202,6 +202,11 @@ def courseware_resolution(
         default_model=ADJUDICATION_MODEL,
         default_bedrock_model=BEDROCK_ADJUDICATION_MODEL,
     )
+    # Before any model call, so nothing Opik does can fail the run after outputs
+    # start being written.
+    opik_prompt_version = publish_prompt_version(
+        ADJUDICATION_PROMPT_NAME, ADJUDICATION_PROMPT
+    )
     result = resolve_concepts(
         labels,
         state,
@@ -235,9 +240,7 @@ def courseware_resolution(
             "concepts_minted": MetadataValue.int(run["concepts_minted"]),
             "concepts_merged": MetadataValue.int(run["concepts_merged"]),
             "prompt_version": MetadataValue.text(PROMPT_VERSION),
-            "opik_prompt_version": MetadataValue.text(
-                publish_prompt_version(ADJUDICATION_PROMPT_NAME, ADJUDICATION_PROMPT)
-            ),
+            "opik_prompt_version": MetadataValue.text(opik_prompt_version),
         },
     )
     yield churn_check(
