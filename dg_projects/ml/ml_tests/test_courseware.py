@@ -52,6 +52,29 @@ def test_verify_passage_unknown_source():
     assert verify_passage("anything at all", None).status == "unknown_source"
 
 
+def test_verify_passage_matches_whole_words_only():
+    assert verify_passage("art", "the start of the course").status == "unverified"
+    assert verify_passage("art", "the art of the course").status == "exact"
+
+
+@pytest.mark.parametrize(
+    ("source", "passage", "quoted"),
+    [
+        # the source keeps a ligature, a superscript and a sharp s that NFKC and
+        # casefolding rewrite in the passage
+        ("the \ufb01rst moment is x\u00b2", "the \ufb01rst moment is x\u00b2", None),
+        ("the \ufb01rst moment", "The first moment", None),
+        ("die Stra\u00dfe ist lang", "STRASSE ist lang", "Stra\u00dfe ist lang"),
+        ("a cafe\u0301 menu", "caf\u00e9 menu", "cafe\u0301 menu"),
+    ],
+)
+def test_verify_passage_normalizes_the_source_like_the_passage(source, passage, quoted):
+    match = verify_passage(passage, source)
+    assert match.status == "exact"
+    expected = quoted or source
+    assert source[match.char_start : match.char_end] == expected
+
+
 def _rows(texts: list[str], scope_kind: str = "unit") -> pl.DataFrame:
     return pl.DataFrame(
         {

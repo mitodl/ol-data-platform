@@ -6,6 +6,7 @@ source_text), so a claim's evidence can be located from SQL without this code.
 
 import re
 import unicodedata
+from functools import lru_cache
 from typing import Literal, NamedTuple
 
 VerificationStatus = Literal["exact", "fuzzy", "unverified", "unknown_source"]
@@ -23,16 +24,52 @@ class PassageMatch(NamedTuple):
     char_end: int | None = None
 
 
+class _Normalized(NamedTuple):
+    text: str
+    # for each character of text, the span of the original it came from
+    starts: list[int]
+    ends: list[int]
+
+
+@lru_cache(maxsize=64)
+def _normalize(text: str) -> _Normalized:
+    """NFKC and casefold, one base character and its combining marks at a time.
+
+    Normalizing in pieces keeps a map back to the original offsets, which a
+    normalized copy of the whole text would lose when a character expands
+    ("\u00df" to "ss") or a ligature splits.
+    """
+    pieces: list[str] = []
+    starts: list[int] = []
+    ends: list[int] = []
+    start = 0
+    for end in range(1, len(text) + 1):
+        if end < len(text) and unicodedata.combining(text[end]):
+            continue
+        piece = unicodedata.normalize("NFKC", text[start:end]).casefold()
+        pieces.append(piece)
+        starts.extend([start] * len(piece))
+        ends.extend([end] * len(piece))
+        start = end
+    return _Normalized("".join(pieces), starts, ends)
+
+
 def _words(text: str) -> list[str]:
-    return _WORD.findall(unicodedata.normalize("NFKC", text).casefold())
+    return _WORD.findall(_normalize(text).text)
 
 
 def _span(passage_words: list[str], source: str) -> tuple[int, int] | None:
-    """Find the passage's words in order in the source, ignoring everything between."""
-    pattern = r"\W+".join(re.escape(word) for word in passage_words)
-    # the original text, not a normalized copy, so the offsets index source_text
-    match = re.search(pattern, source, re.IGNORECASE)
-    return (match.start(), match.end()) if match else None
+    """Find the passage's words in order in the source, ignoring everything between.
+
+    The source is normalized the same way as the passage, and the match is mapped
+    back so the offsets index the original source_text.
+    """
+    pattern = r"\b" + r"\W+".join(re.escape(word) for word in passage_words) + r"\b"
+    normalized = _normalize(source)
+    match = re.search(pattern, normalized.text)
+    if not match:
+        return None
+    return normalized.starts[match.start()], normalized.ends[match.end() - 1]
 
 
 def _trigrams(words: list[str]) -> set[tuple[str, ...]]:
