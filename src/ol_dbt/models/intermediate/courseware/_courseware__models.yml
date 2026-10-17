@@ -81,9 +81,9 @@ models:
     description: boolean, whether the extraction's extractor, prompt, schema, model
       and effort are the ones promoted for its run
   - name: is_retired
-    description: boolean, whether the scope part is gone from the course (its scope
-      was deleted, or it is past the scope's current part count); a retired extraction
-      is never current
+    description: boolean, whether the scope part is gone from the course (its sequential
+      is no longer in the run's latest structure, or the part is past the scope's
+      current part count); a retired extraction is never current
   - name: is_current
     description: boolean, whether this is the newest extraction of its scope part
       under the promoted version, and the part is not retired
@@ -477,33 +477,48 @@ unit_tests:
 - name: test_int__courseware__extractions_follows_the_current_course
   description: >
     The extraction key leaves position out, so a reordered course keeps its stored
-    extractions. A scope the sources still list takes its position from them; one
-    they no longer list keeps the position stored at extraction, and is retired
-    when its run is in the sources. A scope that shrank from two parts to one
-    retires its old part 2. A run the sources leave out (var('courseware_courseruns'))
-    keeps its extractions current.
+    extractions; a scope the sources list takes its position from them, and one they
+    do not keeps the position stored at extraction. A sequential gone from the run's
+    latest structure is retired, but one still in the structure whose text is missing
+    from the sources is not, and neither is the context scope. A scope that shrank
+    from two parts to one retires its old part 2. A run with no structure keeps its
+    extractions current.
   model: int__courseware__extractions
   given:
   - input: source('courseware_intermediate', 'courseware_claim_extraction')
     rows:
     - {extraction_key: moved, extractor_id: x, prompt_version: p, schema_version: s,
       model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: run,
-      scope_id: seq-1, scope_part: 1, scope_part_count: 1, scope_position: 1, extracted_at: '2026-10-16T00:00:00'}
+      scope_id: seq-1, scope_kind: unit, scope_part: 1, scope_part_count: 1, scope_position: 1,
+      extracted_at: '2026-10-16T00:00:00'}
     - {extraction_key: removed, extractor_id: x, prompt_version: p, schema_version: s,
       model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: run,
-      scope_id: seq-gone, scope_part: 1, scope_part_count: 1, scope_position: 2, extracted_at: '2026-10-16T00:00:00'}
+      scope_id: seq-gone, scope_kind: unit, scope_part: 1, scope_part_count: 1, scope_position: 2,
+      extracted_at: '2026-10-16T00:00:00'}
+    - {extraction_key: textless, extractor_id: x, prompt_version: p, schema_version: s,
+      model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: run,
+      scope_id: seq-4, scope_kind: unit, scope_part: 1, scope_part_count: 1, scope_position: 6,
+      extracted_at: '2026-10-16T00:00:00'}
+    - {extraction_key: context, extractor_id: x, prompt_version: p, schema_version: s,
+      model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: run,
+      scope_id: context, scope_kind: context, scope_part: 1, scope_part_count: 1,
+      scope_position: 0, extracted_at: '2026-10-16T00:00:00'}
     - {extraction_key: shrunk_old_1, extractor_id: x, prompt_version: p, schema_version: s,
       model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: run,
-      scope_id: seq-3, scope_part: 1, scope_part_count: 2, scope_position: 4, extracted_at: '2026-10-15T00:00:00'}
+      scope_id: seq-3, scope_kind: unit, scope_part: 1, scope_part_count: 2, scope_position: 4,
+      extracted_at: '2026-10-15T00:00:00'}
     - {extraction_key: shrunk_old_2, extractor_id: x, prompt_version: p, schema_version: s,
       model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: run,
-      scope_id: seq-3, scope_part: 2, scope_part_count: 2, scope_position: 4, extracted_at: '2026-10-15T00:00:00'}
+      scope_id: seq-3, scope_kind: unit, scope_part: 2, scope_part_count: 2, scope_position: 4,
+      extracted_at: '2026-10-15T00:00:00'}
     - {extraction_key: shrunk_new_1, extractor_id: x, prompt_version: p, schema_version: s,
       model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: run,
-      scope_id: seq-3, scope_part: 1, scope_part_count: 1, scope_position: 4, extracted_at: '2026-10-16T00:00:00'}
+      scope_id: seq-3, scope_kind: unit, scope_part: 1, scope_part_count: 1, scope_position: 4,
+      extracted_at: '2026-10-16T00:00:00'}
     - {extraction_key: unlisted_run, extractor_id: x, prompt_version: p, schema_version: s,
       model_id: m, effort: medium, platform: mitxonline, courserun_readable_id: other-run,
-      scope_id: seq-1, scope_part: 1, scope_part_count: 1, scope_position: 5, extracted_at: '2026-10-16T00:00:00'}
+      scope_id: seq-1, scope_kind: unit, scope_part: 1, scope_part_count: 1, scope_position: 5,
+      extracted_at: '2026-10-16T00:00:00'}
   - input: ref('courseware_extraction_promotions')
     rows:
     - {platform: mitxonline, courserun_readable_id: null, extractor_id: x, prompt_version: p,
@@ -513,10 +528,24 @@ unit_tests:
     - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-1, scope_position: 3}
     - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-new, scope_position: 1}
     - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-3, scope_position: 4}
+  - input: ref('dim_course_content')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, block_id: seq-1, block_category: sequential,
+      is_latest: true}
+    - {platform: mitxonline, courserun_readable_id: run, block_id: seq-3, block_category: sequential,
+      is_latest: true}
+    - {platform: mitxonline, courserun_readable_id: run, block_id: seq-4, block_category: sequential,
+      is_latest: true}
+    - {platform: mitxonline, courserun_readable_id: run, block_id: seq-new, block_category: sequential,
+      is_latest: true}
+    - {platform: mitxonline, courserun_readable_id: run, block_id: seq-gone, block_category: sequential,
+      is_latest: false}
   expect:
     rows:
     - {extraction_key: moved, scope_position: 3, is_retired: false, is_current: true}
     - {extraction_key: removed, scope_position: 2, is_retired: true, is_current: false}
+    - {extraction_key: textless, scope_position: 6, is_retired: false, is_current: true}
+    - {extraction_key: context, scope_position: 0, is_retired: false, is_current: true}
     - {extraction_key: shrunk_old_1, scope_position: 4, is_retired: false, is_current: false}
     - {extraction_key: shrunk_old_2, scope_position: 4, is_retired: true, is_current: false}
     - {extraction_key: shrunk_new_1, scope_position: 4, is_retired: false, is_current: true}
