@@ -40,7 +40,9 @@
     counted as linked for materials. A solution page with child pages keeps them as a
     unit, unread itself. Quiz solutions, correctness icons and answer, hint and sample
     answer reveal blocks are cut from page HTML before its links are read. A document
-    linked from more than one scope is read once, in the first unit.
+    linked from more than one scope is read once, in the first unit. A link to another
+    course's resource is left to that course: it is not read here and does not count as
+    linked there.
 
     var('courseware_ocw_courses') selects OCW courses by slug. Without it a build reads
     no OCW course, since the allowlist does not cover OCW yet. Setting either selector
@@ -586,7 +588,9 @@ with content as (
         , {{ dbt.hash('files.body') }} as text_hash
     from ocw_files as files
     inner join ocw_solution_resources as solution_resources
-        on files.content_file_key = solution_resources.content_file_key
+        on
+            files.courserun_readable_id = solution_resources.courserun_readable_id
+            and files.content_file_key = solution_resources.content_file_key
     -- a scan with no text layer reads as its file name, which a problem set can share
     where length(files.body) > 200
 )
@@ -609,7 +613,9 @@ with content as (
         end as source_kind
     from ocw_files as files
     left join ocw_solution_resources as solution_resources
-        on files.content_file_key = solution_resources.content_file_key
+        on
+            files.courserun_readable_id = solution_resources.courserun_readable_id
+            and files.content_file_key = solution_resources.content_file_key
     left join ocw_solution_texts as solution_texts
         on
             files.courserun_readable_id = solution_texts.courserun_readable_id
@@ -853,7 +859,9 @@ with content as (
     inner join ocw_pages as pages
         on page_links.page_key = pages.page_key
     inner join ocw_resources as resources
-        on page_links.target_key = resources.content_file_key
+        on
+            page_links.courserun_readable_id = resources.courserun_readable_id
+            and page_links.target_key = resources.content_file_key
     where page_links.page_role = 'context'
 
     union all
@@ -901,7 +909,9 @@ with content as (
     inner join ocw_unit_members as members
         on unit_links.page_key = members.page_key
     inner join ocw_resources as resources
-        on unit_links.target_key = resources.content_file_key
+        on
+            unit_links.courserun_readable_id = resources.courserun_readable_id
+            and unit_links.target_key = resources.content_file_key
 
     union all
 
@@ -917,7 +927,9 @@ with content as (
         , resources.resource_text as source_text
     from ocw_session_links as session_links
     inner join ocw_resources as resources
-        on session_links.target_key = resources.content_file_key
+        on
+            session_links.courserun_readable_id = resources.courserun_readable_id
+            and session_links.target_key = resources.content_file_key
 
     union all
 
@@ -934,13 +946,24 @@ with content as (
         , resources.resource_text as source_text
     from ocw_resources as resources
     left join (
-        select distinct target_key
+        select distinct
+            courserun_readable_id
+            , target_key
         from ocw_page_links
         where page_role not in ('skipped', 'solution')
     ) as linked
-        on resources.content_file_key = linked.target_key
-    left join (select distinct target_key from ocw_session_links) as session_linked
-        on resources.content_file_key = session_linked.target_key
+        on
+            resources.courserun_readable_id = linked.courserun_readable_id
+            and resources.content_file_key = linked.target_key
+    left join (
+        select distinct
+            courserun_readable_id
+            , target_key
+        from ocw_session_links
+    ) as session_linked
+        on
+            resources.courserun_readable_id = session_linked.courserun_readable_id
+            and resources.content_file_key = session_linked.target_key
     where
         linked.target_key is null
         and session_linked.target_key is null
