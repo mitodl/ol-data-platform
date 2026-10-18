@@ -6,6 +6,8 @@ models:
   description: The text the courseware claim extractor reads, one row per source item
     of each scope (a sequential, the course context, or the course documents) of an
     Open edX course run, in reading order. Problem text is the question side only.
+    Module overview and summary sequentials are read in the context scope, as in mit-learn's
+    unit builder.
   config:
     meta:
       # The text it reads (raw__openedx__s3__course_transcript_text and
@@ -34,7 +36,8 @@ models:
   - name: scope_title
     description: str, the sequential's title or the scope's name
   - name: scope_position
-    description: int, the scope's order in the course; 0 for context, 9999 for materials
+    description: int, the unit's order among the run's units, from 1; 0 for context,
+      9999 for materials
   - name: source_position
     description: int, the source's order within its scope, from 1
   - name: source_ref
