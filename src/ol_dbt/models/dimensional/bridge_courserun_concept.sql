@@ -21,6 +21,16 @@
       - direction_consistency, prior_scope_count over that plus taught_scope_count
         (the scopes that teach it later, which says the run covers it itself), is at
         least courseware_prerequisite_min_direction_consistency.
+
+    A tool the run introduces is not a requirement either (unpublished_reason
+    introduced_by_run): a concept whose kind is tool, that the run's units only use
+    (no unit says learners should already know it), and that no other course teaches
+    or reviews. Courses demonstrate libraries such as scikit-learn and Seaborn as they
+    go, so requiring them would leave a prerequisite no course could ever satisfy.
+    Where the tool first appears does not separate these cases: on the pilot, the
+    introduced tools first appear between the 4th and 10th unit, like pandas, which an
+    earlier course teaches and which stays a requirement.
+
     Unpublished candidates keep their rows, with unpublished_reason, for review.
     Declared requirements and the other relations are always published.
 #}
@@ -42,6 +52,27 @@ with mentions as (
 , course_runs as (
     select * from {{ ref('dim_course_run') }}
     where is_current
+)
+
+, concepts as (
+    select * from {{ ref('dim_concept') }}
+)
+
+-- the course each run belongs to, so a course's reruns count once. A run with no
+-- course_fk (e.g. residential) is keyed by its course's readable id.
+, run_courses as (
+    select distinct
+        mentions.platform
+        , mentions.courserun_readable_id
+        , coalesce(
+            course_runs.course_fk
+            , concat(mentions.platform, '|', {{ courserun_course_readable_id('mentions.courserun_readable_id') }})
+        ) as course_key
+    from mentions
+    left join course_runs
+        on
+            mentions.platform = course_runs.platform
+            and mentions.courserun_readable_id = course_runs.courserun_readable_id
 )
 
 , direct_relations as (
@@ -93,6 +124,7 @@ with mentions as (
         , scope_id
         , min(scope_position) as relied_position
         , count(*) as claim_count
+        , count(case when claim_kind = 'assumed_knowledge' then 1 end) as assumed_claim_count
     from mentions
     where
         scope_kind = 'unit'
@@ -112,6 +144,7 @@ with mentions as (
         , relied_on.concept_id
         , min(relied_on.relied_position) as first_scope_position
         , sum(relied_on.claim_count) as claim_count
+        , sum(relied_on.assumed_claim_count) as assumed_claim_count
         , count(*) as scope_count
         , sum(
             case
@@ -135,32 +168,66 @@ with mentions as (
         or max(first_taught.first_taught_position) > min(relied_on.relied_position)
 )
 
+-- candidates some other course teaches or reviews, outside its context scope
+, taught_elsewhere as (
+    select distinct
+        inferred_candidates.platform
+        , inferred_candidates.courserun_readable_id
+        , inferred_candidates.concept_id
+    from inferred_candidates
+    inner join run_courses
+        on
+            inferred_candidates.platform = run_courses.platform
+            and inferred_candidates.courserun_readable_id = run_courses.courserun_readable_id
+    inner join mentions as teaching
+        on
+            inferred_candidates.concept_id = teaching.concept_id
+            and teaching.claim_kind = 'concept'
+            and teaching.teaching_status in ('taught', 'reviewed')
+            and teaching.scope_kind != 'context'
+    inner join run_courses as teaching_courses
+        on
+            teaching.platform = teaching_courses.platform
+            and teaching.courserun_readable_id = teaching_courses.courserun_readable_id
+    where teaching_courses.course_key != run_courses.course_key
+)
+
 , inferred_directions as (
     select
-        *
-        , cast(prior_scope_count as double) / (prior_scope_count + taught_scope_count) as direction_consistency
+        inferred_candidates.*
+        , cast(inferred_candidates.prior_scope_count as double)
+        / (inferred_candidates.prior_scope_count + inferred_candidates.taught_scope_count) as direction_consistency
+        , coalesce(
+            concepts.concept_kind = 'tool'
+            and inferred_candidates.assumed_claim_count = 0
+            and taught_elsewhere.concept_id is null
+            , false
+        ) as is_introduced_by_run
     from inferred_candidates
+    left join concepts
+        on inferred_candidates.concept_id = concepts.concept_pk
+    left join taught_elsewhere
+        on
+            inferred_candidates.platform = taught_elsewhere.platform
+            and inferred_candidates.courserun_readable_id = taught_elsewhere.courserun_readable_id
+            and inferred_candidates.concept_id = taught_elsewhere.concept_id
 )
 
 -- courses that require each concept, for cross-course support: declared, or inferred
--- by a run whose own evidence points the right way. A run with no course_fk (e.g.
--- residential) is keyed by its course's readable id.
+-- by a run whose own evidence points the right way and that does not introduce it
 , requiring_courses as (
     select
         requiring.concept_id
-        , count(
-            distinct coalesce(
-                course_runs.course_fk
-                , concat(requiring.platform, '|', {{ courserun_course_readable_id('requiring.courserun_readable_id') }})
-            )
-        ) as course_support
+        , count(distinct run_courses.course_key) as course_support
     from (
         select
             platform
             , courserun_readable_id
             , concept_id
         from inferred_directions
-        where direction_consistency >= {{ var('courseware_prerequisite_min_direction_consistency') }}
+        where
+            direction_consistency >= {{ var('courseware_prerequisite_min_direction_consistency') }}
+            and not is_introduced_by_run
         union all
         select
             platform
@@ -169,10 +236,10 @@ with mentions as (
         from direct_relations
         where relation = 'requires'
     ) as requiring
-    left join course_runs
+    inner join run_courses
         on
-            requiring.platform = course_runs.platform
-            and requiring.courserun_readable_id = course_runs.courserun_readable_id
+            requiring.platform = run_courses.platform
+            and requiring.courserun_readable_id = run_courses.courserun_readable_id
     group by requiring.concept_id
 )
 
@@ -190,6 +257,7 @@ with mentions as (
         , inferred_directions.taught_scope_count
         , coalesce(requiring_courses.course_support, 0) as course_support
         , inferred_directions.direction_consistency
+        , inferred_directions.is_introduced_by_run
     from inferred_directions
     left join requiring_courses
         on inferred_directions.concept_id = requiring_courses.concept_id
@@ -209,6 +277,7 @@ with mentions as (
         , cast(null as bigint) as taught_scope_count
         , cast(null as bigint) as course_support
         , cast(null as double) as direction_consistency
+        , false as is_introduced_by_run
     from direct_relations
     group by platform, courserun_readable_id, concept_id, relation, requirement_source
 
@@ -221,6 +290,7 @@ with mentions as (
     select
         *
         , case
+            when is_introduced_by_run then 'introduced_by_run'
             when
                 requirement_source = 'inferred'
                 and prior_scope_count < {{ var('courseware_prerequisite_min_scope_support') }}

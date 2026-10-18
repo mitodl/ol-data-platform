@@ -555,11 +555,13 @@ models:
     tests:
     - not_null
   - name: unpublished_reason
-    description: str, inferred requires only, insufficient_support or contested_direction
-      when the requirement is not published
+    description: str, inferred requires only, why the requirement is not published.
+      introduced_by_run for a tool the run's units only use, that no other course
+      teaches or reviews (the run introduces it); otherwise insufficient_support or
+      contested_direction
     tests:
     - accepted_values:
-        values: [insufficient_support, contested_direction]
+        values: [introduced_by_run, insufficient_support, contested_direction]
 
 - name: bridge_courserun_prerequisite_coverage
   description: Which other course runs cover each concept a course run requires, directly,
