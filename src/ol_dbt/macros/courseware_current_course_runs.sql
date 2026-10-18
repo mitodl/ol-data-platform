@@ -1,11 +1,13 @@
 {#
     Current course runs with course_key, the key that decides which runs are the same
-    course when one course's runs cover another's prerequisites:
+    course, both when one course's runs cover another's prerequisites and when courses
+    corroborate an inferred requirement (bridge_courserun_concept course_support):
     dim_course.course_readable_id, or, when course_fk is null (edxorg runs until edxorg
     courses load, and courses missing from dim_course), courserun_course_readable_id,
     the run id less its last segment. It leaves out the platform: dim_course keys a
     course on (primary_platform, course_readable_id), so course_fk alone would let an
-    edxorg and a mitxonline copy with the same readable id cover each other.
+    edxorg and a mitxonline copy with the same readable id cover each other, or count
+    as two courses of support.
 #}
 {% macro courseware_current_course_runs() -%}
     select

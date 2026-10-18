@@ -542,10 +542,10 @@ models:
     description: int, inferred requires only, scopes of the run that teach the concept
       (all after the first reliance), the contrary evidence
   - name: course_support
-    description: int, inferred requires only, distinct courses (course_fk, or for
-      a run without one the platform and the run id less its run segment) with a run
-      that declares the concept or infers it with a direction_consistency clearing
-      the threshold and does not introduce it (introduced_by_run), this run included
+    description: int, inferred requires only, distinct courses, keyed as bridge_courserun_prerequisite_coverage
+      keys them (course_key, across platforms), with a run that declares the concept
+      or infers it with a direction_consistency clearing the threshold and does not
+      introduce it (introduced_by_run), this run included
   - name: direction_consistency
     description: float, inferred requires only, prior_scope_count / (prior_scope_count
       + taught_scope_count)

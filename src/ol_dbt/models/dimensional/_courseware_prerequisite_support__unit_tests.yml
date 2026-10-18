@@ -79,6 +79,55 @@ unit_tests:
     - {courserun_fk: r1, concept_fk: y, course_support: 2, is_published: true}
     - {courserun_fk: r3, concept_fk: y, course_support: 2, is_published: true}
 
+- name: test_bridge_courserun_concept_counts_a_courses_platform_copies_once
+  description: >
+    6.86x has a mitxonline run and two edxorg runs with the same course id, one
+    linked to an edxorg dim_course row and one with no course_fk. x is assumed in
+    one unit of each, which coverage counts as one course, so no run publishes it.
+    y is assumed in one unit of 6.86x's mitxonline run and one of 6.36x, two
+    courses, so both publish it.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:MITx+6.86x+1T2026",
+      scope_id: u1, scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge,
+      concept_id: x}
+    - {platform: edxorg, courserun_readable_id: "course-v1:MITx+6.86x+2T2025", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: x}
+    - {platform: edxorg, courserun_readable_id: "course-v1:MITx+6.86x+1T2025", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: x}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:MITx+6.86x+1T2026",
+      scope_id: u2, scope_kind: unit, scope_position: 2, claim_kind: assumed_knowledge,
+      concept_id: y}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:MITx+6.36x+1T2026",
+      scope_id: u1, scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge,
+      concept_id: y}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: rm, course_fk: cm, platform: mitxonline, courserun_readable_id: "course-v1:MITx+6.86x+1T2026",
+      is_current: true}
+    - {courserun_pk: re, course_fk: ce, platform: edxorg, courserun_readable_id: "course-v1:MITx+6.86x+2T2025",
+      is_current: true}
+    - {courserun_pk: rn, course_fk: null, platform: edxorg, courserun_readable_id: "course-v1:MITx+6.86x+1T2025",
+      is_current: true}
+    - {courserun_pk: rs, course_fk: cs, platform: mitxonline, courserun_readable_id: "course-v1:MITx+6.36x+1T2026",
+      is_current: true}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: cm, course_readable_id: "course-v1:MITx+6.86x", is_current: true}
+    - {course_pk: ce, course_readable_id: "course-v1:MITx+6.86x", is_current: true}
+    - {course_pk: cs, course_readable_id: "course-v1:MITx+6.36x", is_current: true}
+  - input: ref('dim_concept')
+    rows: []
+  expect:
+    rows:
+    - {courserun_fk: rm, concept_fk: x, course_support: 1, is_published: false}
+    - {courserun_fk: re, concept_fk: x, course_support: 1, is_published: false}
+    - {courserun_fk: rn, concept_fk: x, course_support: 1, is_published: false}
+    - {courserun_fk: rm, concept_fk: y, course_support: 2, is_published: true}
+    - {courserun_fk: rs, concept_fk: y, course_support: 2, is_published: true}
+
 - name: test_bridge_courserun_concept_treats_a_tool_no_course_teaches_as_introduced
   description: >
     Course A uses the tools sk, pd, nb, mp, jn and gt and the concept sd in two units
