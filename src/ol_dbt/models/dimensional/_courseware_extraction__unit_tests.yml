@@ -1,0 +1,41 @@
+---
+unit_tests:
+- name: test_dim_courseware_extraction_flags_a_header_changed_since_extraction
+  description: >
+    The run was last read with header h2, so its h1 extraction is stale and its
+    h2 one is not. An extraction from before header_version was recorded, and a
+    run never read, are unknown (null).
+  model: dim_courseware_extraction
+  given:
+  - input: source('courseware_intermediate', 'courseware_claim_extraction')
+    rows:
+    - {extraction_key: old_header, platform: mitxonline, courserun_readable_id: run,
+      scope_id: seq-1, header_version: h1}
+    - {extraction_key: same_header, platform: mitxonline, courserun_readable_id: run,
+      scope_id: seq-2, header_version: h2}
+    - {extraction_key: unrecorded, platform: mitxonline, courserun_readable_id: run,
+      scope_id: seq-3, header_version: null}
+    - {extraction_key: never_read, platform: mitxonline, courserun_readable_id: other-run,
+      scope_id: seq-1, header_version: h1}
+  - input: ref('int__courseware__extractions')
+    rows:
+    - {extraction_key: old_header}
+    - {extraction_key: same_header}
+    - {extraction_key: unrecorded}
+    - {extraction_key: never_read}
+  - input: ref('int__courseware__latest_scope_inputs')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-1, scope_part: 1,
+      header_version: h2}
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: seq-2, scope_part: 1,
+      header_version: h2}
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_course_content')
+    rows: []
+  expect:
+    rows:
+    - {extraction_key: old_header, current_header_version: h2, is_header_stale: true}
+    - {extraction_key: same_header, current_header_version: h2, is_header_stale: false}
+    - {extraction_key: unrecorded, current_header_version: h2, is_header_stale: null}
+    - {extraction_key: never_read, current_header_version: null, is_header_stale: null}

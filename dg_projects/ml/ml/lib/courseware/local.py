@@ -314,7 +314,12 @@ def _latest_run(
 
 def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
     previous = _existing(output_dir, table)
-    combined = new_rows if previous is None else pl.concat([previous, new_rows])
+    # diagonal: a file written before a column was added gets it as null
+    combined = (
+        new_rows
+        if previous is None
+        else pl.concat([previous, new_rows], how="diagonal")
+    )
     combined.write_parquet(output_dir / f"{table}.parquet")
 
 

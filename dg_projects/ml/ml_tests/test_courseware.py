@@ -445,7 +445,12 @@ def test_scope_inputs_match_what_an_extraction_of_the_part_stores(tmp_path, caps
     observed = (
         scope_inputs(built).filter(pl.col("scope_id") == "seq-1").row(0, named=True)
     )
-    columns = ("scope_part", "scope_part_count", "input_text_checksum")
+    columns = (
+        "scope_part",
+        "scope_part_count",
+        "input_text_checksum",
+        "header_version",
+    )
     assert {c: observed[c] for c in columns} == {c: extraction[c] for c in columns}
     assert scope_inputs(built)["observed_at"].n_unique() == 1
     # observe records every scope of the run, and a dry run records nothing
@@ -456,6 +461,21 @@ def test_scope_inputs_match_what_an_extraction_of_the_part_stores(tmp_path, caps
     local.observe(sources, tmp_path / "out")
     stored = pl.read_parquet(tmp_path / "out" / "courseware_scope_input.parquet")
     assert sorted(stored["scope_id"]) == ["context", "seq-1", "seq-2"]
+    capsys.readouterr()
+
+
+def test_observe_appends_to_a_scope_input_file_without_header_version(tmp_path, capsys):
+    rows = _course_rows("About it.", "Lecture 2", "some text")
+    sources = tmp_path / "sources.parquet"
+    rows.write_parquet(sources)
+    (tmp_path / "out").mkdir()
+    scope_inputs(scopes.build_scopes(rows)).drop("header_version").write_parquet(
+        tmp_path / "out" / "courseware_scope_input.parquet"
+    )
+    local.observe(sources, tmp_path / "out")
+    stored = pl.read_parquet(tmp_path / "out" / "courseware_scope_input.parquet")
+    assert stored["header_version"].null_count() == stored.height // 2
+    assert stored["header_version"].drop_nulls().n_unique() == 1
     capsys.readouterr()
 
 

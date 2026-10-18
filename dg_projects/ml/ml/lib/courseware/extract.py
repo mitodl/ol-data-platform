@@ -136,7 +136,9 @@ EVIDENCE_SCHEMA = {
 # One row per scope part as the extractor last read it. dbt picks each scope's
 # current extraction by matching input_text_checksum and the split, which only
 # Python computes (the sources block and the split by input budget), and which a
-# skipped scope otherwise leaves no trace of.
+# skipped scope otherwise leaves no trace of. header_version is the course header
+# as read, so dbt can flag a current extraction made under an older header (the key
+# leaves the header out, so a header edit alone re-extracts nothing).
 SCOPE_INPUT_SCHEMA = {
     "platform": pl.String,
     "courserun_readable_id": pl.String,
@@ -144,6 +146,7 @@ SCOPE_INPUT_SCHEMA = {
     "scope_part": pl.Int64,
     "scope_part_count": pl.Int64,
     "input_text_checksum": pl.String,
+    "header_version": pl.String,
     "observed_at": pl.Datetime(time_zone="UTC"),
 }
 
@@ -277,6 +280,7 @@ def scope_inputs(scopes: Iterable[Scope]) -> pl.DataFrame:
                 "scope_part": scope.part,
                 "scope_part_count": scope.part_count,
                 "input_text_checksum": scope.input_text_checksum,
+                "header_version": header_version(scope.course),
                 "observed_at": observed_at,
             }
             for scope in scopes
