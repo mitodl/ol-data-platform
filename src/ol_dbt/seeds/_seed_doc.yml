@@ -238,6 +238,10 @@ seeds:
         - platform
         - course_readable_id
         - courserun_readable_id
+  # A row naming both would tie with the run's own row, and the build would pick
+  # one of the two versions arbitrarily.
+  - dbt_utils.expression_is_true:
+      expression: course_readable_id is null or courserun_readable_id is null
   columns:
   - name: platform
     description: str, mitxonline, mitxpro or residential
