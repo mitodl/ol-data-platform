@@ -13,7 +13,9 @@
     title. OCW resources are judged by courseware_ocw_answer_resource, by their
     learning resource types and their directory name; pages are not listed, since a
     page's answers are cut from it rather than the page dropped. A source's latest
-    verdict is the one shown.
+    verdict is the one shown, and only while the source is still read or the rule
+    excludes it: the verdict log is append-only, so a document since removed from
+    the export would otherwise stay flagged.
 #}
 {% set courseruns = var('courseware_courseruns', []) %}
 {% set courserun_filter = "('" ~ courseruns | join("', '") ~ "')" if courseruns else none %}
@@ -109,6 +111,14 @@ with openedx_documents as (
     where check_rank = 1 and is_answer_document
 )
 
+, current_sources as (
+    select distinct
+        platform
+        , courserun_readable_id
+        , source_ref
+    from {{ ref('int__courseware__extraction_sources') }}
+)
+
 select
     coalesce(rule_exclusions.platform, model_flags.platform) as platform
     , coalesce(rule_exclusions.courserun_readable_id, model_flags.courserun_readable_id) as courserun_readable_id
@@ -132,3 +142,9 @@ full outer join model_flags
         rule_exclusions.platform = model_flags.platform
         and rule_exclusions.courserun_readable_id = model_flags.courserun_readable_id
         and rule_exclusions.source_ref = model_flags.source_ref
+left join current_sources
+    on
+        model_flags.platform = current_sources.platform
+        and model_flags.courserun_readable_id = current_sources.courserun_readable_id
+        and model_flags.source_ref = current_sources.source_ref
+where rule_exclusions.source_ref is not null or current_sources.source_ref is not null

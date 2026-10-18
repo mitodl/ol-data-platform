@@ -161,6 +161,14 @@ unit_tests:
     - {platform: mitxonline, courserun_readable_id: r1, source_ref: static/ps5.pdf,
       source_title: ps5.pdf, is_answer_document: true, reason: solutions, check_version: v2,
       model_id: m, checked_at: "2026-10-02T00:00:00"}
+    # removed from the export since its verdict, so nothing is left to review
+    - {platform: mitxonline, courserun_readable_id: r1, source_ref: static/removed.pdf,
+      source_title: removed.pdf, is_answer_document: true, reason: answers, check_version: v2,
+      model_id: m, checked_at: "2026-10-02T00:00:00"}
+  - input: ref('int__courseware__extraction_sources')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: r1, source_ref: static/ps_2003.pdf}
+    - {platform: mitxonline, courserun_readable_id: r1, source_ref: static/reading3.pdf}
   expect:
     rows:
     - {platform: mitxonline, source_ref: static/QCRx1_Assessment Answer Key.pdf, review_reason: excluded_by_rule,
