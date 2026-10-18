@@ -544,21 +544,22 @@ models:
     description: int, inferred requires only, distinct courses (course_fk, or for
       a run without one the platform and the run id less its run segment) with a run
       that declares the concept or infers it with a direction_consistency clearing
-      the threshold, this run included
+      the threshold and does not introduce it (introduced_by_run), this run included
   - name: direction_consistency
     description: float, inferred requires only, prior_scope_count / (prior_scope_count
       + taught_scope_count)
   - name: is_published
     description: boolean, whether the relation clears the publishing rule; inferred
-      requires needs the courseware_prerequisite_* support and direction thresholds,
-      every other relation is published
+      requires needs the courseware_prerequisite_* support and direction thresholds
+      and must not be a tool the run introduces, every other relation is published
     tests:
     - not_null
   - name: unpublished_reason
     description: str, inferred requires only, why the requirement is not published.
-      introduced_by_run for a tool the run's units only use, that no other course
-      teaches or reviews (the run introduces it); otherwise insufficient_support or
-      contested_direction
+      introduced_by_run for a tool the run only uses (no claim of the run assumes
+      it or declares it a prerequisite or recommended background) and no other course,
+      as bridge_courserun_prerequisite_coverage keys courses, teaches or reviews (the
+      run introduces it); otherwise insufficient_support or contested_direction
     tests:
     - accepted_values:
         values: [introduced_by_run, insufficient_support, contested_direction]

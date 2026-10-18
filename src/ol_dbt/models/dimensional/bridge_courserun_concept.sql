@@ -23,13 +23,17 @@
         least courseware_prerequisite_min_direction_consistency.
 
     A tool the run introduces is not a requirement either (unpublished_reason
-    introduced_by_run): a concept whose kind is tool, that the run's units only use
-    (no unit says learners should already know it), and that no other course teaches
-    or reviews. Courses demonstrate libraries such as scikit-learn and Seaborn as they
+    introduced_by_run): a concept whose dim_concept.concept_kind is tool, that the run
+    only uses (no claim of the run, in any scope, assumes it or declares it a
+    prerequisite or recommended background), and that no other course teaches or
+    reviews. Courses demonstrate libraries such as scikit-learn and Seaborn as they
     go, so requiring them would leave a prerequisite no course could ever satisfy.
-    Where the tool first appears does not separate these cases: on the pilot, the
-    introduced tools first appear between the 4th and 10th unit, like pandas, which an
-    earlier course teaches and which stays a requirement.
+    "Other course" and "teaches or reviews" are as bridge_courserun_prerequisite_coverage
+    reads them (its course_key, which leaves out the platform, and any teaches or
+    reviews row), so a tool is introduced only where coverage would find no direct
+    provider. Where the tool first appears does not separate these cases: on the
+    pilot, the introduced tools first appear between the 4th and 10th unit, like
+    pandas, which an earlier course teaches and which stays a requirement.
 
     Unpublished candidates keep their rows, with unpublished_reason, for review.
     Declared requirements and the other relations are always published.
@@ -58,8 +62,15 @@ with mentions as (
     select * from {{ ref('dim_concept') }}
 )
 
+, courses as (
+    select * from {{ ref('dim_course') }}
+    where is_current
+)
+
 -- the course each run belongs to, so a course's reruns count once. A run with no
 -- course_fk (e.g. residential) is keyed by its course's readable id.
+-- coverage_course_key is bridge_courserun_prerequisite_coverage's course_key, which
+-- leaves out the platform.
 , run_courses as (
     select distinct
         mentions.platform
@@ -68,11 +79,17 @@ with mentions as (
             course_runs.course_fk
             , concat(mentions.platform, '|', {{ courserun_course_readable_id('mentions.courserun_readable_id') }})
         ) as course_key
+        , coalesce(
+            courses.course_readable_id
+            , {{ courserun_course_readable_id('mentions.courserun_readable_id') }}
+        ) as coverage_course_key
     from mentions
     left join course_runs
         on
             mentions.platform = course_runs.platform
             and mentions.courserun_readable_id = course_runs.courserun_readable_id
+    left join courses
+        on course_runs.course_fk = courses.course_pk
 )
 
 , direct_relations as (
@@ -124,7 +141,6 @@ with mentions as (
         , scope_id
         , min(scope_position) as relied_position
         , count(*) as claim_count
-        , count(case when claim_kind = 'assumed_knowledge' then 1 end) as assumed_claim_count
     from mentions
     where
         scope_kind = 'unit'
@@ -144,7 +160,6 @@ with mentions as (
         , relied_on.concept_id
         , min(relied_on.relied_position) as first_scope_position
         , sum(relied_on.claim_count) as claim_count
-        , sum(relied_on.assumed_claim_count) as assumed_claim_count
         , count(*) as scope_count
         , sum(
             case
@@ -168,7 +183,19 @@ with mentions as (
         or max(first_taught.first_taught_position) > min(relied_on.relied_position)
 )
 
--- candidates some other course teaches or reviews, outside its context scope
+-- concepts a run says learners should already know, in any scope
+, expected_by_run as (
+    select distinct
+        platform
+        , courserun_readable_id
+        , concept_id
+    from mentions
+    where
+        claim_kind = 'assumed_knowledge'
+        or (claim_kind = 'declared_prerequisite' and prerequisite_kind in ('prerequisite', 'recommended'))
+)
+
+-- candidates some other course teaches or reviews, as coverage would find them
 , taught_elsewhere as (
     select distinct
         inferred_candidates.platform
@@ -179,17 +206,15 @@ with mentions as (
         on
             inferred_candidates.platform = run_courses.platform
             and inferred_candidates.courserun_readable_id = run_courses.courserun_readable_id
-    inner join mentions as teaching
+    inner join direct_relations as teaching
         on
             inferred_candidates.concept_id = teaching.concept_id
-            and teaching.claim_kind = 'concept'
-            and teaching.teaching_status in ('taught', 'reviewed')
-            and teaching.scope_kind != 'context'
+            and teaching.relation in ('teaches', 'reviews')
     inner join run_courses as teaching_courses
         on
             teaching.platform = teaching_courses.platform
             and teaching.courserun_readable_id = teaching_courses.courserun_readable_id
-    where teaching_courses.course_key != run_courses.course_key
+    where teaching_courses.coverage_course_key != run_courses.coverage_course_key
 )
 
 , inferred_directions as (
@@ -199,13 +224,18 @@ with mentions as (
         / (inferred_candidates.prior_scope_count + inferred_candidates.taught_scope_count) as direction_consistency
         , coalesce(
             concepts.concept_kind = 'tool'
-            and inferred_candidates.assumed_claim_count = 0
+            and expected_by_run.concept_id is null
             and taught_elsewhere.concept_id is null
             , false
         ) as is_introduced_by_run
     from inferred_candidates
     left join concepts
         on inferred_candidates.concept_id = concepts.concept_pk
+    left join expected_by_run
+        on
+            inferred_candidates.platform = expected_by_run.platform
+            and inferred_candidates.courserun_readable_id = expected_by_run.courserun_readable_id
+            and inferred_candidates.concept_id = expected_by_run.concept_id
     left join taught_elsewhere
         on
             inferred_candidates.platform = taught_elsewhere.platform
