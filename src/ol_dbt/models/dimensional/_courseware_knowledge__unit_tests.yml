@@ -235,20 +235,20 @@ unit_tests:
   expect:
     rows:
     - {courserun_fk: ra, concept_fk: x, prerequisite_depth: 1, prerequisite_source: declared,
-      required_concept_count: 1, provider_courserun_fk: rb, match_type: direct, provider_support: 3,
-      provider_rank: 1, provider_prerequisite_count: 3}
+      required_concept_count: 1, provider_courserun_fk: rb, match_type: direct, provider_scope_count: 3,
+      narrower_taught_count: null, provider_rank: 1, provider_prerequisite_count: 3}
     - {courserun_fk: ra, concept_fk: x, prerequisite_depth: 1, prerequisite_source: declared,
-      required_concept_count: 1, provider_courserun_fk: rc, match_type: direct, provider_support: 1,
-      provider_rank: 2, provider_prerequisite_count: 2}
+      required_concept_count: 1, provider_courserun_fk: rc, match_type: direct, provider_scope_count: 1,
+      narrower_taught_count: null, provider_rank: 2, provider_prerequisite_count: 2}
     - {courserun_fk: ra, concept_fk: y, prerequisite_depth: 1, prerequisite_source: inferred,
       required_concept_count: 2, provider_courserun_fk: rb, match_type: narrower,
-      provider_support: 3, provider_rank: 1, provider_prerequisite_count: 3}
+      provider_scope_count: null, narrower_taught_count: 3, provider_rank: 1, provider_prerequisite_count: 3}
     - {courserun_fk: ra, concept_fk: m, prerequisite_depth: 2, prerequisite_source: builds_on,
-      required_concept_count: 2, provider_courserun_fk: rb, match_type: direct, provider_support: 1,
-      provider_rank: 1, provider_prerequisite_count: 3}
+      required_concept_count: 2, provider_courserun_fk: rb, match_type: direct, provider_scope_count: 1,
+      narrower_taught_count: null, provider_rank: 1, provider_prerequisite_count: 3}
     - {courserun_fk: ra, concept_fk: m, prerequisite_depth: 2, prerequisite_source: builds_on,
-      required_concept_count: 2, provider_courserun_fk: rc, match_type: close, provider_support: 4,
-      provider_rank: 2, provider_prerequisite_count: 2}
+      required_concept_count: 2, provider_courserun_fk: rc, match_type: close, provider_scope_count: 4,
+      narrower_taught_count: null, provider_rank: 2, provider_prerequisite_count: 2}
     - {courserun_fk: ra, concept_fk: n, prerequisite_depth: 3, prerequisite_source: builds_on,
-      required_concept_count: 2, provider_courserun_fk: null, match_type: null, provider_support: null,
-      provider_rank: null, provider_prerequisite_count: null}
+      required_concept_count: 2, provider_courserun_fk: null, match_type: null, provider_scope_count: null,
+      narrower_taught_count: null, provider_rank: null, provider_prerequisite_count: null}

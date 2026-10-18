@@ -48,8 +48,9 @@ RELATION_WEIGHTS = {
 }
 # The closure stops at this many builds_on hops. A concept further back than this
 # is not useful as "take this first", and the cap keeps the closure from growing
-# with the square of the corpus along long chains. A concept whose sequence_level
-# exceeds it has prerequisites the closure leaves out.
+# with the square of the corpus along long chains. Only a concept whose
+# sequence_level exceeds it can have prerequisites the closure leaves out, since
+# sequence_level is the longest chain and the closure keeps the shortest.
 MAX_PREREQUISITE_DEPTH = 8
 COMMUNITY_CARRY_FORWARD_MIN_JACCARD = 0.3
 LEIDEN_GAMMA = 1.0

@@ -487,7 +487,8 @@ models:
   - name: modularity
     description: float, modularity of the Leiden partition
   - name: sequence_cycle_node_count
-    description: int, concepts on builds_on cycles
+    description: int, concepts on builds_on cycles; 0 since a published builds_on
+      cycle fails the graph run, so nonzero only in earlier runs
   - name: hierarchy_cycle_node_count
     description: int, concepts on broader cycles
 
@@ -731,12 +732,15 @@ models:
     tests:
     - accepted_values:
         values: [direct, close, narrower]
-  - name: provider_support
+  - name: provider_scope_count
     description: int, the provider's scopes teaching or reviewing the concept (direct)
-      or its best close equivalent (close), or narrower_taught_count (narrower)
+      or its best close equivalent (close); null for narrower, which counts concepts
+  - name: narrower_taught_count
+    description: int, narrower only, the required concept's narrower concepts the
+      provider teaches or reviews (bridge_courserun_prerequisite_coverage)
   - name: provider_rank
     description: int, 1 for the best provider of this prerequisite, by match type
-      and then provider_support
+      and then provider_scope_count, or narrower_taught_count for narrower
   - name: provider_prerequisite_count
     description: int, how many of the run's prerequisites this provider covers; rank
       courses to take first by it

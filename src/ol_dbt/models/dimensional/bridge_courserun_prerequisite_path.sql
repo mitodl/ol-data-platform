@@ -16,10 +16,12 @@
     Providers follow bridge_courserun_prerequisite_coverage: a current run of a
     different course (courseware_current_course_runs) that teaches or reviews the
     concept (direct) or a close equivalent (close). Depth 1 also takes coverage's
-    satisfied narrower matches, for umbrella requirements. provider_support is the
-    provider's scopes teaching or reviewing the concept (direct), its best close
-    equivalent (close), or narrower_taught_count (narrower). provider_rank orders a
-    prerequisite's providers by match type, then support. provider_prerequisite_count
+    satisfied narrower matches, for umbrella requirements. provider_scope_count is the
+    provider's scopes teaching or reviewing the concept (direct) or its best close
+    equivalent (close); a narrower match counts concepts instead, so it has
+    narrower_taught_count from coverage and a null scope count. provider_rank orders
+    a prerequisite's providers by match type, then by whichever of the two the match
+    type has. provider_prerequisite_count
     is how many of the run's prerequisites the provider covers, which ranks courses
     to take first.
 #}
@@ -109,7 +111,8 @@ with run_concepts as (
         , prerequisites.concept_fk
         , taught.courserun_fk as provider_courserun_fk
         , 'direct' as match_type
-        , taught.scope_count as provider_support
+        , taught.scope_count as provider_scope_count
+        , cast(null as bigint) as narrower_taught_count
     from prerequisites
     inner join taught
         on prerequisites.concept_fk = taught.concept_fk
@@ -121,7 +124,8 @@ with run_concepts as (
         , prerequisites.concept_fk
         , taught.courserun_fk as provider_courserun_fk
         , 'close' as match_type
-        , max(taught.scope_count) as provider_support
+        , max(taught.scope_count) as provider_scope_count
+        , cast(null as bigint) as narrower_taught_count
     from prerequisites
     inner join close_pairs
         on prerequisites.concept_fk = close_pairs.concept_fk
@@ -136,7 +140,8 @@ with run_concepts as (
         , concept_fk
         , provider_courserun_fk
         , 'narrower' as match_type
-        , narrower_taught_count as provider_support
+        , cast(null as bigint) as provider_scope_count
+        , narrower_taught_count
     from {{ ref('bridge_courserun_prerequisite_coverage') }}
     where
         requirement_is_published
@@ -159,7 +164,8 @@ with run_concepts as (
         , candidate_matches.concept_fk
         , candidate_matches.provider_courserun_fk
         , candidate_matches.match_type
-        , candidate_matches.provider_support
+        , candidate_matches.provider_scope_count
+        , candidate_matches.narrower_taught_count
         , provider_runs.platform as provider_platform
         , provider_runs.courserun_readable_id as provider_courserun_readable_id
         , row_number() over (
@@ -189,7 +195,8 @@ with run_concepts as (
         , providers.provider_courserun_readable_id
         , providers.provider_courserun_fk
         , providers.match_type
-        , providers.provider_support
+        , providers.provider_scope_count
+        , providers.narrower_taught_count
     from prerequisites
     left join providers
         on
@@ -212,14 +219,15 @@ select
     , paths.provider_courserun_readable_id
     , paths.provider_courserun_fk
     , paths.match_type
-    , paths.provider_support
+    , paths.provider_scope_count
+    , paths.narrower_taught_count
     , case
         when paths.provider_courserun_fk is not null
             then row_number() over (
                 partition by paths.courserun_fk, paths.concept_fk
                 order by
                     case paths.match_type when 'direct' then 1 when 'close' then 2 else 3 end
-                    , paths.provider_support desc
+                    , coalesce(paths.provider_scope_count, paths.narrower_taught_count) desc
                     , paths.provider_courserun_readable_id asc
             )
     end as provider_rank

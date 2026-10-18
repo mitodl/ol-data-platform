@@ -1,8 +1,8 @@
 -- Every concept each concept builds on, directly or through others, from the newest
 -- concept graph run: one row per (from, to) with the fewest published builds_on
 -- hops between them. ml.lib.courseware.graph computes it with NetworKit and stops at
--- MAX_PREREQUISITE_DEPTH hops (parameters_json on afact_concept_graph_run), so a
--- concept whose sequence_level exceeds the cap has prerequisites this leaves out. A
+-- MAX_PREREQUISITE_DEPTH hops (parameters_json on afact_concept_graph_run), so only a
+-- concept whose sequence_level exceeds the cap can have prerequisites this leaves out. A
 -- published builds_on cycle fails the graph run, so the closure is a strict partial
 -- order. Rows reflect bridge_concept_relation as of that run, not the latest build.
 with closure as (
