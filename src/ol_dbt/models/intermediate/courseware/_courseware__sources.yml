@@ -138,3 +138,34 @@ sources:
       description: int, offset of an exact or fuzzy match in the source text
     - name: char_end
       description: int, end offset of an exact or fuzzy match in the source text
+  - name: courseware_answer_check
+    description: A small model's verdict on whether an extraction source reads as
+      an answer key or worked solutions (ml.lib.courseware.answer_check), one row
+      per source per check version and source text. A copy of a text already checked
+      reuses its verdict.
+    columns:
+    - name: platform
+      description: str, mitxonline, mitxpro, residential or ocw
+    - name: courserun_readable_id
+      description: str, the run the source belongs to
+    - name: source_ref
+      description: str, the source's ref in int__courseware__extraction_sources
+    - name: source_kind
+      description: str, the source's kind, e.g. document
+    - name: source_title
+      description: str, the source's title as the model saw it
+    - name: source_checksum
+      description: str, sha256 of the source text
+    - name: is_answer_document
+      description: boolean, true when the model read the source as mainly answers
+        to graded work
+    - name: reason
+      description: str, the model's reason, at most 20 words
+    - name: checker_id
+      description: str, the checker, e.g. courseware_answer_check_v1
+    - name: check_version
+      description: str, hash of the checker, prompt, excerpt size, model and effort
+    - name: model_id
+      description: str, the model that gave the verdict
+    - name: checked_at
+      description: timestamp, when the verdict was given
