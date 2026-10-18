@@ -26,7 +26,7 @@
     {%- set lowered = "lower(" ~ name ~ ")" -%}
     {%- set name_and_title = "concat(" ~ title ~ ", ' ', " ~ lowered ~ ")" -%}
     {%- set assessment = 'problem|pset|p-?set|ps[ _-]?[0-9]|homework|hw ?[0-9]|exam([^a-z]|s|$)|quiz|midterm|final([^a-z]|s|$)|assignment|assn|recitation|rec ?[0-9]|exercise|question|practice|review|tutorial|lab ?[0-9]|test([^a-z]|s|$)|worksheet|studio|in-class|drill|sample|instructor|project|qu[0-9]|qz' -%}
-    {%- set marked = 'problem sets?|psets?|ps[ _-]?[0-9]+|homework|hw ?[0-9]*|exams?([^a-z]|$)|quiz|midterms?|mid[_ -]?[0-9]|final[ _-]?(exam|test|quiz|[0-9])|finals([^a-z]|$)|assignments?|tests?([^a-z]|$)|worksheets?' -%}
+    {%- set marked = 'problem sets?|psets?|ps[ _-]?[0-9]+|homework|hw ?[0-9]*|exams?([^a-z]|$)|quiz|midterms?|mid[_ -]?[0-9]|^final |final[ _-]?(exam|test|quiz|[0-9])|finals([^a-z]|$)|assignments?|tests?([^a-z]|$)|worksheets?' -%}
     {%- set graded = courseware_graded_words() -%}
     {%- set name_weak = "'solution|answer|[0-9_-]sol([^a-z]|$|ns?([^a-z]|$)|s([^a-z]|$)|utions?)'" -%}
     {%- set title_weak = (
@@ -150,10 +150,12 @@
     {%- set graded = courseware_graded_words() -%}
     {#- a key that heads the text: at the end, before punctuation or a number, or before "question 1" -#}
     {%- set heading_end = "($|[^a-z ]| [^a-z]| question ?#?[0-9])" -%}
+    {#- what an answer key names after itself; not questions, which prose answers ("answer key questions") -#}
+    {%- set key_target = "( (to|for)( the)?)? (problem sets?|psets?|p-?sets?|ps ?[0-9]|homework|hw ?[0-9]|exams?|quiz(zes)?|midterms?|finals?|assignments?|recitations?|tests?|worksheets?|labs?)([^a-z]|$)" -%}
     {%- set head_key = (
         "'solutions? (to|for) (the )?([0-9.]+ )?(selected |practice |sample |in-class |additional )?(" ~ graded ~ ")"
         ~ "|(" ~ graded ~ "|section)[ _]?#?[0-9]*[a-z]?:?[ _]((solutions?|answers)([^a-z]|$)|(answer )?key" ~ heading_end ~ ")"
-        ~ "|answer keys?" ~ heading_end ~ "|with (answers|solutions)|solution (outlines?|key|set|sheet)|sample (answers|solutions)"
+        ~ "|answer keys?(" ~ heading_end ~ "|" ~ key_target ~ ")|with (answers|solutions)|solution (outlines?|key|set|sheet)|sample (answers|solutions)"
         ~ "|answers? to (the )?(exercises|questions|problems|problem sets?)|question [0-9]+:? answer|problems? [0-9][0-9.-]* solutions?|^solutions?( (to|for))?:? ?([^a-z ]|$)'"
     ) -%}
     {{ regexp_like(text_head, head_key) }}
@@ -174,9 +176,46 @@
 
 {#
     courseware_answer_markers: how many "Solution:" or "Answer:" labels with an answer
-    after them the first 50,000 characters hold. An exam leaves "Answer:" blank, with
-    a blank line after it.
+    after them the first 50,000 characters hold: any character but a blank line or a
+    fill-in line of underscores, on the label's line or the next, so "Answer: -3",
+    "Solution: $x^2$" and a CRLF line break count. An exam leaves "Answer:" blank.
 #}
 {% macro courseware_answer_markers(text) -%}
-    {{ array_length(regexp_extract_all("substr(" ~ text ~ ", 1, 50000)", "'(?i)(solution|answer)s?[ \\t]*:[ \\t]*\\n?[ \\t]*[a-z0-9(]'")) }}
+    {{ array_length(regexp_extract_all("substr(" ~ text ~ ", 1, 50000)", "'(?i)(solution|answer)s?[ \\t]*:[ \\t]*(\\r?\\n)?[ \\t]*[^\\s_]'")) }}
+{%- endmacro %}
+
+
+{#
+    courseware_ocw_resource_name: an OCW resource's directory name from its
+    content_file_key, the name courseware_answer_key reads, without the -1 OCW adds to
+    a copy or a _pdf suffix.
+#}
+{% macro courseware_ocw_resource_name(content_file_key) -%}
+    {{ regexp_replace_all(
+        regexp_replace_all(regexp_extract_or_null(content_file_key, "'([^/]+)/$'", 1), "'-[0-9]+$'", "''")
+        , "'[_-]pdf$'", "''"
+    ) }}
+{%- endmacro %}
+
+
+{#
+    courseware_ocw_answer_resource: whether an OCW resource is an answer key, from its
+    learning resource types or, for anything but a video or a transcript, from
+    courseware_answer_key. A lecture video titled "... Iterative Solutions" is not one.
+    Pages are judged by their caller, which cuts their answers rather than dropping them.
+#}
+{% macro courseware_ocw_answer_resource(
+    file_name, title_lower, content_type, file_extension, content_tags, text_head, answer_markers
+) -%}
+    {%- set transcript_extensions = ['.srt', '.vtt', '.webvtt'] -%}
+    (
+        coalesce({{ content_tags }}, '') like '%Solutions%'
+        or (
+            {{ content_type }} != 'video'
+            and coalesce({{ file_extension }}, '') not in ('{{ transcript_extensions | join("', '") }}')
+            and coalesce({{ content_tags }}, '') not like '%Videos%'
+            and not {{ regexp_like(title_lower, "'(transcript|captions)$'") }}
+            and {{ courseware_answer_key(file_name, title_lower, text_head, answer_markers) }}
+        )
+    )
 {%- endmacro %}

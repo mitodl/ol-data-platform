@@ -3,7 +3,8 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 
 import polars as pl
-from ml.lib.courseware import answer_check
+import pytest
+from ml.lib.courseware import answer_check, local
 from ml.lib.courseware.answer_check import (
     EXCERPT_HEAD_CHARS,
     EXCERPT_TAIL_CHARS,
@@ -20,9 +21,10 @@ READING_TEXT = "Linear regression fits a line to points by least squares."
 class _Client:
     """Stands in for an Anthropic client: flags every excerpt that says Solution."""
 
-    def __init__(self, *, fail: bool = False):
+    def __init__(self, *, fail: bool = False, id_offset: int = 0):
         self.calls: list[str] = []
         self.fail = fail
+        self.id_offset = id_offset
         self.messages = self
 
     @contextmanager
@@ -32,7 +34,7 @@ class _Client:
         entries = re.split(r"(?m)^=== (\d+) \|", listing)[1:]
         verdicts = [
             {
-                "source_id": int(index),
+                "source_id": int(index) + self.id_offset,
                 "is_answer_document": "Solution:" in body,
                 "reason": "answers to problems" if "Solution:" in body else "reading",
             }
@@ -184,3 +186,62 @@ def test_excerpt_keeps_the_opening_and_the_end():
     assert cut.startswith("a" * EXCERPT_HEAD_CHARS)
     assert cut.endswith("z" * EXCERPT_TAIL_CHARS)
     assert "m" not in cut
+
+
+def test_a_failed_batch_is_checked_on_the_next_run():
+    sources = _sources([("run1", "static/ps1.pdf", "document", KEY_TEXT)])
+    failed = check_sources(sources, _Client(fail=True), model_id=MODEL)
+    client = _Client()
+    result = check_sources(sources, client, model_id=MODEL, existing=failed)
+    assert result["is_answer_document"].to_list() == [True]
+    assert len(client.calls) == 1
+
+
+def test_verdicts_counted_from_one_are_rejected():
+    result = check_sources(
+        _sources(
+            [
+                ("run1", "static/ps1.pdf", "document", KEY_TEXT),
+                ("run1", "static/reading.pdf", "document", READING_TEXT),
+            ]
+        ),
+        _Client(id_offset=1),
+        model_id=MODEL,
+    )
+    assert result.height == 0
+
+
+def test_a_reused_verdict_is_dated_when_it_is_recorded():
+    stored = check_sources(
+        _sources([("run1", "static/ps1.pdf", "document", KEY_TEXT)]),
+        _Client(),
+        model_id=MODEL,
+    )
+    result = check_sources(
+        _sources([("run2", "static/ps1.pdf", "document", KEY_TEXT)]),
+        _Client(),
+        model_id=MODEL,
+        existing=stored,
+    )
+    assert result["checked_at"].to_list()[0] > stored["checked_at"].to_list()[0]
+
+
+def test_answer_check_dry_run_calls_nothing(tmp_path, monkeypatch, capsys):
+    path = tmp_path / "sources.parquet"
+    _sources(
+        [
+            ("run1", "static/ps1.pdf", "document", KEY_TEXT),
+            ("b2b-copy", "static/ps1.pdf", "document", KEY_TEXT),
+            ("run1", "static/reading.pdf", "document", READING_TEXT),
+        ]
+    ).write_parquet(path)
+
+    def no_client(**_kwargs):
+        pytest.fail("a dry run built a model client")
+
+    monkeypatch.setattr(local, "LLMClientFactory", no_client)
+    local.answer_check(path, tmp_path / "out", dry_run=True)
+    assert "3 sources of kind document need a verdict; 2 distinct texts" in (
+        capsys.readouterr().out
+    )
+    assert not (tmp_path / "out").exists()

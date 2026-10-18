@@ -168,7 +168,7 @@ models:
   - name: model_id
     description: str, the model that flagged it
   - name: checked_at
-    description: timestamp, when it was flagged
+    description: timestamp, when the flag was recorded for the source
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [platform, courserun_readable_id, source_ref]

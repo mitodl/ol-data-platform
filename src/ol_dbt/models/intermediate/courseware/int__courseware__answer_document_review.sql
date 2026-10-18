@@ -10,14 +10,13 @@
                         a person confirms it; these are the keys the rule missed.
 
     Open edX documents are named by their path without its extension and have no
-    title. OCW resources are named by their directory, the way
-    int__courseware__extraction_sources names them; pages are not listed, since a
+    title. OCW resources are judged by courseware_ocw_answer_resource, by their
+    learning resource types and their directory name; pages are not listed, since a
     page's answers are cut from it rather than the page dropped. A source's latest
     verdict is the one shown.
 #}
 {% set courseruns = var('courseware_courseruns', []) %}
 {% set courserun_filter = "('" ~ courseruns | join("', '") ~ "')" if courseruns else none %}
-{% set ocw_transcript_extensions = ['.srt', '.vtt', '.webvtt'] %}
 
 with openedx_documents as (
     select
@@ -45,21 +44,17 @@ with openedx_documents as (
         'ocw' as platform
         , courserun_readable_id
         , content_file_key as source_ref
-        -- the resource's directory name, without the -1 OCW adds to a copy or a _pdf suffix
-        , {{ regexp_replace_all(
-            regexp_replace_all(regexp_extract_or_null('content_file_key', "'([^/]+)/$'", 1), "'-[0-9]+$'", "''")
-            , "'[_-]pdf$'", "''"
-        ) }} as source_name
+        , {{ courseware_ocw_resource_name('content_file_key') }} as source_name
         , lower(coalesce(title, '')) as source_title
         , {{ courseware_text_head('content') }} as text_head
         , {{ courseware_answer_markers('content') }} as answer_markers
-        , coalesce(content_tags, '') like '%Solutions%' as is_tagged_solution
+        , content_type
+        , file_extension
+        , content_tags
     from {{ ref('int__ocw__content_files') }}
     where
         courserun_readable_id is not null
-        and content_type not in ('page', 'video')
-        and coalesce(file_extension, '') not in ('{{ ocw_transcript_extensions | join("', '") }}')
-        and not {{ regexp_like("lower(coalesce(title, ''))", "'(transcript|captions)$'") }}
+        and content_type != 'page'
         {% if courserun_filter %}and courserun_readable_id in {{ courserun_filter }}{% endif %}
 )
 
@@ -84,9 +79,9 @@ with openedx_documents as (
         , source_title
         , text_head
     from ocw_resources
-    where
-        is_tagged_solution
-        or {{ courseware_answer_key('source_name', 'source_title', 'text_head', 'answer_markers') }}
+    where {{ courseware_ocw_answer_resource(
+        'source_name', 'source_title', 'content_type', 'file_extension', 'content_tags', 'text_head', 'answer_markers'
+    ) }}
 )
 
 , latest_checks as (

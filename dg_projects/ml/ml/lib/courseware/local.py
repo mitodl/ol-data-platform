@@ -16,8 +16,9 @@ import polars as pl
 from anthropic import AnthropicBedrock
 from ml.lib.courseware.answer_check import (
     DEFAULT_SOURCE_KINDS,
-    candidate_sources,
     check_sources,
+    check_version,
+    pending_sources,
 )
 from ml.lib.courseware.extract import (
     BEDROCK_DEFAULT_MODEL,
@@ -184,12 +185,12 @@ def answer_check(  # noqa: PLR0913
     table = "courseware_answer_check"
     previous = _existing(output_dir, table)
     if dry_run:
-        candidates = candidate_sources(rows, kinds)
+        pending, to_check, _ = pending_sources(
+            rows, check_version(model_id, effort), previous, kinds
+        )
         print(  # noqa: T201
-            f"{candidates.height} sources, "
-            f"{candidates['source_checksum'].n_unique()} distinct texts of kind "
-            f"{', '.join(kinds)}; {0 if previous is None else previous.height} "
-            "verdicts stored"
+            f"{len(pending)} sources of kind {', '.join(kinds)} need a verdict; "
+            f"{len(to_check)} distinct texts would be sent, the rest reuse one"
         )
         return
     client = LLMClientFactory(

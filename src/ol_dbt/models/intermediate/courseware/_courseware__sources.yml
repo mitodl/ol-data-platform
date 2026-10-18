@@ -168,4 +168,5 @@ sources:
     - name: model_id
       description: str, the model that gave the verdict
     - name: checked_at
-      description: timestamp, when the verdict was given
+      description: timestamp, when the verdict was recorded for this source; a copy
+        that reuses a verdict gets the time it was recorded, not the time of the call

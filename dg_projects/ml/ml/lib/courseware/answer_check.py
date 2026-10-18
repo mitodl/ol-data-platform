@@ -187,10 +187,57 @@ def _check_batch(
         msg = f"no {CHECK_TOOL['name']} call (stop_reason={response.stop_reason})"
         raise ValueError(msg)
     try:
-        return VerdictBatch.model_validate(tool_input).verdicts
+        verdicts = VerdictBatch.model_validate(tool_input).verdicts
     except ValidationError as error:
         msg = f"invalid verdicts: {error}"
         raise ValueError(msg) from error
+    # an id outside the listing (e.g. counted from 1) or given twice means the
+    # verdicts cannot be matched to their sources
+    ids = [verdict.source_id for verdict in verdicts]
+    if len(set(ids)) != len(ids) or not set(ids) <= set(range(len(batch))):
+        msg = f"verdict ids {sorted(ids)} do not match sources 0-{len(batch) - 1}"
+        raise ValueError(msg)
+    return verdicts
+
+
+def pending_sources(
+    rows: pl.DataFrame,
+    version: str,
+    existing: pl.DataFrame | None = None,
+    source_kinds: Iterable[str] = DEFAULT_SOURCE_KINDS,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Split the candidate sources into what needs a verdict and what is sent.
+
+    :param rows: int__courseware__extraction_sources rows
+    :param version: check_version of this run
+    :param existing: verdicts already stored
+    :param source_kinds: the source kinds to check
+    :returns: the sources with no verdict at this version for their text, one source
+        per distinct text among those with no stored verdict to reuse, and the stored
+        verdicts at this version by text checksum
+    :rtype: tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, dict[str, Any]]]
+    """
+    known: dict[str, dict[str, Any]] = {}
+    done: set[tuple[str, ...]] = set()
+    if existing is not None:
+        current = existing.filter(pl.col("check_version") == version)
+        done = set(current.select(_SOURCE_KEY).iter_rows())
+        for row in current.sort("checked_at").iter_rows(named=True):
+            known[row["source_checksum"]] = row
+    pending = [
+        source
+        for source in candidate_sources(rows, source_kinds).iter_rows(named=True)
+        if tuple(source[column] for column in _SOURCE_KEY) not in done
+    ]
+    # one call per distinct text: copies of a text share its verdict
+    to_check = list(
+        {
+            source["source_checksum"]: source
+            for source in pending
+            if source["source_checksum"] not in known
+        }.values()
+    )
+    return pending, to_check, known
 
 
 def check_sources(  # noqa: PLR0913
@@ -216,26 +263,7 @@ def check_sources(  # noqa: PLR0913
     :rtype: pl.DataFrame
     """
     version = check_version(model_id, effort)
-    known: dict[str, dict[str, Any]] = {}
-    done: set[tuple[str, ...]] = set()
-    if existing is not None:
-        current = existing.filter(pl.col("check_version") == version)
-        done = set(current.select(_SOURCE_KEY).iter_rows())
-        for row in current.sort("checked_at").iter_rows(named=True):
-            known[row["source_checksum"]] = row
-    pending = [
-        source
-        for source in candidate_sources(rows, source_kinds).iter_rows(named=True)
-        if tuple(source[column] for column in _SOURCE_KEY) not in done
-    ]
-    # one call per distinct text: copies of a text share its verdict
-    to_check = list(
-        {
-            source["source_checksum"]: source
-            for source in pending
-            if source["source_checksum"] not in known
-        }.values()
-    )
+    pending, to_check, known = pending_sources(rows, version, existing, source_kinds)
     batches = [list(batch) for batch in batched(to_check, CHECK_BATCH_SIZE)]
     checked_at = datetime.now(tz=UTC)
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -259,7 +287,6 @@ def check_sources(  # noqa: PLR0913
                     known[entry["source_checksum"]] = {
                         "is_answer_document": by_id[index].is_answer_document,
                         "reason": by_id[index].reason,
-                        "checked_at": checked_at,
                     }
     return pl.DataFrame(
         [
@@ -275,7 +302,9 @@ def check_sources(  # noqa: PLR0913
                 "checker_id": CHECKER_ID,
                 "check_version": version,
                 "model_id": model_id,
-                "checked_at": verdict["checked_at"],
+                # when the verdict was recorded for this source, also for a reused
+                # one, so the newest row of a source is its newest text's verdict
+                "checked_at": checked_at,
             }
             for source in pending
             if (verdict := known.get(source["source_checksum"])) is not None

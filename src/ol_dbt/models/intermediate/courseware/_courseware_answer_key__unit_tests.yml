@@ -37,6 +37,12 @@ unit_tests:
     - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
       content_file_path: static/C1_PreAssessment Key.pdf, content_file_text: "Pre-Assessment\
         \ Answer Key\n\nQUESTION #1\nA crew digs."}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/Exam1.pdf, content_file_text: "1. Compute. Answer:\
+        \ -3\n2. Expand. Answer: $x^2$\n3. Solve. Answer:\r\n-1/2"}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/hw3.pdf, content_file_text: "Answer Key for Homework\
+        \ 3\n1. 4"}
     # topics and teaching material
     - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
       content_file_path: static/Types_of_Solutions.pdf, content_file_text: Saturated
@@ -105,6 +111,12 @@ unit_tests:
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit6_041f10_rec02/,
       content_type: pdf, title: Recitation 2, file_extension: .pdf, content_tags: "Recitations,\
         \ Solutions", content: 1. 2x}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit8_01_final/,
+      content_type: pdf, title: Final, file_extension: .pdf, content_tags: null, content: "1.\
+        \ Solution: x = 3\n2. Solution: y = 4\n3. Solution: z = 5"}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/ps3_problem_2/,
+      content_type: video, title: Problem 2, file_extension: null, content_tags: "Problem-solving\
+        \ Videos, Solutions", content: null}
     # topics and teaching material
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit5_111f08_lec3/,
       content_type: pdf, title: Review of Aqueous Solutions, file_extension: .pdf,
@@ -121,7 +133,11 @@ unit_tests:
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/key_ideas/,
       content_type: pdf, title: Key Ideas, file_extension: .pdf, content_tags: null,
       content: The key ideas of the course.}
-    # not resources the rule judges: a page, and a lecture video's transcript
+    # not resources the rule judges: a page, a lecture video's transcript, and a
+    # resource of a lecture video
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/lec10_iterative_sol/,
+      content_type: file, title: "Lecture 10: Iterative Solutions", file_extension: .pdf,
+      content_tags: Lecture Videos, content: Iterative methods.}
     - {courserun_readable_id: o1, content_file_key: courses/c1/pages/exam-solutions/,
       content_type: page, title: Exam Solutions, file_extension: null, content_tags: null,
       content: <p>Solutions</p>}
@@ -167,6 +183,10 @@ unit_tests:
       is_flagged_by_model: false}
     - {platform: mitxonline, source_ref: static/C1_PreAssessment Key.pdf, review_reason: excluded_by_rule,
       is_flagged_by_model: false}
+    - {platform: mitxonline, source_ref: static/Exam1.pdf, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: mitxonline, source_ref: static/hw3.pdf, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
     - {platform: mitxonline, source_ref: static/ps_2003.pdf, review_reason: flagged_by_model,
       is_flagged_by_model: true}
     - {platform: ocw, source_ref: courses/c1/resources/034pfsoln/, review_reason: excluded_by_rule,
@@ -180,6 +200,10 @@ unit_tests:
     - {platform: ocw, source_ref: courses/c1/resources/ses5_solis_wets/, review_reason: excluded_by_rule,
       is_flagged_by_model: false}
     - {platform: ocw, source_ref: courses/c1/resources/mit6_041f10_rec02/, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: ocw, source_ref: courses/c1/resources/mit8_01_final/, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: ocw, source_ref: courses/c1/resources/ps3_problem_2/, review_reason: excluded_by_rule,
       is_flagged_by_model: false}
 
 - name: test_int__courseware__extraction_sources_leaves_out_answer_keys
