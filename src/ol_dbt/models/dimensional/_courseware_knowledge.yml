@@ -604,8 +604,9 @@ models:
   - name: provider_courserun_readable_id
     description: str, a current run of another course that covers the concept. Runs
       are the same course when they share dim_course.course_readable_id across platforms,
-      or, without a course_fk, the run id less its run tag; edxorg and mitxonline
-      copies whose readable ids differ (e.g. by org) still count as different courses
+      or, without a course_fk, the run id less its run tag, with an edxorg {org}/{course}
+      read as course-v1:{org}+{course}; edxorg and mitxonline copies whose readable
+      ids differ (e.g. by org) still count as different courses
   - name: provider_courserun_fk
     description: str, dim_course_run.courserun_pk of the providing run
     tests:

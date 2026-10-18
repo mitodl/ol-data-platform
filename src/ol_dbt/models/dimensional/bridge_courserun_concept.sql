@@ -31,10 +31,11 @@
     reviews. Courses demonstrate libraries such as scikit-learn and Seaborn as they
     go, so requiring them would leave a prerequisite no course could ever satisfy.
     "Other course" and "teaches or reviews" are as bridge_courserun_prerequisite_coverage
-    reads them (the same course_key, and any teaches or reviews row), so a tool is
-    introduced only where coverage would find no direct provider. Where the tool first appears does not separate these cases: on the
-    pilot, the introduced tools first appear between the 4th and 10th unit, like
-    pandas, which an earlier course teaches and which stays a requirement.
+    reads them (the same course_key, a current run, and any teaches or reviews row),
+    so a tool is introduced only where coverage would find no direct provider. Where
+    the tool first appears does not separate these cases: on the pilot, the
+    introduced tools first appear between the 4th and 10th unit, like pandas, which
+    an earlier course teaches and which stays a requirement.
 
     Unpublished candidates keep their rows, with unpublished_reason, for review.
     Declared requirements and the other relations are always published.
@@ -63,15 +64,15 @@ with mentions as (
 )
 
 -- the course each run belongs to, so a course's reruns and its copies on other
--- platforms count once. A run that is not a current dim_course_run is keyed as
--- courseware_current_course_runs keys a run without a course_fk.
+-- platforms count once. A run that is not a current dim_course_run is keyed by its
+-- run id, as courseware_current_course_runs keys a run without a course_fk.
 , run_courses as (
     select distinct
         mentions.platform
         , mentions.courserun_readable_id
         , coalesce(
             course_runs.course_key
-            , {{ courserun_course_readable_id('mentions.courserun_readable_id') }}
+            , {{ courseware_course_key('mentions.courserun_readable_id') }}
         ) as course_key
     from mentions
     left join course_runs
@@ -183,7 +184,8 @@ with mentions as (
         or (claim_kind = 'declared_prerequisite' and prerequisite_kind in ('prerequisite', 'recommended'))
 )
 
--- candidates some other course teaches or reviews, as coverage would find them
+-- candidates some other course teaches or reviews, as coverage would find them:
+-- coverage's providers are current runs only
 , taught_elsewhere as (
     select distinct
         inferred_candidates.platform
@@ -198,7 +200,7 @@ with mentions as (
         on
             inferred_candidates.concept_id = teaching.concept_id
             and teaching.relation in ('teaches', 'reviews')
-    inner join run_courses as teaching_courses
+    inner join course_runs as teaching_courses
         on
             teaching.platform = teaching_courses.platform
             and teaching.courserun_readable_id = teaching_courses.courserun_readable_id
