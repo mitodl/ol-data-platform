@@ -129,6 +129,10 @@ models:
 - name: int__courseware__claims
   description: Every extracted claim with its scope, extractor version, evidence counts
     and normalized concept label key.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: extraction_key
     description: str, the extraction the claim came from
