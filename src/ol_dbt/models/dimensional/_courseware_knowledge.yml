@@ -507,7 +507,14 @@ models:
     - unique
     - not_null
   - name: courserun_fk
-    description: str, dim_course_run.courserun_pk
+    description: str, dim_course_run.courserun_pk. Null for a run with no current
+      dim_course_run row, which course_support keys by its run id and can count as
+      a course of its own.
+    tests:
+    # counts those runs, to decide whether they should stop counting as support
+    - not_null:
+        config:
+          severity: warn
   - name: platform
     description: str, mitxonline, mitxpro or residential
   - name: courserun_readable_id
