@@ -436,8 +436,8 @@ models:
   - name: hierarchy_depth
     description: int, longest chain of broader concepts above this one
   - name: in_sequence_cycle
-    description: boolean, whether the concept is on a builds_on cycle (a data-quality
-      finding)
+    description: boolean, whether the concept is on a builds_on cycle. Always false,
+      since a published builds_on cycle fails the graph run
   - name: in_hierarchy_cycle
     description: boolean, whether the concept is on a broader cycle (a data-quality
       finding)
@@ -630,3 +630,113 @@ models:
       courseware_prerequisite_min_narrower_coverage and courseware_prerequisite_min_narrower_taught
     tests:
     - not_null
+
+- name: bridge_concept_prerequisite_closure
+  description: Every concept each concept builds on, directly or through others, at
+    the fewest published builds_on hops, from the newest graph run. Capped at the
+    run's max_prerequisite_depth (afact_concept_graph_run.parameters_json).
+  columns:
+  - name: from_concept_fk
+    description: str, dim_concept.concept_pk of the concept that builds on to_concept_fk
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
+  - name: to_concept_fk
+    description: str, dim_concept.concept_pk of the prerequisite concept
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
+  - name: min_depth
+    description: int, the fewest builds_on hops between the two; 1 is a published
+      builds_on edge
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_values_to_be_between:
+        min_value: 1
+  - name: graph_run_id
+    description: str, the graph run these rows come from
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [from_concept_fk, to_concept_fk]
+
+- name: bridge_courserun_prerequisite_path
+  description: What to take before a course run. Every concept the run requires, directly
+    or through what those concepts build on, with the runs of other courses that teach
+    each one, ranked. One row per run, prerequisite concept and providing run, and
+    one row with a null provider for a prerequisite no other course covers.
+  config:
+    meta:
+      # Same as bridge_courserun_prerequisite_coverage.
+      qa_buildable: false
+  columns:
+  - name: courserun_prerequisite_path_pk
+    description: str, surrogate key of (courserun_fk, concept_fk, provider_courserun_fk)
+    tests:
+    - unique
+    - not_null
+  - name: platform
+    description: str, the requiring run's platform
+  - name: courserun_readable_id
+    description: str, the requiring run
+  - name: courserun_fk
+    description: str, dim_course_run.courserun_pk of the requiring run
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_course_run')
+        field: courserun_pk
+  - name: concept_fk
+    description: str, dim_concept.concept_pk, the prerequisite concept
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
+  - name: prerequisite_depth
+    description: int, 1 for a concept the run requires (bridge_courserun_concept requires,
+      published), 1 plus the bridge_concept_prerequisite_closure min_depth for a concept
+      a requirement builds on, the shortest over the run's requirements
+    tests:
+    - not_null
+  - name: prerequisite_source
+    description: str, declared or inferred for a requirement (declared when both),
+      builds_on for a concept reached through what requirements build on
+    tests:
+    - not_null
+    - accepted_values:
+        values: [declared, inferred, builds_on]
+  - name: required_concept_count
+    description: int, the run's requirements that are or build on this concept
+    tests:
+    - not_null
+  - name: provider_platform
+    description: str, the providing run's platform
+  - name: provider_courserun_readable_id
+    description: str, a current run of another course that teaches the concept, as
+      in bridge_courserun_prerequisite_coverage; null when none does
+  - name: provider_courserun_fk
+    description: str, dim_course_run.courserun_pk of the providing run
+    tests:
+    - relationships:
+        to: ref('dim_course_run')
+        field: courserun_pk
+  - name: match_type
+    description: str, direct (teaches or reviews the concept), close (a close equivalent)
+      or, for requirements only, narrower (a satisfied narrower match in bridge_courserun_prerequisite_coverage),
+      the first that applies
+    tests:
+    - accepted_values:
+        values: [direct, close, narrower]
+  - name: provider_support
+    description: int, the provider's scopes teaching or reviewing the concept (direct)
+      or its best close equivalent (close), or narrower_taught_count (narrower)
+  - name: provider_rank
+    description: int, 1 for the best provider of this prerequisite, by match type
+      and then provider_support
+  - name: provider_prerequisite_count
+    description: int, how many of the run's prerequisites this provider covers; rank
+      courses to take first by it

@@ -8,10 +8,12 @@ dbt publishes), and computes on three views of the graph with NetworKit:
   connected components, degree, density and sparsity, and a local-degree backbone
   score per edge for drawing a sparsified graph.
 - sequence: builds_on, directed from a concept to what it builds on. PageRank on it
-  is a foundation rank (rank flows to the concepts many others build on); strongly
-  connected components find cycles, which are data-quality findings, since learning
-  order should be acyclic; sequence_level is the longest chain of prerequisites
-  beneath a concept.
+  is a foundation rank (rank flows to the concepts many others build on);
+  sequence_level is the longest chain of prerequisites beneath a concept; and the
+  prerequisite closure lists every concept each one builds on, directly or through
+  others, at its shortest depth. Learning order must be acyclic, and dbt's acyclic
+  test holds published builds_on to it, so a cycle here fails the run rather than
+  publishing a closure that puts a concept before itself.
 - hierarchy: broader, directed from narrower to broader. hierarchy_depth is the
   longest chain of broader concepts above a concept; cycles are findings too.
 
@@ -44,6 +46,11 @@ RELATION_WEIGHTS = {
     "complements": 0.5,
     "related": 0.2,
 }
+# The closure stops at this many builds_on hops. A concept further back than this
+# is not useful as "take this first", and the cap keeps the closure from growing
+# with the square of the corpus along long chains. A concept whose sequence_level
+# exceeds it has prerequisites the closure leaves out.
+MAX_PREREQUISITE_DEPTH = 8
 COMMUNITY_CARRY_FORWARD_MIN_JACCARD = 0.3
 LEIDEN_GAMMA = 1.0
 SEED = 20261016
@@ -68,6 +75,12 @@ EDGE_SCHEMA = {
     "relation": pl.String,
     "weight": pl.Float64,
     "backbone_score": pl.Float64,
+}
+PREREQUISITE_CLOSURE_SCHEMA = {
+    "graph_run_id": pl.String,
+    "from_concept_id": pl.String,
+    "to_concept_id": pl.String,
+    "min_depth": pl.Int64,
 }
 COMMUNITY_SCHEMA = {
     "graph_run_id": pl.String,
@@ -103,7 +116,12 @@ class GraphResult:
     nodes: pl.DataFrame
     edges: pl.DataFrame
     communities: pl.DataFrame
+    prerequisite_closure: pl.DataFrame
     run: pl.DataFrame
+
+
+class PrerequisiteCycleError(ValueError):
+    """Published builds_on edges form a cycle, so learning order is undefined."""
 
 
 def select_edges(relations: pl.DataFrame) -> pl.DataFrame:
@@ -174,6 +192,40 @@ def _longest_chain(graph: nk.Graph, blocked: set[int]) -> dict[int, int]:
         for target in acyclic.iterNeighbors(node):
             depth[node] = max(depth[node], depth[target] + 1)
     return depth
+
+
+def prerequisite_closure(
+    graph: nk.Graph, max_depth: int = MAX_PREREQUISITE_DEPTH
+) -> dict[tuple[int, int], int]:
+    """Every node each node builds on, within max_depth hops, at its shortest depth.
+
+    :param graph: builds_on, directed from a concept to what it builds on
+    :param max_depth: the most hops a pair may be apart
+    :returns: (node, prerequisite node) -> fewest builds_on hops between them
+    :rtype: dict[tuple[int, int], int]
+    :raises PrerequisiteCycleError: when the graph has a directed cycle
+    """
+    if cycle := _cycle_nodes(graph):
+        msg = f"builds_on has a cycle through nodes {sorted(cycle)}"
+        raise PrerequisiteCycleError(msg)
+    if not graph.numberOfNodes():
+        return {}
+    reachable: dict[int, dict[int, int]] = {}
+    # reverse topological order closes every target before its sources, and a
+    # shortest path's tail is a shortest path, so one pass gives min depths
+    for node in reversed(nk.graphtools.topologicalSort(graph)):
+        depths: dict[int, int] = {}
+        for target in graph.iterNeighbors(node):
+            depths[target] = 1
+            for prerequisite, depth in reachable[target].items():
+                if depth + 1 <= min(max_depth, depths.get(prerequisite, max_depth)):
+                    depths[prerequisite] = depth + 1
+        reachable[node] = depths
+    return {
+        (node, prerequisite): depth
+        for node, depths in reachable.items()
+        for prerequisite, depth in depths.items()
+    }
 
 
 def _carry_forward_communities(
@@ -286,6 +338,11 @@ def compute_graph(  # noqa: PLR0915
         foundation = pagerank.scores()
 
     sequence_cycles = _cycle_nodes(sequence)
+    if sequence_cycles:
+        cycle = sorted(labels[concept_ids[node]] for node in sequence_cycles)
+        msg = f"published builds_on has a cycle through {cycle}"
+        raise PrerequisiteCycleError(msg)
+    closure = prerequisite_closure(sequence)
     hierarchy_cycles = _cycle_nodes(hierarchy)
     sequence_level = _longest_chain(sequence, sequence_cycles)
     hierarchy_depth = _longest_chain(hierarchy, hierarchy_cycles)
@@ -346,6 +403,16 @@ def compute_graph(  # noqa: PLR0915
             }
         )
 
+    closure_rows = [
+        {
+            "graph_run_id": run_id,
+            "from_concept_id": concept_ids[source],
+            "to_concept_id": concept_ids[target],
+            "min_depth": depth,
+        }
+        for (source, target), depth in sorted(closure.items())
+    ]
+
     edge_count = association.numberOfEdges()
     possible = node_count * (node_count - 1) / 2
     density = edge_count / possible if possible else 0.0
@@ -354,6 +421,7 @@ def compute_graph(  # noqa: PLR0915
         "min_courserun_support": MIN_COURSERUN_SUPPORT,
         "relation_weights": RELATION_WEIGHTS,
         "leiden_gamma": LEIDEN_GAMMA,
+        "max_prerequisite_depth": MAX_PREREQUISITE_DEPTH,
         "seed": SEED,
     }
     input_checksum = hashlib.sha256(
@@ -394,6 +462,9 @@ def compute_graph(  # noqa: PLR0915
         nodes=nodes,
         edges=pl.DataFrame(edge_rows, schema=EDGE_SCHEMA),
         communities=pl.DataFrame(community_rows, schema=COMMUNITY_SCHEMA),
+        prerequisite_closure=pl.DataFrame(
+            closure_rows, schema=PREREQUISITE_CLOSURE_SCHEMA
+        ),
         run=run,
     )
 
