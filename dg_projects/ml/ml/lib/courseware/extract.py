@@ -1,10 +1,12 @@
 """Extract claims from courseware scopes and flatten them into warehouse rows.
 
-One model call per scope part. The output is three tables keyed by extraction_key,
-a hash of the extractor version and the scope's own input (not the course header):
-courseware_claim_extraction (one row per call), courseware_claim and
-courseware_claim_evidence. dbt builds the dimensional facts, concepts and bridges
-from them; nothing here resolves labels across scopes or courses.
+One model call per distinct scope text. The output is three tables keyed by
+extraction_key, a hash of the extractor version and the scope's own input (not the
+course header): courseware_claim_extraction (one row per scope part), courseware_claim
+and courseware_claim_evidence. A scope part whose text was already extracted in
+another run (content_key) gets a copy of that extraction's rows under its own key,
+with no model call. dbt builds the dimensional facts, concepts and bridges from them;
+nothing here resolves labels across scopes or courses.
 """
 
 import hashlib
@@ -75,6 +77,28 @@ KEY_COLUMNS = (
     "scope_part_count",
     "input_text_checksum",
 )
+
+# What a model call reads besides the course header: the extractor version and the
+# scope part's title, kind, split and source text. Unlike KEY_COLUMNS it leaves out
+# the run and the scope id, so a course copied into another run (B2B copies share
+# text under new block ids) has the same content key, and its scopes reuse the
+# extraction instead of being sent again. Source refs are not in the text the model
+# reads (sources are numbered S01, S02, ...), so evidence maps onto the copy's own
+# blocks by source_id.
+CONTENT_KEY_COLUMNS = (
+    "extractor_id",
+    "prompt_version",
+    "schema_version",
+    "model_id",
+    "effort",
+    "scope_kind",
+    "scope_title",
+    "scope_part",
+    "scope_part_count",
+    "input_text_checksum",
+)
+# stop_reason of an extraction copied from another with the same content key
+REUSED_STOP_REASON = "reused"
 
 EXTRACTION_SCHEMA = {
     "extraction_key": pl.String,
@@ -259,6 +283,60 @@ def covered_keys(stored: pl.DataFrame) -> set[str]:
     return keys
 
 
+def stored_content_key(row: Mapping[str, Any], *, key_on_header: bool = False) -> str:
+    """Compute an extraction's content key from its courseware_claim_extraction columns.
+
+    :param row: a stored extraction row, or the fields of a new one
+    :param key_on_header: also hash header_version, so a run that re-extracts
+        changed headers reuses only an extraction made under the same header
+    :returns: the content key
+    :rtype: str
+    """
+    columns = (
+        (*CONTENT_KEY_COLUMNS, "header_version")
+        if key_on_header
+        else CONTENT_KEY_COLUMNS
+    )
+    return _digest("content", *(row[column] for column in columns))
+
+
+def content_key(
+    scope: Scope, model_id: str, effort: str, *, key_on_header: bool = False
+) -> str:
+    """Key what one model call reads, whichever run and scope it is for.
+
+    Two scope parts with the same content key get the same extraction, so only the
+    first is sent; the others copy its claims (extract_scopes).
+
+    :param scope: the scope part
+    :param model_id: the model id the client expects
+    :param effort: output_config.effort
+    :param key_on_header: also hash the header version (see extraction_key)
+    :returns: the content key
+    :rtype: str
+    """
+    return stored_content_key(
+        _key_fields(scope, model_id, effort), key_on_header=key_on_header
+    )
+
+
+def reusable_content_keys(stored: pl.DataFrame) -> set[str]:
+    """Return every content key the stored extractions can be copied for.
+
+    Like covered_keys, a row with header_version counts under both schemes.
+
+    :param stored: courseware_claim_extraction rows, with header_version
+    :returns: the content keys a new scope part would be copied for
+    :rtype: set[str]
+    """
+    keys = set()
+    for row in stored.iter_rows(named=True):
+        keys.add(stored_content_key(row))
+        if row["header_version"] is not None:
+            keys.add(stored_content_key(row, key_on_header=True))
+    return keys
+
+
 def scope_inputs(scopes: Iterable[Scope]) -> pl.DataFrame:
     """Record the input of every scope part as it is now, extracted or not.
 
@@ -390,6 +468,59 @@ def _claim_row(key: str, ordinal: int, kind: str, claim: BaseModel) -> dict[str,
     }
 
 
+def _truncation_notes(scope: Scope) -> list[str]:
+    return [
+        f"{source.source_id} ({source.source_ref}) was cut to "
+        f"{len(source.text):,} of {source.total_chars:,} characters"
+        for source in scope.sources
+        if source.truncated
+    ]
+
+
+def _extraction_row(  # noqa: PLR0913
+    scope: Scope,
+    key: str,
+    model_id: str,
+    effort: str,
+    *,
+    summary: str,
+    model_notes: list[str],
+    stop_reason: str,
+    tokens: Mapping[str, int],
+) -> dict[str, Any]:
+    return {
+        "extraction_key": key,
+        **_key_fields(scope, model_id, effort),
+        "scope_position": scope.scope_position,
+        "source_count": len(scope.sources),
+        "truncated_source_count": sum(source.truncated for source in scope.sources),
+        "sources_json": json.dumps(
+            [
+                {
+                    "source_id": source.source_id,
+                    "source_ref": source.source_ref,
+                    "included_chars": len(source.text),
+                    "total_chars": source.total_chars,
+                }
+                for source in scope.sources
+            ]
+        ),
+        "summary": summary,
+        "notes_json": json.dumps(model_notes + _truncation_notes(scope)),
+        "stop_reason": stop_reason,
+        **tokens,
+        "extracted_at": datetime.now(tz=UTC),
+    }
+
+
+_TOKEN_COLUMNS = (
+    "input_tokens",
+    "output_tokens",
+    "cache_read_input_tokens",
+    "cache_creation_input_tokens",
+)
+
+
 def _rows(
     scope: Scope, key: str, model_id: str, effort: str, result: _ModelResult
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -416,39 +547,97 @@ def _rows(
                         "char_end": match.char_end,
                     }
                 )
-    notes = list(result.extraction.notes) + [
-        f"{source.source_id} ({source.source_ref}) was cut to "
-        f"{len(source.text):,} of {source.total_chars:,} characters"
-        for source in scope.sources
-        if source.truncated
-    ]
-    extraction = {
-        "extraction_key": key,
-        **_key_fields(scope, model_id, effort),
-        "scope_position": scope.scope_position,
-        "source_count": len(scope.sources),
-        "truncated_source_count": sum(source.truncated for source in scope.sources),
-        "sources_json": json.dumps(
-            [
-                {
-                    "source_id": source.source_id,
-                    "source_ref": source.source_ref,
-                    "included_chars": len(source.text),
-                    "total_chars": source.total_chars,
-                }
-                for source in scope.sources
-            ]
-        ),
-        "summary": result.extraction.summary,
-        "notes_json": json.dumps(notes),
-        "stop_reason": result.stop_reason,
-        "input_tokens": result.input_tokens,
-        "output_tokens": result.output_tokens,
-        "cache_read_input_tokens": result.cache_read_input_tokens,
-        "cache_creation_input_tokens": result.cache_creation_input_tokens,
-        "extracted_at": datetime.now(tz=UTC),
-    }
+    extraction = _extraction_row(
+        scope,
+        key,
+        model_id,
+        effort,
+        summary=result.extraction.summary,
+        model_notes=list(result.extraction.notes),
+        stop_reason=result.stop_reason,
+        tokens={column: getattr(result, column) for column in _TOKEN_COLUMNS},
+    )
     return extraction, claims, evidence
+
+
+@dataclass(frozen=True)
+class _Extracted:
+    """One extraction's rows, to copy onto other scope parts with its content key."""
+
+    extraction: Mapping[str, Any]
+    claims: list[dict[str, Any]]
+    evidence: list[dict[str, Any]]
+
+
+def _reused_rows(
+    scope: Scope, key: str, model_id: str, effort: str, original: _Extracted
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Copy an extraction of the same text onto another scope part, with no call.
+
+    The text, and so each passage's verification and offsets, is identical; only the
+    block each source id names differs, so evidence takes this scope's source_ref.
+    """
+    sources = {source.source_id: source for source in scope.sources}
+    notes = json.loads(original.extraction["notes_json"])
+    # the model's notes come first, then one note per truncated source
+    model_notes = notes[: len(notes) - original.extraction["truncated_source_count"]]
+    extraction = _extraction_row(
+        scope,
+        key,
+        model_id,
+        effort,
+        summary=original.extraction["summary"],
+        model_notes=model_notes,
+        stop_reason=REUSED_STOP_REASON,
+        tokens=dict.fromkeys(_TOKEN_COLUMNS, 0),
+    )
+    claims = [{**claim, "extraction_key": key} for claim in original.claims]
+    evidence = [
+        {
+            **item,
+            "extraction_key": key,
+            "source_ref": (
+                sources[item["source_id"]].source_ref
+                if item["source_id"] in sources
+                else None
+            ),
+        }
+        for item in original.evidence
+    ]
+    return extraction, claims, evidence
+
+
+def _reusable_extractions(stored: ExtractionTables | None) -> dict[str, _Extracted]:
+    """Index stored extractions by content key, under both key schemes."""
+    if stored is None or stored.extractions.is_empty():
+        return {}
+    # one extraction per content key is enough: copies of it hold the same claims
+    picked: dict[str, Mapping[str, Any]] = {}
+    for row in stored.extractions.sort("extracted_at").iter_rows(named=True):
+        content_keys = [stored_content_key(row)]
+        if row["header_version"] is not None:
+            content_keys.append(stored_content_key(row, key_on_header=True))
+        for key in content_keys:
+            picked.setdefault(key, row)
+    keys = {row["extraction_key"] for row in picked.values()}
+    claims: dict[str, list[dict[str, Any]]] = {key: [] for key in keys}
+    for claim in stored.claims.filter(pl.col("extraction_key").is_in(keys)).iter_rows(
+        named=True
+    ):
+        claims[claim["extraction_key"]].append(claim)
+    evidence: dict[str, list[dict[str, Any]]] = {key: [] for key in keys}
+    for item in stored.evidence.filter(pl.col("extraction_key").is_in(keys)).iter_rows(
+        named=True
+    ):
+        evidence[item["extraction_key"]].append(item)
+    return {
+        content: _Extracted(
+            extraction=row,
+            claims=claims[row["extraction_key"]],
+            evidence=evidence[row["extraction_key"]],
+        )
+        for content, row in picked.items()
+    }
 
 
 def extract_scopes(  # noqa: PLR0913
@@ -458,40 +647,52 @@ def extract_scopes(  # noqa: PLR0913
     model_id: str,
     effort: Effort = DEFAULT_EFFORT,
     existing_keys: set[str] | frozenset[str] = frozenset(),
+    reusable: ExtractionTables | None = None,
     max_workers: int = 8,
     key_on_header: bool = False,
 ) -> ExtractionTables:
-    """Extract every scope whose key is not already stored.
+    """Extract every scope whose key is not already stored, once per distinct text.
 
-    A scope that fails is logged and left out, so the next run retries only it.
+    Scope parts with the same content key (e.g. a course and its B2B copies) share
+    one model call: the first is extracted, or a stored extraction from reusable is
+    taken, and the others get copies of its rows under their own extraction keys. A
+    scope that fails is logged and left out, along with the parts that would have
+    copied it, so the next run retries only them.
 
     :param scopes: the scopes to extract
     :param client: an Anthropic or AnthropicBedrock client (LLMClientFactory)
     :param model_id: the model id the client expects
     :param effort: output_config.effort for every call
     :param existing_keys: keys already stored, which are skipped (covered_keys)
+    :param reusable: stored extractions with their claims and evidence, to copy for
+        a scope part with the same content key; it needs only the rows whose content
+        keys the pending scopes have
     :param max_workers: concurrent model calls
     :param key_on_header: hash the header version into the keys (extraction_key)
-    :returns: the new rows
+    :returns: the new rows, copies included
     :rtype: ExtractionTables
     """
-    pending = [
-        (scope, key)
-        for scope in scopes
-        if (key := extraction_key(scope, model_id, effort, key_on_header=key_on_header))
-        not in existing_keys
-    ]
+    groups: dict[str, list[tuple[Scope, str]]] = {}
+    for scope in scopes:
+        key = extraction_key(scope, model_id, effort, key_on_header=key_on_header)
+        if key in existing_keys:
+            continue
+        groups.setdefault(
+            content_key(scope, model_id, effort, key_on_header=key_on_header), []
+        ).append((scope, key))
+    extracted = _reusable_extractions(reusable)
     extractions, claims, evidence = [], [], []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {
-            pool.submit(call_model, client, model_id, effort, scope_message(scope)): (
-                scope,
-                key,
-            )
-            for scope, key in pending
+            pool.submit(
+                call_model, client, model_id, effort, scope_message(members[0][0])
+            ): content
+            for content, members in groups.items()
+            if content not in extracted
         }
         for future in as_completed(futures):
-            scope, key = futures[future]
+            content = futures[future]
+            scope, key = groups[content][0]
             try:
                 result = future.result()
             except (ExtractionError, APIError):
@@ -504,6 +705,7 @@ def extract_scopes(  # noqa: PLR0913
             extraction, scope_claims, scope_evidence = _rows(
                 scope, key, model_id, effort, result
             )
+            extracted[content] = _Extracted(extraction, scope_claims, scope_evidence)
             extractions.append(extraction)
             claims.extend(scope_claims)
             evidence.extend(scope_evidence)
@@ -515,6 +717,26 @@ def extract_scopes(  # noqa: PLR0913
                 result.input_tokens,
                 result.output_tokens,
             )
+    called = {row["extraction_key"] for row in extractions}
+    reused = 0
+    for content, members in groups.items():
+        if content not in extracted:
+            continue
+        for scope, key in members:
+            if key in called:
+                continue
+            extraction, scope_claims, scope_evidence = _reused_rows(
+                scope, key, model_id, effort, extracted[content]
+            )
+            extractions.append(extraction)
+            claims.extend(scope_claims)
+            evidence.extend(scope_evidence)
+            reused += 1
+    log.info(
+        "%d scope parts extracted, %d copied from an extraction of the same text",
+        len(called),
+        reused,
+    )
     return ExtractionTables(
         extractions=pl.DataFrame(extractions, schema=EXTRACTION_SCHEMA),
         claims=pl.DataFrame(claims, schema=CLAIM_SCHEMA),

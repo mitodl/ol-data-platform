@@ -80,7 +80,9 @@ models:
   - name: notes_json
     description: str, JSON list of the model's notes plus truncation notes
   - name: stop_reason
-    description: str, the response's stop_reason
+    description: str, the response's stop_reason, or 'reused' when the rows were copied
+      from an extraction of the same text (content_key) with no model call and zero
+      tokens
   - name: input_tokens
     description: int, uncached input tokens billed
   - name: output_tokens
