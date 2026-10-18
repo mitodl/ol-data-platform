@@ -329,11 +329,15 @@ def reusable_content_keys(stored: pl.DataFrame) -> set[str]:
     :returns: the content keys a new scope part would be copied for
     :rtype: set[str]
     """
-    keys = set()
-    for row in stored.iter_rows(named=True):
-        keys.add(stored_content_key(row))
-        if row["header_version"] is not None:
-            keys.add(stored_content_key(row, key_on_header=True))
+    return {
+        key for row in stored.iter_rows(named=True) for key in _row_content_keys(row)
+    }
+
+
+def _row_content_keys(row: Mapping[str, Any]) -> list[str]:
+    keys = [stored_content_key(row)]
+    if row["header_version"] is not None:
+        keys.append(stored_content_key(row, key_on_header=True))
     return keys
 
 
@@ -581,16 +585,21 @@ def _reused_rows(
     notes = json.loads(original.extraction["notes_json"])
     # the model's notes come first, then one note per truncated source
     model_notes = notes[: len(notes) - original.extraction["truncated_source_count"]]
-    extraction = _extraction_row(
-        scope,
-        key,
-        model_id,
-        effort,
-        summary=original.extraction["summary"],
-        model_notes=model_notes,
-        stop_reason=REUSED_STOP_REASON,
-        tokens=dict.fromkeys(_TOKEN_COLUMNS, 0),
-    )
+    extraction = {
+        **_extraction_row(
+            scope,
+            key,
+            model_id,
+            effort,
+            summary=original.extraction["summary"],
+            model_notes=model_notes,
+            stop_reason=REUSED_STOP_REASON,
+            tokens=dict.fromkeys(_TOKEN_COLUMNS, 0),
+        ),
+        # the header the claims were made under, not this scope's: covered_keys
+        # hashes it, so a key_on_header run re-extracts a copy whose header differs
+        "header_version": original.extraction["header_version"],
+    }
     claims = [{**claim, "extraction_key": key} for claim in original.claims]
     evidence = [
         {
@@ -614,10 +623,7 @@ def _reusable_extractions(stored: ExtractionTables | None) -> dict[str, _Extract
     # one extraction per content key is enough: copies of it hold the same claims
     picked: dict[str, Mapping[str, Any]] = {}
     for row in stored.extractions.sort("extracted_at").iter_rows(named=True):
-        content_keys = [stored_content_key(row)]
-        if row["header_version"] is not None:
-            content_keys.append(stored_content_key(row, key_on_header=True))
-        for key in content_keys:
+        for key in _row_content_keys(row):
             picked.setdefault(key, row)
     keys = {row["extraction_key"] for row in picked.values()}
     claims: dict[str, list[dict[str, Any]]] = {key: [] for key in keys}

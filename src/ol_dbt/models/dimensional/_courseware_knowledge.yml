@@ -61,8 +61,9 @@ models:
     description: str, sha256 of the source text the call read
   - name: header_version
     description: str, hash of the course header the call read (title, outline, description);
-      null for extractions recorded before it was. A run whose current header differs
-      can be re-extracted on purpose (ml.lib.courseware extraction_key, key_on_header)
+      null for extractions recorded before it was. A 'reused' row has its original's,
+      the header its claims were made under. A run whose current header differs can
+      be re-extracted on purpose (ml.lib.courseware extraction_key, key_on_header)
   - name: current_header_version
     description: str, header_version of the run's course header at the extractor's
       latest read (int__courseware__latest_scope_inputs); null when the run was never

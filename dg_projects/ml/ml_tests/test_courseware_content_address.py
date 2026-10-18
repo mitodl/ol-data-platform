@@ -166,6 +166,26 @@ def test_key_on_header_reuses_only_under_the_same_header(calls):
     assert len(calls) == 2
 
 
+def test_key_on_header_re_extracts_a_copy_made_under_another_header(calls):
+    original, copy = _scope("run-a", "a"), _scope("run-b", "b")
+    stored = _extract([original, copy])
+    by_run = {
+        row["courserun_readable_id"]: row
+        for row in stored.extractions.iter_rows(named=True)
+    }
+    # the copy's claims were made under run-a's course title, not its own
+    assert by_run["run-b"]["header_version"] == by_run["run-a"]["header_version"]
+    tables = _extract(
+        [original, copy],
+        existing_keys=extract.covered_keys(stored.extractions),
+        reusable=stored,
+        key_on_header=True,
+    )
+    assert len(calls) == 2
+    assert tables.extractions["courserun_readable_id"].to_list() == ["run-b"]
+    assert tables.extractions["stop_reason"].to_list() == ["tool_use"]
+
+
 def test_a_failed_call_leaves_its_copies_out(monkeypatch):
     def failing_call_model(*_args):
         raise extract.ExtractionError
