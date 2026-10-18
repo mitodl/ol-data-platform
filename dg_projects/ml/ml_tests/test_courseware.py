@@ -479,6 +479,14 @@ def test_observe_appends_to_a_scope_input_file_without_header_version(tmp_path, 
     capsys.readouterr()
 
 
+def test_append_refuses_rows_missing_a_stored_column(tmp_path):
+    previous = pl.DataFrame({"a": [1], "b": ["x"]})
+    previous.write_parquet(tmp_path / "t.parquet")
+    with pytest.raises(ValueError, match=r"no longer carry \['b'\]"):
+        local._append(tmp_path, "t", pl.DataFrame({"a": [2]}))
+    assert pl.read_parquet(tmp_path / "t.parquet").equals(previous)
+
+
 def _golden_scope() -> scopes.Scope:
     course = scopes.Course(
         platform="mitxonline",
