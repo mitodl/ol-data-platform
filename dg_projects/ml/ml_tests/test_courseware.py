@@ -286,20 +286,11 @@ def test_rekey_refuses_a_column_whose_type_changed(tmp_path):
     assert pl.read_parquet(path)["claim_ordinal"].to_list() == [1.5]
 
 
-class _StubFactory:
-    def __init__(self, **_):
-        pass
-
-    def get_client(self):
-        return _StubClient()
-
-
-class _StubClient:
-    pass
-
-
 def _extract_with_labels(monkeypatch, sources, output_dir, labels: list[str]) -> None:
-    """Run local extract with the model replaced by claims carrying these labels."""
+    """Run local extract with the model replaced by claims carrying these labels.
+
+    The test needs the stub_llm_client fixture.
+    """
 
     def fake_extract_scopes(scopes_, _client, *, existing_keys, **_):
         extractions, claims, evidence = [], [], []
@@ -322,12 +313,11 @@ def _extract_with_labels(monkeypatch, sources, output_dir, labels: list[str]) ->
             evidence=pl.DataFrame(evidence, schema=EVIDENCE_SCHEMA),
         )
 
-    monkeypatch.setattr(local, "LLMClientFactory", _StubFactory)
-    monkeypatch.setattr(local, "AnthropicBedrock", _StubClient)
     monkeypatch.setattr(local, "extract_scopes", fake_extract_scopes)
     local.extract(sources, output_dir, model_id="model", effort="medium")
 
 
+@pytest.mark.usefixtures("stub_llm_client")
 @pytest.mark.parametrize("crash_at", [1, 2])
 def test_extract_recovers_from_a_crash_between_writes(tmp_path, monkeypatch, crash_at):
     sources = tmp_path / "sources.parquet"
@@ -366,6 +356,7 @@ def test_extract_recovers_from_a_crash_between_writes(tmp_path, monkeypatch, cra
     )
 
 
+@pytest.mark.usefixtures("stub_llm_client")
 def test_extract_refuses_an_older_claim_table_before_calling_the_model(
     tmp_path, monkeypatch
 ):

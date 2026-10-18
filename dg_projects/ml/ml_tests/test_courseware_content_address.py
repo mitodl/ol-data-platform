@@ -13,7 +13,6 @@ from ml.lib.courseware.extract import (
     stored_extraction_key,
 )
 from ml.lib.courseware.schemas import ConceptClaim, Evidence, ScopeExtraction
-from ml_tests.test_courseware import _StubClient, _StubFactory
 
 TEXT = "K-means needs the number of clusters in advance, unlike hierarchical methods."
 
@@ -222,11 +221,8 @@ def test_dry_run_marks_copies_as_reused(tmp_path, capsys):
     assert out.count(" stored\n") == 0
 
 
-def test_local_extract_stores_copies_with_their_own_scope_input(
-    tmp_path, monkeypatch, calls
-):
-    monkeypatch.setattr(local, "LLMClientFactory", _StubFactory)
-    monkeypatch.setattr(local, "AnthropicBedrock", _StubClient)
+@pytest.mark.usefixtures("stub_llm_client")
+def test_local_extract_stores_copies_with_their_own_scope_input(tmp_path, calls):
     output_dir = tmp_path / "out"
     first = tmp_path / "first.parquet"
     _run_rows("run-a", "a").write_parquet(first)
