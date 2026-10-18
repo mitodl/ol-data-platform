@@ -4,10 +4,18 @@
     course each came from. The claim descriptions say how one scope treats the
     concept; the describer turns them into one course-agnostic description, and the
     course titles let it disambiguate labels like "kernel".
+
+    Every row carries the description prompt version courseware_description_approval
+    approves, so the describer refuses any other prompt, and this model's first build
+    after a promotion requests a description run.
 #}
 with mentions as (
     select * from {{ ref('int__courseware__resolved_concept_mentions') }}
     where description is not null
+)
+
+, approval as (
+    select prompt_version from {{ ref('courseware_description_approval') }}
 )
 
 , course_runs as (
@@ -52,6 +60,9 @@ with mentions as (
     where run_rank = 1
 )
 
-select *
+select
+    one_per_run.*
+    , approval.prompt_version as approved_prompt_version
 from one_per_run
-where context_rank <= 5
+left join approval on 1 = 1
+where one_per_run.context_rank <= 5

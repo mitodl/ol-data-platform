@@ -1,6 +1,13 @@
-"""Learner-facing descriptions for every resolved concept."""
+"""Learner-facing descriptions for every resolved concept.
 
-import hashlib
+Descriptions are written only under a description prompt that
+courseware_description_approval approves. int__courseware__concept_description_inputs
+carries the approved prompt version on every row, so the inputs' next build after
+a promotion requests a run under the new prompt, while a prompt edit deployed
+without a promotion fails before any model call instead of describing every
+concept again. The asset carries no code version for the same reason.
+"""
+
 from collections.abc import Iterator
 
 import polars as pl
@@ -16,6 +23,7 @@ from ml.lib.courseware.describe import (
     BEDROCK_DESCRIPTION_MODEL,
     DESCRIPTION_MODEL,
     DESCRIPTION_PROMPT,
+    DESCRIPTION_PROMPT_VERSION,
     describe_concepts,
     description_version,
     pending_concepts,
@@ -30,7 +38,7 @@ from ml.lib.courseware.warehouse import (
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import publish_prompt_version
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
-from ol_orchestrate.lib.failures import PermanentFailure
+from ol_orchestrate.lib.failures import PermanentFailure, permanent_failure
 from pydantic import Field
 
 INPUTS_KEY = AssetKey(["intermediate", "int__courseware__concept_description_inputs"])
@@ -58,6 +66,27 @@ class CoursewareDescriptionConfig(Config):
     effort: Effort = Field(default=DEFAULT_EFFORT, description="output_config.effort")
 
 
+def require_approved_prompt(inputs: pl.DataFrame) -> None:
+    """Fail unless the inputs approve the description prompt this code runs.
+
+    :param inputs: int__courseware__concept_description_inputs rows, each carrying
+        approved_prompt_version from courseware_description_approval
+    :raises PermanentFailure: when the approved version is not
+        DESCRIPTION_PROMPT_VERSION, or no version is approved
+    """
+    approved = set(inputs["approved_prompt_version"])
+    if approved != {DESCRIPTION_PROMPT_VERSION}:
+        named = sorted(version for version in approved if version is not None)
+        msg = (
+            f"The description prompt version {DESCRIPTION_PROMPT_VERSION} is not "
+            "approved (courseware_description_approval approves "
+            f"{', '.join(named) or 'no version'}). Promote it in "
+            "src/ol_dbt/seeds/courseware_description_approval.csv to describe every "
+            "concept under it, or deploy the approved prompt."
+        )
+        raise permanent_failure(msg)
+
+
 @asset(
     key=DESCRIPTION_KEY,
     group_name="courseware",
@@ -68,7 +97,8 @@ class CoursewareDescriptionConfig(Config):
         "write_mode": "append",
         "schema_update_mode": "update",
     },
-    code_version=hashlib.sha256(DESCRIPTION_PROMPT.encode()).hexdigest()[:12],
+    # No code_version: a prompt change reaches the corpus only through
+    # courseware_description_approval (see the module docstring).
     automation_condition=upstream_or_code_changes(),
     # Nothing is written when every concept is already described, so an upstream
     # rebuild does not commit an empty snapshot.
@@ -84,9 +114,14 @@ def courseware_concept_description(
 
     Calls ml.lib.courseware.describe.describe_concepts against the stored
     descriptions and appends only the new rows, so an unchanged concept is never
-    sent again.
+    sent again. Fails before Opik or the model is called when the deployed prompt
+    is not the approved one, however the run was launched.
     """
     inputs = require_table("intermediate", INPUTS_KEY.path[-1]).collect()
+    if not inputs.height:
+        context.log.info("No concepts to describe")
+        return
+    require_approved_prompt(inputs)
     stored = read_table("intermediate", DESCRIPTION_KEY.path[-1])
     existing = (
         stored.select("concept_id", "input_checksum", "description_version").collect()
@@ -124,6 +159,7 @@ def courseware_concept_description(
                 "concept_count": MetadataValue.int(concept_count),
                 "model_id": MetadataValue.text(model_id),
                 "description_version": MetadataValue.text(version),
+                "prompt_version": MetadataValue.text(DESCRIPTION_PROMPT_VERSION),
                 "failed_concept_count": MetadataValue.int(failed),
                 "opik_prompt_version": MetadataValue.text(opik_prompt_version),
             },

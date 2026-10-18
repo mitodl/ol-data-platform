@@ -44,6 +44,7 @@ from ml.assets.courseware_resolution import (
     courseware_resolution,
 )
 from ml.lib.courseware import graph, warehouse
+from ml.lib.courseware.describe import DESCRIPTION_PROMPT_VERSION
 from ml.resources import opik_auth
 from ml.resources.llm import LLMClientFactory
 from ml.sensors import courseware as sensor_module
@@ -486,16 +487,7 @@ def test_extraction_publishes_its_prompt_before_any_call(tables, calls, monkeypa
 
 
 def test_description_publishes_its_prompt_before_any_call(tables, calls, monkeypatch):
-    tables["int__courseware__concept_description_inputs"] = pl.DataFrame(
-        {
-            "concept_id": ["c1"],
-            "label": ["auc"],
-            "concept_kind": ["concept"],
-            "description": ["used to rank models"],
-            "course_title": ["Supervised Learning"],
-            "context_rank": [1],
-        }
-    )
+    tables[DESCRIPTION_INPUTS] = description_inputs(concepts={"c1": "auc"})
     monkeypatch.setattr(description_module, "publish_prompt_version", _fail_publish)
 
     result = materialize(
@@ -877,17 +869,110 @@ def test_resolution_ignores_carried_labels_that_dropped_out(tables, calls):
 
 
 # ------------------------------------------------------------------- description
-def test_description_describes_each_concept_once(tables, calls):
-    tables["int__courseware__concept_description_inputs"] = pl.DataFrame(
+DESCRIPTION_INPUTS = "int__courseware__concept_description_inputs"
+
+
+def description_inputs(
+    concepts: dict[str, str] | None = None,
+    approved_prompt_version: str | None = DESCRIPTION_PROMPT_VERSION,
+) -> pl.DataFrame:
+    """int__courseware__concept_description_inputs, one context row per concept."""
+    concepts = concepts or {"c1": "auc", "c2": "bias"}
+    return pl.DataFrame(
         {
-            "concept_id": ["c1", "c2"],
-            "label": ["auc", "bias"],
-            "concept_kind": ["concept", "concept"],
-            "description": ["used to rank models", "what a model gets wrong"],
-            "course_title": ["Supervised Learning", "Supervised Learning"],
-            "context_rank": [1, 1],
-        }
+            "concept_id": list(concepts),
+            "label": list(concepts.values()),
+            "concept_kind": ["concept"] * len(concepts),
+            "description": [f"what {label} means" for label in concepts.values()],
+            "course_title": ["Supervised Learning"] * len(concepts),
+            "context_rank": [1] * len(concepts),
+            "approved_prompt_version": [approved_prompt_version] * len(concepts),
+        },
+        schema_overrides={"approved_prompt_version": pl.String},
     )
+
+
+def describe(tables, llm: LLMClientFactory | None = None):
+    (hooked,) = with_failure_hooks([courseware_concept_description])
+    return materialize(
+        [hooked],
+        resources={"io_manager": Warehouse(tables), "llm": llm or FakeLLM()},
+        raise_on_error=False,
+    )
+
+
+def step_failure(result):
+    (failure,) = [
+        event.step_failure_data.user_failure_data
+        for event in result.all_events
+        if event.is_step_failure
+    ]
+    return failure
+
+
+@pytest.mark.parametrize("approved", ["0ld0ld0ld0ld", None])
+def test_description_refuses_a_prompt_that_is_not_approved(
+    tables, calls, monkeypatch, approved
+):
+    tables[DESCRIPTION_INPUTS] = description_inputs(approved_prompt_version=approved)
+    monkeypatch.setattr(description_module, "publish_prompt_version", _fail_publish)
+
+    result = describe(tables)
+
+    assert not result.success
+    failure = step_failure(result)
+    assert f"approves {approved or 'no version'}" in failure.description
+    assert failure.metadata["retryable"].value is False
+    # before Opik or the model
+    assert calls == []
+    assert "courseware_concept_description" not in tables
+
+
+def test_description_prompt_change_waits_for_promotion(tables, calls, monkeypatch):
+    tables[DESCRIPTION_INPUTS] = description_inputs()
+    assert describe(tables).success
+    assert calls == ["record_descriptions"]
+    # A code version would make automation re-describe on deploy.
+    assert courseware_concept_description.code_versions_by_key == {
+        courseware_concept_description.key: None
+    }
+
+    edited = "e0e0e0e0e0e0"
+    monkeypatch.setattr(description_module, "DESCRIPTION_PROMPT_VERSION", edited)
+    monkeypatch.setattr(
+        "ml.lib.courseware.describe.DESCRIPTION_PROMPT", "A different prompt."
+    )
+    calls.clear()
+
+    assert not describe(tables).success
+    assert calls == []
+    assert tables["courseware_concept_description"].height == 2
+
+    # Promoted: every concept is described under the new prompt, once.
+    tables[DESCRIPTION_INPUTS] = description_inputs(approved_prompt_version=edited)
+    assert describe(tables).success
+    assert describe(tables).success
+    assert calls == ["record_descriptions"]
+    assert tables["courseware_concept_description"].height == 4
+
+
+def test_description_describes_only_concepts_new_at_the_approved_version(tables, calls):
+    tables[DESCRIPTION_INPUTS] = description_inputs(concepts={"c1": "auc"})
+    assert describe(tables).success
+    tables[DESCRIPTION_INPUTS] = description_inputs()
+    calls.clear()
+
+    assert describe(tables).success
+
+    assert calls == ["record_descriptions"]
+    assert tables["courseware_concept_description"]["concept_id"].to_list() == [
+        "c1",
+        "c2",
+    ]
+
+
+def test_description_describes_each_concept_once(tables, calls):
+    tables[DESCRIPTION_INPUTS] = description_inputs()
     resources = {"io_manager": Warehouse(tables), "llm": FakeLLM()}
 
     materialize([courseware_concept_description], resources=resources)
@@ -903,16 +988,7 @@ def test_description_describes_each_concept_once(tables, calls):
 
 
 def test_description_stores_what_succeeded_and_fails_on_missing_ones(tables, calls):
-    tables["int__courseware__concept_description_inputs"] = pl.DataFrame(
-        {
-            "concept_id": ["c1", "c2"],
-            "label": ["auc", "bias"],
-            "concept_kind": ["concept", "concept"],
-            "description": ["used to rank models", "what a model gets wrong"],
-            "course_title": ["Supervised Learning", "Supervised Learning"],
-            "context_rank": [1, 1],
-        }
-    )
+    tables[DESCRIPTION_INPUTS] = description_inputs()
     instance = DagsterInstance.ephemeral()
     (hooked,) = with_failure_hooks([courseware_concept_description])
 

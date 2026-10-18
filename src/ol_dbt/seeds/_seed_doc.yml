@@ -267,3 +267,24 @@ seeds:
     description: str, the first 12 hex digits of the output schema's sha256
     tests:
     - not_null
+
+- name: courseware_description_approval
+  description: >
+    The courseware concept description prompt version the description asset may
+    describe under. The asset fails before any model call when the deployed
+    DESCRIPTION_PROMPT's version is not the one named here, so a prompt edit
+    describes nothing until this row is promoted to it, and then describes every
+    concept under it once. At most one row; an empty file approves nothing.
+  config:
+    column_types:
+      prompt_version: varchar
+  tests:
+  - dbt_expectations.expect_table_row_count_to_be_between:
+      arguments:
+        max_value: 1
+  columns:
+  - name: prompt_version
+    description: str, the first 12 hex digits of DESCRIPTION_PROMPT's sha256 (ml.lib.courseware.describe.DESCRIPTION_PROMPT_VERSION;
+      a failed description run names the deployed one)
+    tests:
+    - not_null
