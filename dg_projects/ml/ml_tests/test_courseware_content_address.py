@@ -13,6 +13,7 @@ from ml.lib.courseware.extract import (
     stored_extraction_key,
 )
 from ml.lib.courseware.schemas import ConceptClaim, Evidence, ScopeExtraction
+from ml_tests.test_courseware import _StubClient, _StubFactory
 
 TEXT = "K-means needs the number of clusters in advance, unlike hierarchical methods."
 
@@ -219,3 +220,39 @@ def test_dry_run_marks_copies_as_reused(tmp_path, capsys):
     out = capsys.readouterr().out
     assert out.count(" reused\n") == 1
     assert out.count(" stored\n") == 0
+
+
+def test_local_extract_stores_copies_with_their_own_scope_input(
+    tmp_path, monkeypatch, calls
+):
+    monkeypatch.setattr(local, "LLMClientFactory", _StubFactory)
+    monkeypatch.setattr(local, "AnthropicBedrock", _StubClient)
+    output_dir = tmp_path / "out"
+    first = tmp_path / "first.parquet"
+    _run_rows("run-a", "a").write_parquet(first)
+    local.extract(first, output_dir, model_id="model", effort="medium")
+    both = tmp_path / "both.parquet"
+    pl.concat([_run_rows("run-a", "a"), _run_rows("run-b", "b")]).write_parquet(both)
+    local.extract(both, output_dir, model_id="model", effort="medium")
+    assert len(calls) == 1
+    extractions, claims, evidence = (
+        pl.read_parquet(output_dir / f"{table}.parquet")
+        for table in local.OUTPUT_TABLES
+    )
+    copy = extractions.filter(pl.col("courserun_readable_id") == "run-b").row(
+        0, named=True
+    )
+    assert copy["stop_reason"] == REUSED_STOP_REASON
+    assert copy["header_version"] == extract.header_version(_scope("run-a", "a").course)
+    assert claims.filter(pl.col("extraction_key") == copy["extraction_key"]).height == 1
+    assert evidence.filter(pl.col("extraction_key") == copy["extraction_key"])[
+        "source_ref"
+    ].to_list() == ["b-video"]
+    # the copy's read records its own header, so dbt flags the copy as header-stale
+    read = pl.read_parquet(output_dir / "courseware_scope_input.parquet").filter(
+        pl.col("courserun_readable_id") == "run-b"
+    )
+    assert read["header_version"].to_list() == [
+        extract.header_version(_scope("run-b", "b").course)
+    ]
+    assert read["header_version"][0] != copy["header_version"]
