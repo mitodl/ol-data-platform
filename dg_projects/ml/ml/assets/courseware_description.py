@@ -4,8 +4,9 @@ Descriptions are written only under a description prompt that
 courseware_description_approval approves. int__courseware__concept_description_inputs
 carries the approved prompt version on every row, so the inputs' next build after
 a promotion requests a run under the new prompt, while a prompt edit deployed
-without a promotion fails before any model call instead of describing every
-concept again. The asset carries no code version for the same reason.
+without a promotion describes nothing: a run automation requested logs why and
+stops, and a run launched any other way fails before any model call. The asset
+carries no code version for the same reason.
 """
 
 from collections.abc import Iterator
@@ -19,6 +20,9 @@ from dagster import (
     Output,
     asset,
 )
+
+# Not exported from the top-level dagster namespace; see sensors/courseware.py.
+from dagster._core.storage.tags import AUTOMATION_CONDITION_TAG
 from ml.lib.courseware.describe import (
     BEDROCK_DESCRIPTION_MODEL,
     DESCRIPTION_MODEL,
@@ -66,25 +70,25 @@ class CoursewareDescriptionConfig(Config):
     effort: Effort = Field(default=DEFAULT_EFFORT, description="output_config.effort")
 
 
-def require_approved_prompt(inputs: pl.DataFrame) -> None:
-    """Fail unless the inputs approve the description prompt this code runs.
+def unapproved_prompt(inputs: pl.DataFrame) -> str | None:
+    """Say why the inputs do not approve the description prompt this code runs.
 
     :param inputs: int__courseware__concept_description_inputs rows, each carrying
         approved_prompt_version from courseware_description_approval
-    :raises PermanentFailure: when the approved version is not
-        DESCRIPTION_PROMPT_VERSION, or no version is approved
+    :returns: the reason, or None when DESCRIPTION_PROMPT_VERSION is approved
+    :rtype: str | None
     """
     approved = set(inputs["approved_prompt_version"])
-    if approved != {DESCRIPTION_PROMPT_VERSION}:
-        named = sorted(version for version in approved if version is not None)
-        msg = (
-            f"The description prompt version {DESCRIPTION_PROMPT_VERSION} is not "
-            "approved (courseware_description_approval approves "
-            f"{', '.join(named) or 'no version'}). Promote it in "
-            "src/ol_dbt/seeds/courseware_description_approval.csv to describe every "
-            "concept under it, or deploy the approved prompt."
-        )
-        raise permanent_failure(msg)
+    if approved == {DESCRIPTION_PROMPT_VERSION}:
+        return None
+    named = sorted(version for version in approved if version is not None)
+    return (
+        f"The description prompt version {DESCRIPTION_PROMPT_VERSION} is not "
+        "approved (courseware_description_approval approves "
+        f"{', '.join(named) or 'no version'}). Promote it in "
+        "src/ol_dbt/seeds/courseware_description_approval.csv to describe every "
+        "concept under it, or deploy the approved prompt."
+    )
 
 
 @asset(
@@ -114,14 +118,22 @@ def courseware_concept_description(
 
     Calls ml.lib.courseware.describe.describe_concepts against the stored
     descriptions and appends only the new rows, so an unchanged concept is never
-    sent again. Fails before Opik or the model is called when the deployed prompt
-    is not the approved one, however the run was launched.
+    sent again. Nothing reaches Opik or the model when the deployed prompt is not
+    the approved one.
     """
     inputs = require_table("intermediate", INPUTS_KEY.path[-1]).collect()
     if not inputs.height:
         context.log.info("No concepts to describe")
         return
-    require_approved_prompt(inputs)
+    if refusal := unapproved_prompt(inputs):
+        # Each rebuild of the inputs requests a run while the deployed prompt waits
+        # for promotion. Failing that run would add a retry and a Sentry issue per
+        # rebuild, where an unapproved extraction is never requested at all, so a
+        # run automation requested stops here. A run someone launched fails.
+        if context.run.tags.get(AUTOMATION_CONDITION_TAG) == "true":
+            context.log.warning(refusal)
+            return
+        raise permanent_failure(refusal)
     stored = read_table("intermediate", DESCRIPTION_KEY.path[-1])
     existing = (
         stored.select("concept_id", "input_checksum", "description_version").collect()

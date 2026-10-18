@@ -25,6 +25,7 @@ from dagster import (
     define_asset_job,
     materialize,
 )
+from dagster._core.storage.tags import AUTOMATION_CONDITION_TAG
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
 from ml.assets import courseware_description as description_module
@@ -892,12 +893,15 @@ def description_inputs(
     )
 
 
-def describe(tables, llm: LLMClientFactory | None = None):
+def describe(
+    tables, llm: LLMClientFactory | None = None, tags: dict[str, str] | None = None
+):
     (hooked,) = with_failure_hooks([courseware_concept_description])
     return materialize(
         [hooked],
         resources={"io_manager": Warehouse(tables), "llm": llm or FakeLLM()},
         raise_on_error=False,
+        tags=tags,
     )
 
 
@@ -924,6 +928,23 @@ def test_description_refuses_a_prompt_that_is_not_approved(
     assert f"approves {approved or 'no version'}" in failure.description
     assert failure.metadata["retryable"].value is False
     # before Opik or the model
+    assert calls == []
+    assert "courseware_concept_description" not in tables
+
+
+def test_automation_skips_a_description_prompt_that_is_not_approved(
+    tables, calls, monkeypatch
+):
+    tables[DESCRIPTION_INPUTS] = description_inputs(
+        approved_prompt_version="0ld0ld0ld0ld"
+    )
+    monkeypatch.setattr(description_module, "publish_prompt_version", _fail_publish)
+
+    result = describe(tables, tags={AUTOMATION_CONDITION_TAG: "true"})
+
+    # Succeeds without output, so automation neither retries it nor reports it.
+    assert result.success
+    assert result.get_asset_materialization_events() == []
     assert calls == []
     assert "courseware_concept_description" not in tables
 

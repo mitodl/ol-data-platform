@@ -7,7 +7,9 @@
 
     Every row carries the description prompt version courseware_description_approval
     approves, so the describer refuses any other prompt, and this model's first build
-    after a promotion requests a description run.
+    after a promotion requests a description run. A seed with more than one row
+    approves nothing rather than repeating every row, which would change every
+    concept's input checksum and describe the corpus again.
 #}
 with mentions as (
     select * from {{ ref('int__courseware__resolved_concept_mentions') }}
@@ -15,7 +17,8 @@ with mentions as (
 )
 
 , approval as (
-    select prompt_version from {{ ref('courseware_description_approval') }}
+    select case when count(*) = 1 then max(prompt_version) end as prompt_version
+    from {{ ref('courseware_description_approval') }}
 )
 
 , course_runs as (
@@ -64,5 +67,5 @@ select
     one_per_run.*
     , approval.prompt_version as approved_prompt_version
 from one_per_run
-left join approval on 1 = 1
+cross join approval
 where one_per_run.context_rank <= 5
