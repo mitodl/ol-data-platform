@@ -111,13 +111,19 @@ feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
 )
 
 # Extraction (per course run) and the corpus-wide steps after it. Every one of
-# them calls a model except the graph, and extraction re-runs for every course run
-# when its prompt or schema version changes, so this is enabled deliberately
-# (after courseware_extraction_text_sensor has observed the runs). Stopped by
-# default. Before enabling it, set a concurrency limit for the
-# courseware_extraction pool in ol-infrastructure's Dagster instance config: the
-# instance has no concurrency block, so the pool is unlimited and a first
-# observation would launch one run per course run at once.
+# them calls a model except the graph. Extraction runs only for the course runs
+# courseware_extraction_allowlist approves for the deployed extractor version, so
+# the allowlist bounds what a first observation or a promotion launches. Stopped
+# by default, and enabled after courseware_extraction_text_sensor has observed the
+# runs.
+#
+# Every run it launches carries COURSEWARE_MODEL_CALLS_TAG, which ol-infrastructure's
+# run_coordinator tag_concurrency_limits caps. Dagster's instance config has no
+# per-pool limit (only pools.default_limit, which would bind every pool), and the
+# courseware_extraction pool has no limit set, so without the tag limit a
+# promotion of N runs would start N runs at once, each making max_workers
+# concurrent model calls and committing to the same three Iceberg tables.
+COURSEWARE_MODEL_CALLS_TAG = "courseware/model_calls"
 courseware_automation_sensor = AutomationConditionSensorDefinition(
     name="courseware_automation_sensor",
     target=AssetSelection.assets(
@@ -126,6 +132,7 @@ courseware_automation_sensor = AutomationConditionSensorDefinition(
         courseware_concept_description,
         courseware_concept_graph,
     ),
+    run_tags={COURSEWARE_MODEL_CALLS_TAG: "true"},
     default_status=DefaultSensorStatus.STOPPED,
 )
 
