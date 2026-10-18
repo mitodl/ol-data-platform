@@ -5,8 +5,10 @@ unit_tests:
     A module overview goes to the context scope wherever it sits, and so does a
     chapter's only sequential titled as an intro or wrap-up, as in mit-learn's
     unit builder. An introduction beside other sequentials stays a unit, and the
-    units left are renumbered. About pages other than the description pages are
-    prefixed with their field's name.
+    units left are renumbered. As there, a staff-only sequential or chapter, or a
+    sequential hidden from the table of contents, is neither a unit nor context and
+    does not count toward its chapter's size. About pages other than the description
+    pages are prefixed with their field's name.
   model: int__courseware__extraction_sources
   given:
   - input: ref('dim_course_content')
@@ -51,6 +53,45 @@ unit_tests:
       block_category: html, block_id: "block-v1:X+Y+1T2026+type@html+block@h_l2",
       block_title: "Lecture 2 text", block_index: 10, chapter_block_id: "block-v1:X+Y+1T2026+type@chapter+block@ch3",
       sequential_block_id: "block-v1:X+Y+1T2026+type@sequential+block@l2", parent_block_id: "block-v1:X+Y+1T2026+type@sequential+block@l2"}
+    - {is_latest: true, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      block_category: sequential, block_id: "block-v1:X+Y+1T2026+type@sequential+block@wrap",
+      block_title: "Wrap-up", block_index: 11, chapter_block_id: "block-v1:X+Y+1T2026+type@chapter+block@ch4",
+      sequential_block_id: "block-v1:X+Y+1T2026+type@sequential+block@wrap", parent_block_id: "block-v1:X+Y+1T2026+type@chapter+block@ch4"}
+    - {is_latest: true, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      block_category: html, block_id: "block-v1:X+Y+1T2026+type@html+block@h_wrap",
+      block_title: "Wrap-up text", block_index: 12, chapter_block_id: "block-v1:X+Y+1T2026+type@chapter+block@ch4",
+      sequential_block_id: "block-v1:X+Y+1T2026+type@sequential+block@wrap", parent_block_id: "block-v1:X+Y+1T2026+type@sequential+block@wrap"}
+    - {is_latest: true, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      block_category: sequential, block_id: "block-v1:X+Y+1T2026+type@sequential+block@staff",
+      block_title: "Staff notes", block_index: 13, chapter_block_id: "block-v1:X+Y+1T2026+type@chapter+block@ch4",
+      sequential_block_id: "block-v1:X+Y+1T2026+type@sequential+block@staff", parent_block_id: "block-v1:X+Y+1T2026+type@chapter+block@ch4",
+      block_metadata: '{"visible_to_staff_only": true}'}
+    - {is_latest: true, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      block_category: html, block_id: "block-v1:X+Y+1T2026+type@html+block@h_staff",
+      block_title: "Staff notes text", block_index: 14, chapter_block_id: "block-v1:X+Y+1T2026+type@chapter+block@ch4",
+      sequential_block_id: "block-v1:X+Y+1T2026+type@sequential+block@staff", parent_block_id: "block-v1:X+Y+1T2026+type@sequential+block@staff"}
+    - {is_latest: true, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      block_category: sequential, block_id: "block-v1:X+Y+1T2026+type@sequential+block@bonus",
+      block_title: "Bonus", block_index: 15, chapter_block_id: "block-v1:X+Y+1T2026+type@chapter+block@ch4",
+      sequential_block_id: "block-v1:X+Y+1T2026+type@sequential+block@bonus", parent_block_id: "block-v1:X+Y+1T2026+type@chapter+block@ch4",
+      block_metadata: '{"hide_from_toc": true}'}
+    - {is_latest: true, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      block_category: html, block_id: "block-v1:X+Y+1T2026+type@html+block@h_bonus",
+      block_title: "Bonus text", block_index: 16, chapter_block_id: "block-v1:X+Y+1T2026+type@chapter+block@ch4",
+      sequential_block_id: "block-v1:X+Y+1T2026+type@sequential+block@bonus", parent_block_id: "block-v1:X+Y+1T2026+type@sequential+block@bonus"}
+    - {is_latest: true, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      block_category: chapter, block_id: "block-v1:X+Y+1T2026+type@chapter+block@ch5",
+      block_title: "Answers", block_index: 17, chapter_block_id: "block-v1:X+Y+1T2026+type@chapter+block@ch5",
+      parent_block_id: "block-v1:X+Y+1T2026+type@course+block@course", block_metadata: '{"visible_to_staff_only":
+        true}'}
+    - {is_latest: true, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      block_category: sequential, block_id: "block-v1:X+Y+1T2026+type@sequential+block@l3",
+      block_title: "Lecture 3", block_index: 18, chapter_block_id: "block-v1:X+Y+1T2026+type@chapter+block@ch5",
+      sequential_block_id: "block-v1:X+Y+1T2026+type@sequential+block@l3", parent_block_id: "block-v1:X+Y+1T2026+type@chapter+block@ch5"}
+    - {is_latest: true, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      block_category: html, block_id: "block-v1:X+Y+1T2026+type@html+block@h_l3",
+      block_title: "Lecture 3 text", block_index: 19, chapter_block_id: "block-v1:X+Y+1T2026+type@chapter+block@ch5",
+      sequential_block_id: "block-v1:X+Y+1T2026+type@sequential+block@l3", parent_block_id: "block-v1:X+Y+1T2026+type@sequential+block@l3"}
   - input: ref('int__combined__course_xml_blocks')
     rows:
     - {courserun_readable_id: "course-v1:X+Y+1T2026", coursestructure_xml_source_system: mitxonline,
@@ -67,6 +108,18 @@ unit_tests:
       coursestructure_xml_raw_xml: "<html/>", coursestructure_xml_retrieved_at: "2026-10-17T00:00:00"}
     - {courserun_readable_id: "course-v1:X+Y+1T2026", coursestructure_xml_source_system: mitxonline,
       coursestructure_xml_block_type: html, coursestructure_xml_block_path: course/html/h_l2.xml,
+      coursestructure_xml_raw_xml: "<html/>", coursestructure_xml_retrieved_at: "2026-10-17T00:00:00"}
+    - {courserun_readable_id: "course-v1:X+Y+1T2026", coursestructure_xml_source_system: mitxonline,
+      coursestructure_xml_block_type: html, coursestructure_xml_block_path: course/html/h_wrap.xml,
+      coursestructure_xml_raw_xml: "<html/>", coursestructure_xml_retrieved_at: "2026-10-17T00:00:00"}
+    - {courserun_readable_id: "course-v1:X+Y+1T2026", coursestructure_xml_source_system: mitxonline,
+      coursestructure_xml_block_type: html, coursestructure_xml_block_path: course/html/h_staff.xml,
+      coursestructure_xml_raw_xml: "<html/>", coursestructure_xml_retrieved_at: "2026-10-17T00:00:00"}
+    - {courserun_readable_id: "course-v1:X+Y+1T2026", coursestructure_xml_source_system: mitxonline,
+      coursestructure_xml_block_type: html, coursestructure_xml_block_path: course/html/h_bonus.xml,
+      coursestructure_xml_raw_xml: "<html/>", coursestructure_xml_retrieved_at: "2026-10-17T00:00:00"}
+    - {courserun_readable_id: "course-v1:X+Y+1T2026", coursestructure_xml_source_system: mitxonline,
+      coursestructure_xml_block_type: html, coursestructure_xml_block_path: course/html/h_l3.xml,
       coursestructure_xml_raw_xml: "<html/>", coursestructure_xml_retrieved_at: "2026-10-17T00:00:00"}
   - input: ref('stg__openedx__s3__course_file_exclusions')
     rows: []
@@ -86,6 +139,18 @@ unit_tests:
         \ body", content_file_extraction_status: extracted}
     - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
       content_file_path: html/h_l2.html, content_file_extension: .html, content_file_text: "h_l2\
+        \ body", content_file_extraction_status: extracted}
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: html/h_wrap.html, content_file_extension: .html, content_file_text: "h_wrap\
+        \ body", content_file_extraction_status: extracted}
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: html/h_staff.html, content_file_extension: .html, content_file_text: "h_staff\
+        \ body", content_file_extraction_status: extracted}
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: html/h_bonus.html, content_file_extension: .html, content_file_text: "h_bonus\
+        \ body", content_file_extraction_status: extracted}
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: html/h_l3.html, content_file_extension: .html, content_file_text: "h_l3\
         \ body", content_file_extraction_status: extracted}
     - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
       content_file_path: about/prerequisites.html, content_file_extension: .html,
@@ -109,6 +174,9 @@ unit_tests:
     - {scope_id: "context", scope_kind: context, scope_title: Course context, scope_position: 0,
       source_position: 4, source_ref: "block-v1:X+Y+1T2026+type@html+block@h_summary",
       source_text: "h_summary body"}
+    - {scope_id: "context", scope_kind: context, scope_title: Course context, scope_position: 0,
+      source_position: 5, source_ref: "block-v1:X+Y+1T2026+type@html+block@h_wrap",
+      source_text: "h_wrap body"}
     - {scope_id: "block-v1:X+Y+1T2026+type@sequential+block@l1", scope_kind: unit,
       scope_title: Lecture 1, scope_position: 1, source_position: 1, source_ref: "block-v1:X+Y+1T2026+type@html+block@h_l1",
       source_text: "h_l1 body"}

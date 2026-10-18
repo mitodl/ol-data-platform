@@ -3,7 +3,9 @@
     source item in reading order.
 
     Scopes:
-      unit       one per sequential, its leaf blocks in course-tree order (dim_course_content)
+      unit       one per sequential a learner can navigate to (not staff-only, alone or by
+                 its chapter, and not hidden from the table of contents), its leaf blocks
+                 in course-tree order (dim_course_content)
       context    the about pages, reachable tabs and course info pages, then the blocks of
                  the sequentials that describe the course or a module rather than teach:
                  one titled "Module Overview and Learning Goals" wherever it sits, and a
@@ -138,19 +140,30 @@ with content as (
         and courserun_readable_id in {{ courserun_filter }}
 )
 
+-- as in #4095, a chapter's size counts only the sequentials a learner can navigate to,
+-- and the others are neither units nor context
 , sequentials as (
     select
-        platform
-        , courserun_readable_id
-        , block_id
-        , block_title
-        , block_index
-        , lower(trim({{ regexp_replace_all('block_title', "'\\s+'", "' '") }})) as normalized_title
+        sequential.platform
+        , sequential.courserun_readable_id
+        , sequential.block_id
+        , sequential.block_title
+        , sequential.block_index
+        , lower(trim({{ regexp_replace_all('sequential.block_title', "'\\s+'", "' '") }})) as normalized_title
         , count(*) over (
-            partition by platform, courserun_readable_id, chapter_block_id
+            partition by sequential.platform, sequential.courserun_readable_id, sequential.chapter_block_id
         ) as chapter_sequential_count
-    from content
-    where block_category = 'sequential'
+    from content as sequential
+    left join content as chapter
+        on
+            sequential.platform = chapter.platform
+            and sequential.courserun_readable_id = chapter.courserun_readable_id
+            and sequential.chapter_block_id = chapter.block_id
+    where
+        sequential.block_category = 'sequential'
+        and coalesce({{ json_query_string('sequential.block_metadata', "'$.visible_to_staff_only'") }}, '') != 'true'
+        and coalesce({{ json_query_string('chapter.block_metadata', "'$.visible_to_staff_only'") }}, '') != 'true'
+        and coalesce({{ json_query_string('sequential.block_metadata', "'$.hide_from_toc'") }}, '') != 'true'
 )
 
 , classified_sequentials as (

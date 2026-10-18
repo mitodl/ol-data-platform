@@ -13,6 +13,9 @@ unit_tests:
     rows:
     - {extraction_key: k, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
       scope_id: s, scope_part: 1, extracted_at: "2026-10-17T00:00:00"}
+  - input: ref('int__courseware__extraction_sources')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: s}
   - input: source('courseware_intermediate', 'courseware_claim')
     rows:
     - {extraction_key: k, claim_ordinal: 1, claim_kind: concept, label: C}
