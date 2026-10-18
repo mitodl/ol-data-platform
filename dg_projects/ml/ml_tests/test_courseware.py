@@ -3,7 +3,11 @@ import pytest
 from ml.lib.courseware import local, scopes
 from ml.lib.courseware.describe import _concept_inputs
 from ml.lib.courseware.extract import (
+    CLAIM_SCHEMA,
+    EVIDENCE_SCHEMA,
+    EXTRACTION_SCHEMA,
     EXTRACTOR_ID,
+    ExtractionTables,
     _claim_row,
     _ModelResult,
     extraction_key,
@@ -251,6 +255,106 @@ def test_rekey_recovers_from_a_crash_after_the_first_write(tmp_path, monkeypatch
     monkeypatch.setattr(local, "_write", write)
     local.rekey(tmp_path)
     assert _stored_keys(tmp_path) == [[extraction_key(scope, "model", "medium")]] * 3
+
+
+def test_rekey_adds_columns_an_older_table_lacks(tmp_path):
+    _old_style_outputs(tmp_path)
+    path = tmp_path / "courseware_claim_extraction.parquet"
+    pl.read_parquet(path).drop("cache_creation_input_tokens").write_parquet(path)
+    local.rekey(tmp_path)
+    for table, schema in local.OUTPUT_SCHEMAS.items():
+        stored = pl.read_parquet(tmp_path / f"{table}.parquet")
+        assert stored.schema == pl.Schema(schema)
+    stored = pl.read_parquet(path)
+    assert stored["cache_creation_input_tokens"].to_list() == [None]
+
+
+def test_rekey_refuses_a_column_the_schema_dropped(tmp_path):
+    _old_style_outputs(tmp_path)
+    path = tmp_path / "courseware_claim.parquet"
+    pl.read_parquet(path).with_columns(retired=pl.lit(1)).write_parquet(path)
+    with pytest.raises(ValueError, match="retired"):
+        local.rekey(tmp_path)
+
+
+class _StubFactory:
+    def __init__(self, **_):
+        pass
+
+    def get_client(self):
+        return _StubClient()
+
+
+class _StubClient:
+    pass
+
+
+def _extract_with_labels(monkeypatch, sources, output_dir, labels: list[str]) -> None:
+    """Run local extract with the model replaced by claims carrying these labels."""
+
+    def fake_extract_scopes(scopes_, _client, *, existing_keys, **_):
+        extractions, claims, evidence = [], [], []
+        for scope in scopes_:
+            key = extraction_key(scope, "model", "medium")
+            if key in existing_keys:
+                continue
+            extraction, _, _ = _rows_for(scope, key, "model", "medium", _result())
+            extractions.append(extraction)
+            for ordinal, label in enumerate(labels, start=1):
+                claims.append(
+                    {"extraction_key": key, "claim_ordinal": ordinal, "label": label}
+                )
+                evidence.append(
+                    {"extraction_key": key, "claim_ordinal": ordinal, "passage": label}
+                )
+        return ExtractionTables(
+            extractions=pl.DataFrame(extractions, schema=EXTRACTION_SCHEMA),
+            claims=pl.DataFrame(claims, schema=CLAIM_SCHEMA),
+            evidence=pl.DataFrame(evidence, schema=EVIDENCE_SCHEMA),
+        )
+
+    monkeypatch.setattr(local, "LLMClientFactory", _StubFactory)
+    monkeypatch.setattr(local, "AnthropicBedrock", _StubClient)
+    monkeypatch.setattr(local, "extract_scopes", fake_extract_scopes)
+    local.extract(sources, output_dir, model_id="model", effort="medium")
+
+
+@pytest.mark.parametrize("crash_at", [1, 2])
+def test_extract_recovers_from_a_crash_between_writes(tmp_path, monkeypatch, crash_at):
+    sources = tmp_path / "sources.parquet"
+    _course_rows("About it.", "Lecture 2", "some text").write_parquet(sources)
+    output_dir = tmp_path / "out"
+    write = local._write
+    written: list[str] = []
+
+    def crash_after(rows, directory, table):
+        if len(written) == crash_at:
+            raise KeyboardInterrupt
+        write(rows, directory, table)
+        written.append(table)
+
+    monkeypatch.setattr(local, "_write", crash_after)
+    with pytest.raises(KeyboardInterrupt):
+        _extract_with_labels(monkeypatch, sources, output_dir, ["first", "attempt"])
+    # claims were written, the extraction rows that mark them done were not
+    assert written[0] == "courseware_claim"
+    assert not (output_dir / "courseware_claim_extraction.parquet").exists()
+    monkeypatch.setattr(local, "_write", write)
+    _extract_with_labels(monkeypatch, sources, output_dir, ["second"])
+    extractions, claims, evidence = (
+        pl.read_parquet(output_dir / f"{table}.parquet")
+        for table in local.OUTPUT_TABLES
+    )
+    assert extractions.height == len(scopes.build_scopes(pl.read_parquet(sources)))
+    assert set(claims["extraction_key"]) == set(extractions["extraction_key"])
+    # one claim and one evidence row per extraction, all from the second attempt
+    assert claims["label"].to_list() == ["second"] * extractions.height
+    assert evidence["passage"].to_list() == ["second"] * extractions.height
+    # a further run stores nothing new
+    _extract_with_labels(monkeypatch, sources, output_dir, ["third"])
+    assert pl.read_parquet(output_dir / "courseware_claim.parquet").height == (
+        extractions.height
+    )
 
 
 def test_extract_refuses_keys_that_need_rekey(tmp_path, capsys):

@@ -17,7 +17,9 @@ from anthropic import AnthropicBedrock
 from ml.lib.courseware.describe import describe_concepts
 from ml.lib.courseware.extract import (
     BEDROCK_DEFAULT_MODEL,
+    CLAIM_SCHEMA,
     DEFAULT_EFFORT,
+    EVIDENCE_SCHEMA,
     EXTRACTION_SCHEMA,
     Effort,
     covered_keys,
@@ -42,6 +44,11 @@ OUTPUT_TABLES = (
     "courseware_claim",
     "courseware_claim_evidence",
 )
+OUTPUT_SCHEMAS = {
+    "courseware_claim_extraction": EXTRACTION_SCHEMA,
+    "courseware_claim": CLAIM_SCHEMA,
+    "courseware_claim_evidence": EVIDENCE_SCHEMA,
+}
 
 
 def _existing(output_dir: Path, table: str) -> pl.DataFrame | None:
@@ -65,7 +72,7 @@ def _require_current_keys(stored: pl.DataFrame) -> None:
     :raises ValueError: when the directory needs ``local rekey`` first
     """
     msg = "extraction keys predate the current scheme; run `local rekey` first"
-    if "header_version" not in stored.columns:
+    if set(EXTRACTION_SCHEMA) - set(stored.columns):
         raise ValueError(msg)
     for row in stored.filter(pl.col("header_version").is_null()).iter_rows(named=True):
         if stored_extraction_key(row) != row["extraction_key"]:
@@ -178,17 +185,58 @@ def extract(  # noqa: PLR0913
         max_workers=max_workers,
         key_on_header=key_on_header,
     )
-    for table, new_rows in zip(
-        OUTPUT_TABLES, (tables.extractions, tables.claims, tables.evidence), strict=True
-    ):
-        previous = _existing(output_dir, table)
-        combined = new_rows if previous is None else pl.concat([previous, new_rows])
-        combined.write_parquet(output_dir / f"{table}.parquet")
+    _store_extractions(output_dir, tables.extractions, tables.claims, tables.evidence)
     print(  # noqa: T201
         f"{tables.extractions.height} extractions, {tables.claims.height} claims, "
         f"{tables.evidence.height} evidence rows; "
         f"{tables.extractions['input_tokens'].sum():,} in / "
         f"{tables.extractions['output_tokens'].sum():,} out tokens"
+    )
+
+
+def _store_extractions(
+    output_dir: Path,
+    extractions: pl.DataFrame,
+    claims: pl.DataFrame,
+    evidence: pl.DataFrame,
+) -> None:
+    """Append new extractions so that a crash at any point neither loses nor duplicates.
+
+    The extraction row is what marks a key as done, so it is written last. Claims
+    and evidence already stored under the new keys can only be leftovers of an
+    earlier run that crashed before writing its extraction rows; they are replaced
+    rather than appended to, as the Dagster asset does.
+    """
+    new_keys = extractions["extraction_key"].implode()
+    for table, new_rows in (
+        ("courseware_claim", claims),
+        ("courseware_claim_evidence", evidence),
+        ("courseware_claim_extraction", extractions),
+    ):
+        previous = _existing(output_dir, table)
+        if previous is not None:
+            previous = previous.filter(~pl.col("extraction_key").is_in(new_keys))
+        combined = new_rows if previous is None else pl.concat([previous, new_rows])
+        _write(combined, output_dir, table)
+
+
+def _conform(rows: pl.DataFrame, table: str) -> pl.DataFrame:
+    """Bring a table stored under an older schema to the current one.
+
+    Columns added since it was written become typed nulls, and every column is cast
+    to its current type, so later appends concatenate with new rows.
+
+    :raises ValueError: when the table holds a column the current schema dropped
+    """
+    schema = OUTPUT_SCHEMAS[table]
+    if dropped := sorted(set(rows.columns) - set(schema)):
+        msg = f"{table} holds columns the current schema does not: {dropped}"
+        raise ValueError(msg)
+    return rows.select(
+        pl.col(column).cast(dtype)
+        if column in rows.columns
+        else pl.lit(None, dtype=dtype).alias(column)
+        for column, dtype in schema.items()
     )
 
 
@@ -200,18 +248,19 @@ def rekey(output_dir: Path) -> None:
     key hashes (stored_extraction_key without key_on_header), so it is recomputed
     exactly and nothing is re-extracted. Their header_version stays null, because
     the header they read was not stored. Rows written since record header_version
-    and are left alone.
+    and are left alone. Columns added to a table's schema since it was written are
+    added as nulls.
 
     Claims and evidence are written before the extraction table, which holds the
     old keys until last, so a re-run after a crash finishes the job.
 
     :param output_dir: the directory holding the three extraction tables
     """
-    extractions = pl.read_parquet(output_dir / "courseware_claim_extraction.parquet")
-    if "header_version" not in extractions.columns:
-        extractions = extractions.with_columns(
-            header_version=pl.lit(None, dtype=pl.String)
-        )
+    stored = {
+        table: _conform(pl.read_parquet(output_dir / f"{table}.parquet"), table)
+        for table in OUTPUT_TABLES
+    }
+    extractions = stored["courseware_claim_extraction"]
     new_keys = {
         row["extraction_key"]: stored_extraction_key(row)
         for row in extractions.filter(pl.col("header_version").is_null()).iter_rows(
@@ -219,15 +268,8 @@ def rekey(output_dir: Path) -> None:
         )
     }
     rekeyed = {
-        "courseware_claim_extraction": extractions.select(list(EXTRACTION_SCHEMA)),
-        "courseware_claim": pl.read_parquet(output_dir / "courseware_claim.parquet"),
-        "courseware_claim_evidence": pl.read_parquet(
-            output_dir / "courseware_claim_evidence.parquet"
-        ),
-    }
-    rekeyed = {
         table: rows.with_columns(pl.col("extraction_key").replace(new_keys))
-        for table, rows in rekeyed.items()
+        for table, rows in stored.items()
     }
     if rekeyed["courseware_claim_extraction"]["extraction_key"].is_duplicated().any():
         msg = "extractions that differ only in their course header share a new key"
