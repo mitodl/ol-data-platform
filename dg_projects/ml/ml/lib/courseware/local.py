@@ -64,19 +64,30 @@ def _write(rows: pl.DataFrame, output_dir: Path, table: str) -> None:
     staged.replace(path)
 
 
-def _require_current_keys(stored: pl.DataFrame) -> None:
-    """Refuse a directory whose extractions still carry keys of the old scheme.
+def _require_current(output_dir: Path) -> pl.DataFrame | None:
+    """Refuse a directory that ``local rekey`` has to bring up to date first.
 
-    Their keys would all miss, so every scope would be extracted and billed again.
+    Extractions still keyed the old way would all miss, so every scope would be
+    extracted and billed again. A table under an older schema would fail the append
+    only after every model call had been paid for, storing none of them.
 
+    :param output_dir: the directory holding the three extraction tables
+    :returns: the stored extractions, or None when there are none yet
     :raises ValueError: when the directory needs ``local rekey`` first
     """
-    msg = "extraction keys predate the current scheme; run `local rekey` first"
-    if set(EXTRACTION_SCHEMA) - set(stored.columns):
-        raise ValueError(msg)
+    for table in OUTPUT_TABLES:
+        path = output_dir / f"{table}.parquet"
+        if path.exists() and pl.read_parquet_schema(path) != OUTPUT_SCHEMAS[table]:
+            msg = f"{table} predates the current schema; run `local rekey` first"
+            raise ValueError(msg)
+    stored = _existing(output_dir, "courseware_claim_extraction")
+    if stored is None:
+        return None
     for row in stored.filter(pl.col("header_version").is_null()).iter_rows(named=True):
         if stored_extraction_key(row) != row["extraction_key"]:
+            msg = "extraction keys predate the current scheme; run `local rekey` first"
             raise ValueError(msg)
+    return stored
 
 
 def _read_scopes(sources: Path, courserun: list[str] | None) -> list[Scope]:
@@ -145,9 +156,7 @@ def extract(  # noqa: PLR0913
         if not scope_title or scope.scope_title in scope_title
     ]
     output_dir.mkdir(parents=True, exist_ok=True)
-    stored = _existing(output_dir, "courseware_claim_extraction")
-    if stored is not None:
-        _require_current_keys(stored)
+    stored = _require_current(output_dir)
     existing_keys = covered_keys(stored) if stored is not None else set()
 
     if dry_run:
@@ -223,17 +232,25 @@ def _store_extractions(
 def _conform(rows: pl.DataFrame, table: str) -> pl.DataFrame:
     """Bring a table stored under an older schema to the current one.
 
-    Columns added since it was written become typed nulls, and every column is cast
-    to its current type, so later appends concatenate with new rows.
+    Columns added since it was written become typed nulls, in the current column
+    order, so later appends concatenate with new rows. A column whose type changed
+    is refused rather than cast, because a cast can be lossy (a float truncated to
+    an integer) and rekey overwrites the only copy.
 
-    :raises ValueError: when the table holds a column the current schema dropped
+    :raises ValueError: when the table holds a column the current schema dropped,
+        or one of another type
     """
     schema = OUTPUT_SCHEMAS[table]
     if dropped := sorted(set(rows.columns) - set(schema)):
         msg = f"{table} holds columns the current schema does not: {dropped}"
         raise ValueError(msg)
+    if retyped := sorted(
+        column for column, dtype in rows.schema.items() if dtype != schema[column]
+    ):
+        msg = f"{table} holds columns of another type than the schema: {retyped}"
+        raise ValueError(msg)
     return rows.select(
-        pl.col(column).cast(dtype)
+        pl.col(column)
         if column in rows.columns
         else pl.lit(None, dtype=dtype).alias(column)
         for column, dtype in schema.items()
