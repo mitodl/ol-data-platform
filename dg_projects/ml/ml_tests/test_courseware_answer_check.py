@@ -168,6 +168,30 @@ def test_changed_text_checks_again():
     assert result["is_answer_document"].to_list() == [True]
 
 
+def test_text_changed_back_gets_a_new_verdict_without_a_call():
+    first = check_sources(
+        _sources([("run1", "static/ps1.pdf", "document", READING_TEXT)]),
+        _Client(),
+        model_id=MODEL,
+    )
+    second = check_sources(
+        _sources([("run1", "static/ps1.pdf", "document", KEY_TEXT)]),
+        _Client(),
+        model_id=MODEL,
+        existing=first,
+    )
+    client = _Client()
+    result = check_sources(
+        _sources([("run1", "static/ps1.pdf", "document", READING_TEXT)]),
+        client,
+        model_id=MODEL,
+        existing=pl.concat([first, second]),
+    )
+    assert client.calls == []
+    assert result["is_answer_document"].to_list() == [False]
+    assert result["checked_at"].to_list()[0] > second["checked_at"].to_list()[0]
+
+
 def test_a_failed_batch_is_left_out():
     result = check_sources(
         _sources([("run1", "static/ps1.pdf", "document", KEY_TEXT)]),

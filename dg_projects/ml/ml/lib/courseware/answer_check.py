@@ -212,16 +212,22 @@ def pending_sources(
     :param version: check_version of this run
     :param existing: verdicts already stored
     :param source_kinds: the source kinds to check
-    :returns: the sources with no verdict at this version for their text, one source
-        per distinct text among those with no stored verdict to reuse, and the stored
-        verdicts at this version by text checksum
+    :returns: the sources whose newest verdict at this version is not for their
+        text, one source per distinct text among those with no stored verdict to
+        reuse, and the stored verdicts at this version by text checksum
     :rtype: tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, dict[str, Any]]]
     """
     known: dict[str, dict[str, Any]] = {}
     done: set[tuple[str, ...]] = set()
     if existing is not None:
         current = existing.filter(pl.col("check_version") == version)
-        done = set(current.select(_SOURCE_KEY).iter_rows())
+        # done only when a source's newest verdict is for its text: one whose text
+        # changed and changed back gets a new row (reusing the stored verdict), as
+        # the review queue shows a source's newest verdict
+        newest = current.sort("checked_at").unique(
+            ["platform", "courserun_readable_id", "source_ref"], keep="last"
+        )
+        done = set(newest.select(_SOURCE_KEY).iter_rows())
         for row in current.sort("checked_at").iter_rows(named=True):
             known[row["source_checksum"]] = row
     pending = [
