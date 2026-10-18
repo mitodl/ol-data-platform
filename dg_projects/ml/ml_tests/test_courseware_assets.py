@@ -33,8 +33,10 @@ from ml.assets import courseware_resolution as resolution_module
 from ml.assets.courseware_description import courseware_concept_description
 from ml.assets.courseware_extraction import (
     EXTRACTION_TEXT_KEY,
+    EXTRACTOR_VERSION,
     courseware_extraction,
     courseware_extraction_text,
+    extraction_text_version,
 )
 from ml.assets.courseware_graph import courseware_concept_graph
 from ml.assets.courseware_resolution import (
@@ -58,6 +60,28 @@ from pyiceberg.exceptions import CommitFailedException, NoSuchTableError
 PLATFORM = "mitxonline"
 COURSERUN = "course-v1:MITx+UAI.4+1T2026"
 PARTITION = MultiPartitionKey({"platform": PLATFORM, "courserun": COURSERUN})
+CHECKSUMS = "int__courseware__extraction_source_checksums"
+
+
+def checksums(
+    *courseruns: str, text_checksum: str = "abc", prompt_version: str | None = None
+) -> pl.DataFrame:
+    """Allowlisted runs, approved for this code's extractor version by default."""
+    version = {**EXTRACTOR_VERSION}
+    if prompt_version is not None:
+        version["prompt_version"] = prompt_version
+    return pl.DataFrame(
+        [
+            {
+                "platform": PLATFORM,
+                "courserun_readable_id": courserun,
+                "source_count": 3,
+                "text_checksum": text_checksum,
+                **version,
+            }
+            for courserun in courseruns or (COURSERUN,)
+        ]
+    )
 
 
 # ---------------------------------------------------------------- fake warehouse
@@ -273,6 +297,7 @@ def extract(
     if instance is None:
         instance = DagsterInstance.ephemeral()
         instance.add_dynamic_partitions("courseware_courserun", [COURSERUN])
+    tables.setdefault(CHECKSUMS, checksums())
     # With the hooks definitions.py attaches, so stop_run_retries runs.
     (hooked,) = with_failure_hooks([courseware_extraction])
     return materialize(
@@ -342,6 +367,8 @@ def test_extraction_writes_partitioned_iceberg_tables(calls, tmp_path, monkeypat
     def read(database_name: str, table_name: str) -> pl.LazyFrame:
         if table_name == "int__courseware__extraction_sources":
             return source_rows.lazy()
+        if table_name == CHECKSUMS:
+            return checksums().lazy()
         table = catalog.load_table(f"{database_name}.{table_name}")
         return pl.DataFrame(table.scan().to_arrow()).lazy()
 
@@ -503,15 +530,31 @@ def test_an_empty_schema_suffix_is_refused(monkeypatch):
         warehouse.warehouse_database("intermediate")
 
 
+def test_extraction_refuses_a_run_not_approved_for_this_version(tables, calls):
+    tables["int__courseware__extraction_sources"] = sources("Lecture 1")
+    tables[CHECKSUMS] = checksums(prompt_version="0ld0ld0ld0ld")
+
+    result = extract(tables)
+
+    assert not result.success
+    (failure,) = [
+        event.step_failure_data.user_failure_data
+        for event in result.all_events
+        if event.is_step_failure
+    ]
+    assert "approves courseware_claims_v1-0ld0ld0ld0ld-" in failure.description
+    assert failure.metadata["retryable"].value is False
+    assert calls == []
+    assert "courseware_claim_extraction" not in tables
+
+    tables[CHECKSUMS] = checksums("course-v1:MITx+OTHER+1T")
+
+    assert not extract(tables).success
+    assert calls == []
+
+
 def test_extraction_text_observes_one_run(tables):
-    tables["int__courseware__extraction_source_checksums"] = pl.DataFrame(
-        {
-            "platform": [PLATFORM, PLATFORM],
-            "courserun_readable_id": [COURSERUN, "course-v1:MITx+OTHER+1T"],
-            "source_count": [3, 4],
-            "text_checksum": ["abc", "def"],
-        }
-    )
+    tables[CHECKSUMS] = checksums(COURSERUN, "course-v1:MITx+OTHER+1T")
     instance = DagsterInstance.ephemeral()
     instance.add_dynamic_partitions("courseware_courserun", [COURSERUN])
 
@@ -527,19 +570,12 @@ def test_extraction_text_observes_one_run(tables):
         if event.is_asset_observation
     ]
     assert observation.partition == PARTITION
-    assert observation.data_version == "abc"
+    assert observation.data_version == extraction_text_version("abc")
 
 
 # ------------------------------------------------------------------------ sensor
 def test_sensor_registers_then_observes_then_rests(tables):
-    tables["int__courseware__extraction_source_checksums"] = pl.DataFrame(
-        {
-            "platform": [PLATFORM],
-            "courserun_readable_id": [COURSERUN],
-            "source_count": [3],
-            "text_checksum": ["abc"],
-        }
-    )
+    tables[CHECKSUMS] = checksums()
     instance = DagsterInstance.ephemeral()
 
     first = courseware_extraction_text_sensor(build_sensor_context(instance=instance))
@@ -556,7 +592,7 @@ def test_sensor_registers_then_observes_then_rests(tables):
     assert [
         (event.partition, event.tags[sensor_module.DATA_VERSION_TAG])
         for event in second.asset_events
-    ] == [(PARTITION, "abc")]
+    ] == [(PARTITION, extraction_text_version("abc"))]
     assert second.dynamic_partitions_requests == []
 
     third = courseware_extraction_text_sensor(
@@ -565,6 +601,64 @@ def test_sensor_registers_then_observes_then_rests(tables):
 
     assert third.asset_events == []
     assert third.cursor is None
+
+
+def observed(result) -> list[tuple[str, str]]:
+    return [
+        (
+            event.partition.keys_by_dimension["courserun"],
+            event.tags[sensor_module.DATA_VERSION_TAG],
+        )
+        for event in result.asset_events
+    ]
+
+
+def test_sensor_waits_for_a_run_to_be_promoted(tables, monkeypatch):
+    lagging = "course-v1:MITx+OTHER+1T"
+    tables[CHECKSUMS] = pl.concat(
+        [checksums(), checksums(lagging, prompt_version="0ld0ld0ld0ld")]
+    )
+    instance = DagsterInstance.ephemeral()
+    instance.add_dynamic_partitions("courseware_courserun", [COURSERUN, lagging])
+
+    first = courseware_extraction_text_sensor(build_sensor_context(instance=instance))
+
+    # A run approved for another version is not observed, so nothing extracts it.
+    assert observed(first) == [(COURSERUN, extraction_text_version("abc"))]
+
+    tables[CHECKSUMS] = checksums(COURSERUN, lagging)
+    promoted = courseware_extraction_text_sensor(
+        build_sensor_context(instance=instance, cursor=first.cursor)
+    )
+
+    assert observed(promoted) == [
+        (lagging, extraction_text_version("abc")),
+        (COURSERUN, extraction_text_version("abc")),
+    ]
+
+    # A new extractor version in code alone observes nothing: every row now lags.
+    monkeypatch.setitem(EXTRACTOR_VERSION, "prompt_version", "n3wn3wn3wn3w")
+    deployed = courseware_extraction_text_sensor(
+        build_sensor_context(instance=instance, cursor=promoted.cursor)
+    )
+
+    assert observed(deployed) == []
+    assert deployed.cursor not in {None, promoted.cursor}
+
+
+def test_sensor_registers_only_approved_runs(tables):
+    tables[CHECKSUMS] = pl.concat(
+        [
+            checksums(),
+            checksums("course-v1:MITx+OTHER+1T", prompt_version="0ld0ld0ld0ld"),
+        ]
+    )
+
+    result = courseware_extraction_text_sensor(
+        build_sensor_context(instance=DagsterInstance.ephemeral())
+    )
+
+    assert result.dynamic_partitions_requests[0].partition_keys == [COURSERUN]
 
 
 # -------------------------------------------------------------------- resolution

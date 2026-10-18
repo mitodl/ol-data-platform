@@ -34,6 +34,51 @@ unit_tests:
     - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+2T", allowlist_level: course}
     - {platform: mitxonline, courserun_readable_id: "course-v1:X+C+1T", allowlist_level: platform}
     - {platform: residential, courserun_readable_id: "course-v1:MITx+R+1T", allowlist_level: courserun}
+- name: test_int__courseware__extraction_source_checksums_most_specific_allowlist_row
+  description: >
+    A run takes its own allowlist row over its course's, and its course's over its
+    platform's. A run no row names is left out, so the extraction sensor never
+    registers or observes it.
+  model: int__courseware__extraction_source_checksums
+  given:
+  - input: ref('int__courseware__extraction_sources')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", scope_id: s,
+      scope_kind: unit, scope_position: 1, source_position: 1, source_ref: r, source_text: t}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+2T", scope_id: s,
+      scope_kind: unit, scope_position: 1, source_position: 1, source_ref: r, source_text: t}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+C+1T", scope_id: s,
+      scope_kind: unit, scope_position: 1, source_position: 1, source_ref: r, source_text: t}
+    - {platform: mitxpro, courserun_readable_id: "course-v1:xPRO+D+1T", scope_id: s,
+      scope_kind: unit, scope_position: 1, source_position: 1, source_ref: r, source_text: t}
+  - input: ref('dim_course_run')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", course_fk: a,
+      is_current: true}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+2T", course_fk: a,
+      is_current: true}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+C+1T", course_fk: c,
+      is_current: true}
+    - {platform: mitxpro, courserun_readable_id: "course-v1:xPRO+D+1T", course_fk: d,
+      is_current: true}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: a, course_readable_id: "course-v1:X+A"}
+    - {course_pk: c, course_readable_id: "course-v1:X+C"}
+    - {course_pk: d, course_readable_id: "course-v1:xPRO+D"}
+  - input: ref('courseware_extraction_allowlist')
+    rows:
+    - {platform: mitxonline, course_readable_id: null, courserun_readable_id: null,
+      extractor_id: v1, prompt_version: by_platform, schema_version: s}
+    - {platform: mitxonline, course_readable_id: "course-v1:X+A", courserun_readable_id: null,
+      extractor_id: v1, prompt_version: by_course, schema_version: s}
+    - {platform: mitxonline, course_readable_id: null, courserun_readable_id: "course-v1:X+A+1T",
+      extractor_id: v1, prompt_version: by_run, schema_version: s}
+  expect:
+    rows:
+    - {courserun_readable_id: "course-v1:X+A+1T", prompt_version: by_run}
+    - {courserun_readable_id: "course-v1:X+A+2T", prompt_version: by_course}
+    - {courserun_readable_id: "course-v1:X+C+1T", prompt_version: by_platform}
 
 - name: test_int__courseware__extraction_sources_reads_only_allowlisted_runs
   description: >

@@ -389,10 +389,13 @@ models:
     - not_null
 
 - name: int__courseware__extraction_source_checksums
-  description: One row per course run in int__courseware__extraction_sources with
-    a checksum of the text its extraction scopes are built from. The courseware extraction
-    sensor reports it as the run's data version, so a run is re-extracted only when
-    its text changes.
+  description: One row per course run in int__courseware__extraction_sources that
+    courseware_extraction_allowlist approves, with a checksum of the text its extraction
+    scopes are built from and the extractor version it is approved for. The courseware
+    extraction sensor reports the checksum as the run's data version while that version
+    is the deployed extractor's, so a run is re-extracted only when its text changes
+    or it is promoted to a new version. Runs the allowlist does not name are left
+    out.
   config:
     meta:
       qa_buildable: false
@@ -410,6 +413,19 @@ models:
   - name: text_checksum
     description: str, md5 over every source row's title, position, reference and text,
       in reading order
+    tests:
+    - not_null
+  - name: extractor_id
+    description: str, the extractor version's id the run is approved for, from its
+      most specific courseware_extraction_allowlist row
+    tests:
+    - not_null
+  - name: prompt_version
+    description: str, the prompt version the run is approved for
+    tests:
+    - not_null
+  - name: schema_version
+    description: str, the output schema version the run is approved for
     tests:
     - not_null
   tests:

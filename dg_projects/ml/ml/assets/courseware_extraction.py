@@ -2,9 +2,14 @@
 
 courseware_extraction_text stands for the text a run's scopes are built from. It
 is observed, not materialized: courseware_extraction_text_sensor reports each run's
-text checksum (int__courseware__extraction_source_checksums) as its data version,
-and courseware_extraction runs for a partition when that version moves, when the
-partition is new, or when the extractor's code version changes.
+text checksum (int__courseware__extraction_source_checksums) under the extractor
+version as its data version, and courseware_extraction runs for a partition when
+that version moves or the partition is new.
+
+Only runs courseware_extraction_allowlist approves for the deployed extractor
+version are observed or extracted. A prompt or schema change therefore extracts
+nothing until the allowlist is promoted to the new version, run by run or
+platform by platform, and the asset carries no code version for the same reason.
 """
 
 import polars as pl
@@ -49,7 +54,7 @@ from ml.lib.courseware.warehouse import (
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import publish_prompt_version
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
-from ol_orchestrate.lib.failures import PermanentFailure
+from ol_orchestrate.lib.failures import PermanentFailure, permanent_failure
 from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
 from pydantic import Field
 from pyiceberg.exceptions import CommitFailedException
@@ -65,6 +70,12 @@ EXTRACTION_KEY = AssetKey(["intermediate", "courseware_claim_extraction"])
 CLAIM_KEY = AssetKey(["intermediate", "courseware_claim"])
 EVIDENCE_KEY = AssetKey(["intermediate", "courseware_claim_evidence"])
 EXTRACTION_PROMPT_NAME = "courseware-claim-extraction"
+# The extractor version this code runs, as courseware_extraction_allowlist names it.
+EXTRACTOR_VERSION = {
+    "extractor_id": EXTRACTOR_ID,
+    "prompt_version": PROMPT_VERSION,
+    "schema_version": SCHEMA_VERSION,
+}
 # Tries per delete commit before the run fails on a concurrent writer.
 DELETE_COMMIT_ATTEMPTS = 3
 # The POC measured 98.9% of 1,949 passages as exact matches, none unverified.
@@ -79,12 +90,60 @@ _OUTPUT_METADATA = {
 
 
 def text_checksums() -> pl.DataFrame:
-    """Every run's text checksum, from int__courseware__extraction_source_checksums."""
+    """Every allowlisted run's text checksum and the extractor version it may use.
+
+    From int__courseware__extraction_source_checksums, which leaves out the runs
+    courseware_extraction_allowlist does not name.
+    """
     return (
         require_table("intermediate", CHECKSUMS_KEY.path[-1])
-        .select("platform", "courserun_readable_id", "text_checksum")
+        .select(
+            "platform", "courserun_readable_id", "text_checksum", *EXTRACTOR_VERSION
+        )
         .collect()
     )
+
+
+def approved(rows: pl.DataFrame) -> pl.DataFrame:
+    """Keep the runs approved for the extractor version this code runs."""
+    return rows.filter(
+        *(pl.col(column) == value for column, value in EXTRACTOR_VERSION.items())
+    )
+
+
+def extraction_text_version(text_checksum: str) -> str:
+    """Return extraction_text's data version for a run's text checksum.
+
+    The extractor version is part of it so that promoting an unchanged run to a new
+    version moves the data version and extracts the run once more.
+    """
+    return "-".join([text_checksum, *EXTRACTOR_VERSION.values()])
+
+
+def approved_run(platform: str, courserun: str) -> dict[str, str]:
+    """Return a run's checksum row, or fail when it is not approved for this version.
+
+    :raises PermanentFailure: when courseware_extraction_allowlist does not approve
+        the run for the extractor version this code runs
+    """
+    rows = text_checksums().filter(
+        (pl.col("platform") == platform)
+        & (pl.col("courserun_readable_id") == courserun)
+    )
+    if not approved(rows).height:
+        approved_for = (
+            "-".join(rows.row(0, named=True)[column] for column in EXTRACTOR_VERSION)
+            if rows.height
+            else None
+        )
+        msg = (
+            f"{platform} {courserun} is not approved for extractor version "
+            f"{'-'.join(EXTRACTOR_VERSION.values())} (courseware_extraction_allowlist "
+            f"approves {approved_for or 'no version'}). Add or promote its row in "
+            "src/ol_dbt/seeds/courseware_extraction_allowlist.csv."
+        )
+        raise permanent_failure(msg)
+    return rows.row(0, named=True)
 
 
 @multi_observable_source_asset(
@@ -110,12 +169,10 @@ def courseware_extraction_text(context: AssetExecutionContext) -> ObserveResult:
     run can be observed on demand.
     """
     platform, courserun = partition_courserun(context.partition_key)
-    row = text_checksums().filter(
-        (pl.col("platform") == platform)
-        & (pl.col("courserun_readable_id") == courserun)
-    )
+    row = approved_run(platform, courserun)
     return ObserveResult(
-        asset_key=EXTRACTION_TEXT_KEY, data_version=DataVersion(row["text_checksum"][0])
+        asset_key=EXTRACTION_TEXT_KEY,
+        data_version=DataVersion(extraction_text_version(row["text_checksum"])),
     )
 
 
@@ -212,10 +269,9 @@ def evidence_check(evidence: pl.DataFrame, min_exact_share: float) -> AssetCheck
             key=key,
             io_manager_key="courseware_io_manager",
             metadata=_OUTPUT_METADATA,
-            # The prompt and schema versions are part of every extraction key, so
-            # a change to either re-extracts every run (rows are added, not
-            # replaced).
-            code_version=f"{EXTRACTOR_ID}-{PROMPT_VERSION}-{SCHEMA_VERSION}",
+            # No code_version: a version change reaches a run through its
+            # allowlist row and extraction_text's data version, never all runs at
+            # once (see the module docstring).
             automation_condition=upstream_or_code_changes(),
         )
         for key in (CLAIM_KEY, EVIDENCE_KEY, EXTRACTION_KEY)
@@ -242,9 +298,12 @@ def courseware_extraction(
     Calls ml.lib.courseware.extract.extract_scopes over the run's scopes, skipping
     every extraction_key already in courseware_claim_extraction. All three tables
     are append-only. Claims and evidence are written before the extraction rows,
-    which mark a key as done.
+    which mark a key as done. A run courseware_extraction_allowlist does not approve
+    for this extractor version fails before anything is read or called, however it
+    was launched.
     """
     platform, courserun = partition_courserun(context.partition_key)
+    approved_run(platform, courserun)
     rows = (
         require_table("intermediate", SOURCES_KEY.path[-1])
         .filter(

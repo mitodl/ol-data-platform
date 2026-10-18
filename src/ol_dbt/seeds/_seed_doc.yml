@@ -211,17 +211,26 @@ seeds:
     - unique
   - name: currency_name
     description: str, the currency's name
+
 - name: courseware_extraction_allowlist
   description: >
-    The course runs whose courseware is assembled for claim extraction. A run takes
-    its own row, else its course's row, else its platform's row (course_readable_id
-    and courserun_readable_id both empty), and a run matching no row is left out of
-    int__courseware__extraction_sources. Approve a run by editing this file.
+    The course runs the courseware claim extraction assets may extract, and the
+    extractor version each is approved for. A run takes its own row, else its
+    course's row, else its platform's row (course_readable_id and
+    courserun_readable_id both empty), and a run matching no row is never extracted.
+    The courseware extraction sensor observes a run only while its approved version
+    is the one the deployed extractor runs, so a prompt or schema change extracts
+    nothing until the rows here name the new version. Approve a run, or a new
+    version, by editing this file. The version values are the ones
+    dim_courseware_extraction shows.
   config:
     column_types:
       platform: varchar
       course_readable_id: varchar
       courserun_readable_id: varchar
+      extractor_id: varchar
+      prompt_version: varchar
+      schema_version: varchar
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -229,10 +238,6 @@ seeds:
         - platform
         - course_readable_id
         - courserun_readable_id
-  # A row naming both would tie with the run's own row, and the build would pick
-  # one of the two arbitrarily.
-  - dbt_utils.expression_is_true:
-      expression: course_readable_id is null or courserun_readable_id is null
   columns:
   - name: platform
     description: str, mitxonline, mitxpro or residential
@@ -246,3 +251,15 @@ seeds:
       it (e.g. course-v1:UAI_SOURCE+UAI.4); empty for a run or platform row
   - name: courserun_readable_id
     description: str, the run this row approves; empty for a course or platform row
+  - name: extractor_id
+    description: str, the extractor version's id, e.g. courseware_claims_v1
+    tests:
+    - not_null
+  - name: prompt_version
+    description: str, the first 12 hex digits of the system prompt's sha256
+    tests:
+    - not_null
+  - name: schema_version
+    description: str, the first 12 hex digits of the output schema's sha256
+    tests:
+    - not_null
