@@ -124,6 +124,20 @@ models:
   - name: description
     description: str, the page's description, as HTML; null without a page. The API
       strips the tags and MIT Learn then passes it through clean_data.
+  - name: has_catalog_page
+    description: boolean, whether the course's page is live and in the Learn catalog,
+      which is when MITx Online's pages API lists it to MIT Learn. MIT Learn builds
+      full_description only for these and otherwise leaves the stored value alone.
+    tests: [not_null]
+  - name: about
+    description: str, the page's About section as stored HTML; null unless has_catalog_page.
+      One of the sections MIT Learn's parse_full_description assembles.
+  - name: what_you_learn
+    description: str, the page's What you'll learn section as stored HTML; null unless
+      has_catalog_page.
+  - name: prerequisites
+    description: str, the page's Prerequisites section as stored HTML; null unless
+      has_catalog_page.
   - name: image_url
     description: str, the page's feature image on the MITx Online site, with the ?v=<file
       hash> suffix the API adds; null without one.
@@ -299,6 +313,20 @@ models:
   - name: description
     description: str, the page's description, as HTML; null without a page. The API
       strips the tags and MIT Learn then passes it through clean_data.
+  - name: has_catalog_page
+    description: boolean, whether the program's page is live and in the Learn catalog,
+      which is when MITx Online's pages API lists it to MIT Learn. MIT Learn builds
+      full_description only for these and otherwise leaves the stored value alone.
+    tests: [not_null]
+  - name: about
+    description: str, the page's About section as stored HTML; null unless has_catalog_page.
+      One of the sections MIT Learn's parse_full_description assembles.
+  - name: what_you_learn
+    description: str, the page's What you'll learn section as stored HTML; null unless
+      has_catalog_page.
+  - name: prerequisites
+    description: str, the page's Prerequisites section as stored HTML; null unless
+      has_catalog_page.
   - name: image_url
     description: str, the page's feature image on the MITx Online site, with the ?v=<file
       hash> suffix the API adds; null without one.
@@ -782,7 +810,8 @@ unit_tests:
     A course is published when its page is live and in the Learn catalog and one
     of its runs is published. It is certified when a published, current run offers
     the verified mode. Course numbers run from the latest run back, each once.
-    Topics include parent topics, and a proctored exam course is left out.
+    Topics include parent topics, and a proctored exam course is left out. The
+    page sections are carried only when the page is live and in the Learn catalog.
   model: integrations__learn__mitxonline_courses
   given:
   - input: ref('stg__mitxonline__app__postgres__courses_course')
@@ -794,9 +823,11 @@ unit_tests:
   - input: ref('int__mitxonline__catalog_pages')
     rows:
     - {course_id: 1, program_id: null, wagtail_page_id: 10, page_is_live: true, page_is_in_learn_catalog: true,
-      page_ingests_content_files_for_ai: false}
+      page_ingests_content_files_for_ai: false, page_about: <p>About 1</p>, page_what_you_learn: <p>Skills</p>,
+      page_prerequisites: null}
     - {course_id: 2, program_id: null, wagtail_page_id: 20, page_is_live: true, page_is_in_learn_catalog: false,
-      page_ingests_content_files_for_ai: false}
+      page_ingests_content_files_for_ai: false, page_about: <p>About 2</p>, page_what_you_learn: null,
+      page_prerequisites: null}
     - {course_id: null, program_id: 7, wagtail_page_id: 70, page_is_live: true, page_is_in_learn_catalog: true,
       page_ingests_content_files_for_ai: false}
   - input: ref('integrations__learn__mitxonline_runs')
@@ -840,20 +871,25 @@ unit_tests:
     rows:
     - {readable_id: course-1, has_page: true, published: true, certification: true,
       certification_type: MicroMasters Credential, availability: anytime, course_numbers: [
-        "1.01x", "1.02x"], topics: ["Algebra", "Mathematics"], departments: ["Mathematics"]}
+        "1.01x", "1.02x"], topics: ["Algebra", "Mathematics"], departments: ["Mathematics"],
+      has_catalog_page: true, about: <p>About 1</p>, what_you_learn: <p>Skills</p>,
+      prerequisites: null}
     - {readable_id: course-2, has_page: true, published: false, certification: false,
       certification_type: Certificate of Completion, availability: dated, course_numbers: [
-        "2.01x"], topics: null, departments: null}
+        "2.01x"], topics: null, departments: null, has_catalog_page: false, about: null,
+      what_you_learn: null, prerequisites: null}
     - {readable_id: course-3, has_page: false, published: false, certification: false,
       certification_type: Certificate of Completion, availability: anytime, course_numbers: null,
-      topics: null, departments: null}
+      topics: null, departments: null, has_catalog_page: false, about: null, what_you_learn: null,
+      prerequisites: null}
 
 - name: test_integrations__learn__mitxonline_programs_listed_published_and_priced
   description: >
     Only live programs that are not B2B-only are listed. A program is published
     when its page is live and in the Learn catalog, certified when it has a page
     and the verified mode, and priced from its page when it has that mode. The
-    start date is the program's own when no course run starts in the future.
+    start date is the program's own when no course run starts in the future. The
+    page sections come from a live page in the Learn catalog.
   model: integrations__learn__mitxonline_programs
   given:
   - input: ref('stg__mitxonline__app__postgres__courses_program')
@@ -873,7 +909,8 @@ unit_tests:
   - input: ref('int__mitxonline__catalog_pages')
     rows:
     - {program_id: 1, wagtail_page_id: 10, page_is_live: true, page_is_in_learn_catalog: true,
-      page_min_price: 500, page_max_price: 500}
+      page_min_price: 500, page_max_price: 500, page_about: <p>About</p>, page_what_you_learn: null,
+      page_prerequisites: <p>Calculus</p>}
   - input: ref('stg__mitxonline__app__postgres__courses_program_enrollment_modes')
     rows:
     - {program_id: 1, enrollmentmode_id: 2}
@@ -898,6 +935,8 @@ unit_tests:
   expect:
     rows:
     - {readable_id: program-1, has_page: true, published: true, certification: true,
-      prices: [500], start_date: "2020-01-01T00:00:00.000"}
+      prices: [500], start_date: "2020-01-01T00:00:00.000", has_catalog_page: true,
+      about: <p>About</p>, what_you_learn: null, prerequisites: <p>Calculus</p>}
     - {readable_id: program-2, has_page: false, published: false, certification: false,
-      prices: [0], start_date: "2019-01-01T00:00:00.000"}
+      prices: [0], start_date: "2019-01-01T00:00:00.000", has_catalog_page: false,
+      about: null, what_you_learn: null, prerequisites: null}

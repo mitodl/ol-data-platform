@@ -2503,6 +2503,13 @@ models:
     description: timestamp, when the page was last published
   - name: page_description
     description: str, the page's description, as HTML
+  - name: page_about
+    description: str, the page's About section, as stored HTML (Wagtail's database
+      representation, before the API expands internal links and embeds)
+  - name: page_what_you_learn
+    description: str, the page's What you'll learn section, as stored HTML
+  - name: page_prerequisites
+    description: str, the page's Prerequisites section, as stored HTML
   - name: page_length
     description: str, free-text length of the course or program
   - name: page_effort

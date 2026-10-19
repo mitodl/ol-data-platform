@@ -188,6 +188,8 @@ courses titled "Proctored Exam", which the ETL drops. Beyond the required column
 | `min_weeks`, `max_weeks` | int | From the page |
 | `min_weekly_hours`, `max_weekly_hours` | string | From the page, as stored; MIT Learn parses them to integers |
 | `min_price`, `max_price` | decimal | The page's certificate price range |
+| `has_catalog_page` | boolean | Whether the page is live and in the Learn catalog, which is when MITx Online's pages API lists it to MIT Learn |
+| `about`, `what_you_learn`, `prerequisites` | string | The page's sections as stored HTML, for `full_description`; null unless `has_catalog_page` |
 
 `integrations__learn__mitxonline_runs` has one row per run of those courses, source runs and
 B2B runs included, because MIT Learn stores those too, unpublished. `published`, `status`
@@ -208,11 +210,12 @@ and `prices` depend on the time the model builds.
 | `prices` | array(decimal) | Zero for the audit mode, the page's min and max price for the verified mode; only zero when the run is not current or the page has no price |
 | `instructors` | array(string) | Names of the course page's instructors. A name linked twice appears twice |
 
-`integrations__learn__mitxonline_programs` has one row per live program that is not B2B-only.
-It has `image_url`, `has_page`, `topics` (the page topics of its live courses, without
-parents), `departments`, `certification`, `certification_type`, `availability`, the duration
-and price columns above, `display_mode`, `published` (page live and `include_in_learn_catalog`)
-and the fields of the single run MIT Learn gives a program: `start_date`, `end_date`,
+`integrations__learn__mitxonline_programs` has one row per live program that is not
+B2B-only. It has `image_url`, `has_page`, `topics` (the page topics of its live courses,
+without parents), `departments`, `certification`, `certification_type`, `availability`, the
+duration and price columns above, `has_catalog_page`, `about`, `what_you_learn`,
+`prerequisites`, `display_mode`, `published` (page live and `include_in_learn_catalog`) and
+the fields of the single run MIT Learn gives a program: `start_date`, `end_date`,
 `enrollment_start`, `enrollment_end` and `prices`. The run's `pace` is the distinct pace of
 the program's courses and is left to the Sync task.
 
@@ -234,6 +237,42 @@ followed one level down: no required program requires another today.
 so a deleted tree node or a department removed from a program leaves raw on the next sync.
 The staging model tests the tree path as unique. Two rows with one path are a deleted node
 whose path went to another node, one sign that the table is loaded incrementally again.
+
+#### `full_description`
+
+MIT Learn's ETL builds `full_description` for courses and programs (mit-learn #4089) from
+the product pages MITx Online's Wagtail pages API (`/api/v2/pages/?fields=*`) lists, which
+for MIT Learn's request (its `Api-Key` header authenticates no user) are the live pages in
+the Learn catalog. Wagtail also leaves out pages behind a view restriction, which raw does
+not carry; none were seen on 2026-10-19. The models deliver the sections and the Sync task
+runs MIT Learn's own assembly, `learning_resources.etl.mitxonline.parse_full_description`,
+on them: each section through `clean_data` under an `<h2>` heading, then `html_to_markdown`
+and `strip_markdown_images`. Markdown conversion is left to the Sync task because a SQL
+rewrite would not match `html2text`. When `has_catalog_page` is false MIT Learn does not see
+the page and leaves the stored `full_description` alone, so the Sync task should too. A page
+with no sections gets `None`.
+
+The sections are the HTML MITx Online stores, not what its API serves: the API expands
+Wagtail's internal links (`<a linktype="page" id="...">`) to URLs. `clean_data` drops `<a>`
+tags and keeps their text, so the assembled text is the same either way. If MIT Learn ever
+keeps links in `full_description`, the Sync task would need the page URLs.
+
+FAQs are not delivered. MIT Learn appends the page's FAQs (`ProductPageFAQ`, table
+`cms_productpagefaq`, question plus rich-text answer in `sort_order`) under "Frequently
+asked questions", and that table is not ingested: it is not a stream of the production
+Airbyte connection and not in the dlt source. On 2026-10-19, 1 course page (6 FAQs) and 18
+program pages (112 FAQs) of the ones MIT Learn reads had FAQs. Until the table is ingested
+and the models carry `faqs` as an array of `{question, answer}`, the Sync task cannot
+reproduce `full_description` for those pages.
+
+Checked on 2026-10-19 by building the models on production raw (Athena) and running MIT
+Learn's `parse_full_description` (mit-learn main at 2662d01e4) on both the models' sections
+and MITx Online's pages API: with FAQs left out of both, the result is identical for all 186
+courses and 28 programs whose page the API lists (159 and 28 of them published). The one
+listed page without `has_catalog_page` has the catalog flag off in raw (synced 12:06 UTC)
+and on in the API (read 22:12 UTC). With FAQs, the 19 pages above differ and the rest match.
+MIT Learn's production API had no `full_description` on any MITx Online course or program
+that day, so the comparison is with MIT Learn's code, not stored values.
 
 Checked on 2026-10-13 against a build on production raw: the models publish the same 157
 courses and 28 programs MIT Learn does, with the same published runs, run dates, prices,
@@ -381,3 +420,4 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-13 | Tobias Macey | MITx Online models rebuilt on what MIT Learn's MITx Online ETL reads from the MITx Online catalog API. Added `integrations__learn__mitxonline_runs` and `integrations__learn__mitxonline_program_children`. `runs`, `courses`, `url`, `page_slug`, `price`, `length`, `effort`, `instructors` and `program_type` are gone from the courses and programs models; `topics` and `departments` are arrays; `published` follows MIT Learn's rule; B2B-only programs are left out and courses that are not live are included. |
 | 2026-10-15 | Tobias Macey | `integrations__learn__oll_courses` rebuilt on what MIT Learn's OLL ETL writes. OCW-offered rows are included under Learn's `{course_number}+{semester}_{year}` id, with `offered_by` `ocw` (else `mitx`); only Learn's `SKIP_OCW_COURSES` run is left out. Added `run_id`, `course_number`, `offered_by`, `level`, `instructors`, `year`, `semester`, `duration`, `min_weeks`, `max_weeks`, `time_commitment`, `min_weekly_hours` and `max_weekly_hours`; `topics` is an array of the sheet's MITx Online topics; `published` follows the sheet; `runs` is gone. |
 | 2026-10-16 | Tobias Macey | `courses_programrequirement` and `courses_program_departments` load by full refresh, so deleted tree nodes and departments leave `integrations__learn__mitxonline_program_children`, the programs' `departments` and `start_date`, and the courses' `certification_type`. No column changes. |
+| 2026-10-19 | Tobias Macey | Added `has_catalog_page`, `about`, `what_you_learn` and `prerequisites` to `integrations__learn__mitxonline_courses` and `integrations__learn__mitxonline_programs` for MIT Learn's `full_description`. FAQs are not carried yet. |

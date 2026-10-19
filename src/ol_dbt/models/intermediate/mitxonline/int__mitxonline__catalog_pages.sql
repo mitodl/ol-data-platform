@@ -1,6 +1,7 @@
 -- The CMS page of each MITx Online course and program, with the fields MITx Online's catalog
 -- API reads off it: the feature image URL as cms.api.get_wagtail_img_src builds it and the
--- names of the linked instructor pages.
+-- names of the linked instructor pages. It also carries the rich-text sections MIT Learn reads
+-- from the Wagtail pages API (/api/v2/pages/) for a resource's full description.
 
 with pages as (
     select * from {{ ref('stg__mitxonline__app__postgres__cms_wagtail_page') }}
@@ -20,6 +21,9 @@ with pages as (
         , cast(null as bigint) as program_id
         , wagtail_page_id
         , course_description as page_description
+        , course_about as page_about
+        , course_what_you_learn as page_what_you_learn
+        , course_prerequisites as page_prerequisites
         , course_length as page_length
         , course_effort as page_effort
         , course_feature_image_id as page_feature_image_id
@@ -38,6 +42,9 @@ with pages as (
         , program_id
         , wagtail_page_id
         , program_description as page_description
+        , program_about as page_about
+        , program_what_you_learn as page_what_you_learn
+        , program_prerequisites as page_prerequisites
         , program_length as page_length
         , program_effort as page_effort
         , program_feature_image_id as page_feature_image_id
@@ -72,6 +79,9 @@ select
     , pages.wagtail_page_first_published_on as page_first_published_on
     , pages.wagtail_page_last_published_on as page_last_published_on
     , product_pages.page_description
+    , product_pages.page_about
+    , product_pages.page_what_you_learn
+    , product_pages.page_prerequisites
     , product_pages.page_length
     , product_pages.page_effort
     , product_pages.page_min_weeks
