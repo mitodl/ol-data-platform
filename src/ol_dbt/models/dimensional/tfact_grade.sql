@@ -54,9 +54,23 @@ with mitxonline_grades as (
     from {{ ref('int__edxorg__mitx_courserun_grades') }}
 )
 
+-- The raw table keeps grades that Open edX deleted, so a learner can have two for one
+-- run. Keep the newest, the one Open edX still has.
+, residential_grades_ranked as (
+    select
+        *
+        , row_number() over (
+            partition by user_id, courserun_readable_id
+            order by courserungrade_created_on desc, courserungrade_id desc
+        ) as grade_rank
+    from {{ ref('int__mitxresidential__courserun_grades') }}
+)
+
 , residential_grades as (
     select
-        cast(courserungrade_id as varchar) as grade_id
+        -- Natural key, as for edxorg: a replacement grade then keeps the grade_key, so
+        -- an incremental run overwrites the old row instead of adding a second one
+        {{ dbt_utils.generate_surrogate_key(['cast(user_id as varchar)', 'courserun_readable_id']) }} as grade_id
         , user_id
         , courserun_readable_id
         , courserungrade_grade as grade_value
@@ -67,7 +81,8 @@ with mitxonline_grades as (
         , courserungrade_created_on as grade_created_on
         , courserungrade_updated_on as grade_updated_on
         , 'residential' as platform
-    from {{ ref('int__mitxresidential__courserun_grades') }}
+    from residential_grades_ranked
+    where grade_rank = 1
 )
 
 , combined_grades as (
