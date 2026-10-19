@@ -261,6 +261,14 @@ def test_label_matcher_rule():
 def _inputs(claims: pl.DataFrame) -> samples.GoldInputs:
     empty = pl.DataFrame()
     return samples.GoldInputs(
+        extractions=claims.select(
+            "extraction_key",
+            "model_id",
+            "platform",
+            "courserun_readable_id",
+            "scope_id",
+            "scope_part",
+        ).unique(),
         claims=claims,
         evidence=empty,
         sources=empty,
@@ -629,6 +637,7 @@ def _labels(*keys):
 
 def test_pairs_population_uses_the_final_clustering():
     inputs = samples.GoldInputs(
+        extractions=pl.DataFrame(),
         claims=pl.DataFrame(),
         evidence=pl.DataFrame(),
         sources=pl.DataFrame(),
@@ -756,6 +765,7 @@ def test_score_subsections_reports_blind_recall_separately(tmp_path):
 def test_pairs_leave_out_labels_no_current_claim_uses():
     # x was a label in an earlier run: its decisions and embedding remain
     inputs = samples.GoldInputs(
+        extractions=pl.DataFrame(),
         claims=pl.DataFrame(),
         evidence=pl.DataFrame(),
         sources=pl.DataFrame(),
@@ -807,6 +817,7 @@ def test_clusters_leave_out_labels_no_current_claim_uses():
     # x was a label of k1 in an earlier extraction; k3 has no current label at all
     keys = ["a", "b", "c", "d", "e", "f"]
     inputs = samples.GoldInputs(
+        extractions=pl.DataFrame(),
         claims=pl.DataFrame(),
         evidence=pl.DataFrame(),
         sources=pl.DataFrame(),
@@ -911,6 +922,7 @@ def test_few_labels_are_not_their_own_neighbours():
     # with no more labels than the neighbour count, the top ranks hold the query too
     keys = ["a", "b", "c", "d"]
     inputs = samples.GoldInputs(
+        extractions=pl.DataFrame(),
         claims=pl.DataFrame(),
         evidence=pl.DataFrame(),
         sources=pl.DataFrame(),
@@ -955,32 +967,45 @@ def test_few_labels_are_not_their_own_neighbours():
         assert row["item_id"] not in json.loads(row["neighbour_sizes_json"])
 
 
-def _write_gold_inputs(directory, *, assignments, registry, decisions):
-    """Write the parquet files load_inputs reads; one run, no claims."""
+def _extraction(key, model, scope):
+    return {
+        "extraction_key": key,
+        "model_id": f"us.anthropic.claude-{model}-5-5",
+        "prompt_version": "v1",
+        "platform": "mitxonline",
+        "courserun_readable_id": "course-v1:UAI_SOURCE+UAI.4+1T2026",
+        "scope_id": scope,
+        "scope_kind": "unit",
+        "scope_title": scope,
+        "scope_position": 1,
+        "scope_part": 1,
+        "extracted_at": datetime(2026, 10, 17, tzinfo=UTC),
+    }
+
+
+def _write_gold_inputs(
+    directory,
+    *,
+    assignments,
+    registry,
+    decisions,
+    extractions=None,
+    claims=None,
+    sources=None,
+):
+    """Write the parquet files load_inputs reads; one run, by default one claim."""
     extraction = directory / "extraction"
     identity = directory / "identity"
     extraction.mkdir(parents=True)
     identity.mkdir()
-    pl.DataFrame(
-        {
-            "extraction_key": ["e1"],
-            "model_id": ["us.anthropic.claude-opus-5-5"],
-            "prompt_version": ["v1"],
-            "platform": ["mitxonline"],
-            "courserun_readable_id": ["course-v1:UAI_SOURCE+UAI.4+1T2026"],
-            "scope_id": ["u1"],
-            "scope_kind": ["unit"],
-            "scope_title": ["u1"],
-            "scope_position": [1],
-            "scope_part": [1],
-            "extracted_at": [datetime(2026, 10, 17, tzinfo=UTC)],
-        }
-    ).write_parquet(extraction / "courseware_claim_extraction.parquet")
-    pl.DataFrame({"extraction_key": ["e1"], "claim_ordinal": [1]}).write_parquet(
-        extraction / "courseware_claim.parquet"
-    )
-    pl.DataFrame(
-        {"extraction_key": ["e1"], "claim_ordinal": [1], "evidence_ordinal": [1]}
+    if extractions is None:
+        extractions = pl.DataFrame([_extraction("e1", "opus", "u1")])
+    if claims is None:
+        claims = pl.DataFrame({"extraction_key": ["e1"], "claim_ordinal": [1]})
+    extractions.write_parquet(extraction / "courseware_claim_extraction.parquet")
+    claims.write_parquet(extraction / "courseware_claim.parquet")
+    claims.select("extraction_key", "claim_ordinal").with_columns(
+        pl.lit(1).alias("evidence_ordinal")
     ).write_parquet(extraction / "courseware_claim_evidence.parquet")
     run = "r1"
     pl.DataFrame(
@@ -1003,8 +1028,9 @@ def _write_gold_inputs(directory, *, assignments, registry, decisions):
     ).write_parquet(identity / "courseware_concept_label_embedding.parquet")
     _labels(*keys).write_parquet(directory / "concept_labels.parquet")
     empty = pl.DataFrame({"unused": [None]})
-    for name in ("sources", "concepts", "relations"):
+    for name in ("concepts", "relations"):
         empty.write_parquet(directory / f"{name}.parquet")
+    (empty if sources is None else sources).write_parquet(directory / "sources.parquet")
     return samples.load_inputs(
         [extraction],
         directory / "sources.parquet",
@@ -1144,3 +1170,65 @@ def test_recall_with_no_labelled_denominator_is_skipped():
     assert score._estimate(strata, alpha=0.05)["skipped"] == (
         "no labelled item counts toward the denominator"
     )
+
+
+def test_a_model_that_extracted_no_claims_still_counts_for_the_scope(tmp_path):
+    # haiku extracted u1 and u2 and returned no claims; opus named nothing in u2
+    claim = _claim("opus", "u1", 1, "Linear regression")
+    inputs = _write_gold_inputs(
+        tmp_path,
+        assignments=pl.DataFrame({"concept_label_key": ["x"], "concept_id": ["k1"]}),
+        registry=pl.DataFrame(
+            {"concept_id": ["k1"], "merged_into_concept_id": [None]},
+            schema={"concept_id": pl.String, "merged_into_concept_id": pl.String},
+        ),
+        decisions=pl.DataFrame(
+            schema={
+                "query_label_key": pl.String,
+                "candidate_label_key": pl.String,
+                "verdict": pl.String,
+            }
+        ),
+        extractions=pl.DataFrame(
+            [
+                _extraction("opus-u1", "opus", "u1"),
+                _extraction("haiku-u1", "haiku", "u1"),
+                _extraction("opus-u2", "opus", "u2"),
+                _extraction("haiku-u2", "haiku", "u2"),
+            ]
+        ),
+        claims=pl.DataFrame([claim]).select(
+            "extraction_key",
+            "claim_ordinal",
+            "claim_kind",
+            "label",
+            "description",
+            "teaching_status",
+        ),
+        sources=pl.DataFrame(
+            {
+                "platform": ["mitxonline"] * 2,
+                "courserun_readable_id": [claim["courserun_readable_id"]] * 2,
+                "scope_id": ["u1", "u2"],
+                "scope_kind": ["unit"] * 2,
+                "scope_title": ["u1", "u2"],
+                "scope_position": [1, 2],
+                "source_text": ["text"] * 2,
+            }
+        ),
+    )
+    [row] = samples.claims_population(inputs).to_dicts()
+    # haiku saw the scope and did not name it: a disagreement, not unpaired
+    assert (row["agreement"], row["autorater"]) == ("opus_only", 0.0)
+    subsections = {
+        row["scope_id"]: row
+        for row in samples.subsections_population(inputs).iter_rows(named=True)
+    }
+    assert sorted(subsections) == ["u1", "u2"]
+    u1, u2 = subsections["u1"], subsections["u2"]
+    assert (u1["models"], u1["found_hat_haiku"], u1["found_hat_opus"]) == (
+        "haiku+opus",
+        0,
+        1,
+    )
+    assert (u2["models"], u2["gold_hat"]) == ("haiku+opus", 0)

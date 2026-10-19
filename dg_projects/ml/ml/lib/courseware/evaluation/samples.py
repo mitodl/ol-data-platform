@@ -230,6 +230,9 @@ def stratified_sample(  # noqa: PLR0913
 class GoldInputs:
     """Everything the samplers read, loaded from local parquet outputs.
 
+    :param extractions: the current extraction of each scope part by each model,
+        including one that returned no claims, so the scope still counts as
+        extracted by that model
     :param claims: current claims of every extractor model, one row per claim, with
         the extraction's scope and model columns
     :param evidence: evidence rows of those claims
@@ -244,6 +247,7 @@ class GoldInputs:
     :param matcher: the frozen label matching rule
     """
 
+    extractions: pl.DataFrame
     claims: pl.DataFrame
     evidence: pl.DataFrame
     sources: pl.DataFrame
@@ -392,6 +396,7 @@ def load_inputs(  # noqa: PLR0913
             mapping.select("concept_label_key", "canonical_label_key").iter_rows()
         )
     return GoldInputs(
+        extractions=current,
         claims=claims,
         evidence=evidence,
         sources=pl.read_parquet(sources),
@@ -411,6 +416,15 @@ def _claim_status(claim_kind: str, teaching_status: str | None) -> str:
     if claim_kind == "concept":
         return teaching_status or "mentioned"
     return "assumed" if claim_kind == "assumed_knowledge" else claim_kind
+
+
+def _extracted(inputs: GoldInputs) -> pl.DataFrame:
+    """Each current extraction with its model family, whether it has claims or not."""
+    return inputs.extractions.with_columns(
+        pl.col("model_id")
+        .map_elements(model_family, return_dtype=pl.String)
+        .alias("model")
+    )
 
 
 def _with_canonical(inputs: GoldInputs) -> pl.DataFrame:
@@ -453,8 +467,10 @@ def claims_population(inputs: GoldInputs) -> pl.DataFrame:
     """
     claims = _with_canonical(inputs)
     scope = ["platform", "courserun_readable_id", "scope_id", "scope_part"]
-    models_per_scope = claims.group_by(scope).agg(
-        pl.col("model").unique().alias("scope_models")
+    models_per_scope = (
+        _extracted(inputs)
+        .group_by(scope)
+        .agg(pl.col("model").unique().alias("scope_models"))
     )
     named = (
         claims.filter(pl.col("canonical").is_not_null())
@@ -651,23 +667,23 @@ def subsections_population(inputs: GoldInputs) -> pl.DataFrame:
     :returns: one row per unit scope
     :rtype: pl.DataFrame
     """
-    claims = _with_canonical(inputs)
-    concepts = _scope_concepts(claims)
+    concepts = _scope_concepts(_with_canonical(inputs))
     scope = ["platform", "courserun_readable_id", "scope_id"]
     units = (
         inputs.sources.filter(pl.col("scope_kind") == "unit")
         .group_by(*scope, "scope_title", "scope_position")
         .agg(pl.col("source_text").str.len_chars().sum().alias("chars"))
     )
-    models = sorted(claims["model"].unique())
-    # a column per model that extracted anything, named a concept or not
+    extractions = _extracted(inputs)
+    models = sorted(extractions["model"].unique())
+    # a column per model that extracted anything, claims or not
     per_model = concepts.group_by(scope).agg(
         (pl.col("model") == model).sum().alias(f"found_hat_{model}") for model in models
     )
     pooled = concepts.group_by(scope).agg(
         pl.col("canonical").n_unique().alias("gold_hat")
     )
-    extracted = claims.group_by(scope).agg(
+    extracted = extractions.group_by(scope).agg(
         pl.col("model").unique().sort().str.join("+").alias("models")
     )
     return (
