@@ -196,8 +196,10 @@ def test_cluster_new_themes_adds_far_groups_and_places_near_ones(monkeypatch) ->
     labels = np.array([0] * 10 + [cluster.NOISE_CLUSTER_ID] * 20)
     _fix_noise_groups(monkeypatch, np.array([0] * 10 + [1] * 10))
 
-    new_labels, new_probabilities, new_count, placed_count = cluster.cluster_new_themes(
-        unit_vectors, labels, np.zeros(30), min_cluster_size=2, umap_params=(2, 5)
+    new_labels, new_probabilities, new_count, placed_count, _ = (
+        cluster.cluster_new_themes(
+            unit_vectors, labels, np.zeros(30), min_cluster_size=2, umap_params=(2, 5)
+        )
     )
 
     assert (new_count, placed_count) == (1, 1)
@@ -224,11 +226,11 @@ def test_cluster_new_themes_keeps_a_group_near_a_new_cluster_as_noise(
     labels = np.array([0] * 10 + [cluster.NOISE_CLUSTER_ID] * 18)
     _fix_noise_groups(monkeypatch, np.array([0] * 10 + [1] * 8))
 
-    new_labels, _, new_count, placed_count = cluster.cluster_new_themes(
+    new_labels, _, new_count, placed_count, capped_count = cluster.cluster_new_themes(
         unit_vectors, labels, np.zeros(28), min_cluster_size=2, umap_params=(2, 5)
     )
 
-    assert (new_count, placed_count) == (1, 0)
+    assert (new_count, placed_count, capped_count) == (1, 0, 0)
     assert (new_labels[10:20] == 1).all()
     assert (new_labels[20:] == cluster.NOISE_CLUSTER_ID).all()
 
@@ -256,7 +258,7 @@ def test_cluster_new_themes_merges_a_split_theme_and_caps_new_clusters(
 
     _fix_noise_groups(monkeypatch, group_labels)
 
-    new_labels, _, new_count, placed_count = cluster.cluster_new_themes(
+    new_labels, _, new_count, placed_count, capped_count = cluster.cluster_new_themes(
         unit_vectors,
         labels,
         np.zeros(53),
@@ -267,7 +269,7 @@ def test_cluster_new_themes_merges_a_split_theme_and_caps_new_clusters(
 
     # Larger group 1 becomes the cluster, and groups 0 and 5 join it; the cap leaves
     # group 2 as noise; cluster 0 takes group 3 but not a second group
-    assert (new_count, placed_count) == (1, 3)
+    assert (new_count, placed_count, capped_count) == (1, 3, 1)
     assert (new_labels[20:35] == 1).all()
     assert (new_labels[35:41] == cluster.NOISE_CLUSTER_ID).all()
     assert (new_labels[41:45] == 0).all()
@@ -286,11 +288,11 @@ def test_cluster_new_themes_keeps_a_near_group_larger_than_its_cluster_as_noise(
     labels = np.array([0] * 5 + [cluster.NOISE_CLUSTER_ID] * 25)
     _fix_noise_groups(monkeypatch, np.array([0] * 15 + [1] * 10))
 
-    new_labels, _, new_count, placed_count = cluster.cluster_new_themes(
+    new_labels, _, new_count, placed_count, capped_count = cluster.cluster_new_themes(
         unit_vectors, labels, np.zeros(30), min_cluster_size=2, umap_params=(2, 5)
     )
 
-    assert (new_count, placed_count) == (1, 0)
+    assert (new_count, placed_count, capped_count) == (1, 0, 0)
     assert (new_labels[5:20] == cluster.NOISE_CLUSTER_ID).all()
     assert (new_labels[20:] == 1).all()
 

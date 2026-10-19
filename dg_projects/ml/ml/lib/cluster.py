@@ -53,6 +53,8 @@ CLUSTER_RUN_SCHEMA = {
     "new_cluster_count": pl.Int64,
     # Noise groups that joined a cluster instead of becoming one (cluster_new_themes)
     "placed_group_count": pl.Int64,
+    # New themes left as noise because the run reached MAX_NEW_CLUSTERS_PER_RUN
+    "capped_new_cluster_count": pl.Int64,
     "base_cluster_run_id": pl.String,
 }
 
@@ -402,7 +404,7 @@ def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
     min_samples: int | None = HDBSCAN_MIN_SAMPLES,
     cluster_selection_method: str = HDBSCAN_CLUSTER_SELECTION_METHOD,
     first_new_cluster_id: int = 0,
-) -> tuple[np.ndarray, np.ndarray, int, int]:
+) -> tuple[np.ndarray, np.ndarray, int, int, int]:
     """Cluster the noise, with UMAP fitted on the noise alone, and take the groups
     largest first. A group far from every existing cluster becomes a new cluster,
     up to max_new_clusters, or joins a new cluster from this call it is very close
@@ -411,13 +413,13 @@ def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
 
     New clusters get ids after the existing ones, and never below
     first_new_cluster_id. Returns (labels, probabilities, new_cluster_count,
-    placed_group_count).
+    placed_group_count, capped_new_cluster_count).
     """
     umap_n_components, umap_n_neighbors = umap_params
     noise = np.flatnonzero(labels == NOISE_CLUSTER_ID)
     # UMAP needs more points than n_components
     if len(noise) < max(min_cluster_size, umap_n_components + 2):
-        return labels, probabilities, 0, 0
+        return labels, probabilities, 0, 0, 0
     reduced = UMAP(
         n_components=umap_n_components,
         n_neighbors=umap_n_neighbors,
@@ -440,6 +442,7 @@ def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
     next_cluster_id = max(labels.max() + 1, first_new_cluster_id)
     new_cluster_count = 0
     placed_group_count = 0
+    capped_new_cluster_count = 0
     new_centroids: dict[int, np.ndarray] = {}
     # A cluster's centroid is not recomputed here, so a second group would be
     # compared with a centroid the first one already moved
@@ -469,10 +472,10 @@ def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
                 labels[noise[in_group]] = nearest_new
                 probabilities[noise[in_group]] = clusterer.probabilities_[in_group]
                 placed_group_count += 1
-            elif (
-                nearest_new_similarity < max_centroid_similarity
-                and new_cluster_count < max_new_clusters
-            ):
+            elif nearest_new_similarity < max_centroid_similarity:
+                if new_cluster_count >= max_new_clusters:
+                    capped_new_cluster_count += 1
+                    continue
                 labels[noise[in_group]] = next_cluster_id
                 probabilities[noise[in_group]] = clusterer.probabilities_[in_group]
                 new_centroids[next_cluster_id] = centroid
@@ -488,7 +491,13 @@ def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
             labels[noise[in_group]] = target
             placed_targets.add(target)
             placed_group_count += 1
-    return labels, probabilities, new_cluster_count, placed_group_count
+    return (
+        labels,
+        probabilities,
+        new_cluster_count,
+        placed_group_count,
+        capped_new_cluster_count,
+    )
 
 
 def _unit_vectors(vectors: np.ndarray) -> np.ndarray:
@@ -724,20 +733,25 @@ def extend_clusters(  # noqa: PLR0913 -- same settings as cluster_embeddings
     probabilities = np.full(len(labels), np.nan)
     new_cluster_count = None
     placed_group_count = None
+    capped_new_cluster_count = None
     if add_new_clusters:
-        labels, probabilities, new_cluster_count, placed_group_count = (
-            cluster_new_themes(
-                unit_vectors,
-                labels,
-                probabilities,
-                new_cluster_min_size,
-                umap_params=umap_params,
-                random_state=random_state,
-                min_samples=min_samples,
-                cluster_selection_method=cluster_selection_method,
-                # A live key with no member in this run still owns its id
-                first_new_cluster_id=len(cluster_keys),
-            )
+        (
+            labels,
+            probabilities,
+            new_cluster_count,
+            placed_group_count,
+            capped_new_cluster_count,
+        ) = cluster_new_themes(
+            unit_vectors,
+            labels,
+            probabilities,
+            new_cluster_min_size,
+            umap_params=umap_params,
+            random_state=random_state,
+            min_samples=min_samples,
+            cluster_selection_method=cluster_selection_method,
+            # A live key with no member in this run still owns its id
+            first_new_cluster_id=len(cluster_keys),
         )
     carried_keys = [
         cluster_keys[label] if 0 <= label < len(cluster_keys) else None
@@ -776,5 +790,6 @@ def extend_clusters(  # noqa: PLR0913 -- same settings as cluster_embeddings
         "placed_noise_count": placed_noise_count,
         "new_cluster_count": new_cluster_count,
         "placed_group_count": placed_group_count,
+        "capped_new_cluster_count": capped_new_cluster_count,
     }
     return candidates_df, run_metadata

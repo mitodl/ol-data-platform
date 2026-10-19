@@ -437,7 +437,8 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
 
     context.log.info(
         "Cluster run %s (%s): %d conversations, %d clusters, %d noise, "
-        "%s noise placed, %s new clusters, %s noise groups placed, silhouette=%s",
+        "%s noise placed, %s new clusters (%s more held by the cap), "
+        "%s noise groups placed, silhouette=%s",
         run_metadata["cluster_run_id"],
         run_metadata["run_type"],
         run_metadata["total_conversations"],
@@ -445,6 +446,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
         run_metadata["noise_count"],
         run_metadata.get("placed_noise_count"),
         run_metadata.get("new_cluster_count"),
+        run_metadata.get("capped_new_cluster_count"),
         run_metadata.get("placed_group_count"),
         run_metadata["silhouette_score"],
     )
