@@ -165,30 +165,39 @@ def _unit(rows: np.ndarray) -> np.ndarray:
     return rows / np.linalg.norm(rows, axis=1, keepdims=True)
 
 
-def test_cluster_new_themes_adds_far_groups_and_places_near_ones() -> None:
-    rng = np.random.default_rng(0)
-    # Cluster 0 has 10 members. The first noise group shares its direction and is
-    # no larger, so it joins cluster 0; the second noise group is a new theme.
-    unit_vectors = _unit(
-        np.vstack(
-            [
-                np.tile([1.0, 0.0, 0.0], (20, 1)),
-                np.tile([0.0, 1.0, 0.0], (10, 1)),
-            ]
-        )
-        + rng.normal(scale=0.01, size=(30, 3))
+def _fix_noise_groups(monkeypatch, group_labels: np.ndarray) -> None:
+    # HDBSCAN splits the same points differently across platforms, so the tests of
+    # what happens to each group set the groups themselves
+    class FakeUmap:
+        def __init__(self, **_kwargs):
+            pass
+
+        def fit_transform(self, vectors):
+            return vectors
+
+    class FakeHdbscan:
+        def __init__(self, **_kwargs):
+            self.probabilities_ = np.ones(len(group_labels))
+
+        def fit_predict(self, _reduced):
+            return group_labels
+
+    monkeypatch.setattr(cluster, "UMAP", FakeUmap)
+    monkeypatch.setattr(cluster, "HDBSCAN", FakeHdbscan)
+
+
+def test_cluster_new_themes_adds_far_groups_and_places_near_ones(monkeypatch) -> None:
+    e = np.eye(3)
+    # Group 0 shares cluster 0's direction and is no larger, so it joins cluster 0;
+    # group 1 is a new theme
+    unit_vectors = np.vstack(
+        [np.tile(e[0], (10, 1)), np.tile(e[0], (10, 1)), np.tile(e[1], (10, 1))]
     )
     labels = np.array([0] * 10 + [cluster.NOISE_CLUSTER_ID] * 20)
-    probabilities = np.array([1.0] * 10 + [0.0] * 20)
+    _fix_noise_groups(monkeypatch, np.array([0] * 10 + [1] * 10))
 
     new_labels, new_probabilities, new_count, placed_count = cluster.cluster_new_themes(
-        unit_vectors,
-        labels,
-        probabilities,
-        min_cluster_size=5,
-        max_centroid_similarity=0.75,
-        group_placement_min_similarity=0.85,
-        umap_params=(2, 5),
+        unit_vectors, labels, np.zeros(30), min_cluster_size=2, umap_params=(2, 5)
     )
 
     assert (new_count, placed_count) == (1, 1)
@@ -197,32 +206,31 @@ def test_cluster_new_themes_adds_far_groups_and_places_near_ones() -> None:
     assert (new_probabilities[20:] > 0).all()
 
 
-def test_cluster_new_themes_makes_one_cluster_from_two_groups_of_one_theme() -> None:
-    rng = np.random.default_rng(0)
-    # Both noise groups are far from cluster 0 but 0.8 similar to each other
+def test_cluster_new_themes_keeps_a_group_near_a_new_cluster_as_noise(
+    monkeypatch,
+) -> None:
+    e = np.eye(3)
+    # Both groups are far from cluster 0 and 0.8 similar to each other: too close
+    # to be two categories, not close enough to merge
     unit_vectors = _unit(
         np.vstack(
             [
-                np.tile([1.0, 0.0, 0.0], (10, 1)),
-                np.tile([0.0, 1.0, 0.0], (10, 1)),
-                np.tile([0.0, 0.8, 0.6], (10, 1)),
+                np.tile(e[0], (10, 1)),
+                np.tile(e[1], (10, 1)),
+                np.tile(0.8 * e[1] + 0.6 * e[2], (8, 1)),
             ]
         )
-        + rng.normal(scale=0.01, size=(30, 3))
     )
-    labels = np.array([0] * 10 + [cluster.NOISE_CLUSTER_ID] * 20)
+    labels = np.array([0] * 10 + [cluster.NOISE_CLUSTER_ID] * 18)
+    _fix_noise_groups(monkeypatch, np.array([0] * 10 + [1] * 8))
 
     new_labels, _, new_count, placed_count = cluster.cluster_new_themes(
-        unit_vectors,
-        labels,
-        np.zeros(30),
-        min_cluster_size=5,
-        umap_params=(2, 5),
+        unit_vectors, labels, np.zeros(28), min_cluster_size=2, umap_params=(2, 5)
     )
 
     assert (new_count, placed_count) == (1, 0)
-    assert (new_labels[10:] == 1).sum() == 10
-    assert (new_labels[10:] == cluster.NOISE_CLUSTER_ID).sum() == 10
+    assert (new_labels[10:20] == 1).all()
+    assert (new_labels[20:] == cluster.NOISE_CLUSTER_ID).all()
 
 
 def test_cluster_new_themes_merges_a_split_theme_and_caps_new_clusters(
@@ -246,22 +254,7 @@ def test_cluster_new_themes_merges_a_split_theme_and_caps_new_clusters(
     labels = np.array([0] * 20 + [cluster.NOISE_CLUSTER_ID] * 33)
     group_labels = np.array([0] * 5 + [1] * 10 + [2] * 6 + [3] * 4 + [4] * 4 + [5] * 4)
 
-    class FakeUmap:
-        def __init__(self, **_kwargs):
-            pass
-
-        def fit_transform(self, vectors):
-            return vectors
-
-    class FakeHdbscan:
-        def __init__(self, **_kwargs):
-            self.probabilities_ = np.ones(len(group_labels))
-
-        def fit_predict(self, _reduced):
-            return group_labels
-
-    monkeypatch.setattr(cluster, "UMAP", FakeUmap)
-    monkeypatch.setattr(cluster, "HDBSCAN", FakeHdbscan)
+    _fix_noise_groups(monkeypatch, group_labels)
 
     new_labels, _, new_count, placed_count = cluster.cluster_new_themes(
         unit_vectors,
@@ -282,32 +275,24 @@ def test_cluster_new_themes_merges_a_split_theme_and_caps_new_clusters(
     assert (new_labels[49:] == 1).all()
 
 
-def test_cluster_new_themes_keeps_a_near_group_larger_than_its_cluster_as_noise() -> (
-    None
-):
-    rng = np.random.default_rng(0)
+def test_cluster_new_themes_keeps_a_near_group_larger_than_its_cluster_as_noise(
+    monkeypatch,
+) -> None:
+    e = np.eye(3)
     # The near group (15) is larger than cluster 0 (5): a broader theme, left as noise
-    unit_vectors = _unit(
-        np.vstack(
-            [
-                np.tile([1.0, 0.0, 0.0], (20, 1)),
-                np.tile([0.0, 1.0, 0.0], (10, 1)),
-            ]
-        )
-        + rng.normal(scale=0.01, size=(30, 3))
+    unit_vectors = np.vstack(
+        [np.tile(e[0], (5, 1)), np.tile(e[0], (15, 1)), np.tile(e[1], (10, 1))]
     )
     labels = np.array([0] * 5 + [cluster.NOISE_CLUSTER_ID] * 25)
+    _fix_noise_groups(monkeypatch, np.array([0] * 15 + [1] * 10))
 
     new_labels, _, new_count, placed_count = cluster.cluster_new_themes(
-        unit_vectors,
-        labels,
-        np.zeros(30),
-        min_cluster_size=5,
-        umap_params=(2, 5),
+        unit_vectors, labels, np.zeros(30), min_cluster_size=2, umap_params=(2, 5)
     )
 
     assert (new_count, placed_count) == (1, 0)
     assert (new_labels[5:20] == cluster.NOISE_CLUSTER_ID).all()
+    assert (new_labels[20:] == 1).all()
 
 
 def test_extend_clusters_keeps_live_keys_and_adds_new_themes() -> None:
