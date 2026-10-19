@@ -8,7 +8,8 @@ models:
     Open edX course run, in reading order. Problem text is the question side only.
     OCW courses are scoped by page group, section page or calendar session, with answer
     keys left out; a link to a resource also takes what the resource's description
-    links.
+    links, and a course taught through three or more page groups does not read its
+    textbook section.
   config:
     meta:
       # The text it reads (raw__openedx__s3__course_transcript_text and
@@ -405,3 +406,76 @@ unit_tests:
     - {scope_id: courses/c1/pages/differentiation/, source_position: 2, source_ref: courses/c1/pages/differentiation/session-10-quotient-rule/}
     - {scope_id: courses/c1/pages/differentiation/, source_position: 3, source_ref: courses/c1/resources/ses10a/}
     - {scope_id: courses/c1/pages/differentiation/, source_position: 4, source_ref: courses/c1/resources/ex10prb/}
+
+- name: test_int__courseware__extraction_sources_skips_ocw_textbook_in_week_courses
+  description: >
+    c1 teaches through three weeks, so its Online Textbook is reference reading: the
+    textbook page and the chapter only it links are not read, and the chapter does
+    not
+    land in materials. c2 is its Open Textbook, which it reads as a unit.
+  model: int__courseware__extraction_sources
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
+        the course.</p>}
+    - {course_slug: c2, courserun_readable_id: run2, course_title: Course Two, course_description_html: <p>Another
+        course.</p>}
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-1/,
+      content_type: page, title: 'Week 1', file_extension: null, content_tags: null,
+      content: <p>Kinematics.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-1/lesson-1/,
+      content_type: page, title: Lesson 1, file_extension: null, content_tags: null,
+      content: <p>Position.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-2/,
+      content_type: page, title: 'Week 2', file_extension: null, content_tags: null,
+      content: <p>Forces.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-2/lesson-2/,
+      content_type: page, title: Lesson 2, file_extension: null, content_tags: null,
+      content: <p>Newton.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-3/,
+      content_type: page, title: 'Week 3', file_extension: null, content_tags: null,
+      content: <p>Energy.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-3/lesson-3/,
+      content_type: page, title: Lesson 3, file_extension: null, content_tags: null,
+      content: <p>Work.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/online-textbook/,
+      content_type: page, title: Online Textbook, file_extension: null, content_tags: null,
+      content: '<p>The textbook.</p><a href="/courses/c1/resources/chapter1/">Chapter
+        1</a>'}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/chapter1/,
+      content_type: pdf, title: Chapter 1, file_extension: .pdf, content_tags: null,
+      content: Chapter 1. Kinematics in one dimension.}
+    - {courserun_readable_id: run2, course_slug: c2, content_file_key: courses/c2/pages/open-textbook/,
+      content_type: page, title: Open Textbook, file_extension: null, content_tags: null,
+      content: '<p>The book.</p><a href="/courses/c2/resources/chapter1/">Chapter
+        1</a>'}
+    - {courserun_readable_id: run2, course_slug: c2, content_file_key: courses/c2/resources/chapter1/,
+      content_type: pdf, title: Chapter 1, file_extension: .pdf, content_tags: null,
+      content: Chapter 1. Limits.}
+  expect:
+    rows:
+    - {scope_id: context, source_ref: courses/c1/}
+    - {scope_id: courses/c1/pages/week-1/, source_ref: courses/c1/pages/week-1/}
+    - {scope_id: courses/c1/pages/week-1/, source_ref: courses/c1/pages/week-1/lesson-1/}
+    - {scope_id: courses/c1/pages/week-2/, source_ref: courses/c1/pages/week-2/}
+    - {scope_id: courses/c1/pages/week-2/, source_ref: courses/c1/pages/week-2/lesson-2/}
+    - {scope_id: courses/c1/pages/week-3/, source_ref: courses/c1/pages/week-3/}
+    - {scope_id: courses/c1/pages/week-3/, source_ref: courses/c1/pages/week-3/lesson-3/}
+    - {scope_id: context, source_ref: courses/c2/}
+    - {scope_id: courses/c2/pages/open-textbook/, source_ref: courses/c2/pages/open-textbook/}
+    - {scope_id: courses/c2/pages/open-textbook/, source_ref: courses/c2/resources/chapter1/}

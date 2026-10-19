@@ -31,6 +31,12 @@
       context    the course description and the syllabus pages, with what they link
       materials  documents no page links
 
+    A course taught through three or more page groups (an OCW Scholar course's weeks)
+    does not read its textbook section (Online Textbook, Open Textbook): the weeks teach,
+    and the book is reference reading that outweighs them (8.01SC's is nine tenths of
+    its text). What only the textbook links is not read and does not land in materials.
+    A course that is its textbook (Calculus Open Textbook) reads it as units.
+
     A link to a resource also links what that resource's description links, right
     after it: 18.01SC's pages link video clips whose descriptions link the session
     notes. The description is read from stg__ocw__s3__course_content, since
@@ -69,6 +75,7 @@
 {% set ocw_context_sections = ['syllabus'] %}
 {# about the course rather than its content; calendar rows still title and place sessions #}
 {% set ocw_skipped_sections = ['calendar', 'related-resources', 'instructor-insights', 'download', 'resource-index'] %}
+{% set ocw_textbook_section = "'^((open|online)-)?textbooks?(-|$)'" %}
 {% set ocw_transcript_extensions = ['.srt', '.vtt', '.webvtt'] %}
 {% set ocw_resource_href = "'href=\"/(courses/[^/\"]+/resources/[^/\"#?]+)'" %}
 {# a table column of answer keys: "Solutions", "Exam Solutions", "Answer Key"; not "Problem Sets and Solutions" #}
@@ -411,6 +418,19 @@ with content as (
     group by parent_key
 )
 
+, ocw_taught_by_groups as (
+    select files.courserun_readable_id
+    from ocw_files as files
+    inner join ocw_page_children as children
+        on files.content_file_key = children.page_key
+    where
+        files.page_path is not null
+        and files.section not in ('{{ (ocw_context_sections + ocw_skipped_sections) | join("', '") }}')
+        and not {{ regexp_like('files.section', ocw_textbook_section) }}
+    group by files.courserun_readable_id
+    having count(*) >= 3
+)
+
 , ocw_pages as (
     select
         files.courserun_readable_id
@@ -429,11 +449,17 @@ with content as (
             when files.is_solution and coalesce(children.child_count, 0) = 0 then 'solution'
             when files.section in ('{{ ocw_context_sections | join("', '") }}') then 'context'
             when files.section in ('{{ ocw_skipped_sections | join("', '") }}') then 'skipped'
+            when
+                grouped.courserun_readable_id is not null
+                and {{ regexp_like('files.section', ocw_textbook_section) }}
+                then 'reference'
             else 'unit'
         end as page_role
     from ocw_files as files
     left join ocw_page_children as children
         on files.content_file_key = children.page_key
+    left join ocw_taught_by_groups as grouped
+        on files.courserun_readable_id = grouped.courserun_readable_id
     where files.page_path is not null
 )
 
@@ -1009,7 +1035,8 @@ with content as (
 
     union all
 
-    -- documents no read page links; what only a skipped page links counts as unlinked
+    -- documents no read page links; what only a skipped page links counts as unlinked,
+    -- what a textbook read as reference links as linked
     select
         resources.courserun_readable_id
         , 'materials' as scope_id
