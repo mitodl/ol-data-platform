@@ -6,9 +6,10 @@
   bucket.
 
   Learn drops a resource that has no file to read text from. For a video that
-  file is its transcript, which Learn looks for under
-  video_files.video_transcript_file. A resource whose file is not in the bucket
-  is dropped as well: Learn's read of it raises.
+  file is its transcript (get_video_transcript_path): the first English entry of
+  video_files.video_transcript_resources that names a file, else the first entry
+  that names a file, else video_files.video_transcript_file. A resource whose
+  file is not in the bucket is dropped as well: Learn's read of it raises.
 
   Not reproduced: Learn passes a resource's description through nh3 with an
   allowlist of tags. The description here is the HTML OCW published.
@@ -58,20 +59,56 @@ with content as (
     where coursecontent_kind = 'resource'
 )
 
+-- One row per transcript a video lists, ranked the way Learn picks one. Learn
+-- raises on a non-empty value that is not a list, which drops the resource;
+-- here it yields no rows, which drops it too unless the video also has a
+-- video_transcript_file.
+, transcript_resources as (
+    select
+        resources.coursecontent_s3_key
+        , {{ json_extract_scalar('transcript.element', "'$.file'") }} as transcript_file
+        , row_number() over (
+            partition by resources.coursecontent_s3_key
+            order by
+                case
+                    when lower(coalesce({{ json_extract_scalar('transcript.element', "'$.language'") }}, '')) like 'en%'
+                        then 0
+                    else 1
+                end
+                , transcript.idx
+        ) as transcript_rank
+    from resources
+    cross join
+        unnest({{ try_parse_json_array('resources.coursecontent_video_transcript_resources') }})  -- noqa: PRS
+        with ordinality as transcript (element, idx)
+    where
+        resources.is_video
+        and resources.is_current_format
+        and coalesce({{ json_extract_scalar('transcript.element', "'$.file'") }}, '') != ''
+)
+
 , resource_files as (
     select
-        *
+        resources.*
         , case
-            when is_video and is_current_format then coursecontent_video_transcript_file
-            when is_video then coursecontent_legacy_transcript_file
-            else coursecontent_file
+            when resources.is_video and resources.is_current_format
+                then coalesce(transcript_resources.transcript_file, resources.coursecontent_video_transcript_file)
+            when resources.is_video then resources.coursecontent_legacy_transcript_file
+            else resources.coursecontent_file
         end as text_file_path
         , case
-            when is_video
-                then coalesce(nullif(coursecontent_file, ''), nullif(coursecontent_video_archive_url, ''), '')
-            else coalesce(coursecontent_file, '')
+            when resources.is_video
+                then
+                    coalesce(
+                        nullif(resources.coursecontent_file, ''), nullif(resources.coursecontent_video_archive_url, ''), ''
+                    )
+            else coalesce(resources.coursecontent_file, '')
         end as extension_path
     from resources
+    left join transcript_resources
+        on
+            resources.coursecontent_s3_key = transcript_resources.coursecontent_s3_key
+            and transcript_resources.transcript_rank = 1
 )
 
 , resource_content_files as (

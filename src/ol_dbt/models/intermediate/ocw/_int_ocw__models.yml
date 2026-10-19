@@ -539,6 +539,60 @@ unit_tests:
       content_type: video, title: Lecture 2, description: "", url: "https://ocw.mit.edu/courses/a-course/resources/lecture-2/",
       content: Transcript, file_extension: .mp4, image_src: "https://i.ytimg.com/vi/def456/hqdefault.jpg",
       youtube_id: def456}
+- name: test_int__ocw__content_files_prefers_the_english_transcript
+  description: >
+    A video's transcript is the first English entry of video_transcript_resources
+    that names a file, else the first entry that names a file, else
+    video_transcript_file (get_video_transcript_path, mitodl/mit-learn#4063). The
+    transcript chosen shows in whether the resource is kept: Learn drops one
+    whose transcript path does not contain "courses".
+  model: int__ocw__content_files
+  given:
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: a-course, courserun_readable_id: b89637d2d64abf7896f604f5d40d48a9}
+  - input: ref('stg__ocw__s3__course_content')
+    rows:
+    # The English entry wins over an earlier Spanish one, so this video is dropped.
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/english-first/data.json,
+      coursecontent_title: English first, coursecontent_resource_type: Video, coursecontent_video_youtube_id: aaa,
+      coursecontent_video_transcript_resources: '[{"file": "/courses/a-course/t_es.pdf",
+        "language": "es"}, {"file": "https://elsewhere/t_en.pdf", "language": "en"}]',
+      coursecontent_video_transcript_file: /courses/a-course/t.pdf}
+    # Of two English entries the first is read.
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/two-english/data.json,
+      coursecontent_title: Two English, coursecontent_resource_type: Video, coursecontent_video_youtube_id: bbb,
+      coursecontent_video_transcript_resources: '[{"file": "/courses/a-course/t_en.pdf",
+        "language": "en"}, {"file": "https://elsewhere/t_en2.pdf", "language": "EN"}]',
+      coursecontent_text: English transcript, coursecontent_text_extraction_status: extracted}
+    # With no English entry the first that names a file is read.
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/no-english/data.json,
+      coursecontent_title: No English, coursecontent_resource_type: Video, coursecontent_video_youtube_id: ccc,
+      coursecontent_video_transcript_resources: '[{"file": "", "language": "en"},
+        {"file": "/courses/a-course/t_fr.pdf", "language": "fr"}]'}
+    # An empty list leaves video_transcript_file.
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/empty-list/data.json,
+      coursecontent_title: Empty list, coursecontent_resource_type: Video, coursecontent_video_youtube_id: ddd,
+      coursecontent_video_transcript_resources: '[]', coursecontent_video_transcript_file: /courses/a-course/t_single.pdf}
+    # An empty list and no file: no transcript, so dropped.
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/none/data.json,
+      coursecontent_title: None, coursecontent_resource_type: Video, coursecontent_video_youtube_id: eee,
+      coursecontent_video_transcript_resources: '[]'}
+    # Not a list: it counts as none.
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/object/data.json,
+      coursecontent_title: Object, coursecontent_resource_type: Video, coursecontent_video_youtube_id: fff,
+      coursecontent_video_transcript_resources: '{"content": [], "website": "a-course"}'}
+    # Data written before the list existed has only the single file.
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/single-file/data.json,
+      coursecontent_title: Single file, coursecontent_resource_type: Video, coursecontent_video_youtube_id: ggg,
+      coursecontent_video_transcript_file: /courses/a-course/t_old.pdf}
+  expect:
+    rows:
+    - {content_file_key: courses/a-course/resources/two-english/, content: English
+        transcript, youtube_id: bbb}
+    - {content_file_key: courses/a-course/resources/no-english/, content: null, youtube_id: ccc}
+    - {content_file_key: courses/a-course/resources/empty-list/, content: null, youtube_id: ddd}
+    - {content_file_key: courses/a-course/resources/single-file/, content: null, youtube_id: ggg}
 - name: test_int__ocw__live_courses_reads_what_learn_reads
   description: >
     The run id prefers legacy_uid, cross-listed numbers are split and trimmed,
