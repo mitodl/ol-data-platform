@@ -31,6 +31,11 @@
       context    the course description and the syllabus pages, with what they link
       materials  documents no page links
 
+    A link to a resource also links what that resource's description links, right
+    after it: 18.01SC's pages link video clips whose descriptions link the session
+    notes. The description is read from stg__ocw__s3__course_content, since
+    int__ocw__content_files drops a video with no transcript file.
+
     Answer keys are left out: a resource whose learning resource types name solutions,
     that courseware_answer_key reads as one from its file name, title and opening text,
     that a table links in a column headed Solutions (or Answers, Key), or whose text is
@@ -459,7 +464,7 @@ with content as (
     where {{ array_length(regexp_extract_all('body', ocw_resource_href, 1)) }} > 0
 )
 
-, ocw_page_links as (
+, ocw_direct_page_links as (
     select
         page_hrefs.courserun_readable_id
         , page_hrefs.page_key
@@ -468,6 +473,58 @@ with content as (
         , concat({{ element_at_array('page_hrefs.hrefs', 'links.link_index') }}, '/') as target_key
     from ocw_page_hrefs as page_hrefs
     cross join {{ unnest_sequence(array_length('page_hrefs.hrefs'), 'links', 'link_index') }}
+)
+
+-- the resources a resource's description links, which int__ocw__content_files cannot
+-- give for a video it dropped
+, ocw_description_hrefs as (
+    select
+        ocw_courses.courserun_readable_id
+        , substr(content.coursecontent_s3_key, 1, length(content.coursecontent_s3_key) - length('data.json'))
+            as resource_key
+        , {{ regexp_extract_all('content.coursecontent_body', ocw_resource_href, 1) }} as hrefs
+    from {{ ref('stg__ocw__s3__course_content') }} as content
+    inner join ocw_courses
+        on content.course_slug = ocw_courses.course_slug
+    where
+        content.coursecontent_kind = 'resource'
+        and {{ array_length(regexp_extract_all('content.coursecontent_body', ocw_resource_href, 1)) }} > 0
+)
+
+, ocw_description_links as (
+    select
+        description_hrefs.courserun_readable_id
+        , description_hrefs.resource_key
+        , links.link_index
+        , concat({{ element_at_array('description_hrefs.hrefs', 'links.link_index') }}, '/') as target_key
+    from ocw_description_hrefs as description_hrefs
+    cross join {{ unnest_sequence(array_length('description_hrefs.hrefs'), 'links', 'link_index') }}
+)
+
+-- a page links what it links directly and, right after each resource, what that
+-- resource's description links
+, ocw_page_links as (
+    select
+        courserun_readable_id
+        , page_key
+        , page_role
+        , cast(link_index as bigint) * 1000 as link_index
+        , target_key
+    from ocw_direct_page_links
+
+    union all
+
+    select
+        page_links.courserun_readable_id
+        , page_links.page_key
+        , page_links.page_role
+        , cast(page_links.link_index as bigint) * 1000 + description_links.link_index as link_index
+        , description_links.target_key
+    from ocw_direct_page_links as page_links
+    inner join ocw_description_links as description_links
+        on
+            page_links.courserun_readable_id = description_links.courserun_readable_id
+            and page_links.target_key = description_links.resource_key
 )
 
 -- Every page's tables, one row per table row. On top-level section pages and the
@@ -686,15 +743,34 @@ with content as (
     where {{ array_length(regexp_extract_all('row_html', ocw_resource_href, 1)) }} > 0
 )
 
-, ocw_session_links as (
+, ocw_direct_session_links as (
     select
         session_hrefs.courserun_readable_id
         , session_hrefs.page_key
         , session_hrefs.scope_id
-        , session_hrefs.table_index * 1000000 + session_hrefs.row_index * 1000 + links.link_index as link_order
+        , (cast(session_hrefs.table_index as bigint) * 1000000 + session_hrefs.row_index * 1000 + links.link_index)
+        * 1000 as link_order
         , concat({{ element_at_array('session_hrefs.hrefs', 'links.link_index') }}, '/') as target_key
     from ocw_session_hrefs as session_hrefs
     cross join {{ unnest_sequence(array_length('session_hrefs.hrefs'), 'links', 'link_index') }}
+)
+
+, ocw_session_links as (
+    select * from ocw_direct_session_links
+
+    union all
+
+    select
+        session_links.courserun_readable_id
+        , session_links.page_key
+        , session_links.scope_id
+        , session_links.link_order + description_links.link_index as link_order
+        , description_links.target_key
+    from ocw_direct_session_links as session_links
+    inner join ocw_description_links as description_links
+        on
+            session_links.courserun_readable_id = description_links.courserun_readable_id
+            and session_links.target_key = description_links.resource_key
 )
 
 -- a session is titled from the calendar where it has the row
