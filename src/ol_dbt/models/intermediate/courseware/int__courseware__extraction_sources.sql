@@ -27,7 +27,8 @@
                  Assignments, Exams); a page whose parent page is not published;
                  and, in a flat course, one per session: the
                  resources linked in row N of any table keyed by SES #, LEC # or WEEK #,
-                 titled from the calendar
+                 titled from the calendar, and the problem set its calendar row
+                 releases ("PS 3 out") when no session row links it
       context    the course description and the syllabus pages, with what they link
       materials  documents no page links
 
@@ -81,6 +82,7 @@
 {# a table column of answer keys: "Solutions", "Exam Solutions", "Answer Key"; not "Problem Sets and Solutions" #}
 {% set ocw_solution_column = "'^((problem sets?|psets?|exams?|quiz(zes)?|labs?|homeworks?|assignments?|practice exams?|exam review|sample|recitations?|midterms?|finals?|final exam) )?(solutions?|answers?|answer keys?|keys?|solns?)$'" %}
 {% set ocw_table_cell = "'(?s)<t[dh](?:\\s[^>]*)?>(.*?)</t[dh]>'" %}
+{% set ocw_problem_set_release = "'(?:^|[^a-z])(?:problem set|pset|ps) ?#? ?([0-9]+),? (?:out|assigned|released|handed out)'" %}
 
 with content as (
     select *
@@ -781,8 +783,79 @@ with content as (
     cross join {{ unnest_sequence(array_length('session_hrefs.hrefs'), 'links', 'link_index') }}
 )
 
+, ocw_release_rows as (
+    select
+        courserun_readable_id
+        , page_key
+        , concat(session_kind, '-', cast(session_number as varchar)) as scope_id
+        , table_index
+        , row_index
+        , {{ regexp_extract_all("lower(" ~ courseware_html_text('row_html') ~ ")", ocw_problem_set_release, 1) }}
+            as problem_sets
+    from ocw_session_rows
+    where section = 'calendar'
+)
+
+-- the session whose calendar row first says problem set N is out
+, ocw_problem_set_releases as (
+    select
+        release_rows.courserun_readable_id
+        , release_rows.page_key
+        , release_rows.scope_id
+        , (cast(release_rows.table_index as bigint) * 1000000 + release_rows.row_index * 1000 + 999) * 1000
+        + problem_sets.problem_set_index as link_order
+        , cast(cast({{ element_at_array('release_rows.problem_sets', 'problem_sets.problem_set_index') }} as integer)
+            as varchar) as problem_set
+        , row_number() over (
+            partition by
+                release_rows.courserun_readable_id
+                , cast({{ element_at_array('release_rows.problem_sets', 'problem_sets.problem_set_index') }} as integer)
+            order by release_rows.table_index, release_rows.row_index
+        ) as release_rank
+    from ocw_release_rows as release_rows
+    cross join {{ unnest_sequence(array_length('release_rows.problem_sets'), 'problem_sets', 'problem_set_index') }}
+    where {{ array_length('release_rows.problem_sets') }} > 0
+)
+
+-- a resource titled or named as problem set N ("Problem Set 3", ps03, mit6_046_pset3)
+-- that no session row links goes to the session that releases it
+, ocw_release_links as (
+    select
+        releases.courserun_readable_id
+        , releases.page_key
+        , releases.scope_id
+        , releases.link_order
+        , resources.content_file_key as target_key
+    from ocw_problem_set_releases as releases
+    inner join ocw_resources as resources
+        on
+            releases.courserun_readable_id = resources.courserun_readable_id
+            and (
+                {{ regexp_like(
+                    'lower(resources.title)'
+                    , "concat('(^|[^a-z])(problem set|pset|ps) ?#? ?0*', releases.problem_set, '([^0-9]|$)')"
+                ) }}
+                or {{ regexp_like(
+                    regexp_extract_or_null('resources.content_file_key', "'([^/]+)/$'", 1)
+                    , "concat('(^|[^a-z])(ps|pset|problemset)[_-]?0*', releases.problem_set, '([^0-9]|$)')"
+                ) }}
+            )
+    left join ocw_direct_session_links as session_links
+        on
+            resources.courserun_readable_id = session_links.courserun_readable_id
+            and resources.content_file_key = session_links.target_key
+    where
+        releases.release_rank = 1
+        and resources.source_kind = 'document'
+        and session_links.target_key is null
+)
+
 , ocw_session_links as (
     select * from ocw_direct_session_links
+
+    union all
+
+    select * from ocw_release_links
 
     union all
 
