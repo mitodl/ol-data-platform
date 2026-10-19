@@ -231,6 +231,9 @@ seeds:
       extractor_id: varchar
       prompt_version: varchar
       schema_version: varchar
+  # Duplicates tie on match_rank in int__courseware__extraction_source_checksums,
+  # and the build would pick one of their versions arbitrarily, so one bad row is
+  # the failure and the project's >10 does not apply.
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -238,10 +241,13 @@ seeds:
         - platform
         - course_readable_id
         - courserun_readable_id
-  # A row naming both would tie with the run's own row, and the build would pick
-  # one of the two versions arbitrarily.
+      config:
+        error_if: ">0"
+  # A row naming both would tie with the run's own row the same way.
   - dbt_utils.expression_is_true:
       expression: course_readable_id is null or courserun_readable_id is null
+      config:
+        error_if: ">0"
   columns:
   - name: platform
     description: str, mitxonline, mitxpro or residential
