@@ -969,9 +969,33 @@
     timezone('{{ time_zone }}', cast(cast({{ date_expr }} as date) as timestamp))
 {%- endmacro %}
 
-{# StarRocks has no zone-aware type. An instant is a DATETIME holding UTC wall-clock time. #}
+{#
+    StarRocks has no zone-aware type. An instant is a DATETIME holding UTC wall-clock time.
+    Its cast and convert_tz return NULL for a string they cannot read and for an unknown
+    zone, where Trino raises, so starrocks_strict_convert_tz raises there instead.
+#}
 {% macro starrocks__local_date_to_timestamptz(date_expr, time_zone) -%}
-    convert_tz(cast(cast({{ date_expr }} as date) as datetime), '{{ time_zone }}', 'UTC')
+    {{ starrocks_strict_convert_tz('cast(cast({} as date) as datetime)', date_expr, "'" ~ time_zone ~ "'") }}
+{%- endmacro %}
+
+{#
+    starrocks_strict_convert_tz: `input_expr` read as a DATETIME by the `to_datetime`
+    template ("{}" stands for the input) and moved from `zone_expr` to UTC. Fails the
+    query where the input cannot be read or the zone is unknown. A NULL input or zone is
+    NULL, as on Trino. Each argument is rendered as few times as possible: StarRocks
+    rejects a query whose expression tree passes 10,000 nodes, and the MIT PE event
+    times reach it when their local time is rendered three times.
+#}
+{% macro starrocks_strict_convert_tz(to_datetime, input_expr, zone_expr) -%}
+    if(
+        assert_true(
+            {{ to_datetime.format("coalesce(" ~ input_expr ~ ", '2000-01-01')") }} is not null
+            and convert_tz(cast('2000-01-01' as datetime), coalesce({{ zone_expr }}, 'UTC'), 'UTC') is not null
+            , 'unreadable local timestamp or unknown time zone'
+        )
+        , convert_tz({{ to_datetime.format(input_expr) }}, {{ zone_expr }}, 'UTC')
+        , null
+    )
 {%- endmacro %}
 
 
@@ -1015,7 +1039,7 @@
 {%- endmacro %}
 
 {% macro starrocks__local_timestamp_to_timestamptz(timestamp_expr, zone_expr) -%}
-    convert_tz(cast({{ timestamp_expr }} as datetime), {{ zone_expr }}, 'UTC')
+    {{ starrocks_strict_convert_tz('cast({} as datetime)', timestamp_expr, zone_expr) }}
 {%- endmacro %}
 
 
