@@ -239,7 +239,6 @@ metadata:
     - NATIVE_FILTER-rtf0SLxia
     - NATIVE_FILTER-8eiua81W1
     chartsInScope:
-    - 64
     - 108
     controlValues:
       defaultToFirstItem: false
@@ -258,10 +257,9 @@ metadata:
     scope:
       excluded: []
       rootPath:
-      - ROOT_ID
+      - TAB-t1-4mh38qE
     tabsInScope:
     - TAB-t1-4mh38qE
-    - TAB-pWPKo4rBS
     targets:
     - column:
         name: program_coupon_code
