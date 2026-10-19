@@ -90,7 +90,7 @@ def _run_feedback_clusters(config: FeedbackClustersConfig, io_manager):
     )
 
 
-def test_promoted_run_cannot_add_clusters_without_a_review() -> None:
+def test_promoted_full_refresh_is_rejected_without_a_review() -> None:
     # Valid input, so only the review gate can stop this run
     io_manager = _CapturingIOManager()
     with (
@@ -107,7 +107,7 @@ def test_promoted_run_cannot_add_clusters_without_a_review() -> None:
         result = _run_feedback_clusters(
             FeedbackClustersConfig(
                 is_promoted=True,
-                add_new_clusters=True,
+                full_refresh=True,
                 embedding_model_version="text-embedding-3-small",
                 embedding_dim=8,
                 feedback_since=None,

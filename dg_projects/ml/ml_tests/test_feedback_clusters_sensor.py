@@ -97,6 +97,10 @@ def test_growth_sensor_triggers_when_the_live_run_is_far_behind() -> None:
         active_clusters=2, run_platforms="mitlearn", total_conversations=2
     )
     assert isinstance(result, RunRequest)
+    assert result.run_config["ops"]["feedback_clusters"]["config"] == {
+        "is_promoted": True,
+        "add_new_clusters": True,
+    }
 
 
 def test_growth_sensor_skips_without_an_active_cluster() -> None:

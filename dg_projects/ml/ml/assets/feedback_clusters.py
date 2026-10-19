@@ -137,11 +137,10 @@ class FeedbackClustersConfig(Config):
     add_new_clusters: bool = Field(
         default=False,
         description=(
-            "When not a full refresh, also create clusters for new common themes. "
-            "Run it with is_promoted false and promote the run after a review. "
-            "Turn off feedback_clusters_schedule and feedback_clusters_growth_sensor "
-            "during the review: identity rejects this run if another run goes live "
-            "first. Ignored with full_refresh, which builds every cluster from scratch."
+            "When not a full refresh, also create clusters for new common themes and "
+            "move noise groups that sit close to a cluster into it. The schedule and "
+            "growth sensor set it. Ignored with full_refresh, which builds every "
+            "cluster from scratch."
         ),
     )
     sample_limit: int | None = Field(
@@ -251,7 +250,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v7",
+            code_version="feedback_clusters_v8",
         ),
         "feedback_cluster_candidate": AssetOut(
             key=AssetKey(["intermediate", "feedback_cluster_candidate"]),
@@ -261,7 +260,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v7",
+            code_version="feedback_clusters_v8",
             # Not required: a failed run writes feedback_cluster_run with no candidates.
             is_required=False,
         ),
@@ -284,13 +283,13 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
     expensive relative to how often new conversations show up, and
     feedback_cluster_assignment (incremental placement) handles those between
     runs. feedback_cluster_identity matches this run's clusters onto stable
-    cluster_keys. A promoted incremental run goes live without a review; a
-    full_refresh or add_new_clusters run waits for one (see is_promoted).
+    cluster_keys. A promoted incremental run goes live without a review, new
+    themes included; a full_refresh run waits for one (see is_promoted).
     """
-    if config.is_promoted and (config.full_refresh or config.add_new_clusters):
+    if config.is_promoted and config.full_refresh:
         # The review gate: identity would otherwise take the run live at once
         msg = (
-            "full_refresh and add_new_clusters change the categories, so run them "
+            "full_refresh can split, merge, and relabel every category, so run it "
             "with is_promoted false and promote the run after a review."
         )
         raise permanent_failure(msg)

@@ -8,6 +8,7 @@ from dagster import (
 )
 from ml.assets.feedback_clusters import database_name as cluster_database_name
 from ml.lib.cluster import (
+    AUTOMATED_RUN_CONFIG,
     DEFAULT_FEEDBACK_SINCE,
     DEFAULT_PLATFORMS,
     filter_conversation_scope,
@@ -143,7 +144,7 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
         embedding_count, last_completed_total_conversations
     ):
         return RunRequest(
-            run_config={"ops": {"feedback_clusters": {"config": {"is_promoted": True}}}}
+            run_config={"ops": {"feedback_clusters": {"config": AUTOMATED_RUN_CONFIG}}}
         )
     return SkipReason(
         "Corpus growth since the last completed run is below the trigger threshold"

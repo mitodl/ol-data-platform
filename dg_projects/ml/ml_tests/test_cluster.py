@@ -197,6 +197,34 @@ def test_cluster_new_themes_adds_far_groups_and_places_near_ones() -> None:
     assert (new_probabilities[20:] > 0).all()
 
 
+def test_cluster_new_themes_makes_one_cluster_from_two_groups_of_one_theme() -> None:
+    rng = np.random.default_rng(0)
+    # Both noise groups are far from cluster 0 but 0.8 similar to each other
+    unit_vectors = _unit(
+        np.vstack(
+            [
+                np.tile([1.0, 0.0, 0.0], (10, 1)),
+                np.tile([0.0, 1.0, 0.0], (10, 1)),
+                np.tile([0.0, 0.8, 0.6], (10, 1)),
+            ]
+        )
+        + rng.normal(scale=0.01, size=(30, 3))
+    )
+    labels = np.array([0] * 10 + [cluster.NOISE_CLUSTER_ID] * 20)
+
+    new_labels, _, new_count, placed_count = cluster.cluster_new_themes(
+        unit_vectors,
+        labels,
+        np.zeros(30),
+        min_cluster_size=5,
+        umap_params=(2, 5),
+    )
+
+    assert (new_count, placed_count) == (1, 0)
+    assert (new_labels[10:] == 1).sum() == 10
+    assert (new_labels[10:] == cluster.NOISE_CLUSTER_ID).sum() == 10
+
+
 def test_cluster_new_themes_keeps_a_near_group_larger_than_its_cluster_as_noise() -> (
     None
 ):

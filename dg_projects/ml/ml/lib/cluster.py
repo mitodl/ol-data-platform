@@ -63,6 +63,10 @@ CLUSTER_RUN_SCHEMA = {
 # weekly schedule and growth sensor explicitly opt into True.
 DEFAULT_IS_PROMOTED = False
 
+# What the weekly schedule and growth sensor launch: promoted incremental runs that
+# also add new themes, so a new topic gets its own category without a manual run.
+AUTOMATED_RUN_CONFIG = {"is_promoted": True, "add_new_clusters": True}
+
 # The default for FeedbackClustersConfig.feedback_since, and what the weekly schedule
 # and growth sensor use, since they don't pass it. Unset means the full history.
 DEFAULT_FEEDBACK_SINCE = os.environ.get("FEEDBACK_SINCE") or None
@@ -395,8 +399,9 @@ def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
     first_new_cluster_id: int = 0,
 ) -> tuple[np.ndarray, np.ndarray, int, int]:
     """Cluster the noise, with UMAP fitted on the noise alone. A group whose
-    centroid is not close to any existing cluster's becomes a new cluster; a group
-    very close to one joins it if the group is no larger than that cluster.
+    centroid is not close to any existing cluster's, or to a group already made a
+    new cluster in this call, becomes a new cluster; a group very close to an
+    existing cluster joins it if the group is no larger than that cluster.
 
     New clusters get ids after the existing ones, and never below
     first_new_cluster_id. Returns (labels, probabilities, new_cluster_count,
@@ -428,16 +433,23 @@ def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
     next_cluster_id = max(labels.max() + 1, first_new_cluster_id)
     new_cluster_count = 0
     placed_group_count = 0
+    new_centroids: list[np.ndarray] = []
     for group in np.unique(group_labels[group_labels != NOISE_CLUSTER_ID]):
         in_group = group_labels == group
         centroid = unit_vectors[noise[in_group]].mean(axis=0)
         centroid /= np.linalg.norm(centroid)
         similarities = centroids @ centroid if len(centroids) else np.array([])
         if similarities.size == 0 or similarities.max() < max_centroid_similarity:
-            labels[noise[in_group]] = next_cluster_id
-            probabilities[noise[in_group]] = clusterer.probabilities_[in_group]
-            next_cluster_id += 1
-            new_cluster_count += 1
+            # HDBSCAN can split one theme into two groups; only the first becomes one
+            if not any(
+                float(other @ centroid) >= max_centroid_similarity
+                for other in new_centroids
+            ):
+                labels[noise[in_group]] = next_cluster_id
+                probabilities[noise[in_group]] = clusterer.probabilities_[in_group]
+                next_cluster_id += 1
+                new_cluster_count += 1
+                new_centroids.append(centroid)
             continue
         target = cluster_ids[similarities.argmax()]
         group_size = int(in_group.sum())

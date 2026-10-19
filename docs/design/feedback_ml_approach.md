@@ -269,9 +269,10 @@ cohesion signal that lets a human say "this is recurring."
   tickets and least on short single-turn sources.
 - **Scheduled runs keep the clusters stable** (rev. 5, §C.1): a full re-cluster moves about half of the
   conversations to another category even when the data barely changes, so the weekly schedule and the growth
-  sensor run incrementally. An incremental run keeps the live clusters, adds new conversations that clearly
-  fit one, and never creates a cluster. New clusters (`add_new_clusters`) and a full re-cluster
-  (`full_refresh`) are manual runs that a person reviews before promoting. Each run writes a new
+  sensor run incrementally. An incremental run keeps the live clusters and never retires one. It adds new
+  conversations that clearly fit a cluster, moves noise groups that sit close to a cluster into it, and
+  creates a cluster for each new common theme (`add_new_clusters`). A full re-cluster (`full_refresh`) is a
+  manual run that a person reviews before promoting. Each run writes a new
   `cluster_run_id` to `feedback_cluster_run` and its raw assignments to `feedback_cluster_candidate`. An
   identity-matching step then maps the run's clusters onto the existing `cluster_key`s and rewrites
   `feedback_cluster_membership`, so a cluster that continues across runs keeps its key, and therefore its
@@ -360,17 +361,19 @@ Three mechanisms keep assignment current:
 **What a run is now.** A `feedback_cluster_run` row is an audit record: which configuration ran, over how many
 conversations, with what outcome (`completed` | `failed`). A failed run changes nothing downstream.
 `is_promoted` decides which runs reach the dashboard: the scheduled runs are promoted, and a manual run that
-adds clusters or re-clusters everything runs unpromoted. After a review, running identity with that run's
-`cluster_run_id` promotes it. An incremental run records the live run it started from, and identity rejects
-it if another run went live in the meantime, so turn off the weekly schedule and the growth sensor during a
-review.
+re-clusters everything runs unpromoted. After a review, running identity with that run's `cluster_run_id`
+promotes it. An incremental run records the live run it started from, and identity rejects it if another run
+went live in the meantime, so turn off the weekly schedule and the growth sensor while a manual incremental
+run waits for review.
 
 **Automated checks, and a review for structural changes.** Placement and re-clustering both emit asset
 metadata: the unplaced share, per-run continuity (the share of conversations that keep their key), and counts
 of continued / split / merged / new / retired keys. A blocking asset check holds the membership rewrite when
 continuity falls below a floor, so a bad configuration cannot silently reshuffle every cluster. Incremental
-runs need no review; a run that adds clusters or re-clusters everything changes the categories, so a person
-reviews it before it is promoted.
+runs need no review, new themes included: a new theme must have at least 200 conversations and sit below 0.75
+similarity to every existing cluster and every other new theme, so it cannot copy an existing category. A run
+that re-clusters everything can split, merge, and relabel every category, so a person reviews it before it is
+promoted.
 
 **A null `cluster_key` now means two things.** HDBSCAN noise from a re-cluster (the "one-off complaint"
 bucket) and a conversation that incremental placement could not put near any cluster both leave the key null.
