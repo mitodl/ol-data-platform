@@ -302,3 +302,49 @@ unit_tests:
       source_ref: courses/c1/resources/mit5_111f08_lec3/, source_kind: document}
     - {scope_id: materials, scope_kind: materials, scope_title: Course materials,
       source_ref: courses/c1/resources/mit2_092f09_lec15/, source_kind: document}
+
+- name: test_int__courseware__extraction_sources_reads_ocw_solution_file_names
+  description: >
+    A file name carries "sol" glued to other letters both in answer keys and in
+    topics. Solnhofen limestone, Solis and Wets, and lab 2's solids are teaching
+    material and stay; exam_smpsolqii2a (a sample answer to exam question II-2A)
+    and samplesol are answer keys and are left out.
+  model: int__courseware__extraction_sources
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
+        the course.</p>}
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/solnhofenlimestone/,
+      content_type: file, title: SolnhofenLimestone.txt, file_extension: .txt, content_tags: '["Assignments"]',
+      content: Measure the yield strength of Solnhofen limestone.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ses5_solis_wets/,
+      content_type: pdf, title: ses5_solis_wets.pdf, file_extension: .pdf, content_tags: '["Lecture
+        Notes"]', content: Minimization by Random Search Techniques by Solis and Wets.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/catialab2solids/,
+      content_type: pdf, title: catialab2solids.pdf, file_extension: .pdf, content_tags: '["Laboratory
+        Assignments"]', content: 'Recitation 1: Introduction to Digital Project.'}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/exam_smpsolqii2a/,
+      content_type: pdf, title: exam_smpsolqii2a.pdf, file_extension: .pdf, content_tags: '["Exams"]',
+      content: Ohio County Election 2004 Results. Answer to Question II-2A.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/samplesoltxt/,
+      content_type: file, title: samplesol.txt, file_extension: .txt, content_tags: '["Problem
+        Sets"]', content: 'Edit Distance: 73'}
+  expect:
+    rows:
+    - {scope_id: context, source_ref: courses/c1/}
+    - {scope_id: materials, source_ref: courses/c1/resources/solnhofenlimestone/}
+    - {scope_id: materials, source_ref: courses/c1/resources/ses5_solis_wets/}
+    - {scope_id: materials, source_ref: courses/c1/resources/catialab2solids/}

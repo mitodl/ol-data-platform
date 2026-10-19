@@ -7,7 +7,8 @@
     Written for OCW's resources and pages, and for any (name, title, text) triple.
 
     The name signals are tokens a solution file carries even glued to other letters
-    (pset3sol, 034pfsoln, hw5sampleans), and "key" at the end after a number or an
+    (pset3sol, 034pfsoln, hw5sampleans, exam_smpsolqii2a; not solnhofenlimestone,
+    ses5_solis_wets or catialab2solids), and "key" at the end after a number or an
     assessment (exam2_key, pract_final_key; not key_ideas or lec_mathle_key).
     "Solution" on its own names a topic as often as a key (aqueous solutions, solution
     of dynamic equilibrium equations, solving), so a bare solution/answer/key in the
@@ -28,8 +29,8 @@
     {#- worked examples in readings, reviews and recitation notes carry "Solution:" too, so markers count only on graded work -#}
     {%- set marked = 'problem sets?|psets?|ps[ _-]?[0-9]+|homework|hw ?[0-9]*|exams?([^a-z]|$)|quiz|midterms?|mid[_ -]?[0-9]|finals?([^a-z]|$)|assignments?|tests?([^a-z]|$)|worksheets?' -%}
     {%- set name_key = (
-        "'soln|(sols?|anskey)[0-9]*$|sol[0-9]|(^|[^a-z])(sols?|ans|answers?)([^a-z]|$)|([0-9]|exam|xam|quiz|qz|pset|ps|hw|midterm|final|test|prob)[_-]?keys?$"
-        ~ "|sampleans|anssh|quizans|ans_?sheet|answer_?sheet|[0-9]ans([^a-z]|$)"
+        "'soln([^h]|$)|(sols?|anskey)[0-9]*$|sol[0-9]|(^|[^a-z])(sols?|ans|answers?)([^a-z]|$)|([0-9]|exam|xam|quiz|qz|pset|ps|hw|midterm|final|test|prob)[_-]?keys?$"
+        ~ "|sampleans|s(a?mp|ample)sol|anssh|quizans|ans_?sheet|answer_?sheet|[0-9]ans([^a-z]|$)"
         ~ "|[0-9][_-]?solutions?([^a-z-]|$)|solutions?[_-]?[0-9]|^solutions?([0-9]|_[^o]|$)|^answers?|(^|[0-9_-])sol[a-z]?[0-9]|(exam|quiz|ps|pset|hw|rec|midterm|final|test)sols?([^a-z]|$)'"
     ) -%}
     {%- set name_weak = "'solution|answer|[0-9_-]sol([^a-z]|$|ns?([^a-z]|$)|s([^a-z]|$)|utions?)'" -%}
