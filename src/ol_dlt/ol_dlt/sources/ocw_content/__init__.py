@@ -100,7 +100,8 @@ SKIPPED_TITLES = frozenset({"3play caption file", "3play pdf file"})
 # Part of every course version, so that changing it reads every course again.
 # Raise it when text_file_key picks a different file for data.json that has
 # not changed. 2: a video's transcript comes from video_transcript_resources
-# when it has one (mit-learn #4063).
+# when it has one (mit-learn #4063), and a path is split on "courses" only when
+# it does not start with it.
 TEXT_FILE_RULE = 2
 
 # Site files Hugo generates beside a course's uploads. No resource points at
@@ -186,12 +187,13 @@ type CourseObjects = dict[str, dict[str, Any]]
 
 
 def video_transcript_path(video_files: dict[str, Any]) -> str | None:
-    """Return the path of a video's transcript, as ``data.json`` gives it.
+    """Return the path of a video's transcript, as Learn passes it on.
 
     Follows ``get_video_transcript_path`` in mit-learn: a republished course
     lists one transcript per language under ``video_transcript_resources``, and
     the first English one that names a file wins, else the first that names a
-    file. Older data has the single ``video_transcript_file``.
+    file, with its leading slashes stripped. Older data has the single
+    ``video_transcript_file``, passed on as it is.
 
     :param video_files: The ``video_files`` object of a video resource.
     :returns: The path, or None when the video has no transcript or Learn raises
@@ -219,7 +221,7 @@ def video_transcript_path(video_files: dict[str, Any]) -> str | None:
         ]
         path = (english or transcripts)[0]["file"]
         # Learn's .lstrip raises on a file that is not a string.
-        return path if isinstance(path, str) else None
+        return path.lstrip("/") if isinstance(path, str) else None
     return video_files.get("video_transcript_file")
 
 
@@ -244,13 +246,16 @@ def text_file_key(resource: dict[str, Any]) -> str | None:
 
     if not isinstance(path, str) or resource.get("title") in SKIPPED_TITLES:
         return None
-    if "courses" not in path:
-        return None
+    # Learn's own split, for a path not already starting with "courses": a path
+    # with no "courses" raises there, and one naming "courses" twice keeps only
+    # what lies between the first two. The extension is the split path's.
+    if not path.startswith("courses"):
+        if "courses" not in path:
+            return None
+        path = "courses" + path.split("courses")[1]
     if PurePosixPath(path).suffix.lower() not in VALID_FILE_TYPES:
         return None
-    # Learn's own split: a path naming "courses" twice yields a key that is not
-    # in the bucket, and the resource is dropped there as it is here.
-    return unquote("courses" + path.split("courses")[1])
+    return unquote(path)
 
 
 def content_kind(slug: str, key: str) -> str | None:
