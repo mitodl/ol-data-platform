@@ -298,10 +298,10 @@ def test_labels_without_a_letter_or_number_are_skipped_and_counted():
 
 
 @pytest.mark.parametrize("label", [".", "..", ".+", "+."])
-def test_symbol_only_labels_are_skipped_though_they_have_a_key(label):
-    # label_key spells these out ("dot", "dot plus"), but "dot" alone would tag
-    # every sentence after a stray period, and the word "dot" in "dot plot"
-    assert label_key(label) is not None
+def test_symbol_only_labels_have_no_key_and_are_skipped(label):
+    # spelled out ("dot", "dot plus"), "dot" alone would tag every sentence after a
+    # stray period, and the word "dot" in "dot plot"
+    assert label_key(label) is None
     result = tag_sources(
         sources(". The dot plot shows variance. .. and .+ too"),
         aliases((label, "c1"), ("variance", "c2")),
@@ -360,7 +360,9 @@ def test_spelled_out_symbols_match_the_text_that_has_them():
 
 
 def _sql_label_key(label):
-    """Apply the courseware_label_key macro's eight passes, transcribed one for one."""
+    """Apply the courseware_label_key macro's check and passes, one for one."""
+    if not re.search(r"[^\W_]", label):
+        return None
     key = label.lower()
     key = re.sub(r"^[+#]", " ", key)
     key = re.sub(r"[ \t\n\f\r][+#]", " ", key)
@@ -368,8 +370,7 @@ def _sql_label_key(label):
     key = re.sub(r"#", " sharp ", key)
     key = re.sub(r"^[.]", "dot ", key)
     key = re.sub(r"[ \t\n\f\r][.]", " dot ", key)
-    key = re.sub(r"[\W_]+", " ", key).strip()
-    return key or None
+    return re.sub(r"[\W_]+", " ", key).strip()
 
 
 # the macro's unit-test cases (_courseware_label_key__unit_tests.yml), then edge cases
@@ -382,6 +383,10 @@ LABEL_KEY_CASES = [
     ("adjusted R²", "adjusted r²"),
     ("K-Means  Clustering!", "k means clustering"),
     ("+", None),
+    (".", None),
+    ("..", None),
+    (".+", None),
+    ("#.", None),
     ("F#", "f sharp"),
     ("ASP.NET", "asp net"),
     ("the .csv file", "the dot csv file"),
@@ -394,6 +399,9 @@ LABEL_KEY_CASES = [
     ("..net", "dot dot net"),
     ("snake_case name", "snake case name"),
     ("∇", None),
+    ("#", None),
+    ("+.", None),
+    (". .", None),
     ("İstanbul", "i stanbul"),
     ("Naïve Bayes", "naïve bayes"),
 ]
@@ -415,7 +423,11 @@ def test_text_tokens_join_to_the_label_key():
     for text in texts:
         tokens = _tokens(text)
         joined = " ".join(low for low, _, _, _ in tokens)
-        assert joined == (label_key(text) or ""), text
+        if label_key(text) is None:
+            # symbols are still spelled out in text, though such a label has no key
+            assert set(joined.split()) <= {"dot", "plus", "sharp"}, text
+        else:
+            assert joined == label_key(text), text
         # the fast path gives the same haystacks and spans as the full tokenizer
         tokenized = _tokenize(text)
         if not tokens:

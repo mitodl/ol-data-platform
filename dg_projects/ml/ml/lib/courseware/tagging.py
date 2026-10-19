@@ -164,16 +164,19 @@ def label_key(label: str) -> str | None:
     """Normalize a label exactly as the courseware_label_key macro does.
 
     :param label: any text
-    :returns: the key, or None when no letter or number is left
+    :returns: the key, or None when the label has no letter or number
     :rtype: str | None
     """
+    # checked first, as "." and ".+" would otherwise spell out to "dot" and "dot plus"
+    if not _WORD.search(label):
+        return None
     key = label.lower()
     key = re.sub(r"^[+#]", " ", key)
     key = re.sub(rf"[{_WHITESPACE}][+#]", " ", key)
     key = key.replace("+", " plus ").replace("#", " sharp ")
     key = re.sub(r"^[.]", "dot ", key)
     key = re.sub(rf"[{_WHITESPACE}][.]", " dot ", key)
-    return re.sub(r"[\W_]+", " ", key).strip() or None
+    return re.sub(r"[\W_]+", " ", key).strip()
 
 
 @dataclass(frozen=True)
@@ -251,8 +254,9 @@ def _tokenize(text: str) -> _Tokenized | None:
 def _tokens(text: str) -> list[tuple[str, str, int, int]]:
     """Tokenize text by the label_key rule, keeping where each token came from.
 
-    " ".join of the lowercase tokens equals label_key(text) (or "" for None). A
-    symbol spelled out becomes its own token ("plus"), and a word whose lowercase
+    For text with a letter or number, " ".join of the lowercase tokens equals
+    label_key(text); text without one has no key but keeps its tokens. A symbol
+    spelled out becomes its own token ("plus"), and a word whose lowercase
     form splits ("İ" lowers to "i" and a combining dot) gives each part the whole
     word's span.
 
@@ -486,10 +490,8 @@ class ConceptDictionary:
         self.tokenless_label_count = 0
         by_phrase: dict[str, set[Entry]] = defaultdict(set)
         for key, concept_id, alias in rows:
-            # An alias with no letter or number has nothing to match: "∇" has no key,
-            # and "." or ".+" spell out to "dot" or "dot plus", which would tag the
-            # word "dot" and every stray period after a space.
-            if key is None or not _WORD.search(alias):
+            # An alias with no letter or number ("∇", "." or ".+") has nothing to match
+            if key is None:
                 self.tokenless_label_count += 1
                 continue
             for entry in _entries(key, concept_id, alias):
