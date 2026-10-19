@@ -326,7 +326,6 @@ def rekey(output_dir: Path) -> None:
     print(f"{changed} of {extractions.height} extractions re-keyed")  # noqa: T201
 
 
-@app.command
 def _latest_run(
     output_dir: Path, table: str, run_id: str | None
 ) -> pl.DataFrame | None:
