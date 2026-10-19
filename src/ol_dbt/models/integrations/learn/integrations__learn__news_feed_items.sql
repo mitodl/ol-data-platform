@@ -46,10 +46,12 @@ with medium_posts as (
         ) }} as figure_img
         , {{ json_extract_varchar_array('post_creators_json', "'$'") }} as authors
         , array_sort({{ json_extract_varchar_array('post_categories_json', "'$'") }}) as topics
+        -- Both publish dates are built here as a timestamp(3), which Trino
+        -- renders with three fractional digits.
         , {{ format_timestamp_as_iso8601(
             local_timestamp_to_timestamptz(
                 date_parse('post_published_on_raw', "'%a, %d %b %Y %H:%i:%s GMT'"), "'UTC'"
-            )
+            ), fractional_digits=3
         ) }} as publish_date
     from medium_posts
 )
@@ -88,7 +90,7 @@ News and updates from MIT Professional Education.
         , {{ empty_varchar_array() }} as topics
         , {{ format_timestamp_as_iso8601(timestamptz_at_utc(
             local_date_to_timestamptz("nullif(news_date_raw, '')", 'America/New_York')
-        )) }} as publish_date
+        ), fractional_digits=3) }} as publish_date
     from mitpe_news
 )
 

@@ -16,10 +16,12 @@ models:
     - unique
   - name: start_on
     description: timestamp with time zone, the event's start
+    data_type: timestamp with time zone
     tests:
     - not_null
   - name: end_on
     description: timestamp with time zone, the event's end, never before its start
+    data_type: timestamp with time zone
     tests:
     - not_null
 
