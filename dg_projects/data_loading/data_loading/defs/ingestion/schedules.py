@@ -267,14 +267,18 @@ def ocw_content_run_in_flight(instance: dg.DagsterInstance) -> bool:
     the prefixes it saw empty, the gone courses it unpublished (which the next
     sweep would then unpublish and count against the limit again). A run
     started by hand is seen, and queued behind the others, only if it is
-    launched with ``OCW_CONTENT_RUN_TAGS``.
+    launched with ``OCW_CONTENT_RUN_TAGS``. The schedule's own name is checked
+    too because a sweep started before that tag existed carries only it, and
+    the first sweep can outlast a day.
     """
-    return bool(
+    return any(
         instance.get_run_records(
-            dg.RunsFilter(
-                tags=OCW_CONTENT_RUN_TAGS, statuses=list(IN_FLIGHT_RUN_STATUSES)
-            ),
+            dg.RunsFilter(tags=tags, statuses=list(IN_FLIGHT_RUN_STATUSES)),
             limit=1,
+        )
+        for tags in (
+            OCW_CONTENT_RUN_TAGS,
+            {"dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME},
         )
     )
 

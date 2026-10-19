@@ -170,6 +170,8 @@ def test_window_held_open_by_a_long_load_is_not_taken_for_a_rebuild(
         {"dagster/sensor_name": OCW_CONTENT_SENSOR_NAME, **OCW_CONTENT_RUN_TAGS},
         # A load started from the launchpad with the tag.
         OCW_CONTENT_RUN_TAGS,
+        # A sweep started before the tag existed.
+        {"dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME},
     ],
 )
 def test_waits_while_a_load_is_in_flight(
