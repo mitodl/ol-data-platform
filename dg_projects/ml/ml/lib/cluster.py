@@ -232,9 +232,10 @@ GROUP_PLACEMENT_MIN_SIMILARITY = float(
 # comparison the §B.1 bake-off depends on.
 RANDOM_STATE = int(os.environ.get("CLUSTER_RANDOM_STATE", "42"))
 
-# Early re-cluster trigger alongside the cron schedule -- corpus growth (in
-# embedded conversations) since the last completed run.
-CORPUS_GROWTH_TRIGGER = int(os.environ.get("CLUSTER_CORPUS_GROWTH_TRIGGER", "5000"))
+# Corpus growth (in embedded conversations) since the last completed run that starts
+# a run from feedback_clusters_growth_sensor. About 3-4 days at 2026-10 volume, so a
+# new topic gets its own category within a week.
+CORPUS_GROWTH_TRIGGER = int(os.environ.get("CLUSTER_CORPUS_GROWTH_TRIGGER", "1000"))
 
 # silhouette_score is O(n^2) (pairwise distances) -- at the ~198K-conversation
 # MVP scale that's tens of billions of distance calculations after clustering
