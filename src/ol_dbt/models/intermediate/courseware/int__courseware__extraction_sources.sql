@@ -43,7 +43,7 @@
     notes. The description is read from stg__ocw__s3__course_content, since
     int__ocw__content_files drops a video with no transcript file.
 
-    Answer keys are left out: a resource whose learning resource types name solutions,
+    Answer keys are left out: a resource of type Problem Set Solutions or Exam Solutions,
     that courseware_answer_key reads as one from its file name, title and opening text,
     that a table links in a column headed Solutions (or Answers, Key), or whose text is
     the same as such a resource's; a page the same way by its name and title, except one
@@ -377,7 +377,10 @@ with content as (
         , {{ regexp_extract_or_null('content_file_key', "'/pages/([^/]+)/'", 1) }} as section
         , {{ regexp_replace_all('content_file_key', "'[^/]+/$'", "''") }} as parent_key
         , (
-            content_tags like '%Solutions%'
+            -- not "Multiple Assignment Types with Solutions", which also holds the
+            -- assignments (and a workshop facilitation guide); the name rules read those
+            content_tags like '%"Problem Set Solutions"%'
+            or content_tags like '%"Exam Solutions"%'
             or (
                 -- a lecture video titled "... Iterative Solutions" is not an answer key
                 content_type != 'video'

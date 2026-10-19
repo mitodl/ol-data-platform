@@ -355,6 +355,48 @@ unit_tests:
     - {scope_id: materials, source_ref: courses/c1/resources/ses5_solis_wets/}
     - {scope_id: materials, source_ref: courses/c1/resources/catialab2solids/}
 
+- name: test_int__courseware__extraction_sources_reads_ocw_mixed_solution_types
+  description: >
+    "Multiple Assignment Types with Solutions" tags answer keys and the material
+    they go with, so the tag alone does not leave a resource out. The facilitation
+    guide stays; hw3sol is left out by its name, and the Exam Solutions file by its
+    type.
+  model: int__courseware__extraction_sources
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
+        the course.</p>}
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/facilitation_guide_pdf/,
+      content_type: pdf, title: Workshop Facilitation Guide, file_extension: .pdf,
+      content_tags: '["Multiple Assignment Types with Solutions"]', content: Planning
+        the workshop and its learning goals.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/hw3sol/,
+      content_type: pdf, title: 'Solutions to Homework 3: Decision Analysis', file_extension: .pdf,
+      content_tags: '["Multiple Assignment Types with Solutions"]', content: The expected
+        value of perfect information is 12.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/review2/,
+      content_type: pdf, title: Quiz 2 Review, file_extension: .pdf, content_tags: '["Exams","Exam
+        Solutions"]', content: 1. The runtime is O(n log n).}
+  expect:
+    rows:
+    - {scope_id: context, source_ref: courses/c1/}
+    - {scope_id: materials, source_ref: courses/c1/resources/facilitation_guide_pdf/}
+
 - name: test_int__courseware__extraction_sources_follows_ocw_resource_descriptions
   description: >
     Session 10's page links a video clip whose description links the session notes.
