@@ -14,11 +14,12 @@ objects, so the warehouse holds what Learn would have extracted:
     -> raw__ocw__s3__course_content
 
 A course is read whole, and only when it changed. Its version is a digest of
-the ETags of the objects above and of the files under its own prefix, held in
-dlt state with the ETags of any files it read from another course's prefix. A
-publish that rewrites identical bytes keeps every ETag, so it changes nothing
-here. A changed course appends a full new set of rows stamped with one
-``course_retrieved_at``, and staging keeps each course's newest set. A course
+the ETags of the objects above and of the files under its own prefix, and of
+``TEXT_FILE_RULE``, held in dlt state with the ETags of any files it read from
+another course's prefix. A publish that rewrites identical bytes keeps every
+ETag, so it changes nothing here. A changed course appends a full new set of
+rows stamped with one ``course_retrieved_at``, and staging keeps each course's
+newest set. A course
 that leaves the bucket appends one ``unpublished`` row, which becomes its
 newest set and so empties it downstream. So does a course whose prefix has no
 ``data.json`` on two reads ``WAIT_BETWEEN_READS`` apart.
@@ -96,6 +97,12 @@ VALID_FILE_TYPES = frozenset(
 )
 # Learn drops these resources, so their text is never read.
 SKIPPED_TITLES = frozenset({"3play caption file", "3play pdf file"})
+
+# Part of every course version, so that changing it reads every course again.
+# Raise it when text_file_key picks a different file for data.json that has
+# not changed. 2: a video's transcript comes from video_transcript_resources
+# when it has one (mit-learn #4063).
+TEXT_FILE_RULE = 2
 
 # Site files Hugo generates beside a course's uploads. No resource points at
 # them, and a theme release can rewrite them without the course changing, so
@@ -179,6 +186,36 @@ SCHEMA = pa.schema(
 type CourseObjects = dict[str, dict[str, Any]]
 
 
+def video_transcript_path(video_files: dict[str, Any]) -> str | None:
+    """Return the path of a video's transcript, as ``data.json`` gives it.
+
+    Follows ``get_video_transcript_path`` in mit-learn: a republished course
+    lists one transcript per language under ``video_transcript_resources``, and
+    the first English one that names a file wins, else the first that names a
+    file. Older data has the single ``video_transcript_file``.
+
+    :param video_files: The ``video_files`` object of a video resource.
+    :returns: The path, or None when the video has no transcript.
+    """
+    resources = video_files.get("video_transcript_resources")
+    # Learn raises on a non-empty value that is not a list, which drops the
+    # resource. Here it counts as no list, which drops it too unless the video
+    # also has a video_transcript_file.
+    transcripts = [
+        entry
+        for entry in (resources if isinstance(resources, list) else [])
+        if isinstance(entry, dict) and entry.get("file")
+    ]
+    if transcripts:
+        english = [
+            entry
+            for entry in transcripts
+            if str(entry.get("language") or "").lower().startswith("en")
+        ]
+        return (english or transcripts)[0]["file"]
+    return video_files.get("video_transcript_file")
+
+
 def text_file_key(resource: dict[str, Any]) -> str | None:
     """Return the S3 key of the file Learn extracts text from for a resource.
 
@@ -190,7 +227,7 @@ def text_file_key(resource: dict[str, Any]) -> str | None:
     """
     if resource.get("resourcetype"):
         if resource["resourcetype"] == "Video":
-            path = (resource.get("video_files") or {}).get("video_transcript_file")
+            path = video_transcript_path(resource.get("video_files") or {})
         else:
             path = resource.get("file")
     elif resource.get("resource_type") == "Video":
@@ -243,6 +280,7 @@ def course_version(slug: str, objects: CourseObjects) -> str:
     as is one under another course. ``read_course`` returns the ETags of those.
     """
     digest = hashlib.md5(usedforsecurity=False)
+    digest.update(f"text_file_rule\t{TEXT_FILE_RULE}\n".encode())
     for key in sorted(objects):
         if in_course_version(slug, key):
             digest.update(f"{key}\t{objects[key]['ETag']}\n".encode())

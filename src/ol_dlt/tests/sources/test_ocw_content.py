@@ -151,6 +151,66 @@ def _load(**kwargs: Any) -> list[dict[str, Any]]:
             "courses/a/t.pdf",
         ),
         ({"resourcetype": "Video", "file": None, "video_files": {}}, None),
+        # A republished course lists its transcripts by language, and the
+        # English one wins wherever it is in the list.
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": [
+                        {"file": "/courses/a/t_es.pdf", "language": "es"},
+                        {"file": "/courses/a/t_en.pdf", "language": "EN-us"},
+                        {"file": "/courses/a/t_en2.pdf", "language": "en"},
+                    ],
+                    "video_transcript_file": "/courses/a/t.pdf",
+                },
+            },
+            "courses/a/t_en.pdf",
+        ),
+        # With no English transcript the first that names a file is read.
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": [
+                        {"file": "", "language": "en"},
+                        {"file": "/courses/a/t_es.pdf", "language": "es"},
+                        {"file": "/courses/a/t_fr.pdf", "language": None},
+                    ]
+                },
+            },
+            "courses/a/t_es.pdf",
+        ),
+        # An empty list, or one that is not a list, leaves the single file.
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": [],
+                    "video_transcript_file": "/courses/a/t.pdf",
+                },
+            },
+            "courses/a/t.pdf",
+        ),
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": "",
+                    "video_transcript_file": "/courses/a/t.pdf",
+                },
+            },
+            "courses/a/t.pdf",
+        ),
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": {"content": [], "website": "a"}
+                },
+            },
+            None,
+        ),
         (
             {"resource_type": "Video", "transcript_file": "/courses/a/t.pdf"},
             "courses/a/t.pdf",
@@ -188,6 +248,15 @@ def test_course_version_ignores_site_files(bucket: FakeS3) -> None:
         )
         != before
     )
+
+
+def test_course_version_changes_with_the_text_file_rule(
+    bucket: FakeS3, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    objects = ocw_content.list_course(bucket, _BUCKET, "a-course")
+    before = ocw_content.course_version("a-course", objects)
+    monkeypatch.setattr(ocw_content, "TEXT_FILE_RULE", ocw_content.TEXT_FILE_RULE + 1)
+    assert ocw_content.course_version("a-course", objects) != before
 
 
 @pytest.mark.integration
