@@ -1638,6 +1638,8 @@ requires-dist = [
     { name = "google-cloud-storage", specifier = ">=3.0" },
     { name = "httpx2", specifier = ">=2.2.0" },
     { name = "hvac", specifier = "~=2.4.0" },
+    { name = "langchain-text-splitters", marker = "extra == 'embeddings'", specifier = "~=1.1.2" },
+    { name = "litellm", marker = "extra == 'embeddings'", specifier = "~=1.96.2" },
     { name = "pandas", specifier = "~=3.0.0" },
     { name = "polars", specifier = ">=1.35.1" },
     { name = "psycopg2-binary", specifier = "~=2.9.10" },
@@ -1646,13 +1648,16 @@ requires-dist = [
     { name = "pygithub", specifier = ">=2.8.1" },
     { name = "pyiceberg", extras = ["polars"], specifier = ">=0.11.1" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "qdrant-client", marker = "extra == 'embeddings'", specifier = "~=1.18.0" },
     { name = "s3fs", specifier = ">=2026.0.0,<2027.0.0" },
     { name = "sentry-sdk", specifier = "~=2.66" },
     { name = "slack-sdk", specifier = "~=3.36" },
     { name = "sqlalchemy", specifier = ">=2.0" },
+    { name = "tiktoken", marker = "extra == 'embeddings'", specifier = "~=0.13.0" },
     { name = "trino", specifier = ">=0.329" },
     { name = "universal-pathlib", specifier = "~=0.3.1" },
 ]
+provides-extras = ["embeddings"]
 
 [[package]]
 name = "opentelemetry-api"
