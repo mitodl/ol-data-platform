@@ -2,6 +2,7 @@
 
 import numpy as np
 import polars as pl
+import pytest
 from ml.lib import cluster
 
 
@@ -254,7 +255,8 @@ def test_cluster_new_themes_merges_a_split_theme_and_caps_new_clusters(
         )
     )
     labels = np.array([0] * 20 + [cluster.NOISE_CLUSTER_ID] * 33)
-    group_labels = np.array([0] * 5 + [1] * 10 + [2] * 6 + [3] * 4 + [4] * 4 + [5] * 4)
+    # Group 2 has the lowest label, so only size order keeps it from the cap's slot
+    group_labels = np.array([1] * 5 + [2] * 10 + [0] * 6 + [3] * 4 + [4] * 4 + [5] * 4)
 
     _fix_noise_groups(monkeypatch, group_labels)
 
@@ -275,6 +277,53 @@ def test_cluster_new_themes_merges_a_split_theme_and_caps_new_clusters(
     assert (new_labels[41:45] == 0).all()
     assert (new_labels[45:49] == cluster.NOISE_CLUSTER_ID).all()
     assert (new_labels[49:] == 1).all()
+
+
+@pytest.mark.parametrize(
+    ("existing", "groups", "expected"),
+    [
+        # Group 25 deg merges into group 0 deg and moves its centroid to 11 deg, so
+        # group 50 deg is then 0.78 similar: too close to be a second category
+        ((90, 10), [(0, 600), (25, 500), (50, 400)], (1, 1)),
+        # Group 25 deg is closest to new cluster 45 deg, but joining it would bring
+        # that cluster within 0.81 of new cluster 0 deg
+        ((90, 10), [(0, 600), (45, 550), (25, 500)], (2, 0)),
+        # Group 25 deg is close to existing cluster 0 deg, but joining it would bring
+        # that cluster within 0.79 of new cluster 45 deg
+        ((0, 1000), [(45, 500), (25, 400)], (1, 0)),
+    ],
+)
+def test_cluster_new_themes_keeps_categories_apart_after_a_join(
+    monkeypatch, existing, groups, expected
+) -> None:
+    def at(degrees: float) -> np.ndarray:
+        # The existing cluster sits at 90 deg, out of the plane, when it is 90
+        radians = np.radians(degrees)
+        if degrees == 90:
+            return np.array([0.0, 0.0, 1.0])
+        return np.array([np.cos(radians), np.sin(radians), 0.0])
+
+    existing_degrees, existing_size = existing
+    unit_vectors = np.vstack(
+        [np.tile(at(existing_degrees), (existing_size, 1))]
+        + [np.tile(at(degrees), (size, 1)) for degrees, size in groups]
+    )
+    noise_size = sum(size for _, size in groups)
+    labels = np.array([0] * existing_size + [cluster.NOISE_CLUSTER_ID] * noise_size)
+    _fix_noise_groups(
+        monkeypatch,
+        np.concatenate([[index] * size for index, (_, size) in enumerate(groups)]),
+    )
+
+    _, _, new_count, placed_count, _ = cluster.cluster_new_themes(
+        unit_vectors,
+        labels,
+        np.zeros(len(labels)),
+        min_cluster_size=2,
+        umap_params=(2, 5),
+    )
+
+    assert (new_count, placed_count) == expected
 
 
 def test_cluster_new_themes_keeps_a_near_group_larger_than_its_cluster_as_noise(

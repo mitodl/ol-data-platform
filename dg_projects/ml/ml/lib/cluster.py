@@ -2,6 +2,7 @@
 
 import os
 import uuid
+from collections.abc import Iterable
 from typing import Any
 
 import numpy as np
@@ -390,6 +391,49 @@ def place_noise(
     return labels, int(placed.sum())
 
 
+def _member_sums(
+    unit_vectors: np.ndarray, labels: np.ndarray
+) -> tuple[dict[int, np.ndarray], dict[int, int]]:
+    clustered = labels != NOISE_CLUSTER_ID
+    cluster_ids, member_index, counts = np.unique(
+        labels[clustered], return_inverse=True, return_counts=True
+    )
+    member_sums = np.zeros((len(cluster_ids), unit_vectors.shape[1]))
+    np.add.at(member_sums, member_index, unit_vectors[clustered])
+    sums = {int(c): member_sums[i] for i, c in enumerate(cluster_ids)}
+    sizes = {int(c): int(n) for c, n in zip(cluster_ids, counts, strict=True)}
+    return sums, sizes
+
+
+def _nearest(
+    similarity: dict[int, float], cluster_ids: Iterable[int]
+) -> tuple[int | None, float]:
+    return max(
+        ((cluster_id, similarity[cluster_id]) for cluster_id in cluster_ids),
+        key=lambda pair: pair[1],
+        default=(None, -1.0),
+    )
+
+
+def _stays_apart(
+    sums: dict[int, np.ndarray],
+    others: list[int],
+    cluster_id: int,
+    group_sum: np.ndarray,
+    max_centroid_similarity: float,
+) -> bool:
+    # A join must not bring a new cluster within max_centroid_similarity of another
+    # cluster: that would make two categories of one theme
+    joined = sums[cluster_id] + group_sum
+    centroid = joined / np.linalg.norm(joined)
+    return all(
+        float(sums[other] @ centroid) / np.linalg.norm(sums[other])
+        < max_centroid_similarity
+        for other in others
+        if other != cluster_id
+    )
+
+
 def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
     unit_vectors: np.ndarray,
     labels: np.ndarray,
@@ -409,7 +453,9 @@ def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
     largest first. A group far from every existing cluster becomes a new cluster,
     up to max_new_clusters, or joins a new cluster from this call it is very close
     to. A group very close to an existing cluster joins it if the group is no larger
-    than that cluster, at most one group per cluster.
+    than that cluster, at most one group per cluster. Centroids stay current as
+    groups join, and a join that would bring a new cluster within
+    max_centroid_similarity of another cluster is skipped.
 
     New clusters get ids after the existing ones, and never below
     first_new_cluster_id. Returns (labels, probabilities, new_cluster_count,
@@ -432,64 +478,74 @@ def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
         cluster_selection_method=cluster_selection_method,
     )
     group_labels = clusterer.fit_predict(reduced)
-    cluster_ids, centroids = _unit_centroids(unit_vectors, labels)
-    counted_ids, counts = np.unique(
-        labels[labels != NOISE_CLUSTER_ID], return_counts=True
-    )
-    cluster_sizes = dict(zip(counted_ids.tolist(), counts.tolist(), strict=True))
     labels = labels.copy()
     probabilities = probabilities.copy()
+    # Kept current as groups join, so each group is compared with the centroids the
+    # earlier groups produced
+    sums, sizes = _member_sums(unit_vectors, labels)
+    existing_ids = set(sums)
+    new_ids: list[int] = []
     next_cluster_id = max(labels.max() + 1, first_new_cluster_id)
     new_cluster_count = 0
     placed_group_count = 0
     capped_new_cluster_count = 0
-    new_centroids: dict[int, np.ndarray] = {}
-    # A cluster's centroid is not recomputed here, so a second group would be
-    # compared with a centroid the first one already moved
+    # One group per existing cluster per run, so a run cannot stack several groups
+    # onto one category and stretch it past its label
     placed_targets: set[int] = set()
+
+    def join(cluster_id: int, in_group: np.ndarray, group_sum: np.ndarray) -> None:
+        labels[noise[in_group]] = cluster_id
+        sums[cluster_id] = sums[cluster_id] + group_sum
+        sizes[cluster_id] += int(in_group.sum())
+
     groups, group_sizes = np.unique(
         group_labels[group_labels != NOISE_CLUSTER_ID], return_counts=True
     )
     # Largest first: a theme HDBSCAN split in two keeps its larger part's centroid
     for group in groups[np.argsort(-group_sizes, kind="stable")]:
         in_group = group_labels == group
-        centroid = unit_vectors[noise[in_group]].mean(axis=0)
-        centroid /= np.linalg.norm(centroid)
-        similarities = centroids @ centroid if len(centroids) else np.array([])
-        if similarities.size == 0 or similarities.max() < max_centroid_similarity:
-            nearest_new, nearest_new_similarity = max(
-                (
-                    (cluster_id, float(other @ centroid))
-                    for cluster_id, other in new_centroids.items()
-                ),
-                key=lambda pair: pair[1],
-                default=(None, -1.0),
-            )
+        group_sum = unit_vectors[noise[in_group]].sum(axis=0)
+        centroid = group_sum / np.linalg.norm(group_sum)
+        similarity = {
+            cluster_id: float(total @ centroid) / np.linalg.norm(total)
+            for cluster_id, total in sums.items()
+        }
+        nearest_existing, existing_similarity = _nearest(similarity, existing_ids)
+        nearest_new, new_similarity = _nearest(similarity, new_ids)
+        if existing_similarity < max_centroid_similarity:
             if (
                 nearest_new is not None
-                and nearest_new_similarity >= group_placement_min_similarity
+                and new_similarity >= group_placement_min_similarity
             ):
-                labels[noise[in_group]] = nearest_new
-                probabilities[noise[in_group]] = clusterer.probabilities_[in_group]
-                placed_group_count += 1
-            elif nearest_new_similarity < max_centroid_similarity:
+                if _stays_apart(
+                    sums, list(sums), nearest_new, group_sum, max_centroid_similarity
+                ):
+                    join(nearest_new, in_group, group_sum)
+                    probabilities[noise[in_group]] = clusterer.probabilities_[in_group]
+                    placed_group_count += 1
+            elif new_similarity < max_centroid_similarity:
                 if new_cluster_count >= max_new_clusters:
                     capped_new_cluster_count += 1
                     continue
                 labels[noise[in_group]] = next_cluster_id
                 probabilities[noise[in_group]] = clusterer.probabilities_[in_group]
-                new_centroids[next_cluster_id] = centroid
+                sums[next_cluster_id] = group_sum
+                sizes[next_cluster_id] = int(in_group.sum())
+                new_ids.append(next_cluster_id)
                 next_cluster_id += 1
                 new_cluster_count += 1
             continue
-        target = int(cluster_ids[similarities.argmax()])
         if (
-            similarities.max() >= group_placement_min_similarity
-            and int(in_group.sum()) <= cluster_sizes[target]
-            and target not in placed_targets
+            nearest_existing is not None
+            and existing_similarity >= group_placement_min_similarity
+            and int(in_group.sum()) <= sizes[nearest_existing]
+            and nearest_existing not in placed_targets
+            and _stays_apart(
+                sums, new_ids, nearest_existing, group_sum, max_centroid_similarity
+            )
         ):
-            labels[noise[in_group]] = target
-            placed_targets.add(target)
+            join(nearest_existing, in_group, group_sum)
+            placed_targets.add(nearest_existing)
             placed_group_count += 1
     return (
         labels,
