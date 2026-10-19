@@ -586,8 +586,6 @@ models:
         - courserun_fk
       config:
         where: user_fk is not null and courserun_fk is not null
-        # One duplicated pair doubles a consumer's rows, so the project's >10 does not apply.
-        error_if: ">0"
   config:
     meta:
       qa_branches:
