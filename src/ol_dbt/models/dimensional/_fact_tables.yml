@@ -586,6 +586,8 @@ models:
         - courserun_fk
       config:
         where: user_fk is not null and courserun_fk is not null
+        # One duplicated pair doubles a consumer's rows, so the project's >10 does not apply.
+        error_if: ">0"
   config:
     meta:
       qa_branches:
@@ -1820,7 +1822,8 @@ unit_tests:
   description: >
     Residential grades are in tfact_grade. The user resolves through
     dim_user.residential_openedx_user_id, the run through dim_course_run on the
-    residential platform, and a non-empty letter grade means passed.
+    residential platform, and a non-empty letter grade means passed. Of a learner's
+    two grades for one run, only the newest created is kept.
   model: tfact_grade
   overrides:
     macros:
@@ -1834,6 +1837,10 @@ unit_tests:
     rows: []
   - input: ref('int__mitxresidential__courserun_grades')
     rows:
+    # Replaced by grade 11; updated later, so the ranking must use created_on.
+    - {courserungrade_id: 10, user_id: 555, courserun_readable_id: "course-v1:MITx+6.002+2024",
+      courserungrade_grade: 0.5, courserungrade_letter_grade: "C", courserungrade_created_on: "2023-09-01T00:00:00",
+      courserungrade_updated_on: "2024-06-01T00:00:00"}
     - {courserungrade_id: 11, user_id: 555, courserun_readable_id: "course-v1:MITx+6.002+2024",
       courserungrade_grade: 0.9, courserungrade_letter_grade: "A", courserungrade_created_on: "2024-01-15T00:00:00",
       courserungrade_updated_on: "2024-01-16T00:00:00"}
