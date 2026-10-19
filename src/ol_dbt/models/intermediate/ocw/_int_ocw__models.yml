@@ -591,6 +591,25 @@ unit_tests:
     - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/single-file/data.json,
       coursecontent_title: Single file, coursecontent_resource_type: Video, coursecontent_video_youtube_id: ggg,
       coursecontent_video_transcript_file: /courses/a-course/t_old.pdf}
+    # Learn raises on an entry that is not an object, on a language that is
+    # not a string, and on a chosen file that is not a string, which drops the
+    # resource whatever its video_transcript_file.
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/null-entry/data.json,
+      coursecontent_title: Null entry, coursecontent_resource_type: Video, coursecontent_video_youtube_id: iii,
+      coursecontent_video_transcript_resources: '[null]', coursecontent_video_transcript_file: /courses/a-course/t_null.pdf}
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/number-language/data.json,
+      coursecontent_title: Number language, coursecontent_resource_type: Video, coursecontent_video_youtube_id: jjj,
+      coursecontent_video_transcript_resources: '[{"file": "/courses/a-course/t_es.pdf",
+        "language": "es"}, {"file": "/courses/a-course/t_x.pdf", "language": 1}]'}
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/object-file/data.json,
+      coursecontent_title: Object file, coursecontent_resource_type: Video, coursecontent_video_youtube_id: kkk,
+      coursecontent_video_transcript_resources: '[{"file": {"path": "/courses/a-course/t_en.pdf"},
+        "language": "en"}, {"file": "/courses/a-course/t_en2.pdf", "language": "en"}]'}
+    # An entry whose file is 0 names no file, so its language is never read.
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/zero-file/data.json,
+      coursecontent_title: Zero file, coursecontent_resource_type: Video, coursecontent_video_youtube_id: lll,
+      coursecontent_video_transcript_resources: '[{"file": 0, "language": 1}, {"file":
+        "/courses/a-course/t_fr.pdf", "language": "fr"}]'}
   expect:
     rows:
     - {content_file_key: courses/a-course/resources/two-english/, content: English
@@ -600,6 +619,7 @@ unit_tests:
     - {content_file_key: courses/a-course/resources/single-file/, content: null, youtube_id: ggg}
     - {content_file_key: courses/a-course/resources/empty-string/, content: null,
       youtube_id: hhh}
+    - {content_file_key: courses/a-course/resources/zero-file/, content: null, youtube_id: lll}
 - name: test_int__ocw__live_courses_reads_what_learn_reads
   description: >
     The run id prefers legacy_uid, cross-listed numbers are split and trimmed,

@@ -223,6 +223,43 @@ def _load(**kwargs: Any) -> list[dict[str, Any]]:
             {"resourcetype": "Document", "file": "/courses/a/courses/x.pdf"},
             "courses/a/",
         ),
+        # Learn raises on an entry that is not an object, on a language that
+        # is not a string, and on a chosen file that is not a string, which
+        # drops the resource whatever its video_transcript_file.
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": [None],
+                    "video_transcript_file": "/courses/a/t.pdf",
+                },
+            },
+            None,
+        ),
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": [
+                        {"file": "/courses/a/t_es.pdf", "language": "es"},
+                        {"file": "/courses/a/t_x.pdf", "language": 1},
+                    ]
+                },
+            },
+            None,
+        ),
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": [
+                        {"file": ["/courses/a/t_en.pdf"], "language": "en"},
+                        {"file": "/courses/a/t_en2.pdf", "language": "en"},
+                    ]
+                },
+            },
+            None,
+        ),
     ],
 )
 def test_text_file_key_follows_learn(

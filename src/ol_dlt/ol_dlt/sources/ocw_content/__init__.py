@@ -194,23 +194,32 @@ def video_transcript_path(video_files: dict[str, Any]) -> str | None:
     file. Older data has the single ``video_transcript_file``.
 
     :param video_files: The ``video_files`` object of a video resource.
-    :returns: The path, or None when the video has no transcript.
+    :returns: The path, or None when the video has no transcript or Learn raises
+        reading the list, which drops the resource.
     """
     resources = video_files.get("video_transcript_resources") or []
-    # Learn raises on a non-empty value that is not a list, which drops the
-    # resource.
-    if not isinstance(resources, list):
+    # Learn calls .get on every entry and .lower on the language of every entry
+    # that names a file, so a value that is not a list, an entry that is not an
+    # object, or a language that is not a string raises.
+    if not isinstance(resources, list) or not all(
+        isinstance(entry, dict) for entry in resources
+    ):
         return None
-    transcripts = [
-        entry for entry in resources if isinstance(entry, dict) and entry.get("file")
-    ]
+    transcripts = [entry for entry in resources if entry.get("file")]
+    if any(
+        entry.get("language") and not isinstance(entry["language"], str)
+        for entry in transcripts
+    ):
+        return None
     if transcripts:
         english = [
             entry
             for entry in transcripts
-            if str(entry.get("language") or "").lower().startswith("en")
+            if (entry.get("language") or "").lower().startswith("en")
         ]
-        return (english or transcripts)[0]["file"]
+        path = (english or transcripts)[0]["file"]
+        # Learn's .lstrip raises on a file that is not a string.
+        return path if isinstance(path, str) else None
     return video_files.get("video_transcript_file")
 
 

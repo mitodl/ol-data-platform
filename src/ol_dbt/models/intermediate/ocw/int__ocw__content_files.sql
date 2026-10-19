@@ -8,8 +8,11 @@
   Learn drops a resource that has no file to read text from. For a video that
   file is its transcript (get_video_transcript_path): the first English entry of
   video_files.video_transcript_resources that names a file, else the first entry
-  that names a file, else video_files.video_transcript_file. A resource whose
-  file is not in the bucket is dropped as well: Learn's read of it raises.
+  that names a file, else video_files.video_transcript_file. Learn raises, and
+  so drops the resource, on an entry of the list that is not an object, on a
+  language that is not a string, and on a chosen file that is not a string. A
+  resource whose file is not in the bucket is dropped as well: Learn's read of
+  it raises.
 
   Not reproduced: Learn passes a resource's description through nh3 with an
   allowlist of tags. The description here is the HTML OCW published.
@@ -64,21 +67,17 @@ with content as (
     where coursecontent_kind = 'resource'
 )
 
--- One row per transcript a video lists, ranked the way Learn picks one.
-, transcript_resources as (
+-- One row per entry of a video's video_transcript_resources, with the JSON text
+-- of its file and language.
+, transcript_entries as (
     select
         resources.coursecontent_s3_key
+        , transcript.idx
+        , coalesce({{ json_is_object('transcript.element') }}, false) as is_object
+        , {{ json_array_string('transcript.element', "'$.file'") }} as file_json
+        , {{ json_array_string('transcript.element', "'$.language'") }} as language_json
         , {{ json_extract_scalar('transcript.element', "'$.file'") }} as transcript_file
-        , row_number() over (
-            partition by resources.coursecontent_s3_key
-            order by
-                case
-                    when lower(coalesce({{ json_extract_scalar('transcript.element', "'$.language'") }}, '')) like 'en%'
-                        then 0
-                    else 1
-                end
-                , transcript.idx
-        ) as transcript_rank
+        , {{ json_extract_scalar('transcript.element', "'$.language'") }} as transcript_language
     from resources
     cross join
         unnest({{ try_parse_json_array('resources.coursecontent_video_transcript_resources') }})  -- noqa: PRS
@@ -86,14 +85,66 @@ with content as (
     where
         resources.is_video
         and resources.is_current_format
-        and coalesce({{ json_extract_scalar('transcript.element', "'$.file'") }}, '') != ''
+)
+
+-- Learn tests the file and language the way Python does: null, false, 0, "",
+-- [] and {} are false.
+, transcript_flags as (
+    select
+        *
+        , coalesce(
+            file_json not in ('null', 'false', '""', '[]', '{}')
+            and coalesce(try_cast(file_json as double), 1) != 0
+            , false
+        ) as names_file
+        , coalesce(
+            language_json not in ('null', 'false', '""', '[]', '{}')
+            and coalesce(try_cast(language_json as double), 1) != 0
+            , false
+        ) as names_language
+    from transcript_entries
+)
+
+-- The entries that name a file, ranked the way Learn picks one.
+, transcript_resources as (
+    select
+        coursecontent_s3_key
+        , transcript_file
+        , substr(file_json, 1, 1) = '"' as is_file_string
+        , row_number() over (
+            partition by coursecontent_s3_key
+            order by
+                case when lower(coalesce(transcript_language, '')) like 'en%' then 0 else 1 end
+                , idx
+        ) as transcript_rank
+    from transcript_flags
+    where names_file
+)
+
+-- Learn calls .get on every entry and .lower on the language of every entry
+-- that names a file, so an entry that is not an object or a language that is
+-- not a string raises, which drops the resource.
+, unreadable_transcript_entries as (
+    select distinct coursecontent_s3_key
+    from transcript_flags
+    where
+        not is_object
+        or (names_file and names_language and substr(language_json, 1, 1) != '"')
 )
 
 , resource_files as (
     select
         resources.*
         , case
-            when resources.is_video and resources.is_current_format and resources.has_unreadable_transcripts
+            when
+                resources.is_video
+                and resources.is_current_format
+                and (
+                    resources.has_unreadable_transcripts
+                    or unreadable_transcript_entries.coursecontent_s3_key is not null
+                    -- Learn's .lstrip raises on a chosen file that is not a string.
+                    or not coalesce(transcript_resources.is_file_string, true)
+                )
                 then null
             when resources.is_video and resources.is_current_format
                 then coalesce(transcript_resources.transcript_file, resources.coursecontent_video_transcript_file)
@@ -113,6 +164,8 @@ with content as (
         on
             resources.coursecontent_s3_key = transcript_resources.coursecontent_s3_key
             and transcript_resources.transcript_rank = 1
+    left join unreadable_transcript_entries
+        on resources.coursecontent_s3_key = unreadable_transcript_entries.coursecontent_s3_key
 )
 
 , resource_content_files as (
