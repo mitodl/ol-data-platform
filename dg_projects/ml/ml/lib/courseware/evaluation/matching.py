@@ -18,6 +18,8 @@ from collections.abc import Iterable
 import polars as pl
 
 MATCHING_RULE = "normalized label, then resolved concept id, then supplied label map"
+# a Unicode letter or number, the macro's [\p{L}\p{N}]
+_WORD = re.compile(r"[^\W_]")
 # the courseware_label_key macro's steps, in its order
 _KEY_STEPS = (
     # a + or # standing alone is a separator ("a + b", "# of rows")
@@ -41,10 +43,13 @@ def concept_label_key(label: str) -> str | None:
     :returns: the key, or None for a label with no letter or number
     :rtype: str | None
     """
+    # checked first, as "." and ".+" would otherwise spell out to "dot" and "dot plus"
+    if not _WORD.search(label):
+        return None
     key = label.lower()
     for pattern, replacement in _KEY_STEPS:
         key = pattern.sub(replacement, key)
-    return key.strip() or None
+    return key.strip()
 
 
 class LabelMatcher:

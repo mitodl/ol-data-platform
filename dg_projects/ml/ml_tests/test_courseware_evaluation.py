@@ -222,6 +222,12 @@ def test_mean_pairwise_cohen_matches_two_rater_kappa():
         ("  area under the ROC curve (AUC) ", "area under the roc curve auc"),
         ("+", None),
         ("--", None),
+        ("#", None),
+        (".", None),
+        ("..", None),
+        (".+", None),
+        ("+.", None),
+        ("#.", None),
     ],
 )
 def test_concept_label_key_matches_the_sql_macro(label, key):
