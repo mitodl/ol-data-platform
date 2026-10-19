@@ -281,7 +281,9 @@ seeds:
     DESCRIPTION_PROMPT's version is not the one named here (a run automation
     requested logs why, any other run fails), so a prompt edit describes nothing
     until this row is promoted to it, and then describes every concept under it
-    once. At most one row; an empty file, or more than one row, approves nothing.
+    once. The promotion may deploy before or after the ml image carrying the
+    prompt; whichever lands second requests the run that describes. At most one
+    row; an empty file, or more than one row, approves nothing.
   config:
     column_types:
       prompt_version: varchar

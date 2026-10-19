@@ -2,11 +2,16 @@
 
 Descriptions are written only under a description prompt that
 courseware_description_approval approves. int__courseware__concept_description_inputs
-carries the approved prompt version on every row, so the inputs' next build after
-a promotion requests a run under the new prompt, while a prompt edit deployed
-without a promotion describes nothing: a run automation requested logs why and
-stops, and a run launched any other way fails before any model call. The asset
-carries no code version for the same reason.
+carries the approved prompt version on every row, and a run under any other prompt
+describes nothing: a run automation requested logs why and stops, and a run
+launched any other way fails before any model call.
+
+A promotion lands in two images, the seed row in lakehouse and the prompt in ml,
+and either may deploy first. The inputs' next build after the seed promotion
+requests a run, and the asset's code version is DESCRIPTION_PROMPT_VERSION, so the
+ml deploy that changes the prompt requests one too. The first of the two runs stops
+as unapproved and the second describes every concept under the new prompt. A
+prompt edit deployed without a promotion requests one run, which stops.
 """
 
 from collections.abc import Iterator
@@ -101,8 +106,9 @@ def unapproved_prompt(inputs: pl.DataFrame) -> str | None:
         "write_mode": "append",
         "schema_update_mode": "update",
     },
-    # No code_version: a prompt change reaches the corpus only through
-    # courseware_description_approval (see the module docstring).
+    # So the deploy that changes the prompt requests a run even when its promotion
+    # deployed first (see the module docstring).
+    code_version=DESCRIPTION_PROMPT_VERSION,
     automation_condition=upstream_or_code_changes(),
     # Nothing is written when every concept is already described, so an upstream
     # rebuild does not commit an empty snapshot.
@@ -126,10 +132,11 @@ def courseware_concept_description(
         context.log.info("No concepts to describe")
         return
     if refusal := unapproved_prompt(inputs):
-        # Each rebuild of the inputs requests a run while the deployed prompt waits
-        # for promotion. Failing that run would add a retry and a Sentry issue per
-        # rebuild, where an unapproved extraction is never requested at all, so a
-        # run automation requested stops here. A run someone launched fails.
+        # Each rebuild of the inputs and each prompt deploy requests a run while the
+        # deployed prompt and the approved one differ. Failing that run would add a
+        # retry and a Sentry issue per request, where an unapproved extraction is
+        # never requested at all, so a run automation requested stops here. A run
+        # someone launched fails.
         if context.run.tags.get(AUTOMATION_CONDITION_TAG) == "true":
             context.log.warning(refusal)
             return

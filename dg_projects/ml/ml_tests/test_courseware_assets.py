@@ -17,14 +17,19 @@ import polars as pl
 import pytest
 from anthropic import Anthropic
 from dagster import (
+    AssetMaterialization,
+    AssetSelection,
+    AssetSpec,
     DagsterInstance,
     Definitions,
     IOManager,
     MultiPartitionKey,
     build_sensor_context,
     define_asset_job,
+    evaluate_automation_conditions,
     materialize,
 )
+from dagster._core.definitions.data_version import DATA_VERSION_TAG
 from dagster._core.storage.tags import AUTOMATION_CONDITION_TAG
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
@@ -953,10 +958,6 @@ def test_description_prompt_change_waits_for_promotion(tables, calls, monkeypatc
     tables[DESCRIPTION_INPUTS] = description_inputs()
     assert describe(tables).success
     assert calls == ["record_descriptions"]
-    # A code version would make automation re-describe on deploy.
-    assert courseware_concept_description.code_versions_by_key == {
-        courseware_concept_description.key: None
-    }
 
     edited = "e0e0e0e0e0e0"
     monkeypatch.setattr(description_module, "DESCRIPTION_PROMPT_VERSION", edited)
@@ -975,6 +976,64 @@ def test_description_prompt_change_waits_for_promotion(tables, calls, monkeypatc
     assert describe(tables).success
     assert calls == ["record_descriptions"]
     assert tables["courseware_concept_description"].height == 4
+
+
+def automation_requests(
+    instance: DagsterInstance, prompt_version: str, cursor=None
+) -> tuple[int, Any]:
+    """Run one automation tick with the description prompt at prompt_version.
+
+    :returns: how many description runs the tick requested, and its cursor
+    """
+    # The asset as deployed with DESCRIPTION_PROMPT_VERSION at prompt_version. One
+    # without a code version keeps none.
+    deployed = courseware_concept_description.map_asset_specs(
+        lambda spec: spec.replace_attributes(
+            code_version=spec.code_version and prompt_version
+        )
+    )
+    result = evaluate_automation_conditions(
+        defs=Definitions(
+            assets=[deployed, AssetSpec(description_module.INPUTS_KEY)],
+            resources={"io_manager": Warehouse({}), "llm": FakeLLM()},
+        ),
+        instance=instance,
+        asset_selection=AssetSelection.assets(courseware_concept_description),
+        cursor=cursor,
+    )
+    return result.get_num_requested(courseware_concept_description.key), result.cursor
+
+
+def build_inputs(instance: DagsterInstance, data_version: str) -> None:
+    instance.report_runless_asset_event(
+        AssetMaterialization(
+            description_module.INPUTS_KEY, tags={DATA_VERSION_TAG: data_version}
+        )
+    )
+
+
+@pytest.mark.parametrize("seed_first", [True, False])
+def test_a_promotion_requests_a_run_whichever_image_deploys_last(seed_first):
+    # The seed promotes in the lakehouse image and the prompt changes in the ml
+    # image. The first deploy's run stops as unapproved and writes nothing, so the
+    # second deploy has to request another run.
+    instance = DagsterInstance.ephemeral()
+    build_inputs(instance, "approves-old")
+    instance.report_runless_asset_event(
+        AssetMaterialization(courseware_concept_description.key)
+    )
+    prompt_version = "0ld0ld0ld0ld"
+    _, cursor = automation_requests(instance, prompt_version)
+
+    for deploy in ["seed", "ml"] if seed_first else ["ml", "seed"]:
+        if deploy == "seed":
+            build_inputs(instance, "approves-new")
+        else:
+            prompt_version = "e0e0e0e0e0e0"
+        requested, cursor = automation_requests(instance, prompt_version, cursor)
+        assert requested == 1, deploy
+        requested, cursor = automation_requests(instance, prompt_version, cursor)
+        assert requested == 0, deploy
 
 
 def test_description_describes_only_concepts_new_at_the_approved_version(tables, calls):
