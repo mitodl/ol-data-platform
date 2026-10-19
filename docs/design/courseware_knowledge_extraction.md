@@ -291,6 +291,38 @@ Engines, checked 2026-10-16:
 
 Spike order: DuckPGQ first (no infrastructure, matches `ol-dbt` local development; stop if SQL/PGQ covers the queries), then LadybugDB as a read-only file Dagster builds and learn-ai opens in process, then Neo4j Community in Kubernetes as the server baseline, with Neptune Analytics as the managed comparison.
 
+#### Engine spike (2026-10-18)
+
+The spike ran the request-time query shapes over the pilot's published edges (586 concepts, 6,714 of 9,167 edges, from this branch's compiled `bridge_concept_relation` and `dim_concept`) and over a synthetic graph 100 times its size (58,600 concepts, 774,501 edges). The synthetic graph copies each relation's degree distribution (Chung-Lu: each node takes a random pilot node's degrees). It replaces published `builds_on`, 65 edges all at depth 1 on the pilot, with a layered DAG of 109,911 edges over 16 levels so the 8-hop cap matters. It has no community structure, so its neighbourhoods reach further than real ones would. Edges are stored in both directions. Per seed concept:
+
+- 2-hop and 3-hop expansion ranked by best path weight, top 50. A path weighs the product of its edge weights, and an edge weighs its relation (`close` 1.0, `broader` 0.9, `builds_on` 0.8, `related` 0.6, `practiced_with` 0.5, `complements` 0.4) times (1 + `courserun_support`) / (2 + `courserun_support`).
+- Every concept the seed builds on within 8 hops, at its fewest hops (its rows of `bridge_concept_prerequisite_closure`).
+
+Seeds are 50 concepts sampled with a fixed seed, 25 from the top degree decile and 25 below it, and for the path query 50 concepts with an outgoing published `builds_on` (37 on the pilot). Latency is p50 / p95 in milliseconds over 10 warm passes on the pilot and 3 on the synthetic graph, from one process on a 12-vCPU WSL2 laptop shared with other work, so p95 is noisy. Every engine returned the same rows as the SQL baseline for every seed on both graphs.
+
+The engines: plain SQL in DuckDB 1.5.6 on tables loaded from Parquet, with k-hop written two ways (aggregating to the best weight per concept at each hop, and a recursive CTE that enumerates walks, as Trino or StarRocks would run it) and the path as a recursive CTE; DuckPGQ (community build 61f5d082) on the same tables; LadybugDB (PyPI `ladybug` 0.21.2, MIT; `real-ladybug` is an older package name, last released as 0.15.3 in April) on a read-only file, with Cypher variable-length matching and with the per-hop form in Cypher; Neo4j Community 2026.09.0 in local docker (4 GB heap, 2 GB page cache), loaded with `neo4j-admin database import` and queried over Bolt.
+
+| engine | 2-hop pilot | 2-hop synthetic | 3-hop pilot | 3-hop synthetic | path pilot | path synthetic | cold first query, synthetic |
+|---|---|---|---|---|---|---|---|
+| SQL, per hop | 9 / 16 | 23 / 34 | 15 / 25 | 41 / 56 | 10 / 21 | 21 / 36 | 26 |
+| SQL, recursive CTE | 13 / 27 | 21 / 37 | 27 / 53 | 49 / 79 | 7 / 16 | 18 / 38 | 34 |
+| DuckPGQ | 11 / 20 | 28 / 42 | 30 / 54 | 81 / 135 | 28 / 44 | 2,617 / 3,756 | 37 |
+| LadybugDB, variable-length | 16 / 26 | 39 / 59 | 131 / 350 | 218 / 313 | 2 / 11 | 4 / 10 | 210 |
+| LadybugDB, per hop | 35 / 66 | 35 / 50 | 50 / 70 | 140 / 197 | 2 / 4 | 4 / 10 | 115 |
+| Neo4j Community | 14 / 25 | 20 / 32 | 115 / 312 | 258 / 487 | 7 / 12 | 14 / 32 | 5,765 |
+
+The cold column is the first query in a fresh process, after loading the Parquet (0.3 s), opening the LadybugDB file (0.08 s) or starting the Neo4j container (11.5 s).
+
+- Ranked expansion needs no graph engine. Per-hop SQL was the fastest 3-hop on both graphs, 41 ms p50 on the synthetic graph against 81 ms for DuckPGQ and 140 to 258 ms for LadybugDB and Neo4j. Cypher variable-length matching enumerates paths (a median 67,367 3-hop walks per synthetic seed, up to 205,365), while the per-hop form keeps one row per concept per hop.
+- Unpruned 3-hop is not usable context. It reached a median 545 of the pilot's 586 concepts and 33,747 synthetic ones (2-hop: 253 and 1,664). AskTIM needs a pruned expansion (relation families, support thresholds or top k per hop), which is also SQL.
+- The engines win the variable-length path, LadybugDB at 4 ms p50 against 18 to 21 ms for the recursive CTE. The closure table already serves that as a lookup, so the gap matters only for path shapes the closure doesn't hold.
+- DuckPGQ adds nothing over SQL. Its variable-length patterns are always ANY SHORTEST, so ranked expansion is one fixed-length pattern per hop count, slower than the same SQL. Its shortest-path query took 2.6 s p50 on the synthetic graph and 28 ms on the pilot, growing with the graph rather than the result. It also needs a writable database: on a read-only DuckDB file its queries fail with a CREATE error. Per the spike order, it stops here.
+- LadybugDB works as a file learn-ai opens in process. The synthetic file is 59 MB (from 8.4 MB of Parquet), built in 4.3 s (pilot: 2.4 MB in 0.3 s), opens read-only in 0.08 s, and two processes held it open at once. Resident memory was 120 MB after opening and 198 MB after 50 3-hop queries. DuckDB over the same Parquet has the same deployment shape (0.3 s load, 144 MB) and was faster on every k-hop query.
+- Neo4j Community bought no latency over SQL. Import plus index took 46 s, most of it JVM and server starts, for a 140 MB store, and the first query after a start took 5.8 s. It ran in docker, not Kubernetes.
+- Neptune Analytics was not created. A test needs a graph imported from the S3 Parquet export (`CreateGraphUsingImportTask`), IAM access, and the Neo4j queries in openCypher sent from inside the VPC. The minimum graph is 16 m-NCU at $0.48 per hour in us-east-1 (AWS price list for AmazonNeptune, published 2026-09-11; [Neptune pricing](https://aws.amazon.com/neptune/pricing/) bills a stopped graph at 10% of compute), so a few hours of testing costs a few dollars and an always-on graph about $350 per month. Whether the synthetic graph fits in 16 m-NCU is unchecked.
+
+Recommendation: no graph engine for AskTIM's k-hop context. The `course_knowledge` tenant serves ranked 1- and 2-hop neighbourhoods as per-hop SQL views in StarRocks, and paths from the closure table. LadybugDB is the candidate if learn-ai needs paths the closure doesn't hold, or graph and vector search in one in-process file. Unmeasured: the per-hop SQL on StarRocks (planner and network overhead included), Neptune Analytics, the real corpus's degree distribution and clustering, concurrent load, and pruned expansion.
+
 Not done yet: see the fast-follow list in section 11.
 
 ## 10. Concept identity, relationships and graph topology
