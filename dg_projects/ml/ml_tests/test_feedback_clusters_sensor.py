@@ -4,7 +4,14 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import polars as pl
-from dagster import RunRequest, SkipReason, build_sensor_context
+from dagster import (
+    DagsterInstance,
+    DagsterRunStatus,
+    RunRequest,
+    SkipReason,
+    build_sensor_context,
+)
+from dagster._core.test_utils import create_run_for_test
 from ml.lib.cluster import should_trigger_early_recluster
 from ml.sensors.feedback_clusters import feedback_clusters_growth_sensor
 
@@ -66,7 +73,8 @@ def _tables(*, active_clusters: int, run_platforms: str, total_conversations: in
     return lambda *, database_name, table_name: tables[table_name].lazy()  # noqa: ARG005
 
 
-def _evaluate(**table_args):
+def _evaluate(instance: DagsterInstance | None = None, **table_args):
+    instance = instance or DagsterInstance.ephemeral()
     with (
         patch(
             "ml.sensors.feedback_clusters.get_glue_catalog", return_value=MagicMock()
@@ -89,7 +97,7 @@ def _evaluate(**table_args):
             ),
         ),
     ):
-        return feedback_clusters_growth_sensor(build_sensor_context())
+        return feedback_clusters_growth_sensor(build_sensor_context(instance=instance))
 
 
 def test_growth_sensor_triggers_when_the_live_run_is_far_behind() -> None:
@@ -115,5 +123,16 @@ def test_growth_sensor_skips_when_the_live_run_has_another_scope() -> None:
     # The incremental run it would start would be rejected for its scope
     result = _evaluate(
         active_clusters=2, run_platforms="mitxonline", total_conversations=2
+    )
+    assert isinstance(result, SkipReason)
+
+
+def test_growth_sensor_skips_while_a_run_is_in_progress() -> None:
+    instance = DagsterInstance.ephemeral()
+    create_run_for_test(
+        instance, job_name="feedback_clusters_job", status=DagsterRunStatus.STARTED
+    )
+    result = _evaluate(
+        instance, active_clusters=2, run_platforms="mitlearn", total_conversations=2
     )
     assert isinstance(result, SkipReason)

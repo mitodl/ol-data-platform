@@ -139,8 +139,10 @@ class FeedbackClustersConfig(Config):
         description=(
             "When not a full refresh, also create clusters for new common themes and "
             "move noise groups that sit close to a cluster into it. The growth sensor "
-            "sets it. Ignored with full_refresh, which builds every "
-            "cluster from scratch."
+            "sets it. For a manual run held for review (is_promoted false), turn off "
+            "feedback_clusters_growth_sensor: identity rejects the run if another run "
+            "goes live first. Ignored with full_refresh, which builds every cluster "
+            "from scratch."
         ),
     )
     sample_limit: int | None = Field(
@@ -281,9 +283,10 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
     feedback_clusters_growth_sensor (see definitions.py), not chained on every
     feedback_embeddings refresh -- a run is expensive relative to how often new
     conversations show up, and feedback_cluster_assignment (incremental
-    placement) handles those between runs. feedback_cluster_identity matches this run's clusters onto stable
-    cluster_keys. A promoted incremental run goes live without a review, new
-    themes included; a full_refresh run waits for one (see is_promoted).
+    placement) handles those between runs. feedback_cluster_identity matches this
+    run's clusters onto stable cluster_keys. A promoted incremental run goes live
+    without a review, new themes included; a full_refresh run waits for one (see
+    is_promoted).
     """
     if config.is_promoted and config.full_refresh:
         # The review gate: identity would otherwise take the run live at once

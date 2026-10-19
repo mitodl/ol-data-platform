@@ -51,7 +51,7 @@ CLUSTER_RUN_SCHEMA = {
     # Incremental runs only. base_cluster_run_id is the live run this one extended.
     "placed_noise_count": pl.Int64,
     "new_cluster_count": pl.Int64,
-    # Noise groups that joined an existing cluster (see cluster_new_themes)
+    # Noise groups that joined a cluster instead of becoming one (cluster_new_themes)
     "placed_group_count": pl.Int64,
     "base_cluster_run_id": pl.String,
 }
@@ -227,6 +227,10 @@ GROUP_PLACEMENT_MIN_SIMILARITY = float(
     os.environ.get("GROUP_PLACEMENT_MIN_SIMILARITY", "0.85")
 )
 
+# New themes go live without a review, so one bad run (such as after a summary
+# prompt change) cannot add more categories than this; the rest stay noise.
+MAX_NEW_CLUSTERS_PER_RUN = int(os.environ.get("MAX_NEW_CLUSTERS_PER_RUN", "5"))
+
 # Fixed rather than left to UMAP/HDBSCAN's own default (None -- a fresh random
 # state per call): a clustering run must be reproducible for the run-vs-run
 # comparison the §B.1 bake-off depends on.
@@ -391,6 +395,7 @@ def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
     min_cluster_size: int = NEW_CLUSTER_MIN_SIZE,
     max_centroid_similarity: float = NEW_CLUSTER_MAX_CENTROID_SIMILARITY,
     group_placement_min_similarity: float = GROUP_PLACEMENT_MIN_SIMILARITY,
+    max_new_clusters: int = MAX_NEW_CLUSTERS_PER_RUN,
     *,
     umap_params: tuple[int, int] = (UMAP_N_COMPONENTS, UMAP_N_NEIGHBORS),
     random_state: int = RANDOM_STATE,
@@ -398,10 +403,11 @@ def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
     cluster_selection_method: str = HDBSCAN_CLUSTER_SELECTION_METHOD,
     first_new_cluster_id: int = 0,
 ) -> tuple[np.ndarray, np.ndarray, int, int]:
-    """Cluster the noise, with UMAP fitted on the noise alone. A group whose
-    centroid is not close to any existing cluster's, or to a group already made a
-    new cluster in this call, becomes a new cluster; a group very close to an
-    existing cluster joins it if the group is no larger than that cluster.
+    """Cluster the noise, with UMAP fitted on the noise alone, and take the groups
+    largest first. A group far from every existing cluster becomes a new cluster,
+    up to max_new_clusters, or joins a new cluster from this call it is very close
+    to. A group very close to an existing cluster joins it if the group is no larger
+    than that cluster, at most one group per cluster.
 
     New clusters get ids after the existing ones, and never below
     first_new_cluster_id. Returns (labels, probabilities, new_cluster_count,
@@ -425,40 +431,62 @@ def cluster_new_themes(  # noqa: PLR0913 -- one arg per UMAP/HDBSCAN setting
     )
     group_labels = clusterer.fit_predict(reduced)
     cluster_ids, centroids = _unit_centroids(unit_vectors, labels)
-    cluster_sizes = {
-        cluster_id: int((labels == cluster_id).sum()) for cluster_id in cluster_ids
-    }
+    counted_ids, counts = np.unique(
+        labels[labels != NOISE_CLUSTER_ID], return_counts=True
+    )
+    cluster_sizes = dict(zip(counted_ids.tolist(), counts.tolist(), strict=True))
     labels = labels.copy()
     probabilities = probabilities.copy()
     next_cluster_id = max(labels.max() + 1, first_new_cluster_id)
     new_cluster_count = 0
     placed_group_count = 0
-    new_centroids: list[np.ndarray] = []
-    for group in np.unique(group_labels[group_labels != NOISE_CLUSTER_ID]):
+    new_centroids: dict[int, np.ndarray] = {}
+    # A cluster's centroid is not recomputed here, so a second group would be
+    # compared with a centroid the first one already moved
+    placed_targets: set[int] = set()
+    groups, group_sizes = np.unique(
+        group_labels[group_labels != NOISE_CLUSTER_ID], return_counts=True
+    )
+    # Largest first: a theme HDBSCAN split in two keeps its larger part's centroid
+    for group in groups[np.argsort(-group_sizes, kind="stable")]:
         in_group = group_labels == group
         centroid = unit_vectors[noise[in_group]].mean(axis=0)
         centroid /= np.linalg.norm(centroid)
         similarities = centroids @ centroid if len(centroids) else np.array([])
         if similarities.size == 0 or similarities.max() < max_centroid_similarity:
-            # HDBSCAN can split one theme into two groups; only the first becomes one
-            if not any(
-                float(other @ centroid) >= max_centroid_similarity
-                for other in new_centroids
+            nearest_new, nearest_new_similarity = max(
+                (
+                    (cluster_id, float(other @ centroid))
+                    for cluster_id, other in new_centroids.items()
+                ),
+                key=lambda pair: pair[1],
+                default=(None, -1.0),
+            )
+            if (
+                nearest_new is not None
+                and nearest_new_similarity >= group_placement_min_similarity
+            ):
+                labels[noise[in_group]] = nearest_new
+                probabilities[noise[in_group]] = clusterer.probabilities_[in_group]
+                placed_group_count += 1
+            elif (
+                nearest_new_similarity < max_centroid_similarity
+                and new_cluster_count < max_new_clusters
             ):
                 labels[noise[in_group]] = next_cluster_id
                 probabilities[noise[in_group]] = clusterer.probabilities_[in_group]
+                new_centroids[next_cluster_id] = centroid
                 next_cluster_id += 1
                 new_cluster_count += 1
-                new_centroids.append(centroid)
             continue
-        target = cluster_ids[similarities.argmax()]
-        group_size = int(in_group.sum())
+        target = int(cluster_ids[similarities.argmax()])
         if (
             similarities.max() >= group_placement_min_similarity
-            and group_size <= cluster_sizes[target]
+            and int(in_group.sum()) <= cluster_sizes[target]
+            and target not in placed_targets
         ):
             labels[noise[in_group]] = target
-            cluster_sizes[target] += group_size
+            placed_targets.add(target)
             placed_group_count += 1
     return labels, probabilities, new_cluster_count, placed_group_count
 

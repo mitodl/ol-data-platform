@@ -1,7 +1,9 @@
 import polars as pl
 from dagster import (
+    DagsterRunStatus,
     DefaultSensorStatus,
     RunRequest,
+    RunsFilter,
     SensorEvaluationContext,
     SkipReason,
     sensor,
@@ -33,7 +35,22 @@ from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
         "feedback_cluster_membership."
     ),
 )
-def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
+def feedback_clusters_growth_sensor(context: SensorEvaluationContext):
+    # The baseline counts only completed runs, so a run longer than the sensor
+    # interval would otherwise be started again from the same base
+    if context.instance.get_run_records(
+        filters=RunsFilter(
+            job_name="feedback_clusters_job",
+            statuses=[
+                DagsterRunStatus.QUEUED,
+                DagsterRunStatus.NOT_STARTED,
+                DagsterRunStatus.STARTING,
+                DagsterRunStatus.STARTED,
+            ],
+        ),
+        limit=1,
+    ):
+        return SkipReason("A feedback_clusters_job run is already queued or running")
     catalog = get_glue_catalog()
     if not table_exists(catalog, f"{cluster_database_name}.feedback_embeddings"):
         return SkipReason("feedback_embeddings hasn't materialized yet")

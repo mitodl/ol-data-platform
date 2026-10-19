@@ -225,6 +225,63 @@ def test_cluster_new_themes_makes_one_cluster_from_two_groups_of_one_theme() -> 
     assert (new_labels[10:] == cluster.NOISE_CLUSTER_ID).sum() == 10
 
 
+def test_cluster_new_themes_merges_a_split_theme_and_caps_new_clusters(
+    monkeypatch,
+) -> None:
+    e = np.eye(5)
+    unit_vectors = _unit(
+        np.vstack(
+            [
+                np.tile(e[0], (20, 1)),  # cluster 0
+                np.tile(e[1] + 0.5 * e[2], (5, 1)),  # group 0: small part of a theme
+                np.tile(e[1], (10, 1)),  # group 1: its larger part
+                np.tile(e[3], (6, 1)),  # group 2: a second new theme
+                np.tile(e[0] + 0.1 * e[3], (4, 1)),  # group 3: edge of cluster 0
+                np.tile(e[0] + 0.1 * e[4], (4, 1)),  # group 4: another edge
+                # group 5: close to group 1's centroid, not to group 0's
+                np.tile(e[1] - 0.4 * e[2], (4, 1)),
+            ]
+        )
+    )
+    labels = np.array([0] * 20 + [cluster.NOISE_CLUSTER_ID] * 33)
+    group_labels = np.array([0] * 5 + [1] * 10 + [2] * 6 + [3] * 4 + [4] * 4 + [5] * 4)
+
+    class FakeUmap:
+        def __init__(self, **_kwargs):
+            pass
+
+        def fit_transform(self, vectors):
+            return vectors
+
+    class FakeHdbscan:
+        def __init__(self, **_kwargs):
+            self.probabilities_ = np.ones(len(group_labels))
+
+        def fit_predict(self, _reduced):
+            return group_labels
+
+    monkeypatch.setattr(cluster, "UMAP", FakeUmap)
+    monkeypatch.setattr(cluster, "HDBSCAN", FakeHdbscan)
+
+    new_labels, _, new_count, placed_count = cluster.cluster_new_themes(
+        unit_vectors,
+        labels,
+        np.zeros(53),
+        min_cluster_size=2,
+        max_new_clusters=1,
+        umap_params=(2, 5),
+    )
+
+    # Larger group 1 becomes the cluster, and groups 0 and 5 join it; the cap leaves
+    # group 2 as noise; cluster 0 takes group 3 but not a second group
+    assert (new_count, placed_count) == (1, 3)
+    assert (new_labels[20:35] == 1).all()
+    assert (new_labels[35:41] == cluster.NOISE_CLUSTER_ID).all()
+    assert (new_labels[41:45] == 0).all()
+    assert (new_labels[45:49] == cluster.NOISE_CLUSTER_ID).all()
+    assert (new_labels[49:] == 1).all()
+
+
 def test_cluster_new_themes_keeps_a_near_group_larger_than_its_cluster_as_noise() -> (
     None
 ):
