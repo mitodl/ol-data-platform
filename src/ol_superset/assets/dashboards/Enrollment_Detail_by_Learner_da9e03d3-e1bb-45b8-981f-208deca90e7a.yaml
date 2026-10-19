@@ -234,6 +234,39 @@ metadata:
         name: coupon_code
       datasetUuid: 01f179b6-cb75-465f-8ceb-0525c24fa223
     type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-zp-lAphrX
+    - NATIVE_FILTER-rtf0SLxia
+    - NATIVE_FILTER-8eiua81W1
+    chartsInScope:
+    - 64
+    - 108
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: Coupon code used on the program purchase in Program Order ID, such as a B2B code.
+    filterType: filter_select
+    id: NATIVE_FILTER-pOcC7xR4mK2vQ9nB5tYw1
+    name: Program Order Coupon Code
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-t1-4mh38qE
+    - TAB-pWPKo4rBS
+    targets:
+    - column:
+        name: program_coupon_code
+      datasetUuid: 01f179b6-cb75-465f-8ceb-0525c24fa223
+    type: NATIVE_FILTER
   - cascadeParentIds: []
     controlValues:
       creatable: true
