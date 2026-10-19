@@ -567,10 +567,11 @@ def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
     parser handles real course XML from the block directories, and a document
     extractor has nothing to do with an XML manifest.
 
-    The root course.xml file is skipped because it is already processed by
-    process_course_xml() to extract course-level metadata. The course/{run_tag}.xml
-    file is also skipped for the same reason — it contains the course metadata block
-    and not structural content.
+    The course block is included like any other, from both of its files:
+    course/{run_tag}.xml (block type ``course``) and the root course.xml, which
+    points at it and is given block type ``course`` too. MIT Learn loads each of
+    them as a ContentFile, and integrations__learn__content_files reads them from
+    here.
 
     :param archive_path: The path to the tar archive for the course bundle
     :param source_system: The ETL source system (e.g. "prod", "edge", "mitxonline")
@@ -625,16 +626,8 @@ def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
                     continue
 
                 block_type = path_parts[1]
-
-                # Skip the root course.xml — already processed by process_course_xml()
-                # to extract course-level metadata.
-                if block_type == "course.xml":
-                    continue
-
-                # Skip course/{run_tag}.xml — this is the course metadata block already
-                # processed by process_course_xml(), not a structural content block.
-                if block_type == "course":
-                    continue
+                if member.path == f"{archive_root_name}/course.xml":
+                    block_type = "course"
 
                 # drafts/ is the Studio draft workspace. Its contents are unpublished
                 # by definition, so they are skipped outright -- neither parsed as

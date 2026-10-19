@@ -104,6 +104,18 @@ unit_tests:
       coursestructure_xml_archive_version: v2, coursestructure_xml_block_type: chapter,
       coursestructure_xml_block_display_name: Stale, coursestructure_xml_block_path: course/chapter/week_1.xml,
       coursestructure_xml_raw_xml: '<chapter display_name="Stale"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    # The course root: course.xml has no display_name, so its title comes from
+    # the file name, as Learn's does.
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: course,
+      coursestructure_xml_block_display_name: "", coursestructure_xml_block_path: course/course.xml,
+      coursestructure_xml_raw_xml: '<course url_name="R1" org="X" course="Y" />',
+      coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: course,
+      coursestructure_xml_block_display_name: Test Course, coursestructure_xml_block_path: course/course/R1.xml,
+      coursestructure_xml_raw_xml: '<course display_name="Test Course"><chapter url_name="week_1"
+        /></course>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
     # Residential MITx is not a Learn source.
     - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: mitx,
       coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: chapter,
@@ -158,6 +170,9 @@ unit_tests:
       title: Intro Video, url: "https://courses.xpro.mit.edu/courses/course-v1:X+Y+R1/jump_to_id/0123456789abcdef0123456789abcdef"}
     - {edx_module_id: "block-v1:X+Y+R1+type@html+block@abcd", title: Welcome, url: null}
     - {edx_module_id: "block-v1:X+Y+R1+type@chapter+block@week_1", title: Week 1,
+      url: null}
+    - {edx_module_id: "block-v1:X+Y+R1+type@course+block@course", title: Course, url: null}
+    - {edx_module_id: "block-v1:X+Y+R1+type@course+block@R1", title: Test Course,
       url: null}
     - {edx_module_id: "block-v1:X+Y+R1+type@tabs+block@5244487e", title: 5244487E,
       url: null}

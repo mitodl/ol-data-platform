@@ -21,8 +21,11 @@
   the check its files would include ones Learn hides, and a scoped pull would
   publish them.
 
-  Not reproduced yet: the course root files course.xml and course/<run>.xml,
-  which course_xml_blocks does not carry.
+  The course root files course.xml and course/<run>.xml come from
+  course_xml_blocks like any other block, and only for an export parsed after
+  that asset started carrying them (2026-10). A run whose blocks file is older
+  has every other file but not those two until its course_xml_blocks partition
+  is rematerialized.
 #}
 
 {% set valid_text_file_types = [

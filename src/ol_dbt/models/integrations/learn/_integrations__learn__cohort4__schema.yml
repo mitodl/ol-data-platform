@@ -14,8 +14,9 @@ models:
     transcript text the openedx location extracts, less the files Learn's
     excluded_olx_paths hides (staff-only subtrees, unreachable tabs and about
     pages, course settings, asset manifests, unreferenced static files). A run appears
-    once its export has been through that check.
-    Still missing: the course root files course.xml and course/<run>.xml.
+    once its export has been through that check. The course root files course.xml
+    and course/<run>.xml are there for a run whose course_xml_blocks were parsed
+    after that asset started carrying them (2026-10).
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
