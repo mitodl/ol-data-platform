@@ -1,13 +1,16 @@
 {#
   format_timestamp_as_iso8601: an instant as an ISO 8601 string in UTC.
 
-  fractional_digits is how many fractional digits Trino renders for timestamp_expr:
-  to_iso8601 writes the precision of the value's type, 6 for a timestamp read from an
-  Iceberg table and 3 for one built in the query (cast(... as timestamp), date_parse).
-  StarRocks' DATETIME and DuckDB's TIMESTAMPTZ carry no precision, so their bodies take
-  it from here. Trino ignores it.
+  fractional_digits, 3 or 6, is how many fractional digits the StarRocks and DuckDB
+  bodies write. Trino ignores it: to_iso8601 writes the precision of the value's type,
+  e.g. 6 for a timestamp column of an Iceberg table and 3 for one built in the query
+  with cast(... as timestamp) or date_parse. Pass what Trino writes for the expression.
+  StarRocks' DATETIME and DuckDB's TIMESTAMPTZ carry no precision and hold at most 6.
 #}
 {% macro format_timestamp_as_iso8601(timestamp_expr, fractional_digits=6) %}
+  {% if fractional_digits not in (3, 6) %}
+    {{ exceptions.raise_compiler_error("format_timestamp_as_iso8601: fractional_digits must be 3 or 6, got " ~ fractional_digits) }}
+  {% endif %}
   {{ return(adapter.dispatch('format_timestamp_as_iso8601', 'open_learning')(timestamp_expr, fractional_digits)) }}
 {% endmacro %}
 
