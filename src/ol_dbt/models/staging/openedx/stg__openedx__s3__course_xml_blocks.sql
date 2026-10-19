@@ -54,11 +54,12 @@ with
             -- one course can share it; keyed on that, the deduplication above kept one and
             -- dropped the rest. Open edX exports a ':' in a url_name as a directory
             -- (name_to_pathname), so PP1/P4_Q3a.xml is the block PP1:P4_Q3a. The root
-            -- course.xml has no such path; it points at course/<url_name>.xml, so it
-            -- takes that block's id from its url_name.
+            -- course.xml, the pointer to course/<url_name>.xml, has no block directory and
+            -- takes its file name, course, as MIT Learn's ContentFile key does. Its
+            -- url_name would collide with the course block it points at.
             coalesce(
                 replace({{ regexp_extract_or_null("xml_path", "'^[^/]+/[^/]+/(.+)\\.xml$'", 1) }}, '/', ':'),
-                block_id
+                {{ regexp_extract_or_null("xml_path", "'^[^/]+/([^/]+)\\.xml$'", 1) }}
             ) as coursestructure_xml_block_id,
             block_type as coursestructure_xml_block_type,
             block_display_name as coursestructure_xml_block_display_name,

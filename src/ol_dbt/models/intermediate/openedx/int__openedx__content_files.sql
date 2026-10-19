@@ -67,6 +67,8 @@ with blocks as (
         -- tab in an attribute as "&#09;" where the export has "<a/>" and "&#9;";
         -- undoing the two makes the text Learn's for every non-HTML XML file in
         -- the three runs compared on 2026-10-19 (md5 equal to Learn's checksum).
+        -- What ElementTree does not keep (comments, the XML declaration, CDATA
+        -- markers) still differs from Learn's text where a block has it.
         -- The HTML text is an approximation: CDATA markers go first so a script
         -- body inside one is not cut at its first ">".
         , trim(case

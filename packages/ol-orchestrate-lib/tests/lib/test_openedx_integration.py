@@ -21,7 +21,7 @@ from ol_orchestrate.lib.openedx import (
 
 DOWNLOADS = Path.home() / "Downloads"
 
-EXCLUDED_BLOCK_TYPES = {"drafts", "assets", "static", "course"}
+EXCLUDED_BLOCK_TYPES = {"drafts", "assets", "static"}
 
 ARCHIVES = [
     pytest.param(
@@ -163,7 +163,7 @@ def test_real_archive_no_excluded_block_types(
     }
     assert not found_excluded, (
         f"Found excluded block types: {found_excluded}. "
-        "drafts/assets/static/course directories should be filtered."
+        "drafts/assets/static directories should be filtered."
     )
 
 

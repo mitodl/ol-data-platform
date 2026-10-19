@@ -21,8 +21,8 @@ models:
       key and the parent's pointer name it, taken from the XML file's path below <root>/<block_type>/
       without .xml, with each '/' read as ':' (e.g. PP1/P4_Q3a.xml is PP1:P4_Q3a).
       Not the url_name attribute inside the file, which a library_content child carries
-      from its source library. The root course.xml points at course/<url_name>.xml
-      and takes that course block's id from its url_name
+      from its source library. The root course.xml, the pointer to course/<url_name>.xml,
+      has the id course, its file name
     tests:
     - not_null
   - name: coursestructure_xml_block_type
