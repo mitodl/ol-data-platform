@@ -331,14 +331,24 @@ How a scoped load behaves (`ocw_content_source(courses=[...])`):
   is skipped and its state left as it was: it does not mark the prefix empty, does not count
   toward the 10% limit, and does not move the sweep's resume point. Only the sweep, which has seen
   the whole bucket, settles those.
-- More than 50 courses written in one tick is a mass rebuild (138 courses per five minutes at the
-  median on 2026-10-14). The sensor skips those and the sweep reads them.
-- The sensor waits while a sweep or an earlier scoped load is running, so two loads do not read
-  the same state at once. The schedule does not wait for a scoped load: a sweep starting at 04:35
-  while one runs can read a course twice (a duplicate set of rows, which staging drops), and the
-  two commits to the Iceberg table can conflict and fail one run. The 39 single publishes on
-  2026-10-16 and 2026-10-19 fell between 13:45 and 22:46 UTC, so this is unlikely; a run-coordinator `tag_concurrency_limits` entry in
-  ol-infrastructure would rule it out if it shows up.
+- It stops at the byte budget like the sweep, and the asset drains it, so a large named set is
+  safe to request. From the launchpad, a named set is run config on `ocw_content_ingest`:
+  `ops: {ocw_content_ingest: {config: {courses: [<slug>, ...]}}}`.
+
+How the sensor and the sweep share the state:
+
+- Each load saves the whole dlt state, and a load restores the one saved by the newest load id
+  (dlt's filesystem destination, `get_stored_state`). Two loads at once would drop what the earlier one recorded, e.g. the gone courses a
+  sweep unpublished, which the next sweep would unpublish and count against the limit again. So
+  the sensor waits while a sweep or scoped load is running, and the schedule ticks hourly from
+  04:35 to 09:35 and starts the day's one sweep at the first tick nothing is running. A load
+  started by hand from the UI is not seen by either.
+- More than 50 courses written per poll interval is a mass rebuild (138 courses per five minutes at
+  the median on 2026-10-14; the busiest day of single publishes since had 30). The sensor skips
+  those and the sweep reads them. The limit scales with the window, so the publishes that piled up
+  while a load ran are not taken for a rebuild.
+- The cursor moves when a run is requested, so the courses of a scoped run that fails wait for the
+  next sweep.
 
 It ends at the raw load. `integrations__learn__ocw_content_files` still rebuilds with the daily
 lakehouse run, and telling Learn a course changed is the sender this section is about, which is

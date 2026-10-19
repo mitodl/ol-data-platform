@@ -303,8 +303,9 @@ def build_batched_assets(
 ) -> AssetsDefinition:
     """Wrap a one-table budgeted source as an ``@dlt_assets`` op that drains it.
 
-    ``build_source`` is called once for the asset definition and once per
-    batch (see ``load_in_batches``). Its single resource names the table.
+    ``build_source`` is called once for the asset definition, once per run for
+    the table's name and once per batch (see ``drain``). Its single resource
+    names the table.
     """
 
     @dlt_assets(

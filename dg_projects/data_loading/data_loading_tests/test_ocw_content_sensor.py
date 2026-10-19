@@ -1,5 +1,6 @@
 """Tests for ocw_content_publish_sensor against an ephemeral Dagster instance."""
 
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
 import dagster as dg
@@ -9,12 +10,17 @@ from data_loading.definitions import defs
 from data_loading.defs.ingestion import ocw_content_sensor
 from data_loading.defs.ingestion.assets import ocw_content_assets
 from data_loading.defs.ingestion.ocw_content_sensor import (
-    MAX_COURSES_PER_RUN,
-    OCW_CONTENT_SENSOR_NAME,
+    MAX_COURSES_PER_POLL,
+    POLL_INTERVAL_SECONDS,
+    SETTLE_SECONDS,
     courses_published_between,
     ocw_content_publish_sensor,
 )
-from data_loading.defs.ingestion.schedules import OCW_CONTENT_SCHEDULE_NAME
+from data_loading.defs.ingestion.schedules import (
+    OCW_CONTENT_SCHEDULE_NAME,
+    OCW_CONTENT_SENSOR_NAME,
+    ocw_content_sweep_due,
+)
 from ol_dlt.sources import ocw_content
 
 # The previous tick's window ended this long before the tick under test.
@@ -24,6 +30,13 @@ _SINCE_AGO = timedelta(minutes=10)
 @pytest.fixture
 def instance() -> dg.DagsterInstance:
     return dg.DagsterInstance.ephemeral()
+
+
+@pytest.fixture
+def persistent_instance() -> Iterator[dg.DagsterInstance]:
+    """Yield an instance on disk, which a schedule context needs."""
+    with dg.instance_for_test() as instance:
+        yield instance
 
 
 @pytest.fixture
@@ -120,8 +133,11 @@ def test_requested_run_config_is_valid_for_the_asset() -> None:
 def test_mass_rebuild_is_left_to_the_sweep(
     instance: dg.DagsterInstance, published: dict[str, datetime]
 ) -> None:
-    since = datetime.now(tz=UTC) - _SINCE_AGO
-    for number in range(1, MAX_COURSES_PER_RUN + 2):
+    # One poll interval's worth of window.
+    since = datetime.now(tz=UTC) - timedelta(
+        seconds=SETTLE_SECONDS + POLL_INTERVAL_SECONDS
+    )
+    for number in range(1, MAX_COURSES_PER_POLL + 2):
         published[f"course-{number}"] = since + timedelta(seconds=number)
 
     result = _tick(instance, since.isoformat())
@@ -131,6 +147,19 @@ def test_mass_rebuild_is_left_to_the_sweep(
     assert "rebuild" in str(result.skip_reason)
     assert result.cursor is not None
     assert datetime.fromisoformat(result.cursor) > since
+
+
+def test_window_held_open_by_a_long_load_is_not_taken_for_a_rebuild(
+    instance: dg.DagsterInstance, published: dict[str, datetime]
+) -> None:
+    since = datetime.now(tz=UTC) - timedelta(hours=2)
+    for number in range(1, MAX_COURSES_PER_POLL + 2):
+        published[f"course-{number}"] = since + timedelta(minutes=number)
+
+    (request,) = _tick(instance, since.isoformat()).run_requests or []
+
+    config = request.run_config["ops"][ocw_content_assets.op.name]["config"]
+    assert len(config["courses"]) == MAX_COURSES_PER_POLL + 1
 
 
 @pytest.mark.parametrize(
@@ -167,3 +196,51 @@ def test_sensor_is_registered_stopped() -> None:
     sensor = defs.get_sensor_def(OCW_CONTENT_SENSOR_NAME)
 
     assert sensor.default_status == dg.DefaultSensorStatus.STOPPED
+
+
+def _sweep_due(instance: dg.DagsterInstance, tick: datetime) -> bool:
+    context = dg.build_schedule_context(
+        instance=instance, scheduled_execution_time=tick
+    )
+    return ocw_content_sweep_due(context)
+
+
+def test_sweep_waits_for_a_scoped_load_and_runs_once_a_day(
+    persistent_instance: dg.DagsterInstance,
+) -> None:
+    instance = persistent_instance
+    # Runs are created at the real time, so the ticks are today's.
+    today = datetime.now(tz=UTC)
+    scoped = create_run_for_test(
+        instance,
+        job_name="__ASSET_JOB",
+        status=dg.DagsterRunStatus.STARTED,
+        tags={"dagster/sensor_name": OCW_CONTENT_SENSOR_NAME},
+    )
+
+    assert not _sweep_due(instance, today)
+
+    instance.report_run_failed(scoped)
+    assert _sweep_due(instance, today)
+    create_run_for_test(
+        instance,
+        job_name="__ASSET_JOB",
+        status=dg.DagsterRunStatus.SUCCESS,
+        tags={"dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME},
+    )
+    assert not _sweep_due(instance, today)
+    assert _sweep_due(instance, today + timedelta(days=1))
+
+
+def test_sweep_waits_for_the_previous_sweep(
+    persistent_instance: dg.DagsterInstance,
+) -> None:
+    instance = persistent_instance
+    create_run_for_test(
+        instance,
+        job_name="__ASSET_JOB",
+        status=dg.DagsterRunStatus.STARTED,
+        tags={"dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME},
+    )
+
+    assert not _sweep_due(instance, datetime.now(tz=UTC) + timedelta(days=1))

@@ -24,10 +24,10 @@ from data_loading.defs.ingestion.assets import (
     OcwContentLoadConfig,
     ocw_content_assets,
 )
-from data_loading.defs.ingestion.schedules import OCW_CONTENT_SCHEDULE_NAME
-from data_loading.defs.ingestion.sensor import IN_FLIGHT_RUN_STATUSES
-
-OCW_CONTENT_SENSOR_NAME = "ocw_content_publish_sensor"
+from data_loading.defs.ingestion.schedules import (
+    OCW_CONTENT_SENSOR_NAME,
+    ocw_content_run_in_flight,
+)
 
 # A tick costs one HEAD per course (2,603 prefixes on 2026-10-19), so polling
 # every five minutes is ~750,000 HEAD requests a day against the bucket.
@@ -39,11 +39,13 @@ POLL_INTERVAL_SECONDS = 5 * 60
 # 2026-10-16 to 2026-10-19.
 SETTLE_SECONDS = 2 * 60
 
-# More courses than this written in one tick is a mass rebuild (138 courses per
-# five minutes at the median during the 2026-10-14 one; the busiest day of
-# single publishes since had 30). Those rarely change what the source reads, so
-# they are left to the sweep, which checks every course anyway.
-MAX_COURSES_PER_RUN = 50
+# More courses than this written per poll interval is a mass rebuild (138
+# courses per five minutes at the median during the 2026-10-14 one; the busiest
+# day of single publishes since had 30). Those rarely change what the source
+# reads, so they are left to the sweep, which checks every course anyway. Per
+# interval rather than per tick: a tick that waited an hour on a running load
+# covers twelve intervals of ordinary publishes.
+MAX_COURSES_PER_POLL = 50
 
 
 def courses_published_between(
@@ -57,25 +59,6 @@ def courses_published_between(
     :returns: The slugs, sorted.
     """
     return sorted(slug for slug, at in published.items() if since < at <= until)
-
-
-def ocw_content_run_in_flight(instance: dg.DagsterInstance) -> bool:
-    """Tell whether a sweep or a scoped OCW content load has not finished.
-
-    Two loads at once would read their dlt state before either saved it, so one
-    would read a course the other already read, and both would commit to the
-    same Iceberg table.
-    """
-    return any(
-        instance.get_run_records(
-            dg.RunsFilter(tags=tags, statuses=list(IN_FLIGHT_RUN_STATUSES)),
-            limit=1,
-        )
-        for tags in (
-            {"dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME},
-            {"dagster/sensor_name": OCW_CONTENT_SENSOR_NAME},
-        )
-    )
 
 
 @dg.sensor(
@@ -98,7 +81,9 @@ def ocw_content_publish_sensor(
 
     The cursor is the end of the window the last tick covered. It does not
     move while a load is in flight, so the courses published meanwhile are
-    requested once it ends; the load skips any the sweep already read.
+    requested once it ends; the load skips any the sweep already read. It does
+    move once a run is requested, so the courses of a run that fails wait for
+    the next sweep.
     """
     until = datetime.now(tz=UTC) - timedelta(seconds=SETTLE_SECONDS)
     if context.cursor is None:
@@ -122,10 +107,11 @@ def ocw_content_publish_sensor(
             skip_reason=f"No course published between {since} and {until}.",
             cursor=cursor,
         )
-    if len(courses) > MAX_COURSES_PER_RUN:
+    intervals = round((until - since) / timedelta(seconds=POLL_INTERVAL_SECONDS))
+    if len(courses) > MAX_COURSES_PER_POLL * max(intervals, 1):
         context.log.warning(
-            "%s courses were written between %s and %s, more than a publish "
-            "writes; leaving them to the daily sweep.",
+            "%s courses were written between %s and %s, more than publishes "
+            "write; leaving them to the daily sweep.",
             len(courses),
             since,
             until,
