@@ -14,6 +14,7 @@ from ol_dlt import config
 from ol_dlt.sources import ocw_content
 
 _BUCKET = "ocw-test"
+_EPOCH = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 class FakeS3:
@@ -23,6 +24,7 @@ class FakeS3:
         self.objects = objects
         # Keys still listed that can no longer be read.
         self.vanished: set[str] = set()
+        self.modified: dict[str, datetime] = {}
 
     def ls(self, path: str, *, detail: bool = False) -> list[str]:  # noqa: ARG002
         prefix = path.removeprefix(f"{_BUCKET}/")
@@ -43,7 +45,11 @@ class FakeS3:
     def info(self, path: str) -> dict[str, Any]:
         key = path.removeprefix(f"{_BUCKET}/")
         if key in self.objects:
-            return {**self.find(path)[path], "type": "file"}
+            return {
+                **self.find(path)[path],
+                "type": "file",
+                "LastModified": self.modified.get(key, _EPOCH),
+            }
         if any(other.startswith(key) for other in self.objects):
             return {"type": "directory", "size": 0}
         raise FileNotFoundError(path)
@@ -415,15 +421,150 @@ def test_run_of_failures_is_probed_before_the_rest_of_the_course_is_tried(
 
 
 @pytest.mark.integration
-def test_named_courses_are_read_again_unchanged(
+def test_named_courses_are_read_again_unchanged_when_forced(
     test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
 ) -> None:
     _load()
 
-    rows = _load(courses=["b-course", "not-a-course"])
+    rows = _load(courses=["b-course", "not-a-course"], force=True)
 
     assert len(rows) == 9  # noqa: PLR2004
     assert fake_tika.calls == 3  # noqa: PLR2004
+
+
+def test_force_without_courses_is_refused() -> None:
+    with pytest.raises(ValueError, match="name them in courses"):
+        ocw_content.ocw_content_source(bucket=_BUCKET, force=True)
+
+
+def _resource_state() -> dict[str, Any]:
+    pipeline = config.pipeline_for("ocw", pipeline_name="ocw_content")
+    return pipeline.state["sources"]["ocw_content_ingest"]["resources"][
+        ocw_content.RAW_TABLE
+    ]
+
+
+@pytest.mark.integration
+def test_scoped_load_reads_a_named_course_once_and_the_sweep_skips_it(
+    test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
+) -> None:
+    _load()
+    bucket.objects["courses/a-course/pages/syllabus/data.json"] = b'{"title": "A"}'
+    bucket.objects["courses/b-course/pages/syllabus/data.json"] = b'{"title": "B"}'
+
+    rows = _load(courses=["a-course"])
+
+    assert len(rows) == 9  # noqa: PLR2004
+    assert fake_tika.calls == 3  # noqa: PLR2004
+    # Unchanged since, so a second publish notice reads nothing.
+    assert len(_load(courses=["a-course"])) == len(rows)
+    # The sweep reads only the course the scoped load was not given.
+    rows = _load()
+    assert len(rows) == 12  # noqa: PLR2004
+    newest = max(row["course_retrieved_at"] for row in rows)
+    assert {
+        row["course_slug"] for row in rows if row["course_retrieved_at"] == newest
+    } == {"b-course"}
+    assert fake_tika.calls == 4  # noqa: PLR2004
+    assert len(_load()) == len(rows)
+
+
+@pytest.mark.integration
+def test_scoped_load_keeps_the_sweep_resume_point(
+    test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
+) -> None:
+    _load(budget_bytes=1)
+    assert _resource_state()["resume_after"] == "a-course"
+
+    assert {row["course_slug"] for row in _load(courses=["b-course"])} == {
+        "a-course",
+        "b-course",
+    }
+
+    assert _resource_state()["resume_after"] == "a-course"
+    # The sweep resumes where it was and finds b-course already read.
+    assert len(_load(budget_bytes=1)) == 6  # noqa: PLR2004
+
+
+@pytest.mark.integration
+def test_scoped_load_never_unpublishes_a_course(
+    test_profile: Path,
+    bucket: FakeS3,
+    fake_tika: FakeTika,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """It has not seen the bucket, so the unpublish rules are the sweep's alone."""
+    monkeypatch.setattr(ocw_content, "MIN_COURSES_FOR_UNPUBLISH_GUARD", 2)
+    rows = _load()
+    for key in [key for key in bucket.objects if key.startswith("courses/b-course/")]:
+        del bucket.objects[key]
+    for key in [key for key in bucket.objects if key.endswith("data.json")]:
+        if key.startswith("courses/a-course/"):
+            del bucket.objects[key]
+    named = ["a-course", "b-course"]
+    recorded = dict(_resource_state()["course_versions"])
+
+    assert len(_load(courses=named)) == len(rows)
+
+    class Tomorrow(ocw_content.datetime):
+        @classmethod
+        def now(cls, tz: Any = None) -> Any:
+            return super().now(tz) + timedelta(days=1)
+
+    monkeypatch.setattr(ocw_content, "datetime", Tomorrow)
+    assert len(_load(courses=named)) == len(rows)
+    state = _resource_state()
+    assert state["course_versions"] == recorded
+    assert "unpublish_window" not in state
+    # Both gone at once trips the sweep's limit, which the scoped loads did
+    # not spend or set off.
+    with pytest.raises(PipelineStepFailed, match="Refusing to unpublish"):
+        _load()
+
+
+@pytest.mark.integration
+def test_scoped_load_leaves_an_empty_prefix_for_the_sweep_to_settle(
+    test_profile: Path,
+    bucket: FakeS3,
+    fake_tika: FakeTika,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows = _load()
+    for key in [key for key in bucket.objects if key.endswith("data.json")]:
+        if key.startswith("courses/a-course/"):
+            del bucket.objects[key]
+    # The sweep sees it empty once.
+    assert len(_load()) == len(rows)
+
+    class Tomorrow(ocw_content.datetime):
+        @classmethod
+        def now(cls, tz: Any = None) -> Any:
+            return super().now(tz) + timedelta(days=1)
+
+    monkeypatch.setattr(ocw_content, "datetime", Tomorrow)
+    # A scoped load a day later is not the second look.
+    assert len(_load(courses=["a-course"])) == len(rows)
+    # The sweep's own second look is.
+    rows = _load()
+    newest = max(row["course_retrieved_at"] for row in rows)
+    assert [
+        (row["course_slug"], row["content_kind"])
+        for row in rows
+        if row["course_retrieved_at"] == newest
+    ] == [("a-course", "unpublished")]
+
+
+def test_published_at_is_when_each_course_data_json_was_written(
+    bucket: FakeS3,
+) -> None:
+    published = datetime(2026, 10, 19, 18, 31, tzinfo=UTC)
+    bucket.modified["courses/b-course/data.json"] = published
+    bucket.objects["courses/c-empty/index.html"] = b"<html></html>"
+
+    assert ocw_content.published_at(bucket, _BUCKET) == {
+        "a-course": _EPOCH,
+        "b-course": published,
+    }
 
 
 @pytest.mark.integration
