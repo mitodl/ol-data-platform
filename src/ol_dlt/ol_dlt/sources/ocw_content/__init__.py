@@ -611,8 +611,9 @@ def ocw_content_source(  # noqa: PLR0913
         ``data.json``, is skipped and left to the sweep. Sweeps every course
         when None.
     :param budget_bytes: How many source bytes one load may read. A course is
-        never split, so a load can exceed it by one course. Ignored when
-        ``courses`` is given.
+        never split, so a load can exceed it by one course. A scoped load stops
+        there too, and the next one skips the courses it read. Ignored with
+        ``force``, which would read them again.
     :param table_format: ``native`` or ``iceberg``; defaults to the active
         profile's.
     :param force: Read the named ``courses`` whether or not they changed, e.g.
@@ -714,8 +715,9 @@ def ocw_content_source(  # noqa: PLR0913
                     else:
                         external_files.pop(slug, None)
                     spent += source_bytes
-                    if courses is None and spent >= budget_bytes:
-                        state["resume_after"] = slug
+                    if spent >= budget_bytes and not force:
+                        if courses is None:
+                            state["resume_after"] = slug
                         return
         finally:
             # Not waited for: when Tika is down, the calls in flight would each

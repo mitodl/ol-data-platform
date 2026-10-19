@@ -470,6 +470,22 @@ def test_scoped_load_reads_a_named_course_once_and_the_sweep_skips_it(
 
 
 @pytest.mark.integration
+def test_scoped_load_drains_a_named_set_a_budget_at_a_time(
+    test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
+) -> None:
+    named = ["a-course", "b-course"]
+
+    assert {row["course_slug"] for row in _load(courses=named, budget_bytes=1)} == {
+        "a-course"
+    }
+    rows = _load(courses=named, budget_bytes=1)
+    assert {row["course_slug"] for row in rows} == {"a-course", "b-course"}
+    # Drained: the next load reads nothing, and the sweep has no resume point.
+    assert len(_load(courses=named, budget_bytes=1)) == len(rows)
+    assert "resume_after" not in _resource_state()
+
+
+@pytest.mark.integration
 def test_scoped_load_keeps_the_sweep_resume_point(
     test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
 ) -> None:

@@ -396,14 +396,16 @@ class OcwContentLoadConfig(Config):
     )
 
 
-# A sweep: one load covers at most ocw_content.BUDGET_BYTES of course files, and
-# each load saves which courses it finished, so a run cut off mid-backlog resumes
+# One load covers at most ocw_content.BUDGET_BYTES of course files, and each
+# load saves which courses it finished, so a run cut off mid-backlog resumes
 # there. The first run extracts every course (~70,000 files through Tika);
 # later runs read only the courses whose objects changed.
 #
-# Scoped to `courses`, it is one load (a course is never split, so there is no
-# budget to drain), which is how ocw_content_publish_sensor loads a course soon
-# after it is published.
+# Run config `courses` scopes the run to those courses, read only if changed and
+# drained a budget at a time the same way. That is how
+# ocw_content_publish_sensor loads a course soon after it is published, and how
+# a named set is loaded from the launchpad:
+#   ops: {ocw_content_ingest: {config: {courses: [<slug>, ...]}}}
 @dlt_assets(
     dlt_source=ocw_content.build_source(),
     dlt_pipeline=ocw_content.ocw_content_pipeline,
@@ -416,19 +418,15 @@ def ocw_content_assets(
     config: OcwContentLoadConfig,
 ) -> Iterable[Any]:
     """Sweep the OCW live bucket, or load the courses named in the run config."""
-    if config.courses is None:
-        yield from drain(
-            context=context,
-            dlt=dlt,
-            build_source=ocw_content.build_source,
-            pipeline=ocw_content.ocw_content_pipeline,
+    if config.courses is not None:
+        context.log.info(
+            "Loading %s named OCW courses: %s", len(config.courses), config.courses
         )
-        return
-    context.log.info("Loading %s OCW courses: %s", len(config.courses), config.courses)
-    yield from dlt.run(
+    yield from drain(
         context=context,
-        dlt_source=ocw_content.build_source(config.courses),
-        loader_file_format="parquet",
+        dlt=dlt,
+        build_source=partial(ocw_content.build_source, config.courses),
+        pipeline=ocw_content.ocw_content_pipeline,
     )
 
 
