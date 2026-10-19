@@ -354,8 +354,7 @@ unit_tests:
       course_position_in_program: 2}
   - input: ref('int__edxorg__mitx_program_courses')
     rows:
-    - {program_uuid: "edxorg-program", program_name: "Other Program",
-       course_readable_id: "MITx/OTHER+1"}
+    - {program_uuid: "edxorg-program", program_name: "Other Program", course_readable_id: "MITx/OTHER+1"}
   - input: ref('int__mitx__programs')
     rows: []
   - input: ref('int__mitx__courses')
