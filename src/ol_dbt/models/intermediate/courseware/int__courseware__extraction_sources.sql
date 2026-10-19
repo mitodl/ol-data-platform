@@ -508,15 +508,15 @@ with content as (
 , ocw_description_hrefs as (
     select
         ocw_courses.courserun_readable_id
-        , substr(content.coursecontent_s3_key, 1, length(content.coursecontent_s3_key) - length('data.json'))
+        , substr(ocw_content.coursecontent_s3_key, 1, length(ocw_content.coursecontent_s3_key) - length('data.json'))
             as resource_key
-        , {{ regexp_extract_all('content.coursecontent_body', ocw_resource_href, 1) }} as hrefs
-    from {{ ref('stg__ocw__s3__course_content') }} as content
+        , {{ regexp_extract_all('ocw_content.coursecontent_body', ocw_resource_href, 1) }} as hrefs
+    from {{ ref('stg__ocw__s3__course_content') }} as ocw_content
     inner join ocw_courses
-        on content.course_slug = ocw_courses.course_slug
+        on ocw_content.course_slug = ocw_courses.course_slug
     where
-        content.coursecontent_kind = 'resource'
-        and {{ array_length(regexp_extract_all('content.coursecontent_body', ocw_resource_href, 1)) }} > 0
+        ocw_content.coursecontent_kind = 'resource'
+        and {{ array_length(regexp_extract_all('ocw_content.coursecontent_body', ocw_resource_href, 1)) }} > 0
 )
 
 , ocw_description_links as (
