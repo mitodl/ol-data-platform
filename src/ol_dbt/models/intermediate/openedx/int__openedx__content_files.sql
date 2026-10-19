@@ -6,7 +6,7 @@
   static files.
 
   Learn skips any file whose extracted text is empty, and the same rule applies
-  here, to block text that approximates Tika's (see block_files). That is why an
+  here, to block text read the way Tika reads it (see block_files). That is why an
   OLX pointer file (<html filename=.../>) or a vertical holding only inline html
   never reaches Learn. A file whose extraction failed keeps its row, with null
   content and extraction_status "failed", so a consumer can tell it apart from a
@@ -57,33 +57,31 @@ with blocks as (
         , coursestructure_xml_source_system as source_system
         , coursestructure_xml_block_path as source_path
         , '.xml' as file_extension
-        -- An approximation of Tika's text for XML. Its XML parser carries
-        -- attribute values as well as text nodes, which is why Learn keeps every
-        -- chapter and sequential although their XML has no text of its own. A
-        -- block with an <html> element in it is read as HTML instead, which drops
-        -- the attributes: Learn has no vertical with inline html unless it also
-        -- has text, and titles those it has from the file name. CDATA markers go
-        -- first so a script body inside one is not cut at its first ">". The two
-        -- parts are joined as an array because Trino's concat() fails on a result
-        -- over 1 MiB ("Concatenated string is too large") and some blocks carry
-        -- megabytes of attribute text (inline transcripts, embedded images).
-        , trim({{ regexp_replace_all(
-            html_unescape(
-                array_join(
-                    array_of([
-                        "case when not has_html then "
-                        ~ array_join(regexp_extract_all('coursestructure_xml_raw_xml', "'=\"([^\"]*)\"'", 1), ' ')
-                        ~ " else '' end"
-                        , regexp_replace_all(
+        -- Learn's text for an XML file is what Tika returns for it, and Tika goes
+        -- by the bytes, not by the XML Content-Type Learn sends. It reads a file
+        -- with an <html> element in it as HTML and returns its text nodes (empty
+        -- for an OLX pointer such as <html url_name=.../>, which is why Learn has
+        -- none of them), and any other XML file as plain text, unchanged. So a
+        -- block's content is its XML as written. raw_xml is ElementTree's
+        -- re-serialization of it, which writes an empty element as "<a />" and a
+        -- tab in an attribute as "&#09;" where the export has "<a/>" and "&#9;";
+        -- undoing the two makes the text Learn's for every non-HTML XML file in
+        -- the three runs compared on 2026-10-19 (md5 equal to Learn's checksum).
+        -- The HTML text is an approximation: CDATA markers go first so a script
+        -- body inside one is not cut at its first ">".
+        , trim(case
+            when has_html
+                then {{ regexp_replace_all(
+                    html_unescape(
+                        regexp_replace_all(
                             "replace(replace(coursestructure_xml_raw_xml, '<![CDATA[', ' '), ']]>', ' ')"
                             , "'<[^>]*>'", "' '"
                         )
-                    ])
-                    , ' '
-                )
-            )
-            , "'\\s+'", "' '"
-        ) }}) as content
+                    )
+                    , "'\\s+'", "' '"
+                ) }}
+            else replace(replace(coursestructure_xml_raw_xml, ' />', '/>'), '&#09;', '&#9;')
+        end) as content
         , 'extracted' as extraction_status
         , case when not has_html then coursestructure_xml_block_display_name end as xml_display_name
         , cast(coursestructure_xml_retrieved_at as varchar) as extracted_at

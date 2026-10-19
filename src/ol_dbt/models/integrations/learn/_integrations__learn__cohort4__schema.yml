@@ -53,8 +53,9 @@ models:
   - name: file_type
     description: str, always null; Learn's Open edX ETL sets none.
   - name: content
-    description: str, the file's extracted text; null when extraction failed. Block
-      text approximates Tika's (attribute values and text nodes).
+    description: str, the file's extracted text; null when extraction failed. An XML
+      block's text is its XML as exported, which is what Tika returns for it, or for
+      a block with inline html, its text nodes (an approximation of Tika's HTML text).
   - name: content_title
     description: str, always ''. Learn reads Tika's metadata title into this field,
       but its production content files have '' throughout, PDFs with an embedded title
