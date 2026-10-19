@@ -32,10 +32,10 @@
       context    the course description and the syllabus pages, with what they link
       materials  documents no page links
 
-    A course taught through three or more page groups (an OCW Scholar course's weeks)
-    does not read its textbook section (Online Textbook, Open Textbook): the weeks teach,
-    and the book is reference reading that outweighs them (8.01SC's is nine tenths of
-    its text). What only the textbook links is not read and does not land in materials.
+    A course taught through three or more top-level sections that hold child pages (an
+    OCW Scholar course's weeks) does not read its textbook section (Online Textbook,
+    Open Textbook): the weeks teach, and the book is reference reading that outweighs
+    them (8.01SC's is nine tenths of its text). What only the textbook links is not read and does not land in materials.
     A course that is its textbook (Calculus Open Textbook) reads it as units.
 
     A link to a resource also links what that resource's description links, right
@@ -423,6 +423,8 @@ with content as (
     group by parent_key
 )
 
+-- counted by section: RES.8-005's one Problem Solving Videos section has 11 child
+-- pages with children of their own
 , ocw_taught_by_groups as (
     select files.courserun_readable_id
     from ocw_files as files
@@ -433,7 +435,7 @@ with content as (
         and files.section not in ('{{ (ocw_context_sections + ocw_skipped_sections) | join("', '") }}')
         and not {{ regexp_like('files.section', ocw_textbook_section) }}
     group by files.courserun_readable_id
-    having count(*) >= 3
+    having count(distinct files.section) >= 3
 )
 
 , ocw_pages as (

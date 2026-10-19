@@ -522,6 +522,63 @@ unit_tests:
     - {scope_id: courses/c2/pages/open-textbook/, source_ref: courses/c2/pages/open-textbook/}
     - {scope_id: courses/c2/pages/open-textbook/, source_ref: courses/c2/resources/chapter1/}
 
+- name: test_int__courseware__extraction_sources_counts_ocw_groups_by_section
+  description: >
+    c1's three page groups are all inside its Lecture Notes section, so it is not
+    taught by groups and reads its Online Textbook as a unit.
+  model: int__courseware__extraction_sources
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
+        the course.</p>}
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/,
+      content_type: page, title: Lecture Notes, file_extension: null, content_tags: null,
+      content: <p>Notes.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-1/,
+      content_type: page, title: Part 1, file_extension: null, content_tags: null,
+      content: <p>Kinematics.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-1/lesson-1/,
+      content_type: page, title: Lesson 1, file_extension: null, content_tags: null,
+      content: <p>Position.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-2/,
+      content_type: page, title: Part 2, file_extension: null, content_tags: null,
+      content: <p>Forces.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-2/lesson-2/,
+      content_type: page, title: Lesson 2, file_extension: null, content_tags: null,
+      content: <p>Newton.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/online-textbook/,
+      content_type: page, title: Online Textbook, file_extension: null, content_tags: null,
+      content: '<p>The textbook.</p><a href="/courses/c1/resources/chapter1/">Chapter
+        1</a>'}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/chapter1/,
+      content_type: pdf, title: Chapter 1, file_extension: .pdf, content_tags: null,
+      content: Chapter 1. Kinematics in one dimension.}
+  expect:
+    rows:
+    - {scope_id: context, source_ref: courses/c1/}
+    - {scope_id: courses/c1/pages/lecture-notes/, source_ref: courses/c1/pages/lecture-notes/}
+    - {scope_id: courses/c1/pages/lecture-notes/part-1/, source_ref: courses/c1/pages/lecture-notes/part-1/}
+    - {scope_id: courses/c1/pages/lecture-notes/part-1/, source_ref: courses/c1/pages/lecture-notes/part-1/lesson-1/}
+    - {scope_id: courses/c1/pages/lecture-notes/part-2/, source_ref: courses/c1/pages/lecture-notes/part-2/}
+    - {scope_id: courses/c1/pages/lecture-notes/part-2/, source_ref: courses/c1/pages/lecture-notes/part-2/lesson-2/}
+    - {scope_id: courses/c1/pages/online-textbook/, source_ref: courses/c1/pages/online-textbook/}
+    - {scope_id: courses/c1/pages/online-textbook/, source_ref: courses/c1/resources/chapter1/}
+
 - name: test_int__courseware__extraction_sources_places_ocw_problem_sets_at_release
   description: >
     The calendar's session 2 row says "Problem set 1 out", so ps1, which only the
