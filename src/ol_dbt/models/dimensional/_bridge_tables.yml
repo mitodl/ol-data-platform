@@ -328,12 +328,13 @@ models:
       Null for cross-platform links.
 
 unit_tests:
-- name: test_bridge_program_course_electives_are_not_required
+- name: test_bridge_program_course_memberships
   description: >
     A course in an elective set is one option among several, so is_required
     is false for it on MITx Online and MicroMasters and true for core courses.
     xPRO has no elective sets, so every xPRO program course is required. A
     MicroMasters course in two elective sets of one program is one bridge row.
+    Other edX.org MITx program memberships are retained from the program-course API.
   model: bridge_program_course
   given:
   - input: ref('int__mitxonline__program_requirements')
@@ -351,6 +352,15 @@ unit_tests:
       course_position_in_program: 2}
     - {program_id: 3, course_id: 31, electiveset_id: 8, programrequirement_type: Elective,
       course_position_in_program: 2}
+  - input: ref('int__edxorg__mitx_program_courses')
+    rows:
+    - {program_uuid: "edxorg-program", program_name: "Other Program",
+       course_readable_id: "MITx/OTHER+1"}
+  - input: ref('int__mitx__programs')
+    rows: []
+  - input: ref('int__mitx__courses')
+    rows:
+    - {course_readable_id: "course-v1:MITxT+OTHER+1"}
   - input: ref('stg__micromasters__app__postgres__courses_course')
     rows:
     - {course_id: 30, course_edx_key: "MITx+MM.1"}
@@ -360,6 +370,7 @@ unit_tests:
     - {program_pk: p1, source_id: "1", platform_code: mitxonline}
     - {program_pk: p2, source_id: "2", platform_code: mitxpro}
     - {program_pk: p3, source_id: "3", platform_code: micromasters}
+    - {program_pk: p4, source_id: "edxorg-program", platform_code: edxorg}
   - input: ref('dim_course')
     rows:
     - {course_pk: c10, source_id: 10, primary_platform: mitxonline, is_current: true}
@@ -369,6 +380,8 @@ unit_tests:
       is_current: true}
     - {course_pk: c31, course_readable_id: "MITx+MM.2", primary_platform: edxorg,
       is_current: true}
+    - {course_pk: c40, course_readable_id: "course-v1:MITxT+OTHER+1", primary_platform: edxorg,
+      is_current: true}
   expect:
     rows:
     - {program_fk: p1, course_fk: c10, is_required: true}
@@ -376,3 +389,4 @@ unit_tests:
     - {program_fk: p2, course_fk: c20, is_required: true}
     - {program_fk: p3, course_fk: c30, is_required: true}
     - {program_fk: p3, course_fk: c31, is_required: false}
+    - {program_fk: p4, course_fk: c40, is_required: true}
