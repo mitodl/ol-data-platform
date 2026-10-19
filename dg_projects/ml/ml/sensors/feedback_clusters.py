@@ -1,13 +1,16 @@
 import polars as pl
 from dagster import (
+    DagsterRunStatus,
     DefaultSensorStatus,
     RunRequest,
+    RunsFilter,
     SensorEvaluationContext,
     SkipReason,
     sensor,
 )
 from ml.assets.feedback_clusters import database_name as cluster_database_name
 from ml.lib.cluster import (
+    AUTOMATED_RUN_CONFIG,
     DEFAULT_FEEDBACK_SINCE,
     DEFAULT_PLATFORMS,
     filter_conversation_scope,
@@ -26,13 +29,28 @@ from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
     minimum_interval_seconds=3600,
     default_status=DefaultSensorStatus.STOPPED,
     description=(
-        "Triggers an incremental run of feedback_clusters early when the embedded "
-        "corpus has grown enough since the live run, before "
-        "feedback_clusters_weekly_schedule. Only checks corpus growth -- an "
-        "unplaced-share trigger would also need feedback_cluster_membership."
+        "Starts an incremental run of feedback_clusters, new themes included, when "
+        "the embedded corpus has grown enough since the last completed run. Only "
+        "checks corpus growth -- an unplaced-share trigger would also need "
+        "feedback_cluster_membership."
     ),
 )
-def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
+def feedback_clusters_growth_sensor(context: SensorEvaluationContext):
+    # The baseline counts only completed runs, so a run longer than the sensor
+    # interval would otherwise be started again from the same base
+    if context.instance.get_run_records(
+        filters=RunsFilter(
+            job_name="feedback_clusters_job",
+            statuses=[
+                DagsterRunStatus.QUEUED,
+                DagsterRunStatus.NOT_STARTED,
+                DagsterRunStatus.STARTING,
+                DagsterRunStatus.STARTED,
+            ],
+        ),
+        limit=1,
+    ):
+        return SkipReason("A feedback_clusters_job run is already queued or running")
     catalog = get_glue_catalog()
     if not table_exists(catalog, f"{cluster_database_name}.feedback_embeddings"):
         return SkipReason("feedback_embeddings hasn't materialized yet")
@@ -143,7 +161,7 @@ def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):
         embedding_count, last_completed_total_conversations
     ):
         return RunRequest(
-            run_config={"ops": {"feedback_clusters": {"config": {"is_promoted": True}}}}
+            run_config={"ops": {"feedback_clusters": {"config": AUTOMATED_RUN_CONFIG}}}
         )
     return SkipReason(
         "Corpus growth since the last completed run is below the trigger threshold"

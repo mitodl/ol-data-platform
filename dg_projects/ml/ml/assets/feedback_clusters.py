@@ -137,11 +137,12 @@ class FeedbackClustersConfig(Config):
     add_new_clusters: bool = Field(
         default=False,
         description=(
-            "When not a full refresh, also create clusters for new common themes. "
-            "Run it with is_promoted false and promote the run after a review. "
-            "Turn off feedback_clusters_schedule and feedback_clusters_growth_sensor "
-            "during the review: identity rejects this run if another run goes live "
-            "first. Ignored with full_refresh, which builds every cluster from scratch."
+            "When not a full refresh, also create clusters for new common themes and "
+            "move noise groups that sit close to a cluster into it. The growth sensor "
+            "sets it. For a manual run held for review (is_promoted false), turn off "
+            "feedback_clusters_growth_sensor: identity rejects the run if another run "
+            "goes live first. Ignored with full_refresh, which builds every cluster "
+            "from scratch."
         ),
     )
     sample_limit: int | None = Field(
@@ -232,8 +233,8 @@ class FeedbackClustersConfig(Config):
         description=(
             "Whether feedback_cluster_identity may auto-select this run into "
             "live cluster_membership. Defaults false -- set true only for the "
-            "production launcher (feedback_clusters_weekly_schedule/"
-            "feedback_clusters_growth_sensor); a manual run (e.g. a bake-off, "
+            "production launcher (feedback_clusters_growth_sensor); a manual "
+            "run (e.g. a bake-off, "
             "#2543, or hyperparameter sweep) should leave this unset."
         ),
     )
@@ -251,7 +252,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v7",
+            code_version="feedback_clusters_v8",
         ),
         "feedback_cluster_candidate": AssetOut(
             key=AssetKey(["intermediate", "feedback_cluster_candidate"]),
@@ -261,7 +262,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v7",
+            code_version="feedback_clusters_v8",
             # Not required: a failed run writes feedback_cluster_run with no candidates.
             is_required=False,
         ),
@@ -278,19 +279,19 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
     -- whether feedback_cluster_identity may select it); one row per clustered
     conversation lands in
     feedback_cluster_candidate. Both are append-only:
-    every run gets its own cluster_run_id. Scheduled/triggered (see
-    feedback_clusters_schedule/feedback_clusters_growth_sensor in definitions.py),
-    not chained on every feedback_embeddings refresh -- a run is
-    expensive relative to how often new conversations show up, and
-    feedback_cluster_assignment (incremental placement) handles those between
-    runs. feedback_cluster_identity matches this run's clusters onto stable
-    cluster_keys. A promoted incremental run goes live without a review; a
-    full_refresh or add_new_clusters run waits for one (see is_promoted).
+    every run gets its own cluster_run_id. Triggered by
+    feedback_clusters_growth_sensor (see definitions.py), not chained on every
+    feedback_embeddings refresh -- a run is expensive relative to how often new
+    conversations show up, and feedback_cluster_assignment (incremental
+    placement) handles those between runs. feedback_cluster_identity matches this
+    run's clusters onto stable cluster_keys. A promoted incremental run goes live
+    without a review, new themes included; a full_refresh run waits for one (see
+    is_promoted).
     """
-    if config.is_promoted and (config.full_refresh or config.add_new_clusters):
+    if config.is_promoted and config.full_refresh:
         # The review gate: identity would otherwise take the run live at once
         msg = (
-            "full_refresh and add_new_clusters change the categories, so run them "
+            "full_refresh can split, merge, and relabel every category, so run it "
             "with is_promoted false and promote the run after a review."
         )
         raise permanent_failure(msg)
@@ -436,7 +437,8 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
 
     context.log.info(
         "Cluster run %s (%s): %d conversations, %d clusters, %d noise, "
-        "%s noise placed, %s new clusters, silhouette=%s",
+        "%s noise placed, %s new clusters (%s more held by the cap), "
+        "%s noise groups placed, silhouette=%s",
         run_metadata["cluster_run_id"],
         run_metadata["run_type"],
         run_metadata["total_conversations"],
@@ -444,6 +446,8 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
         run_metadata["noise_count"],
         run_metadata.get("placed_noise_count"),
         run_metadata.get("new_cluster_count"),
+        run_metadata.get("capped_new_cluster_count"),
+        run_metadata.get("placed_group_count"),
         run_metadata["silhouette_score"],
     )
 
