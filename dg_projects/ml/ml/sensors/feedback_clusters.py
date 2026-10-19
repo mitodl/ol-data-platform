@@ -27,10 +27,10 @@ from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
     minimum_interval_seconds=3600,
     default_status=DefaultSensorStatus.STOPPED,
     description=(
-        "Triggers an incremental run of feedback_clusters early when the embedded "
-        "corpus has grown enough since the live run, before "
-        "feedback_clusters_weekly_schedule. Only checks corpus growth -- an "
-        "unplaced-share trigger would also need feedback_cluster_membership."
+        "Starts an incremental run of feedback_clusters, new themes included, when "
+        "the embedded corpus has grown enough since the last completed run. Only "
+        "checks corpus growth -- an unplaced-share trigger would also need "
+        "feedback_cluster_membership."
     ),
 )
 def feedback_clusters_growth_sensor(_context: SensorEvaluationContext):

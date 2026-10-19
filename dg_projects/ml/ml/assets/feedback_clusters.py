@@ -138,8 +138,8 @@ class FeedbackClustersConfig(Config):
         default=False,
         description=(
             "When not a full refresh, also create clusters for new common themes and "
-            "move noise groups that sit close to a cluster into it. The schedule and "
-            "growth sensor set it. Ignored with full_refresh, which builds every "
+            "move noise groups that sit close to a cluster into it. The growth sensor "
+            "sets it. Ignored with full_refresh, which builds every "
             "cluster from scratch."
         ),
     )
@@ -231,8 +231,8 @@ class FeedbackClustersConfig(Config):
         description=(
             "Whether feedback_cluster_identity may auto-select this run into "
             "live cluster_membership. Defaults false -- set true only for the "
-            "production launcher (feedback_clusters_weekly_schedule/"
-            "feedback_clusters_growth_sensor); a manual run (e.g. a bake-off, "
+            "production launcher (feedback_clusters_growth_sensor); a manual "
+            "run (e.g. a bake-off, "
             "#2543, or hyperparameter sweep) should leave this unset."
         ),
     )
@@ -277,12 +277,11 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
     -- whether feedback_cluster_identity may select it); one row per clustered
     conversation lands in
     feedback_cluster_candidate. Both are append-only:
-    every run gets its own cluster_run_id. Scheduled/triggered (see
-    feedback_clusters_schedule/feedback_clusters_growth_sensor in definitions.py),
-    not chained on every feedback_embeddings refresh -- a run is
-    expensive relative to how often new conversations show up, and
-    feedback_cluster_assignment (incremental placement) handles those between
-    runs. feedback_cluster_identity matches this run's clusters onto stable
+    every run gets its own cluster_run_id. Triggered by
+    feedback_clusters_growth_sensor (see definitions.py), not chained on every
+    feedback_embeddings refresh -- a run is expensive relative to how often new
+    conversations show up, and feedback_cluster_assignment (incremental
+    placement) handles those between runs. feedback_cluster_identity matches this run's clusters onto stable
     cluster_keys. A promoted incremental run goes live without a review, new
     themes included; a full_refresh run waits for one (see is_promoted).
     """

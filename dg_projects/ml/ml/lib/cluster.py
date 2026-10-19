@@ -60,20 +60,20 @@ CLUSTER_RUN_SCHEMA = {
 # embedding_dim/embedding_input_filter, which a same-model evaluation run (e.g. a
 # min_cluster_size/UMAP sweep) can share with a real production run. Fails closed:
 # a manual/ad hoc launch that omits this is an evaluation run by default; only the
-# weekly schedule and growth sensor explicitly opt into True.
+# growth sensor explicitly opts into True.
 DEFAULT_IS_PROMOTED = False
 
-# What the weekly schedule and growth sensor launch: promoted incremental runs that
-# also add new themes, so a new topic gets its own category without a manual run.
+# What the growth sensor launches: promoted incremental runs that also add new
+# themes, so a new topic gets its own category without a manual run.
 AUTOMATED_RUN_CONFIG = {"is_promoted": True, "add_new_clusters": True}
 
-# The default for FeedbackClustersConfig.feedback_since, and what the weekly schedule
-# and growth sensor use, since they don't pass it. Unset means the full history.
+# The default for FeedbackClustersConfig.feedback_since, and what the growth sensor
+# uses, since it doesn't pass it. Unset means the full history.
 DEFAULT_FEEDBACK_SINCE = os.environ.get("FEEDBACK_SINCE") or None
 
 
 # The default platforms for FeedbackSummariesConfig and FeedbackClustersConfig, and
-# what the weekly schedule and growth sensor use, since they don't pass it.
+# what the growth sensor uses, since it doesn't pass it.
 DEFAULT_PLATFORMS: list[str] | None = ["mitlearn"]
 
 
@@ -257,12 +257,11 @@ def should_trigger_early_recluster(
     last_completed_run_total_conversations: int | None,
     growth_trigger: int = CORPUS_GROWTH_TRIGGER,
 ) -> bool:
-    """Decide whether the corpus has grown enough to recluster before the cron schedule.
+    """Decide whether the corpus has grown enough to start a cluster run.
 
     last_completed_run_total_conversations=None means no completed run exists yet
     (feedback_cluster_run doesn't exist, or has never recorded run_status='completed')
-    -- always trigger once there's anything to cluster, rather than waiting for the
-    cron schedule's first tick.
+    -- always trigger once there's anything to cluster.
     """
     if last_completed_run_total_conversations is None:
         return current_embedding_count > 0
@@ -667,7 +666,7 @@ def extend_clusters(  # noqa: PLR0913 -- same settings as cluster_embeddings
     add_new_clusters, also add new themes (cluster_new_themes).
 
     A full recluster reshuffles many clusters even when the data barely changes,
-    so the scheduled runs use this instead. Every conversation in
+    so the growth sensor's runs use this instead. Every conversation in
     cluster_key_by_pk (its live, active cluster_key) keeps that key; the rest are
     noise. Each candidate row carries the
     cluster_key it keeps, which feedback_cluster_identity uses in place of
