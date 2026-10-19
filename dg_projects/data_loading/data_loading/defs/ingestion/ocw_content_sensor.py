@@ -25,6 +25,7 @@ from data_loading.defs.ingestion.assets import (
     ocw_content_assets,
 )
 from data_loading.defs.ingestion.schedules import (
+    OCW_CONTENT_RUN_TAGS,
     OCW_CONTENT_SENSOR_NAME,
     ocw_content_run_in_flight,
 )
@@ -127,6 +128,7 @@ def ocw_content_publish_sensor(
         run_requests=[
             dg.RunRequest(
                 run_key=f"{OCW_CONTENT_SENSOR_NAME}:{cursor}",
+                tags=OCW_CONTENT_RUN_TAGS,
                 run_config=dg.RunConfig(
                     ops={
                         ocw_content_assets.op.name: OcwContentLoadConfig(

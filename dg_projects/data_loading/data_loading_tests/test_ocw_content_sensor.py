@@ -17,6 +17,7 @@ from data_loading.defs.ingestion.ocw_content_sensor import (
     ocw_content_publish_sensor,
 )
 from data_loading.defs.ingestion.schedules import (
+    OCW_CONTENT_RUN_TAGS,
     OCW_CONTENT_SCHEDULE_NAME,
     OCW_CONTENT_SENSOR_NAME,
     ocw_content_sweep_due,
@@ -165,8 +166,10 @@ def test_window_held_open_by_a_long_load_is_not_taken_for_a_rebuild(
 @pytest.mark.parametrize(
     "tags",
     [
-        {"dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME},
-        {"dagster/sensor_name": OCW_CONTENT_SENSOR_NAME},
+        {"dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME, **OCW_CONTENT_RUN_TAGS},
+        {"dagster/sensor_name": OCW_CONTENT_SENSOR_NAME, **OCW_CONTENT_RUN_TAGS},
+        # A load started from the launchpad with the tag.
+        OCW_CONTENT_RUN_TAGS,
     ],
 )
 def test_waits_while_a_load_is_in_flight(
@@ -192,6 +195,31 @@ def test_waits_while_a_load_is_in_flight(
     }
 
 
+def test_scoped_loads_and_the_sweep_carry_the_queue_tag(
+    instance: dg.DagsterInstance, published: dict[str, datetime]
+) -> None:
+    since = datetime.now(tz=UTC) - _SINCE_AGO
+    published["a-course"] = since + timedelta(minutes=1)
+
+    (request,) = _tick(instance, since.isoformat()).run_requests or []
+
+    assert request.tags.items() >= OCW_CONTENT_RUN_TAGS.items()
+    schedule = defs.get_schedule_def(OCW_CONTENT_SCHEDULE_NAME)
+    assert schedule.tags.items() >= OCW_CONTENT_RUN_TAGS.items()
+
+
+def test_a_run_without_the_tag_is_not_waited_for(
+    instance: dg.DagsterInstance, published: dict[str, datetime]
+) -> None:
+    since = datetime.now(tz=UTC) - _SINCE_AGO
+    published["a-course"] = since + timedelta(minutes=1)
+    create_run_for_test(
+        instance, job_name="__ASSET_JOB", status=dg.DagsterRunStatus.STARTED
+    )
+
+    assert _tick(instance, since.isoformat()).run_requests
+
+
 def test_sensor_is_registered_stopped() -> None:
     sensor = defs.get_sensor_def(OCW_CONTENT_SENSOR_NAME)
 
@@ -215,7 +243,7 @@ def test_sweep_waits_for_a_scoped_load_and_runs_once_a_day(
         instance,
         job_name="__ASSET_JOB",
         status=dg.DagsterRunStatus.STARTED,
-        tags={"dagster/sensor_name": OCW_CONTENT_SENSOR_NAME},
+        tags={"dagster/sensor_name": OCW_CONTENT_SENSOR_NAME, **OCW_CONTENT_RUN_TAGS},
     )
 
     assert not _sweep_due(instance, today)
@@ -226,7 +254,10 @@ def test_sweep_waits_for_a_scoped_load_and_runs_once_a_day(
         instance,
         job_name="__ASSET_JOB",
         status=dg.DagsterRunStatus.SUCCESS,
-        tags={"dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME},
+        tags={
+            "dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME,
+            **OCW_CONTENT_RUN_TAGS,
+        },
     )
     assert not _sweep_due(instance, today)
     assert _sweep_due(instance, today + timedelta(days=1))
@@ -240,7 +271,10 @@ def test_sweep_waits_for_the_previous_sweep(
         instance,
         job_name="__ASSET_JOB",
         status=dg.DagsterRunStatus.STARTED,
-        tags={"dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME},
+        tags={
+            "dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME,
+            **OCW_CONTENT_RUN_TAGS,
+        },
     )
 
     assert not _sweep_due(instance, datetime.now(tz=UTC) + timedelta(days=1))

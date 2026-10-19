@@ -250,6 +250,12 @@ course_xml_blocks_ingest_schedule = dg.ScheduleDefinition(
 OCW_CONTENT_SCHEDULE_NAME = "ocw_content_ingest_daily_schedule"
 # Defined in ocw_content_sensor, named here so the schedule can wait for its runs.
 OCW_CONTENT_SENSOR_NAME = "ocw_content_publish_sensor"
+# Carried by the sweep and by every scoped load. The run coordinator's
+# tag_concurrency_limits in ol-infrastructure (dagster_instance.yaml) caps runs
+# with this key at one, so a load requested while another is starting waits in
+# the queue. The in-flight checks below only keep the sensor and schedule from
+# requesting runs that would sit there.
+OCW_CONTENT_RUN_TAGS = {"ocw/content_load": "true"}
 
 
 def ocw_content_run_in_flight(instance: dg.DagsterInstance) -> bool:
@@ -260,16 +266,15 @@ def ocw_content_run_in_flight(instance: dg.DagsterInstance) -> bool:
     other recorded: the sweep's resume point,
     the prefixes it saw empty, the gone courses it unpublished (which the next
     sweep would then unpublish and count against the limit again). A run
-    started by hand carries neither tag and is not seen here.
+    started by hand is seen, and queued behind the others, only if it is
+    launched with ``OCW_CONTENT_RUN_TAGS``.
     """
-    return any(
+    return bool(
         instance.get_run_records(
-            dg.RunsFilter(tags=tags, statuses=list(IN_FLIGHT_RUN_STATUSES)),
+            dg.RunsFilter(
+                tags=OCW_CONTENT_RUN_TAGS, statuses=list(IN_FLIGHT_RUN_STATUSES)
+            ),
             limit=1,
-        )
-        for tags in (
-            {"dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME},
-            {"dagster/sensor_name": OCW_CONTENT_SENSOR_NAME},
         )
     )
 
@@ -310,6 +315,7 @@ ocw_content_ingest_schedule = dg.ScheduleDefinition(
     cron_schedule="35 4-9 * * *",
     execution_timezone="Etc/UTC",
     should_execute=ocw_content_sweep_due,
+    tags=OCW_CONTENT_RUN_TAGS,
     default_status=(
         dg.DefaultScheduleStatus.RUNNING
         if DAGSTER_ENV == "production"
