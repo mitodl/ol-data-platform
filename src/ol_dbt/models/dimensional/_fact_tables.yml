@@ -1823,7 +1823,8 @@ unit_tests:
     Residential grades are in tfact_grade. The user resolves through
     dim_user.residential_openedx_user_id, the run through dim_course_run on the
     residential platform, and a non-empty letter grade means passed. Of a learner's
-    two grades for one run, only the newest created is kept.
+    two grades for one run, only the newest created is kept, and its grade_id comes
+    from the learner and run, not the Open edX id.
   model: tfact_grade
   overrides:
     macros:
@@ -1863,13 +1864,36 @@ unit_tests:
     rows:
     - {platform_pk: "PLATFORM_RESIDENTIAL", platform_readable_id: "residential"}
   expect:
+    # grade_id is md5 of "<user_id>-<courserun_readable_id>", so grades 10 and 11 share it
+    # and an incremental run overwrites the replaced grade.
     rows:
-    - {user_fk: "USER_RES_555", courserun_fk: "RUN_6002", platform_fk: "PLATFORM_RESIDENTIAL",
-      platform: "residential", grade_value: 0.9, is_passing: true, letter_grade: "A"}
-    - {user_fk: "USER_RES_555", courserun_fk: null, platform_fk: "PLATFORM_RESIDENTIAL",
-      platform: "residential", grade_value: 0.2, is_passing: false, letter_grade: ""}
-    - {user_fk: null, courserun_fk: "RUN_6002", platform_fk: "PLATFORM_RESIDENTIAL",
-      platform: "residential", grade_value: 0.0, is_passing: false, letter_grade: null}
+    - grade_id: "86b3d5926230705d8dce66d09e67ba70"  # pragma: allowlist secret
+      grade_key: "aece925a6f6b5ed52cabd235691580da"  # pragma: allowlist secret
+      user_fk: "USER_RES_555"
+      courserun_fk: "RUN_6002"
+      platform_fk: "PLATFORM_RESIDENTIAL"
+      platform: "residential"
+      grade_value: 0.9
+      is_passing: true
+      letter_grade: "A"
+    - grade_id: "90a11cf9abb94109695707cbc35c7d4e"  # pragma: allowlist secret
+      grade_key: "f2b91c2c6f0006fef4971b4796aee564"  # pragma: allowlist secret
+      user_fk: "USER_RES_555"
+      courserun_fk:
+      platform_fk: "PLATFORM_RESIDENTIAL"
+      platform: "residential"
+      grade_value: 0.2
+      is_passing: false
+      letter_grade: ""
+    - grade_id: "d519e491c40e911baf3455c0745fc7a2"  # pragma: allowlist secret
+      grade_key: "7cf433ec9da852e235c7d65786542fce"  # pragma: allowlist secret
+      user_fk:
+      courserun_fk: "RUN_6002"
+      platform_fk: "PLATFORM_RESIDENTIAL"
+      platform: "residential"
+      grade_value: 0.0
+      is_passing: false
+      letter_grade:
 - name: test_tfact_order_refreshes_stale_user_fk_after_dim_user_rekey
   description: >
     Regression test for the dim_user re-key incident: when dim_user.user_pk changes
