@@ -13,7 +13,7 @@ select
     , article_title                                         as title
     , coalesce(
         {{ cast_timestamp_to_iso8601('article_created_on_raw') }},
-        {{ cast_timestamp_to_iso8601('current_timestamp') }}
+        {{ cast_timestamp_to_iso8601(current_timestamptz()) }}
     )                                                       as last_modified
     , 'mit_climate'                                         as etl_source
     , article_summary                                       as description

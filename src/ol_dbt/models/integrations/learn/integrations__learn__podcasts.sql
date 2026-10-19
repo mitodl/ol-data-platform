@@ -59,7 +59,7 @@ select
     -- The RSS <lastBuildDate> is RFC 2822, which Trino cannot parse without a
     -- format string that varies by feed; current_timestamp is the same
     -- conservative fallback mitpe/oll use.
-    , {{ cast_timestamp_to_iso8601('current_timestamp') }}   as last_modified
+    , {{ cast_timestamp_to_iso8601(current_timestamptz()) }} as last_modified
     , 'podcast'                                              as etl_source
     , 'podcast'                                              as platform
     , 'podcast'                                              as resource_type

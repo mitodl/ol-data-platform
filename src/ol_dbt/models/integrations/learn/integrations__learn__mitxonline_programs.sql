@@ -50,7 +50,7 @@ with programs as (
         runs.courserun_is_live
         and not coalesce(runs.courserun_is_source_run, false)
         and coalesce(runs.courserun_tag, '') != 'SOURCE'
-        and {{ from_iso8601_timestamp('runs.courserun_start_on') }} > current_timestamp
+        and {{ from_iso8601_timestamp('runs.courserun_start_on') }} > {{ current_timestamptz() }}
     group by program_courses.program_id
 )
 
@@ -135,7 +135,7 @@ select
     , coalesce(
         pages.page_last_published_on
         , pages.page_first_published_on
-        , {{ cast_timestamp_to_iso8601('current_timestamp') }}
+        , {{ cast_timestamp_to_iso8601(current_timestamptz()) }}
     ) as last_modified
     , 'mitxonline' as etl_source
     , 'mitxonline' as platform

@@ -379,3 +379,20 @@ unit_tests:
     rows:
     - {channel_id: ocw, title: OCW, offered_by: ocw, etl_source: youtube, published: true,
       dlt_load_id: '2'}
+
+- name: test_integrations__learn__podcasts_last_modified_is_the_utc_build_time
+  description: >
+    last_modified is current_timestamptz, the build time in UTC on every engine.
+    A bare current_timestamp is session-local time on StarRocks.
+  model: integrations__learn__podcasts
+  overrides:
+    macros:
+      current_timestamptz: "'2026-10-19 12:00:00'"
+  given:
+  - input: ref('stg__podcast__rss__channels')
+    rows:
+    - {podcast_rss_url: "https://example.com/feed.xml", podcast_title: A podcast,
+      podcast_dlt_load_id: "1"}
+  expect:
+    rows:
+    - {readable_id: example.com/feed.xml, last_modified: "2026-10-19T12:00:00.000000Z"}
