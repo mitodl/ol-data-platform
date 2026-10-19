@@ -19,10 +19,9 @@ the ETags of the objects above and of the files under its own prefix, and of
 another course's prefix. A publish that rewrites identical bytes keeps every
 ETag, so it changes nothing here. A changed course appends a full new set of
 rows stamped with one ``course_retrieved_at``, and staging keeps each course's
-newest set. A course
-that leaves the bucket appends one ``unpublished`` row, which becomes its
-newest set and so empties it downstream. So does a course whose prefix has no
-``data.json`` on two reads ``WAIT_BETWEEN_READS`` apart.
+newest set. A course that leaves the bucket appends one ``unpublished`` row,
+which becomes its newest set and so empties it downstream. So does a course
+whose prefix has no ``data.json`` on two reads ``WAIT_BETWEEN_READS`` apart.
 
 A file Tika fails on is loaded with ``extraction_status`` ``failed``. When the
 failure may pass (a timeout, a 5xx), the course is read again on up to
@@ -197,14 +196,13 @@ def video_transcript_path(video_files: dict[str, Any]) -> str | None:
     :param video_files: The ``video_files`` object of a video resource.
     :returns: The path, or None when the video has no transcript.
     """
-    resources = video_files.get("video_transcript_resources")
+    resources = video_files.get("video_transcript_resources") or []
     # Learn raises on a non-empty value that is not a list, which drops the
-    # resource. Here it counts as no list, which drops it too unless the video
-    # also has a video_transcript_file.
+    # resource.
+    if not isinstance(resources, list):
+        return None
     transcripts = [
-        entry
-        for entry in (resources if isinstance(resources, list) else [])
-        if isinstance(entry, dict) and entry.get("file")
+        entry for entry in resources if isinstance(entry, dict) and entry.get("file")
     ]
     if transcripts:
         english = [
@@ -280,7 +278,10 @@ def course_version(slug: str, objects: CourseObjects) -> str:
     as is one under another course. ``read_course`` returns the ETags of those.
     """
     digest = hashlib.md5(usedforsecurity=False)
-    digest.update(f"text_file_rule\t{TEXT_FILE_RULE}\n".encode())
+    # Not for a prefix with no data.json: a new rule would start its wait to be
+    # unpublished again, and count it against the unpublish limit.
+    if any(content_kind(slug, key) for key in objects):
+        digest.update(f"text_file_rule\t{TEXT_FILE_RULE}\n".encode())
     for key in sorted(objects):
         if in_course_version(slug, key):
             digest.update(f"{key}\t{objects[key]['ETag']}\n".encode())

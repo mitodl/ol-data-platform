@@ -55,14 +55,16 @@ with content as (
         , coalesce(coursecontent_resource_type, '') != '' as is_current_format
         , coalesce(nullif(coursecontent_resource_type, ''), coursecontent_legacy_resource_type, '') = 'Video'
             as is_video
+        -- Learn raises on a video_transcript_resources that is neither empty nor
+        -- a list, which drops the resource.
+        , coalesce(coursecontent_video_transcript_resources, 'null') not in ('null', '""', '{}', 'false', '0')
+        and {{ try_parse_json_array('coursecontent_video_transcript_resources') }} is null
+            as has_unreadable_transcripts
     from content
     where coursecontent_kind = 'resource'
 )
 
--- One row per transcript a video lists, ranked the way Learn picks one. Learn
--- raises on a non-empty value that is not a list, which drops the resource;
--- here it yields no rows, which drops it too unless the video also has a
--- video_transcript_file.
+-- One row per transcript a video lists, ranked the way Learn picks one.
 , transcript_resources as (
     select
         resources.coursecontent_s3_key
@@ -91,6 +93,8 @@ with content as (
     select
         resources.*
         , case
+            when resources.is_video and resources.is_current_format and resources.has_unreadable_transcripts
+                then null
             when resources.is_video and resources.is_current_format
                 then coalesce(transcript_resources.transcript_file, resources.coursecontent_video_transcript_file)
             when resources.is_video then resources.coursecontent_legacy_transcript_file

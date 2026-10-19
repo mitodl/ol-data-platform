@@ -181,7 +181,8 @@ def _load(**kwargs: Any) -> list[dict[str, Any]]:
             },
             "courses/a/t_es.pdf",
         ),
-        # An empty list, or one that is not a list, leaves the single file.
+        # An empty list or an empty string leaves the single file. Learn raises
+        # on anything else that is not a list, which drops the resource.
         (
             {
                 "resourcetype": "Video",
@@ -206,7 +207,8 @@ def _load(**kwargs: Any) -> list[dict[str, Any]]:
             {
                 "resourcetype": "Video",
                 "video_files": {
-                    "video_transcript_resources": {"content": [], "website": "a"}
+                    "video_transcript_resources": {"content": [], "website": "a"},
+                    "video_transcript_file": "/courses/a/t.pdf",
                 },
             },
             None,
@@ -257,6 +259,15 @@ def test_course_version_changes_with_the_text_file_rule(
     before = ocw_content.course_version("a-course", objects)
     monkeypatch.setattr(ocw_content, "TEXT_FILE_RULE", ocw_content.TEXT_FILE_RULE + 1)
     assert ocw_content.course_version("a-course", objects) != before
+
+
+def test_text_file_rule_leaves_a_prefix_with_no_data_json_alone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    objects = {"courses/gone/abc_notes.pdf": {"ETag": '"1"', "size": 1}}
+    before = ocw_content.course_version("gone", objects)
+    monkeypatch.setattr(ocw_content, "TEXT_FILE_RULE", ocw_content.TEXT_FILE_RULE + 1)
+    assert ocw_content.course_version("gone", objects) == before
 
 
 @pytest.mark.integration

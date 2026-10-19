@@ -578,10 +578,15 @@ unit_tests:
     - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/none/data.json,
       coursecontent_title: None, coursecontent_resource_type: Video, coursecontent_video_youtube_id: eee,
       coursecontent_video_transcript_resources: '[]'}
-    # Not a list: it counts as none.
+    # Learn raises on a value that is neither empty nor a list, which drops the
+    # resource whatever its video_transcript_file; an empty string is no list.
     - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/object/data.json,
       coursecontent_title: Object, coursecontent_resource_type: Video, coursecontent_video_youtube_id: fff,
-      coursecontent_video_transcript_resources: '{"content": [], "website": "a-course"}'}
+      coursecontent_video_transcript_resources: '{"content": [], "website": "a-course"}',
+      coursecontent_video_transcript_file: /courses/a-course/t_object.pdf}
+    - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/empty-string/data.json,
+      coursecontent_title: Empty string, coursecontent_resource_type: Video, coursecontent_video_youtube_id: hhh,
+      coursecontent_video_transcript_resources: '""', coursecontent_video_transcript_file: /courses/a-course/t_string.pdf}
     # Data written before the list existed has only the single file.
     - {course_slug: a-course, coursecontent_kind: resource, coursecontent_s3_key: courses/a-course/resources/single-file/data.json,
       coursecontent_title: Single file, coursecontent_resource_type: Video, coursecontent_video_youtube_id: ggg,
@@ -593,6 +598,8 @@ unit_tests:
     - {content_file_key: courses/a-course/resources/no-english/, content: null, youtube_id: ccc}
     - {content_file_key: courses/a-course/resources/empty-list/, content: null, youtube_id: ddd}
     - {content_file_key: courses/a-course/resources/single-file/, content: null, youtube_id: ggg}
+    - {content_file_key: courses/a-course/resources/empty-string/, content: null,
+      youtube_id: hhh}
 - name: test_int__ocw__live_courses_reads_what_learn_reads
   description: >
     The run id prefers legacy_uid, cross-listed numbers are split and trimmed,
