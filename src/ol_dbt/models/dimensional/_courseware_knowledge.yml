@@ -344,10 +344,11 @@ models:
   - name: reverse_courserun_support
     description: int, builds_on only, course runs showing the opposite direction
   - name: course_scope_support
-    description: int, builds_on only, scope_support with each course's reruns counted
-      once (the run with the most units; a run without a course_fk is keyed by the
-      run id less its run segment); the support the publishing rule reads, since reruns
-      of one course have near-identical text
+    description: int, builds_on only, scope_support with each course's reruns and
+      platform copies counted once (the run with the most units; courses keyed by
+      courseware_current_course_runs' course_key, so an edxorg and a mitxonline copy
+      with one readable id are one course); the support the publishing rule reads,
+      since reruns and copies of one course have near-identical text
   - name: reverse_scope_support
     description: int, builds_on only, course_scope_support of the opposite direction
   - name: direction_consistency
