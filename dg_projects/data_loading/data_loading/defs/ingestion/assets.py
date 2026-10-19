@@ -7,13 +7,14 @@ of wildly different sizes can load concurrently instead of one giant table
 blocking the rest of the run behind it.
 """
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from functools import partial
 from typing import Any
 
 from dagster import (
     AssetExecutionContext,
     AssetsDefinition,
+    Config,
     Definitions,
     MaterializeResult,
 )
@@ -38,6 +39,7 @@ from ol_dlt.sources import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, EDXORG_DB_TABLES
 from ol_orchestrate.lib.failures import with_failure_hooks
+from pydantic import Field
 
 from data_loading.defs.ingestion.translators import (
     EdxorgDltTranslator,
@@ -259,6 +261,38 @@ def load_in_batches(
     return results, batches, rows_loaded
 
 
+def drain(
+    *,
+    context: AssetExecutionContext,
+    dlt: DagsterDltResource,
+    build_source: Callable[[], Any],
+    pipeline: Any,
+) -> Iterator[MaterializeResult[Any]]:
+    """Run ``load_in_batches`` and yield one materialization per asset.
+
+    One, not one per batch: Dagster rejects a step that materializes the same
+    asset twice. The last batch's metadata describes an empty catch-up load, so
+    the counts that describe the whole run are added here.
+    """
+    (resource_name,) = build_source().resources
+    results, batches, rows_loaded = load_in_batches(
+        context=context,
+        dlt=dlt,
+        build_source=build_source,
+        pipeline=pipeline,
+        resource_name=resource_name,
+    )
+    for result in results:
+        yield MaterializeResult(
+            asset_key=result.asset_key,
+            metadata={
+                **dict(result.metadata or {}),
+                "batches": batches,
+                "rows_loaded": rows_loaded,
+            },
+        )
+
+
 def build_batched_assets(
     *,
     name: str,
@@ -272,11 +306,9 @@ def build_batched_assets(
     ``build_source`` is called once for the asset definition and once per
     batch (see ``load_in_batches``). Its single resource names the table.
     """
-    source = build_source()
-    (resource_name,) = source.resources
 
     @dlt_assets(
-        dlt_source=source,
+        dlt_source=build_source(),
         dlt_pipeline=pipeline,
         name=name,
         # group_name is set per-asset by the translator (scoped by source system).
@@ -286,27 +318,9 @@ def build_batched_assets(
     def _asset(
         context: AssetExecutionContext, dlt: DagsterDltResource
     ) -> Iterable[Any]:
-        results, batches, rows_loaded = load_in_batches(
-            context=context,
-            dlt=dlt,
-            build_source=build_source,
-            pipeline=pipeline,
-            resource_name=resource_name,
+        yield from drain(
+            context=context, dlt=dlt, build_source=build_source, pipeline=pipeline
         )
-
-        # One materialization per asset, not one per batch: Dagster rejects a
-        # step that materializes the same asset twice. The last batch's
-        # metadata describes an empty catch-up load, so the counts that
-        # describe the whole run are added here.
-        for result in results:
-            yield MaterializeResult(
-                asset_key=result.asset_key,
-                metadata={
-                    **dict(result.metadata or {}),
-                    "batches": batches,
-                    "rows_loaded": rows_loaded,
-                },
-            )
 
     return _asset
 
@@ -369,16 +383,53 @@ posthog_events_assets = build_batched_assets(
     translator=RawDataDltTranslator(),
 )
 
-# One load covers at most ocw_content.BUDGET_BYTES of course files, and each
-# load saves which courses it finished, so a run cut off mid-backlog resumes
+
+class OcwContentLoadConfig(Config):
+    """Run config for the OCW content load."""
+
+    courses: list[str] | None = Field(
+        default=None,
+        description=(
+            "Course slugs to load on their own, each only if it changed. "
+            "Sweeps every course when unset."
+        ),
+    )
+
+
+# A sweep: one load covers at most ocw_content.BUDGET_BYTES of course files, and
+# each load saves which courses it finished, so a run cut off mid-backlog resumes
 # there. The first run extracts every course (~70,000 files through Tika);
 # later runs read only the courses whose objects changed.
-ocw_content_assets = build_batched_assets(
+#
+# Scoped to `courses`, it is one load (a course is never split, so there is no
+# budget to drain), which is how ocw_content_publish_sensor loads a course soon
+# after it is published.
+@dlt_assets(
+    dlt_source=ocw_content.build_source(),
+    dlt_pipeline=ocw_content.ocw_content_pipeline,
     name="ocw_content_ingest",
-    build_source=ocw_content.build_source,
-    pipeline=ocw_content.ocw_content_pipeline,
-    translator=RawDataDltTranslator(),
+    dagster_dlt_translator=RawDataDltTranslator(),
 )
+def ocw_content_assets(
+    context: AssetExecutionContext,
+    dlt: DagsterDltResource,
+    config: OcwContentLoadConfig,
+) -> Iterable[Any]:
+    """Sweep the OCW live bucket, or load the courses named in the run config."""
+    if config.courses is None:
+        yield from drain(
+            context=context,
+            dlt=dlt,
+            build_source=ocw_content.build_source,
+            pipeline=ocw_content.ocw_content_pipeline,
+        )
+        return
+    context.log.info("Loading %s OCW courses: %s", len(config.courses), config.courses)
+    yield from dlt.run(
+        context=context,
+        dlt_source=ocw_content.build_source(config.courses),
+        loader_file_format="parquet",
+    )
 
 
 defs = Definitions(

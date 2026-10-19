@@ -135,7 +135,10 @@ def test_schedules_and_sensors_load() -> None:
         "course_xml_blocks_ingest_daily_schedule",
         "ocw_content_ingest_daily_schedule",
     }
-    assert "edxorg_upstream_changes_sensor" in {s.name for s in _REPO.sensor_defs}
+    assert {s.name for s in _REPO.sensor_defs} >= {
+        "edxorg_upstream_changes_sensor",
+        "ocw_content_publish_sensor",
+    }
 
 
 def test_dlt_resource_present() -> None:
