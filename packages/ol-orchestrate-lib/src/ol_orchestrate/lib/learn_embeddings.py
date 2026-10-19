@@ -210,7 +210,7 @@ class ContentFileDocument(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     key: str
-    content: str
+    content: str | None
     resource_readable_id: str
     run_readable_id: str | None
     platform_code: str | None
@@ -230,7 +230,8 @@ class ContentFileDocument(BaseModel):
                 f"payload keys that are set from the model fields: {sorted(duplicated)}"
             )
             raise ValueError(msg)
-        if "platform" in self.payload and self.payload["platform"]["code"] != (
+        platform = self.payload.get("platform", {"code": self.platform_code or ""})
+        if not isinstance(platform, dict) or platform.get("code") != (
             self.platform_code or ""
         ):
             msg = "payload platform.code does not match platform_code"
@@ -285,7 +286,7 @@ def chunk_and_embed(
 ) -> list[models.PointStruct]:
     """Chunk content files and build their content-file collection points.
 
-    Files with empty content get no points, as in Learn.
+    Files with no content get no points, as in Learn.
 
     :param documents: the content files
     :param embedder: computes the dense vectors

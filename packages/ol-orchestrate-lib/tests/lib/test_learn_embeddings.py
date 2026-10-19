@@ -233,6 +233,7 @@ def test_empty_chunks_keep_their_numbers() -> None:
 def test_files_without_content_get_no_points() -> None:
     embedder = FakeEmbedder()
     assert chunk_and_embed([_content_file(content="")], embedder) == []
+    assert chunk_and_embed([_content_file(content=None)], embedder) == []
     assert learn.content_file_chunks(_learn_document(_content_file(content=""))) == []
 
 
@@ -242,6 +243,8 @@ def test_files_without_content_get_no_points() -> None:
         ({"views": 3}, "does not store"),
         ({"key": "x"}, "set from the model fields"),
         ({"platform": {"code": "xpro", "name": "xPRO"}}, "does not match"),
+        ({"platform": None}, "does not match"),
+        ({"platform": {"name": "xPRO"}}, "does not match"),
     ],
 )
 def test_bad_payloads_are_rejected(payload: dict[str, Any], message: str) -> None:
