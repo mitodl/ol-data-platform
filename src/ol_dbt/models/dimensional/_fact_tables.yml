@@ -579,6 +579,15 @@ models:
       combination_of_columns:
       - grade_id
       - platform
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - user_fk
+        - courserun_fk
+      config:
+        where: user_fk is not null and courserun_fk is not null
+        # One duplicated pair doubles a consumer's rows, so the project's >10 does not apply.
+        error_if: ">0"
   config:
     meta:
       qa_branches:
@@ -597,9 +606,9 @@ models:
     - not_null
   - name: grade_id
     description: >
-      Source system grade ID. Integer-cast courserungrade_id for MITx Online, MITx
-      Pro and Residential;
-      surrogate key from (user_id, courserun_readable_id) for edX.org.
+      Source system grade ID. Integer-cast courserungrade_id for MITx Online and MITx
+      Pro; surrogate key from (user_id, courserun_readable_id) for edX.org and
+      Residential.
     tests:
     - not_null
   - name: grade_date_key
@@ -1850,11 +1859,11 @@ unit_tests:
     - {platform_pk: "PLATFORM_RESIDENTIAL", platform_readable_id: "residential"}
   expect:
     rows:
-    - {grade_id: "11", user_fk: "USER_RES_555", courserun_fk: "RUN_6002", platform_fk: "PLATFORM_RESIDENTIAL",
+    - {user_fk: "USER_RES_555", courserun_fk: "RUN_6002", platform_fk: "PLATFORM_RESIDENTIAL",
       platform: "residential", grade_value: 0.9, is_passing: true, letter_grade: "A"}
-    - {grade_id: "12", user_fk: "USER_RES_555", courserun_fk: null, platform_fk: "PLATFORM_RESIDENTIAL",
+    - {user_fk: "USER_RES_555", courserun_fk: null, platform_fk: "PLATFORM_RESIDENTIAL",
       platform: "residential", grade_value: 0.2, is_passing: false, letter_grade: ""}
-    - {grade_id: "13", user_fk: null, courserun_fk: "RUN_6002", platform_fk: "PLATFORM_RESIDENTIAL",
+    - {user_fk: null, courserun_fk: "RUN_6002", platform_fk: "PLATFORM_RESIDENTIAL",
       platform: "residential", grade_value: 0.0, is_passing: false, letter_grade: null}
 - name: test_tfact_order_refreshes_stale_user_fk_after_dim_user_rekey
   description: >
