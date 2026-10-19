@@ -29,8 +29,8 @@ from data_loading.defs.ingestion.sensor import IN_FLIGHT_RUN_STATUSES
 
 OCW_CONTENT_SENSOR_NAME = "ocw_content_publish_sensor"
 
-# A tick costs one HEAD per course (2,603 on 2026-10-19), about $0.001 at S3's
-# GET/HEAD price, so polling every five minutes costs ~$9 a month in requests.
+# A tick costs one HEAD per course (2,603 prefixes on 2026-10-19), so polling
+# every five minutes is ~750,000 HEAD requests a day against the bucket.
 POLL_INTERVAL_SECONDS = 5 * 60
 
 # A course is loaded once its data.json is this old, so the load does not

@@ -303,18 +303,18 @@ learn a course published. Narrowed to two candidates, not yet decided between th
 `defs/ingestion/ocw_content_sensor.py`) polls every five minutes and requests one load scoped to
 the courses published since its last tick. It ships stopped. The reasons:
 
-- The platform can ship it alone. The webhook needs a receiver: Dagster has no authenticated
-  ingress for an outside caller, so it means a new endpoint (or a queue the sensor reads) built in
-  ol-infrastructure. On the sending side ocw-studio needs no code: `OpenCatalogWebhookStep` posts
+- The platform can ship it alone. The webhook needs a receiver, and nothing in the platform
+  accepts a call from ocw-studio today: it means a new authenticated endpoint (or a queue the
+  sensor reads) built in ol-infrastructure. On the sending side ocw-studio needs no code: `OpenCatalogWebhookStep` posts
   `{"webhook_key", "prefix": "<site url>/", "version": "live"}` to every URL in
   `OPEN_CATALOG_URLS`, after the upload and the CDN purge, so adding a platform URL there is a
   config change in ocw-studio's environment.
-- The bucket has a cheap, reliable publish signal. An online publish writes the course's
+- The bucket has a cheap publish signal. An online publish writes the course's
   `courses/<slug>/data.json` with the rest of its build (for the 39 courses published 2026-10-16
   to 2026-10-19 the last object landed at most 3 s after it), so the `LastModified` of that one
   object is the course's last publish. One HEAD per course (2,603 prefixes, 2,590 with a
   `data.json`) took 16 s from a laptop with 32 in flight, against 206 s and 456 requests for a
-  listing of all 455,605 objects. That is ~$0.001 a tick, ~$9 a month at five minutes.
+  listing of all 455,605 objects. At five minutes that is ~750,000 HEAD requests a day.
 - `LastModified` only says _when_ to look. Whether a course changed is still decided by its ETag
   digest in dlt state, so a publish or a mass rebuild that rewrites identical bytes costs one
   listing of the course and no Tika calls.
@@ -336,8 +336,8 @@ How a scoped load behaves (`ocw_content_source(courses=[...])`):
 - The sensor waits while a sweep or an earlier scoped load is running, so two loads do not read
   the same state at once. The schedule does not wait for a scoped load: a sweep starting at 04:35
   while one runs can read a course twice (a duplicate set of rows, which staging drops), and the
-  two commits to the Iceberg table can conflict and fail one run. Publishes have clustered in
-  13:00-23:00 UTC, so this is unlikely; a run-coordinator `tag_concurrency_limits` entry in
+  two commits to the Iceberg table can conflict and fail one run. The 39 single publishes on
+  2026-10-16 and 2026-10-19 fell between 13:45 and 22:46 UTC, so this is unlikely; a run-coordinator `tag_concurrency_limits` entry in
   ol-infrastructure would rule it out if it shows up.
 
 It ends at the raw load. `integrations__learn__ocw_content_files` still rebuilds with the daily
