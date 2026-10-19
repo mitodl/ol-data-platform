@@ -9,8 +9,10 @@
     dim_course_run.course_fk, so a run with no dim_course course matches only run and
     platform rows), else its platform's. Extraction itself still skips every
     scope whose extraction_key is stored, so a checksum change costs model calls only
-    for the scopes that actually changed. md5 because it is all change detection needs
-    and md5_hex gives the same digest on every engine.
+    for the scopes that actually changed. The key also hashes the model and effort,
+    which the allowlist does not approve, so the first extraction of a run after a
+    model change calls the model for every scope. md5 because it is all change
+    detection needs and md5_hex gives the same digest on every engine.
 #}
 {% set source_fields = [
     "coalesce(course_title, '')",
