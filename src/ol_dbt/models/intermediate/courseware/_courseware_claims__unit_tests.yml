@@ -11,11 +11,14 @@ unit_tests:
   - input: source('courseware_intermediate', 'courseware_claim_extraction')
     rows:
     - {extraction_key: old_unit, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
-      scope_id: overview, scope_part: 1, extracted_at: "2026-10-01T00:00:00"}
+      scope_id: overview, scope_part: 1, scope_part_count: 1, extractor_id: v1, prompt_version: p,
+      schema_version: c, model_id: m, effort: medium, extracted_at: "2026-10-01T00:00:00"}
     - {extraction_key: old_context, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
-      scope_id: context, scope_part: 1, extracted_at: "2026-10-01T00:00:00"}
+      scope_id: context, scope_part: 1, scope_part_count: 1, extractor_id: v1, prompt_version: p,
+      schema_version: c, model_id: m, effort: medium, extracted_at: "2026-10-01T00:00:00"}
     - {extraction_key: new_context, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
-      scope_id: context, scope_part: 1, extracted_at: "2026-10-17T00:00:00"}
+      scope_id: context, scope_part: 1, scope_part_count: 1, extractor_id: v1, prompt_version: p,
+      schema_version: c, model_id: m, effort: medium, extracted_at: "2026-10-17T00:00:00"}
   - input: ref('int__courseware__extraction_sources')
     rows:
     - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: context}
