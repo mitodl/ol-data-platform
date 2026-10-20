@@ -1,0 +1,30 @@
+---
+metric:
+  name: certified_learners
+  displayName: Certified learners
+  description: >-
+    Distinct learners who hold an unrevoked course certificate for a course run.
+    A learner is certified in a run when is_certified is true on
+    afact_learner_courserun_progress, whatever their grade or enrollment status.
+    Counts are distinct learners over the rows in scope, so a learner certified
+    in two runs of one contract counts once at the contract grain.
+
+    Not the same measure as certified_learners on the monthly engagement trend
+    views, which counts learners whose certificate was issued in that month.
+  metricType: COUNT
+  unitOfMeasurement: COUNT
+  metricExpression:
+    language: SQL
+    code: count(distinct case when is_certified then user_fk end)
+status: Approved
+implemented_by:
+- dbt_model: afact_learner_courserun_progress
+  columns: [is_certified]
+- dbt_model: mv_b2b_learner_enrollment
+  columns: [is_certified]
+- dbt_model: mv_b2b_mit_admin_contract_health
+  columns: [certified_learners]
+- dbt_model: mv_b2b_contract_utilization
+  columns: [certified_learners]
+- dbt_model: mv_b2b_enrollment_completion_funnel
+  columns: [certified_learners]
