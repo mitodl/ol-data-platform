@@ -160,6 +160,8 @@ unit_tests:
       content_file_text: A short course., content_file_extraction_status: extracted}
   - input: ref('stg__openedx__s3__course_transcript_text')
     rows: []
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
   expect:
     rows:
     - {scope_id: "context", scope_kind: context, scope_title: Course context, scope_position: 0,
@@ -187,3 +189,7 @@ unit_tests:
     - {scope_id: "block-v1:X+Y+1T2026+type@sequential+block@l2", scope_kind: unit,
       scope_title: Lecture 2, scope_position: 3, source_position: 1, source_ref: "block-v1:X+Y+1T2026+type@html+block@h_l2",
       source_text: "h_l2 body"}
+  overrides:
+    vars:
+      courseware_courseruns:
+      - "course-v1:X+Y+1T2026"
