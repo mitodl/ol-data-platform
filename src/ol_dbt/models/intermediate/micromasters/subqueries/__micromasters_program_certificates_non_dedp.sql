@@ -1,17 +1,30 @@
 {{ config(materialized='view') }}
 
-with micromasters_program_certificates as (
-    --- There are learners who received both 'Statistics and Data Science (General track)' and 'Statistics and Data
-    --  Science' from 2U data, but we only count them once in 'Statistics and Data Science' for MM program certificates
-    --  report.
+with program_mapping as (
+    select * from {{ ref('edxorg_to_mitxonline_program_mapping') }}
+)
+
+, micromasters_program_certificates as (
+    --- 2U data has two program_uuids titled 'Statistics and Data Science (General Track)' (one was the
+    --  original 'Statistics and Data Science' program), and some learners hold both. 'Finance' and 'MIT Finance'
+    --  are likewise one program. Keep one certificate per learner per MITx Online program; each SDS track is its own
+    --  MITx Online program and keeps its own certificate. The awarded date and uuid make the pick stable across runs,
+    --  which matters because MIT Learn never deletes a certificate whose program_certificate_hashed_id drops out.
     select
-        *
+        certificates.*
         , row_number() over (
-            partition by user_id, micromasters_program_id
-            order by program_title
+            partition by
+                certificates.user_id
+                , coalesce(program_mapping.mitxonline_program_readable_id, certificates.program_title)
+            order by
+                certificates.program_title
+                , certificates.program_certificate_awarded_on
+                , certificates.program_uuid
         ) as row_num
-    from {{ ref('int__edxorg__mitx_program_certificates') }}
-    where program_type = 'MicroMasters'
+    from {{ ref('int__edxorg__mitx_program_certificates') }} as certificates
+    left join program_mapping
+        on certificates.program_title = program_mapping.edxorg_program_title
+    where certificates.program_type = 'MicroMasters'
 )
 
 , edx_users as (
