@@ -1,13 +1,9 @@
 with conversation_fact as (
-    select * from {{ ref('afact_feedback_conversation') }}
-    where is_in_cluster_scope
-)
-
-, conversation as (
     select
-        feedback_conversation_pk
+        *
         , {{ html_unescape('conversation_text') }} as unescaped_text
-    from {{ ref('int__feedback__conversation') }}
+    from {{ ref('afact_feedback_conversation') }}
+    where is_in_cluster_scope
 )
 
 , feedback_category as (
@@ -49,11 +45,12 @@ select
     , {{ format_datetime('date_dim.date', 'yyyy') }} as conversation_year
     , opening_turn.source_url
     , conversation_fact.conversation_summary
-    -- Strips quoted email replies ("On <date>, <name> wrote: ...") up to the next turn
+    -- Strips quoted email replies ("On <date>, <name> wrote: ...") up to the next turn.
+    -- The header must stay on one line, or it can match a later turn's "wrote:".
     , replace(
         {{ regexp_replace_with_backreferences(
-            'conversation.unescaped_text'
-            , "'(?s)On [A-Z][a-z]{2}, .{5,60} wrote:.*?(\\n---\\n|$)'"
+            'conversation_fact.unescaped_text'
+            , "'(?s)On [A-Z][a-z]{2}, [^\\n]{5,60} wrote:.*?(\\n---\\n|$)'"
             , "'$1'"
         ) }}
         , {{ dbt.concat([codepoint_char(10), "'---'", codepoint_char(10)]) }}
@@ -71,8 +68,6 @@ inner join feedback_cluster
     on
         conversation_fact.cluster_key = feedback_cluster.cluster_key
         and conversation_fact.category_fk = feedback_cluster.category_fk
-inner join conversation
-    on conversation_fact.feedback_conversation_pk = conversation.feedback_conversation_pk
 inner join feedback_source
     on conversation_fact.feedback_source_fk = feedback_source.feedback_source_pk
 inner join opening_turn
