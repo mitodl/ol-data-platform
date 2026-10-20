@@ -9,10 +9,13 @@ metric:
     when the grade is passing; else in_progress when the grade is above zero or
     the learner has tracked activity in the run; else not_started.
 
-    One rule for every platform. The inputs differ: residential runs have no
-    grades or certificates (only in_progress and not_started occur), bootcamps
-    have certificates but no activity or grades (only certified and
-    not_started), and edX.org certificates are never marked revoked.
+    One rule for every platform, with inputs that differ by platform:
+    residential has grades and activity but no certificates (never certified);
+    bootcamps has certificates but no grades or activity (only certified and
+    not_started); emeritus and global_alumni have enrollments only (not_started
+    unless the learner has xPRO data for the same run); edX.org certificates
+    are never marked revoked. The population is course enrollments with a
+    learner and a course run.
   metricType: OTHER
   metricExpression:
     language: SQL

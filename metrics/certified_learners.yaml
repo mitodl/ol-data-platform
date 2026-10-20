@@ -5,12 +5,16 @@ metric:
   description: >-
     Distinct learners who hold an unrevoked course certificate for a course run.
     A learner is certified in a run when is_certified is true on
-    afact_learner_courserun_progress, whatever their grade or enrollment status.
-    Counts are distinct learners over the rows in scope, so a learner certified
-    in two runs of one contract counts once at the contract grain.
+    afact_learner_courserun_progress, whatever their grade and whether or not
+    the enrollment is still active. A certificate with no course enrollment row
+    for that learner and run is not counted. Counts are distinct learners over
+    the rows in scope, so a learner certified in two runs of one contract counts
+    once at the contract grain.
 
-    Not the same measure as certified_learners on the monthly engagement trend
-    views, which counts learners whose certificate was issued in that month.
+    The content engagement depth views publish it per course run as
+    certificates_earned. Not the same measure as certified_learners on the
+    monthly engagement trend views, which counts learners whose certificate was
+    issued in that month.
   metricType: COUNT
   unitOfMeasurement: COUNT
   metricExpression:
@@ -28,3 +32,7 @@ implemented_by:
   columns: [certified_learners]
 - dbt_model: mv_b2b_enrollment_completion_funnel
   columns: [certified_learners]
+- dbt_model: mv_b2b_content_engagement_depth
+  columns: [certificates_earned]
+- dbt_model: mv_b2b_contract_content_engagement_depth
+  columns: [certificates_earned]
