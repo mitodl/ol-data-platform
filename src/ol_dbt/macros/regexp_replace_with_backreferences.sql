@@ -15,8 +15,8 @@
   {# DuckDB's regexp_replace uses the RE2 engine (https://duckdb.org/docs/current/sql/functions/regular_expressions),
      whose replacement-string backreferences are \1, \2, ... rather than Trino's $1, $2, ...;
      translate the caller's Trino-style replacement string instead of asking every caller to
-     write it twice. #}
-  regexp_replace({{ column_name }}, {{ pattern }}, {{ trino_replacement | replace('$', '\\') }})
+     write it twice. 'g' because DuckDB replaces only the first match by default, Trino every match. #}
+  regexp_replace({{ column_name }}, {{ pattern }}, {{ trino_replacement | replace('$', '\\') }}, 'g')
 {% endmacro %}
 
 {% macro starrocks__regexp_replace_with_backreferences(column_name, pattern, trino_replacement) %}
