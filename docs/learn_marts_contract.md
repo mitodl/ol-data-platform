@@ -275,9 +275,14 @@ courses and 28 programs whose page the API lists (159 and 28 of them published).
 listed page without `has_catalog_page` has the catalog flag off in raw (synced 12:06 UTC)
 and on in the API (read 22:12 UTC). MIT Learn's production API had no `full_description` on
 any MITx Online course or program that day, so the comparison is with MIT Learn's code, not
-stored values. `faqs` has not been compared on production data: `cms_productpagefaq` was
-added to the production Airbyte connection on 2026-10-20 and had not synced when the column
-was added.
+stored values.
+
+Checked again on 2026-10-20 with FAQs, after `cms_productpagefaq`'s first production sync
+(14:28 UTC): MIT Learn's `parse_full_description` (mit-learn main at e04e9003b) gives the
+same result from the models' sections and `faqs` as from the pages API (read 14:36 UTC) for
+all 187 courses and 28 programs, including the 19 pages with FAQs. Raw has one FAQ row more
+than the API: an empty question and answer on a page that is not live, so `faqs` is null
+there.
 
 Checked on 2026-10-13 against a build on production raw: the models publish the same 157
 courses and 28 programs MIT Learn does, with the same published runs, run dates, prices,
