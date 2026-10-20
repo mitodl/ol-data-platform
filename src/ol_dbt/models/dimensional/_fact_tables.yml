@@ -73,6 +73,11 @@ models:
         where: "user_fk is not null"
         config:
           severity: warn
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.learner
   - name: courserun_fk
     description: Foreign key to dim_course_run (null for program enrollments)
     tests:

@@ -1731,7 +1731,7 @@ models:
       meta:
         openmetadata:
           glossary:
-          - open-learning.learner
+          - open-learning.active-learner
   - name: courserun_fk
     description: string, foreign key to dim_course_run, matched on (courserun_readable_id,
       platform) against the current run. Null where the event's course id has no current
