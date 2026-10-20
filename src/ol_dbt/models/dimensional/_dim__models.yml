@@ -1802,8 +1802,11 @@ models:
     residential has grades (from tfact_grade) but no certificates, so certified
     does not occur. bootcamps has certificates but no grades or activity, so
     every uncertified enrollment is not_started and gets a needs_attention_since.
-    emeritus and global_alumni have no grades, certificates or activity, so every
-    enrollment is not_started.
+    emeritus' and global_alumni's own sources supply no grades, certificates or
+    activity. An enrollment on an xPRO-mapped run carries the xPRO run's
+    courserun_fk, and dim_user groups the learner's accounts by email, so the row
+    reaches another status only through the same learner's xPRO grade, certificate
+    or activity on the same run. Otherwise it is not_started.
 
     Consent is not applied. A consumer-facing model built on this one must
     carry or apply consent itself.
@@ -1885,8 +1888,9 @@ models:
   - name: is_passing
     description: boolean, the grade's own passing flag, carried from tfact_grade whatever
       the certificate status. The rule differs per platform; tfact_grade.is_passing
-      states it. Null when there is no grade, which is every bootcamps, emeritus and
-      global_alumni enrollment. A certified learner with a passing grade is true here,
+      states it. Null when there is no grade, which is every bootcamps enrollment
+      and every emeritus and global_alumni enrollment without the same learner's xPRO
+      grade on the same run. A certified learner with a passing grade is true here,
       so count this for "passed" totals and use completion_status = 'passed' for passed-and-not-certified.
       A certified learner can also be false or null, because an unrevoked certificate
       is certified without a passing grade.
@@ -1896,7 +1900,9 @@ models:
           glossary:
           - open-learning.ferpa-classification.education-record
   - name: grade_value
-    description: double, grade between 0.0 and 1.0. Null when there is no grade.
+    description: double, grade on a 0.0 to 1.0 scale, carried from tfact_grade, so
+      it can exceed 1.0 where the source allows it (tfact_grade.grade_value). Null
+      when there is no grade.
     config:
       meta:
         openmetadata:

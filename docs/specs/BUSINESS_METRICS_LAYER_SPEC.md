@@ -169,13 +169,16 @@ The model's YAML description states these gaps:
 | edxorg | yes | yes, never marked revoked | yes | all four |
 | residential | yes (since ol-data-platform#3012) | no | yes | `passed`, `in_progress`, `not_started` |
 | bootcamps | no | yes | no | `certified`, `not_started` |
-| emeritus, global_alumni | no | no | no | `not_started` |
+| emeritus, global_alumni | none of their own | none of their own | none of their own | `not_started`; any through xPRO data |
 
-Every uncertified bootcamps enrollment, and every emeritus and global_alumni enrollment,
-is therefore `not_started` and gets a `needs_attention_since`. What `is_passing` means
-differs per platform; `tfact_grade`'s YAML states the rule for each. The gaps are closed
-in the inputs by the passing and certificate tasks in §7, not by platform branches in
-this model.
+Every uncertified bootcamps enrollment is therefore `not_started` and gets a
+`needs_attention_since`. The emeritus and global_alumni sources supply no grades,
+certificates or activity, but `tfact_enrollment` gives an enrollment on an xPRO-mapped run
+the xPRO run's `courserun_fk`, and `dim_user` groups the learner's accounts by email. Such a
+row reaches another status only through the same learner's xPRO data on the same run;
+otherwise it is `not_started`. What `is_passing` means differs per platform;
+`tfact_grade`'s YAML states the rule for each. The gaps are closed in the inputs by the
+passing and certificate tasks in §7, not by platform branches in this model.
 
 Access: the model keeps the `dimensional` layer's grants. Its inputs (enrollments, grades,
 certificates, `dim_user`) are already readable by those roles, so it exposes no new source
