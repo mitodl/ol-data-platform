@@ -633,11 +633,15 @@ models:
     Grain: One row per (user × course run) grade, across MITx Online, MITx Pro,
     edX.org and Residential MITx.
     edX.org rows include MicroMasters-linked grades (micromasters_program_id IS NOT
-    NULL);
-    a separate MicroMasters platform source may be added in a future phase.
+    NULL). The MicroMasters DEDP combined grade (int__micromasters__course_grades)
+    is a course grade that includes the proctored exam and is kept only for
+    certificate holders, so it is not a course run grade and has no row here. Nearly
+    every edX.org run it is assigned to already has a passing edxorg row for the
+    learner.
+    Emeritus, Global Alumni and Bootcamps have no grade source, so they have no
+    rows.
     Note: edX.org grade timestamps are unavailable in source data; grade_date_key
-    and
-    grade_created_on are null for edX.org rows.
+    and grade_created_on are null for edX.org rows.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
@@ -724,7 +728,10 @@ models:
           glossary:
           - open-learning.platform
   - name: grade_value
-    description: Numeric grade value between 0.0 and 1.0
+    description: >
+      Numeric grade on a 0.0 to 1.0 scale on every platform. The source value is
+      carried unchanged, and MITx Online, MITx Pro and edX.org each have some rows
+      above 1.0.
     config:
       meta:
         openmetadata:
@@ -732,8 +739,20 @@ models:
           - open-learning.ferpa-classification.education-record
   - name: is_passing
     description: >
-      Boolean indicating whether the learner passed the course run. Residential has
-      no passing flag, so it is true when the letter grade is not empty.
+      Boolean, whether the learner passed the course run. Never null. This is the
+      one statement of the rule, which differs per platform because each source
+      records a pass differently.
+      mitxonline, mitxpro: the application's own passed flag
+      (courses_courserungrade.passed), carried unchanged. It can disagree with
+      letter_grade: a passing grade with no letter grade, or a 'Pass' that is not
+      passing.
+      edxorg: person_course.completed when person_course has a grade for the learner
+      and run, where it matches grade >= the run's passing grade; otherwise true
+      when user_info_combo has a certificate verify_uuid for the run, and false when
+      it does not.
+      residential: the source has no passed flag, so true when letter_grade is not
+      empty. The letter grades that occur are Pass, Passing and A to D; there is
+      no failing letter.
     config:
       meta:
         openmetadata:
@@ -741,9 +760,8 @@ models:
           - open-learning.ferpa-classification.education-record
   - name: letter_grade
     description: >
-      Letter grade string (e.g. 'Pass', 'Fail'). Available for MITx Online, MITx
-      Pro and Residential;
-      null for edX.org.
+      Letter grade string (e.g. 'Pass', 'A'). Available for MITx Online, MITx Pro
+      and Residential; null for edX.org.
     config:
       meta:
         openmetadata:

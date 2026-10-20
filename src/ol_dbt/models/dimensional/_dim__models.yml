@@ -1797,10 +1797,13 @@ models:
     deferrals, transfers) the active one is reported, else the newest.
 
     One rule covers every platform, and its inputs are weaker outside MITx
-    Online and xPRO. edxorg certificates are never marked revoked. residential
-    has no grades or certificates, so only in_progress and not_started occur.
-    bootcamps has certificates but no grades or activity, so every uncertified
-    enrollment is not_started and gets a needs_attention_since.
+    Online and xPRO. is_passing is tfact_grade's, whose YAML states the passing
+    rule for each platform. edxorg certificates are never marked revoked.
+    residential has grades (from tfact_grade) but no certificates, so certified
+    does not occur. bootcamps has certificates but no grades or activity, so
+    every uncertified enrollment is not_started and gets a needs_attention_since.
+    emeritus and global_alumni have no grades, certificates or activity, so every
+    enrollment is not_started.
 
     Consent is not applied. A consumer-facing model built on this one must
     carry or apply consent itself.
@@ -1847,7 +1850,7 @@ models:
       for a non-B2B enrollment and on every other platform.
   - name: platform
     description: string, platform of the enrollment (mitxonline, mitxpro, edxorg,
-      residential, bootcamps).
+      residential, bootcamps, emeritus, global_alumni).
     tests:
     - not_null
     config:
@@ -1881,10 +1884,12 @@ models:
       from tfact_enrollment.
   - name: is_passing
     description: boolean, the grade's own passing flag, carried from tfact_grade whatever
-      the certificate status. Null when there is no grade. A certified learner with
-      a passing grade is true here, so count this for "passed" totals and use completion_status
-      = 'passed' for passed-and-not-certified. A certified learner can also be false
-      or null, because an unrevoked certificate is certified without a passing grade.
+      the certificate status. The rule differs per platform; tfact_grade.is_passing
+      states it. Null when there is no grade, which is every bootcamps, emeritus and
+      global_alumni enrollment. A certified learner with a passing grade is true here,
+      so count this for "passed" totals and use completion_status = 'passed' for passed-and-not-certified.
+      A certified learner can also be false or null, because an unrevoked certificate
+      is certified without a passing grade.
     config:
       meta:
         openmetadata:

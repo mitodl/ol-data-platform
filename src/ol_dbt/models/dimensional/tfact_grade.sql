@@ -5,10 +5,11 @@
     on_schema_change='append_new_columns'
 ) }}
 
--- Consolidate course run grades from all platforms
--- Note: edX.org rows include MicroMasters-linked grades (micromasters_program_id IS NOT NULL).
--- These are intentionally included here as edxorg grade records; MicroMasters as a distinct
--- platform source may be added in a future phase.
+-- Consolidate course run grades from all platforms. The is_passing rule differs per
+-- platform; the model YAML states each one.
+-- edX.org rows include MicroMasters-linked grades (micromasters_program_id IS NOT NULL).
+-- The MicroMasters DEDP combined grade (int__micromasters__course_grades) is a course grade
+-- that includes the proctored exam, so it has no row here.
 with mitxonline_grades as (
     select
         cast(courserungrade_id as varchar) as grade_id
