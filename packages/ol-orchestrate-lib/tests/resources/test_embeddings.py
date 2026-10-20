@@ -1,26 +1,39 @@
-"""Tests for the Qdrant and LiteLLM embedding resources, with no network calls."""
+"""Tests for the Qdrant and ol-llm embedding resources, with no network calls."""
 
+import os
 from collections.abc import Iterator
 from typing import Any
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
+from dagster import build_init_resource_context
+from ol_llm import KeycloakClient, Settings, TracingConfig
+from ol_orchestrate.lib.embeddings.learn import LEARN_V1_CONTENT_FILES
 from ol_orchestrate.resources import embeddings
-from ol_orchestrate.resources.embeddings import LiteLLMEmbedderResource, QdrantResource
+from ol_orchestrate.resources.embeddings import (
+    EmbeddingsResource,
+    ProviderKeySecret,
+    QdrantResource,
+)
 from ol_orchestrate.resources.secrets.vault import Vault
 
 QDRANT_HOST = "https://qdrant.example.com"
 QDRANT_KEY = "qk"  # pragma: allowlist secret
+OPIK_CLIENT_SECRET = "cs"  # noqa: S105  # pragma: allowlist secret
 OPENAI_KEY = "ok"  # pragma: allowlist secret
 SECRETS = {
-    "pipelines/qdrant": {"host": QDRANT_HOST, "api_key": QDRANT_KEY},
-    "pipelines/openai": {"api_key": OPENAI_KEY},
+    ("secret-data", "pipelines/openai"): {"api_key": OPENAI_KEY},
+    ("secret-data", "pipelines/qdrant"): {"host": QDRANT_HOST, "api_key": QDRANT_KEY},
+    ("secret-operations", "sso/opik"): {
+        "url": "https://sso.example.com/realms/ol",
+        "client_id": "opik-client",
+        "client_secret": OPIK_CLIENT_SECRET,
+    },
 }
 
 
 def _read_secret(mount_point: str, path: str) -> dict[str, Any]:
-    assert mount_point == "secret-data"
-    return {"data": SECRETS[path]}
+    return {"data": SECRETS[mount_point, path]}
 
 
 @pytest.fixture
@@ -35,25 +48,16 @@ def _vault() -> Vault:
     return Vault(vault_addr="https://vault.example.com", vault_auth_type="token")
 
 
-def _embedding_response(texts: list[str], dim: int) -> MagicMock:
-    response = MagicMock()
-    response.to_dict.return_value = {
-        "data": [
-            {"index": i, "embedding": [float(len(text))] * dim}
-            for i, text in enumerate(texts)
-        ]
-    }
-    return response
+def _qdrant() -> QdrantResource:
+    return QdrantResource(
+        vault=_vault(),
+        vault_path="pipelines/qdrant",
+        base_collection_name="mitlearn-production",
+    )
 
 
 def test_qdrant_client_has_cloud_inference(vault_client: MagicMock) -> None:
-    resource = QdrantResource(
-        vault=_vault(),
-        vault_path="pipelines/qdrant",
-        resources_collection="r",
-        content_files_collection="c",
-        topics_collection="t",
-    )
+    resource = _qdrant()
     with patch.object(embeddings, "QdrantClient") as qdrant_client:
         assert resource.get_client() is resource.get_client()
 
@@ -70,67 +74,96 @@ def test_qdrant_client_has_cloud_inference(vault_client: MagicMock) -> None:
     )
 
 
-def _embedder(**config: Any) -> LiteLLMEmbedderResource:
-    return LiteLLMEmbedderResource(
-        vault=_vault(), vault_path="pipelines/openai", **config
+def test_collection_names_follow_learn() -> None:
+    assert LEARN_V1_CONTENT_FILES.qdrant is not None
+    assert (
+        _qdrant().collection_name(LEARN_V1_CONTENT_FILES.qdrant)
+        == "mitlearn-production.platform_content_files"
     )
 
 
-@pytest.mark.usefixtures("vault_client")
-def test_embedder_batches_and_calls_litellm_as_learn_does() -> None:
-    texts = [f"text {i}" for i in range(250)]
-    embedder = _embedder(embedding_dim=2)
-    with patch(
-        "litellm.embedding",
-        side_effect=lambda **kwargs: _embedding_response(kwargs["input"], 2),
-    ) as embedding:
-        vectors = embedder.embed_documents(texts)
-
-    assert vectors == [[float(len(text))] * 2 for text in texts]
-    assert [len(call.kwargs["input"]) for call in embedding.call_args_list] == [
-        100,
-        100,
-        50,
-    ]
-    assert embedding.call_args_list[0].kwargs == {
-        "model": "text-embedding-3-large",
-        "input": texts[:100],
-        "custom_llm_provider": "openai",
-        "api_base": None,
-        "api_key": OPENAI_KEY,
-        "max_retries": 3,
-        "timeout": 600,
-    }
-    assert embedder.vector_name == "text-embedding-3-large"
-
-
-@pytest.mark.usefixtures("vault_client")
-def test_embedder_rejects_vectors_of_the_wrong_length() -> None:
-    embedder = _embedder()
+@pytest.fixture
+def ol_llm_setup() -> Iterator[tuple[MagicMock, MagicMock]]:
     with (
-        patch(
-            "litellm.embedding",
-            side_effect=lambda **kwargs: _embedding_response(kwargs["input"], 1536),
-        ),
-        pytest.raises(ValueError, match="not 3072 long"),
+        patch.object(embeddings, "configure") as configure,
+        patch.object(embeddings, "configure_tracing") as configure_tracing,
     ):
-        embedder.embed_documents(["a"])
+        yield configure, configure_tracing
 
 
-@pytest.mark.usefixtures("vault_client")
-def test_embedder_rejects_a_short_response() -> None:
-    embedder = _embedder(embedding_dim=1)
-    with (
-        patch(
-            "litellm.embedding",
-            side_effect=lambda **kwargs: _embedding_response(kwargs["input"][:1], 1),
-        ),
-        pytest.raises(ValueError, match="2 texts returned 1 vectors"),
-    ):
-        embedder.embed_documents(["a", "b"])
+def _set_up(resource: EmbeddingsResource) -> None:
+    resource.setup_for_execution(build_init_resource_context())
 
 
-def test_embedder_sends_nothing_for_no_texts() -> None:
-    with patch("litellm.embedding") as embedding:
-        assert _embedder().embed_documents([]) == []
-    embedding.assert_not_called()
+def test_tracing_is_off_without_an_opik_url(
+    ol_llm_setup: tuple[MagicMock, MagicMock],
+    vault_client: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPIK_URL_OVERRIDE", raising=False)
+    monkeypatch.setenv("OL_LLM_ENVIRONMENT", "qa")
+    configure, configure_tracing = ol_llm_setup
+
+    _set_up(EmbeddingsResource(vault=_vault(), environment="ci"))
+
+    configure.assert_called_once_with(Settings(environment="ci"))
+    configure_tracing.assert_called_once_with(
+        TracingConfig(enabled=False, include_content=False)
+    )
+    vault_client.secrets.kv.v1.read_secret.assert_not_called()
+
+
+@pytest.mark.usefixtures("ol_llm_setup")
+def test_provider_keys_are_copied_from_vault(
+    vault_client: MagicMock,  # noqa: ARG001
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPIK_URL_OVERRIDE", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    resource = EmbeddingsResource(
+        vault=_vault(),
+        environment="ci",
+        provider_keys=[
+            ProviderKeySecret(env_var="OPENAI_API_KEY", vault_path="pipelines/openai")
+        ],
+    )
+
+    _set_up(resource)
+
+    assert os.environ["OPENAI_API_KEY"] == OPENAI_KEY
+
+
+def test_tracing_authenticates_with_the_vault_keycloak_client(
+    ol_llm_setup: tuple[MagicMock, MagicMock],
+    vault_client: MagicMock,  # noqa: ARG001
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik.example.com/api")
+    _, configure_tracing = ol_llm_setup
+
+    _set_up(EmbeddingsResource(vault=_vault(), environment="production"))
+
+    configure_tracing.assert_called_once_with(
+        TracingConfig(
+            keycloak=KeycloakClient(
+                token_url="https://sso.example.com/realms/ol/protocol/openid-connect/token",
+                client_id="opik-client",
+                client_secret=OPIK_CLIENT_SECRET,
+            ),
+            include_content=False,
+        )
+    )
+
+
+@pytest.mark.usefixtures("ol_llm_setup")
+def test_each_strategy_gets_its_own_use_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPIK_URL_OVERRIDE", raising=False)
+    resource = EmbeddingsResource(vault=_vault(), environment="ci")
+    _set_up(resource)
+
+    embedder = resource.embedder(LEARN_V1_CONTENT_FILES)
+
+    assert embedder.spec == LEARN_V1_CONTENT_FILES.model
+    assert embedder._use_case.name == "embed-learn-v1-content-files"
+    assert embedder._use_case.app == "ol-data-platform"
+    assert embedder._use_case.profile == "batch"

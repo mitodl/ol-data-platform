@@ -9,16 +9,22 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-from ol_orchestrate.lib import learn_embeddings
-from ol_orchestrate.lib.learn_embeddings import (
+from ol_orchestrate.lib.embeddings import chunking
+from ol_orchestrate.lib.embeddings.documents import Document
+from ol_orchestrate.lib.embeddings.learn import (
+    LEARN_V1_CONTENT_FILES,
     ContentFileDocument,
     chunk_and_embed,
-    chunk_text,
     content_file_point_key,
     point_id,
     resource_metadata_point_key,
     resource_point_key,
     vector_name,
+)
+from ol_orchestrate.lib.embeddings.models import (
+    EmbeddingBatch,
+    EmbeddingModelSpec,
+    InputType,
 )
 from qdrant_client import models
 
@@ -65,14 +71,17 @@ MARKDOWN_TEXT = "\n\n".join(
 class FakeEmbedder:
     """Returns the text's length as a one-element vector."""
 
-    vector_name = "text-embedding-3-large"
+    spec: EmbeddingModelSpec = LEARN_V1_CONTENT_FILES.model
 
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
 
-    def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
+    def embed(self, texts: Sequence[str], *, input_type: InputType) -> EmbeddingBatch:
+        assert input_type == "document"
         self.calls.append(list(texts))
-        return [[float(len(text))] for text in texts]
+        return EmbeddingBatch(
+            vectors=[[float(len(text))] for text in texts], input_tokens=len(texts)
+        )
 
 
 def expected_chunks(document: ContentFileDocument) -> list[tuple[int, str]]:
@@ -207,12 +216,27 @@ def test_chunk_and_embed_matches_learn(document: ContentFileDocument) -> None:
         chunk = point.payload["chunk_content"]
         assert point.vector["text-embedding-3-large"] == [float(len(chunk))]
         assert point.vector["bm25"] == models.Document(text=chunk, model="qdrant/bm25")
-    assert embedder.calls == [[chunk for _, chunk in expected_chunks(document)]]
+    assert embedder.calls == [
+        list(dict.fromkeys(chunk for _, chunk in expected_chunks(document)))
+    ]
+
+
+def _learn_chunks(text: str, *, markdown: bool) -> list[tuple[int, str]]:
+    document = Document(
+        doc_key="d",
+        doc_kind="content_file",
+        text=text,
+        format="markdown" if markdown else "text",
+    )
+    return [
+        (chunk.chunk_number, chunk.text)
+        for chunk in LEARN_V1_CONTENT_FILES.chunker.chunk(document)
+    ]
 
 
 def test_markdown_chunks_keep_their_headers() -> None:
     """Each chunk is prefixed with the headers its own text does not start with."""
-    chunks = [chunk for _, chunk in chunk_text(MARKDOWN_TEXT, markdown=True)]
+    chunks = [chunk for _, chunk in _learn_chunks(MARKDOWN_TEXT, markdown=True)]
 
     assert (
         chunks[0] == "# Calculus 1A: Differentiation  \nShort overview of the course."
@@ -226,8 +250,8 @@ def test_empty_chunks_keep_their_numbers() -> None:
         def split_text(self, _text: str) -> list[str]:
             return ["a", "", "b"]
 
-    with patch.object(learn_embeddings, "_recursive_splitter", Splitter):
-        assert chunk_text("ignored", markdown=False) == [(0, "a"), (2, "b")]
+    with patch.object(chunking, "_token_splitter", lambda *_: Splitter()):
+        assert _learn_chunks("ignored", markdown=False) == [(0, "a"), (2, "b")]
 
 
 def test_files_without_content_get_no_points() -> None:

@@ -1,24 +1,35 @@
-"""Qdrant and LiteLLM resources for writing MIT Learn's vector collections.
+"""Resources for computing embeddings through ol-llm and writing them to Qdrant.
 
 Requires the ``embeddings`` extra.
 """
 
-from collections.abc import Sequence
-from itertools import batched
-from typing import Any, cast
+import os
+from typing import Any
 
-import litellm
-from dagster import ConfigurableResource, ResourceDependency
+from dagster import (
+    Config,
+    ConfigurableResource,
+    InitResourceContext,
+    ResourceDependency,
+)
+from ol_llm import (
+    Attribution,
+    KeycloakClient,
+    Settings,
+    TracingConfig,
+    UseCase,
+    configure,
+    configure_tracing,
+)
 from pydantic import Field, PrivateAttr
 from qdrant_client import QdrantClient
 
-from ol_orchestrate.lib.learn_embeddings import DENSE_MODEL_NAME, vector_name
+from ol_orchestrate.lib.embeddings.models import OlLlmEmbedder
+from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy, QdrantTarget
 from ol_orchestrate.resources.secrets.vault import Vault
 
 QDRANT_GRPC_PORT = 6334
 QDRANT_TIMEOUT_SECONDS = 10
-EMBEDDING_REQUEST_TIMEOUT_SECONDS = 600
-TEXT_EMBEDDING_3_LARGE_DIMENSIONS = 3072
 
 
 def _read_kv1_secret(vault: Vault, mount_point: str, path: str) -> dict[str, Any]:
@@ -31,22 +42,28 @@ class QdrantResource(ConfigurableResource[None]):
     """A Qdrant Cloud client with cloud inference on.
 
     Cloud inference is what turns the ``models.Document`` sparse inputs from
-    :func:`ol_orchestrate.lib.learn_embeddings.build_point` into BM25 vectors.
+    :func:`ol_orchestrate.lib.embeddings.qdrant.build_points` into BM25 vectors.
     The Vault secret holds ``host`` (the cluster URL) and ``api_key``.
     """
 
     vault: ResourceDependency[Vault]
     vault_mount_point: str = "secret-data"
     vault_path: str = Field(description="KV v1 path of the secret with host, api_key")
-    resources_collection: str = Field(description="one point per learning resource")
-    content_files_collection: str = Field(
-        description="content file chunks and resource metadata chunks"
+    base_collection_name: str = Field(
+        description="the collections' common prefix, e.g. mitlearn-production"
     )
-    topics_collection: str = Field(description="one point per topic")
     grpc_port: int = QDRANT_GRPC_PORT
     timeout_seconds: int = QDRANT_TIMEOUT_SECONDS
 
     _client: QdrantClient | None = PrivateAttr(default=None)
+
+    def collection_name(self, target: QdrantTarget) -> str:
+        """Return a target's collection name, ``{base}.{collection}`` as Learn's are.
+
+        :param target: a strategy's Qdrant target
+        :rtype: str
+        """
+        return f"{self.base_collection_name}.{target.collection}"
 
     def get_client(self) -> QdrantClient:
         """Return the client, reading the credentials from Vault on first use.
@@ -68,74 +85,91 @@ class QdrantResource(ConfigurableResource[None]):
         return self._client
 
 
-class LiteLLMEmbedderResource(ConfigurableResource[None]):
-    """Dense embeddings through ``litellm.embedding``, called as MIT Learn calls it.
+class ProviderKeySecret(Config):
+    """A provider API key in Vault, and the variable its SDK reads it from.
 
-    The Vault secret holds ``api_key`` for the provider. Texts are sent
-    ``batch_size`` at a time, and the provider client retries rate limits,
-    timeouts and server errors ``max_retries`` times with backoff.
+    ol-llm builds provider clients that read their key from the environment, so
+    the resource copies each key from Vault into its variable.
+    """
+
+    env_var: str = Field(description="e.g. OPENAI_API_KEY")
+    vault_mount_point: str = "secret-data"
+    vault_path: str = Field(description="KV v1 path of the secret")
+    key: str = "api_key"
+
+
+class EmbeddingsResource(ConfigurableResource[None]):
+    """Embedders for strategies, calling models through ol-llm.
+
+    Each strategy gets its own ol-llm use case, ``embed-{strategy id}``, so its
+    requests and their cost can be told apart in Opik. Provider keys come from
+    Vault (``provider_keys``); Bedrock needs none, as it authenticates with the
+    pod's IAM role.
+
+    Tracing to Opik is on when ``OPIK_URL_OVERRIDE`` is set, as for the ml code
+    location. The Keycloak client that authenticates to it is read from Vault.
+    Traces leave out the embedded texts unless ``trace_content`` is set, since
+    a backfill would otherwise copy the corpus into Opik.
     """
 
     vault: ResourceDependency[Vault]
-    vault_mount_point: str = "secret-data"
-    vault_path: str = Field(description="KV v1 path of the secret with api_key")
-    model_name: str = DENSE_MODEL_NAME
-    embedding_dim: int = Field(
-        default=TEXT_EMBEDDING_3_LARGE_DIMENSIONS,
-        description="length every returned vector must have",
+    environment: str = Field(description="put on every trace, e.g. production")
+    app: str = Field(
+        default="ol-data-platform",
+        description="the ol-llm app, which is the Opik project",
     )
-    custom_llm_provider: str = "openai"
-    api_base: str | None = None
-    batch_size: int = 100
-    max_retries: int = 3
-    request_timeout_seconds: int = EMBEDDING_REQUEST_TIMEOUT_SECONDS
+    provider_keys: list[ProviderKeySecret] = Field(default_factory=list)
+    trace_content: bool = False
+    opik_vault_mount_point: str = "secret-operations"
+    opik_vault_path: str = Field(
+        default="sso/opik",
+        description="KV v1 path of the Keycloak client with url, client_id, "
+        "client_secret",
+    )
 
-    _api_key: str | None = PrivateAttr(default=None)
+    _run_id: str | None = PrivateAttr(default=None)
 
-    @property
-    def vector_name(self) -> str:
-        """The name of the dense vector in Learn's collections.
+    def setup_for_execution(self, context: InitResourceContext) -> None:
+        """Configure ol-llm and its tracing for this process.
 
-        :rtype: str
+        :param context: the resource context, for the run id
         """
-        return vector_name(self.model_name)
+        for secret in self.provider_keys:
+            os.environ[secret.env_var] = _read_kv1_secret(
+                self.vault, secret.vault_mount_point, secret.vault_path
+            )[secret.key]
+        # Read the rest of the settings (gateway routes) from OL_LLM_* as usual.
+        configure(
+            Settings.from_env({**os.environ, "OL_LLM_ENVIRONMENT": self.environment})
+        )
+        configure_tracing(self._tracing_config())
+        self._run_id = context.run_id
 
-    def _get_api_key(self) -> str:
-        if self._api_key is None:
-            self._api_key = _read_kv1_secret(
-                self.vault, self.vault_mount_point, self.vault_path
-            )["api_key"]
-        return self._api_key
+    def _tracing_config(self) -> TracingConfig:
+        if not os.environ.get("OPIK_URL_OVERRIDE"):
+            return TracingConfig(enabled=False, include_content=self.trace_content)
+        secret = _read_kv1_secret(
+            self.vault, self.opik_vault_mount_point, self.opik_vault_path
+        )
+        return TracingConfig(
+            keycloak=KeycloakClient(
+                token_url=f"{secret['url']}/protocol/openid-connect/token",
+                client_id=secret["client_id"],
+                client_secret=secret["client_secret"],
+            ),
+            include_content=self.trace_content,
+        )
 
-    def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
-        """Embed texts, ``batch_size`` per request.
+    def embedder(self, strategy: EmbeddingStrategy) -> OlLlmEmbedder:
+        """Return an embedder for a strategy's model.
 
-        :param texts: the texts to embed
-        :returns: one vector per text, in order
-        :rtype: list[list[float]]
-        :raises ValueError: when the provider returns the wrong number of
-            vectors or a vector whose length is not ``embedding_dim``
+        :param strategy: the strategy
+        :rtype: OlLlmEmbedder
         """
-        vectors: list[list[float]] = []
-        for batch in batched(texts, self.batch_size):
-            response = litellm.embedding(
-                model=self.model_name,
-                input=list(batch),
-                custom_llm_provider=self.custom_llm_provider,
-                api_base=self.api_base,
-                api_key=self._get_api_key(),
-                max_retries=self.max_retries,
-                timeout=self.request_timeout_seconds,
-            )
-            data = cast(list[dict[str, Any]], response.to_dict()["data"])
-            batch_vectors = [item["embedding"] for item in data]
-            if len(batch_vectors) != len(batch):
-                msg = f"{len(batch)} texts returned {len(batch_vectors)} vectors"
-                raise ValueError(msg)
-            if any(len(vector) != self.embedding_dim for vector in batch_vectors):
-                msg = (
-                    f"{self.model_name} returned a vector not {self.embedding_dim} long"
-                )
-                raise ValueError(msg)
-            vectors.extend(batch_vectors)
-        return vectors
+        use_case = UseCase(
+            app=self.app,
+            name=f"embed-{strategy.strategy_id.replace('_', '-')}",
+            profile="batch",
+            model=strategy.model.model,
+        )
+        return OlLlmEmbedder(strategy.model, use_case, Attribution(run_id=self._run_id))
