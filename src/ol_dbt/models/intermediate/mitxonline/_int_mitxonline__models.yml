@@ -2503,6 +2503,13 @@ models:
     description: timestamp, when the page was last published
   - name: page_description
     description: str, the page's description, as HTML
+  - name: page_about
+    description: str, the page's About section, as stored HTML (Wagtail's database
+      representation, before the API expands internal links and embeds)
+  - name: page_what_you_learn
+    description: str, the page's What you'll learn section, as stored HTML
+  - name: page_prerequisites
+    description: str, the page's Prerequisites section, as stored HTML
   - name: page_length
     description: str, free-text length of the course or program
   - name: page_effort
@@ -2532,8 +2539,50 @@ models:
   - name: page_instructors
     description: array(str), names of the instructor pages linked to the page, in
       link order; null without any
+  - name: page_faqs
+    description: str, the page's FAQs as a JSON array of {"question", "answer"} objects
+      in sort_order, which is the order MITx Online's pages API returns them in. The
+      answer is the stored rich-text HTML. Null for a page without any.
 
 unit_tests:
+- name: test_int__mitxonline__catalog_pages_faqs_in_page_order
+  description: >
+    A page's FAQs come in sort_order, with the id breaking ties and a missing
+    sort_order last, as a JSON array of question and answer. A page without
+    FAQs has none.
+  model: int__mitxonline__catalog_pages
+  given:
+  - input: ref('stg__mitxonline__app__postgres__cms_wagtail_page')
+    rows:
+    - {wagtail_page_id: 10, wagtail_page_is_live: true}
+    - {wagtail_page_id: 11, wagtail_page_is_live: true}
+  - input: ref('stg__mitxonline__app__postgres__wagtailimages_image')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__cms_coursepage')
+    rows:
+    - {course_id: 1, wagtail_page_id: 10, course_is_in_learn_catalog: true, course_ingests_content_files_for_ai: false}
+  - input: ref('stg__mitxonline__app__postgres__cms_programpage')
+    rows:
+    - {program_id: 7, wagtail_page_id: 11, program_is_in_learn_catalog: true}
+  - input: ref('stg__mitxonline__app__postgres__cms_instructorpagelink')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__cms_instructorpage')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__cms_productpagefaq')
+    rows:
+    - {productpagefaq_id: 1, wagtail_page_id: 10, productpagefaq_question: "Last?",
+      productpagefaq_answer: <p>Unordered</p>, productpagefaq_sort_order: null}
+    - {productpagefaq_id: 2, wagtail_page_id: 10, productpagefaq_question: "Second?",
+      productpagefaq_answer: <p>Two</p>, productpagefaq_sort_order: 1}
+    - {productpagefaq_id: 3, wagtail_page_id: 10, productpagefaq_question: "First?",
+      productpagefaq_answer: '<p>One "quoted"</p>', productpagefaq_sort_order: 0}
+    - {productpagefaq_id: 4, wagtail_page_id: 10, productpagefaq_question: "Third?",
+      productpagefaq_answer: <p>Three</p>, productpagefaq_sort_order: 1}
+  expect:
+    rows:
+    - {wagtail_page_id: 10, page_faqs: '[{"question":"First?","answer":"<p>One \"quoted\"</p>"},{"question":"Second?","answer":"<p>Two</p>"},{"question":"Third?","answer":"<p>Three</p>"},{"question":"Last?","answer":"<p>Unordered</p>"}]'}
+    - {wagtail_page_id: 11, page_faqs: null}
+
 - name: test_int__mitxonline__catalog_course_runs_enrollable_and_variant
   description: >
     A run is enrollable when it is live, has a start date, enrollment has started

@@ -1924,6 +1924,23 @@ sources:
       description: int, foreign key to wagtail_page referring to the linked instructor
         page
 
+  - name: raw__mitxonline__app__postgres__cms_productpagefaq
+    description: The frequently asked questions on a course or program page, in the
+      order the page shows them
+    columns:
+    - name: id
+      description: int, primary key for cms_productpagefaq
+    - name: page_id
+      description: int, foreign key to wagtailcore_page referring to the course or
+        program page
+    - name: question
+      description: str, the question
+    - name: answer
+      description: str, the answer, as Wagtail rich text (stored HTML)
+    - name: sort_order
+      description: int, the question's position on the page, from 0. Wagtail's Orderable
+        sets it when an editor saves the page.
+
   - name: raw__mitxonline__app__postgres__courses_coursestopic
     columns:
     - name: id

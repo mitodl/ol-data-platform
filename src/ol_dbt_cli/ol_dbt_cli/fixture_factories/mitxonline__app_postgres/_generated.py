@@ -465,6 +465,20 @@ class InstructorPageLinkBase(fg.RowFactory):
     linked_instructor_page_id = fg.parent("linked_instructor_page", "page_ptr_id", nullable=True)
 
 
+@fg.table("raw__mitxonline__app__postgres__cms_productpagefaq", default_count=SCAFFOLD_DEFAULT_COUNT)
+class ProductPageFAQBase(fg.RowFactory):
+    """Table cms_productpagefaq, from model cms.ProductPageFAQ."""
+
+    class Params:
+        page = None
+
+    id = factory.Sequence(lambda n: n)
+    page_id = fg.parent("page", "id")
+    question = fg.value("text.sentence")
+    answer = fg.value("text.sentence")
+    sort_order = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))
+
+
 @fg.table("raw__mitxonline__app__postgres__cms_programpage", default_count=SCAFFOLD_DEFAULT_COUNT)
 class ProgramPageBase(fg.RowFactory):
     """Table cms_programpage, from model cms.ProgramPage."""

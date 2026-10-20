@@ -1,6 +1,8 @@
 -- The CMS page of each MITx Online course and program, with the fields MITx Online's catalog
 -- API reads off it: the feature image URL as cms.api.get_wagtail_img_src builds it and the
--- names of the linked instructor pages.
+-- names of the linked instructor pages. It also carries the rich-text sections MIT Learn reads
+-- from the Wagtail pages API (/api/v2/pages/) for a resource's full description, and its FAQs as
+-- that API's `faqs` field lists them.
 
 with pages as (
     select * from {{ ref('stg__mitxonline__app__postgres__cms_wagtail_page') }}
@@ -20,6 +22,9 @@ with pages as (
         , cast(null as bigint) as program_id
         , wagtail_page_id
         , course_description as page_description
+        , course_about as page_about
+        , course_what_you_learn as page_what_you_learn
+        , course_prerequisites as page_prerequisites
         , course_length as page_length
         , course_effort as page_effort
         , course_feature_image_id as page_feature_image_id
@@ -38,6 +43,9 @@ with pages as (
         , program_id
         , wagtail_page_id
         , program_description as page_description
+        , program_about as page_about
+        , program_what_you_learn as page_what_you_learn
+        , program_prerequisites as page_prerequisites
         , program_length as page_length
         , program_effort as page_effort
         , program_feature_image_id as page_feature_image_id
@@ -64,6 +72,33 @@ with pages as (
     group by links.wagtail_page_id
 )
 
+-- Each page's FAQs as a JSON array of {question, answer} in the order the pages API returns
+-- them: ProductPageFAQ's Meta.ordering is sort_order, which Postgres sorts nulls last, and
+-- the id breaks ties. The answer is the stored rich text, like the page sections.
+, faq_objects as (
+    select
+        wagtail_page_id
+        , productpagefaq_id
+        , coalesce(productpagefaq_sort_order, 2147483647) as faq_position
+        , {{ json_object_from_pairs([
+            ['question', 'productpagefaq_question']
+            , ['answer', 'productpagefaq_answer']
+        ]) }} as faq_json
+    from {{ ref('stg__mitxonline__app__postgres__cms_productpagefaq') }}
+)
+
+, faqs as (
+    select
+        wagtail_page_id
+        , {{ dbt.concat([
+            "'['"
+            , array_join("array_agg(faq_json order by faq_position, productpagefaq_id)", ",")
+            , "']'"
+        ]) }} as faqs
+    from faq_objects
+    group by wagtail_page_id
+)
+
 select
     product_pages.course_id
     , product_pages.program_id
@@ -72,6 +107,9 @@ select
     , pages.wagtail_page_first_published_on as page_first_published_on
     , pages.wagtail_page_last_published_on as page_last_published_on
     , product_pages.page_description
+    , product_pages.page_about
+    , product_pages.page_what_you_learn
+    , product_pages.page_prerequisites
     , product_pages.page_length
     , product_pages.page_effort
     , product_pages.page_min_weeks
@@ -84,7 +122,9 @@ select
     , coalesce(product_pages.page_ingests_content_files_for_ai, false) as page_ingests_content_files_for_ai
     , images.image_src as page_feature_image_src
     , instructors.instructors as page_instructors
+    , faqs.faqs as page_faqs
 from product_pages
 inner join pages on product_pages.wagtail_page_id = pages.wagtail_page_id
 left join images on product_pages.page_feature_image_id = images.image_id
 left join instructors on product_pages.wagtail_page_id = instructors.wagtail_page_id
+left join faqs on product_pages.wagtail_page_id = faqs.wagtail_page_id
