@@ -12,6 +12,8 @@ import polars as pl
 import pytest
 from botocore.exceptions import ClientError
 from google import genai
+from google.auth.credentials import AnonymousCredentials
+from google.genai import types as genai_types
 from ml.lib import embed
 
 
@@ -425,43 +427,152 @@ def test_default_embedding_model_version_honors_explicit_provider_override(
     assert embed.default_embedding_model_version() == embed.EMBEDDING_MODEL_VERSION
 
 
-class _FakeGeminiEmbedding:
-    def __init__(self, values: list[float]) -> None:
-        self.values = values
-        self.statistics = None
+def _gemini_client(
+    monkeypatch: pytest.MonkeyPatch,
+    response_body: dict[str, Any],
+    *,
+    vertexai: bool,
+) -> tuple[genai.Client, list[dict[str, Any]]]:
+    """Build a real genai.Client with its transport replaced, so the SDK's own
+    per-backend and per-model routing runs but nothing leaves the process. Returns
+    the client and the list each request's path and body are appended to.
+    """
+    if vertexai:
+        client = genai.Client(
+            vertexai=True,
+            project="test-project",
+            location="global",
+            credentials=AnonymousCredentials(),
+        )
+    else:
+        client = genai.Client(api_key="test")  # pragma: allowlist secret
+    requests: list[dict[str, Any]] = []
+
+    def fake_request(
+        _method: str,
+        path: str,
+        body: dict[str, Any],
+        _http_options: object = None,
+    ) -> genai_types.HttpResponse:
+        requests.append({"path": path, "body": body})
+        return genai_types.HttpResponse(headers={}, body=json.dumps(response_body))
+
+    monkeypatch.setattr(client._api_client, "request", fake_request)
+    return client, requests
 
 
-class _FakeGeminiModels:
-    def __init__(self, embeddings_by_call: list[list[list[float]]]) -> None:
-        self._calls = iter(embeddings_by_call)
-        self.last_contents: list[str] | None = None
+@pytest.mark.parametrize(
+    ("vertexai", "model_version", "expected"),
+    [
+        (False, "gemini-embedding-001", 250),
+        (False, "gemini-embedding-2-preview", 250),
+        (True, "gemini-embedding-001", 1),
+        (True, "gemini-embedding-2-preview", 1),
+        (True, "text-embedding-005", 5),
+    ],
+)
+def test_gemini_embedding_client_sizes_request_batches_by_backend_and_model(
+    monkeypatch: pytest.MonkeyPatch,
+    vertexai: bool,  # noqa: FBT001
+    model_version: str,
+    expected: int,
+) -> None:
+    client, _ = _gemini_client(monkeypatch, {}, vertexai=vertexai)
 
-    def embed_content(
-        self, *, model: str, contents: list[str], config: object
-    ) -> "_FakeGeminiResponse":
-        self.last_model = model
-        self.last_contents = contents
-        self.last_config = config
-        vectors = next(self._calls)
-        return _FakeGeminiResponse([_FakeGeminiEmbedding(v) for v in vectors])
+    embedding_client = embed.GeminiEmbeddingClient(client, model_version, 2)
+
+    assert embedding_client.max_request_batch_size == expected
 
 
-class _FakeGeminiResponse:
-    def __init__(self, embeddings: list["_FakeGeminiEmbedding"]) -> None:
-        self.embeddings = embeddings
+def test_gemini_api_embeds_each_text_separately(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bare list of strings would reach gemini-embedding-2 as one Content and come
+    back as one aggregated vector.
+    """
+    client, requests = _gemini_client(
+        monkeypatch,
+        {"embeddings": [{"values": [0.1, 0.2]}, {"values": [0.3, 0.4]}]},
+        vertexai=False,
+    )
 
-
-def test_gemini_embedding_client_returns_values_in_response_order() -> None:
-    fake_models = _FakeGeminiModels([[[0.1, 0.2], [0.3, 0.4]]])
-
-    class _FakeGeminiClient:
-        models = fake_models
-
-    client = embed.GeminiEmbeddingClient(_FakeGeminiClient(), "gemini-embedding-001", 2)
-    result = client.embed_batch(["a", "b"])
+    result = embed.GeminiEmbeddingClient(
+        client, "gemini-embedding-2-preview", 2
+    ).embed_batch(["a", "b"])
 
     assert result == [[0.1, 0.2], [0.3, 0.4]]
-    assert fake_models.last_contents == ["a", "b"]
+    assert requests[0]["path"].endswith(":batchEmbedContents")
+    assert [len(r["content"]["parts"]) for r in requests[0]["body"]["requests"]] == [
+        1,
+        1,
+    ]
+
+
+def test_vertex_gemini_embedding_001_calls_predict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, requests = _gemini_client(
+        monkeypatch,
+        {
+            "predictions": [
+                {"embeddings": {"values": [0.1, 0.2], "statistics": {"token_count": 3}}}
+            ]
+        },
+        vertexai=True,
+    )
+
+    result = embed.GeminiEmbeddingClient(client, "gemini-embedding-001", 2).embed_batch(
+        ["a"]
+    )
+
+    assert result == [[0.1, 0.2]]
+    assert requests[0]["path"].endswith("gemini-embedding-001:predict")
+    assert len(requests[0]["body"]["instances"]) == 1
+
+
+def test_vertex_embed_content_model_calls_embed_content(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, requests = _gemini_client(
+        monkeypatch, {"embedding": {"values": [0.1, 0.2]}}, vertexai=True
+    )
+
+    result = embed.GeminiEmbeddingClient(
+        client, "gemini-embedding-2-preview", 2
+    ).embed_batch(["a"])
+
+    assert result == [[0.1, 0.2]]
+    assert requests[0]["path"].endswith("gemini-embedding-2-preview:embedContent")
+
+
+def test_vertex_embed_content_model_rejects_more_than_one_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The SDK raises rather than sending one aggregated request, so an oversized
+    batch fails the chunk instead of pairing one vector with several rows.
+    """
+    client, requests = _gemini_client(
+        monkeypatch, {"embedding": {"values": [0.1, 0.2]}}, vertexai=True
+    )
+
+    with pytest.raises(ValueError, match="one content at a time"):
+        embed.GeminiEmbeddingClient(
+            client, "gemini-embedding-2-preview", 2
+        ).embed_batch(["a", "b"])
+    assert requests == []
+
+
+def test_gemini_embedding_client_rejects_an_embedding_count_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _ = _gemini_client(
+        monkeypatch, {"embeddings": [{"values": [0.1, 0.2]}]}, vertexai=False
+    )
+
+    with pytest.raises(ValueError, match="returned 1 embeddings for 2 texts"):
+        embed.GeminiEmbeddingClient(client, "gemini-embedding-001", 2).embed_batch(
+            ["a", "b"]
+        )
 
 
 class _FakeBedrockBody:
