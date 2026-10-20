@@ -704,7 +704,8 @@ def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
             conversation_ref, turn_count, embedding_input, resolved_text columns,
             e.g. resolve_embedding_text's output. A null resolved_text (upstream
             summary/redaction not ready yet) is skipped and retried next run, same
-            as a failed API call (#2542's checkpointing precedent).
+            as a failed API call (#2542's checkpointing precedent). An empty or
+            whitespace-only one is skipped the same way.
         client: an object with an `embed_batch(texts: list[str]) -> list[list[float]]`
             method, e.g. an OpenAIEmbeddingClient wrapping LLMClientFactory.
         checkpoint_target: (catalog, table_identifier) passed through to
@@ -740,7 +741,13 @@ def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
     """
     log = context.log if context is not None else logger
     catalog, table_identifier = checkpoint_target
-    rows = [row for row in df.to_dicts() if row["resolved_text"] is not None]
+    # A blank text is skipped too: Vertex's :predict drops an empty text from the
+    # request, so the embedding count stops matching and the whole sub-batch fails.
+    rows = [
+        row
+        for row in df.to_dicts()
+        if row["resolved_text"] is not None and row["resolved_text"].strip()
+    ]
 
     consecutive_failed_chunks = 0
     chunk_dfs: list[pl.DataFrame] = []

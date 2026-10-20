@@ -824,6 +824,32 @@ def test_embed_and_checkpoint_skips_null_text() -> None:
     assert client.batch_calls == [["hello"]]
 
 
+def test_embed_and_checkpoint_skips_blank_text() -> None:
+    """Vertex's :predict sends no instance for an empty text, which would fail
+    every other row in the same request.
+    """
+    table = _FakeTable()
+    catalog = _FakeCatalog(table)
+    client = _FakeEmbeddingClient()
+    df = pl.DataFrame(
+        {
+            "feedback_conversation_pk": ["pk-1", "pk-2", "pk-3"],
+            "source_slug": ["zendesk", "zendesk", "zendesk"],
+            "conversation_ref": ["1", "2", "3"],
+            "turn_count": [3, 1, 1],
+            "embedding_input": ["summary", "concatenated_turns", "summary"],
+            "resolved_text": ["hello", "", " \n "],
+        }
+    )
+
+    result = embed.embed_and_checkpoint(
+        df, client, (catalog, "some_db.feedback_embeddings")
+    )
+
+    assert result["conversation_ref"].to_list() == ["1"]
+    assert client.batch_calls == [["hello"]]
+
+
 def test_embed_and_checkpoint_batches_calls() -> None:
     """Multiple rows within EMBEDDING_BATCH_SIZE go out in a single API call."""
     table = _FakeTable()
