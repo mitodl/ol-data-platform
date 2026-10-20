@@ -3,17 +3,21 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import polars as pl
-from b2b_organization.partitions.b2b_organization import (
-    b2b_organization_list_partitions,
-)
 from dagster import (
     AssetExecutionContext,
     AssetKey,
     DataVersion,
+    DynamicPartitionsDefinition,
     Output,
     asset,
 )
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
+
+# Dynamic partitions are stored on the instance by name, not per code location,
+# so the organizations added while this lived in b2b_organization carry over.
+b2b_organization_list_partitions = DynamicPartitionsDefinition(
+    name="b2b_organization_list"
+)
 
 
 @asset(
@@ -21,7 +25,7 @@ from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
     group_name="b2b_organization",
     deps=[AssetKey(["reporting", "organization_administration_report"])],
     partitions_def=b2b_organization_list_partitions,
-    io_manager_key="s3file_io_manager",
+    io_manager_key="b2b_partners_io_manager",
     key=AssetKey(["b2b_organization", "administration_report_export"]),
 )
 def export_b2b_organization_data(context: AssetExecutionContext):

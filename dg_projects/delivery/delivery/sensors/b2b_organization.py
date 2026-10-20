@@ -14,7 +14,11 @@ from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 @sensor(
     name="b2b_organization_list_sensor",
     description="Query a list of B2B organizational customers",
-    default_status=DefaultSensorStatus.STOPPED,
+    # RUNNING in the b2b_organization location at the time of the move to
+    # delivery (a daily production tick launching one run per organization).
+    # Instigator state is keyed on location name, so the new location would
+    # otherwise start it STOPPED.
+    default_status=DefaultSensorStatus.RUNNING,
     minimum_interval_seconds=60 * 60 * 24,  # daily
     job_name="b2b_organization_data_export_job",
 )
