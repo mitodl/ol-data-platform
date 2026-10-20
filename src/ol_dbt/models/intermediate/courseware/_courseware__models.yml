@@ -246,7 +246,9 @@ unit_tests:
   model: int__courseware__extraction_sources
   overrides:
     vars:
-      courseware_ocw_courses: [c1]
+      courseware_ocw_courses:
+      - c1
+      - c2
   given:
   - input: ref('dim_course_content')
     rows: []
@@ -290,6 +292,8 @@ unit_tests:
     - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/mock_exam/,
       content_type: pdf, title: Mock Exam Key, file_extension: .pdf, content_tags: null,
       content: 1. Beowulf is an epic.}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
   expect:
     rows:
     - {scope_id: context, scope_kind: context, scope_title: Course context, source_ref: courses/c2/,
@@ -348,6 +352,8 @@ unit_tests:
     - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/samplesoltxt/,
       content_type: file, title: samplesol.txt, file_extension: .txt, content_tags: '["Problem
         Sets"]', content: 'Edit Distance: 73'}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
   expect:
     rows:
     - {scope_id: context, source_ref: courses/c1/}
@@ -355,6 +361,10 @@ unit_tests:
     - {scope_id: materials, source_ref: courses/c1/resources/ses5_solis_wets/}
     - {scope_id: materials, source_ref: courses/c1/resources/catialab2solids/}
 
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
 - name: test_int__courseware__extraction_sources_reads_ocw_mixed_solution_types
   description: >
     "Multiple Assignment Types with Solutions" tags answer keys and the material
@@ -392,11 +402,17 @@ unit_tests:
     - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/review2/,
       content_type: pdf, title: Quiz 2 Review, file_extension: .pdf, content_tags: '["Exams","Exam
         Solutions"]', content: 1. The runtime is O(n log n).}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
   expect:
     rows:
     - {scope_id: context, source_ref: courses/c1/}
     - {scope_id: materials, source_ref: courses/c1/resources/facilitation_guide_pdf/}
 
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
 - name: test_int__courseware__extraction_sources_follows_ocw_resource_descriptions
   description: >
     Session 10's page links a video clip whose description links the session notes.
@@ -441,6 +457,8 @@ unit_tests:
     - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ex10prb/,
       content_type: pdf, title: MIT18_01SCF10_ex10prb.pdf, file_extension: .pdf, content_tags: null,
       content: Differentiate x/(x+1).}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
   expect:
     rows:
     - {scope_id: context, source_position: 1, source_ref: courses/c1/}
@@ -449,6 +467,10 @@ unit_tests:
     - {scope_id: courses/c1/pages/differentiation/, source_position: 3, source_ref: courses/c1/resources/ses10a/}
     - {scope_id: courses/c1/pages/differentiation/, source_position: 4, source_ref: courses/c1/resources/ex10prb/}
 
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
 - name: test_int__courseware__extraction_sources_skips_ocw_textbook_in_week_courses
   description: >
     c1 teaches through three weeks, so its Online Textbook is reference reading: the
@@ -509,6 +531,8 @@ unit_tests:
     - {courserun_readable_id: run2, course_slug: c2, content_file_key: courses/c2/resources/chapter1/,
       content_type: pdf, title: Chapter 1, file_extension: .pdf, content_tags: null,
       content: Chapter 1. Limits.}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
   expect:
     rows:
     - {scope_id: context, source_ref: courses/c1/}
@@ -522,6 +546,11 @@ unit_tests:
     - {scope_id: courses/c2/pages/open-textbook/, source_ref: courses/c2/pages/open-textbook/}
     - {scope_id: courses/c2/pages/open-textbook/, source_ref: courses/c2/resources/chapter1/}
 
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
+      - c2
 - name: test_int__courseware__extraction_sources_counts_ocw_groups_by_section
   description: >
     c1's three page groups are all inside its Lecture Notes section, so it is not
@@ -568,6 +597,8 @@ unit_tests:
     - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/chapter1/,
       content_type: pdf, title: Chapter 1, file_extension: .pdf, content_tags: null,
       content: Chapter 1. Kinematics in one dimension.}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
   expect:
     rows:
     - {scope_id: context, source_ref: courses/c1/}
@@ -579,6 +610,10 @@ unit_tests:
     - {scope_id: courses/c1/pages/online-textbook/, source_ref: courses/c1/pages/online-textbook/}
     - {scope_id: courses/c1/pages/online-textbook/, source_ref: courses/c1/resources/chapter1/}
 
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
 - name: test_int__courseware__extraction_sources_places_ocw_problem_sets_at_release
   description: >
     The calendar's session 2 row says "Problem set 1 out", so ps1, which only the
@@ -622,9 +657,15 @@ unit_tests:
     - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ps2/,
       content_type: pdf, title: ps2.pdf, file_extension: .pdf, content_tags: null,
       content: 1. Differentiate x^2.}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
   expect:
     rows:
     - {scope_id: context, scope_title: Course context, source_ref: courses/c1/}
     - {scope_id: session-1, scope_title: 'Session 1: Introduction', source_ref: courses/c1/resources/ps2/}
     - {scope_id: session-2, scope_title: 'Session 2: Limits', source_ref: courses/c1/resources/ps1/}
     - {scope_id: courses/c1/pages/assignments/, scope_title: Assignments, source_ref: courses/c1/pages/assignments/}
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
