@@ -56,13 +56,13 @@ def sample_course_archive():
     course_root = Path(temp_dir.name) / "course_root"
     course_root.mkdir()
 
-    # Root course.xml — processed by process_course_xml(), skipped here
+    # Root course.xml, the pointer to the course block
     (course_root / "course.xml").write_text(
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<course url_name="2024_Spring" org="TestX" course="TEST101"/>\n'
     )
 
-    # course/{run_tag}.xml — metadata block, skipped by process_course_xml_blocks
+    # course/{run_tag}.xml, the course block
     course_dir = course_root / "course"
     course_dir.mkdir()
     (course_dir / "2024_Spring.xml").write_text(
@@ -215,19 +215,24 @@ def test_process_course_xml_blocks_raw_xml_present(sample_course_archive):
         )
 
 
-def test_process_course_xml_blocks_course_metadata_skipped(sample_course_archive):
-    """Test that course/{run_tag}.xml metadata files are not included as blocks.
+def test_process_course_xml_blocks_course_root_included(sample_course_archive):
+    """Both files of the course block are blocks of type course.
 
-    These files are already processed by process_course_xml() to extract
-    course-level metadata and should not appear in the structural block output.
+    MIT Learn loads course.xml and course/{run_tag}.xml as ContentFiles, and
+    integrations__learn__content_files reads them from the blocks.
     """
     archive_path, _ = sample_course_archive
     blocks, _ = process_course_xml_blocks(archive_path, "test")
 
-    block_types = {b.block_type for b in blocks}
-    assert "course" not in block_types, (
-        "course/ metadata files should be skipped "
-        "— already handled by process_course_xml()"
+    course_blocks = {b.xml_path: b for b in blocks if b.block_type == "course"}
+    assert set(course_blocks) == {
+        "course_root/course.xml",
+        "course_root/course/2024_Spring.xml",
+    }
+    assert course_blocks["course_root/course.xml"].block_id == "2024_Spring"
+    assert (
+        course_blocks["course_root/course/2024_Spring.xml"].block_display_name
+        == "Test Course 101"
     )
 
 
