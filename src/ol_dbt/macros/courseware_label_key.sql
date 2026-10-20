@@ -8,7 +8,6 @@
          so R² keeps its 2 and Schrödinger its ö;
       5. leading and trailing whitespace is stripped, and a label with no letters or
          numbers left has no key (null).
-    ml.lib.courseware.tagging.label_key is the same rule in Python and must match it.
 #}
 {% macro courseware_label_key(label_expr) -%}
     {%- set key = "lower(" ~ label_expr ~ ")" -%}
