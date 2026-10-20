@@ -148,6 +148,8 @@ select
     , case when pages.page_is_listed_to_learn then pages.page_about end as about
     , case when pages.page_is_listed_to_learn then pages.page_what_you_learn end as what_you_learn
     , case when pages.page_is_listed_to_learn then pages.page_prerequisites end as prerequisites
+    -- The pages API lists a page without FAQs with an empty array
+    , case when pages.page_is_listed_to_learn then coalesce(pages.page_faqs, '[]') end as faqs
     , pages.page_feature_image_src as image_url
     , pages.wagtail_page_id is not null as has_page
     , (

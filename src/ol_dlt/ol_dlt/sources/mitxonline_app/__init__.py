@@ -95,6 +95,7 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
         DatabaseTable(name="cms_coursepage_topics", primary_key="id"),
         DatabaseTable(name="cms_instructorpage", primary_key="page_ptr_id"),
         DatabaseTable(name="cms_instructorpagelink", primary_key="id"),
+        DatabaseTable(name="cms_productpagefaq", primary_key="id"),
         DatabaseTable(name="cms_programpage", primary_key="page_ptr_id"),
         DatabaseTable(name="cms_signatoryindexpage", primary_key="page_ptr_id"),
         DatabaseTable(name="cms_signatorypage", primary_key="page_ptr_id"),
