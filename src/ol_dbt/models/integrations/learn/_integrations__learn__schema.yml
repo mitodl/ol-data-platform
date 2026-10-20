@@ -657,7 +657,11 @@ models:
   - name: micromasters_program_id
     description: MicroMasters program id for the completed program, when applicable.
   - name: mitxonline_program_id
-    description: MITx Online program id for the completed program, when applicable.
+    description: >
+      MITx Online program id for the completed program. For an edX.org
+      MicroMasters certificate, the id of the MITx Online program its title
+      maps to in edxorg_to_mitxonline_program_mapping. Null when the title has
+      no mapping.
   - name: user_first_name
     description: Certificate recipient's first name.
   - name: user_last_name
@@ -1028,3 +1032,38 @@ unit_tests:
     - {readable_id: program-2, has_page: false, published: false, certification: false,
       prices: [0], start_date: "2019-01-01T00:00:00.000", has_catalog_page: false,
       about: null, what_you_learn: null, prerequisites: null, faqs: null}
+- name: test_integrations__learn__program_certificates_maps_edxorg_programs_to_mitxonline
+  description: >
+    A non-DEDP certificate has no MITx Online program id upstream, so it takes
+    the id of the MITx Online program its edX.org title maps to, per SDS track.
+    A DEDP certificate keeps the id it already has, and a title with no mapping
+    stays null.
+  model: integrations__learn__program_certificates
+  given:
+  - input: ref('int__micromasters__program_certificates')
+    rows:
+    - {program_certificate_hashed_id: scm, program_title: Supply Chain Management,
+      micromasters_program_id: 1, mitxonline_program_id: null, program_completion_timestamp: "2020-01-01T00:00:00.000"}
+    - {program_certificate_hashed_id: sds-methods, program_title: Statistics and Data
+        Science (Methods Track), micromasters_program_id: 4, mitxonline_program_id: null,
+      program_completion_timestamp: "2020-01-01T00:00:00.000"}
+    - {program_certificate_hashed_id: dedp, program_title: 'Data, Economics, and Design
+        of Policy: Public Policy', micromasters_program_id: null, mitxonline_program_id: 2,
+      program_completion_timestamp: "2024-01-01T00:00:00.000"}
+    - {program_certificate_hashed_id: unmapped, program_title: Statistics and Data
+        Science, micromasters_program_id: 4, mitxonline_program_id: null, program_completion_timestamp: null}
+  - input: ref('edxorg_to_mitxonline_program_mapping')
+    rows:
+    - {edxorg_program_title: Supply Chain Management, mitxonline_program_readable_id: program-v1:MITxT+SCM}
+    - {edxorg_program_title: Statistics and Data Science (Methods Track), mitxonline_program_readable_id: program-v1:MITxT+SDS-Methods-Track}
+  - input: ref('int__mitxonline__programs')
+    rows:
+    - {program_id: 44, program_readable_id: program-v1:MITxT+SCM}
+    - {program_id: 46, program_readable_id: program-v1:MITxT+SDS-Methods-Track}
+    - {program_id: 2, program_readable_id: program-v1:MITx+DEDP-Public-Policy}
+  expect:
+    rows:
+    - {record_hash: scm, mitxonline_program_id: 44}
+    - {record_hash: sds-methods, mitxonline_program_id: 46}
+    - {record_hash: dedp, mitxonline_program_id: 2}
+    - {record_hash: unmapped, mitxonline_program_id: null}
