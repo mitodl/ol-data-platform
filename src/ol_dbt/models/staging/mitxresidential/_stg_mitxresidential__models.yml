@@ -825,3 +825,81 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["courserun_readable_id", "organization_id"]
+
+unit_tests:
+- name: test_stg__mitxresidential__openedx__api__course_structure_keeps_a_block_restored_by_a_later_retrieval
+  description: >
+    b2 is removed at r2 and restored at r3, returning the course to its r1
+    hash. r3 differs from r2, so every block of r3 is kept, b2 included.
+  model: stg__mitxresidential__openedx__api__course_structure
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__mitx__openedx__api__course_blocks')
+    rows:
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: course, course_content_hash: A,
+      retrieved_at: '2026-10-01 00:00:00'}
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: b1, course_content_hash: A,
+      retrieved_at: '2026-10-01 00:00:00'}
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: b2, course_content_hash: A,
+      retrieved_at: '2026-10-01 00:00:00'}
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: course, course_content_hash: B,
+      retrieved_at: '2026-10-02 00:00:00'}
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: b1, course_content_hash: B,
+      retrieved_at: '2026-10-02 00:00:00'}
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: course, course_content_hash: A,
+      retrieved_at: '2026-10-03 00:00:00'}
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: b1, course_content_hash: A,
+      retrieved_at: '2026-10-03 00:00:00'}
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: b2, course_content_hash: A,
+      retrieved_at: '2026-10-03 00:00:00'}
+  expect:
+    rows:
+    - {courserun_readable_id: course-v1:MITx+6.002+2026_Spring, coursestructure_block_id: course,
+      coursestructure_content_hash: A, coursestructure_retrieved_at: '2026-10-01T00:00:00.000000Z'}
+    - {courserun_readable_id: course-v1:MITx+6.002+2026_Spring, coursestructure_block_id: b1,
+      coursestructure_content_hash: A, coursestructure_retrieved_at: '2026-10-01T00:00:00.000000Z'}
+    - {courserun_readable_id: course-v1:MITx+6.002+2026_Spring, coursestructure_block_id: b2,
+      coursestructure_content_hash: A, coursestructure_retrieved_at: '2026-10-01T00:00:00.000000Z'}
+    - {courserun_readable_id: course-v1:MITx+6.002+2026_Spring, coursestructure_block_id: course,
+      coursestructure_content_hash: B, coursestructure_retrieved_at: '2026-10-02T00:00:00.000000Z'}
+    - {courserun_readable_id: course-v1:MITx+6.002+2026_Spring, coursestructure_block_id: b1,
+      coursestructure_content_hash: B, coursestructure_retrieved_at: '2026-10-02T00:00:00.000000Z'}
+    - {courserun_readable_id: course-v1:MITx+6.002+2026_Spring, coursestructure_block_id: course,
+      coursestructure_content_hash: A, coursestructure_retrieved_at: '2026-10-03T00:00:00.000000Z'}
+    - {courserun_readable_id: course-v1:MITx+6.002+2026_Spring, coursestructure_block_id: b1,
+      coursestructure_content_hash: A, coursestructure_retrieved_at: '2026-10-03T00:00:00.000000Z'}
+    - {courserun_readable_id: course-v1:MITx+6.002+2026_Spring, coursestructure_block_id: b2,
+      coursestructure_content_hash: A, coursestructure_retrieved_at: '2026-10-03T00:00:00.000000Z'}
+- name: test_stg__mitxresidential__openedx__api__course_structure_drops_a_retrieval_with_an_unchanged_hash
+  description: >
+    r2 has the same hash as r1, so none of its blocks are kept. r3 changed
+    the course, so all of its blocks are.
+  model: stg__mitxresidential__openedx__api__course_structure
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__mitx__openedx__api__course_blocks')
+    rows:
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: course, course_content_hash: A,
+      retrieved_at: '2026-10-01 00:00:00'}
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: b1, course_content_hash: A,
+      retrieved_at: '2026-10-01 00:00:00'}
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: course, course_content_hash: A,
+      retrieved_at: '2026-10-02 00:00:00'}
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: b1, course_content_hash: A,
+      retrieved_at: '2026-10-02 00:00:00'}
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: course, course_content_hash: B,
+      retrieved_at: '2026-10-03 00:00:00'}
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: b1, course_content_hash: B,
+      retrieved_at: '2026-10-03 00:00:00'}
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: b2, course_content_hash: B,
+      retrieved_at: '2026-10-03 00:00:00'}
+  expect:
+    rows:
+    - {courserun_readable_id: course-v1:MITx+6.002+2026_Spring, coursestructure_block_id: course,
+      coursestructure_content_hash: A, coursestructure_retrieved_at: '2026-10-01T00:00:00.000000Z'}
+    - {courserun_readable_id: course-v1:MITx+6.002+2026_Spring, coursestructure_block_id: b1,
+      coursestructure_content_hash: A, coursestructure_retrieved_at: '2026-10-01T00:00:00.000000Z'}
+    - {courserun_readable_id: course-v1:MITx+6.002+2026_Spring, coursestructure_block_id: course,
+      coursestructure_content_hash: B, coursestructure_retrieved_at: '2026-10-03T00:00:00.000000Z'}
+    - {courserun_readable_id: course-v1:MITx+6.002+2026_Spring, coursestructure_block_id: b1,
+      coursestructure_content_hash: B, coursestructure_retrieved_at: '2026-10-03T00:00:00.000000Z'}
+    - {courserun_readable_id: course-v1:MITx+6.002+2026_Spring, coursestructure_block_id: b2,
+      coursestructure_content_hash: B, coursestructure_retrieved_at: '2026-10-03T00:00:00.000000Z'}
