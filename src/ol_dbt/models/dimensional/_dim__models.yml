@@ -81,6 +81,11 @@ models:
     tests:
     - not_null
     - unique
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.platform
   - name: platform_name
     description: string, name of the platform
     tests:
@@ -356,6 +361,11 @@ models:
     tests:
     - not_null
     - unique
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.user
   - name: user_pk_source
     description: string, which identifier user_pk was derived from - global when the
       group has a user_global_id, the platform name when it was keyed off a source
@@ -373,14 +383,34 @@ models:
     description: string, a unique identifier for the user across all platforms
     tests:
     - unique
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: mitlearn_user_id
     data_type: bigint
     description: int, a unique identifier for the user on the MIT Learn
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: mitlearn_openedx_user_id
     description: string, user id on the MIT Learn open edX platform
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: mitxonline_openedx_user_id
     data_type: bigint
     description: string, openedx user id. This is deprecated in favor of mitlearn_openedx_user_id.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: mitxonline_application_user_id
     data_type: bigint
     description: int, user id on MITxOnline application
@@ -388,18 +418,38 @@ models:
     - unique:
         config:
           error_if: ">0"
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: user_mitxonline_username
     description: string, username on the MITx Online open edx platform. If user doesn't
       have an open edX account, it defaults to username on the MITx Online application,
       which is their email address.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: mitxpro_openedx_user_id
     description: int, openedx user id for MITx Pro
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: bootcamps_application_user_id
     description: int, user id on Bootcamps application
     tests:
     - unique:
         config:
           error_if: ">0"
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: mitxpro_application_user_id
     data_type: bigint
     description: int, user id on MITx Pro application
@@ -407,16 +457,36 @@ models:
     - unique:
         config:
           error_if: ">0"
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: user_mitxpro_username
     description: string, username on MITx Pro
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: residential_openedx_user_id
     description: int, openedx user id for MITx Residential
     tests:
     - unique:
         config:
           error_if: ">0"
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: user_residential_username
     description: string, username on MITx Residential
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: edxorg_openedx_user_id
     data_type: bigint
     description: int, openedx user id for edX.org
@@ -424,16 +494,36 @@ models:
     - unique:
         config:
           error_if: ">0"
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: user_edxorg_username
     description: string, username on edX.org
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: emeritus_user_id
     description: string, user id on Emeritus platform
     tests:
     - unique:
         config:
           error_if: ">0"
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: global_alumni_user_id
     description: string, user id on Global Alumni platform
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: emeritus_identity_key
     description: string, identifies the user's Emeritus account - the Emeritus user
       id, or the email as Emeritus sent it (not lowercased) when Emeritus sent no
@@ -444,6 +534,11 @@ models:
           row_condition: "emeritus_user_id is not null"
         config:
           error_if: ">0"
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: global_alumni_identity_key
     description: string, identifies the user's Global Alumni account - the email as
       Global Alumni sent it (not lowercased), falling back to the user id. Email comes
@@ -455,6 +550,11 @@ models:
           row_condition: "global_alumni_user_id is not null"
         config:
           error_if: ">0"
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: email
     data_type: varchar
     description: string, user email on the corresponding platform including xpro,
@@ -464,25 +564,76 @@ models:
     - unique:
         config:
           error_if: ">0"
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
+          - open-learning.ferpa-classification.directory-information
   - name: full_name
     description: str, user full name. Very small number of edX.org users have blank
       full name, their name couldn't be populated from other sources if they don't
       have their accounts linked on MicroMasters.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
+          - open-learning.ferpa-classification.directory-information
   - name: address_country
     description: str, country code provided by the user on the corresponding platform
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.indirect-identifier
   - name: highest_education
     description: str, user's level of education
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.indirect-identifier
   - name: gender
     description: str, Gender selected by the user on their profile on the corresponding
       platform
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.indirect-identifier
+          - open-learning.ferpa-classification.education-record
   - name: birth_year
     description: int, user's birth year
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.indirect-identifier
   - name: company
     description: str, user's company
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.indirect-identifier
+          - open-learning.ferpa-classification.education-record
   - name: job_title
     description: str, user's job title
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.indirect-identifier
+          - open-learning.ferpa-classification.education-record
   - name: industry
     description: str, user's job industry
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.indirect-identifier
+          - open-learning.ferpa-classification.education-record
   - name: topic_interests
     description: array, a list of topic interests selected by MIT Learn users on their
       profile. e.g. Art, Design & Architecture, Health & Medicine, Business & Management
@@ -499,18 +650,48 @@ models:
       process on MIT Learn
   - name: user_is_active_on_bootcamps
     description: boolean, indicating if user's account is active on Bootcamps.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.active-account
   - name: user_is_active_on_mitlearn
     description: boolean, indicating if user's account is active on MIT Learn.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.active-account
   - name: user_joined_on_mitlearn
     description: str, date and time when the user joined on MIT Learn.
   - name: user_is_active_on_mitxonline
     description: boolean, indicating if user's account is active on MITx Online.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.active-account
   - name: user_is_active_on_edxorg
     description: boolean, indicating if user's account is active on edX.org.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.active-account
   - name: user_is_active_on_mitxpro
     description: boolean, indicating if user's account is active on MITx Pro.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.active-account
   - name: user_is_active_on_residential
     description: boolean, indicating if user's account is active on Residential MITx.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.active-account
   - name: user_joined_on_mitxonline
     description: str, when the user joined on MITx Online.
   - name: user_joined_on_edxorg
@@ -527,23 +708,48 @@ models:
     - unique:
         config:
           error_if: ">0"
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.direct-identifier
   - name: address_state
     description: str, state or territory code from the user's legal address. Populated
       for MITxOnline and edX.org users (sourced via int__mitx__users, which coalesces
       MITxOnline, edX.org, and MicroMasters records), MITx Pro users, and Bootcamps
       users. Null for Emeritus, Global Alumni, and Residential users.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.identifiability.indirect-identifier
   - name: latest_income_usd
     description: numeric, the most recent income amount in USD from the user's flexible
       pricing (financial aid) application on MITxOnline. Null if the user has never
       submitted a financial aid application.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.ferpa-classification.education-record
   - name: latest_original_income
     description: numeric, the most recent income amount in the user's original currency
       from their flexible pricing application on MITxOnline. Null if no application
       exists.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.ferpa-classification.education-record
   - name: latest_original_currency
     description: str, the currency code (e.g. USD, EUR) of the original income reported
       in the user's most recent flexible pricing application on MITxOnline. Null if
       no application exists.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.ferpa-classification.education-record
   tests:
   # An Emeritus identity key only falls back to email when the user has no Emeritus id.
   - dbt_expectations.expect_column_pair_values_to_be_equal:
@@ -1521,6 +1727,11 @@ models:
         field: user_pk
         config:
           severity: warn
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.learner
   - name: courserun_fk
     description: string, foreign key to dim_course_run, matched on (courserun_readable_id,
       platform) against the current run. Null where the event's course id has no current
@@ -1546,6 +1757,11 @@ models:
     - relationships:
         to: ref('dim_date')
         field: date_key
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.active-learner
   - name: videos_played
     description: int, distinct video blocks with a play_video event that day. Same
       definition as the report's videos_watched.
@@ -1611,6 +1827,11 @@ models:
     description: string, foreign key to dim_user.
     tests:
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.learner
   - name: courserun_fk
     description: string, foreign key to dim_course_run.
     tests:
@@ -1633,8 +1854,18 @@ models:
   - name: enrollment_is_active
     description: boolean, whether the reported enrollment is active. Carried from
       tfact_enrollment.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.active-enrollment
   - name: enrollment_mode
     description: string, enrollment mode (audit, verified, etc.). Carried from tfact_enrollment.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.enrollment-mode
   - name: enrollment_status
     description: string, why the enrollment changed (e.g. refunded, deferred). Carried
       from tfact_enrollment.
@@ -1644,10 +1875,25 @@ models:
       a passing grade is true here, so count this for "passed" totals and use completion_status
       = 'passed' for passed-and-not-certified. A certified learner can also be false
       or null, because an unrevoked certificate is certified without a passing grade.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.ferpa-classification.education-record
   - name: grade_value
     description: double, grade between 0.0 and 1.0. Null when there is no grade.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.ferpa-classification.education-record
   - name: letter_grade
     description: string, letter grade. Carried from tfact_grade.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.ferpa-classification.education-record
   - name: grade_updated_on
     description: string, ISO-8601 timestamp the grade was last updated. Carried from
       tfact_grade.
@@ -1664,9 +1910,19 @@ models:
       run. Never null.
     tests:
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.certificate
   - name: last_active_on
     description: date, latest day with tracked activity in afact_learner_courserun_daily_activity.
       Null when there is none.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.active-learner
   - name: completion_status
     description: string, certified when is_certified; else passed when is_passing;
       else in_progress when grade_value > 0 or last_active_on is not null; else not_started.
