@@ -37,7 +37,7 @@ The `entity` binding says which asset the contract is for:
   (`type: dashboardDataModel`, `fqn: Superset.model.41`) or a raw table dbt
   doesn't declare. Supported types are table, dashboardDataModel, topic,
   apiEndpoint and container, but only table and dashboardDataModel contracts
-  may list a `schema`: OpenMetadata 2.0.2 checks column types for those two
+  may list a `schema`: OpenMetadata 2.0.5 checks column types for those two
   only (topics and API endpoints by name, containers not at all). Contracts
   on the other types carry semantics rules only.
 
@@ -52,7 +52,7 @@ The `entity` binding says which asset the contract is for:
 | `sla` shape | `ol-dbt validate --only data_contract` (dbt PR CI) | every PR, before merge |
 | `sla`, `dbt_model` bindings | the asset's Dagster freshness check (lakehouse code location) | hourly, by `dbt_layer_freshness_sensor` |
 
-OpenMetadata 2.0.2 reports a retyped column in `typeMismatchFields` but doesn't
+OpenMetadata 2.0.5 reports a retyped column in `typeMismatchFields` but doesn't
 count it as a failure, so the contract still shows Success in OpenMetadata
 (`DataContractRepository.validateSchemaFieldsAgainstEntity`). The `ol-dbt
 contracts` commands fail on it; OpenMetadata's own status and alerts won't.
@@ -74,8 +74,18 @@ uses, so `VARCHAR` → `STRING` passes and `VARCHAR` → `BIGINT` fails. Changin
 contracted column therefore means changing its contract in the same PR, where
 the reviewer sees it.
 
-Quality stays in dbt tests and Dagster asset checks. Contracts don't use
-`qualityExpectations`.
+Quality stays in dbt tests and Dagster asset checks, and contracts leave
+`qualityExpectations` out. OpenMetadata 2.0.5 could carry the dbt and Dagster
+test cases by reference: the contract's test-suite pipeline skips test cases
+from other platforms, and on completion the contract takes each referenced
+case's latest stored result. But the contract's quality would only update when
+a validation runs (OpenMetadata's daily run or `ol-dbt contracts validate`),
+those results have no age limit, each validation launches the contract's
+test-suite ingestion pipeline as a pod, and `ol-dbt contracts validate` would
+have to poll past the Running status that leaves the contract in. Dagster
+already posts these failures to Slack as they happen (the run failure sensor
+for dbt tests, `asset_check_failure_sensor` for freshness and native asset
+checks).
 
 ## Commands
 
