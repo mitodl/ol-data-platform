@@ -1,6 +1,6 @@
 # Courseware knowledge as platform data: concepts, outcomes, prerequisites and assessments in the dimensional layer
 
-Status: proposed. Date: 2026-10-16. Related: `embedding_substrate_and_search_engine.md` (branch `embedding-substrate-spec`), `adr_embedding_compute_strategy.md`, hq RFC #13220 (answer separation), hq RFC #13314 (learner memory), hq RFC #11522 (Omnigraph).
+Status: proposed; descriptive discovery pilot only, inferred preparation and readiness remain experimental. Date: 2026-10-16. Architecture revised: 2026-10-20. Related: `embedding_substrate_and_search_engine.md` (branch `embedding-substrate-spec`), `adr_embedding_compute_strategy.md`, hq RFC #13220 (answer separation), hq RFC #13314 (learner memory), hq RFC #11522 (Omnigraph).
 
 Sources read on 2026-10-16: this repo at `07eadd990`, mit-learn at `d2eef5677`, learn-ai `main` at `df18361`, the course-profile repo at its single commit (2026-10-15), the "Enhancing course context for hybrid search" document, and the ontology and tooling sources linked in section 6.
 
@@ -8,12 +8,15 @@ Sources read on 2026-10-16: this repo at `07eadd990`, mit-learn at `d2eef5677`, 
 
 MIT Learn search embeds a short markdown rendering of each resource (title, description, topics, price, instructors, runs) plus a concatenation of its content files. A query like "courses where students implement a neural network" has nothing to match against except whatever phrasing happens to appear in that text. Learn has no structured record of what a course teaches, assumes, or assesses: no concept, skill, outcome or prerequisite field exists on `LearningResource`, `LearningResourceRun` or `ContentFile`. The nearest things are free-text CMS sections folded into `full_description`, `CredentialMetadata.criteria` (LLM-written badge criteria, one skill per bullet), and `ContentFile.summary`/`flashcards`. The topic taxonomy is two levels deep (11 parents, 101 children) and is applied per resource, never per unit, video or problem.
 
-Two efforts are addressing this, and they do not share a destination:
+Related efforts are addressing this at different layers:
 
-- "Enhancing course context for hybrid search" proposes a map-reduce LLM pipeline inside Learn: extract topics, concepts, algorithms, outcomes, prerequisites and `relationships` triples per content file (MAP), consolidate and deduplicate (REDUCE), then render one markdown "context document" per course for the existing embedding path (SYNTHESIS). The structured JSON is explicitly a transient step; the deliverable is the markdown, treated as a derived search artifact.
+- "Enhancing course context for hybrid search" proposed a map-reduce pipeline whose deliverable was a markdown context document. Its transient-JSON design is not a description of the current Learn implementation.
+- Learn's current course-profile work (mitodl/mit-learn#4095 and #4111) builds units from OLX and persists validated claims, evidence and notes in `ClaimExtraction.output`, with extractor versions and raw responses. Learn ingests MIT edX content too. It does not yet provide the shared cross-platform concept identity proposed here, but another consumer could integrate its stored output without running extraction again.
 - course-profile (https://github.com/mitodl/course-profile) is a standalone prototype that profiles one OCW course, one OLX export, or one captioned video. Its unit of output is a _claim_ (concept, skill, assumed knowledge, assessment expectation) with a `teaching_status` of taught, reviewed, used or mentioned, and every claim carries a verbatim passage that is re-verified against the extracted text. It keeps declared prerequisites, inferred preparation and sequencing gaps apart, and applies a code rule that excludes any inferred prerequisite the course teaches before first use. Four runs exist (8.01SC, 6.0001, UAI.4, one 18.06 lecture); 8.01SC produced 659 claims from 61 Opus calls (515k input, 222k output tokens, about $6 to $8 at high effort). Output lands in JSON files and a SQLite viewer on Vercel and Fly.
 
-Both re-extract text the platform already holds, both key their output to their own identifiers rather than ours, and neither produces something a second consumer (AskTIM, the product page, a knowledge graph, a prerequisite report, a B2B skills view) can read without re-running the pipeline. Both are also upstream of two decisions this repo has already made: AI compute is engine-external and its outputs are Iceberg tables (`adr_embedding_compute_strategy.md`), and the text that gets embedded is platform data, with the serving store a rebuildable projection (`embedding_substrate_and_search_engine.md`).
+The producers use different identifiers and storage contracts. Reusing their output needs a shared observation and provenance contract, not necessarily another extraction. This repo has already decided that AI compute is engine-external and its outputs are Iceberg tables (`adr_embedding_compute_strategy.md`), and that embedded text is platform data with a rebuildable serving projection (`embedding_substrate_and_search_engine.md`). Those decisions do not by themselves require every extraction call to run in Dagster.
+
+The [publication contract and architectural corrections](#publication-contract-and-architectural-corrections-2026-10-20) below supersede conflicting recommendations elsewhere in this document and the historical practice review. They describe the corrected target, not fixes already made in the implementation PRs.
 
 ## 2. What the platform already has
 
@@ -34,19 +37,21 @@ Gaps that matter here: edxorg has block XML but no document or transcript extrac
 
 ## 3. Options
 
-Three shapes, with the same extraction quality assumed in each.
+Extraction compute, authoritative storage and product serving are separate decisions. Compare these shapes with the same extraction quality assumed in each.
 
-Learn-side pipeline (the context document proposal). Learn's Celery workers run MAP/REDUCE/SYNTHESIS over `ContentFile` rows and write the markdown back for embedding. Cheapest path to a better embedding; the structured JSON is discarded or stored as a blob on the resource. The cost is that it lives in the application that has the least of the inputs (no edxorg text, no block structure, no tracking-log signal about which problems are actually graded) and the fewest consumers (search only). A second consumer, or a second platform, means a second pipeline, and the platform would later ingest Learn's blob back out to analyze it. It also runs the extraction over problem text before #13220 has split questions from answers.
+Learn-side extraction (the current course-profile PRs). Learn's workers extract claims over OLX-derived units and persist structured output. This puts extraction near its first consumer and retains the application team's iteration loop. Cross-platform identity, analytical joins and another consumer still need an integration contract, but not a duplicate pipeline. Answer separation (#13220) is a requirement regardless of which service runs extraction.
 
 Standalone profiler (course-profile as a service). Keep the prototype's pipeline and viewer, point it at our buckets, publish its JSON. Best extraction design of the three today, and its reviewer UI is real. But its identifiers are its own (`U03:c2`), its store is SQLite, its ingesters re-derive course structure from OCW HTML and OLX trees that we already have as tables, and its outputs are not joinable to enrollments, grades or engagement without a second integration. It would become a fourth place courseware text is extracted (Learn, openedx assets, ocw_content, course-profile).
 
 Platform assets in the dimensional layer (proposed). Extraction runs as Dagster assets over the text the platform already holds, keyed by `content_block_pk` and `courserun_readable_id`, and writes claims, evidence, entities and relationships into Iceberg as `dim_`, `bridge_` and `tfact_` models. Learn consumes rollups through the integrations schema exactly as it consumes courses and content files today; the context document becomes a renderer over those tables and one `builder_id` in the embedding substrate; a knowledge graph is a projection of the edge tables when a consumer needs traversal. The cost is that it is the slowest route to a better embedding (the schema has to exist first), and it puts subject-matter review of extracted claims on a team that does not own the courses.
 
-I propose the third. The extraction is expensive enough (thousands of courses, tens of LLM calls each) that it should be paid once into a store every consumer can read, and the two existing efforts already agree on the content of what to extract. What they disagree on is only where the state lives, and that is the platform's question to answer. The course-profile claim model is the right extraction contract and should be adopted as is; the context document is the right first consumer and should be built as a view.
+Shared producers with platform-owned resolution are another option. Learn or a shared extraction library can publish immutable observations into the same lake-backed contract, while the platform owns cross-course resolution, provenance and releases. This avoids requiring one compute owner, at the cost of coordinating producer versions and source identifiers.
+
+I propose platform ownership of durable observations, concept identity and published releases. Dagster extraction is the initial producer because it can reuse lake text and join the analytical model. That is a preference based on those capabilities, not a claim that Learn output cannot be reused. Agree the producer boundary with the Learn team before superseding #4111. Adapt course-profile's claim model as the observation contract; treat the context document as the first consumer rather than making a prerequisite graph a dependency of search.
 
 ## 4. The model
 
-Sections 4 to 6 are the proposal as first written. Where they differ from what the proof of concept built, sections 9 to 11 are current: the built table names (section 9), concept identity and resolution (section 10, "Identity" and "Batched, incremental resolution") and the concept-to-concept relation types (section 10, "Relationships between concepts").
+Sections 4 to 6 are the proposal as first written. Sections 9 to 11 describe the POC and subsequent work. The publication-contract section below takes precedence over both: observations are not pedagogical necessities, label assignments need senses, and per-stage promotion is not a published knowledge release. Acceptance gates described here are requirements, not claims that the POC enforces them.
 
 Grain and keys follow `src/ol_dbt/models/dimensional/README.md`: surrogate `*_pk` via `generate_surrogate_key`, every course join carries `platform`, `platform` plus `courserun_readable_id` identifies a run. The Open edX XML and text assets record the deployment instead (`xpro`, `mitx`), so `int__courseware__extraction_sources` maps those to `mitxpro` and `residential` before it joins them to `dim_course_content`.
 
@@ -82,7 +87,7 @@ Assessment claims from Open edX problems are extracted from the question side on
 
 `bridge_concept_vocabulary`: `concept_fk`, `vocabulary` (`learn_topic`, `openalex_subfield`, `openalex_topic`, `esco_skill`, `acm_ccs`, `physh`, `msc2020`, `onet`, `cip`), `external_id`, `match_type` (`exact`, `close`, `broad`), `match_source`. The crosswalk, in SKOS terms. `learn_topic` rows point at the uuids already in `seeds/learn_topics.csv`, so every concept rolls up to the facet Learn's UI already filters on.
 
-`bridge_concept_relation`: `from_concept_fk`, `to_concept_fk`, `relation` (`prerequisite_of`, `broader`, `related`, `uses`, `part_of`), `support_count`, `first_run_fk`, `status`. Concept-to-concept edges are derived (the same concept `used` in a course that teaches a second concept, across enough courses), and they are the only table a graph projection needs beyond the course bridges.
+`bridge_concept_relation`: `from_concept_fk`, `to_concept_fk`, `relation` (`prerequisite_of`, `broader`, `related`, `uses`, `part_of`), `support_count`, `first_run_fk`, `status`. Course co-occurrence and ordering produce candidate edges with course-scoped evidence, not accepted global prerequisites. Repeated observations and acyclicity alone do not establish that learning one concept requires the other. Hierarchy and pedagogical dependency are separate predicates and may coexist for a pair.
 
 `dim_learning_outcome`: `outcome_pk`, `statement`, `bloom_process`, `knowledge_type`, `status`, with `bridge_learning_outcome_concept` for the concepts an outcome names. Outcomes stay distinct from concepts because an outcome is a sentence about a learner and a concept is a thing; schema.org collapses both into `teaches`, and we need the distinction for Bloom-level reporting and for the badge criteria Learn already generates.
 
@@ -90,7 +95,7 @@ Assessment claims from Open edX problems are extracted from the question side on
 
 Derived by dbt from the claims, filtered to accepted concepts and verified evidence:
 
-- `bridge_courserun_concept`: `courserun_fk`, `concept_fk`, `relation` (`teaches`, `reviews`, `uses`, `mentions`, `assesses`, `requires`), `first_block_fk`, `claim_count`, `max_confidence`. `requires` is the union of declared prerequisites and inferred preparation that survived the prerequisite rule (a concept assumed before any unit teaches it), with `requirement_source` recording which.
+- `bridge_courserun_concept`: `courserun_fk`, `concept_fk`, `relation` (`teaches`, `reviews`, `uses`, `mentions`, `assesses`, `requires`), `first_block_fk`, `claim_count`, `max_confidence`. Declared requirements stay separate from inferred preparation candidates, with `requirement_source` recording which. A concept used before first teaching is a review candidate, not automatically an entry requirement or a learner-readiness constraint.
 - `bridge_course_concept`: the run bridge collapsed to the course, for catalog consumers.
 - `bridge_courserun_learning_outcome`, `bridge_problem_concept` (`problem_block_fk`, `concept_fk`, from assessment claims; joins to `tfact_problem_events` for "which concepts do learners fail on"), `bridge_video_concept`.
 - `bridge_program_concept`: the course bridge summed over `bridge_program_course`, which gives the program-level skills list that `CredentialMetadata` currently asks an LLM to write from scratch.
@@ -114,7 +119,7 @@ Dagster assets in `dg_projects/ml` (the LLM resources and the Iceberg IO manager
 2. Mention propagation (CPU, deterministic). Aho-Corasick (`ahocorasick_rs` or `pyahocorasick`) over normalized text, built from `dim_concept_alias` and the vocabularies' labels, tags every block with the concepts it mentions, so a concept found by the LLM in one course is located in every course. Written to a `concept_mention` table with spans. Model-based pre-tagging (GLiNER2) is optional and only pays off if it lets the LLM step classify candidates or skip blocks; section 9 has the measurements.
 3. Claim extraction (LLM). The course-profile prompts and Pydantic schemas (`course_profile/prompts.py`, `schemas.py`), ported as the first `extractor_id`, run through `LLMClientFactory` with prompts in Opik. Three calls per course plus one per unit, as the prototype does. Structured output via forced tool use, with the schema generated from the LinkML model in section 6 so the warehouse contract and the LLM contract are one file. Evidence passages are verified against the platform text before the write. Model tier is a per-run parameter; the prototype used Opus at high effort and recorded 28 to 61 calls per course.
 4. Resolution (corpus-wide, not per document). Each claim label is embedded, retrieved against `dim_concept_alias` and a local Wikidata label index (never live WDQS), reranked by a small LLM call, and either attached to an existing concept, proposed as a new one, or queued. Low-confidence merges go to review. The review surface is Superset over the claim and evidence tables for the first pilot; course-profile's viewer, pointed at Iceberg instead of SQLite, is the candidate for a real reviewer UI since it already does claim-to-passage highlighting.
-5. Rollups and rules (dbt). The prerequisite rule (`validate.py:apply_prereq_rule` in the prototype) becomes a dbt model: an assumed-knowledge claim is a `requires` edge only when no unit at or before first use has a `taught` or `reviewed` claim for the same concept. Doing it in SQL over resolved `concept_fk` is more reliable than the prototype's label matching, and it is testable with dbt unit tests.
+5. Rollups and rules (dbt). The prototype's used-before-taught rule becomes a reproducible preparation-candidate rule over resolved senses. It identifies what to review, not what a learner must know. Keep `taught` and `reviewed` distinct: a review can assume prior knowledge and cannot by itself show that a provider teaches sufficient preparation. Unit tests establish the rule's behavior; domain annotation and downstream evaluation establish whether its interpretation is useful.
 6. Incremental. Re-extract a unit when its `input_text_checksum` changes (the `course_xml_version` the exclusions asset already carries), re-resolve when an alias table changes, re-render the context document on either.
 
 Cost shape. At the prototype's usage (about 500k input and 200k output tokens per course on Opus), 3,011 Learn courses is roughly 1.5 billion input and 0.6 billion output tokens for a full backfill. Which tier runs which step is a pilot question; the claim and evidence tables make a cheaper extractor directly comparable to the expensive one on the same courses, which is the point of keying everything by `extraction_run_fk`.
@@ -152,21 +157,22 @@ Tooling by stage: Aho-Corasick (`ahocorasick_rs`, Apache-2.0; `pyahocorasick`, B
 
 ## 7. Phasing
 
-0. Schema and fixtures, no LLM spend. Write the LinkML schema and the dbt models in section 4. Load the four existing course-profile runs (8.01SC, 6.0001, UAI.4, 18.06 lecture 1; 1,884 claims) into the claim, evidence and concept tables as the first extraction runs, re-verify their passages against the platform's own text where the course exists in the lake, and run the prerequisite rule in SQL against them. This shakes out the model on real output before any pipeline exists and gives a regression baseline for the ported extractor. Prerequisite work from section 2 that this phase needs: `dim_content_file` keyed to `dim_course_content`, and OCW content keyed into the same space.
-1. Pilot extractor. Port course-profile's prompts and schemas as `extractor_id = course_profile_v1` in `dg_projects/ml`, run it over 20 courses (10 OCW, 10 MITx Online and xPRO, chosen to overlap the embedding substrate's first eval set), with candidate mentions and resolution against Learn topics, OpenAlex and Wikidata. Compare against the prototype's output on the courses both have. Review in Superset; decide on the reviewer UI. Run the OntoCast spike on the same 20 courses and diff its emergent terms against the LinkML schema.
-2. Serving. `integrations__learn__resource_knowledge` and the rendered context document as a substrate builder; evaluate the context-document arm against `learn_v1` on the substrate's eval set. Learn adds the warehouse pull and, if the arm wins, points `resources` embedding at it. Concepts as a Learn search facet is Learn's call at this point.
-3. Backfill and incremental. Full corpus in the cheapest tier that held up in the pilot, with a second extractor run on a sample for comparison; schema.org `Course` markup on product pages; `bridge_program_concept` replacing LLM-written badge criteria; the `course_knowledge` tenant in ol-analytics-api, and AskTIM tools that call it for prerequisites and next courses.
-4. Graph engine. Project `bridge_concept_relation` and the course bridges into an engine when a consumer needs k-hop expansion with ranking or graph algorithms at request time, which the tenant's SQL over precomputed tables doesn't give. Not before.
+0. Agree the observation contract and ownership with Learn. Keep immutable claims, input provenance and evidence separate from resolved senses and product judgments. Establish source visibility and answer-separation policy before model calls or export.
+1. Research pilot. Retain the five UAI courses as engineering fixtures and add unrelated disciplines, ambiguous labels and differing course structures. Finish sense-aware assignment and pilot the human annotation guideline. Proposed data stays in a review-only surface.
+2. Descriptive discovery pilot. Name reviewers, implement accepted-only publication, and publish a versioned release shared by Learn ingest and the tenant. Evaluate descriptions, concepts and stated preparation against the existing search/profile baseline. Agree quality, relevance, latency and failure-behavior acceptance criteria before rollout. A feature flag limits exposure but does not replace these gates.
+3. Separately validate inferred preparation. Evaluate concept dependencies and course-to-course preparation at relevant competency depth. Do not infer readiness from a reviewed concept, search similarity, descendant counts, or a lack of providers. Only after this evaluation should AskTIM present inferred paths or next-course readiness, or published markup assert inferred prerequisites.
+4. Backfill after the applicable gates pass. Budget model calls and review throughput, use explicit producer and release promotion, and measure drift. Descriptive backfill does not authorize preparation or mastery claims.
+5. Add a graph engine only if an evaluated consumer needs traversal the existing tables and precomputed projections cannot serve within its latency budget.
 
-We do _not_ need, yet: a graph database, a competency framework export (CASE or CTDL), Lightcast, per-learner concept mastery (that is `bridge_problem_concept` joined to `tfact_problem_events`, and it falls out once the bridge exists), or an LLM in the SYNTHESIS step.
+We do _not_ need, yet: a resident graph database, competency-framework exports, Lightcast, or an LLM in the SYNTHESIS step. A problem-to-concept bridge can support mastery research, but joining attempts to it does not establish learner mastery without a validated learner model.
 
 ## 8. Open questions
 
 - Answer separation (#13220) is a dependency for assessment claims from Open edX problems. Blocking for the problem part of phase 1, not for the rest.
 - Extraction scope for OCW courses that are a flat list of resources with no week structure: course-profile's lecture-layout heuristics (syllabus calendar to attach problem sets) would need to become dbt logic over `int__ocw__pages`. Blocking for OCW in phase 1.
-- Who reviews concept merges and claim quality. The feedback pipeline's category review is a precedent, but these claims need subject knowledge. Blocking for promoting anything past `proposed`.
-- Whether Learn wants concepts and outcomes as facets, as product-page content, or only inside the embedded document. Changes the shape of the integrations view, not the dimensional model. Non-blocking.
-- Auth for the `course_knowledge` tenant: anonymous read-only behind APISIX with a rate limit, or a client-credentials client per consumer (learn-ai, the Learn frontend). Blocking for the tenant, not for ingest.
+- Who reviews concepts, merges, claims, descriptions and preparation assertions, with what review capacity and escalation policy. Feedback categories have no approval gate to borrow. Blocking for every learner-facing publication path, not only schema.org markup.
+- Whether Learn wants concepts and outcomes as facets, product-page content, or only embedded search text. Agree the surface before rollout because its evidence, review and evaluation requirements differ; this is not only a view-shape decision.
+- Auth and content visibility for the `course_knowledge` tenant and ingest exports. Absence of learner PII does not make B2B or residential course content public. Decide eligible sources, derived-data policy and consumer permissions before anonymous access or export; rate limiting alone is not that policy.
 - StarRocks latency for chat-time tool calls. Measure p95 for the tenant's routes in QA before AskTIM depends on them. Blocking for the AskTIM tools.
 - Model tier per step, and whether the per-unit extraction can be batched through a provider batch API. Non-blocking; the pilot answers it.
 - MSC2020 license terms for derived crosswalks. Non-blocking; drop MSC if unclear.
@@ -194,7 +200,7 @@ Wall clock was 2 to 3 minutes per course at six concurrent calls. Of 1,949 evide
 
 Findings:
 
-- The cross-course join is the result neither in-flight effort can produce. UAI.4's inferred requirements resolve to concepts UAI.2 teaches (pandas, Matplotlib, DataFrame) and UAI.3 teaches (standard deviation, KDE, train/validation/test split), with no per-course configuration. Python and scikit-learn remain unmatched, presumably because UAI.1 was not extracted.
+- The cross-course join demonstrates the value of shared concept identity, not a capability exclusive to one extraction runtime. UAI.4's inferred preparation candidates resolve to concepts UAI.2 teaches (pandas, Matplotlib, DataFrame) and UAI.3 teaches (standard deviation, KDE, train/validation/test split). This does not show those courses provide adequate preparation. The initial guess that Python and scikit-learn lacked providers because UAI.1 was absent did not hold up: later work found umbrella-label and only-used-tool cases (#3030 and #3043). The pilot-specific coverage rules remain experimental.
 - Label normalization alone is not resolution. Before the resolution step, "AUC", "AUC / ROC curve" and "logarithm"/"logarithms" each produced a false requirement. Some proposed merges are wrong ("random module" with "random number generation"), so `proposed` status and review matter.
 - Prompt v1 produced course-internal pointers ("concepts from Lecture 3") as assumed knowledge and "Lectures 2-4" as a declared prerequisite. v2 forbids both, and both versions' rows stay queryable side by side.
 - The Tika text of an html body keeps no hrefs, so a slide deck cannot be placed in the sequential that links it, which is why the materials scope exists. Recording `/static/` references in the document-text asset would fix it.
@@ -271,7 +277,7 @@ The edge tables stay the system of record and the graph is an export of them. On
 - Two exports from the same models: `published` (accepted concepts, verified evidence) for Learn, the tutor and JSON-LD, and `review` with everything. Learner edges (enrollment, attempts, a derived per-concept mastery) come later, as a separate export under a separate access policy.
 - A Dagster asset writes Parquet per label to S3 per snapshot, plus CSV for loaders that need it and N-Triples via the LinkML context for an RDF store. The graph is rebuilt per snapshot (low millions of edges without learners) and swapped by pointer. Only learner edges would need incremental upserts.
 
-Plain SQL over the bridges already answers "what should I take before X" (two joins), structural and topic rollups, and coverage. Prerequisite chains should be a materialized closure table built by the NetworKit graph asset (section 10), which also fails on a cycle as a data-quality check. Trino's recursive CTE is experimental with a fixed depth, and StarRocks needs a flag with a default depth of 5, so the serving tenant in section 10 reads the closure table and never recurses at request time. An engine earns its place only for low-latency k-hop expansion with ranking (GraphRAG context for learn-ai), constrained variable-length paths, graph algorithms and interactive exploration.
+Plain SQL over the bridges retrieves candidate preparation matches (two joins), structural and topic rollups, and observed coverage. It does not by itself justify answering "what should I take before X" as educational advice. Prerequisite chains should be a materialized closure table built by the NetworKit graph asset (section 10), which also fails on a cycle as a data-quality check. Trino's recursive CTE is experimental with a fixed depth, and StarRocks needs a flag with a default depth of 5, so the serving tenant in section 10 reads the closure table and never recurses at request time. An engine earns its place only for low-latency k-hop expansion with ranking (GraphRAG context for learn-ai), constrained variable-length paths, graph algorithms and interactive exploration.
 
 Engines, checked 2026-10-16:
 - Kùzu was archived on 2025-10-10. LadybugDB is the active fork (MIT, near-weekly releases, Parquet `COPY FROM`, vector and full-text search), though one author wrote about two thirds of its commits.
@@ -298,7 +304,9 @@ A concept is an opaque UUID minted once by `ml.lib.courseware.resolve` and never
 - `courseware_concept_assignment`: which concept each normalized label belongs to.
 - `courseware_concept_relation`: concept-to-concept proposals.
 
-Every verdict goes to the append-only `courseware_resolution_decision`, and each run gets a row in `courseware_resolution_run` with its churn counts. dbt reads the newest run. `dim_concept.concept_pk` is the UUID itself, and retired concepts keep their rows with `merged_into_concept_fk`. The display label is chosen at read time from the most-mentioned member label, so renaming a concept never changes its id. Identity stays separate from display, as MDM survivorship does it.
+Every verdict goes to the append-only `courseware_resolution_decision`, and each run gets a row in `courseware_resolution_run` with its churn counts. The POC reads the newest run; publication must instead pin the run in an approved release. `dim_concept.concept_pk` is the UUID itself, and retired concepts keep their rows with `merged_into_concept_fk`. The display label is chosen at read time from the most-mentioned member label, so renaming a concept never changes its id.
+
+The POC still assigns one normalized label to one concept. An operating-system kernel, a matrix kernel and an SVM kernel therefore cannot be distinguished by identity alone. The target is claim-level sense assignment: an alias retrieves multiple candidate concepts, and claim context selects the sense or queues it for review. This changes resolution, aliases, tagging, descriptions and joins, so it blocks freezing consumer contracts as well as backfill (Witan task `tk-sense-aware-concept-assignment-let-one-normalize-2307ee`). Stable UUIDs and merge redirects do not substitute for sense disambiguation or split history.
 
 ### Batched, incremental resolution
 
@@ -321,12 +329,12 @@ The batched resolver merges more conservatively than the single call did (456 la
 
 ### Relationships between concepts
 
-`int__courseware__concept_relation_evidence` records every observation that two concepts are related. `bridge_concept_relation` aggregates it into one edge per (from, to, relation), with the evidence kept as columns, so consumers choose thresholds and the edge table evolves as courses are added:
+`int__courseware__concept_relation_evidence` records course-scoped observations and resolver proposals. `bridge_concept_relation` aggregates them into candidate edges. The table below describes the POC's relation vocabulary, not accepted global knowledge. Keep observation provenance and distinguish a support threshold from pedagogical validation:
 
 | family | relation | evidence | meaning |
 |---|---|---|---|
-| hierarchy | broader | adjudication | from is a kind or part of to |
-| sequence | builds_on | course sequence | a unit teaching `from` relies on `to`, and `to` is taught earlier in the course or not at all |
+| hierarchy | broader | adjudication | POC combines kind-of and part-of; target predicates must distinguish them |
+| sequence | builds_on | course sequence | POC candidate: a unit teaches `from` and uses, assumes or reviews `to`; this does not prove `from` requires `to` |
 | practice | practiced_with | course sequence | the same, when `to` is a tool: a practice dependency, not a step in learning order |
 | equivalence | close | adjudication | nearly interchangeable (exact matches are merged into one concept instead) |
 | association | complements | co-taught units, co-assessed items | taught or assessed together |
@@ -355,36 +363,100 @@ Communities read as coherent topics: ML evaluation; Python plotting; chart types
 
 ### Serving: Learn ingest plus an ol-analytics-api tenant
 
-Delivery to learners goes two ways, depending on where the query runs.
+The target delivery has two projections of one approved knowledge release. This is not the current POC contract: its per-course view exports concept labels, while the target needs concept UUIDs, sense assignments and release ids. Both projections must enforce the same review and source-visibility policy.
 
 Learn ingests what has to sit beside its own search index. `integrations__learn__resource_knowledge` and `integrations__learn__concepts` arrive through the warehouse-pull ETL, keyed by concept UUID. They supply per-course concepts and prerequisites as search fields and an OpenSearch facet, the context document embedded into Qdrant, concept chips, and a concept detail endpoint. This path can't move to StarRocks, because our clusters are shared-data and StarRocks's vector index runs only on shared-nothing clusters (`embedding_substrate_and_search_engine.md`, on the unmerged `embedding-substrate-spec` branch).
 
-Graph traversal goes to a `course_knowledge` tenant in ol-analytics-api. It reads StarRocks views built from the dimensional tables through the lake's external catalog:
-- the prerequisite path for a course, declared vs. inferred, with the courses that teach each prerequisite (from the closure table);
+Graph lookups are proposed for a `course_knowledge` tenant in ol-analytics-api over StarRocks views through the lake's external catalog. This is a target query inventory, not an approval to expose inferred advice:
+- declared preparation and separately identified experimental path candidates, with the courses observed teaching each concept (from an approved release's closure);
 - courses that teach a concept, by teaching status and support;
 - concepts matching a learner's wording, through `dim_concept_alias`;
 - a concept's neighbours, by relation family and community;
-- next courses for a set of known concepts: courses whose required concepts the set covers, ranked by `builds_on` and community.
+- experimental next-course candidates for a set of stated concepts, with match evidence and uncertainty, not a claim that the learner is ready.
 
-The tenant returns course keys (`etl_source`, `readable_id`), concept ids, labels and short descriptions. Price, availability and URLs stay in Learn, so callers fetch course details there. A merged concept id redirects to its survivor, so an id a caller cached keeps working. AskTIM's prerequisite, concept and next-course tools call the tenant (learn-ai already calls services other than Learn, e.g. Zendesk); Learn's concept pages and "courses to take first" do too.
+The target tenant returns course keys (`etl_source`, `readable_id`), concept ids, labels, short descriptions, release id and assertion status. Price, availability and URLs stay in Learn; callers batch-fetch eligible course details there and follow the compatibility and failure policy below. A merged concept id redirects to its survivor, so an id a caller cached keeps working. AskTIM's prerequisite, concept and next-course tools call the tenant (learn-ai already calls services other than Learn, e.g. Zendesk); Learn's concept pages and "courses to take first" do too.
 
-The alternative was Learn copying the relation, closure and community tables into Postgres and rebuilding these queries in Django. That is a second copy of a contract that changes with every resolution and graph run, and every change to the graph schema becomes a Learn migration. ol-analytics-api already has what this tenant needs from the b2b tenants: StarRocks views over Iceberg, dbt exposures that hold a view's columns to the API's selects, and a committed OpenAPI spec per tenant. The TypeScript client pipeline for that spec isn't wired up yet. The data carries no learner PII. That matters because ol-analytics-api isolates tenants only in the application layer, and pods can be reached without going through the gateway. Those two limits constrain `b2b_learner_records` and are acceptable here.
+Another option is a versioned projection in Learn, or a Learn-facing backend that composes catalog and graph responses. Copying data does not require copying inference logic, and a stable product schema can isolate consumers from graph-internal changes. The tenant avoids replicating the full relation tables, at the cost of another online dependency and an explicit compatibility contract. ol-analytics-api already has what this tenant needs from the b2b tenants: StarRocks views over Iceberg, dbt exposures that hold a view's columns to the API's selects, and a committed OpenAPI spec per tenant. The TypeScript client pipeline for that spec isn't wired up yet. The proposed public projection carries no learner PII, but that is not sufficient to authorize all course-derived content for public use. ol-analytics-api's application-layer tenant isolation and gateway bypass limits still require a source-visibility and access-policy review before this tenant is exposed.
 
 What it costs: AskTIM tool calls make one more network hop and depend on one more service. Callers make a second lookup in Learn for course details. Data is as fresh as the dbt build plus the view refresh, which is fine for course content. Auth and chat-time latency are open (section 8).
 
-## 11. Fast-follow work (accepted from the practice review)
+## 11. Follow-up work from the practice review
+
+This is the original work list, not a list of optional post-launch improvements. Identity, review, publication and evaluation requirements below block the learner-facing surfaces that depend on them. Several PRs implement individual mechanisms without satisfying the complete publication contract.
 
 1. Human gold set. 300 to 500 claims, stratified by course family and by model agreement (both models, one only), plus 20 to 40 exhaustively annotated subsections for recall, double-annotated in part, with precision estimated by stratified prediction-powered inference. Same-family model agreement overstates recall, because shared misses are invisible. A few hundred labelled concept pairs and about 100 sampled clusters for resolution, scored with B-cubed.
 2. Claim-quote support check. Run a sampled NLI or LLM-judge check that each verified passage supports its claim, with a per-claim confidence built from match tier, cross-scope and cross-model agreement, and calibrated on the gold set.
 3. Explicit promotion of extraction versions. Replace "newest extraction wins" (`is_current`) with a promoted extractor version per scope, so a trial run or a second model never becomes current by running last.
-4. Support threshold for inferred prerequisites. `requires` and `builds_on` from a single claim let the model's known bias toward predicting prerequisites through. Require support across scopes or runs, enforce a strict partial order (no cycles) as a dbt test, and evaluate against sampled annotated pairs.
-5. Course-header hashing. The outline and description are part of every extraction key, so editing a course's about page re-extracts the whole course. Key on the scope's own text and record the header version separately.
+4. Preparation-candidate evaluation. Support thresholds and cycle checks (#3028) help rank and inspect candidates; they do not establish necessity. Evaluate pair-specific dependencies and course preparation separately, retain course context, and do not force hierarchy and prerequisites to be mutually exclusive.
+5. Context-aware extraction reuse. #3027 removes the header from cache identity; #3038 flags stale headers; #3040 reuses output across courses. These are POC optimizations, not evidence that headers are semantically irrelevant. Separate exact-input identity from reuse policy, retain both producer and recipient context, and require identical semantic input or a validated context-independent extractor before treating reused output as publication-eligible.
 6. Review workflow. A queue over proposed concepts, merges, relations and descriptions: auto-accept only high-confidence exact merges, and keep reviewer decisions in their own table that the resolver reads as constraints, so review is not overwritten by a rerun.
-7. Cross-signal relation confidence. Raise an edge's confidence when adjudication and course evidence agree, and track edge strength over time with a dbt snapshot of `bridge_concept_relation`.
+7. Relation support scoring. #3029's noisy-OR score uses uncalibrated reliability priors and correlated observations. Treat it as a ranking heuristic, not a probability of truth. Generic connectedness is not evidence for a particular relation or its direction. Group copied material by lineage, calibrate against independently annotated relationships, and retain edge history.
 8. Wikidata linking at the concept level. Link each concept, not each mention, against a local label and alias dump with an embedding or LLM rerank. Record QID redirects when Wikidata merges items.
 9. Dagster assets. Wrap `extract_scopes`, `resolve_concepts`, `describe_concepts` and `compute_graph` as assets in `dg_projects/ml`, writing the same tables to Iceberg through the existing IO manager. Prompt versions go in Opik.
 10. Dictionary propagation. Aho-Corasick tagging of every block with known concept aliases, with a case-sensitive pass and an ambiguity flag for short aliases, and a check that resolution errors are not multiplied across the corpus.
 11. Scale paths. Use an ANN index (Qdrant or hnswlib) for blocking past tens of thousands of labels, and multithreaded Leiden with a fixed partition seed for large graphs.
+
+## Publication contract and architectural corrections (2026-10-20)
+
+The architecture review covered #3020, #3021 and #3026 through #3045, together with Learn #4095/#4111 and hq #13844/#13946. The evidence store remains the proposed foundation. The inferred prerequisite graph is an experimental product built from it, not a validated consequence of having evidence-backed claims. The corrections below are required design work; this document change does not implement them.
+
+### Observations, dependencies and readiness are different assertions
+
+The current `course_sequence` join pairs each taught concept with concepts used, assumed or reviewed in the same scope. A unit can teach scatter plots while using the median in an independent exercise. Both claims can have valid quotations without median being necessary to learn scatter plots. Repeating that pattern in two units can pass #3028's support threshold without strengthening the missing pair-specific argument.
+
+Retain course, scope, source lineage and extraction version on observations. A global pedagogical dependency requires separate evidence and review of the relationship itself, including its audience and competency depth. A quoted claim, consistent direction, and an acyclic graph establish different properties; none substitutes for that review. Compute an advisory closure only over dependencies approved for that purpose, not over all observed ordering candidates.
+
+Keep kind-of, part-of and pedagogical dependency separate. A private method can be a kind of method and depend on understanding methods. #3029's pairwise hierarchy/sequence contest must not decide that only one can be true. #3034's annotation guideline must permit both predicates and uncertain or context-dependent judgments rather than instructing annotators to call every hierarchy pair a non-prerequisite.
+
+### Coverage is preparation evidence, not a satisfied requirement
+
+#3030/#3045 accept direct teaching or review, a close match, or at least three narrower concepts covering half of the observed descendants. Those are retrieval heuristics. Reviewing a concept can assume learners already know it. A correlation coefficient and correlation can be useful search neighbours without being interchangeable preparation. Descendants also have unequal importance, and the target course may depend on exactly the omitted ones.
+
+Report match type, depth, relevant subskills, missing coverage and uncertainty separately. Do not expose `is_satisfied` as a readiness verdict until that interpretation has been evaluated. The denominator must be a versioned requirement specification for the target course, not every descendant observed anywhere in the corpus. With a corpus-wide denominator, adding unrelated courses can make the same provider fail coverage without changing either course.
+
+#3043's tool rule has the same open-world problem. Absence of another course teaching scikit-learn does not show that a run introduces it. It can mean missing data, failed extraction or genuinely assumed preparation. Adding an unrelated provider must not by itself turn an unchanged course's tool use into a requirement. Derive introduced/assumed status from the course's own evidence; use provider availability only when ranking possible preparation.
+
+### Sense-aware identity and exact-input provenance precede publication
+
+Finish claim-level sense assignment before freezing the Learn or tenant schema. Aliases may retrieve several concepts; descriptions and dictionary tags must not silently select the first sense ever assigned. Store merge and split lineage, and preserve the meaning of an identifier within each published release.
+
+The extractor currently receives course title, outline and description. #3040 reuses claims under different headers when source text matches, even though context can determine a label's sense or teaching interpretation. This is a deliberate optimization, not a missing flag. `is_header_stale` records disagreement but does not make the output equivalent to an extraction under the recipient's input.
+
+Keep the exact input digest and original extraction context as provenance. Choose either reuse over identical semantic inputs or a context-independent extraction stage with its own evaluated contract. If changed context requires reclassification, carry review forward by semantic equivalence rather than hiding the input change. Measure this on identical passages placed in different disciplines and curricula before broad cross-course reuse.
+
+### Publish a coherent release, not the latest output of each stage
+
+#3027 and #3039 gate individual producer versions, but resolution and graph views still select their latest runs independently. A resolution merge followed by a failed graph build can leave new concepts beside an old closure. Learn ingest and the tenant can then disagree even when each table is locally valid.
+
+Define a release manifest binding extraction selections, resolution run, sense assignments, reviewed descriptions and assertions, graph run, coverage rules, visibility policy and output-schema version. Build and validate a candidate without changing the published pointer. Promote it only after required projections are ready; retain the preceding release for rollback. A failed downstream stage leaves the last complete release published.
+
+Both Learn exports and tenant responses need the release id and stable concept ids, not label-only arrays. Specify compatibility during asynchronous ingest: pin compatible versions or fall back to the last mutually available release. Reconcile removals, redirects and splits explicitly. Select the course run with an agreed catalog policy (Learn profiles its `best_run`), not merely whichever run was most recently extracted. Batch catalog hydration and suppress unavailable courses; if the graph service fails, retain descriptive search without inventing preparation paths.
+
+### Review and source policy gate every learner-facing projection
+
+The POC hard-codes concepts as `proposed` and its Learn-shaped views include them. #3028's `is_published` means a support rule passed, not that a person accepted the assertion. Neither field is sufficient authorization for public ingest or an anonymous graph route.
+
+Name reviewers and decision owners, measure their workload, persist decisions independently of generated rows, and apply decisions as resolver constraints. Enforce accepted-only, source-eligible publication for Learn ingest, the tenant, search context, chips, AskTIM and JSON-LD alike. Proposed rows remain review-only. Reusing an accepted concept does not automatically accept a new claim, description or dependency involving it. Any future auto-accept policy needs its own measured error bounds and audit sample.
+
+Answer-key checks and source exclusions remain required. No learner PII is not the same as public course content, particularly for B2B and residential material. Source eligibility and permissions must survive resolution and reuse into every derived projection.
+
+### Calibrate relationships and evaluate the product independently
+
+#3029 treats verdicts and course units as independent noisy votes with fixed reliabilities. Shared source material, instructional conventions and related model judgments violate that assumption. Cross-signal connectedness also does not establish a specific dependency. Keep raw support components and source lineage, call the existing number an uncalibrated support score, and do not use it as a probability or as the sole reason to discard one valid relation in favour of another.
+
+#3034 supplies sampling and scoring tools, not human quality results. Five UAI courses test one curricular family. The #3045 pilot's published closure adds no transitive rows to the course paths, so it does not demonstrate the benefit of transitive recommendations. Model agreement, quote matching and graph modularity are not substitutes for a downstream comparison.
+
+Before each surface launches, its owners must agree numerical acceptance criteria and record results against them. Evaluate at least claim support and teaching status by discipline, sense disambiguation, dependency validity with context, course-pair preparation at the required depth, and error under corpus additions and context changes. Compare the descriptive search/profile pilot against the existing Learn baseline on relevance and cost. Evaluate inferred paths separately on harmful prerequisite advice, recommendation utility, coverage and abstention. Include latency, release mismatch, stale data and service-failure cases. PPI can improve an estimate's efficiency; it cannot repair a wrong assertion definition or an unrepresentative population.
+
+### Work remaining in the stack
+
+- #3021/#3033: sense-aware assignments, aliases, tags and UUID-bearing consumer contracts.
+- #3028/#3045: separate instructional observations from reviewed pedagogical dependencies and advisory closure.
+- #3029/#3034: remove forced hierarchy/dependency exclusivity from publication and annotation; calibrate source-grouped support.
+- #3030/#3043/#3045: separate preparation evidence from readiness, and remove corpus-availability rules from course semantics.
+- #3027/#3038/#3040: define and evaluate context-safe reuse without losing exact-input provenance.
+- #3035/#3036/#3039 and consumer work: add reviewed, source-eligible, compatible release publication and rollback, not only producer approval.
+- #3034 and the delivery tasks: complete cross-domain human and downstream evaluation before broad publication. The Witan quality epic `tk-epic-extraction-and-resolution-quality-evaluatio-e722c7` records the review and outstanding corrections.
 
 ## References
 
