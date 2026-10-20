@@ -4,12 +4,15 @@ The stand-in replaces only ``OpenMetadataClient.request``, so name lookups,
 404 handling and the command's ordering run as they would against a server.
 Its PUT and PATCH follow what the OpenMetadata 2.0.5 source does for a bot
 (see ``ol_dbt_cli.lib.metric_sync``); that behaviour is not checked against a
-live server here.
+live server here. It does not consolidate a user's edits within a session the
+way the server does, which sync does not depend on: it reads only the newest
+version the bot wrote.
 """
 
 from __future__ import annotations
 
 import copy
+import html
 import io
 import json
 import shutil
@@ -25,7 +28,7 @@ from ol_dbt_cli.commands import metrics as metrics_command
 from ol_dbt_cli.lib import openmetadata
 from ol_dbt_cli.lib.manifest import ManifestModel, ManifestRegistry
 from ol_dbt_cli.lib.metric_registry import SCHEMA_SNAPSHOT, SCHEMA_VERSION_KEY, load_metrics
-from ol_dbt_cli.lib.metric_sync import lineage_sources, structural_changes
+from ol_dbt_cli.lib.metric_sync import lineage_sources, same_description, structural_changes
 from ol_dbt_cli.lib.openmetadata import OpenMetadataClient, OpenMetadataError
 
 FIXTURES = Path(__file__).parent / "fixtures" / "metrics"
@@ -36,6 +39,29 @@ PROGRESS_FQN = f"{SERVICE}.ol_data_lake_production.ol_warehouse_production_dimen
 # Every other model the fixtures bind is a b2b StarRocks view.
 STARROCKS_VIEWS = sorted({i.binding.target for m in load_metrics(FIXTURES) for i in m.implemented_by} - {PROGRESS})
 SNAPSHOT_VERSION = json.loads(SCHEMA_SNAPSHOT.read_text())[SCHEMA_VERSION_KEY]
+# What the OWASP sanitizer behind DescriptionSanitizer encodes in text
+# (Encoding.REPLACEMENTS in owasp-java-html-sanitizer 20260101.1).
+_SANITIZER_ENTITIES = {
+    '"': "&#34;",
+    "&": "&amp;",
+    "'": "&#39;",
+    "+": "&#43;",
+    "<": "&lt;",
+    "=": "&#61;",
+    ">": "&gt;",
+    "@": "&#64;",
+    "`": "&#96;",
+}
+TIER1 = {"tagFQN": "Tier.Tier1", "source": "Classification", "labelType": "Manual", "state": "Confirmed"}
+TEAM = [{"type": "team", "name": "data-platform"}]
+TEAM_REF = [{"id": "team-1", "type": "team"}]
+
+
+def _sanitize(description: str | None) -> str | None:
+    """Store a plain-text description the way DescriptionSanitizer.sanitize does: decode, then re-encode."""
+    if description is None:
+        return None
+    return "".join(_SANITIZER_ENTITIES.get(c, c) for c in html.unescape(description))
 
 
 def _manifest() -> ManifestRegistry:
@@ -73,6 +99,8 @@ class FakeOpenMetadata(OpenMetadataClient):
         self.glossary_terms = {"Learning.Course completion"}
         self.tables = {PROGRESS_FQN: "table-1"}
         self.metrics: dict[str, dict[str, Any]] = {}
+        # Every version of each metric, oldest first.
+        self.history: dict[str, list[dict[str, Any]]] = {}
         self.lineage: list[dict[str, Any]] = []
         self.calls: list[tuple[str, str]] = []
 
@@ -80,7 +108,15 @@ class FakeOpenMetadata(OpenMetadataClient):
         return [c for c in self.calls if c[0] != "GET"]
 
     def edit_in_ui(self, name: str, user: str, **fields: Any) -> None:
-        self.metrics[name].update(fields, updatedBy=user)
+        """Apply a person's PATCH, which the server sanitizes like any other."""
+        metric = self.metrics[name]
+        if "description" in fields:
+            fields["description"] = _sanitize(fields["description"])
+        metric.update(fields, updatedBy=user, version=round(metric["version"] + 0.1, 1))
+        self._record(metric)
+
+    def _record(self, metric: dict[str, Any]) -> None:
+        self.history.setdefault(metric["name"], []).append(copy.deepcopy(metric))
 
     def request(
         self,
@@ -105,6 +141,10 @@ class FakeOpenMetadata(OpenMetadataClient):
                 return {"id": self.tables[unquote(fqn)]}
             case ("GET", "metrics", "name", name) if name in self.metrics:
                 return copy.deepcopy(self.metrics[name])
+            case ("GET", "metrics", metric_id, "versions"):
+                [name] = [n for n, m in self.metrics.items() if m["id"] == metric_id]
+                # EntityRepository.listVersions: entity JSON strings, newest first.
+                return {"entityType": "metric", "versions": [json.dumps(v) for v in reversed(self.history[name])]}
             case ("PUT", "metrics"):
                 return self._put_metric(body)
             case ("PATCH", "metrics", metric_id):
@@ -112,8 +152,10 @@ class FakeOpenMetadata(OpenMetadataClient):
                 [metric] = [m for m in self.metrics.values() if m["id"] == metric_id]
                 for op in body:
                     assert op["op"] == "add"
-                    metric[op["path"].lstrip("/")] = op["value"]
+                    field = op["path"].lstrip("/")
+                    metric[field] = _sanitize(op["value"]) if field == "description" else op["value"]
                 metric.update(updatedBy=BOT, version=round(metric["version"] + 0.1, 1))
+                self._record(metric)
                 return copy.deepcopy(metric)
             case ("PUT", "lineage"):
                 self.lineage.append(body)
@@ -125,17 +167,20 @@ class FakeOpenMetadata(OpenMetadataClient):
         if live is None:
             created = {**copy.deepcopy(body), "id": f"metric-{len(self.metrics) + 1}", "version": 0.1}
             created.update(fullyQualifiedName=body["name"], entityStatus="Unprocessed", updatedBy=BOT)
+            created["description"] = _sanitize(body.get("description"))
             self.metrics[body["name"]] = created
+            self._record(created)
             return copy.deepcopy(created)
         updated = {**copy.deepcopy(body), "id": live["id"], "fullyQualifiedName": live["fullyQualifiedName"]}
-        if live.get("description"):
-            updated["description"] = live["description"]
+        # keepsStoredDescription for a bot PUT; otherwise updateDescription sanitizes.
+        updated["description"] = live.get("description") or _sanitize(body.get("description"))
         if live.get("owners"):
             updated["owners"] = live["owners"]
         updated["reviewers"] = body.get("reviewers") or []
         updated["tags"] = live.get("tags", []) + [t for t in body.get("tags", []) if t not in live.get("tags", [])]
         updated.update(entityStatus="Unprocessed", updatedBy=BOT, version=round(live["version"] + 0.1, 1))
         self.metrics[body["name"]] = updated
+        self._record(updated)
         return copy.deepcopy(updated)
 
 
@@ -227,43 +272,119 @@ def test_structural_change_puts_then_patches_what_the_put_kept(server: FakeOpenM
     assert metric["entityStatus"] == "Approved"
 
 
-def test_ui_edit_to_status_is_drift_until_forced(server: FakeOpenMetadata, metrics_dir: Path) -> None:
-    _sync(metrics_dir)
-    server.edit_in_ui("certified_learners", "jane", entityStatus="Deprecated")
+QUOTED_DESCRIPTION = 'A learner\'s "active" enrollments, counted once per run.'
+
+
+def test_description_with_quotes_is_stored_encoded_and_not_patched_again(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _edit_file(metrics_dir, "certified_learners", description=QUOTED_DESCRIPTION)
+    _sync(metrics_dir, names=("certified_learners",))
+    stored = server.metrics["certified_learners"]["description"]
+    assert stored == "A learner&#39;s &#34;active&#34; enrollments, counted once per run."
+    version = server.metrics["certified_learners"]["version"]
     server.calls.clear()
-    assert _sync(metrics_dir, names=("certified_learners",)) is True
-    assert server.writes() == []
-    assert server.metrics["certified_learners"]["entityStatus"] == "Deprecated"
+    capsys.readouterr()
 
-    assert _sync(metrics_dir, names=("certified_learners",), force=True) is False
-    assert server.metrics["certified_learners"]["entityStatus"] == "Approved"
+    assert _sync(metrics_dir, names=("certified_learners",), dry_run=True) is False
+    assert "then PATCH" not in capsys.readouterr().out
+    assert _sync(metrics_dir, names=("certified_learners",)) is False
+    assert server.writes() == [("PUT", "/v1/lineage")]
+    assert server.metrics["certified_learners"]["version"] == version
 
 
-def test_ui_edit_to_a_field_sync_does_not_compare_is_not_drift(server: FakeOpenMetadata, metrics_dir: Path) -> None:
-    _sync(metrics_dir)
-    tier = {"tagFQN": "Tier.Tier1", "source": "Classification", "labelType": "Manual", "state": "Confirmed"}
-    server.edit_in_ui("certified_learners", "jane", tags=[tier])
+def test_ui_tag_edit_after_a_quoted_description_is_not_description_drift(
+    server: FakeOpenMetadata, metrics_dir: Path
+) -> None:
+    _edit_file(metrics_dir, "certified_learners", description=QUOTED_DESCRIPTION)
+    _sync(metrics_dir, names=("certified_learners",))
+    server.edit_in_ui("certified_learners", "jane", tags=[TIER1])
     server.calls.clear()
     assert _sync(metrics_dir, names=("certified_learners",)) is False
     assert server.writes() == [("PUT", "/v1/lineage")]
 
 
+@pytest.mark.parametrize(
+    ("field", "ui_value"),
+    [("description", "Edited in the UI."), ("entityStatus", "Deprecated"), ("reviewers", [])],
+)
+def test_ui_edit_to_a_synced_field_is_drift_until_forced(
+    server: FakeOpenMetadata, metrics_dir: Path, field: str, ui_value: Any
+) -> None:
+    _edit_file(metrics_dir, "certified_learners", reviewers=TEAM)
+    _sync(metrics_dir, names=("certified_learners",))
+    synced = copy.deepcopy(server.metrics["certified_learners"][field])
+    server.edit_in_ui("certified_learners", "jane", **{field: ui_value})
+    # A later edit by someone else to a field sync does not own does not hide it.
+    server.edit_in_ui("certified_learners", "bob", tags=[TIER1])
+    server.calls.clear()
+    assert _sync(metrics_dir, names=("certified_learners",)) is True
+    assert server.writes() == []
+    assert server.metrics["certified_learners"][field] == ui_value
+
+    assert _sync(metrics_dir, names=("certified_learners",), force=True) is False
+    assert server.metrics["certified_learners"][field] == synced
+
+
+def test_ui_edit_to_a_field_sync_does_not_compare_is_not_drift(server: FakeOpenMetadata, metrics_dir: Path) -> None:
+    _sync(metrics_dir)
+    server.edit_in_ui("certified_learners", "jane", tags=[TIER1])
+    server.calls.clear()
+    assert _sync(metrics_dir, names=("certified_learners",)) is False
+    assert server.writes() == [("PUT", "/v1/lineage")]
+
+
+def test_file_change_after_an_unrelated_ui_edit_syncs_without_force(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir)
+    server.edit_in_ui("certified_learners", "jane", tags=[TIER1])
+    _edit_file(metrics_dir, "certified_learners", description="Learners with a certificate.", reviewers=TEAM)
+    capsys.readouterr()
+    assert _sync(metrics_dir, names=("certified_learners",)) is False
+    assert "drift" not in capsys.readouterr().out
+    metric = server.metrics["certified_learners"]
+    assert metric["description"] == "Learners with a certificate."
+    assert metric["reviewers"] == TEAM_REF
+    assert metric["tags"] == [TIER1]
+
+
+def test_drift_is_the_file_against_live_when_the_bot_never_wrote_the_metric(
+    server: FakeOpenMetadata, metrics_dir: Path
+) -> None:
+    _sync(metrics_dir)
+    server.history["certified_learners"].clear()
+    server.edit_in_ui("certified_learners", "jane", description="Created by hand.")
+    assert _sync(metrics_dir, names=("certified_learners",)) is True
+    assert server.metrics["certified_learners"]["description"] == "Created by hand."
+
+
 def test_reviewers_the_file_does_not_set_survive_a_put(server: FakeOpenMetadata, metrics_dir: Path) -> None:
     _sync(metrics_dir)
-    reviewers = [{"id": "team-1", "type": "team", "name": "data-platform"}]
-    server.metrics["certified_learners"]["reviewers"] = reviewers
+    server.metrics["certified_learners"]["reviewers"] = [{**TEAM_REF[0], "name": "data-platform"}]
     _edit_file(metrics_dir, "certified_learners", metricType="SUM")
     assert _sync(metrics_dir, names=("certified_learners",)) is False
-    assert server.metrics["certified_learners"]["reviewers"] == [{"id": "team-1", "type": "team"}]
+    assert server.metrics["certified_learners"]["reviewers"] == TEAM_REF
+
+
+@pytest.mark.parametrize("structural", [False, True])
+def test_an_empty_reviewers_list_clears_them(server: FakeOpenMetadata, metrics_dir: Path, structural: bool) -> None:
+    _edit_file(metrics_dir, "certified_learners", reviewers=TEAM)
+    _sync(metrics_dir, names=("certified_learners",))
+    assert server.metrics["certified_learners"]["reviewers"] == TEAM_REF
+    _edit_file(metrics_dir, "certified_learners", reviewers=[], **({"metricType": "SUM"} if structural else {}))
+    server.calls.clear()
+    assert _sync(metrics_dir, names=("certified_learners",)) is False
+    assert (("PUT", "/v1/metrics") in server.calls) is structural
+    assert server.metrics["certified_learners"]["reviewers"] == []
 
 
 def test_owners_reviewers_and_glossary_terms_resolve_by_name(server: FakeOpenMetadata, metrics_dir: Path) -> None:
-    team = [{"type": "team", "name": "data-platform"}]
     term = {"tagFQN": "Learning.Course completion", "source": "Glossary", "labelType": "Manual", "state": "Confirmed"}
-    _edit_file(metrics_dir, "certified_learners", owners=team, reviewers=team, tags=[term])
+    _edit_file(metrics_dir, "certified_learners", owners=TEAM, reviewers=TEAM, tags=[term])
     assert _sync(metrics_dir, names=("certified_learners",)) is False
     metric = server.metrics["certified_learners"]
-    assert metric["owners"] == metric["reviewers"] == [{"id": "team-1", "type": "team"}]
+    assert metric["owners"] == metric["reviewers"] == TEAM_REF
     assert metric["tags"] == [term]
 
 
@@ -271,6 +392,7 @@ def test_owners_reviewers_and_glossary_terms_resolve_by_name(server: FakeOpenMet
     "fields",
     [
         {"reviewers": [{"type": "team", "name": "nobody"}]},
+        {"assets": [{"id": "table-1", "type": "table"}]},
         {"tags": [{"tagFQN": "Learning.Missing", "source": "Glossary", "labelType": "Manual", "state": "Confirmed"}]},
     ],
 )
@@ -304,6 +426,12 @@ def test_structural_changes_ignore_server_keys_and_extra_tags() -> None:
     # A field the file dropped is cleared by the PUT, so it counts.
     assert structural_changes(body, {**live, "granularity": "DAY"}) == ["granularity"]
     assert structural_changes({**body, "metricType": "SUM"}, live) == ["metricType"]
+
+
+def test_descriptions_compare_after_the_server_encoding_is_undone() -> None:
+    assert same_description(_sanitize('a "b" & c\'s @d'), 'a "b" & c\'s @d')
+    assert same_description(_sanitize("a &amp; b"), "a &amp; b")
+    assert not same_description(_sanitize("a b"), "a c")
 
 
 def test_binding_missing_from_the_manifest_is_unresolved(metrics_dir: Path) -> None:

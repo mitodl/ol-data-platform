@@ -59,7 +59,16 @@ SCHEMA_SNAPSHOT = Path(__file__).with_name("openmetadata_metric_schema.json")
 SCHEMA_VERSION_KEY = "x-openmetadata-version"
 _SCHEMA_REF_PREFIX = "#/components/schemas/"
 _CREATE_METRIC = "CreateMetric"
-SYNC_OWNED_FIELDS = frozenset({"id", "fullyQualifiedName"})
+_SYNC_OWNED = "`ol-dbt metrics sync` resolves it; remove it."
+# Fields a file may not set, and why. `assets` is a CreateMetric field, but it
+# takes entity ids, which only exist in the live catalog, and a GET returns it
+# only when asked for, so sync could neither send nor compare it.
+EXCLUDED_FIELDS = {
+    "id": _SYNC_OWNED,
+    "fullyQualifiedName": _SYNC_OWNED,
+    "assets": "It takes catalog ids a file cannot know. List the tables under `implemented_by`; sync links them "
+    "by lineage.",
+}
 
 # OpenMetadata references an owner or reviewer by id, which only exists in the
 # live catalog. The file names them and sync resolves the names, as it does for
@@ -259,17 +268,18 @@ def _check_body(metric: MetricDefinition, report: ValidationReport) -> None:
     version = schema[SCHEMA_VERSION_KEY]
     # The OpenAPI document does not mark CreateMetric as closed, but the server
     # rejects a field it does not know, so the schema alone would let one through.
-    known = set(schema["components"]["schemas"][_CREATE_METRIC]["properties"])
+    known = set(schema["components"]["schemas"][_CREATE_METRIC]["properties"]) - EXCLUDED_FIELDS.keys()
+    unknown_hint = (
+        f"OpenMetadata {version}'s CreateMetric has no such field. A glossary term is a `tags` entry "
+        "with `source: Glossary`."
+    )
     for key in sorted(str(k) for k in set(metric.body) - known):
         report.add(
             METRIC_REGISTRY_CHECK,
             Severity.ERROR,
             label,
             f"`metric.{key}` is not a field the file may set",
-            "`ol-dbt metrics sync` resolves it; remove it."
-            if key in SYNC_OWNED_FIELDS
-            else f"OpenMetadata {version}'s CreateMetric has no such field. A glossary term is a `tags` entry "
-            "with `source: Glossary`.",
+            EXCLUDED_FIELDS.get(key, unknown_hint),
         )
     document = {"metric": metric.body} | ({} if metric.status is None else {"status": metric.status})
     # Draft 4 is the JSON Schema dialect an OpenAPI 3.0 schema object is closest to.

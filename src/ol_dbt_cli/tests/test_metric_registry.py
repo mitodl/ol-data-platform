@@ -241,6 +241,11 @@ def test_field_the_file_may_not_set_errors(tmp_path: Path, field: str) -> None:
     assert _run(tmp_path, _metric({field: "x"})) == [f"`metric.{field}` is not a field the file may set"]
 
 
+def test_assets_is_rejected_since_a_file_cannot_know_asset_ids(tmp_path: Path) -> None:
+    assets = [{"id": "00000000-0000-0000-0000-000000000000", "type": "table"}]
+    assert _run(tmp_path, _metric({"assets": assets})) == ["`metric.assets` is not a field the file may set"]
+
+
 def test_non_string_metric_keys_are_reported(tmp_path: Path) -> None:
     assert _run(tmp_path, _metric({1: "x", "zz": "y"})) == [
         "`metric.1` is not a field the file may set",

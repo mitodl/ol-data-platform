@@ -25,6 +25,7 @@ from ol_dbt_cli.lib.git_utils import get_repo_root
 from ol_dbt_cli.lib.manifest import ManifestRegistry
 from ol_dbt_cli.lib.metric_registry import (
     DEFAULT_METRICS_DIR,
+    EXCLUDED_FIELDS,
     SCHEMA_SNAPSHOT,
     SCHEMA_VERSION_KEY,
     MetricDefinition,
@@ -38,9 +39,11 @@ from ol_dbt_cli.lib.metric_sync import (
     after_put,
     create_body,
     drift,
+    last_synced_version,
     lineage_edge,
     lineage_sources,
     patch_ops,
+    same_description,
     structural_changes,
 )
 from ol_dbt_cli.lib.openmetadata import (
@@ -150,10 +153,15 @@ def _sync_one(
     # Resolve everything before reading the live metric, so nothing is written
     # for a file that names a team, term or table the catalog lacks.
     try:
+        excluded = sorted(EXCLUDED_FIELDS.keys() & metric.body.keys())
+        if excluded:
+            msg = " ".join(f"`metric.{f}` is not a field the file may set. {EXCLUDED_FIELDS[f]}" for f in excluded)
+            raise ValueError(msg)
         owners = metric.body.get("owners")
         reviewers = metric.body.get("reviewers")
-        owner_refs = client.named_refs(owners) if owners else None
-        reviewer_refs = client.named_refs(reviewers) if reviewers else None
+        # An empty list clears the field; only an absent key leaves it to OpenMetadata.
+        owner_refs = client.named_refs(owners) if owners is not None else None
+        reviewer_refs = client.named_refs(reviewers) if reviewers is not None else None
         for tag in metric.body.get("tags", []):
             collection = TAG_COLLECTIONS[tag["source"]]
             client.request("GET", f"/v1/{collection}/name/{quote_fqn(tag['tagFQN'])}")
@@ -170,14 +178,17 @@ def _sync_one(
 
     live: dict[str, Any] | None = client.get_or_none(_metric_path(metric.name), query={"fields": METRIC_FIELDS})
     body = create_body(metric, owner_refs, reviewer_refs, live)
+    synced = live
+    if live is not None and live.get("updatedBy") != bot:
+        synced = last_synced_version(client.request("GET", f"/v1/metrics/{live['id']}/versions"), bot)
     # Before any write: a PUT records the bot as updatedBy, after which a human
     # edit would no longer show as drift.
-    found = drift(metric, body, live, bot)
+    found = drift(metric, body, live, synced)
     if found:
         verb = "overriding" if force else "drift"
         console.print(
-            f"[bold red]{verb}[/]  {name}: {escape(', '.join(found))} changed in OpenMetadata by "
-            f"{escape(str(live and live.get('updatedBy')))} since the last sync"
+            f"[bold red]{verb}[/]  {name}: {escape(', '.join(found))} changed in OpenMetadata since the last "
+            f"sync (last updated by {escape(str(live and live.get('updatedBy')))})"
         )
         if not force:
             return False
@@ -211,6 +222,11 @@ def _sync_one(
         return False
     patched = f"; patched {', '.join(op['path'].lstrip('/') for op in ops)}" if ops else ""
     console.print(f"[green]synced[/]    {name} (v{current['version']}): {escape(action + patched)}")
+    if "description" in body and not same_description(current.get("description"), body["description"]):
+        console.print(
+            f"[yellow]rewritten[/] {name}: OpenMetadata's sanitizer changed the description (it drops markup "
+            "and control characters it does not allow), so every sync will PATCH it again. Fix the file."
+        )
     return True
 
 

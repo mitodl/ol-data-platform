@@ -15,12 +15,28 @@ and MetricRepository), a PUT to an existing Metric:
 So sync PUTs only to create the metric or change one of its own fields, sends
 the live reviewers when the file does not set any, and then PATCHes
 description, owners, reviewers and status wherever they still differ. An
-unchanged file therefore writes nothing.
+unchanged file writes no Metric field; it re-PUTs its lineage edges, which
+the server upserts.
+
+The server stores ``DescriptionSanitizer.sanitize(description)`` on create,
+PUT and PATCH. That is the OWASP HTML sanitizer, which decodes the text and
+re-encodes ``& < > " ' + = @ ` `` as entities (``learner's`` is stored as
+``learner&#39;s``), so descriptions are compared after unescaping both sides.
+
+Drift is a field sync owns that someone else changed since the bot last wrote
+the metric: the live value is compared with the newest version in
+``GET /v1/metrics/{id}/versions`` whose ``updatedBy`` is the bot. Each version
+there is a full snapshot of the entity, reviewers included
+(``EntityRepository.listVersions``, ``storeEntityHistory``).
 """
 
 from __future__ import annotations
 
 import copy
+import html
+import json
+import operator
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -98,6 +114,28 @@ def _ref_set(refs: list[dict[str, Any]] | None) -> set[tuple[str, str]]:
     return {(r["type"], r["id"]) for r in _live_refs(refs)}
 
 
+def same_description(a: str | None, b: str | None) -> bool:
+    """Whether two descriptions read the same once the server's entity encoding is undone.
+
+    Markup the sanitizer strips (e.g. a ``<script>`` or an unknown tag) is not
+    restored, so a description holding it never compares equal.
+    """
+    return html.unescape(a or "") == html.unescape(b or "")
+
+
+def last_synced_version(history: dict[str, Any], bot: str) -> dict[str, Any] | None:
+    """Return the newest version of a metric that *bot* wrote, or ``None`` when it wrote none.
+
+    :param history: the body of ``GET /v1/metrics/{id}/versions``, whose
+        ``versions`` are entity JSON strings, newest first.
+    """
+    for raw in history["versions"]:
+        version = json.loads(raw)
+        if version.get("updatedBy") == bot:
+            return version
+    return None
+
+
 def create_body(
     metric: MetricDefinition,
     owners: list[dict[str, str]] | None,
@@ -106,9 +144,11 @@ def create_body(
 ) -> dict[str, Any]:
     """Build the CreateMetric body for PUT /v1/metrics.
 
-    :param owners: resolved owner references; ``None`` when the file has none.
-    :param reviewers: resolved reviewer references; ``None`` when the file has
-        none, in which case the live reviewers are sent so the PUT keeps them.
+    :param owners: resolved owner references; ``None`` when the file does not
+        set ``owners``.
+    :param reviewers: resolved reviewer references, ``[]`` to clear them;
+        ``None`` when the file does not set ``reviewers``, in which case the
+        live reviewers are sent so the PUT keeps them.
     :param live: the metric as OpenMetadata has it, or ``None``.
     """
     body = copy.deepcopy(metric.body)
@@ -178,21 +218,34 @@ def after_put(body: dict[str, Any], live: dict[str, Any] | None) -> dict[str, An
     }
 
 
-def drift(metric: MetricDefinition, body: dict[str, Any], live: dict[str, Any] | None, bot: str) -> list[str]:
-    """List differences someone other than the sync bot made since the last sync.
+def drift(
+    metric: MetricDefinition, body: dict[str, Any], live: dict[str, Any] | None, synced: dict[str, Any] | None
+) -> list[str]:
+    """List the fields someone other than the sync bot changed since the bot last wrote them.
 
     Only description, reviewers and status are compared, and only where the
-    file sets them. Nothing is reported when the bot made the last change,
-    since the file then already won.
+    file sets them. A field is drift when its live value differs both from
+    the file's and from *synced*, so a file change to a field nobody touched
+    in OpenMetadata is not drift, and neither is an edit that already matches
+    the file.
+
+    :param synced: the newest version the bot wrote (*live* itself when the
+        bot made the last change), or ``None`` when it never wrote the metric,
+        in which case every difference from the file counts.
     """
-    if live is None or live.get("updatedBy") == bot:
+    if live is None:
         return []
+
+    def edited(field: str, want: Any, same: Callable[[Any, Any], bool]) -> bool:
+        have = live.get(field)
+        return not same(have, want) and (synced is None or not same(have, synced.get(field)))
+
     found = []
-    if "description" in body and live.get("description") != body["description"]:
+    if "description" in body and edited("description", body["description"], same_description):
         found.append("description")
-    if "reviewers" in metric.body and _ref_set(live.get("reviewers")) != _ref_set(body["reviewers"]):
+    if "reviewers" in metric.body and edited("reviewers", body["reviewers"], lambda a, b: _ref_set(a) == _ref_set(b)):
         found.append("reviewers")
-    if metric.status is not None and live.get(STATUS_FIELD) != metric.status:
+    if metric.status is not None and edited(STATUS_FIELD, metric.status, operator.eq):
         found.append(f"{STATUS_FIELD} ({live.get(STATUS_FIELD)} in OpenMetadata, {metric.status} in the file)")
     return found
 
@@ -207,7 +260,7 @@ def patch_ops(
         one the metric had before a PUT reset it; ``None`` leaves it alone.
     """
     ops: list[dict[str, Any]] = []
-    if "description" in body and current.get("description") != body["description"]:
+    if "description" in body and not same_description(current.get("description"), body["description"]):
         ops.append({"op": "add", "path": "/description", "value": body["description"]})
     for field in ("owners", "reviewers"):
         if field in metric.body and _ref_set(current.get(field)) != _ref_set(body[field]):

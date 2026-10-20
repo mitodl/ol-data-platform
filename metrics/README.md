@@ -40,7 +40,11 @@ schema:
 
 - `owners` and `reviewers` are `{type: team | user, name: ...}`. OpenMetadata
   takes an id, which only exists in the live catalog, so sync resolves the name.
+  An empty list (`reviewers: []`) clears them; leaving the key out keeps what
+  OpenMetadata has.
 - `id` and `fullyQualifiedName` belong to sync.
+- `assets` is not allowed: it takes catalog ids a file cannot know. The tables
+  under `implemented_by` become lineage instead.
 
 A glossary term is a `tags` entry with `source: Glossary`. `metricExpression`
 is documentation only.
@@ -122,9 +126,12 @@ snapshot. For each file it:
    `implemented_by` tables by name, and writes nothing for that metric when one
    is missing;
 2. reads the live metric and checks for drift: when someone other than the sync
-   bot made the last change and the description, reviewers or status differ
-   from the file, it reports them and exits non-zero without writing, unless
-   `--force`. The edit then belongs in a pull request;
+   bot changed the description, reviewers or status since the bot last wrote
+   the metric (the newest version in its history whose `updatedBy` is the bot),
+   and the change differs from the file, it reports them and exits non-zero
+   without writing, unless `--force`. The edit then belongs in a pull request.
+   A file change to a field nobody edited in OpenMetadata syncs whatever else
+   was edited there;
 3. PUTs the `metric` body only to create the metric or to change one of its own
    fields (type, unit, expression, ...);
 4. PATCHes description, owners, reviewers and `status` where they still differ.
@@ -134,6 +141,9 @@ snapshot. For each file it:
    stores no column lineage for a Metric, so the columns stay in this file.
 
 An unchanged file writes only the lineage edges, which OpenMetadata upserts.
+OpenMetadata stores descriptions HTML-encoded (`learner's` as `learner&#39;s`),
+so sync compares them with the encoding undone. Markup the server's sanitizer
+removes cannot compare equal, and sync warns that the file needs fixing.
 Fields the file does not set are left as OpenMetadata has them, and a PUT
 never removes a tag, so deleting a tag from a file does not remove it from the
 catalog. Lineage from a StarRocks view is skipped with a warning until

@@ -412,13 +412,23 @@ against a schema the server no longer publishes, and `refresh-schema` comes firs
 5. For each `implemented_by` entry, resolve the table from a production manifest and
    `PUT /v1/lineage` with a table-to-metric edge, with no column lineage.
 
-Drift: step 2 reads the live entity's `updatedBy`. If the last change was not made by the
-sync's bot and description, reviewers or status differ from the file, report the
-difference and exit non-zero without writing, unless `--force`. The edit then becomes a
-pull request. This needs no stored state. The check has to precede the PUT: a PUT that
-changes a structural field (e.g. `metricType`) records the bot as `updatedBy` while the
-server keeps the human-edited description, and a check made afterwards would see the bot
-and let the PATCH overwrite it.
+Drift: step 2 reads the live entity's `updatedBy`. When the last change was not made by
+the sync's bot, it reads `GET /v1/metrics/{id}/versions` and takes the newest version whose
+`updatedBy` is the bot. Each version is a full snapshot of the entity, reviewers included
+(`EntityRepository.storeEntityHistory` stores the original loaded with the PUT/PATCH
+fields). A description, reviewers or status that differs both from that version and from
+the file was edited by someone else, so sync reports it and exits non-zero without
+writing, unless `--force`. The edit then becomes a pull request. A file change to a field
+nobody edited syncs even when someone edited another field (e.g. a tag), and a metric the
+bot never wrote is compared with the file. This needs no stored state of our own. The
+check has to precede the PUT: a PUT that changes a structural field (e.g. `metricType`)
+records the bot as `updatedBy` while the server keeps the human-edited description, and a
+check made afterwards would see the bot and let the PATCH overwrite it.
+
+Descriptions: the server stores `DescriptionSanitizer.sanitize(description)` on create, PUT
+and PATCH, which HTML-encodes text (`'` as `&#39;`, `"` as `&#34;`), so sync compares
+descriptions with the encoding undone. Otherwise a description with a quote would be
+PATCHed on every run and read as drift after any human edit.
 
 Column lineage: OpenMetadata 2.0.3 stores none for a Metric. `LineageRepository`
 returns no child names for one ("Metric column level lineage is not supported") and
