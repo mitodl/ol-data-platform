@@ -239,6 +239,12 @@ unit_tests:
     - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
       content_file_path: static/reading3.pdf, content_file_extension: .pdf, content_file_text: "Example\
         \ 1. Solution: 3. Example 2. Solution: 4. Example 3. Solution: 5."}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
   expect:
     rows:
     - {scope_id: materials, source_ref: static/reading3.pdf}
+  overrides:
+    vars:
+      courseware_courseruns:
+      - r1
