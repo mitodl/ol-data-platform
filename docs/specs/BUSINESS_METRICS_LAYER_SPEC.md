@@ -404,10 +404,11 @@ against a schema the server no longer publishes, and `refresh-schema` comes firs
 1. Resolve owner and reviewer names to ids, and check each glossary `tagFQN` exists.
 2. `GET /v1/metrics/name/{name}` and run the drift check below on what comes back. Nothing
    has been written at this point.
-3. `PUT /v1/metrics` with the `metric` body. This creates the entity or updates its
-   structural fields.
-4. `PATCH /v1/metrics/{id}` for description, owners, reviewers and status. A bot PUT does
-   not overwrite an existing description, so git wins only through PATCH.
+3. `PUT /v1/metrics` with the `metric` body, only when the metric does not exist or one of
+   its own fields differs. This creates the entity or updates its structural fields.
+4. `PATCH /v1/metrics/{id}` for description, owners, reviewers and status where they still
+   differ. A bot PUT does not overwrite an existing description or existing owners, so git
+   wins only through PATCH.
 5. For each `implemented_by` entry, resolve the table from a production manifest and
    `PUT /v1/lineage` with a table-to-metric edge, with no column lineage.
 
@@ -488,7 +489,16 @@ Nothing here blocks phase 1.
   requests.
 - Materialization: table vs. incremental for the progress model. Start as a table and
   measure the build.
-- Reviewers on re-sync: whether a bot PUT clears reviewers set in the OpenMetadata UI is
-  not verified. Test on QA before writing the drift check.
-- Creating a Metric with reviewers may start OpenMetadata's approval workflow and set the
-  status itself. Not verified; affects step 3 of sync.
+- Reviewers and status on re-sync, read from the 2.0.5 source (production runs 2.0.5) and
+  not yet observed on a server. A PUT replaces reviewers with the body's
+  (`EntityUpdater.updateReviewers`), so a body without them clears them; sync sends the
+  live reviewers when the file sets none. A PUT also resets `entityStatus` to Unprocessed,
+  because CreateMetric has no status and `setDefaultStatus` fills it, which is why sync
+  PUTs only for a structural change and then PATCHes the status back. A PUT merges tags
+  and never removes one (`updateTags`).
+- Approval workflow: none of the workflow definitions 2.0.5 seeds triggers on `metric`
+  (only glossaryTerm, recognizerFeedback and AI assets), so creating a Metric with
+  reviewers does not set its status. When a metric has reviewers, only one of them may move it
+  from In Review to Approved or Rejected (`updateEntityStatus`), so a sync bot that is not
+  a reviewer fails that PATCH. Whether a custom workflow on our server targets metrics is
+  not checked.

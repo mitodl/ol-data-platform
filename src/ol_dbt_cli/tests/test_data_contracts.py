@@ -372,7 +372,7 @@ def test_sync_publishes_only_clean_contracts(
 
     _write(tmp_path, "c", _contract({"type": "dashboardDataModel", "fqn": "Superset.model.41"}))
     client = _FakeClient(validation)
-    monkeypatch.setattr(contracts_command.OpenMetadataClient, "from_env", classmethod(lambda cls: client))
+    monkeypatch.setattr(openmetadata.OpenMetadataClient, "from_env", classmethod(lambda cls: client))
     monkeypatch.setattr(contracts_command, "get_repo_root", lambda: tmp_path)
 
     def exits_nonzero(command: Any, **kwargs: Any) -> bool:
@@ -410,7 +410,7 @@ def test_unresolved_contract_does_not_stop_later_ones(
         return "entity-id"
 
     monkeypatch.setattr(client, "entity_id", entity_id)
-    monkeypatch.setattr(contracts_command.OpenMetadataClient, "from_env", classmethod(lambda cls: client))
+    monkeypatch.setattr(openmetadata.OpenMetadataClient, "from_env", classmethod(lambda cls: client))
     monkeypatch.setattr(contracts_command, "get_repo_root", lambda: tmp_path)
     monkeypatch.setattr(openmetadata, "load_manifest", lambda path: _registry(_node("dropped_model", {})))
 

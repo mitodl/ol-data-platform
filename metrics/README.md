@@ -101,10 +101,41 @@ ol-dbt validate --only metric_registry
 # After an OpenMetadata upgrade: rewrite the schema snapshot from the server's
 # published OpenAPI document (no token needed), then commit the diff.
 ol-dbt metrics refresh-schema --server-url https://data.ol.mit.edu/api
+
+# Publish to OpenMetadata. Needs OM_SERVER_URL, OM_BOT_JWT_TOKEN and a
+# production manifest. --dry-run reads the catalog and writes nothing.
+ol-dbt metrics sync --service "Starburst Galaxy" --manifest prod-manifest.json --dry-run
 ```
 
 The snapshot is committed instead of fetched in CI so that a PR check does not
 depend on the catalog being reachable, and so that an upgrade changes what a
 metric file may contain in a reviewed commit.
 
-Publishing these files to OpenMetadata (`ol-dbt metrics sync`) is not built yet.
+## Sync to OpenMetadata
+
+`ol-dbt metrics sync` makes each Metric entity in OpenMetadata match its file
+and adds a lineage edge from each `implemented_by` table to it. It stops before
+the first file when the server's version is not the one stamped in the schema
+snapshot. For each file it:
+
+1. resolves `owners`, `reviewers`, glossary and classification `tags` and the
+   `implemented_by` tables by name, and writes nothing for that metric when one
+   is missing;
+2. reads the live metric and checks for drift: when someone other than the sync
+   bot made the last change and the description, reviewers or status differ
+   from the file, it reports them and exits non-zero without writing, unless
+   `--force`. The edit then belongs in a pull request;
+3. PUTs the `metric` body only to create the metric or to change one of its own
+   fields (type, unit, expression, ...);
+4. PATCHes description, owners, reviewers and `status` where they still differ.
+   A bot's PUT keeps a stored description and existing owners and resets the
+   status, so these land only by PATCH;
+5. PUTs a table-to-metric lineage edge per `implemented_by` table. OpenMetadata
+   stores no column lineage for a Metric, so the columns stay in this file.
+
+An unchanged file writes only the lineage edges, which OpenMetadata upserts.
+Fields the file does not set are left as OpenMetadata has them, and a PUT
+never removes a tag, so deleting a tag from a file does not remove it from the
+catalog. Lineage from a StarRocks view is skipped with a warning until
+OpenMetadata has a StarRocks service, and an edge whose `implemented_by` entry
+was removed is not deleted.
