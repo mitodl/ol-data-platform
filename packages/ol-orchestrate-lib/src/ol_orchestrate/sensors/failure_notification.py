@@ -17,6 +17,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import batched
 from typing import Any
 
 import sentry_sdk
@@ -76,11 +77,18 @@ SLACK_CHANNEL_BY_ENV = {
 }
 slack_channel = SLACK_CHANNEL_BY_ENV[DAGSTER_ENV]
 
-# Bounds a single tick's Slack payload and its event-log scan. A backlog larger
-# than this is drained over subsequent ticks via the cursor. Capped at 49, not
-# 50: asset_check_failure_message adds one header block on top of one detail
-# block per failure, and Slack rejects a chat.postMessage over 50 blocks.
-MAX_CHECK_EVALUATIONS_PER_TICK = 49
+# How many check evaluation events one tick of a check sensor reads. A backlog
+# larger than this drains over later ticks via the cursor. Almost every
+# evaluation is a dbt test (dagster-dbt makes each one an asset check), and at
+# the earlier 49 per 5-minute tick (14,112 a day) the sensors fell behind for
+# good: on 2026-10-20 the OpenMetadata push was writing evaluations from 46
+# hours earlier.
+CHECK_EVALUATIONS_PER_TICK = 500
+
+# Capped at 49, not 50: asset_check_failure_message adds one header block on
+# top of one detail block per failure, and Slack rejects a chat.postMessage over
+# 50 blocks.
+MAX_FAILURES_PER_MESSAGE = 49
 
 # Metadata dagster-dbt stamps on every check evaluation it builds from a dbt
 # result. Matched as a set: any one of these keys can occur on a hand-written
@@ -769,7 +777,7 @@ def is_inventory_check_outside_its_job(
 # Bounds on the substance appended to each failure's detail block. Kept small
 # on purpose: this appends to the block's existing text rather than adding a
 # block per failure, which is what keeps the 1-header-plus-1-block-per-failure
-# arithmetic behind MAX_CHECK_EVALUATIONS_PER_TICK intact.
+# arithmetic behind MAX_FAILURES_PER_MESSAGE intact.
 MAX_METADATA_ENTRIES_PER_FAILURE = 3
 MAX_METADATA_VALUE_LENGTH = 200
 MAX_DESCRIPTION_LENGTH = 300
@@ -883,7 +891,7 @@ def check_evaluation_records(instance: Any, cursor: int | None) -> Sequence[Any]
     ``ascending=True`` is load-bearing. The storage layer applies the LIMIT
     after ordering, so descending order returns the *newest* batch above the
     cursor; advancing the cursor past it would permanently skip any older
-    backlog beyond MAX_CHECK_EVALUATIONS_PER_TICK. Ascending returns the oldest
+    backlog beyond CHECK_EVALUATIONS_PER_TICK. Ascending returns the oldest
     events above the cursor, so a backlog drains in order, one batch per tick,
     with no gaps and no repeats.
     """
@@ -892,7 +900,7 @@ def check_evaluation_records(instance: Any, cursor: int | None) -> Sequence[Any]
             event_type=DagsterEventType.ASSET_CHECK_EVALUATION,
             after_cursor=cursor,
         ),
-        limit=MAX_CHECK_EVALUATIONS_PER_TICK,
+        limit=CHECK_EVALUATIONS_PER_TICK,
         ascending=True,
     )
 
@@ -993,14 +1001,15 @@ def asset_check_failure_sensor(context: SensorEvaluationContext) -> None:
         return
 
     client = WebClient(token=get_slack_token())
-    client.chat_postMessage(
-        channel=slack_channel,
-        blocks=asset_check_failure_message(failures),
-        text=(
-            f"Dagster {DAGSTER_ENV}: {len(failures)} asset check "
-            f"failure{'s' if len(failures) > 1 else ''}"
-        ),
-    )
+    for message_failures in batched(failures, MAX_FAILURES_PER_MESSAGE):
+        client.chat_postMessage(
+            channel=slack_channel,
+            blocks=asset_check_failure_message(message_failures),
+            text=(
+                f"Dagster {DAGSTER_ENV}: {len(message_failures)} asset check "
+                f"failure{'s' if len(message_failures) > 1 else ''}"
+            ),
+        )
 
 
 FAILURE_NOTIFICATION_SENSORS = (

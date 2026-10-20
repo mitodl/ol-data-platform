@@ -1,7 +1,8 @@
 """Tests for pushing Dagster asset check evaluations to OpenMetadata."""
 
 import logging
-from collections.abc import Mapping
+import math
+from collections.abc import Mapping, Sequence
 from types import SimpleNamespace
 from typing import Any
 
@@ -104,6 +105,7 @@ RESULT_ENDPOINT = f"v1/dataQuality/testCases/testCaseResults/{TEST_CASE_ENCODED}
 def _record(
     check_name: str,
     *,
+    storage_id: int = 1,
     passed: bool = True,
     asset_key: AssetKey = DIM_USER,
     metadata: dict[str, Any] | None = None,
@@ -121,24 +123,36 @@ def _record(
         timestamp=timestamp,
         dagster_event=SimpleNamespace(event_specific_data=evaluation),
     )
-    return SimpleNamespace(event_log_entry=entry)
+    return SimpleNamespace(storage_id=storage_id, event_log_entry=entry)
+
+
+def _push(
+    records: Sequence[SimpleNamespace],
+    client: _FakeClient,
+    deadline: float = math.inf,
+) -> tuple[int, int]:
+    return push_check_evaluations(
+        records, {DIM_USER: DIM_USER_FQN}, client, LOG, deadline
+    )
 
 
 def test_push_writes_results_and_skips_dbt_tests_and_unmapped_assets() -> None:
     client = _FakeClient()
     records = [
-        _record("freshness_check", passed=False),
-        _record("freshness_check", timestamp=1_760_003_600.0),
+        _record("freshness_check", storage_id=1, passed=False),
+        _record("freshness_check", storage_id=2, timestamp=1_760_003_600.0),
         # dagster-dbt's conversion of a dbt test: already in OM via run_results.json.
         _record(
             "not_null_dim_user_user_pk",
+            storage_id=3,
             metadata={"unique_id": "test.x", "invocation_id": "i", "status": "pass"},
         ),
-        _record("freshness_check", asset_key=AssetKey(["raw", "unmapped"])),
+        _record(
+            "freshness_check", storage_id=4, asset_key=AssetKey(["raw", "unmapped"])
+        ),
     ]
-    pushed = push_check_evaluations(records, {DIM_USER: DIM_USER_FQN}, client, LOG)
 
-    assert pushed == 2
+    assert _push(records, client) == (2, 4)
     assert [(method, endpoint) for method, endpoint, _ in client.calls] == [
         ("GET", TEST_DEFINITION_GET),
         ("PUT", "v1/dataQuality/testDefinitions"),
@@ -164,9 +178,7 @@ def test_push_writes_results_and_skips_dbt_tests_and_unmapped_assets() -> None:
 def test_existing_definition_and_test_case_are_not_rewritten() -> None:
     """So an edit made in OpenMetadata, e.g. disabling the definition, sticks."""
     client = _FakeClient(existing={TEST_DEFINITION_GET, TEST_CASE_GET})
-    push_check_evaluations(
-        [_record("freshness_check")], {DIM_USER: DIM_USER_FQN}, client, LOG
-    )
+    _push([_record("freshness_check")], client)
     assert [(method, endpoint) for method, endpoint, _ in client.calls] == [
         ("GET", TEST_DEFINITION_GET),
         ("GET", TEST_CASE_GET),
@@ -177,14 +189,17 @@ def test_existing_definition_and_test_case_are_not_rewritten() -> None:
 def test_result_already_written_counts_as_pushed() -> None:
     """A retried batch re-posts results OpenMetadata already has; it answers 409."""
     client = _FakeClient(fail=("POST", RESULT_ENDPOINT, 409))
-    records = [_record("freshness_check")]
-    assert push_check_evaluations(records, {DIM_USER: DIM_USER_FQN}, client, LOG) == 1
+    assert _push([_record("freshness_check")], client) == (1, 1)
 
 
 def test_nothing_to_push_makes_no_calls() -> None:
     client = _FakeClient()
-    records = [_record("freshness_check", asset_key=AssetKey(["raw", "unmapped"]))]
-    assert push_check_evaluations(records, {DIM_USER: DIM_USER_FQN}, client, LOG) == 0
+    records = [
+        _record(
+            "freshness_check", storage_id=7, asset_key=AssetKey(["raw", "unmapped"])
+        )
+    ]
+    assert _push(records, client) == (0, 7)
     assert client.calls == []
 
 
@@ -192,17 +207,30 @@ def test_table_missing_from_openmetadata_is_skipped(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     client = _FakeClient(fail=("POST", "v1/dataQuality/testCases", 404))
-    records = [_record("freshness_check")]
     with caplog.at_level(logging.WARNING):
-        assert (
-            push_check_evaluations(records, {DIM_USER: DIM_USER_FQN}, client, LOG) == 0
-        )
+        assert _push([_record("freshness_check")], client) == (0, 1)
     assert "OpenMetadata has no table" in caplog.text
 
 
 def test_other_api_errors_raise() -> None:
     client = _FakeClient(fail=("POST", RESULT_ENDPOINT, 500))
     with pytest.raises(httpx.HTTPStatusError):
-        push_check_evaluations(
-            [_record("freshness_check")], {DIM_USER: DIM_USER_FQN}, client, LOG
-        )
+        _push([_record("freshness_check")], client)
+
+
+def test_a_passed_deadline_leaves_the_rest_of_the_batch_for_the_next_tick() -> None:
+    """Regression: a tick that runs past the sensor timeout advances no cursor.
+
+    Each write takes OpenMetadata a second or more, so a batch with many
+    pushable evaluations has to be spread over several ticks.
+    """
+    client = _FakeClient(existing={TEST_DEFINITION_GET, TEST_CASE_GET})
+    records = [
+        _record("freshness_check", storage_id=1, asset_key=AssetKey(["raw", "x"])),
+        _record("freshness_check", storage_id=2),
+        _record("freshness_check", storage_id=3, timestamp=1_760_003_600.0),
+    ]
+
+    # The first write always goes ahead, so a tick never ends with no progress.
+    assert _push(records, client, deadline=-math.inf) == (1, 2)
+    assert [call[:2] for call in client.calls][-1] == ("POST", RESULT_ENDPOINT)
