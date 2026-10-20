@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 from ol_dbt_cli.commands.validate import _check_data_contract
+from ol_dbt_cli.lib import openmetadata
 from ol_dbt_cli.lib.data_contracts import (
     DATA_CONTRACT_CHECK,
     check_data_contracts,
@@ -344,7 +345,7 @@ class _FakeClient:
     def entity_id(self, entity_type: str, fqn: str) -> str:
         return "entity-id"
 
-    def owner_refs(self, owners: list[dict[str, str]]) -> list[dict[str, str]]:
+    def named_refs(self, owners: list[dict[str, str]]) -> list[dict[str, str]]:
         return [{"id": "owner-id", "type": o["type"]} for o in owners]
 
     def request(self, method: str, path: str, body: Any = None, query: dict[str, str] | None = None) -> Any:
@@ -411,7 +412,7 @@ def test_unresolved_contract_does_not_stop_later_ones(
     monkeypatch.setattr(client, "entity_id", entity_id)
     monkeypatch.setattr(contracts_command.OpenMetadataClient, "from_env", classmethod(lambda cls: client))
     monkeypatch.setattr(contracts_command, "get_repo_root", lambda: tmp_path)
-    monkeypatch.setattr(contracts_command, "load_manifest", lambda path: _registry(_node("dropped_model", {})))
+    monkeypatch.setattr(openmetadata, "load_manifest", lambda path: _registry(_node("dropped_model", {})))
 
     with pytest.raises(SystemExit):
         contracts_command.sync(service="svc", contracts_dir_path=str(tmp_path), manifest_path="manifest.json")
