@@ -1,9 +1,13 @@
 with conversation_fact as (
+    select * from {{ ref('afact_feedback_conversation') }}
+    where is_in_cluster_scope
+)
+
+, conversation as (
     select
-        *
+        feedback_conversation_pk
         , {{ html_unescape('conversation_text') }} as unescaped_text
-    from {{ ref('afact_feedback_conversation') }}
-    where is_in_cluster_scope and category_source = 'cluster'
+    from {{ ref('int__feedback__conversation') }}
 )
 
 , feedback_category as (
@@ -48,7 +52,7 @@ select
     -- Strips quoted email replies ("On <date>, <name> wrote: ...") up to the next turn
     , replace(
         {{ regexp_replace_with_backreferences(
-            'conversation_fact.unescaped_text'
+            'conversation.unescaped_text'
             , "'(?s)On [A-Z][a-z]{2}, .{5,60} wrote:.*?(\\n---\\n|$)'"
             , "'$1'"
         ) }}
@@ -61,8 +65,14 @@ select
 from conversation_fact
 inner join feedback_category
     on conversation_fact.category_fk = feedback_category.feedback_category_pk
+-- The category_fk match keeps only conversations whose category came from their
+-- cluster, not from the tag-seed fallback.
 inner join feedback_cluster
-    on conversation_fact.cluster_key = feedback_cluster.cluster_key
+    on
+        conversation_fact.cluster_key = feedback_cluster.cluster_key
+        and conversation_fact.category_fk = feedback_cluster.category_fk
+inner join conversation
+    on conversation_fact.feedback_conversation_pk = conversation.feedback_conversation_pk
 inner join feedback_source
     on conversation_fact.feedback_source_fk = feedback_source.feedback_source_pk
 inner join opening_turn

@@ -117,7 +117,7 @@ with conversation as (
         dim_feedback_category.feedback_category_pk
         , category_proposal.cluster_key
     from {{ ref('int__feedback__category_proposal') }} as category_proposal
-    inner join {{ ref('dim_feedback_category') }} as dim_feedback_category
+    inner join {{ ref('dim_feedback_category') }}
         on category_proposal.category_slug = dim_feedback_category.category_slug
 )
 
@@ -149,7 +149,6 @@ select
     , conversation.turn_count
     , participants.participant_count
     , conversation.conversation_text_chars
-    , conversation.conversation_text
     , ticket.ticket_status as final_status
     , ticket.ticket_priority as final_priority
     , turn_aggregates.explicit_rating
@@ -184,10 +183,6 @@ select
     -- conversation with neither stays null, the queryable unassigned state.
     , coalesce(cluster_category.feedback_category_pk, feedback_category.feedback_category_pk)
         as category_fk
-    , case
-        when cluster_category.feedback_category_pk is not null then 'cluster'
-        when feedback_category.feedback_category_pk is not null then 'tag_seed'
-    end as category_source
     , dominant_tag.tag_label as dominant_tag_label
     , cluster_assignment.cluster_key
     , cluster_assignment.cluster_similarity
