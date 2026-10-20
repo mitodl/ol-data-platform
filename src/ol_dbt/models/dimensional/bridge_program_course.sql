@@ -12,10 +12,9 @@ with micromasters_course_keys as (
         , course_id
         , cast(null as varchar) as course_readable_id
         -- An elective is one option in a "choose N of M" set, so it is not required on its
-        -- own. The number a program requires is program_num_required_courses upstream.
-        -- The type is the innermost operator's, so a course under an all_of nested in an
-        -- elective set reads Core. No MITx Online program nests requirements (2026-10-15).
-        , programrequirement_type = 'Core' as is_required
+        -- own, nor is a course under an all_of nested in one. The number a program
+        -- requires is program_num_required_courses upstream.
+        , programrequirement_is_required as is_required
         , 'mitxonline' as platform
         , 'mitxonline' as platform_code
         , course_order_in_program as course_order

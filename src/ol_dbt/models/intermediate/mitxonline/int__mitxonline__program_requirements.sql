@@ -34,6 +34,16 @@ with program_requirements as (
             when 'all_of' then 'Core'
         end
             as programrequirement_type
+        -- A course is required on its own only when every operator between it and the
+        -- program root is all_of. A course under an all_of nested in a "choose N of M"
+        -- set is one option in that set, though its innermost operator reads Core.
+        , min(
+            case operator_nodes.programrequirement_operator
+                when 'all_of' then 1
+                when 'min_number_of' then 0
+            end
+        ) over (partition by course_nodes.course_id, course_nodes.program_id) = 1
+            as programrequirement_is_required
 
         , row_number()
             over (
@@ -52,6 +62,7 @@ with program_requirements as (
         , all_requirements.course_id
         , all_requirements.program_id
         , all_requirements.programrequirement_type
+        , all_requirements.programrequirement_is_required
         , all_requirements.programrequirement_title
         , all_requirements.electiveset_required_number
         , all_requirements.programrequirement_path
@@ -79,6 +90,7 @@ with program_requirements as (
         , child_requirements.course_id
         , child_requirements.program_id
         , child_requirements.programrequirement_type
+        , child_requirements.programrequirement_is_required
         , child_requirements.programrequirement_title
         , child_requirements.electiveset_required_number
         , child_requirements.course_node_path
@@ -127,6 +139,7 @@ select
     , combined_requirements.course_id
     , combined_requirements.program_id
     , combined_requirements.programrequirement_type
+    , combined_requirements.programrequirement_is_required
     , combined_requirements.programrequirement_title
     , combined_requirements.electiveset_required_number
     , combined_requirements.programrequirement_parent_requirement_id
