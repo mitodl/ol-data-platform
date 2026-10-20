@@ -82,7 +82,7 @@ def test_repo_contracts_load() -> None:
 def test_repo_dim_user_sla_is_26_hours() -> None:
     # The layer-wide default the lakehouse freshness check had before dim_user's
     # contract became the declaration of its bound.
-    (contract,) = load_contracts(REPO_CONTRACTS_DIR)
+    (contract,) = [c for c in load_contracts(REPO_CONTRACTS_DIR) if c.body["name"] == "dim_user"]
     assert freshness_bound(contract) == timedelta(hours=26)
 
 

@@ -21,24 +21,33 @@ from dagster import (
 )
 from dagster_dbt.asset_utils import get_asset_key_for_model
 from ol_dbt_cli.lib.data_contracts import DataContract, freshness_bound
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from lakehouse.lib.repo_paths import find_upward
 
-# dg_projects/lakehouse/Dockerfile copies contracts/ here. Like the inventory, a
-# missing directory degrades (every model gets the default) rather than making
-# the code location unimportable.
+# dg_projects/lakehouse/Dockerfile copies contracts/ here.
 CONTRACTS_FALLBACK = Path("/app/contracts")
 
 
 def find_contracts_dir() -> Path:
-    """Locate the repository's ``contracts/`` from the source tree or the image."""
+    """Locate the repository's ``contracts/`` from the source tree or the image.
+
+    Unlike a missing inventory, a missing contracts directory has no asset to
+    fail on: every contracted model would quietly fall back to the default
+    bound. So a deployed image without it fails to load; only dev, where a
+    partial checkout is normal, gets a warning.
+
+    :raises FileNotFoundError: outside dev, when no ``contracts/`` is found.
+    """
     found = find_upward(Path(__file__), Path("contracts"), CONTRACTS_FALLBACK)
     if not found.is_dir():
-        warnings.warn(
-            f"No contracts directory at {found}; every dbt model gets the default "
-            "freshness bound.",
-            stacklevel=2,
+        msg = (
+            f"No contracts directory at {found}; every dbt model would get the "
+            "default freshness bound."
         )
+        if DAGSTER_ENV != "dev":
+            raise FileNotFoundError(msg)
+        warnings.warn(msg, stacklevel=2)
     return found
 
 

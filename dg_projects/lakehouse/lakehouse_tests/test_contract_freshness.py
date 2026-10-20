@@ -195,10 +195,13 @@ class TestContractsDir:
         assert (found / "dim_user.yaml").is_file()
 
     def test_repo_dim_user_keeps_the_26_hour_bound(self) -> None:
-        bounds = contract_freshness_bounds(
-            load_contracts(find_contracts_dir()), {"dim_user": DIM_USER}.get
-        )
-        assert bounds[DIM_USER] == DEFAULT
+        dim_user = [
+            c
+            for c in load_contracts(find_contracts_dir())
+            if c.body["name"] == "dim_user"
+        ]
+        bounds = contract_freshness_bounds(dim_user, {"dim_user": DIM_USER}.get)
+        assert bounds == {DIM_USER: DEFAULT}
 
     def test_finds_contracts_two_levels_up_as_in_the_image(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -212,13 +215,29 @@ class TestContractsDir:
 
         assert find_contracts_dir() == expected
 
-    def test_missing_contracts_warns_and_returns_the_fallback(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def _nowhere(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         module = tmp_path / "nowhere" / "contract_freshness.py"
         module.parent.mkdir(parents=True)
         module.touch()
         monkeypatch.setattr(contract_freshness, "__file__", str(module))
 
+    def test_missing_contracts_in_dev_warns_and_returns_the_fallback(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._nowhere(tmp_path, monkeypatch)
+        monkeypatch.setattr(contract_freshness, "DAGSTER_ENV", "dev")
+
         with pytest.warns(UserWarning, match="default freshness bound"):
             assert find_contracts_dir() == CONTRACTS_FALLBACK
+
+    @pytest.mark.parametrize("environment", ["qa", "production"])
+    def test_missing_contracts_outside_dev_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, environment: str
+    ) -> None:
+        # A changed image layout must not quietly put every contracted model
+        # back on the default bound.
+        self._nowhere(tmp_path, monkeypatch)
+        monkeypatch.setattr(contract_freshness, "DAGSTER_ENV", environment)
+
+        with pytest.raises(FileNotFoundError, match="default freshness bound"):
+            find_contracts_dir()
