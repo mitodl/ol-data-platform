@@ -16,7 +16,7 @@ with program_requirements as (
     where programrequirement_node_type = 'course'
 )
 
-, all_requirements as (
+, course_node_requirements as (
     select
         operator_nodes.programrequirement_id as programrequirement_requirement_id
         , course_nodes.course_id
@@ -34,16 +34,17 @@ with program_requirements as (
             when 'all_of' then 'Core'
         end
             as programrequirement_type
-        -- A course is required on its own only when every operator between it and the
+        -- A course node is required only when every operator between it and the
         -- program root is all_of. A course under an all_of nested in a "choose N of M"
         -- set is one option in that set, though its innermost operator reads Core.
+        -- Partitioned by the course node, as one course can sit under two groups of a program.
         , min(
             case operator_nodes.programrequirement_operator
                 when 'all_of' then 1
                 when 'min_number_of' then 0
             end
-        ) over (partition by course_nodes.course_id, course_nodes.program_id) = 1
-            as programrequirement_is_required
+        ) over (partition by course_nodes.programrequirement_id)
+            as course_node_is_required
 
         , row_number()
             over (
@@ -54,6 +55,16 @@ with program_requirements as (
     from course_nodes
     left join operator_nodes
         on course_nodes.programrequirement_path like {{ dbt.concat(["operator_nodes.programrequirement_path", "'%'"]) }}
+)
+
+-- The program requires a course when any of its course nodes is required.
+, all_requirements as (
+    select
+        course_node_requirements.*
+        , max(course_node_requirements.course_node_is_required)
+            over (partition by course_node_requirements.course_id, course_node_requirements.program_id) = 1
+            as programrequirement_is_required
+    from course_node_requirements
 )
 
 , child_requirements as (
