@@ -1,0 +1,67 @@
+---
+# OpenMetadata data contract for marts__combined_course_enrollment_detail. See README.md in this directory.
+entity:
+  type: table
+  dbt_model: marts__combined_course_enrollment_detail
+contract:
+  name: marts__combined_course_enrollment_detail
+  displayName: marts__combined_course_enrollment_detail
+  description: One row per course run enrollment across MIT Open Learning platforms.
+    Superset reads it directly (dataset Superset.model.54, on 10 dashboards including
+    Enrollment Detail by Learner and Course Enrollment Activity) and it feeds the
+    reporting models behind most other dashboards. The schema lists the columns the
+    tracked dashboards' charts select, group or filter on.
+  entityStatus: Approved
+  owners:
+  - type: team
+    name: data-platform
+  schema:
+  - name: platform
+    dataType: VARCHAR
+    constraint: NOT_NULL
+  - name: course_readable_id
+    dataType: VARCHAR
+    constraint: NOT_NULL
+  - name: course_title
+    dataType: VARCHAR
+  - name: courserun_readable_id
+    dataType: VARCHAR
+  - name: courserun_title
+    dataType: VARCHAR
+  - name: courserun_is_current
+    dataType: BOOLEAN
+    constraint: NOT_NULL
+  - name: courserun_start_on
+    dataType: VARCHAR
+  - name: courserun_end_on
+    dataType: VARCHAR
+  - name: courserun_upgrade_deadline
+    dataType: VARCHAR
+  - name: courserunenrollment_enrollment_status
+    dataType: VARCHAR
+  - name: courserunenrollment_is_active
+    dataType: BOOLEAN
+    constraint: NOT_NULL
+  - name: courseruncertificate_is_earned
+    dataType: BOOLEAN
+    constraint: NOT_NULL
+  - name: courserungrade_grade
+    dataType: DOUBLE
+  - name: courserungrade_is_passing
+    dataType: BOOLEAN
+  - name: user_email
+    dataType: VARCHAR
+    constraint: NOT_NULL
+  semantics:
+  - name: hasOwner
+    description: The table has at least one owner to route contract failures to.
+    rule: '{"!!": [{"var": "owners.0"}]}'
+    enabled: true
+  - name: hasDescription
+    description: The table has a description.
+    rule: '{"!!": [{"var": "description"}]}'
+    enabled: true
+  sla:
+    refreshFrequency:
+      interval: 1
+      unit: day

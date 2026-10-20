@@ -23,7 +23,9 @@ contract:                    # an OpenMetadata CreateDataContract body, minus `e
 
 `contract` uses OpenMetadata's native shape rather than ODCS. OpenMetadata's
 ODCS importer has no `semantics` field, and a `mode=replace` import clears them.
-`schema` lists only the columns being promised, not every column. `dataType`
+`schema` lists only the columns being promised, not every column. For a table
+or dataset behind Superset dashboards, those are the columns the dashboards'
+charts and native filters reference in `src/ol_superset/assets`. `dataType`
 takes OpenMetadata type names (`VARCHAR`, `BIGINT`, `TIMESTAMP`, ...).
 
 The `entity` binding says which asset the contract is for:

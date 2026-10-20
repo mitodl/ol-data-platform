@@ -11,6 +11,9 @@ contract:
     Superset datasets join on user_pk and the per-platform user ids below, so
     those columns must not be dropped or retyped without a coordinated change.
   entityStatus: Approved
+  owners:
+  - type: team
+    name: data-platform
   schema:
   - name: user_pk
     dataType: VARCHAR

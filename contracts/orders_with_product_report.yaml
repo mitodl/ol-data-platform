@@ -1,0 +1,112 @@
+---
+# OpenMetadata data contract for orders_with_product_report. See README.md in this directory.
+entity:
+  type: table
+  dbt_model: orders_with_product_report
+contract:
+  name: orders_with_product_report
+  displayName: orders_with_product_report
+  description: One row per order line with its product, coupon and payment receipt.
+    Superset dataset Superset.model.353 reads it for the Orders dashboard's Order
+    detail table and for the All Orders - C/S & Finance dashboard. The schema lists
+    the columns the Order detail chart and the Orders dashboard's native filters use.
+  entityStatus: Approved
+  owners:
+  - type: team
+    name: data-platform
+  schema:
+  - name: platform
+    dataType: VARCHAR
+    constraint: NOT_NULL
+  - name: order_id
+    dataType: BIGINT
+  - name: line_id
+    dataType: BIGINT
+  - name: coupon_code
+    dataType: VARCHAR
+  - name: b2border_contract_number
+    dataType: VARCHAR
+  - name: coupon_name
+    dataType: VARCHAR
+  - name: coupon_redeemed_on
+    dataType: VARCHAR
+  - name: coupon_type
+    dataType: VARCHAR
+  - name: discount
+    dataType: VARCHAR
+  - name: order_created_on
+    dataType: VARCHAR
+    constraint: NOT_NULL
+  - name: order_reference_number
+    dataType: VARCHAR
+    constraint: NOT_NULL
+  - name: order_state
+    dataType: VARCHAR
+    constraint: NOT_NULL
+  - name: order_tax_amount
+    dataType: DECIMAL
+  - name: order_tax_country_code
+    dataType: VARCHAR
+  - name: order_tax_rate_name
+    dataType: VARCHAR
+  - name: order_total_price_paid_plus_tax
+    dataType: DECIMAL
+  - name: order_total_price_paid
+    dataType: DECIMAL
+  - name: order_type
+    dataType: VARCHAR
+  - name: product_id
+    dataType: BIGINT
+    constraint: NOT_NULL
+  - name: product_readable_id
+    dataType: VARCHAR
+    constraint: NOT_NULL
+  - name: product_type
+    dataType: VARCHAR
+  - name: receipt_authorization_code
+    dataType: VARCHAR
+  - name: receipt_bill_to_address_state
+    dataType: VARCHAR
+  - name: receipt_payment_amount
+    dataType: DECIMAL
+  - name: receipt_payment_currency
+    dataType: VARCHAR
+  - name: receipt_payment_card_number
+    dataType: VARCHAR
+  - name: receipt_payment_card_type
+    dataType: VARCHAR
+  - name: receipt_payment_method
+    dataType: VARCHAR
+  - name: receipt_payment_timestamp
+    dataType: VARCHAR
+  - name: receipt_payer_name
+    dataType: VARCHAR
+  - name: receipt_payer_email
+    dataType: VARCHAR
+  - name: receipt_payer_ip_address
+    dataType: VARCHAR
+  - name: receipt_transaction_id
+    dataType: VARCHAR
+  - name: redeemed_email
+    dataType: VARCHAR
+  - name: unit_price
+    dataType: DECIMAL
+  - name: user_email
+    dataType: VARCHAR
+  - name: user_id
+    dataType: BIGINT
+  - name: product_name
+    dataType: VARCHAR
+  semantics:
+  - name: hasOwner
+    description: The table has at least one owner to route contract failures to.
+    rule: '{"!!": [{"var": "owners.0"}]}'
+    enabled: true
+  - name: hasDescription
+    description: The table has a description.
+    rule: '{"!!": [{"var": "description"}]}'
+    enabled: true
+  sla:
+    refreshFrequency:
+      interval: 1
+      unit: day
