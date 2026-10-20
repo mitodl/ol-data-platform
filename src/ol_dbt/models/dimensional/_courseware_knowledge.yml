@@ -10,6 +10,8 @@ models:
       # It reads tables only the courseware extractor writes, which no QA run produces
       # until the Dagster assets exist.
       qa_buildable: false
+      # Verbatim course text, which no source-visibility policy covers yet.
+      superset_dataset: false
   columns:
   - name: courseware_extraction_pk
     description: str, surrogate key of extraction_key
@@ -86,6 +88,8 @@ models:
     meta:
       # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
       qa_buildable: false
+      # Verbatim course text, which no source-visibility policy covers yet.
+      superset_dataset: false
   columns:
   - name: courseware_claim_pk
     description: str, surrogate key of (extraction_key, claim_ordinal)
@@ -162,6 +166,8 @@ models:
     meta:
       # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
       qa_buildable: false
+      # Verbatim course text, which no source-visibility policy covers yet.
+      superset_dataset: false
   columns:
   - name: courseware_claim_evidence_pk
     description: str, surrogate key of (extraction_key, claim_ordinal, evidence_ordinal)
