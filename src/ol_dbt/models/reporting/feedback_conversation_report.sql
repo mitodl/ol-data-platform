@@ -48,8 +48,8 @@ select
             , "'(?s)On [A-Z][a-z]{2}, .{5,60} wrote:.*?(\\n---\\n|$)'"
             , "'$1'"
         ) }}
-        , chr(10) || '---' || chr(10)
-        , chr(10) || '———' || chr(10)
+        , {{ dbt.concat([codepoint_char(10), "'---'", codepoint_char(10)]) }}
+        , {{ dbt.concat([codepoint_char(10), "'———'", codepoint_char(10)]) }}
     ) as conversation_text
     , course_run.courserun_readable_id
     , course_run.courserun_title as course_title

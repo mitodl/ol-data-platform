@@ -1700,6 +1700,24 @@ models:
         column_list: ["order_id", "line_id", "platform"]
 
 - name: feedback_conversation_report
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - ocw/app_postgres
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
   description: Learner feedback conversations in the current clustering run, with
     their cluster category, source, course run and cleaned conversation text. One
     row per conversation. Feeds the feedback dashboard; count rows for conversation
