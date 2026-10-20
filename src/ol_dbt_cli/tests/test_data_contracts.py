@@ -292,6 +292,17 @@ def test_om_fqn_and_request(tmp_path: Path) -> None:
     assert "entity" not in contract.body
 
 
+def test_om_fqn_lowercases_the_relation(tmp_path: Path) -> None:
+    _write(tmp_path, "c", _contract({"type": "table", "dbt_model": "Enrollment_Activity_Counts_Dataset"}))
+    [contract] = load_contracts(tmp_path)
+    registry = _registry(_node("Enrollment_Activity_Counts_Dataset", {}))
+    assert (
+        om_fqn(contract.entity, registry, "Starburst Galaxy")
+        == "Starburst Galaxy.ol_data_lake_production.ol_warehouse_production_dimensional."
+        "enrollment_activity_counts_dataset"
+    )
+
+
 @pytest.mark.parametrize(
     ("warehouse", "om"),
     [
