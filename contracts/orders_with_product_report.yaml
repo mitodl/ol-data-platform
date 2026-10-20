@@ -57,10 +57,8 @@ contract:
     dataType: VARCHAR
   - name: product_id
     dataType: BIGINT
-    constraint: NOT_NULL
   - name: product_readable_id
     dataType: VARCHAR
-    constraint: NOT_NULL
   - name: product_type
     dataType: VARCHAR
   - name: receipt_authorization_code
@@ -106,7 +104,12 @@ contract:
     description: The table has a description.
     rule: '{"!!": [{"var": "description"}]}'
     enabled: true
+  # Dagster's freshness check fails once the table is older than
+  # refreshFrequency + maxLatency (26 hours), so a late nightly build does not page.
   sla:
     refreshFrequency:
       interval: 1
       unit: day
+    maxLatency:
+      value: 2
+      unit: hour

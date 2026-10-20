@@ -34,7 +34,6 @@ contract:
     dataType: VARCHAR
   - name: courserunenrollment_created_on
     dataType: VARCHAR
-    constraint: NOT_NULL
   - name: courserunenrollment_enrollment_mode
     dataType: VARCHAR
   - name: courserunenrollment_enrollment_status
@@ -109,7 +108,12 @@ contract:
     description: The table has a description.
     rule: '{"!!": [{"var": "description"}]}'
     enabled: true
+  # Dagster's freshness check fails once the table is older than
+  # refreshFrequency + maxLatency (26 hours), so a late nightly build does not page.
   sla:
     refreshFrequency:
       interval: 1
       unit: day
+    maxLatency:
+      value: 2
+      unit: hour

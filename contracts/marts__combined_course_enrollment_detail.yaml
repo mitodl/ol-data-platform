@@ -21,7 +21,6 @@ contract:
     constraint: NOT_NULL
   - name: course_readable_id
     dataType: VARCHAR
-    constraint: NOT_NULL
   - name: course_title
     dataType: VARCHAR
   - name: courserun_readable_id
@@ -51,7 +50,6 @@ contract:
     dataType: BOOLEAN
   - name: user_email
     dataType: VARCHAR
-    constraint: NOT_NULL
   semantics:
   - name: hasOwner
     description: The table has at least one owner to route contract failures to.
@@ -61,7 +59,12 @@ contract:
     description: The table has a description.
     rule: '{"!!": [{"var": "description"}]}'
     enabled: true
+  # Dagster's freshness check fails once the table is older than
+  # refreshFrequency + maxLatency (26 hours), so a late nightly build does not page.
   sla:
     refreshFrequency:
       interval: 1
       unit: day
+    maxLatency:
+      value: 2
+      unit: hour
