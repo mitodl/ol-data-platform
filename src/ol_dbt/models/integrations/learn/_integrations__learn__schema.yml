@@ -661,7 +661,11 @@ models:
       MITx Online program id for the completed program. For an edX.org
       MicroMasters certificate, the id of the MITx Online program its title
       maps to in edxorg_to_mitxonline_program_mapping. Null when the title has
-      no mapping.
+      no mapping; the warning means a new edX.org title needs a seed row.
+    tests:
+    - not_null:
+        config:
+          severity: warn
   - name: user_first_name
     description: Certificate recipient's first name.
   - name: user_last_name
@@ -1056,11 +1060,13 @@ unit_tests:
     rows:
     - {edxorg_program_title: Supply Chain Management, mitxonline_program_readable_id: program-v1:MITxT+SCM}
     - {edxorg_program_title: Statistics and Data Science (Methods Track), mitxonline_program_readable_id: program-v1:MITxT+SDS-Methods-Track}
+    - {edxorg_program_title: 'Data, Economics, and Design of Policy: Public Policy',
+      mitxonline_program_readable_id: program-v1:MITx+Other}
   - input: ref('int__mitxonline__programs')
     rows:
     - {program_id: 44, program_readable_id: program-v1:MITxT+SCM}
     - {program_id: 46, program_readable_id: program-v1:MITxT+SDS-Methods-Track}
-    - {program_id: 2, program_readable_id: program-v1:MITx+DEDP-Public-Policy}
+    - {program_id: 99, program_readable_id: program-v1:MITx+Other}
   expect:
     rows:
     - {record_hash: scm, mitxonline_program_id: 44}
