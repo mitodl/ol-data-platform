@@ -831,6 +831,7 @@ unit_tests:
   description: >
     b2 is removed at r2 and restored at r3, returning the course to its r1
     hash. r3 differs from r2, so every block of r3 is kept, b2 included.
+    The raw table holds b2 twice at r3, and only one copy is kept.
   model: stg__mitxresidential__openedx__api__course_structure
   given:
   - input: source('ol_warehouse_raw_data', 'raw__mitx__openedx__api__course_blocks')
@@ -848,6 +849,8 @@ unit_tests:
     - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: course, course_content_hash: A,
       retrieved_at: '2026-10-03 00:00:00'}
     - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: b1, course_content_hash: A,
+      retrieved_at: '2026-10-03 00:00:00'}
+    - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: b2, course_content_hash: A,
       retrieved_at: '2026-10-03 00:00:00'}
     - {course_id: course-v1:MITx+6.002+2026_Spring, block_id: b2, course_content_hash: A,
       retrieved_at: '2026-10-03 00:00:00'}

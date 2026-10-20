@@ -27,14 +27,27 @@ with course_block_source as (
     where previous_content_hash is null or previous_content_hash != course_content_hash
 )
 
+-- The raw table can hold a block more than once in one retrieval, so only one copy is kept.
 , course_block as (
-    select course_block_source.*
-    from course_block_source
-    inner join course_retrieval
-        on
-            course_block_source.course_id = course_retrieval.course_id
-            and course_block_source.retrieved_at = course_retrieval.retrieved_at
-            and course_block_source.course_content_hash = course_retrieval.course_content_hash
+    select * from (
+        select
+            course_block_source.*
+            , row_number() over (
+                partition by
+                    course_block_source.course_id
+                    , course_block_source.block_id
+                    , course_block_source.retrieved_at
+                    , course_block_source.course_content_hash
+                order by course_block_source.block_content_hash asc, course_block_source.block_index asc
+            ) as block_copy_number
+        from course_block_source
+        inner join course_retrieval
+            on
+                course_block_source.course_id = course_retrieval.course_id
+                and course_block_source.retrieved_at = course_retrieval.retrieved_at
+                and course_block_source.course_content_hash = course_retrieval.course_content_hash
+    ) as retrieved_block
+    where block_copy_number = 1
 )
 
 , cleaned as (
