@@ -211,3 +211,38 @@ seeds:
     - unique
   - name: currency_name
     description: str, the currency's name
+- name: courseware_extraction_allowlist
+  description: >
+    The course runs whose courseware is assembled for claim extraction. A run takes
+    its own row, else its course's row, else its platform's row (course_readable_id
+    and courserun_readable_id both empty), and a run matching no row is left out of
+    int__courseware__extraction_sources. Approve a run by editing this file.
+  config:
+    column_types:
+      platform: varchar
+      course_readable_id: varchar
+      courserun_readable_id: varchar
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - platform
+        - course_readable_id
+        - courserun_readable_id
+  # A row naming both would tie with the run's own row, and the build would pick
+  # one of the two arbitrarily.
+  - dbt_utils.expression_is_true:
+      expression: course_readable_id is null or courserun_readable_id is null
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [mitxonline, mitxpro, residential]
+  - name: course_readable_id
+    description: str, the course whose runs this row approves, as dim_course spells
+      it (e.g. course-v1:UAI_SOURCE+UAI.4); empty for a run or platform row
+  - name: courserun_readable_id
+    description: str, the run this row approves; empty for a course or platform row

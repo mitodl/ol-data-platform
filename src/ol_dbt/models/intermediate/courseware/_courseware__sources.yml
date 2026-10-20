@@ -1,0 +1,137 @@
+---
+version: 2
+
+sources:
+# Written by the courseware claim extractor (dg_projects/ml, ml.lib.courseware) into
+# the intermediate schema, the same way the feedback assets write theirs. Rows are
+# never updated: a new prompt, schema, model or input text adds rows under a new
+# extraction_key.
+- name: courseware_intermediate
+  loader: dagster
+  database: '{{ target.database | default(none) }}'
+  schema: '{{ target.schema }}_intermediate'
+  tables:
+  - name: courseware_claim_extraction
+    description: One row per model call, i.e. one scope part of a course run read
+      by one extractor version and model.
+    columns:
+    - name: extraction_key
+      description: str, sha256 of everything the call depended on (extractor, prompt
+        and schema versions, model, effort, run, scope and the full message text)
+      tests:
+      - unique
+      - not_null
+    - name: extractor_id
+      description: str, the extractor, e.g. courseware_claims_v1
+    - name: prompt_version
+      description: str, hash of the system prompt
+    - name: schema_version
+      description: str, hash of the output JSON schema
+    - name: model_id
+      description: str, the model id as sent to the provider
+    - name: effort
+      description: str, output_config.effort for the call
+    - name: platform
+      description: str, mitxonline, mitxpro or residential
+    - name: courserun_readable_id
+      description: str, the run the scope belongs to
+    - name: scope_id
+      description: str, the sequential block id, or 'context' or 'materials'
+    - name: scope_kind
+      description: str, unit, context or materials
+    - name: scope_title
+      description: str, the sequential title or the scope name
+    - name: scope_position
+      description: int, the scope's order in the course; 0 for context, 9999 for materials
+    - name: scope_part
+      description: int, which part of a scope split to fit the input budget, from
+        1
+    - name: scope_part_count
+      description: int, how many parts the scope was split into
+    - name: input_text_checksum
+      description: str, sha256 of the source text the call read
+    - name: source_count
+      description: int, number of sources the call read
+    - name: truncated_source_count
+      description: int, number of those sources cut to the per-source limit
+    - name: sources_json
+      description: str, JSON list of {source_id, source_ref, included_chars, total_chars}
+    - name: summary
+      description: str, the model's summary of the scope
+    - name: notes_json
+      description: str, JSON list of the model's notes plus truncation notes
+    - name: stop_reason
+      description: str, the response's stop_reason
+    - name: input_tokens
+      description: int, uncached input tokens billed
+    - name: output_tokens
+      description: int, output tokens billed, thinking included
+    - name: cache_read_input_tokens
+      description: int, input tokens read from the prompt cache
+    - name: cache_creation_input_tokens
+      description: int, input tokens written to the prompt cache
+    - name: extracted_at
+      description: timestamp, when the call returned
+  - name: courseware_claim
+    description: One row per claim in an extraction, as the model returned it.
+    columns:
+    - name: extraction_key
+      description: str, the extraction the claim came from
+      tests:
+      - not_null
+    - name: claim_ordinal
+      description: int, the claim's position in the extraction, from 1
+    - name: claim_kind
+      description: str, concept, skill, assumed_knowledge, assessment_expectation,
+        learning_outcome, declared_prerequisite or audience
+    - name: label
+      description: str, the model's canonical label; the statement for outcomes and
+        audience
+    - name: description
+      description: str, the model's description; the statement for declared prerequisites
+    - name: concept_kind
+      description: str, concept, method, tool, dataset or application (concepts only)
+    - name: teaching_status
+      description: str, taught, reviewed, used or mentioned (concepts and skills)
+    - name: how_used
+      description: str, where the material relies on assumed knowledge
+    - name: flagged_as_prior
+      description: boolean, whether the material frames assumed knowledge as prior
+    - name: bloom_process
+      description: str, Bloom revised cognitive process (assessments and outcomes)
+    - name: knowledge_type
+      description: str, Bloom revised knowledge type (outcomes)
+    - name: prerequisite_kind
+      description: str, prerequisite, corequisite, recommended or explicitly_none
+    - name: course_ref
+      description: str, a course a declared prerequisite names
+    - name: related_concept_labels_json
+      description: str, JSON list of concept labels an assessment or outcome names
+    tests:
+    - dbt_expectations.expect_compound_columns_to_be_unique:
+        column_list: [extraction_key, claim_ordinal]
+  - name: courseware_claim_evidence
+    description: One row per evidence passage, verified against the source text the
+      call read (int__courseware__extraction_sources.source_text).
+    columns:
+    - name: extraction_key
+      description: str, the extraction
+      tests:
+      - not_null
+    - name: claim_ordinal
+      description: int, the claim within the extraction
+    - name: evidence_ordinal
+      description: int, the passage's position within the claim, from 1
+    - name: source_id
+      description: str, the S01-style id the model cited
+    - name: source_ref
+      description: str, the cited source's block id or export path; null when the
+        id was not one the call was sent
+    - name: passage
+      description: str, the passage as the model quoted it
+    - name: verification_status
+      description: str, exact, fuzzy, unverified or unknown_source
+    - name: char_start
+      description: int, offset of an exact match in the source text
+    - name: char_end
+      description: int, end offset of an exact match in the source text

@@ -1,0 +1,199 @@
+---
+version: 2
+
+models:
+- name: dim_courseware_extraction
+  description: One row per courseware claim extractor call, i.e. one scope part of
+    a course run read by one extractor version and model. Versions accumulate.
+  config:
+    meta:
+      # It reads tables only the courseware extractor writes, which no QA run produces
+      # until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: courseware_extraction_pk
+    description: str, surrogate key of extraction_key
+    tests:
+    - unique
+    - not_null
+  - name: extraction_key
+    description: str, sha256 of everything the call depended on
+  - name: courserun_fk
+    description: str, dim_course_run.courserun_pk
+    tests:
+    - relationships:
+        to: ref('dim_course_run')
+        field: courserun_pk
+  - name: scope_block_fk
+    description: str, dim_course_content.content_block_pk of the sequential; null
+      for the context and materials scopes
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the sequential's block id, or 'context' or 'materials'
+  - name: scope_kind
+    description: str, unit, context or materials
+  - name: scope_title
+    description: str, the sequential's title or the scope's name
+  - name: scope_position
+    description: int, the scope's order in the course; 0 for context, 9999 for materials
+  - name: scope_part
+    description: int, which part of a split scope the call read, from 1
+  - name: scope_part_count
+    description: int, how many parts the scope was split into
+  - name: extractor_id
+    description: str, the extractor version
+  - name: prompt_version
+    description: str, hash of the system prompt
+  - name: schema_version
+    description: str, hash of the output JSON schema
+  - name: model_id
+    description: str, the model id as sent to the provider
+  - name: effort
+    description: str, the effort setting for the call
+  - name: input_text_checksum
+    description: str, sha256 of the source text the call read
+  - name: source_count
+    description: int, sources the call read
+  - name: truncated_source_count
+    description: int, sources cut to the per-source limit
+  - name: summary
+    description: str, the model's summary of the scope
+  - name: notes_json
+    description: str, JSON list of the model's notes plus truncation notes
+  - name: stop_reason
+    description: str, the response's stop_reason
+  - name: input_tokens
+    description: int, uncached input tokens billed
+  - name: output_tokens
+    description: int, output tokens billed, thinking included
+  - name: cache_read_input_tokens
+    description: int, input tokens read from the prompt cache
+  - name: cache_creation_input_tokens
+    description: int, input tokens written to the prompt cache
+  - name: extracted_at
+    description: timestamp, when the call returned
+  - name: is_current
+    description: boolean, whether this is the newest extraction of its scope part
+
+- name: tfact_courseware_claim
+  description: One row per extracted claim (concept, skill, assumed knowledge, assessment
+    expectation, learning outcome, declared prerequisite, audience), as the model
+    stated it, with its evidence counts.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: courseware_claim_pk
+    description: str, surrogate key of (extraction_key, claim_ordinal)
+    tests:
+    - unique
+    - not_null
+  - name: courseware_extraction_fk
+    description: str, dim_courseware_extraction.courseware_extraction_pk
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_courseware_extraction')
+        field: courseware_extraction_pk
+  - name: courserun_fk
+    description: str, dim_course_run.courserun_pk
+  - name: scope_block_fk
+    description: str, dim_course_content.content_block_pk of the sequential; null
+      for the context and materials scopes
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_kind
+    description: str, unit, context or materials
+  - name: scope_position
+    description: int, the scope's order in the course
+  - name: claim_ordinal
+    description: int, the claim's position in the extraction, from 1
+  - name: claim_kind
+    description: str, the kind of claim
+    tests:
+    - accepted_values:
+        values: [concept, skill, assumed_knowledge, assessment_expectation, learning_outcome,
+          declared_prerequisite, audience]
+  - name: label
+    description: str, the model's canonical label; the statement for outcomes and
+      audience
+  - name: description
+    description: str, the model's description of how the scope treats the claim
+  - name: concept_kind
+    description: str, concept, method, tool, dataset or application (concepts only)
+  - name: teaching_status
+    description: str, taught, reviewed, used or mentioned (concepts and skills)
+  - name: how_used
+    description: str, where the material relies on assumed knowledge
+  - name: flagged_as_prior
+    description: boolean, whether the material frames assumed knowledge as prior
+  - name: bloom_process
+    description: str, Bloom revised cognitive process (assessments and outcomes)
+  - name: knowledge_type
+    description: str, Bloom revised knowledge type (outcomes)
+  - name: prerequisite_kind
+    description: str, prerequisite, corequisite, recommended or explicitly_none
+  - name: course_ref
+    description: str, a course a declared prerequisite names
+  - name: related_concept_labels_json
+    description: str, JSON list of concept labels an assessment or outcome names
+  - name: evidence_count
+    description: int, evidence passages quoted for the claim
+  - name: verified_evidence_count
+    description: int, passages found in the source text (exact or fuzzy)
+  - name: is_verified
+    description: boolean, whether at least one passage was found in the source
+  - name: is_current
+    description: boolean, whether the claim's extraction is the newest for its scope
+      part
+  - name: extracted_at
+    description: timestamp, when the extraction returned
+
+- name: tfact_courseware_claim_evidence
+  description: One row per evidence passage quoted for a claim, with its verification
+    against the source text and its character span there.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: courseware_claim_evidence_pk
+    description: str, surrogate key of (extraction_key, claim_ordinal, evidence_ordinal)
+    tests:
+    - unique
+    - not_null
+  - name: courseware_claim_fk
+    description: str, tfact_courseware_claim.courseware_claim_pk
+    tests:
+    - relationships:
+        to: ref('tfact_courseware_claim')
+        field: courseware_claim_pk
+  - name: content_block_fk
+    description: str, dim_course_content.content_block_pk of the cited block; null
+      when the source is an exported file (about page, document)
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: evidence_ordinal
+    description: int, the passage's position within the claim, from 1
+  - name: source_ref
+    description: str, the cited block id or export path; null when the model cited
+      a source id the call was not sent
+  - name: passage
+    description: str, the passage as the model quoted it
+  - name: verification_status
+    description: str, exact, fuzzy, unverified or unknown_source
+    tests:
+    - accepted_values:
+        values: [exact, fuzzy, unverified, unknown_source]
+  - name: char_start
+    description: int, offset of an exact match in the source text
+  - name: char_end
+    description: int, end offset of an exact match in the source text
