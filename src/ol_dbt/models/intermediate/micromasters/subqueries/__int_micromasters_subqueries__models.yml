@@ -185,9 +185,9 @@ models:
 - name: __micromasters_program_certificates_non_dedp
   description: Non DEDP program certificate earners. Data come from learners report
     from edX.org, with one certificate per learner per MITx Online program (see edxorg_to_mitxonline_program_mapping).
-    A learner with both 2U General Track program records, or both 'Finance' and 'MIT
-    Finance', appears once; a learner with several Statistics and Data Science tracks
-    appears once per track
+    A learner with both 2U General Track program records, both Social Sciences Track
+    records, or both 'Finance' and 'MIT Finance', appears once; a learner with several
+    Statistics and Data Science tracks appears once per track
   config:
     meta:
       qa_branches:

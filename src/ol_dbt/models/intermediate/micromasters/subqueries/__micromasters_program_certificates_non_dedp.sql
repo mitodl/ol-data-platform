@@ -6,7 +6,8 @@ with program_mapping as (
 
 , micromasters_program_certificates as (
     --- 2U data has two program_uuids titled 'Statistics and Data Science (General Track)' (one was the
-    --  original 'Statistics and Data Science' program), and some learners hold both. 'Finance' and 'MIT Finance'
+    --  original 'Statistics and Data Science' program) and two titled 'Statistics and Data Science (Social Sciences
+    --  Track)', and some learners hold both of a pair. 'Finance' and 'MIT Finance'
     --  are likewise one program. Keep one certificate per learner per MITx Online program; each SDS track is its own
     --  MITx Online program and keeps its own certificate. The awarded date and uuid make the pick stable across runs,
     --  which matters because MIT Learn never deletes a certificate whose program_certificate_hashed_id drops out.
