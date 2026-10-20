@@ -981,21 +981,26 @@
 {#
     starrocks_strict_convert_tz: `input_expr` read as a DATETIME by the `to_datetime`
     template ("{}" stands for the input) and moved from `zone_expr` to UTC. Fails the
-    query where the input cannot be read or the zone is unknown. A NULL input or zone is
-    NULL, as on Trino. Each argument is rendered as few times as possible: StarRocks
-    rejects a query whose expression tree passes 10,000 nodes, and the MIT PE event
-    times reach it when their local time is rendered three times.
+    query where the input cannot be read, or where a non-NULL input has an unknown zone.
+    A NULL input or zone is NULL, as on Trino, which does not check the zone of a NULL
+    timestamp. The lambda binds the input so it is rendered once: StarRocks rejects a
+    query whose expression tree passes 10,000 nodes, and the MIT PE event times reach
+    it when their local time is rendered three times.
 #}
 {% macro starrocks_strict_convert_tz(to_datetime, input_expr, zone_expr) -%}
-    if(
-        assert_true(
-            {{ to_datetime.format("coalesce(" ~ input_expr ~ ", '2000-01-01')") }} is not null
-            and convert_tz(cast('2000-01-01' as datetime), coalesce({{ zone_expr }}, 'UTC'), 'UTC') is not null
-            , 'unreadable local timestamp or unknown time zone'
+    array_map(
+        (local_value, local_zone) -> if(
+            assert_true(
+                local_value is null
+                or convert_tz({{ to_datetime.format('local_value') }}, coalesce(local_zone, 'UTC'), 'UTC') is not null
+                , 'unreadable local timestamp or unknown time zone'
+            )
+            , convert_tz({{ to_datetime.format('local_value') }}, local_zone, 'UTC')
+            , null
         )
-        , convert_tz({{ to_datetime.format(input_expr) }}, {{ zone_expr }}, 'UTC')
-        , null
-    )
+        , [{{ input_expr }}]
+        , [{{ zone_expr }}]
+    )[1]
 {%- endmacro %}
 
 
