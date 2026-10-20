@@ -32,6 +32,7 @@ from __future__ import annotations
 import copy
 import re
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -88,6 +89,23 @@ _WAREHOUSE_TYPE_ALIASES = {
 SCHEMA_TYPED_ENTITIES = frozenset({"table", "dashboardDataModel"})
 
 _TYPE_HEAD = re.compile(r"^\s*([A-Za-z]+)")
+
+# The units OpenMetadata's contractSLA schema (2.0.2) allows for
+# refreshFrequency and maxLatency. timedelta has no month or year, so those
+# take their longest length: a bound that fires before a calendar-monthly
+# refresh is due would be a false alarm every short month.
+_REFRESH_UNITS = {
+    "hour": timedelta(hours=1),
+    "day": timedelta(days=1),
+    "week": timedelta(weeks=1),
+    "month": timedelta(days=31),
+    "year": timedelta(days=366),
+}
+_LATENCY_UNITS = {
+    "minute": timedelta(minutes=1),
+    "hour": timedelta(hours=1),
+    "day": timedelta(days=1),
+}
 
 
 @dataclass(frozen=True)
@@ -178,8 +196,59 @@ def load_contracts(contracts_dir: Path) -> list[DataContract]:
                 f"column types for {', '.join(sorted(SCHEMA_TYPED_ENTITIES))}. Use semantics rules instead."
             )
             raise ValueError(msg)
-        contracts.append(DataContract(path=path, entity=binding, body=body))
+        contract = DataContract(path=path, entity=binding, body=body)
+        # Parsed here so a malformed SLA fails `ol-dbt validate` in CI rather
+        # than the lakehouse code location that builds freshness checks from it.
+        freshness_bound(contract)
+        contracts.append(contract)
     return contracts
+
+
+def _sla_duration(path: Path, raw: Any, field: str, amount_key: str, units: dict[str, timedelta]) -> timedelta:
+    amount = raw.get(amount_key) if isinstance(raw, dict) else None
+    if (
+        not isinstance(amount, int)
+        or isinstance(amount, bool)
+        or amount < 1
+        or not isinstance(raw, dict)
+        or raw.get("unit") not in units
+    ):
+        msg = (
+            f"{path}: `sla.{field}` needs a positive integer `{amount_key}` and a `unit` "
+            f"of {', '.join(units)}, got {raw!r}"
+        )
+        raise ValueError(msg)
+    return amount * units[raw["unit"]]
+
+
+def freshness_bound(contract: DataContract) -> timedelta | None:
+    """How long after its last update the contracted asset counts as stale, from its ``sla``.
+
+    The asset is due once per ``refreshFrequency`` and may land up to
+    ``maxLatency`` after that, so the bound is their sum. OpenMetadata stores
+    the SLA but never evaluates it; the lakehouse code location turns this
+    bound into the asset's Dagster freshness check.
+
+    :returns: ``None`` when the contract sets no ``sla.refreshFrequency``.
+    :rtype: timedelta | None
+    :raises ValueError: when ``sla`` is not a mapping, or ``refreshFrequency``
+        or ``maxLatency`` does not match OpenMetadata's contractSLA shape.
+    """
+    sla = contract.body.get("sla")
+    if sla is None:
+        return None
+    if not isinstance(sla, dict):
+        msg = f"{contract.path}: `sla` must be a mapping, got {sla!r}"
+        raise ValueError(msg)
+    if "refreshFrequency" not in sla:
+        if "maxLatency" in sla:
+            msg = f"{contract.path}: `sla.maxLatency` is grace on `sla.refreshFrequency`, which is missing"
+            raise ValueError(msg)
+        return None
+    bound = _sla_duration(contract.path, sla["refreshFrequency"], "refreshFrequency", "interval", _REFRESH_UNITS)
+    if "maxLatency" in sla:
+        bound += _sla_duration(contract.path, sla["maxLatency"], "maxLatency", "value", _LATENCY_UNITS)
+    return bound
 
 
 def manifest_node(binding: EntityBinding, manifest: ManifestRegistry) -> ManifestModel | None:

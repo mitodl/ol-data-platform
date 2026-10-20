@@ -6,7 +6,6 @@ import re
 from datetime import timedelta
 
 from dagster import (
-    AssetCheckSeverity,
     AssetSelection,
     AssetSpec,
     AutomationConditionSensorDefinition,
@@ -15,7 +14,6 @@ from dagster import (
     Definitions,
     RunConfig,
     ScheduleDefinition,
-    build_last_update_freshness_checks,
     build_sensor_for_freshness_checks,
     define_asset_job,
     with_source_code_references,
@@ -33,6 +31,7 @@ from dagster_dbt.asset_utils import (
     get_asset_key_for_model,
     get_manifest_and_translator_from_dbt_assets,
 )
+from ol_dbt_cli.lib.data_contracts import load_contracts
 from ol_dbt_cli.lib.inventory import load_units, render_dagster_intervals
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.failures import with_failure_hooks
@@ -75,6 +74,12 @@ from lakehouse.assets.qa_mirror import build_qa_mirror_assets
 from lakehouse.assets.qa_observation_drift import qa_observation_drift
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import build_superset_dataset_assets
+from lakehouse.lib.contract_freshness import (
+    build_freshness_checks,
+    contract_freshness_bounds,
+    dbt_model_key_lookup,
+    find_contracts_dir,
+)
 from lakehouse.lib.dbt_environment import (
     DBT_AUTOMATION_ENABLED,
     STARROCKS_IS_LOCAL,
@@ -741,12 +746,17 @@ freshness_checked_assets = [
     key for key in dbt_model_keys if key.path[0] in FRESHNESS_CHECKED_GROUPS
 ]
 
-# 26 hours, against the 24-hour default sync cadence -- a nightly build that
-# runs a little late must not page anyone.
-dbt_layer_freshness_checks = build_last_update_freshness_checks(
-    assets=freshness_checked_assets,
-    lower_bound_delta=timedelta(hours=26),
-    severity=AssetCheckSeverity.ERROR,
+# A model with a data contract SLA (contracts/) is checked against that
+# instead, in any group, so the contract is the one place its freshness is
+# declared. The default is 26 hours, against the 24-hour default sync cadence
+# -- a nightly build that runs a little late must not page anyone.
+dbt_layer_freshness_checks = build_freshness_checks(
+    default_keys=freshness_checked_assets,
+    default_bound=timedelta(hours=26),
+    contract_bounds=contract_freshness_bounds(
+        load_contracts(find_contracts_dir()),
+        dbt_model_key_lookup(full_dbt_project),
+    ),
 )
 
 dbt_layer_freshness_sensor = build_sensor_for_freshness_checks(

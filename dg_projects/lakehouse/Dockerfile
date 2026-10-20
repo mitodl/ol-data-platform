@@ -130,6 +130,12 @@ COPY --from=builder /app/src/ol_dbt /app/ol_dbt
 # Keeps ingestion/inventory a sibling of the package, so the upward search from
 # /app/lakehouse/lib/ finds it at /app/ingestion/inventory.
 COPY --from=builder /app/ingestion/inventory /app/ingestion/inventory
+# The data contracts' SLAs bound the dbt models' freshness checks
+# (lakehouse/lib/contract_freshness.py). Nothing in the build reads them, so
+# they come straight from the context, to /app/contracts where the same upward
+# search finds them. Without them every model falls back to the 26-hour default,
+# with only a load-time warning to say so.
+COPY contracts /app/contracts
 
 # Copy the dbt project from the builder
 COPY --from=builder /app/src/ol_dbt /opt/dbt
