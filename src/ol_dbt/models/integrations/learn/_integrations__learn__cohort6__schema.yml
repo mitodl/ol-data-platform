@@ -278,3 +278,43 @@ unit_tests:
     rows:
     - guid: https://medium.com/p/1
       content: '<p>Intro</p><a href="https://medium.com/media/abc/href">https://medium.com/media/abc/href</a><p>More</p>'
+
+- name: test_integrations__learn__news_feed_items_publish_date_matches_trino
+  description: >
+    publish_date is a UTC instant with three fractional digits, as Trino's
+    to_iso8601 renders the timestamp(3) both feeds' dates are parsed into.
+  model: integrations__learn__news_feed_items
+  given:
+  - input: ref('stg__medium__rss__posts')
+    rows:
+    - {post_guid: https://medium.com/p/1, post_published_on_raw: "Wed, 18 Feb 2026\
+        \ 14:28:25 GMT"}
+  - input: ref('stg__mitpe__api__news')
+    rows:
+    - {news_id: mitpe-1, news_date_raw: "2026-09-30"}
+  expect:
+    rows:
+    - {guid: https://medium.com/p/1, publish_date: "2026-02-18T14:28:25.000Z"}
+    - {guid: mitpe-1, publish_date: "2026-09-30T04:00:00.000Z"}
+
+- name: test_integrations__learn__event_feed_items_event_datetime_matches_trino
+  description: >
+    event_datetime is a UTC instant with six fractional digits on both feeds:
+    on Trino the union with the MIT PE times read from Iceberg makes it a
+    timestamp(6). An Open Learning start is US Eastern wall-clock time.
+  model: integrations__learn__event_feed_items
+  given:
+  - input: ref('stg__openlearning__api__events')
+    rows:
+    - {event_id: ol-1, event_is_published: true, event_start_on_raw: "2124-03-15T13:42:36-04:00"}
+  - input: ref('stg__mitpe__api__events')
+    rows:
+    - {event_id: mitpe-1, event_title: Talk}
+  - input: ref('int__news_events__mitpe_event_times')
+    rows:
+    - {event_id: mitpe-1, start_on: "2124-09-15 16:30:00+00", end_on: "2124-09-15\
+        \ 17:00:00+00"}
+  expect:
+    rows:
+    - {guid: ol-1, event_datetime: "2124-03-15T17:42:36.000000Z", event_end_datetime: null}
+    - {guid: mitpe-1, event_datetime: "2124-09-15T16:30:00.000000Z", event_end_datetime: "2124-09-15T17:00:00.000000Z"}

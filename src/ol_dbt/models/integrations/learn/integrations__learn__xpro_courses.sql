@@ -42,7 +42,7 @@ select
     , coalesce(
         pages.page_last_published_on
         , pages.page_first_published_on
-        , {{ cast_timestamp_to_iso8601('current_timestamp') }}
+        , {{ cast_timestamp_to_iso8601(current_timestamptz()) }}
     ) as last_modified
     , 'xpro' as etl_source
     , pages.page_description as description

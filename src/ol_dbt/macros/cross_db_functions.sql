@@ -969,9 +969,38 @@
     timezone('{{ time_zone }}', cast(cast({{ date_expr }} as date) as timestamp))
 {%- endmacro %}
 
-{# StarRocks has no zone-aware type. An instant is a DATETIME holding UTC wall-clock time. #}
+{#
+    StarRocks has no zone-aware type. An instant is a DATETIME holding UTC wall-clock time.
+    Its cast and convert_tz return NULL for a string they cannot read and for an unknown
+    zone, where Trino raises, so starrocks_strict_convert_tz raises there instead.
+#}
 {% macro starrocks__local_date_to_timestamptz(date_expr, time_zone) -%}
-    convert_tz(cast(cast({{ date_expr }} as date) as datetime), '{{ time_zone }}', 'UTC')
+    {{ starrocks_strict_convert_tz('cast(cast({} as date) as datetime)', date_expr, "'" ~ time_zone ~ "'") }}
+{%- endmacro %}
+
+{#
+    starrocks_strict_convert_tz: `input_expr` read as a DATETIME by the `to_datetime`
+    template ("{}" stands for the input) and moved from `zone_expr` to UTC. Fails the
+    query where the input cannot be read, or where a non-NULL input has an unknown zone.
+    A NULL input or zone is NULL, as on Trino, which does not check the zone of a NULL
+    timestamp. The lambda binds the input so it is rendered once: StarRocks rejects a
+    query whose expression tree passes 10,000 nodes, and the MIT PE event times reach
+    it when their local time is rendered three times.
+#}
+{% macro starrocks_strict_convert_tz(to_datetime, input_expr, zone_expr) -%}
+    array_map(
+        (local_value, local_zone) -> if(
+            assert_true(
+                local_value is null
+                or convert_tz({{ to_datetime.format('local_value') }}, coalesce(local_zone, 'UTC'), 'UTC') is not null
+                , 'unreadable local timestamp or unknown time zone'
+            )
+            , convert_tz({{ to_datetime.format('local_value') }}, local_zone, 'UTC')
+            , null
+        )
+        , [{{ input_expr }}]
+        , [{{ zone_expr }}]
+    )[1]
 {%- endmacro %}
 
 
@@ -1015,7 +1044,7 @@
 {%- endmacro %}
 
 {% macro starrocks__local_timestamp_to_timestamptz(timestamp_expr, zone_expr) -%}
-    convert_tz(cast({{ timestamp_expr }} as datetime), {{ zone_expr }}, 'UTC')
+    {{ starrocks_strict_convert_tz('cast({} as datetime)', timestamp_expr, zone_expr) }}
 {%- endmacro %}
 
 

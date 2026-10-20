@@ -63,7 +63,7 @@ select
     , certificates.program_completion_timestamp
     , coalesce(
         {{ from_iso8601_timestamp('certificates.program_completion_timestamp') }}
-        , current_timestamp
+        , {{ current_timestamptz() }}
     ) as last_modified
 from certificates
 where certificates.program_certificate_hashed_id is not null
