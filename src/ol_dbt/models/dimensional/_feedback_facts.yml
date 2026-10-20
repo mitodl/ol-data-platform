@@ -307,9 +307,6 @@ models:
     - accepted_values:
         arguments:
           values: ['cluster', 'tag_seed']
-  - name: cluster_category_description
-    description: str, the LLM-proposed description of this conversation's cluster
-      category. Null when category_source is not 'cluster'.
   - name: dominant_tag_label
     description: str, the conversation's support tag (the tag-seed guess above), before
       any cluster-derived category replaces it. Null for a conversation with no tags.

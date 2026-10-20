@@ -116,7 +116,6 @@ with conversation as (
     select
         dim_feedback_category.feedback_category_pk
         , category_proposal.cluster_key
-        , category_proposal.category_description
     from {{ ref('int__feedback__category_proposal') }} as category_proposal
     inner join {{ ref('dim_feedback_category') }} as dim_feedback_category
         on category_proposal.category_slug = dim_feedback_category.category_slug
@@ -189,9 +188,6 @@ select
         when cluster_category.feedback_category_pk is not null then 'cluster'
         when feedback_category.feedback_category_pk is not null then 'tag_seed'
     end as category_source
-    -- Per cluster, not dim_feedback_category's: that keeps one row per slug, which
-    -- can come from another cluster or a tag seed with no description.
-    , cluster_category.category_description as cluster_category_description
     , dominant_tag.tag_label as dominant_tag_label
     , cluster_assignment.cluster_key
     , cluster_assignment.cluster_similarity

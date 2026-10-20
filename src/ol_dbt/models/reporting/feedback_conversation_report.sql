@@ -10,6 +10,10 @@ with conversation_fact as (
     select * from {{ ref('dim_feedback_category') }}
 )
 
+, feedback_cluster as (
+    select * from {{ ref('dim_feedback_cluster') }}
+)
+
 , feedback_source as (
     select * from {{ ref('dim_feedback_source') }}
 )
@@ -31,7 +35,7 @@ with conversation_fact as (
 select
     conversation_fact.cluster_key
     , feedback_category.category_label
-    , conversation_fact.cluster_category_description as category_description
+    , feedback_cluster.category_description
     , feedback_source.source_name as source
     , {{ json_extract_scalar('opening_turn.source_metadata', "'$.chatsession_agent'") }}
         as chat_agent
@@ -57,6 +61,8 @@ select
 from conversation_fact
 inner join feedback_category
     on conversation_fact.category_fk = feedback_category.feedback_category_pk
+inner join feedback_cluster
+    on conversation_fact.cluster_key = feedback_cluster.cluster_key
 inner join feedback_source
     on conversation_fact.feedback_source_fk = feedback_source.feedback_source_pk
 inner join opening_turn

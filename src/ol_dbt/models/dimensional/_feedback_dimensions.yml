@@ -168,3 +168,40 @@ models:
     description: str, ISO8601 timestamp of the earliest ticket carrying this category.
   - name: updated_at
     description: str, ISO8601 timestamp of the latest ticket carrying this category.
+
+- name: dim_feedback_cluster
+  description: The clusters that feedback conversations are grouped into. One row
+    per cluster_key that has ever been labeled, with the category the cluster proposed.
+  columns:
+  - name: feedback_cluster_pk
+    description: str, surrogate key generated from cluster_key.
+    tests:
+    - not_null
+    - unique
+  - name: cluster_key
+    description: str, the cluster's stable identity across clustering runs. Joins
+      to afact_feedback_conversation.cluster_key.
+    tests:
+    - not_null
+    - unique
+  - name: category_fk
+    description: str, foreign key to dim_feedback_category, from the slug of the category
+      this cluster proposed.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_feedback_category')
+          field: feedback_category_pk
+  - name: proposed_category_label
+    description: str, the category label the LLM proposed for this cluster. Several
+      clusters can propose labels with the same slug, so use dim_feedback_category.category_label
+      to group by category.
+  - name: category_description
+    description: str, the LLM-proposed description of this cluster's category.
+  - name: cluster_status
+    description: str, active or retired.
+  - name: proposed_in_cluster_run_id
+    description: str, the clustering run in which the category was proposed.
+  - name: proposed_at
+    description: str, ISO8601 timestamp of when the category was proposed.
