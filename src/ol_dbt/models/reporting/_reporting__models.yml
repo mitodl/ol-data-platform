@@ -1698,3 +1698,78 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["order_id", "line_id", "platform"]
+
+- name: feedback_conversation_report
+  config:
+    meta:
+      qa_branches:
+      - learn_ai/app_postgres
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/api
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/api
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - ocw/app_postgres
+      - xpro/api
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
+  description: Learner feedback conversations in the current clustering run, with
+    their cluster category, source, course run and cleaned conversation text. One
+    row per conversation. Feeds the feedback dashboard; count rows for conversation
+    totals.
+  columns:
+  - name: cluster_key
+    description: str, the cluster the conversation is assigned to in the current clustering
+      run.
+    tests:
+    - not_null
+  - name: category_label
+    description: str, display label of the conversation's feedback category.
+    tests:
+    - not_null
+  - name: category_description
+    description: str, LLM-proposed description of the cluster's category.
+  - name: source
+    description: str, name of the feedback source, e.g. Zendesk, Learn AI chatbot.
+    tests:
+    - not_null
+  - name: chat_agent
+    description: str, the Learn AI chatbot agent of the conversation. Null for sources
+      that are not chatbots.
+  - name: conversation_id
+    description: str, the conversation identifier in its source system. Unique together
+      with source.
+    tests:
+    - not_null
+  - name: conversation_date
+    description: date, the date of the conversation's first turn.
+  - name: conversation_month
+    description: str, the month of the conversation's first turn, formatted yyyy-MM.
+  - name: conversation_year
+    description: str, the year of the conversation's first turn, formatted yyyy.
+  - name: source_url
+    description: str, link to the conversation's opening turn in its source system.
+  - name: conversation_summary
+    description: str, LLM summary of the conversation. Null if the conversation is
+      not summarized.
+  - name: conversation_text
+    description: str, the redacted conversation text with HTML entities unescaped,
+      including quoted email history. Turns are separated by a line of em dashes.
+  - name: courserun_readable_id
+    description: str, readable ID of the course run the conversation is about. Null
+      if the conversation has no course run.
+  - name: course_title
+    description: str, title of the course run the conversation is about.
+  - name: cluster_size
+    description: int, number of conversations in the same cluster.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["source", "conversation_id"]

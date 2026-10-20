@@ -239,6 +239,9 @@ models:
       because the kept turns are single-author by construction.
   - name: conversation_text_chars
     description: int, summed pre-redaction length of the kept turns.
+  - name: conversation_text
+    description: str, the redacted kept turns in turn order, separated by a line of
+      three dashes. Null until the redacted text has materialized.
   - name: final_status
     description: str, current-state snapshot of the conversation's status. Zendesk
       status history is not synced.
