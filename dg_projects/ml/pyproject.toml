@@ -30,6 +30,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "cyclopts>=5.2.0",
     "dagster-dg-cli>=1.12.10",
     "dagster-webserver",
     "pytest>=9.0.1,<10",
