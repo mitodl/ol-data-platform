@@ -2619,6 +2619,11 @@ dependencies = [
     { name = "trino" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "ruff" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = ">=1.35" },
@@ -2638,6 +2643,9 @@ requires-dist = [
     { name = "sqlglot", specifier = ">=25.26" },
     { name = "trino", specifier = ">=0.329" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "ruff" }]
 
 [[package]]
 name = "ol-orchestrate-lib"

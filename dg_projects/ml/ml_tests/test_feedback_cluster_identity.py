@@ -5,9 +5,11 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import polars as pl
+import pytest
 from ml.assets.feedback_cluster_identity import (
     FeedbackClusterIdentityConfig,
     _active_cluster_members,
+    _check_incremental_base,
     _other_config_active_keys,
     _select_run_to_process,
 )
@@ -157,9 +159,61 @@ def test_select_run_to_process_skips_unpromoted_same_model_sweep() -> None:
             return_value="text-embedding-3-large",
         ),
         patch("ml.assets.feedback_cluster_identity.EMBEDDING_DIM", 1024),
+        patch(
+            "ml.assets.feedback_cluster_identity.latest_identity_processed_run",
+            return_value=None,
+        ),
     ):
         result = _select_run_to_process(MagicMock(), FeedbackClusterIdentityConfig())
     assert result == "production-run"
+
+
+def test_select_run_to_process_skips_runs_older_than_the_live_one() -> None:
+    # "stale" is promoted and unprocessed, but older than the live run: identity
+    # rejected it, or it waits for promotion by cluster_run_id.
+    runs_lf = _lazyframe(
+        {
+            "cluster_run_id": ["stale", "live", "newer"],
+            "run_status": ["completed"] * 3,
+            "run_at": [datetime(2026, 1, d, tzinfo=UTC) for d in (1, 2, 3)],
+            "embedding_model_version": ["text-embedding-3-large"] * 3,
+            "embedding_dim": [1024] * 3,
+            "embedding_input_filter": ["summary"] * 3,
+            "is_promoted": [True] * 3,
+        }
+    )
+    identity_lf = _lazyframe({"cluster_run_id": ["live"]})
+
+    def select(runs: pl.LazyFrame) -> str | None:
+        with (
+            patch(
+                "ml.assets.feedback_cluster_identity.table_exists", return_value=True
+            ),
+            patch(
+                "ml.assets.feedback_cluster_identity.get_dbt_model_as_dataframe",
+                side_effect=_runs_and_identity_frames(runs, identity_lf),
+            ),
+            patch(
+                "ml.assets.feedback_cluster_identity.default_embedding_model_version",
+                return_value="text-embedding-3-large",
+            ),
+            patch("ml.assets.feedback_cluster_identity.EMBEDDING_DIM", 1024),
+            patch(
+                "ml.assets.feedback_cluster_identity.latest_identity_processed_run",
+                return_value="live",
+            ),
+        ):
+            return _select_run_to_process(MagicMock(), FeedbackClusterIdentityConfig())
+
+    assert select(runs_lf) == "newer"
+    assert select(runs_lf.filter(pl.col("cluster_run_id") != "newer")) is None
+
+    # An incremental run that finished after another run went live is skipped
+    stale_base_lf = runs_lf.with_columns(
+        pl.Series("run_type", [None, None, "incremental"], dtype=pl.String),
+        pl.Series("base_cluster_run_id", [None, None, "stale"], dtype=pl.String),
+    )
+    assert select(stale_base_lf) is None
 
 
 def test_select_run_to_process_explicit_override_bypasses_filter() -> None:
@@ -226,3 +280,17 @@ def test_active_cluster_members_keeps_only_members_in_the_run_date_range() -> No
     }
     # old-only stays, empty, so match_clusters retires it rather than dropping it
     assert since_2026 == {"mixed": frozenset({"new-1"}), "old-only": frozenset()}
+
+
+def test_check_incremental_base_rejects_a_run_built_on_an_older_live_run() -> None:
+    with patch(
+        "ml.assets.feedback_cluster_identity.latest_identity_processed_run",
+        return_value="live",
+    ):
+        _check_incremental_base(
+            MagicMock(), {"cluster_run_id": "new", "base_cluster_run_id": "live"}
+        )
+        with pytest.raises(Exception, match="the live run is now live"):
+            _check_incremental_base(
+                MagicMock(), {"cluster_run_id": "new", "base_cluster_run_id": "older"}
+            )

@@ -877,6 +877,26 @@ def asset_check_failure_message(
     ]
 
 
+def check_evaluation_records(instance: Any, cursor: int | None) -> Sequence[Any]:
+    """Read the next batch of asset check evaluation event records above ``cursor``.
+
+    ``ascending=True`` is load-bearing. The storage layer applies the LIMIT
+    after ordering, so descending order returns the *newest* batch above the
+    cursor; advancing the cursor past it would permanently skip any older
+    backlog beyond MAX_CHECK_EVALUATIONS_PER_TICK. Ascending returns the oldest
+    events above the cursor, so a backlog drains in order, one batch per tick,
+    with no gaps and no repeats.
+    """
+    return instance.get_event_records(
+        EventRecordsFilter(
+            event_type=DagsterEventType.ASSET_CHECK_EVALUATION,
+            after_cursor=cursor,
+        ),
+        limit=MAX_CHECK_EVALUATIONS_PER_TICK,
+        ascending=True,
+    )
+
+
 def collect_new_check_failures(
     instance: Any, cursor: int | None
 ) -> tuple[list[tuple[str, Any]], str | None]:
@@ -888,22 +908,8 @@ def collect_new_check_failures(
     ``AssetCheckEvaluation`` itself carries none -- it is only on the
     surrounding event log record -- and the Slack message needs it to link
     back to the run that raised the failure.
-
-    ``ascending=True`` is load-bearing. The storage layer applies the LIMIT
-    after ordering, so descending order returns the *newest* batch above the
-    cursor; advancing the cursor past it would permanently skip any older
-    backlog beyond MAX_CHECK_EVALUATIONS_PER_TICK. Ascending returns the oldest
-    events above the cursor, so a backlog drains in order, one batch per tick,
-    with no gaps and no repeats.
     """
-    records = instance.get_event_records(
-        EventRecordsFilter(
-            event_type=DagsterEventType.ASSET_CHECK_EVALUATION,
-            after_cursor=cursor,
-        ),
-        limit=MAX_CHECK_EVALUATIONS_PER_TICK,
-        ascending=True,
-    )
+    records = check_evaluation_records(instance, cursor)
     if not records:
         return [], None
 

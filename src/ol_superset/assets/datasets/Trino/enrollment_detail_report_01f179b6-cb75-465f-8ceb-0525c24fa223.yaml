@@ -314,6 +314,32 @@ columns:
   type: VARCHAR
   verbose_name: null
 - advanced_data_type: null
+  column_name: program_coupon_code
+  datetime_format: null
+  description: Coupon code used on the program purchase in Program Order ID, such as a B2B code.
+  expression: ''
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: Program Order Coupon Code
+- advanced_data_type: null
+  column_name: program_order_id
+  datetime_format: null
+  description: Order ID of the program purchase that covered this enrollment.
+  expression: ''
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT
+  verbose_name: Program Order ID
+- advanced_data_type: null
   column_name: coupon_code
   datetime_format: null
   description: null

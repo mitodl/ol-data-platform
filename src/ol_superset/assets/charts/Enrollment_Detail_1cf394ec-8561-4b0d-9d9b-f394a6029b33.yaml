@@ -34,6 +34,8 @@ params:
   - receipt_payment_amount
   - coupon_code
   - coupon_name
+  - program_order_id
+  - program_coupon_code
   - unit_price
   - discount
   - order_state

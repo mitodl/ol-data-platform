@@ -175,8 +175,58 @@ ol-dbt fixtures generate --unit xpro/app_postgres --out /tmp/xpro     # /tmp/xpr
 ol-dbt fixtures generate --unit xpro/app_postgres --table raw__xpro__app__postgres__courses_course
 ```
 
+`src/ol_dbt_cli/tests/test_fixture_factories.py` runs every package in CI, with no lake.
+It holds the rows to the package's `models.json` (foreign keys, generic foreign keys,
+`unique`, `unique_together`, treebeard trees) and keeps generated emails on
+`example.com`. It also checks that `scaffold` still writes the committed `_generated.py`,
+so a hand edit there fails CI. It pins each unit's rows to a digest in
+`generated_fixture_digests.json`, the sha256 of `ol-dbt fixtures generate --unit <unit>`,
+which holds the hand-written rows as well as the generated ones. Any change to what `load`
+inserts for the unit fails that test: an edit to the fixture file or the package, a
+generation runtime change, or a mimesis or factory_boy version that draws different values.
+A version bump changes every contributor's lake with no diff in the repo, and this is
+what makes it visible. When the change is intended, the failure prints the new digest to
+commit in the same PR.
+
 Generated rows are fixture rows to `ol-dbt ingest local`, so "load fixtures first and
 the source second" above still holds.
+
+### Scaffolding a factory package
+
+For a Django app, the base factories come from the app's models. `bin/django-model-dump.py`
+runs with the app's own Python and writes what its models say about each table (keys,
+foreign keys, `unique`, `choices`, nullability, field classes, treebeard trees) as JSON.
+It imports the models and reads no rows, and it refuses a database connection, so an app
+whose startup queried would fail the dump rather than reach a database. Each setting the
+app's `settings.py` marks `required=True` needs a value to import, and a placeholder does
+(`DATABASE_URL` has to parse as a URL, e.g. `postgres://x:x@127.0.0.1/x`):
+
+```bash
+APP=~/code/mit/repos/mitxonline
+# With the app's required settings exported as placeholders:
+"$APP/.venv/bin/python" bin/django-model-dump.py --app-dir "$APP" --app mitxonline \
+    --settings main.settings --commit "$(git -C "$APP" rev-parse HEAD)" > /tmp/mitxonline-models.json
+ol-dbt fixtures scaffold --unit mitxonline/app_postgres --models /tmp/mitxonline-models.json
+```
+
+An app with no environment of its own can get one from its lock file without touching the
+checkout, e.g. `UV_PROJECT_ENVIRONMENT=/tmp/mitxpro-venv uv sync --project "$APP" --frozen --no-dev --no-install-project`.
+
+`scaffold` writes three files in the unit's package:
+
+- `_generated.py`: one base factory per fixture table, parents first, rewritten wholesale
+  on every run. What the models cannot say (a JSON column's shape, a treebeard tree's
+  `path`, a self reference, a generic foreign key's object id) is left unset with a comment.
+- `models.json`: the dump cut down to the unit's fixture tables. A later `scaffold` with
+  no `--models` reads it, so the package can be rescaffolded without the app until the
+  fixture gains a table, which needs a new dump.
+- `__init__.py`, only if there is none: the unit's `SEED` and a `generate` that adds no
+  rows. The hand-written module subclasses the base factories and wires the tables together.
+
+A nullable foreign key is NULL in a row `generate` builds without that parent. Column
+names are matched without case, since Airbyte lowercases them. A column the fixture and
+the models disagree on (Airbyte drops and adds columns) is printed and drawn by its
+fixture type.
 
 ### Adding a fixture
 

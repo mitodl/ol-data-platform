@@ -261,7 +261,8 @@ explicit cursor column, or CDC. Two open questions read straight off it once the
 populated:
 
 - `tk-determine-per-source-incremental-cursor-viabilit-51f299` — which connections use xmin,
-  and therefore which need a replacement cursor column chosen before dlt can take over. Today
+  and therefore which need a replacement cursor column, or a decision to re-read the table
+  whole, before dlt can take over. Today
   that answer requires crawling the Airbyte UI; after this lands it is `rg replication_method: xmin`.
 
   Choosing the replacement is `ol-dbt inventory cursors`, which reads the LANDED column list
@@ -272,6 +273,40 @@ populated:
   (`cursor_missing`) exits non-zero. Note what it cannot tell you: whether the column is stamped
   on *every* mutation path. A write-once column yields a load that captures inserts and silently
   never reflects an edit, so a `cursor_available` finding is a shortlist entry, not an approval.
+  The replacement is declared on the dlt source, as `DatabaseTable.cursor_column` in
+  `ol_dlt.sources.<app>`, and not as `cursor_field` on the Airbyte unit (rule 5): `ol-dbt
+  inventory drift` compares `cursor_field` with the live stream, so writing one there fails
+  the daily check for as long as Airbyte still loads the unit.
+
+  The two units with a dlt source, `mitxonline/app_postgres` and `xpro/app_postgres`, chose
+  no cursor at all. Each replaces every table it loads (MITx Online all 66 the unit declares,
+  xPro only its 55 `modeled: true` ones), because Django's `auto_now` does not fire on
+  `queryset.update()`, the Wagtail page subclasses carry no timestamp, and replace is the only
+  disposition that carries a source delete. The same choice is affordable for the other five
+  active xmin units at xPro's scope. Their modeled tables, counted in production raw through
+  Athena on 2026-10-06:
+
+  | Unit | Modeled tables | Rows | Largest table |
+  |---|---|---|---|
+  | `mitlearn/app_postgres` | 11 | 3,236,889 | `users_user`, 899,713 |
+  | `micromasters/app_postgres` | 28 | 1,862,217 | `grades_finalgrade`, 410,561 |
+  | `learn_ai/app_postgres` | 5 | 1,631,455 | `ai_chatbots_djangocheckpoint`, 1,393,373 |
+  | `ocw/app_postgres` | 4 | 228,774 | `websites_websitecontent`, 211,686 |
+  | `ovs/app_postgres` | 6 | 100,289 | `ui_video`, 51,232 |
+
+  For scale, xPro's 55 modeled tables were 2,493,174 rows the same day. These are rows in raw,
+  which overstate the source wherever Airbyte appended: `ai_chatbots_djangocheckpoint` holds
+  1,025,498 distinct ids. `open_discussions/app_postgres` has no modeled table and an inactive
+  connection, so it needs no dlt source.
+
+  One table needs a decision before its unit moves. `ai_chatbots_djangocheckpoint` is 2.75 GB
+  of Parquet (`mitlearn`'s `users_user` is 92 MB), and a replace re-reads all of it on every
+  load. Its only timestamp is `created_on` (`auto_now_add`), which
+  is not a safe cursor: learn-ai writes checkpoints with `aupdate_or_create`
+  (`AsyncDjangoSaver.aput`), so an existing row can change, the `repair_checkpoints` command
+  bulk-updates `metadata`, and the scheduled `delete_stale_sessions` task deletes sessions,
+  which cascades to their checkpoints. An append keyed on `created_on` or `id` misses all
+  three. How often the first two happen was not measured.
 - The Airbyte-side deadline: source-postgres 3.8+ refuses xmin mode outright on any database
   that has ever exceeded 2^32 lifetime transactions
   (`les-airbyte-source-postgres-3-8-refuses-xmin-mode-on-a5438b`). That deadline is independent
@@ -958,7 +993,10 @@ A unit moves in two steps, and they are separate changes:
 2. Production is cut over: every production Airbyte connection of the unit is paused,
    `production` joins that set and the unit flips to `loader: dlt`. A unit can have more than
    one connection (§3.5). Four in the order below have two: the three `mysql` units and
-   `irx/bigquery`. One left running is a second writer on the unit's tables.
+   `irx/bigquery`. One left running is a second writer on the unit's tables. Step 2 also
+   carries the unit's history across (§10.4). It is not one change: the connections are
+   paused and the archive is taken and counted first, and the change that adds `production`
+   merges only after that, since a deploy that adds it can load before anyone archives.
 
 Local ingest needs step 1 only. In the `dev` profile `ol_dlt.database` already reads the
 local-dev CloudNativePG cluster with fixed credentials and no Vault. So the order below is
@@ -1062,3 +1100,66 @@ The per-source cutover recipe (`tk-per-source-dlt-cutover-recipe-sql-database-fi
 should be proven on unit 1. Its source exists, it is the unit most models read, and it is the
 first one a contributor can ingest locally. That proves the `sql_database` half of the recipe.
 The file half is first exercised by unit 11.
+
+### 10.4 Keeping history across a production cutover
+
+A dlt database source writes the raw table names Airbyte writes
+(`DatabaseSourceSpec.raw_table_name`), and with no `cursor_column` it replaces each table on
+every load (`build_table_resource` in `ol_dlt.database`). So a unit's first production dlt
+load overwrites its Airbyte tables. Raw expiry then removes the older Iceberg snapshots: 3 days
+for the `mitxonline`, `xpro`, `mitlearn`, `learn_ai` and `ocw` app tables, and 7 days for the
+other database units (`RAW_LAYER_GROUP_CONFIGS` in `ol_orchestrate.lib.iceberg_maintenance`).
+Two kinds of data that Airbyte has accrued would go with them:
+
+- Keys deleted at the source. An `incremental_deduped_history` table keeps one row per key
+  and never drops a key, so it still holds every row deleted upstream since Airbyte first read
+  it. Most tables of the Postgres units load this way. A replace drops those rows.
+- Earlier versions. An `incremental_append` table keeps every version Airbyte read. Among
+  the Postgres units that is `learn_ai/app_postgres`, which loads 27 of its 28 tables this
+  way. Measured in production on 2026-10-16, counting rows against distinct ids:
+  `ai_chatbots_djangocheckpoint` 1,610,728 and 1,242,506, `ai_chatbots_userchatsession`
+  149,160 and 119,473, `users_user` 28,688 and 17,320, all since 2025-09-24. A history
+  snapshot keeps one version per key, and append tables are outside the snapshot scope until
+  their cutover makes them replaced tables, so only a copy of the raw table keeps these. The
+  `mysql` units (the two studentmodule history tables each), tracking logs, the S3 and API
+  units and Zendesk append too. Where their dlt source goes on appending to the same table,
+  that table is already the record and needs no copy.
+
+Neither is backfill in the sense the history design ruled out (rebuilding history from expired
+Iceberg snapshots). Both are rows that exist today, and the cutover is what would delete them.
+Each unit therefore takes these steps, in this order:
+
+1. The unit's raw history snapshots
+   (`tk-generate-raw-history-snapshots-from-the-ingestio-cb4f69`) run in production on its
+   Airbyte-loaded tables for at least one load cycle. Their first versions are then the
+   Airbyte state, deleted-at-source keys included. They read raw and do not depend on the
+   dlt source, so they can go live before it is built.
+2. Every production Airbyte connection of the unit is paused.
+3. Each raw table those connections load is copied into the history schema
+   (`tk-archive-a-unit-s-airbyte-raw-tables-into-the-his-97421a`), modeled or not. Snapshots
+   cover modeled tables only, so for the rest this copy is the only record. The copy drops
+   secret columns and the inventory's per-table excludes, as the snapshots do. It keeps the
+   loader columns the snapshots drop, because `_airbyte_extracted_at` is the only order an
+   append table's versions have. It has the history layer's grants, and its row counts are
+   checked against the source table. Archive tables are never rebuilt or dropped.
+4. The unit's cutover time is recorded in its inventory unit. Reports use it to discount
+   the versions and deletes from the first snapshot run after it. A renamed column, or a type
+   the snapshot compares differently, writes one new version of every row.
+5. The first production dlt load runs. The snapshot run after it records each key that
+   Airbyte kept and the source no longer has as deleted. The snapshot stamps that delete with
+   its own run time, which is neither the source's delete time nor the recorded cutover
+   time. That is expected, and it trips the snapshot's missing-key guard
+   (`tk-guard-raw-history-snapshots-against-an-empty-or--b6d53b`), so this run uses the
+   guard's per-run override. `dbt_automation_sensor` starts that run on its own after the
+   load, so the override is set (or the sensor paused) before the load, not after. The
+   missing-key count is first checked against the key difference between the Airbyte table
+   and a dlt shadow load, which writes outside the raw schema.
+
+A unit whose dlt table has a new name keeps its Airbyte table, which is then the archive.
+`raw__edxorg__s3__course_blocks` is the first (#2986): `retired.yml` lists it, it stays
+registered and read-only, and it holds earlier copies of 1,918 structure files that the dlt
+table does not. A retired table's data is deleted only after someone has shown that another
+retained table holds the same history.
+
+`tk-history-gate-for-each-unit-s-production-dlt-cuto-5b7751` tracks these steps and blocks the
+per-source cutover recipe. Unit 1 is the first that has to pass it.

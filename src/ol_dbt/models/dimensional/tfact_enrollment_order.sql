@@ -39,6 +39,8 @@ with enrollment as (
         , order_fact.discount_type_fk
         , order_fact.line_price
         , order_fact.line_id
+        , order_fact.platform
+        , product.product_type
         -- the order is already known correct (direct FK); among its lines, prefer
         -- the course-run-specific match (for an accurate unit_price/discount), then a
         -- program-level match, falling back to any other line.
@@ -81,6 +83,8 @@ with enrollment as (
         , order_fact.discount_type_fk
         , order_fact.line_price
         , order_fact.line_id
+        , order_fact.platform
+        , product.product_type
         , case when enrollment.courserun_fk = product.courserun_fk then 1 else 2 end as match_priority
     from enrollment
     inner join product
@@ -100,17 +104,7 @@ with enrollment as (
         and not (enrollment.platform = 'mitxpro' and enrollment.order_id is null)
 )
 
-select
-    enrollment_key
-    , order_fk
-    , order_id
-    , order_reference_number
-    , order_state
-    , order_updated_on
-    , discount_fk
-    , discount_type_fk
-    , line_price
-from (
+, resolved_orders as (
     select
         *
         , row_number() over (
@@ -129,4 +123,33 @@ from (
         select * from order_via_product
     )
 )
-where row_num = 1
+
+, mitxonline_program_course_run_orders as (
+    select * from {{ ref('int__mitxonline__program_course_run_orders') }}
+)
+
+select
+    resolved_orders.enrollment_key
+    , resolved_orders.order_fk
+    , resolved_orders.order_id
+    , resolved_orders.order_reference_number
+    , resolved_orders.order_state
+    , resolved_orders.order_updated_on
+    , resolved_orders.discount_fk
+    , resolved_orders.discount_type_fk
+    , resolved_orders.line_price
+    -- xPRO enrollments from a program purchase carry the program order itself; MITx Online
+    -- enrollments carry a $0 course run order, so their program order is matched.
+    , coalesce(
+        case
+            when resolved_orders.product_type in ('program', 'courses_programrun')
+                then resolved_orders.order_id
+        end
+        , mitxonline_program_course_run_orders.program_order_id
+    ) as program_order_id
+from resolved_orders
+left join mitxonline_program_course_run_orders
+    on
+        resolved_orders.platform = 'mitxonline'
+        and resolved_orders.line_id = cast(mitxonline_program_course_run_orders.line_id as varchar)
+where resolved_orders.row_num = 1

@@ -79,6 +79,9 @@ type Row = dict[str, Any]
 # under .test, where nothing does.
 RESERVED_DOMAIN = "example.com"
 RESERVED_URL_DOMAIN = "example.test"
+# What share of rows `or_null` leaves NULL: enough that a model's NULL branch
+# has rows at tens of rows per table.
+NULL_SHARE = 0.2
 # The day the committed fixtures' `_dlt_load_id` values fall on.
 LOADED_AT = datetime.datetime(2026, 10, 1, tzinfo=datetime.UTC)
 _DLT_ID_ALPHABET = string.ascii_letters + string.digits
@@ -237,8 +240,25 @@ def url(domain: str = RESERVED_URL_DOMAIN) -> Any:
     return factory.LazyFunction(lambda: f"https://{domain}/{_current().field('internet.slug')}")
 
 
-def parent(param: str, column: str) -> Any:
-    """Declare a column that copies ``column`` of the row held in ``class Params`` as ``param``."""
+def or_null(declaration: Any, share: float = NULL_SHARE) -> Any:
+    """Declare a nullable column: NULL in ``share`` of rows, drawn with the seeded RNG, ``declaration`` in the rest."""
+    return factory.Maybe(
+        factory.LazyFunction(lambda: _current().random.random() < share),
+        yes_declaration=None,
+        no_declaration=declaration,
+    )
+
+
+def parent(param: str, column: str, *, nullable: bool = False) -> Any:
+    """Declare a column that copies ``column`` of the row held in ``class Params`` as ``param``.
+
+    :param param: The ``Params`` name ``generate`` passes the parent row as.
+    :param column: The parent's column the foreign key references.
+    :param nullable: The foreign key is nullable, so a row built with no
+        parent is NULL here. Otherwise building it raises.
+    """
+    if nullable:
+        return factory.LazyAttribute(lambda row: None if getattr(row, param) is None else getattr(row, param)[column])
     return factory.LazyAttribute(lambda row: getattr(row, param)[column])
 
 

@@ -18,6 +18,7 @@ on:
     - "ingestion/inventory/**"
     - "contracts/**"
     - "metrics/**"
+    - "exposures/**"
     - ".github/workflows/dbt_pr_ci.yaml"
   workflow_dispatch:
 
@@ -94,10 +95,12 @@ jobs:
     # declarations are incomplete or name a column that is not a cohort. The
     # raw JSON calls check fails on a JSON function called outside a macro,
     # since each engine names and evaluates them differently.
+    # The exposure contract check fails when exposures/<name>.json no longer
+    # matches the columns and cohort declarations an application exposure reads.
     - name: Project-wide validate checks
       run: |
         uv run ol-dbt validate \
-          --only dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat,cohort_policy,raw_json_calls \
+          --only dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat,cohort_policy,raw_json_calls,exposure_contract \
           --format json
 
     # Structural validation of the models changed in this PR. Scoped to changed
@@ -109,7 +112,7 @@ jobs:
         uv run ol-dbt validate \
           --changed-only \
           --base-ref "origin/${GITHUB_BASE_REF}" \
-          --skip dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat,cohort_policy,raw_json_calls \
+          --skip dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat,cohort_policy,raw_json_calls,exposure_contract \
           --format json
 
     # Column-level blast radius of the changed models, posted as a PR comment.

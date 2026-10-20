@@ -8,8 +8,10 @@ hand-written rows. The package adds generated rows to those tables.
 A unit package has two modules:
 
 ``_generated.py``
-    Base factories scaffolded from the source application's Django models.
-    Regenerated wholesale, so never edited by hand.
+    Base factories scaffolded from the source application's Django models by
+    ``ol-dbt fixtures scaffold`` (:mod:`ol_dbt_cli.lib.fixture_scaffold`),
+    from the ``models.json`` beside it. Regenerated wholesale, so never edited
+    by hand.
 
 ``__init__.py``
     Written by hand. Subclasses the base factories for what the models cannot
@@ -54,5 +56,8 @@ which runs a package. It brings every value to its column's fixture type, fills
 the loader's columns, and has
 :func:`ol_dbt_cli.lib.raw_fixtures.validate_generated` check the rows against
 the fixture file's columns and the inventory unit's primary keys. Foreign keys
-are declared in neither, so a unit checks its own references in its tests.
+are declared in neither. ``tests/test_fixture_factories.py`` checks every
+package's rows against its ``models.json`` and pins them to a digest, so a
+change to the rows a package generates fails CI until the digest is updated
+with it.
 """

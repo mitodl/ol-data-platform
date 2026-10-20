@@ -54,12 +54,45 @@ with mitxonline_grades as (
     from {{ ref('int__edxorg__mitx_courserun_grades') }}
 )
 
+-- The raw table keeps grades that Open edX deleted, so a learner can have two for one
+-- run. Keep the newest, the one Open edX still has.
+, residential_grades_ranked as (
+    select
+        *
+        , row_number() over (
+            partition by user_id, courserun_readable_id
+            order by courserungrade_created_on desc, courserungrade_id desc
+        ) as grade_rank
+    from {{ ref('int__mitxresidential__courserun_grades') }}
+)
+
+, residential_grades as (
+    select
+        -- Natural key, as for edxorg: a replacement grade then keeps the grade_key, so
+        -- an incremental run overwrites the old row instead of adding a second one
+        {{ dbt_utils.generate_surrogate_key(['cast(user_id as varchar)', 'courserun_readable_id']) }} as grade_id
+        , user_id
+        , courserun_readable_id
+        , courserungrade_grade as grade_value
+        , courserungrade_letter_grade as letter_grade
+        -- residential has no passing flag; a non-empty letter grade means passed, as in
+        -- int__combined__courserun_enrollments
+        , coalesce(courserungrade_letter_grade != '', false) as is_passing
+        , courserungrade_created_on as grade_created_on
+        , courserungrade_updated_on as grade_updated_on
+        , 'residential' as platform
+    from residential_grades_ranked
+    where grade_rank = 1
+)
+
 , combined_grades as (
     select * from mitxonline_grades
     union all
     select * from mitxpro_grades
     union all
     select * from edxorg_grades
+    union all
+    select * from residential_grades
 )
 
 , user_lookup as (
@@ -68,6 +101,7 @@ with mitxonline_grades as (
         , mitxonline_application_user_id
         , mitxpro_application_user_id
         , edxorg_openedx_user_id
+        , residential_openedx_user_id
     from {{ ref('dim_user') }}
     where user_pk is not null
 )
@@ -95,6 +129,9 @@ with mitxonline_grades as (
             end,
             case when combined_grades.platform = 'edxorg'
                 then ul_edxorg.user_pk
+            end,
+            case when combined_grades.platform = 'residential'
+                then ul_residential.user_pk
             end
         ) as user_fk
         , dim_course_run.courserun_pk as courserun_fk
@@ -110,6 +147,9 @@ with mitxonline_grades as (
     left join user_lookup as ul_edxorg
         on combined_grades.platform = 'edxorg'
         and combined_grades.user_id = ul_edxorg.edxorg_openedx_user_id
+    left join user_lookup as ul_residential
+        on combined_grades.platform = 'residential'
+        and combined_grades.user_id = ul_residential.residential_openedx_user_id
     left join dim_course_run
         on combined_grades.courserun_readable_id = dim_course_run.courserun_readable_id
         and combined_grades.platform = dim_course_run.platform

@@ -5,6 +5,8 @@
 # and an added column the API is to select has to be built before the API
 # deploys. Enabled on StarRocks only, like the models: a ref to a disabled model
 # fails parsing on the other targets.
+# `ol-dbt exposures export` writes what each exposure here reads to
+# exposures/<name>.json, and ol-dbt validate fails while that file is stale.
 version: 2
 exposures:
 - name: ol_analytics_api_b2b_dashboard

@@ -49,7 +49,7 @@ int__feedback__conversation (redacted turns assembled per conversation) [dbt]
   → summarize    : turns → conversation_summary               [py; SKIPPED below a per-source minimum length — §A.1]
   → embed        : summary or turns → vector                  [py]
   → assign       : new vector → nearest live cluster_key       [py; every embedding refresh, §C.1]
-  → recluster    : all vectors → new partition, matched to     [py; scheduled/triggered, + feedback_cluster_run]
+  → recluster    : all vectors → new partition, matched to     [py; sensor-triggered, + feedback_cluster_run]
                    existing cluster_keys by membership overlap
   → label        : new/split/merged cluster_key → label        [py: dim_feedback_category (proposed)]
   → sentiment    : rating or text/vector → sentiment_slug     [py]
@@ -267,11 +267,16 @@ cohesion signal that lets a human say "this is recurring."
   (silhouette + tag-agreement + human coherence). Adopt the summary as the embedding input only where the
   measured lift justifies its per-conversation LLM cost — expected to help most on long multi-turn Zendesk
   tickets and least on short single-turn sources.
-- **Re-clustering is cheap, expected, and automatic** (rev. 4, §C.1): each run writes a new `cluster_run_id`
-  to `feedback_cluster_run` and its raw assignments to `feedback_cluster_candidate`. An identity-matching step
-  then maps the run's clusters onto the existing `cluster_key`s and rewrites `feedback_cluster_membership`.
-  No human approves a run. Stable keys, not a promotion gate, are what decouple churny clustering from the
-  curated category dimension: a cluster that continues across runs keeps its key, and therefore its category.
+- **Automated runs keep the clusters stable** (rev. 5, §C.1): a full re-cluster moves about half of the
+  conversations to another category even when the data barely changes, so the growth sensor's runs are
+  incremental. An incremental run keeps the live clusters and never retires one. It adds new
+  conversations that clearly fit a cluster, moves noise groups that sit close to a cluster into it, and
+  creates a cluster for each new common theme (`add_new_clusters`). A full re-cluster (`full_refresh`) is a
+  manual run that a person reviews before promoting. Each run writes a new
+  `cluster_run_id` to `feedback_cluster_run` and its raw assignments to `feedback_cluster_candidate`. An
+  identity-matching step then maps the run's clusters onto the existing `cluster_key`s and rewrites
+  `feedback_cluster_membership`, so a cluster that continues across runs keeps its key, and therefore its
+  category.
 - **Cross-source clustering (Phase 2):** because all sources share one embedding space in
   `int__feedback__conversation`, a cluster can span Zendesk + forum + tutor — this is the
   mechanism behind `afact_feedback_cluster_daily` (cluster × category × sentiment × date ×
@@ -316,9 +321,9 @@ Three mechanisms keep assignment current:
    - *Why nearest centroid rather than out-of-sample HDBSCAN:* it is deterministic, explainable, and needs no
      persisted UMAP/HDBSCAN models. A persisted UMAP `transform` plus `hdbscan.approximate_predict` is the
      upgrade path if placement quality measurably needs it.
-2. **Automatic re-clustering.** `feedback_clusters` runs over the full embedded corpus on a schedule, and
-   early when either trigger fires: the share of conversations left unplaced since the last run crosses a
-   threshold, or the corpus has grown past a threshold since the last run. Unplaced conversations are where
+2. **Automatic re-clustering.** `feedback_clusters` runs over the full embedded corpus when the growth sensor
+   fires: the corpus has grown by a set number of conversations since the last run. An unplaced-share
+   trigger was planned but is not built. Unplaced conversations are where
    new themes accumulate, and a re-cluster is what turns them into clusters. Runs use the configuration in
    code; changing parameters or the embedding model is a PR, and the next run picks it up.
 3. **Identity matching.** After each completed run, the new partition is matched to the current
@@ -354,21 +359,27 @@ Three mechanisms keep assignment current:
    are asset checks on the identity asset.
 
 **What a run is now.** A `feedback_cluster_run` row is an audit record: which configuration ran, over how many
-conversations, with what outcome (`completed` | `failed`). A failed run changes nothing downstream. There is
-no `candidate` / `approved` status to set.
+conversations, with what outcome (`completed` | `failed`). A failed run changes nothing downstream.
+`is_promoted` decides which runs reach the dashboard: the growth sensor's runs are promoted, and a manual run that
+re-clusters everything runs unpromoted. After a review, running identity with that run's `cluster_run_id`
+promotes it. An incremental run records the live run it started from, and identity rejects it if another run
+went live in the meantime, so turn off the growth sensor while a manual incremental run waits for review.
 
-**Automated checks instead of a human gate.** Placement and re-clustering both emit asset metadata: the
-unplaced share, per-run continuity (the share of conversations that keep their key), and counts of
-continued / split / merged / new / retired keys. A blocking asset check holds the membership rewrite when
-continuity falls below a floor, so a bad configuration cannot silently reshuffle every cluster. The remedy is
-a configuration change, not a runtime approval.
+**Automated checks, and a review for structural changes.** Placement and re-clustering both emit asset
+metadata: the unplaced share, per-run continuity (the share of conversations that keep their key), and counts
+of continued / split / merged / new / retired keys. A blocking asset check holds the membership rewrite when
+continuity falls below a floor, so a bad configuration cannot silently reshuffle every cluster. Incremental
+runs need no review, new themes included: a new theme must have at least 200 conversations and sit below 0.75
+similarity to every existing cluster and every other new theme, so it cannot copy an existing category. A run
+that re-clusters everything can split, merge, and relabel every category, so a person reviews it before it is
+promoted.
 
 **A null `cluster_key` now means two things.** HDBSCAN noise from a re-cluster (the "one-off complaint"
 bucket) and a conversation that incremental placement could not put near any cluster both leave the key null.
 `cluster_assignment_method` tells them apart. Both are "not part of a systemic theme yet".
 
 **Open parameters**, calibrated on the labeled sample (§B.1): the radius percentile, the Jaccard match
-threshold, the re-cluster triggers and schedule, the continuity floor, and how many runs of
+threshold, the re-cluster trigger, the continuity floor, and how many runs of
 `feedback_cluster_candidate` to retain.
 
 ---

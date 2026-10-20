@@ -57,6 +57,7 @@ def test_small_run_writes_a_failed_run_row_with_no_candidates() -> None:
                 "ops": {
                     "feedback_clusters": {
                         "config": FeedbackClustersConfig(
+                            full_refresh=True,
                             min_cluster_size=5,
                             umap_n_components=5,
                             embedding_model_version="text-embedding-3-small",
@@ -78,3 +79,70 @@ def test_small_run_writes_a_failed_run_row_with_no_candidates() -> None:
     assert row["noise_count"] == 0
     assert row["silhouette_score"] is None
     assert row["total_conversations"] == 3
+
+
+def _run_feedback_clusters(config: FeedbackClustersConfig, io_manager):
+    return materialize(
+        [feedback_clusters],
+        resources={"io_manager": io_manager},
+        run_config={"ops": {"feedback_clusters": {"config": config.model_dump()}}},
+        raise_on_error=False,
+    )
+
+
+def test_promoted_full_refresh_is_rejected_without_a_review() -> None:
+    # Valid input, so only the review gate can stop this run
+    io_manager = _CapturingIOManager()
+    with (
+        patch(
+            "ml.assets.feedback_clusters.get_dbt_model_as_dataframe",
+            return_value=_small_embeddings_lazyframe(3),
+        ),
+        patch("ml.assets.feedback_clusters.get_glue_catalog", return_value=MagicMock()),
+        patch(
+            "ml.assets.feedback_clusters._live_cluster_keys",
+            return_value=("live-run", {"0": "key-a"}),
+        ),
+    ):
+        result = _run_feedback_clusters(
+            FeedbackClustersConfig(
+                is_promoted=True,
+                full_refresh=True,
+                embedding_model_version="text-embedding-3-small",
+                embedding_dim=8,
+                feedback_since=None,
+                platforms=None,
+            ),
+            io_manager,
+        )
+
+    assert result.success is False
+    assert io_manager.written == {}
+
+
+def test_incremental_run_with_no_live_members_in_its_input_writes_nothing() -> None:
+    # The live cluster's member is missing from the embeddings, as in an outage
+    io_manager = _CapturingIOManager()
+    with (
+        patch(
+            "ml.assets.feedback_clusters.get_dbt_model_as_dataframe",
+            return_value=_small_embeddings_lazyframe(3),
+        ),
+        patch("ml.assets.feedback_clusters.get_glue_catalog", return_value=MagicMock()),
+        patch(
+            "ml.assets.feedback_clusters._live_cluster_keys",
+            return_value=("live-run", {"missing": "key-a"}),
+        ),
+    ):
+        result = _run_feedback_clusters(
+            FeedbackClustersConfig(
+                embedding_model_version="text-embedding-3-small",
+                embedding_dim=8,
+                feedback_since=None,
+                platforms=None,
+            ),
+            io_manager,
+        )
+
+    assert result.success is False
+    assert io_manager.written == {}

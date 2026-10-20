@@ -159,7 +159,7 @@ def test_active_clusters_scoped_to_config_and_active_status() -> None:
     assert [c["cluster_key"] for c in result] == ["a"]
 
 
-def test_latest_identity_processed_run_none_when_lineage_table_missing() -> None:
+def test_latest_identity_processed_run_none_when_identity_run_table_missing() -> None:
     with patch(
         "ml.lib.cluster_run_lookup.table_exists",
         side_effect=lambda _catalog, table_id: "feedback_cluster_run" in table_id,
@@ -168,33 +168,27 @@ def test_latest_identity_processed_run_none_when_lineage_table_missing() -> None
     assert result is None
 
 
-def test_latest_identity_processed_run_none_when_no_lineage_rows_yet() -> None:
-    with (
-        patch("ml.lib.cluster_run_lookup.table_exists", return_value=True),
-        patch(
-            "ml.lib.cluster_run_lookup.get_dbt_model_as_dataframe",
-            return_value=_lazyframe({"cluster_run_id": []}),
-        ),
-    ):
-        result = cluster_run_lookup.latest_identity_processed_run(MagicMock(), "db")
-    assert result is None
-
-
-def test_latest_identity_processed_run_returns_most_recent_completed() -> None:
-    lineage_lf = _lazyframe({"cluster_run_id": ["run-1", "run-2"]})
+def test_latest_identity_processed_run_is_the_run_processed_last() -> None:
+    # run-1 was clustered first but promoted after a review, so it is live
     runs_lf = _lazyframe(
         {
-            "cluster_run_id": ["run-1", "run-2"],
-            "run_status": ["completed", "completed"],
-            "run_at": [
-                datetime(2026, 1, 1, tzinfo=UTC),
+            "cluster_run_id": ["run-1", "run-2", "run-3"],
+            "run_status": ["completed", "completed", "failed"],
+        }
+    )
+    identity_run_lf = _lazyframe(
+        {
+            "cluster_run_id": ["run-2", "run-1", "run-3"],
+            "processed_at": [
                 datetime(2026, 1, 2, tzinfo=UTC),
+                datetime(2026, 1, 3, tzinfo=UTC),
+                datetime(2026, 1, 4, tzinfo=UTC),
             ],
         }
     )
 
     def _fake_get_dbt_model_as_dataframe(*, database_name, table_name):  # noqa: ARG001
-        return lineage_lf if table_name == "feedback_cluster_lineage" else runs_lf
+        return runs_lf if table_name == "feedback_cluster_run" else identity_run_lf
 
     with (
         patch("ml.lib.cluster_run_lookup.table_exists", return_value=True),
@@ -204,4 +198,4 @@ def test_latest_identity_processed_run_returns_most_recent_completed() -> None:
         ),
     ):
         result = cluster_run_lookup.latest_identity_processed_run(MagicMock(), "db")
-    assert result == "run-2"
+    assert result == "run-1"

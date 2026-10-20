@@ -273,3 +273,36 @@ def test_sync_publishes_only_clean_contracts(
     assert (("PUT", "/v1/dataContracts") in client.calls) is not exits
     # A retyped column fails validate too, although OpenMetadata reports Success.
     assert exits_nonzero(contracts_command.validate) is bool(validation["schemaValidation"].get("typeMismatchFields"))
+
+
+@pytest.mark.parametrize("unresolved", ["missing_model", "dropped_model"])
+def test_unresolved_contract_does_not_stop_later_ones(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, unresolved: str
+) -> None:
+    """A binding missing from the manifest, or an entity OpenMetadata lacks, fails only its own contract."""
+    from ol_dbt_cli.commands import contracts as contracts_command
+
+    # Sorted by path, so the unresolvable contract runs first.
+    _write(tmp_path, "a", _contract({"type": "table", "dbt_model": unresolved}))
+    _write(tmp_path, "b", _contract({"type": "dashboardDataModel", "fqn": "Superset.model.41"}))
+    client = _FakeClient({"valid": True, "schemaValidation": {"failed": 0}})
+
+    def entity_id(entity_type: str, fqn: str) -> str:
+        if fqn.endswith(".dropped_model"):
+            msg = f"GET /v1/tables/name/{fqn} -> 404: not found"
+            raise RuntimeError(msg)
+        return "entity-id"
+
+    monkeypatch.setattr(client, "entity_id", entity_id)
+    monkeypatch.setattr(contracts_command.OpenMetadataClient, "from_env", classmethod(lambda cls: client))
+    monkeypatch.setattr(contracts_command, "get_repo_root", lambda: tmp_path)
+    monkeypatch.setattr(contracts_command, "load_manifest", lambda path: _registry(_node("dropped_model", {})))
+
+    with pytest.raises(SystemExit):
+        contracts_command.sync(service="svc", contracts_dir_path=str(tmp_path), manifest_path="manifest.json")
+    assert client.calls == [("POST", "/v1/dataContracts/validate"), ("PUT", "/v1/dataContracts")]
+
+    client.calls.clear()
+    with pytest.raises(SystemExit):
+        contracts_command.validate(service="svc", contracts_dir_path=str(tmp_path), manifest_path="manifest.json")
+    assert client.calls == [("POST", "/v1/dataContracts/entity/validate")]

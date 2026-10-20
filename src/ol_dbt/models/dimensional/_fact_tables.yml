@@ -219,6 +219,11 @@ models:
           severity: warn
   - name: line_price
     description: Price of the resolved order line, used as unit_price downstream
+  - name: program_order_id
+    description: Order ID of the program purchase that covered this enrollment. Null
+      when no program purchase covered it. For xPRO, this is order_id when the resolved
+      order is a program purchase. For MITx Online, order_id is the $0 course run
+      order, so the program order is matched in int__mitxonline__program_course_run_orders.
 
 - name: tfact_order
   description: >
@@ -570,8 +575,8 @@ models:
 - name: tfact_grade
   description: >
     Transaction fact table for course run grade records.
-    Grain: One row per (user × course run) grade, across MITx Online, MITx Pro, and
-    edX.org.
+    Grain: One row per (user × course run) grade, across MITx Online, MITx Pro,
+    edX.org and Residential MITx.
     edX.org rows include MicroMasters-linked grades (micromasters_program_id IS NOT
     NULL);
     a separate MicroMasters platform source may be added in a future phase.
@@ -583,6 +588,15 @@ models:
       combination_of_columns:
       - grade_id
       - platform
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - user_fk
+        - courserun_fk
+      config:
+        where: user_fk is not null and courserun_fk is not null
+        # One duplicated pair doubles a consumer's rows, so the project's >10 does not apply.
+        error_if: ">0"
   config:
     meta:
       qa_branches:
@@ -605,8 +619,8 @@ models:
   - name: grade_id
     description: >
       Source system grade ID. Integer-cast courserungrade_id for MITx Online and MITx
-      Pro;
-      surrogate key from (user_id, courserun_readable_id) for edX.org.
+      Pro; surrogate key from (user_id, courserun_readable_id) for edX.org and
+      Residential.
     tests:
     - not_null
   - name: grade_date_key
@@ -644,19 +658,21 @@ models:
         to: ref('dim_platform')
         field: platform_pk
   - name: platform
-    description: Platform identifier string (mitxonline, mitxpro, edxorg)
+    description: Platform identifier string (mitxonline, mitxpro, edxorg, residential)
     tests:
     - not_null
     - accepted_values:
-        values: ['mitxonline', 'mitxpro', 'edxorg']
+        values: ['mitxonline', 'mitxpro', 'edxorg', 'residential']
   - name: grade_value
     description: Numeric grade value between 0.0 and 1.0
   - name: is_passing
-    description: Boolean indicating whether the learner passed the course run
+    description: >
+      Boolean indicating whether the learner passed the course run. Residential has
+      no passing flag, so it is true when the letter grade is not empty.
   - name: letter_grade
     description: >
-      Letter grade string (e.g. 'Pass', 'Fail'). Available for MITx Online and MITx
-      Pro only;
+      Letter grade string (e.g. 'Pass', 'Fail'). Available for MITx Online, MITx
+      Pro and Residential;
       null for edX.org.
   - name: grade_created_on
     description: Grade creation timestamp (for incremental processing). Null for edX.org.
@@ -1862,6 +1878,8 @@ unit_tests:
     rows: []
   - input: ref('int__edxorg__mitx_courserun_grades')
     rows: []
+  - input: ref('int__mitxresidential__courserun_grades')
+    rows: []
       # dim_user has since re-keyed this user; user_pk no longer matches the target row below.
   - input: ref('dim_user')
     rows:
@@ -1934,6 +1952,8 @@ unit_tests:
     rows: []
   - input: ref('int__edxorg__mitx_courserun_grades')
     rows: []
+  - input: ref('int__mitxresidential__courserun_grades')
+    rows: []
   - input: ref('dim_user')
     rows:
     - user_pk: "USER_PK"
@@ -1980,6 +2000,82 @@ unit_tests:
       letter_grade: "A"
       grade_created_on: "2024-01-15T00:00:00"
       grade_updated_on: "2024-01-15T00:00:00"
+- name: test_tfact_grade_adds_residential_grades
+  description: >
+    Residential grades are in tfact_grade. The user resolves through
+    dim_user.residential_openedx_user_id, the run through dim_course_run on the
+    residential platform, and a non-empty letter grade means passed. Of a learner's
+    two grades for one run, only the newest created is kept, and its grade_id comes
+    from the learner and run, not the Open edX id.
+  model: tfact_grade
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__courserun_grades')
+    rows: []
+  - input: ref('int__mitxpro__courserun_grades')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_grades')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_grades')
+    rows:
+    # Replaced by grade 11; updated later, so the ranking must use created_on.
+    - {courserungrade_id: 10, user_id: 555, courserun_readable_id: "course-v1:MITx+6.002+2024",
+      courserungrade_grade: 0.5, courserungrade_letter_grade: "C", courserungrade_created_on: "2023-09-01T00:00:00",
+      courserungrade_updated_on: "2024-06-01T00:00:00"}
+    - {courserungrade_id: 11, user_id: 555, courserun_readable_id: "course-v1:MITx+6.002+2024",
+      courserungrade_grade: 0.9, courserungrade_letter_grade: "A", courserungrade_created_on: "2024-01-15T00:00:00",
+      courserungrade_updated_on: "2024-01-16T00:00:00"}
+    - {courserungrade_id: 12, user_id: 555, courserun_readable_id: "course-v1:MITx+6.003+2024",
+      courserungrade_grade: 0.2, courserungrade_letter_grade: "", courserungrade_created_on: "2024-01-15T00:00:00",
+      courserungrade_updated_on: "2024-01-16T00:00:00"}
+    - {courserungrade_id: 13, user_id: 556, courserun_readable_id: "course-v1:MITx+6.002+2024",
+      courserungrade_grade: 0.0, courserungrade_letter_grade: null, courserungrade_created_on: "2024-01-15T00:00:00",
+      courserungrade_updated_on: "2024-01-16T00:00:00"}
+  - input: ref('dim_user')
+    rows:
+    - {user_pk: "USER_RES_555", residential_openedx_user_id: 555}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: "RUN_6002", courserun_readable_id: "course-v1:MITx+6.002+2024",
+      platform: "residential", is_current: true}
+    - {courserun_pk: "RUN_6002_XPRO", courserun_readable_id: "course-v1:MITx+6.002+2024",
+      platform: "mitxpro", is_current: true}
+  - input: ref('dim_platform')
+    rows:
+    - {platform_pk: "PLATFORM_RESIDENTIAL", platform_readable_id: "residential"}
+  expect:
+    # grade_id is md5 of "<user_id>-<courserun_readable_id>", so grades 10 and 11 share it
+    # and an incremental run overwrites the replaced grade.
+    rows:
+    - grade_id: "86b3d5926230705d8dce66d09e67ba70"  # pragma: allowlist secret
+      grade_key: "aece925a6f6b5ed52cabd235691580da"  # pragma: allowlist secret
+      user_fk: "USER_RES_555"
+      courserun_fk: "RUN_6002"
+      platform_fk: "PLATFORM_RESIDENTIAL"
+      platform: "residential"
+      grade_value: 0.9
+      is_passing: true
+      letter_grade: "A"
+    - grade_id: "90a11cf9abb94109695707cbc35c7d4e"  # pragma: allowlist secret
+      grade_key: "f2b91c2c6f0006fef4971b4796aee564"  # pragma: allowlist secret
+      user_fk: "USER_RES_555"
+      courserun_fk:
+      platform_fk: "PLATFORM_RESIDENTIAL"
+      platform: "residential"
+      grade_value: 0.2
+      is_passing: false
+      letter_grade: ""
+    - grade_id: "d519e491c40e911baf3455c0745fc7a2"  # pragma: allowlist secret
+      grade_key: "7cf433ec9da852e235c7d65786542fce"  # pragma: allowlist secret
+      user_fk:
+      courserun_fk: "RUN_6002"
+      platform_fk: "PLATFORM_RESIDENTIAL"
+      platform: "residential"
+      grade_value: 0.0
+      is_passing: false
+      letter_grade:
 - name: test_tfact_order_refreshes_stale_user_fk_after_dim_user_rekey
   description: >
     Regression test for the dim_user re-key incident: when dim_user.user_pk changes
@@ -2073,3 +2169,50 @@ unit_tests:
       order_total_price_paid: 100.00
       order_reference_number: "REF1"
       order_updated_on: "2024-01-15T00:00:00"
+- name: test_tfact_enrollment_order_resolves_program_order_id
+  description: >
+    An xPRO enrollment on a program order carries that order as its program order,
+    and one on a course run order carries none. A MITx Online enrollment picks up
+    the program order matched to its course run order line, and gets none when no
+    match exists.
+  model: tfact_enrollment_order
+  given:
+  - input: ref('tfact_enrollment')
+    rows:
+    - {enrollment_key: "XPRO_PROGRAM", order_id: 7001, user_fk: "U1", courserun_fk: "CR1",
+      program_fk: "PG1", platform_fk: "P_XPRO", platform: "mitxpro"}
+    - {enrollment_key: "XPRO_COURSERUN", order_id: 7002, user_fk: "U2", courserun_fk: "CR2",
+      program_fk: null, platform_fk: "P_XPRO", platform: "mitxpro"}
+    - {enrollment_key: "MITXONLINE_MATCHED", order_id: null, user_fk: "U3", courserun_fk: "CR3",
+      program_fk: null, platform_fk: "P_MITXONLINE", platform: "mitxonline"}
+    - {enrollment_key: "MITXONLINE_UNMATCHED", order_id: null, user_fk: "U4", courserun_fk: "CR4",
+      program_fk: null, platform_fk: "P_MITXONLINE", platform: "mitxonline"}
+  - input: ref('dim_product')
+    rows:
+    - {product_pk: "PROD_XPRO_PROGRAM", product_type: "program", courserun_fk: null,
+      program_fk: "PG1", platform_fk: "P_XPRO", is_current: true}
+    - {product_pk: "PROD_XPRO_CR2", product_type: "course run", courserun_fk: "CR2",
+      program_fk: null, platform_fk: "P_XPRO", is_current: true}
+    - {product_pk: "PROD_MITXONLINE_CR3", product_type: "course run", courserun_fk: "CR3",
+      program_fk: null, platform_fk: "P_MITXONLINE", is_current: true}
+    - {product_pk: "PROD_MITXONLINE_CR4", product_type: "course run", courserun_fk: "CR4",
+      program_fk: null, platform_fk: "P_MITXONLINE", is_current: true}
+  - input: ref('tfact_order')
+    rows:
+    - {order_key: "OK1", order_id: 7001, line_id: "1", user_fk: "U1", product_fk: "PROD_XPRO_PROGRAM",
+      platform_fk: "P_XPRO", platform: "mitxpro", order_state: "fulfilled"}
+    - {order_key: "OK2", order_id: 7002, line_id: "2", user_fk: "U2", product_fk: "PROD_XPRO_CR2",
+      platform_fk: "P_XPRO", platform: "mitxpro", order_state: "fulfilled"}
+    - {order_key: "OK3", order_id: 8001, line_id: "201", user_fk: "U3", product_fk: "PROD_MITXONLINE_CR3",
+      platform_fk: "P_MITXONLINE", platform: "mitxonline", order_state: "fulfilled"}
+    - {order_key: "OK4", order_id: 8002, line_id: "202", user_fk: "U4", product_fk: "PROD_MITXONLINE_CR4",
+      platform_fk: "P_MITXONLINE", platform: "mitxonline", order_state: "fulfilled"}
+  - input: ref('int__mitxonline__program_course_run_orders')
+    rows:
+    - {line_id: 201, program_order_id: 8500}
+  expect:
+    rows:
+    - {enrollment_key: "XPRO_PROGRAM", program_order_id: 7001}
+    - {enrollment_key: "XPRO_COURSERUN", program_order_id: null}
+    - {enrollment_key: "MITXONLINE_MATCHED", program_order_id: 8500}
+    - {enrollment_key: "MITXONLINE_UNMATCHED", program_order_id: null}

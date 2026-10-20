@@ -10,7 +10,9 @@ models:
     Note: edxorg has no native course-level table. edxorg courses are derived from
     courserun records, with one row per course_readable_id using the most-recent course
     run (by courserun_start_date desc nulls last) to supply attributes (title,
-    course_number, is_live). source_id is null for edxorg and OCW courses.
+    course_number, is_live). emeritus and global_alumni courses are derived the same
+    way from Wrike run codes, one per course code with no xPro course. source_id
+    is null for edxorg, OCW, emeritus and global_alumni courses.
     The most-recent-run collapse uses a ROW_NUMBER subquery (WHERE _row_num = 1) rather
     than a QUALIFY clause because Trino does not support QUALIFY; the semantics are
     identical — exactly one row is retained per course_readable_id.
@@ -41,7 +43,8 @@ models:
       Integer source system ID for this course. Null for edxorg courses — edxorg
       exposes no native integer course ID; course records are synthesized from the
       most-recent course run sharing the same course_readable_id. Null for OCW
-      courses because OCW exposes a string UUID, not an integer source ID.
+      courses because OCW exposes a string UUID, not an integer source ID. Null for
+      emeritus and global_alumni courses, which have no course table.
   - name: course_number
     description: Course number (e.g., 6.00.1x)
   - name: course_title
@@ -57,7 +60,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['mitxonline', 'mitxpro', 'edxorg', 'ocw', 'residential', 'bootcamps']
+        values: ['mitxonline', 'mitxpro', 'edxorg', 'ocw', 'residential', 'bootcamps',
+          'emeritus', 'global_alumni']
   - name: effective_date
     description: >
       Timestamp (UTC) when this SCD Type 2 version became effective. Populated as
@@ -82,3 +86,122 @@ models:
       - primary_platform
       - course_readable_id
       where: "is_current = true"
+
+unit_tests:
+- name: test_dim_course_expires_synthesized_course_once_xpro_holds_the_code
+  description: >
+    An Emeritus course in the target whose prefixed Wrike code now has an xPro course
+    drops
+    out of the synthesized set. It must be expired, since no replacement row triggers
+    the
+    expiry. A synthesized course with no xPro course stays, unchanged.
+  model: dim_course
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__courses')
+    format: sql
+    rows: select cast(null as varchar) as course_readable_id, cast(null as integer)
+      as course_id, cast(null as varchar) as course_title, cast(null as varchar) as
+      course_number, cast(null as varchar) as course_description, cast(null as boolean)
+      as course_is_live where false
+  - input: ref('int__mitxpro__courses')
+    rows:
+    - {course_id: 1, course_readable_id: "course-v1:xPRO+DL", course_title: "Deep\
+        \ Learning", course_is_live: true, course_is_external: false}
+  - input: ref('int__mitxpro__course_runs')
+    rows:
+    - {courserun_external_readable_id: "MO-DL-26-12#1", course_id: 1}
+  - input: ref('int__edxorg__mitx_courseruns')
+    format: sql
+    rows: select cast(null as varchar) as course_readable_id, cast(null as varchar)
+      as courserun_title, cast(null as varchar) as course_number, cast(null as varchar)
+      as courserun_start_date, cast(null as boolean) as courserun_is_published where
+      false
+  - input: ref('int__ocw__courses')
+    format: sql
+    rows: select cast(null as varchar) as course_readable_id, cast(null as varchar)
+      as course_title, cast(null as varchar) as course_primary_course_number, cast(null
+      as varchar) as course_description, cast(null as boolean) as course_is_live where
+      false
+  - input: ref('int__bootcamps__course_runs')
+    rows: []
+  - input: ref('int__bootcamps__courses')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows:
+    - {courserun_external_readable_id: "MO-DL-27-03#1", courserun_title: "Deep Learning\
+        \ (Mar-2027)", courserun_start_on: "2027-03-01", courserun_end_on: "2027-04-01"}
+    - {courserun_external_readable_id: "MO-CRT.ES-26-11#1", courserun_title: "CRT\
+        \ ES (Nov-2026)", courserun_start_on: "2026-11-01", courserun_end_on: "2026-12-01"}
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: this
+    rows:
+    - {course_pk: "old_dl", course_readable_id: "MO-DL", primary_platform: "emeritus",
+      course_title: "Deep Learning", course_number: "DL", effective_date: "2026-08-11\
+        \ 00:46:01", is_current: true}
+    - {course_pk: "old_crt", course_readable_id: "MO-CRT.ES", primary_platform: "emeritus",
+      course_title: "CRT ES", course_number: "CRT.ES", effective_date: "2026-08-11\
+        \ 00:46:01", is_current: true}
+  expect:
+    rows:
+    - {course_readable_id: "MO-DL", primary_platform: "emeritus", is_current: false}
+    - {course_readable_id: "course-v1:xPRO+DL", primary_platform: "mitxpro", is_current: true}
+- name: test_dim_course_titles_synthesized_course_from_latest_enrollment_row
+  description: >
+    Two rows of one Emeritus run share the run's start and end dates and differ in
+    title.
+    The course takes the title of the row dim_course_run picks for the run, the latest
+    enrollment, and not the alphabetically first title.
+  model: dim_course
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__courses')
+    format: sql
+    rows: select cast(null as varchar) as course_readable_id, cast(null as integer)
+      as course_id, cast(null as varchar) as course_title, cast(null as varchar) as
+      course_number, cast(null as varchar) as course_description, cast(null as boolean)
+      as course_is_live where false
+  - input: ref('int__mitxpro__courses')
+    rows:
+    - {course_id: 1, course_readable_id: "course-v1:xPRO+DL", course_title: "Deep\
+        \ Learning", course_is_live: true, course_is_external: false}
+  - input: ref('int__mitxpro__course_runs')
+    rows:
+    - {courserun_external_readable_id: "MO-DL-26-12#1", course_id: 1}
+  - input: ref('int__edxorg__mitx_courseruns')
+    format: sql
+    rows: select cast(null as varchar) as course_readable_id, cast(null as varchar)
+      as courserun_title, cast(null as varchar) as course_number, cast(null as varchar)
+      as courserun_start_date, cast(null as boolean) as courserun_is_published where
+      false
+  - input: ref('int__ocw__courses')
+    format: sql
+    rows: select cast(null as varchar) as course_readable_id, cast(null as varchar)
+      as course_title, cast(null as varchar) as course_primary_course_number, cast(null
+      as varchar) as course_description, cast(null as boolean) as course_is_live where
+      false
+  - input: ref('int__bootcamps__course_runs')
+    rows: []
+  - input: ref('int__bootcamps__courses')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows:
+    - {courserun_external_readable_id: "MO-LAI-27-03#1", courserun_title: "A Old Title\
+        \ (Mar-2027)", courserun_start_on: "2027-03-01", courserun_end_on: "2027-04-01",
+      enrollment_created_on: "2026-08-01"}
+    - {courserun_external_readable_id: "MO-LAI-27-03#1", courserun_title: "Z New Title\
+        \ (Mar-2027)", courserun_start_on: "2027-03-01", courserun_end_on: "2027-04-01",
+      enrollment_created_on: "2026-09-01"}
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  expect:
+    rows:
+    - {course_readable_id: "MO-LAI", primary_platform: "emeritus", course_title: "Z\
+        \ New Title", is_current: true}
+    - {course_readable_id: "course-v1:xPRO+DL", primary_platform: "mitxpro", course_title: "Deep\
+        \ Learning", is_current: true}

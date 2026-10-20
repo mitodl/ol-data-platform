@@ -235,25 +235,64 @@ def _location_refusal(location: str, expected_location: str | None) -> str:
     return ""
 
 
-# Keeps one log line to a few kilobytes of keys.
-DELETED_KEYS_PER_LOG_LINE = 100
+DeletionRecorder = Callable[[str, list[str]], str]
+"""Records the keys about to be deleted under a table location.
+
+Called with the location and the keys relative to it, before the delete.
+Returns where the record went. It is the only record of which files went: the
+bucket's delete markers carry the same keys, but finding them means knowing
+when to look.
+"""
 
 
-def _log_doomed_keys(logger: logging.Logger, location: str, uris: list[str]) -> None:
-    """Log the keys about to be deleted, relative to ``location``.
+class S3DeletionManifests:
+    """:data:`DeletionRecorder` that writes one JSON object per table to S3.
 
-    The only record of which files went. The bucket's delete markers carry the
-    same keys, but finding them means knowing when to look. A JSON list,
-    because a key can hold a space.
+    Not a log line per batch of keys: a production pass deletes millions of
+    objects, and at a hundred keys a line that is tens of thousands of events
+    in one run.
+    """
+
+    def __init__(self, s3: Any, *, bucket: str, prefix: str) -> None:
+        """Write under ``s3://<bucket>/<prefix>/`` with ``s3``, a boto3 S3 client."""
+        self._s3 = s3
+        self._bucket = bucket
+        self._prefix = prefix.strip("/")
+
+    @property
+    def uri(self) -> str:
+        """Return the prefix every manifest of this recorder is written under."""
+        return f"s3://{self._bucket}/{self._prefix}/"
+
+    def __call__(self, location: str, keys: list[str]) -> str:
+        """Write ``keys`` to ``<prefix>/<location's bucket and path>.json``."""
+        key = f"{self._prefix}/{_directory(location)}.json"
+        body = json.dumps({"location": location, "keys": keys})
+        self._s3.put_object(
+            Bucket=self._bucket,
+            Key=key,
+            Body=body.encode(),
+            ContentType="application/json",
+        )
+        return f"s3://{self._bucket}/{key}"
+
+
+def relative_keys(location: str, uris: list[str]) -> list[str]:
+    """Return ``uris`` as keys relative to the table ``location``.
+
+    The scheme is dropped on both sides, so metadata written as ``s3a://``
+    still matches a listing returned as ``s3://``.
     """
     root = f"{_directory(location)}/"
-    keys = [file_id(uri).removeprefix(root) for uri in uris]
-    for start in range(0, len(keys), DELETED_KEYS_PER_LOG_LINE):
-        logger.info(
-            "Deleting under %s: %s",
-            location,
-            json.dumps(keys[start : start + DELETED_KEYS_PER_LOG_LINE]),
-        )
+    return [file_id(uri).removeprefix(root) for uri in uris]
+
+
+def _required_recorder(record_deletion: DeletionRecorder | None) -> DeletionRecorder:
+    """Return ``record_deletion``, refusing a delete that would leave no record."""
+    if record_deletion is None:
+        msg = "A delete needs record_deletion, the only record of the deleted keys."
+        raise ValueError(msg)
+    return record_deletion
 
 
 def remove_table_orphan_files(  # noqa: PLR0913
@@ -267,6 +306,7 @@ def remove_table_orphan_files(  # noqa: PLR0913
     delete: bool,
     expected_location: str | None = None,
     recheck: Callable[[], str] | None = None,
+    record_deletion: DeletionRecorder | None = None,
     logger: logging.Logger = log,
 ) -> TableOrphanFiles:
     """Report, and optionally delete, one table's orphan files.
@@ -275,7 +315,7 @@ def remove_table_orphan_files(  # noqa: PLR0913
         left alone. At least 1.
     :param delete: Delete the eligible orphans. The table is loaded again
         first, and anything its metadata reaches by then is dropped from the
-        list.
+        list. Needs ``record_deletion``.
     :param expected_location: The directory the caller checked for overlap with
         other tables. The table is refused when its Iceberg location is a
         different one, because that check then says nothing about what is
@@ -284,6 +324,7 @@ def remove_table_orphan_files(  # noqa: PLR0913
         Returns why the table must now be left alone, or "". The scan of a
         large table takes minutes, and what the caller knew about other
         tables' directories when it started may no longer hold.
+    :param record_deletion: Called with the keys before they are deleted.
     """
     require_minimum_age(min_age_days)
     result = TableOrphanFiles(database=database, table=table_name)
@@ -345,21 +386,44 @@ def remove_table_orphan_files(  # noqa: PLR0913
         return result
     for path in reachable_files(fresh, manifest_cache).all:
         eligible.pop(path, None)
-    doomed = list(eligible.values())
+    _delete(
+        result,
+        list(eligible.values()),
+        store,
+        _required_recorder(record_deletion),
+        logger,
+    )
+    return result
+
+
+def _delete(
+    result: TableOrphanFiles,
+    doomed: list[StoredObject],
+    store: ObjectStore,
+    record_deletion: DeletionRecorder,
+    logger: logging.Logger,
+) -> None:
+    """Record, then delete, ``doomed`` and fill in ``result``'s delete fields."""
+    if not doomed:
+        # No record either: a production pass would otherwise write one empty
+        # object per table with nothing to delete.
+        result.deleted_objects = result.deleted_bytes = 0
+        return
     size = sum(obj.size for obj in doomed)
-    # Before the first batch, so a run that dies part way still names the table.
+    uris = [obj.uri for obj in doomed]
+    # Before the first batch, so a run that dies part way still names the table
+    # and its keys. A record that fails to write deletes nothing.
+    record = record_deletion(result.location, relative_keys(result.location, uris))
     logger.info(
-        "Deleting %d orphan files (%d bytes) under %s",
+        "Deleting %d orphan files (%d bytes) under %s, keys recorded in %s",
         len(doomed),
         size,
         result.location,
+        record,
     )
-    uris = [obj.uri for obj in doomed]
-    _log_doomed_keys(logger, result.location, uris)
     result.delete_errors = store.delete_objects(uris)
     result.deleted_objects = len(doomed) - len(result.delete_errors)
     result.deleted_bytes = size
-    return result
 
 
 def overlapping_tables(tables: Iterable[dict[str, str]]) -> dict[tuple[str, str], str]:
@@ -479,6 +543,7 @@ def remove_database_orphan_files(  # noqa: PLR0913
     delete: bool,
     workers: int,
     claims_max_age_seconds: float = GLUE_CLAIMS_MAX_AGE_SECONDS,
+    record_deletion: DeletionRecorder | None = None,
     logger: logging.Logger = log,
 ) -> DatabaseOrphanFiles:
     """Run :func:`remove_table_orphan_files` over a Glue database's Iceberg tables.
@@ -487,12 +552,17 @@ def remove_database_orphan_files(  # noqa: PLR0913
         and its FileIO must not be shared between threads.
     :param delete: Refused when Glue denies this caller any database: a table
         in one of them could be located inside a directory this pass lists.
+        Needs ``record_deletion``, checked before any table is scanned.
     :param claims_max_age_seconds: Before a table's delete, its directory is
         checked again against a Glue listing no older than this. A table
         registered or moved into the directory since the pass began, or the
         table itself moving, leaves it undeleted.
+    :param record_deletion: Called by each worker before its table's delete,
+        so it must be safe to call from several threads at once.
     """
     require_minimum_age(min_age_days)
+    if delete:
+        _required_recorder(record_deletion)
     claims = _GlueClaims(glue, delete=delete)
     unreadable = claims.unreadable
     overlaps = claims.overlaps
@@ -534,6 +604,7 @@ def remove_database_orphan_files(  # noqa: PLR0913
             recheck=lambda: claims.refusal(
                 (database, name), directory, claims_max_age_seconds
             ),
+            record_deletion=record_deletion,
             logger=logger,
         )
 

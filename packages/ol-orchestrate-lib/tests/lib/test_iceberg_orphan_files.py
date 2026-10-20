@@ -16,11 +16,13 @@ import pytest
 from botocore.exceptions import ClientError
 from ol_orchestrate.lib import iceberg_orphan_files
 from ol_orchestrate.lib.iceberg_orphan_files import (
+    S3DeletionManifests,
     S3ObjectStore,
     StoredObject,
     file_id,
     overlapping_tables,
     reachable_files,
+    relative_keys,
     remove_database_orphan_files,
     remove_table_orphan_files,
 )
@@ -64,6 +66,21 @@ class LocalStore:
         return errors
 
 
+class MemoryRecorder:
+    """Deletion recorder that keeps what it is given, and what was gone by then."""
+
+    def __init__(self, store: "LocalStore | None" = None) -> None:
+        self.store = store
+        self.records: list[tuple[str, list[str]]] = []
+        self.deleted_when_recorded: list[list[str]] = []
+
+    def __call__(self, location: str, keys: list[str]) -> str:
+        self.records.append((location, keys))
+        if self.store is not None:
+            self.deleted_when_recorded.append(list(self.store.deleted))
+        return f"memory://{len(self.records)}"
+
+
 @pytest.fixture
 def catalog(tmp_path: Path) -> SqlCatalog:
     catalog = SqlCatalog(
@@ -94,6 +111,7 @@ def _run(catalog: SqlCatalog, store: LocalStore, **overrides: Any):
         "min_age_days": MIN_AGE_DAYS,
         "now": NOW,
         "delete": False,
+        "record_deletion": MemoryRecorder(),
     }
     return remove_table_orphan_files(
         catalog, DATABASE, TABLE, store, **(kwargs | overrides)
@@ -199,41 +217,75 @@ class TestRemoveTableOrphanFiles:
         assert reloaded.scan().to_arrow().column("id").to_pylist() == [7, 8]
         assert _run(catalog, store).orphan_objects == 0
 
-    def test_a_delete_logs_every_key_it_removes(
-        self, catalog: SqlCatalog, caplog: pytest.LogCaptureFixture
+    def test_a_delete_records_every_key_before_removing_any(
+        self, catalog: SqlCatalog
     ) -> None:
         _expired_table(catalog)
         store = LocalStore()
+        recorder = MemoryRecorder(store)
 
-        with caplog.at_level("INFO", logger=iceberg_orphan_files.log.name):
-            result = _run(catalog, store, delete=True)
+        result = _run(catalog, store, delete=True, record_deletion=recorder)
 
-        prefix = f"Deleting under {result.location}: "
-        logged = [
-            key
-            for message in caplog.messages
-            if message.startswith(prefix)
-            for key in json.loads(message.removeprefix(prefix))
-        ]
+        [(location, keys)] = recorder.records
+        assert location == result.location
         root = file_id(result.location).rstrip("/")
-        assert sorted(f"{root}/{key}" for key in logged) == sorted(
+        assert sorted(f"{root}/{key}" for key in keys) == sorted(
             file_id(uri) for uri in store.deleted
         )
-        assert len(logged) == result.deleted_objects > 0
+        assert len(keys) == result.deleted_objects > 0
+        assert recorder.deleted_when_recorded == [[]]
 
-    def test_logged_keys_survive_spaces_and_a_different_scheme(
-        self, caplog: pytest.LogCaptureFixture
+    def test_a_delete_without_a_recorder_deletes_nothing(
+        self, catalog: SqlCatalog
     ) -> None:
-        with caplog.at_level("INFO", logger=iceberg_orphan_files.log.name):
-            iceberg_orphan_files._log_doomed_keys(
-                iceberg_orphan_files.log,
-                "s3://lake/t/",
-                ["s3a://lake/t/data/a b.parquet", "s3://lake/t/data/c.parquet"],
-            )
+        table = _expired_table(catalog)
+        before = _files(table)
+        store = LocalStore()
 
-        assert caplog.messages == [
-            'Deleting under s3://lake/t/: ["data/a b.parquet", "data/c.parquet"]'
-        ]
+        with pytest.raises(ValueError, match="record_deletion"):
+            _run(catalog, store, delete=True, record_deletion=None)
+
+        assert store.deleted == []
+        assert _files(table) == before
+
+    def test_a_recorder_that_fails_deletes_nothing(self, catalog: SqlCatalog) -> None:
+        table = _expired_table(catalog)
+        before = _files(table)
+        store = LocalStore()
+
+        def failing(_location: str, _keys: list[str]) -> str:
+            msg = "AccessDenied"
+            raise RuntimeError(msg)
+
+        with pytest.raises(RuntimeError, match="AccessDenied"):
+            _run(catalog, store, delete=True, record_deletion=failing)
+
+        assert store.deleted == []
+        assert _files(table) == before
+
+    def test_a_table_with_nothing_to_delete_writes_no_record(
+        self, catalog: SqlCatalog
+    ) -> None:
+        catalog.create_table(f"{DATABASE}.{TABLE}", ROWS.schema).append(ROWS)
+        recorder = MemoryRecorder()
+
+        result = _run(catalog, LocalStore(), delete=True, record_deletion=recorder)
+
+        assert recorder.records == []
+        assert result.deleted_objects == 0
+
+    def test_recorded_keys_survive_spaces_and_a_different_scheme(self) -> None:
+        assert relative_keys(
+            "s3://lake/t/",
+            ["s3a://lake/t/data/a b.parquet", "s3://lake/t/data/c.parquet"],
+        ) == ["data/a b.parquet", "data/c.parquet"]
+
+    def test_a_report_needs_no_recorder(self, catalog: SqlCatalog) -> None:
+        _expired_table(catalog)
+
+        result = _run(catalog, LocalStore(), record_deletion=None)
+
+        assert result.eligible_objects > 0
 
     def test_a_young_orphan_is_counted_and_left_alone(
         self, catalog: SqlCatalog
@@ -444,6 +496,11 @@ class FakeS3:
         self.refuse = refuse or set()
         self.list_calls: list[dict[str, Any]] = []
         self.delete_calls: list[dict[str, Any]] = []
+        self.put_calls: list[dict[str, Any]] = []
+
+    def put_object(self, **kwargs: Any) -> dict[str, Any]:
+        self.put_calls.append(kwargs)
+        return {}
 
     def get_paginator(self, _operation: str) -> _Paginator:
         return _Paginator(self._list)
@@ -498,6 +555,30 @@ class TestS3ObjectStore:
         assert errors == ["s3://lake/t/b: AccessDenied no"]
 
 
+class TestS3DeletionManifests:
+    def test_one_object_per_table_named_after_its_location(self) -> None:
+        s3 = FakeS3({})
+        manifests = S3DeletionManifests(
+            s3, bucket="dagster-data-qa", prefix="orphans/run-1/"
+        )
+
+        written = manifests(
+            "s3a://ol-data-lake-raw-qa/raw__users/",
+            ["data/a b.parquet", "metadata/snap-1.avro"],
+        )
+
+        key = "orphans/run-1/ol-data-lake-raw-qa/raw__users.json"
+        assert written == f"s3://dagster-data-qa/{key}"
+        assert manifests.uri == "s3://dagster-data-qa/orphans/run-1/"
+        [call] = s3.put_calls
+        assert (call["Bucket"], call["Key"]) == ("dagster-data-qa", key)
+        assert call["ContentType"] == "application/json"
+        assert json.loads(call["Body"]) == {
+            "location": "s3a://ol-data-lake-raw-qa/raw__users/",
+            "keys": ["data/a b.parquet", "metadata/snap-1.avro"],
+        }
+
+
 class FakeGlue:
     def __init__(self, tables: dict[str, list[dict[str, Any]]]) -> None:
         self.tables = tables
@@ -543,6 +624,7 @@ class TestRemoveDatabaseOrphanFiles:
             "now": NOW,
             "delete": False,
             "workers": 2,
+            "record_deletion": MemoryRecorder(),
         }
         return remove_database_orphan_files(
             glue, lambda: catalog, LocalStore(), **(kwargs | overrides)
@@ -713,3 +795,14 @@ class TestRemoveDatabaseOrphanFiles:
         with pytest.raises(RuntimeError, match="Refusing to delete"):
             self._run(glue, catalog, delete=True)
         assert _files(table) == _files(catalog.load_table(f"{DATABASE}.{TABLE}"))
+
+    def test_a_delete_without_a_recorder_is_refused_before_any_scan(
+        self, catalog: SqlCatalog
+    ) -> None:
+        table = _expired_table(catalog)
+        glue = FakeGlue({DATABASE: [_glue_table(table, TABLE)]})
+
+        with pytest.raises(ValueError, match="record_deletion"):
+            self._run(glue, catalog, delete=True, record_deletion=None)
+
+        assert glue.fetches == 0

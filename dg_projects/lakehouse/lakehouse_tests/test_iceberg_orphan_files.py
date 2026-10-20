@@ -21,6 +21,7 @@ from ol_orchestrate.lib.iceberg_orphan_files import (
 
 DATABASE = module.RAW_GLUE_DATABASE
 MIN_AGE_DAYS = 7
+DAGSTER_BUCKET = "dagster-data-qa"
 
 
 def _tables(*, deleted: bool = False, errors: list[str] | None = None):
@@ -87,6 +88,7 @@ def _enable_delete(monkeypatch: pytest.MonkeyPatch) -> None:
         "ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS",
         frozenset({module.DAGSTER_ENV}),
     )
+    monkeypatch.setenv("DAGSTER_BUCKET_NAME", DAGSTER_BUCKET)
 
 
 def test_only_qa_deletes():
@@ -124,6 +126,7 @@ def test_delete_is_refused_below_the_scheduled_floor(monkeypatch: pytest.MonkeyP
 
 
 def test_report_run_says_delete_did_not_run(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("DAGSTER_BUCKET_NAME", raising=False)
     calls = _returning(monkeypatch, _result())
 
     metadata = _metadata(IcebergOrphanFilesConfig(min_age_days=MIN_AGE_DAYS))
@@ -132,7 +135,9 @@ def test_report_run_says_delete_did_not_run(monkeypatch: pytest.MonkeyPatch):
     assert calls[0]["delete"] is False
     assert calls[0]["min_age_days"] == MIN_AGE_DAYS
     assert calls[0]["logger"] is not None
+    assert calls[0]["record_deletion"] is None
     assert metadata["delete_status"] == "not run (report only)"
+    assert "deletion_manifests" not in metadata
     assert not [key for key in metadata if key.startswith("deleted_")]
     assert metadata["tables_examined"] == 2
     assert metadata["objects_listed"] == 130
@@ -158,6 +163,11 @@ def test_delete_run_reports_what_it_deleted(monkeypatch: pytest.MonkeyPatch):
     )
 
     assert calls[0]["delete"] is True
+    manifests = calls[0]["record_deletion"]
+    assert manifests.uri.startswith(
+        f"s3://{DAGSTER_BUCKET}/{module.DELETION_MANIFEST_PREFIX}/"
+    )
+    assert metadata["deletion_manifests"] == manifests.uri
     assert metadata["delete_status"] == "ran"
     assert metadata["deleted_objects"] == 90
     assert metadata["deleted_bytes"] == 7_000
@@ -250,5 +260,20 @@ def test_a_failed_delete_run_still_logs_its_totals(
 
     assert (
         "Delete: ran, 89 objects deleted, 7000 bytes sent for deletion, "
-        "error count 1." in capsys.readouterr().err
+        f"error count 1, keys under s3://{DAGSTER_BUCKET}/"
+        f"{module.DELETION_MANIFEST_PREFIX}/" in capsys.readouterr().err
     )
+
+
+def test_a_delete_run_needs_the_dagster_bucket(monkeypatch: pytest.MonkeyPatch):
+    _enable_delete(monkeypatch)
+    monkeypatch.delenv("DAGSTER_BUCKET_NAME")
+    calls = _returning(monkeypatch, _result(tables=_tables(deleted=True)))
+
+    with pytest.raises(KeyError, match="DAGSTER_BUCKET_NAME"):
+        iceberg_raw_orphan_files(
+            build_asset_context(),
+            IcebergOrphanFilesConfig(min_age_days=MIN_AGE_DAYS, delete=True),
+        )
+
+    assert calls == []

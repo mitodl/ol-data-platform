@@ -7,7 +7,7 @@ Date: 2026-09-11 (rev. 6, continuous cluster assignment) · rev. 5 (2026-08-13, 
 grain) · Companion to [`feedback_zendesk_mvp_spec.md`](./feedback_zendesk_mvp_spec.md)
 and [`feedback_ml_approach.md`](./feedback_ml_approach.md)
 
-The scheduled batch job that turns assembled, redacted conversations into summaries, embeddings, clusters,
+The batch pipeline that turns assembled, redacted conversations into summaries, embeddings, clusters,
 LLM-proposed categories, and sentiment. Grounded in the existing repo orchestration patterns. **The fact
 ships without this asset**; this is purely additive — it fills the generated columns on
 `afact_feedback_conversation` and writes `feedback_cluster_run` (see
@@ -66,14 +66,13 @@ dg_projects/feedback_clustering/
   Dockerfile
   build.yaml
   feedback_clustering/
-    definitions.py          # Definitions(assets, resources={io_manager, vault, llm}, jobs, schedules)
+    definitions.py          # Definitions(assets, resources={io_manager, vault, llm}, jobs, sensors)
     assets/feedback_clustering.py   # thin @asset(s)
     resources/llm.py        # NEW Vault-backed LLM/embeddings client factory
     lib/summarize.py        # conversation summarization (skip rule: ml §A.1)
     lib/embed.py            # embedding + redaction helpers
     lib/cluster.py          # UMAP+HDBSCAN helpers
     lib/label.py            # LLM cluster-labeling + sentiment helpers
-    schedules/              # cron ScheduleDefinition (optional; declarative default)
 ```
 
 Scaffold via the `dagster-code-location-structure` skill (`dg`), copying
@@ -103,8 +102,8 @@ feedback_embeddings            @asset  → embedding_vector, embedding_dim, embe
    ▼
 feedback_clusters              @multi_asset (two AssetOuts, fixed rev. 4, @copilot: a plain @asset has one
    │                                     materialized output and cannot populate two target tables from one
-   │                                     DataFrame through PolarsIcebergIOManager). rev. 6: scheduled and
-   │                                     triggered (§6), not chained on every embedding refresh
+   │                                     DataFrame through PolarsIcebergIOManager). rev. 6: sensor-triggered
+   │                                     (§6), not chained on every embedding refresh
    │           ├─ out: feedback_cluster_run       → one row: algorithm, params, cluster_count, noise_count,
    │           │                                     silhouette, run_status (completed | failed)
    │           └─ out: feedback_cluster_candidate → run-local cluster_id / cluster_probability per conversation
@@ -231,7 +230,7 @@ Two options, both in use in the repo:
   (`ol_orchestrate.lib.automation_policies`) on the `feedback_summaries` asset so it re-runs
   when `int__feedback__conversation` refreshes or the code version changes. Downstream embed, incremental
   assignment (`feedback_cluster_assignment`) and sentiment assets chain off it. Re-clustering
-  (`feedback_clusters`, `feedback_cluster_identity`) does not; it follows the schedule and triggers below
+  (`feedback_clusters`, `feedback_cluster_identity`) does not; it follows the growth sensor below
   (rev. 6), and `feedback_category_proposals` follows the keys identity matching produces. This is what `student_risk_probability` and the dbt
   assets use — no cron to maintain. **Caveat now that summarization costs money per conversation:** make the
   summarizer incremental on `feedback_conversation_pk` (only unsummarized or changed conversations), or an
@@ -242,10 +241,10 @@ Two options, both in use in the repo:
   data-driven triggering. MVP volume is ~198K Zendesk **conversations** (`feedback_ml_approach.md` §B.2),
   which runs comfortably in one nightly batch; only the first backfill is large, and it is bounded by the
   summarizer's throughput rather than the embedder's.
-- **Re-clustering is scheduled and triggered, not chained on every refresh** (rev. 6).
+- **Re-clustering is triggered, not chained on every refresh** (rev. 6).
   `feedback_cluster_assignment` runs on every embedding refresh (cheap: a centroid lookup per new
-  conversation). `feedback_clusters` runs on a cron (weekly as a starting point) plus a sensor that fires when
-  the unplaced share or the corpus growth since the last run crosses its threshold
+  conversation). `feedback_clusters` runs when `feedback_clusters_growth_sensor` finds that the corpus has
+  grown by `CLUSTER_CORPUS_GROWTH_TRIGGER` (default 1,000) conversations since the last run
   (`feedback_ml_approach.md` §C.1). Neither needs a person to run or to take effect.
 
 ---

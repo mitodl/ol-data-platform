@@ -79,7 +79,7 @@ class FeedbackCategoryProposalsConfig(Config):
 
 
 @asset(
-    code_version="feedback_category_proposals_v3",
+    code_version="feedback_category_proposals_v4",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_category_proposal"]),
     deps=[AssetKey(["intermediate", "feedback_cluster_membership"])],
@@ -248,8 +248,27 @@ def feedback_category_proposals(
         if proposals_df.height
         else proposals_df
     )
+    # The growth sensor adds categories without a review; list each with its size
+    # so a new one is visible on the run page
+    created = (
+        proposals_df.filter(
+            ~pl.col("cluster_key").is_in(joined["cluster_key"].implode())
+        )
+        if proposals_df.height
+        else proposals_df
+    )
+    member_counts = dict(membership_df.group_by("cluster_key").len().iter_rows())
     context.add_output_metadata(
         {
+            "new_categories": MetadataValue.int(created.height),
+            "new_category_labels": MetadataValue.md(
+                "\n".join(
+                    f"- {row['category_label']} "
+                    f"({member_counts.get(row['cluster_key'], 0)} conversations)"
+                    for row in created.iter_rows(named=True)
+                )
+                or "none"
+            ),
             "clusters_joined_existing": MetadataValue.int(joined.height),
             "joined_categories": MetadataValue.md(
                 "\n".join(

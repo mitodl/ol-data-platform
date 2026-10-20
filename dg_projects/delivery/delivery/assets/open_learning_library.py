@@ -6,8 +6,9 @@ Reads pre-transformed course records from the
 oll dlt pipeline) and delivers them to MIT Learn via a single signed webhook
 POST.
 
-OCW-origin courses are excluded at the staging layer and are never present in
-the integration table, so no additional filtering is needed here.
+The dbt model owns the OLL semantics (ids, offeror, levels, terms, durations);
+this asset only shapes rows into the payload MIT Learn's legacy OLL ETL
+(learning_resources/etl/oll.py) hands its course loader.
 
 Data flow:
     raw__oll__google_sheets__courses (Iceberg, via dlt)
@@ -19,6 +20,7 @@ Scheduling: once a day, after its integrations models have materialized since
 """
 
 import logging
+from collections.abc import Iterable, Mapping
 from typing import Any, cast
 
 import httpx2 as httpx
@@ -45,32 +47,83 @@ _GLUE_DB = (
 _TABLE = "integrations__learn__oll_courses"
 
 
-def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
-    """Map an integrations table row to the MIT Learn LearningResource shape."""
-    image_url = row.get("image_url")
-    topics_raw = row.get("topics") or ""
-    topics = [{"name": t.strip()} for t in topics_raw.split(",") if t.strip()]
+_ETL_SOURCE = "oll"
+_PLATFORM = "oll"
+_AVAILABILITY = "anytime"
+_PACE = ["self_paced"]
+_FORMAT = ["asynchronous"]
 
-    # Reconstruct the single run from the pipe-delimited runs string
-    runs = []
-    if runs_str := row.get("runs"):
-        parts = runs_str.split("|")
-        runs = [{"run_id": parts[0]}]
 
-    return {
-        "readable_id": row["readable_id"],
+def _course_numbers(course_number: str) -> list[dict[str, Any]]:
+    """generate_course_numbers_json(course_number, is_ocw=False) in MIT Learn.
+
+    Its non-OCW department pattern needs a "+" in the number, which OLL course
+    numbers never have, so the department is always None and the sort key is the
+    number itself.
+    """
+    return [
+        {
+            "value": course_number,
+            "listing_type": "primary",
+            "department": None,
+            "sort_coursenum": course_number,
+            "primary": True,
+        }
+    ]
+
+
+def _row_to_resource(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Map an integrations__learn__oll_courses row to MIT Learn's course shape."""
+    image = {"url": row["image_url"], "alt": row["title"]}
+    # [] rather than None: MIT Learn clears topics and instructors on [] but leaves
+    # existing ones alone on None.
+    instructors = [{"full_name": name} for name in row["instructors"] or []]
+    run = {
         "title": row["title"],
-        "url": row.get("url"),
-        "description": row.get("description"),
-        "image": {"url": image_url, "alt": row["readable_id"]} if image_url else None,
-        "topics": topics,
-        "published": True,
-        "etl_source": "oll",
-        "offered_by": {"code": "oll"},
-        "platform": "oll",
-        "resource_type": "course",
-        "runs": runs,
+        "run_id": row["run_id"],
+        "url": row["url"],
+        "published": row["published"],
+        "description": row["description"],
+        "image": image,
+        "level": [row["level"]] if row["level"] else [],
+        "year": row["year"],
+        "semester": row["semester"],
+        "instructors": instructors,
+        "status": "Archived",
+        "availability": _AVAILABILITY,
+        "pace": _PACE,
+        "format": _FORMAT,
+        "duration": row["duration"] or "",
+        "time_commitment": row["time_commitment"] or "",
+        "min_weeks": row["min_weeks"],
+        "max_weeks": row["max_weeks"],
+        "min_weekly_hours": row["min_weekly_hours"],
+        "max_weekly_hours": row["max_weekly_hours"],
     }
+    return {
+        "title": row["title"],
+        "readable_id": row["readable_id"],
+        "url": row["url"],
+        "description": row["description"],
+        "full_description": row["description"],
+        "offered_by": {"code": row["offered_by"]},
+        "platform": _PLATFORM,
+        "published": row["published"],
+        "topics": [{"name": topic} for topic in row["topics"] or []],
+        "course": {"course_numbers": _course_numbers(row["course_number"])},
+        "runs": [run],
+        "image": image,
+        "etl_source": _ETL_SOURCE,
+        "resource_type": "course",
+        "availability": _AVAILABILITY,
+        "pace": _PACE,
+        "format": _FORMAT,
+    }
+
+
+def build_resources(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Build the webhook batch, one course per integrations row."""
+    return [_row_to_resource(row) for row in rows]
 
 
 @asset(
@@ -95,7 +148,7 @@ def oll_webhook(
     ).collect()
     context.log.info("Loaded %d OLL courses from Iceberg", len(df))
 
-    resources = [_row_to_resource(row) for row in df.iter_rows(named=True)]
+    resources = build_resources(df.iter_rows(named=True))
 
     context.log.info("Delivering %d OLL courses to MIT Learn webhook", len(resources))
     try:

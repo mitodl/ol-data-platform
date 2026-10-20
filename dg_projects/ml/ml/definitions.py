@@ -21,7 +21,6 @@ from ml.assets.feedback_summaries import feedback_summaries
 from ml.assets.risk_probability import student_risk_probability
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import configure_opik_keycloak_auth
-from ml.schedules.feedback_clusters import feedback_clusters_schedule
 from ml.sensors.feedback_clusters import feedback_clusters_growth_sensor
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
@@ -89,7 +88,7 @@ feedback_sentiment_eval_job = define_asset_job(
 )
 
 # Covers the feedback pipeline's auto-cascading assets (feedback_clusters itself
-# runs on its own schedule/sensor). Re-enable in the UI after deploy if it was
+# runs from feedback_clusters_growth_sensor). Re-enable in the UI after deploy if it was
 # previously on. Stopped by default.
 feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
     name="feedback_pipeline_automation_sensor",
@@ -191,6 +190,5 @@ defs = Definitions(
         feedback_clusters_job,
         feedback_sentiment_eval_job,
     ],
-    schedules=[feedback_clusters_schedule],
     sensors=[feedback_pipeline_automation_sensor, feedback_clusters_growth_sensor],
 )
