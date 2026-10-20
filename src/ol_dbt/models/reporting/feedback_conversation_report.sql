@@ -1,8 +1,5 @@
 with conversation_fact as (
-    select
-        *
-        , {{ html_unescape('conversation_text') }} as unescaped_text
-    from {{ ref('afact_feedback_conversation') }}
+    select * from {{ ref('afact_feedback_conversation') }}
     where is_in_cluster_scope
 )
 
@@ -45,14 +42,10 @@ select
     , {{ format_datetime('date_dim.date', 'yyyy') }} as conversation_year
     , opening_turn.source_url
     , conversation_fact.conversation_summary
-    -- Strips quoted email replies ("On <date>, <name> wrote: ...") up to the next turn.
-    -- The header must stay on one line, or it can match a later turn's "wrote:".
+    -- Keeps quoted email history: it is often the only copy of the email a learner
+    -- replied to, and the summarizer reads the same full text.
     , replace(
-        {{ regexp_replace_with_backreferences(
-            'conversation_fact.unescaped_text'
-            , "'(?s)On [A-Z][a-z]{2}, [^\\n]{5,60} wrote:.*?(\\n---\\n|$)'"
-            , "'$1'"
-        ) }}
+        {{ html_unescape('conversation_fact.conversation_text') }}
         , {{ dbt.concat([codepoint_char(10), "'---'", codepoint_char(10)]) }}
         , {{ dbt.concat([codepoint_char(10), "'———'", codepoint_char(10)]) }}
     ) as conversation_text
