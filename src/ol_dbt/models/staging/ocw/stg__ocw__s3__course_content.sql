@@ -66,6 +66,8 @@ select
         as coursecontent_video_archive_url
     , {{ json_extract_scalar('source.data_json', "'$.video_files.video_transcript_file'") }}
         as coursecontent_video_transcript_file
+    , {{ json_array_string('source.data_json', "'$.video_files.video_transcript_resources'") }}
+        as coursecontent_video_transcript_resources
     , {{ json_extract_scalar('source.data_json', "'$.transcript_file'") }} as coursecontent_legacy_transcript_file
     , {{ json_extract_scalar('source.data_json', "'$.thumbnail_file'") }} as coursecontent_legacy_thumbnail_file
     , {{ json_extract_scalar('source.data_json', "'$.site_uid'") }} as course_site_uid

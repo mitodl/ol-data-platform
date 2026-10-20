@@ -151,15 +151,129 @@ def _load(**kwargs: Any) -> list[dict[str, Any]]:
             "courses/a/t.pdf",
         ),
         ({"resourcetype": "Video", "file": None, "video_files": {}}, None),
+        # A republished course lists its transcripts by language, and the
+        # English one wins wherever it is in the list.
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": [
+                        {"file": "/courses/a/t_es.pdf", "language": "es"},
+                        {"file": "/courses/a/t_en.pdf", "language": "EN-us"},
+                        {"file": "/courses/a/t_en2.pdf", "language": "en"},
+                    ],
+                    "video_transcript_file": "/courses/a/t.pdf",
+                },
+            },
+            "courses/a/t_en.pdf",
+        ),
+        # With no English transcript the first that names a file is read.
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": [
+                        {"file": "", "language": "en"},
+                        {"file": "/courses/a/t_es.pdf", "language": "es"},
+                        {"file": "/courses/a/t_fr.pdf", "language": None},
+                    ]
+                },
+            },
+            "courses/a/t_es.pdf",
+        ),
+        # An empty list or an empty string leaves the single file. Learn raises
+        # on anything else that is not a list, which drops the resource.
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": [],
+                    "video_transcript_file": "/courses/a/t.pdf",
+                },
+            },
+            "courses/a/t.pdf",
+        ),
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": "",
+                    "video_transcript_file": "/courses/a/t.pdf",
+                },
+            },
+            "courses/a/t.pdf",
+        ),
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": {"content": [], "website": "a"},
+                    "video_transcript_file": "/courses/a/t.pdf",
+                },
+            },
+            None,
+        ),
         (
             {"resource_type": "Video", "transcript_file": "/courses/a/t.pdf"},
             "courses/a/t.pdf",
         ),
         ({"file": "/courses/a/legacy.txt"}, "courses/a/legacy.txt"),
-        # Learn takes what lies between the first two "courses".
+        # Learn takes what lies between the first two "courses" of a path that
+        # does not start with it, and reads no text from the extensionless key.
         (
-            {"resourcetype": "Document", "file": "/courses/a/courses/x.pdf"},
-            "courses/a/",
+            {"resourcetype": "Document", "file": "/courses/a/intro_courses_x.pdf"},
+            None,
+        ),
+        ({"file": "courses/a/intro_courses_x.pdf"}, "courses/a/intro_courses_x.pdf"),
+        # A path from the list has its leading slashes stripped first, so it
+        # is read whole.
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": [
+                        {"file": "//courses/a/intro_courses_t.pdf", "language": "en"}
+                    ]
+                },
+            },
+            "courses/a/intro_courses_t.pdf",
+        ),
+        # Learn raises on an entry that is not an object, on a language that
+        # is not a string, and on a chosen file that is not a string, which
+        # drops the resource whatever its video_transcript_file.
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": [None],
+                    "video_transcript_file": "/courses/a/t.pdf",
+                },
+            },
+            None,
+        ),
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": [
+                        {"file": "/courses/a/t_es.pdf", "language": "es"},
+                        {"file": "/courses/a/t_x.pdf", "language": 1},
+                    ]
+                },
+            },
+            None,
+        ),
+        (
+            {
+                "resourcetype": "Video",
+                "video_files": {
+                    "video_transcript_resources": [
+                        {"file": ["/courses/a/t_en.pdf"], "language": "en"},
+                        {"file": "/courses/a/t_en2.pdf", "language": "en"},
+                    ]
+                },
+            },
+            None,
         ),
     ],
 )
@@ -188,6 +302,24 @@ def test_course_version_ignores_site_files(bucket: FakeS3) -> None:
         )
         != before
     )
+
+
+def test_course_version_changes_with_the_text_file_rule(
+    bucket: FakeS3, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    objects = ocw_content.list_course(bucket, _BUCKET, "a-course")
+    before = ocw_content.course_version("a-course", objects)
+    monkeypatch.setattr(ocw_content, "TEXT_FILE_RULE", ocw_content.TEXT_FILE_RULE + 1)
+    assert ocw_content.course_version("a-course", objects) != before
+
+
+def test_text_file_rule_leaves_a_prefix_with_no_data_json_alone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    objects = {"courses/gone/abc_notes.pdf": {"ETag": '"1"', "size": 1}}
+    before = ocw_content.course_version("gone", objects)
+    monkeypatch.setattr(ocw_content, "TEXT_FILE_RULE", ocw_content.TEXT_FILE_RULE + 1)
+    assert ocw_content.course_version("gone", objects) == before
 
 
 @pytest.mark.integration
@@ -364,23 +496,30 @@ def test_file_under_another_course_is_read(
 
 
 @pytest.mark.integration
-def test_file_value_naming_only_a_prefix_is_missing(
+def test_file_value_naming_only_a_prefix_is_not_read(
     test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
 ) -> None:
-    """Otherwise reading the prefix as a file would fail every load here."""
-    bucket.objects["courses/a-course/resources/odd/data.json"] = json.dumps(
-        {
-            "title": "Odd",
-            "resourcetype": "Document",
-            "file": "/courses/a-course/courses.pdf",
-        }
-    ).encode()
+    """Otherwise reading the prefix as a file would fail every load here.
+
+    Learn splits a path not starting with "courses" on it. A prefix with no
+    extension is not read, and the resource is kept with no text. One with an
+    extension is read, and the read raises, which drops the resource.
+    """
+    for name, path in [
+        ("odd", "/courses/a-course/courses.pdf"),
+        ("odder", "/courses/a-course/x.pdf/courses.pdf"),
+    ]:
+        bucket.objects[f"courses/a-course/resources/{name}/data.json"] = json.dumps(
+            {"title": name, "resourcetype": "Document", "file": path}
+        ).encode()
 
     by_key = {row["s3_key"]: row for row in _load()}
 
     odd = by_key["courses/a-course/resources/odd/data.json"]
-    assert (odd["file_key"], odd["extraction_status"]) == (
-        "courses/a-course/",
+    assert (odd["file_key"], odd["extraction_status"]) == (None, None)
+    odder = by_key["courses/a-course/resources/odder/data.json"]
+    assert (odder["file_key"], odder["extraction_status"]) == (
+        "courses/a-course/x.pdf/",
         "missing",
     )
 

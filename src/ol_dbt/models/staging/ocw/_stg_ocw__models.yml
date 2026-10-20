@@ -331,6 +331,10 @@ models:
     description: str, archive.org URL of a video resource
   - name: coursecontent_video_transcript_file
     description: str, video_files.video_transcript_file of a video resource
+  - name: coursecontent_video_transcript_resources
+    description: str, video_files.video_transcript_resources of a video resource as
+      a JSON string, a list of objects with a file and a language. Newer data.json
+      has it; older data has only video_transcript_file.
   - name: coursecontent_legacy_transcript_file
     description: str, transcript_file of a video resource in the earlier format
   - name: coursecontent_legacy_thumbnail_file
