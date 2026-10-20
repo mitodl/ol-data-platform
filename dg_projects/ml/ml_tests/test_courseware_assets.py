@@ -567,37 +567,6 @@ def test_sensor_registers_only_approved_runs(tables):
     assert result.dynamic_partitions_requests[0].partition_keys == [COURSERUN]
 
 
-# -------------------------------------------------------------------- resolution
-def labels(*keys: str) -> pl.DataFrame:
-    return pl.DataFrame(
-        {
-            "concept_label_key": list(keys),
-            "preferred_label": list(keys),
-            "concept_kind": ["concept"] * len(keys),
-            "description": [f"about {key}" for key in keys],
-            "mention_count": [1] * len(keys),
-            "courserun_count": [1] * len(keys),
-            "taught_mention_count": [1] * len(keys),
-        }
-    )
-
-
-def failure_class(result) -> str:
-    error = next(
-        event.step_failure_data.error
-        for event in result.all_events
-        if event.is_step_failure
-    )
-    assert error is not None
-    return error.cls_name
-
-
-# ------------------------------------------------------------------- description
-
-
-# ------------------------------------------------------------------------- graph
-
-
 def test_courseware_definitions_load():
     Definitions(
         assets=[
