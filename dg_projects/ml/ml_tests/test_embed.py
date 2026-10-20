@@ -530,6 +530,29 @@ def test_vertex_gemini_embedding_001_calls_predict(
     assert len(requests[0]["body"]["instances"]) == 1
 
 
+def test_vertex_predict_model_sends_one_instance_per_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, requests = _gemini_client(
+        monkeypatch,
+        {
+            "predictions": [
+                {"embeddings": {"values": [0.1, 0.2]}},
+                {"embeddings": {"values": [0.3, 0.4]}},
+            ]
+        },
+        vertexai=True,
+    )
+
+    result = embed.GeminiEmbeddingClient(client, "text-embedding-005", 2).embed_batch(
+        ["a", "b"]
+    )
+
+    assert result == [[0.1, 0.2], [0.3, 0.4]]
+    assert requests[0]["path"].endswith("text-embedding-005:predict")
+    assert [i["content"] for i in requests[0]["body"]["instances"]] == ["a", "b"]
+
+
 def test_vertex_embed_content_model_calls_embed_content(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
