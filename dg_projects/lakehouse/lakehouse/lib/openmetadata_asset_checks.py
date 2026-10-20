@@ -148,7 +148,7 @@ def push_check_evaluations(
     seconds for 12 results), so a batch can hold more pushable evaluations than
     fit in a sensor tick. Once ``time.monotonic()``
     passes *deadline*, no further write is started and the rest of the batch is
-    left for the next tick. The first write always goes ahead, so every tick
+    left for the next tick. The first record is always handled, so every tick
     makes progress.
 
     :param records: asset check evaluation event log records, oldest first.
@@ -167,7 +167,10 @@ def push_check_evaluations(
         ):
             handled = record.storage_id
             continue
-        if pushed and time.monotonic() > deadline:
+        # Gated on any record handled, not on a result written: a batch of checks
+        # on tables OpenMetadata lacks writes nothing but still costs two
+        # requests per check.
+        if handled >= records[0].storage_id and time.monotonic() > deadline:
             break
         if not test_case_fqns:
             _ensure_test_definition(client)

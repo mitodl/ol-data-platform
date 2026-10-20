@@ -231,6 +231,33 @@ def test_a_passed_deadline_leaves_the_rest_of_the_batch_for_the_next_tick() -> N
         _record("freshness_check", storage_id=3, timestamp=1_760_003_600.0),
     ]
 
-    # The first write always goes ahead, so a tick never ends with no progress.
-    assert _push(records, client, deadline=-math.inf) == (1, 2)
+    # The first pushable record always goes ahead, so a tick never ends with no
+    # progress. Here the unmapped record 1 is handled first, so the deadline
+    # stops the push before record 2.
+    assert _push(records, client, deadline=-math.inf) == (0, 1)
+    assert client.calls == []
+    assert _push(records[1:], client, deadline=-math.inf) == (1, 2)
     assert [call[:2] for call in client.calls][-1] == ("POST", RESULT_ENDPOINT)
+
+
+def test_the_deadline_also_bounds_checks_on_tables_openmetadata_lacks() -> None:
+    """Regression: the deadline was gated on a written result, so a batch of
+    checks on missing tables (two requests each, nothing written) ran unbounded
+    into the sensor timeout.
+    """
+    client = _FakeClient(fail=("POST", "v1/dataQuality/testCases", 404))
+    other = AssetKey(["dimensional", "dim_course"])
+    records = [
+        _record("freshness_check", storage_id=1),
+        _record("freshness_check", storage_id=2, asset_key=other),
+    ]
+
+    pushed, handled = push_check_evaluations(
+        records,
+        {DIM_USER: DIM_USER_FQN, other: f"{DIM_USER_FQN}_other"},
+        client,
+        LOG,
+        -math.inf,
+    )
+
+    assert (pushed, handled) == (0, 1)

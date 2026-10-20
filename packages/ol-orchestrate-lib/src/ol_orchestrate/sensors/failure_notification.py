@@ -17,7 +17,6 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from itertools import batched
 from typing import Any
 
 import sentry_sdk
@@ -916,32 +915,36 @@ def collect_new_check_failures(
     ``AssetCheckEvaluation`` itself carries none -- it is only on the
     surrounding event log record -- and the Slack message needs it to link
     back to the run that raised the failure.
+
+    At most MAX_FAILURES_PER_MESSAGE failures are returned, so a tick posts one
+    Slack message. The cursor then stops at the last of them and the rest of
+    the batch is read again next tick. Splitting a tick's failures over several
+    messages would not be safe: a failed post fails the tick, the cursor is not
+    saved, and the next tick would repost the messages that did go out.
     """
     records = check_evaluation_records(instance, cursor)
     if not records:
         return [], None
 
-    evaluations = [
-        (
-            record.event_log_entry.run_id,
-            record.event_log_entry.dagster_event.event_specific_data,
-        )
-        for record in records
-    ]
     # WARN-severity checks are advisory; only ERROR is worth a notification. dbt
     # tests are dropped because their run failure already reports them in full,
     # and the failed-partition inventory is announced only from its own job.
     job_names: dict[str, str | None] = {}
-    failures = [
-        (run_id, evaluation)
-        for run_id, evaluation in evaluations
-        if not evaluation.passed
-        and evaluation.severity == AssetCheckSeverity.ERROR
-        and not is_reported_by_the_run_failure_sensor(evaluation)
-        and not is_inventory_check_outside_its_job(
-            instance, run_id, evaluation, job_names
-        )
-    ]
+    failures = []
+    for record in records:
+        run_id = record.event_log_entry.run_id
+        evaluation = record.event_log_entry.dagster_event.event_specific_data
+        if (
+            not evaluation.passed
+            and evaluation.severity == AssetCheckSeverity.ERROR
+            and not is_reported_by_the_run_failure_sensor(evaluation)
+            and not is_inventory_check_outside_its_job(
+                instance, run_id, evaluation, job_names
+            )
+        ):
+            failures.append((run_id, evaluation))
+            if len(failures) == MAX_FAILURES_PER_MESSAGE:
+                return failures, str(record.storage_id)
     # The newest record of an ascending batch: nothing older is left behind,
     # nothing newer is re-delivered.
     return failures, str(records[-1].storage_id)
@@ -1001,15 +1004,14 @@ def asset_check_failure_sensor(context: SensorEvaluationContext) -> None:
         return
 
     client = WebClient(token=get_slack_token())
-    for message_failures in batched(failures, MAX_FAILURES_PER_MESSAGE):
-        client.chat_postMessage(
-            channel=slack_channel,
-            blocks=asset_check_failure_message(message_failures),
-            text=(
-                f"Dagster {DAGSTER_ENV}: {len(message_failures)} asset check "
-                f"failure{'s' if len(message_failures) > 1 else ''}"
-            ),
-        )
+    client.chat_postMessage(
+        channel=slack_channel,
+        blocks=asset_check_failure_message(failures),
+        text=(
+            f"Dagster {DAGSTER_ENV}: {len(failures)} asset check "
+            f"failure{'s' if len(failures) > 1 else ''}"
+        ),
+    )
 
 
 FAILURE_NOTIFICATION_SENSORS = (
