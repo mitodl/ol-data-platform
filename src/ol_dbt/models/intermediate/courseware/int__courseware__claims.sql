@@ -2,8 +2,11 @@
     Every extracted claim with its extraction's scope and version, its evidence counts,
     and the key that groups its label with the same label elsewhere.
 
-    is_current marks the newest extraction of each scope part, so rollups read one
-    extractor version per scope while older versions stay comparable. A claim is
+    is_current marks, for each scope, the newest extraction of each part under the
+    extractor version and part count of the scope's newest extraction, so rollups
+    read one extractor version per scope while older versions stay comparable. A
+    re-extraction that splits the scope into fewer parts leaves no older part
+    current. A claim is
     verified when at least one of its passages was found in the source text.
 
     concept_label_key is a string normalization only (the courseware_label_key macro).
@@ -22,14 +25,52 @@ with extractions as (
     select * from {{ source('courseware_intermediate', 'courseware_claim_evidence') }}
 )
 
+, newest_extractions as (
+    select * from (
+        select
+            platform
+            , courserun_readable_id
+            , scope_id
+            , extractor_id
+            , prompt_version
+            , schema_version
+            , model_id
+            , effort
+            , scope_part_count
+            , row_number() over (
+                partition by platform, courserun_readable_id, scope_id
+                order by extracted_at desc
+            ) as scope_rank
+        from extractions
+    ) as ranked_scopes
+    where scope_rank = 1
+)
+
 , ranked_extractions as (
     select
-        *
-        , row_number() over (
-            partition by platform, courserun_readable_id, scope_id, scope_part
-            order by extracted_at desc
+        extractions.*
+        , newest_extractions.scope_id is not null
+        and row_number() over (
+            partition by
+                extractions.platform
+                , extractions.courserun_readable_id
+                , extractions.scope_id
+                , extractions.scope_part
+                , newest_extractions.scope_id
+            order by extractions.extracted_at desc
         ) = 1 as is_current
     from extractions
+    left join newest_extractions
+        on
+            extractions.platform = newest_extractions.platform
+            and extractions.courserun_readable_id = newest_extractions.courserun_readable_id
+            and extractions.scope_id = newest_extractions.scope_id
+            and extractions.extractor_id = newest_extractions.extractor_id
+            and extractions.prompt_version = newest_extractions.prompt_version
+            and extractions.schema_version = newest_extractions.schema_version
+            and extractions.model_id = newest_extractions.model_id
+            and extractions.effort = newest_extractions.effort
+            and extractions.scope_part_count = newest_extractions.scope_part_count
 )
 
 , evidence_counts as (
