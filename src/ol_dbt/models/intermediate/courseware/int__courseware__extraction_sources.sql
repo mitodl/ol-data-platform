@@ -5,15 +5,17 @@
     Scopes:
       unit       one per sequential, its leaf blocks in course-tree order (dim_course_content)
       context    the about pages, reachable tabs and course info pages
-      materials  the run's static documents (slides, PDFs). The html bodies Tika extracts
-                 keep no hrefs, so a document cannot be placed in the sequential that links
-                 it; they are read together instead.
+      materials  the run's static documents (slides, PDFs) that no unit's html links to.
+                 A document an html block links to (content_file_static_references) is
+                 read in that block's unit instead.
 
     Problem text is the question side only (courseware_problem_question_text). A
     library_content block contributes its first problem, since its children are
     randomized variants of one question. Files are dropped by the export's own exclusion
     rules, except about_page: Learn leaves the about pages out of search, but the
     description and prerequisites stated there are what the context scope is for.
+    Answer keys and solution sets (courseware_answer_key over the file's path, minus its
+    extension, and the opening of its text) are never read.
 
     The build covers the runs int__courseware__extraction_allowlist approves.
     var('courseware_courseruns') replaces that with a list of runs, for local
@@ -279,6 +281,7 @@ with content as (
             ))
 )
 
+-- answer keys and solution sets are never read (courseware_answer_key); an Open edX file has no title
 , unscoped_documents as (
     select documents.*
     from documents
@@ -287,7 +290,102 @@ with content as (
             documents.platform = excluded_paths.platform
             and documents.courserun_readable_id = excluded_paths.courserun_readable_id
             and documents.content_file_path = excluded_paths.content_file_path
-    where excluded_paths.content_file_path is null
+    where
+        excluded_paths.content_file_path is null
+        and not {{ courseware_answer_key(
+            regexp_replace_all('documents.content_file_path', "'[.][A-Za-z0-9]+$'", "''")
+            , "''"
+            , courseware_text_head('documents.content_file_text')
+            , courseware_answer_markers('documents.content_file_text')
+        ) }}
+)
+
+-- every html body's links, including those of a body Tika failed on or found empty
+, html_bodies as (
+    select
+        case content_file_source_system
+            when 'xpro' then 'mitxpro'
+            when 'mitx' then 'residential'
+            else content_file_source_system
+        end as platform
+        , courserun_readable_id
+        , content_file_path
+        , content_file_static_references
+    from {{ ref('stg__openedx__s3__course_document_text') }}
+    where
+        content_file_static_references is not null
+        {% if courserun_filter %}and courserun_readable_id in {{ courserun_filter }}{% endif %}
+)
+
+, html_links as (
+    select
+        unit_blocks.platform
+        , unit_blocks.courserun_readable_id
+        , unit_blocks.sequential_block_id
+        , unit_blocks.block_id
+        , unit_blocks.block_index
+        , {{ json_extract_scalar('linked.static_path', "'$'") }} as linked_path
+    from unit_blocks
+    inner join html_bodies as html_body
+        on
+            unit_blocks.block_category = 'html'
+            and unit_blocks.platform = html_body.platform
+            and unit_blocks.courserun_readable_id = html_body.courserun_readable_id
+            and html_body.content_file_path = concat('html/', unit_blocks.html_filename, '.html')
+    cross join {{ unnest_json_array('html_body.content_file_static_references', 'linked', 'static_path') }}
+)
+
+-- Studio stores "my file.pdf" under the asset name my_file.pdf, which is what a link
+-- spells, so a link is matched to a document by its name without punctuation. That
+-- key also merges distinct files (LectureSlides_15.pdf, Lecture_Slides_15.pdf), so an
+-- exact path wins, and the key is used only when it names one document.
+, link_matches as (
+    select
+        html_links.*
+        , documents.content_file_path
+        , documents.content_file_text
+        , case when html_links.linked_path = documents.content_file_path then 1 else 0 end as is_exact
+    from html_links
+    inner join unscoped_documents as documents
+        on
+            html_links.platform = documents.platform
+            and html_links.courserun_readable_id = documents.courserun_readable_id
+            and {{ regexp_replace_all("lower(html_links.linked_path)", "'[^a-z0-9./-]'", "''") }}
+            = {{ regexp_replace_all("lower(documents.content_file_path)", "'[^a-z0-9./-]'", "''") }}
+    where documents.content_file_extension in ('{{ document_extensions | join("', '") }}')
+)
+
+, counted_link_matches as (
+    select
+        *
+        , sum(is_exact) over (
+            partition by platform, courserun_readable_id, block_id, linked_path
+        ) as exact_matches
+        , count(*) over (
+            partition by platform, courserun_readable_id, block_id, linked_path
+        ) as key_matches
+    from link_matches
+)
+
+-- A linked document is read right after the html block that links it: it takes the
+-- block's source_order, and its static/ path sorts after the block's block-v1 key. One
+-- linked from several units is read in the first, so its claims are not extracted twice.
+, linked_documents as (
+    select
+        platform
+        , courserun_readable_id
+        , sequential_block_id as scope_id
+        , block_index as source_order
+        , content_file_path as source_ref
+        , 'document' as source_kind
+        , {{ regexp_replace_all('content_file_path', "'^static/'", "''") }} as source_title
+        , content_file_text as source_text
+        , row_number() over (
+            partition by platform, courserun_readable_id, content_file_path
+            order by block_index
+        ) as link_rank
+    from counted_link_matches
+    where is_exact = 1 or (exact_matches = 0 and key_matches = 1)
 )
 
 , context_sources as (
@@ -310,20 +408,28 @@ with content as (
 
 , material_sources as (
     select
-        platform
-        , courserun_readable_id
+        unscoped_documents.platform
+        , unscoped_documents.courserun_readable_id
         , 'materials' as scope_id
         , row_number() over (
-            partition by platform, courserun_readable_id order by content_file_path
+            partition by unscoped_documents.platform, unscoped_documents.courserun_readable_id
+            order by unscoped_documents.content_file_path
         ) as source_order
-        , content_file_path as source_ref
+        , unscoped_documents.content_file_path as source_ref
         , 'document' as source_kind
-        , {{ regexp_replace_all('content_file_path', "'^static/'", "''") }} as source_title
-        , content_file_text as source_text
+        , {{ regexp_replace_all('unscoped_documents.content_file_path', "'^static/'", "''") }} as source_title
+        , unscoped_documents.content_file_text as source_text
     from unscoped_documents
+    left join linked_documents
+        on
+            unscoped_documents.platform = linked_documents.platform
+            and unscoped_documents.courserun_readable_id = linked_documents.courserun_readable_id
+            and unscoped_documents.content_file_path = linked_documents.source_ref
+            and linked_documents.link_rank = 1
     where
-        content_file_path like 'static/%'
-        and content_file_extension in ('{{ document_extensions | join("', '") }}')
+        unscoped_documents.content_file_path like 'static/%'
+        and unscoped_documents.content_file_extension in ('{{ document_extensions | join("', '") }}')
+        and linked_documents.source_ref is null
 )
 
 , ocw_courses as (
@@ -1230,6 +1336,28 @@ with content as (
             unit_sources.platform = units.platform
             and unit_sources.courserun_readable_id = units.courserun_readable_id
             and unit_sources.scope_id = units.scope_id
+
+    union all
+
+    select
+        linked_documents.platform
+        , linked_documents.courserun_readable_id
+        , linked_documents.scope_id
+        , linked_documents.source_order
+        , linked_documents.source_ref
+        , linked_documents.source_kind
+        , linked_documents.source_title
+        , linked_documents.source_text
+        , 'unit' as scope_kind
+        , units.scope_title
+        , units.scope_position
+    from linked_documents
+    inner join units
+        on
+            linked_documents.platform = units.platform
+            and linked_documents.courserun_readable_id = units.courserun_readable_id
+            and linked_documents.scope_id = units.scope_id
+    where linked_documents.link_rank = 1
 
     union all
 

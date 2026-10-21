@@ -1,5 +1,6 @@
 """Tests for ml.resources.opik_auth."""
 
+from types import SimpleNamespace
 from typing import Any
 
 import opik
@@ -57,6 +58,7 @@ def _reset_module_state(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(opik_auth, "_configured", False)
     monkeypatch.setattr(opik_auth, "_opik_client", None)
     monkeypatch.setattr(opik_auth, "_client_init_attempted", False)
+    monkeypatch.setattr(opik_auth, "_published_prompts", {})
     monkeypatch.delenv("OPIK_URL_OVERRIDE", raising=False)
 
 
@@ -360,3 +362,48 @@ def test_keycloak_auth_force_refresh_gets_a_new_token() -> None:
 
     assert refreshed == "tok-2"
     assert fake_token_client.calls == 2
+
+
+def _record_span_updates(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    updates: list[dict[str, Any]] = []
+    monkeypatch.setattr(
+        opik_auth.opik_context,
+        "update_current_span",
+        lambda **kwargs: updates.append(kwargs),
+    )
+    return updates
+
+
+def test_attach_span_prompt_links_the_published_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik.example.com")
+    prompt = SimpleNamespace(version="abc123", commit=None)
+    client = SimpleNamespace(create_prompt=lambda **_: prompt)
+    monkeypatch.setattr(opik_auth, "get_opik_client", lambda: client)
+    updates = _record_span_updates(monkeypatch)
+
+    assert opik_auth.publish_prompt_version("name", "template") == "abc123"
+    opik_auth.attach_span_prompt("template")
+    opik_auth.attach_span_prompt("a template never published")
+
+    assert updates == [{"prompts": [prompt]}]
+
+
+def test_attach_span_prompt_skips_a_failed_publish(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik.example.com")
+    # a Prompt with no version recorded is not linked either
+    client = SimpleNamespace(
+        create_prompt=lambda **_: SimpleNamespace(version=None, commit=None)
+    )
+    monkeypatch.setattr(opik_auth, "get_opik_client", lambda: client)
+    updates = _record_span_updates(monkeypatch)
+
+    assert opik_auth.publish_prompt_version("name", "template") == (
+        opik_auth.LOCAL_PROMPT_VERSION
+    )
+    opik_auth.attach_span_prompt("template")
+
+    assert updates == []
