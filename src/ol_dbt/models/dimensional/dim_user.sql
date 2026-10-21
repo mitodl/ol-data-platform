@@ -822,7 +822,9 @@ with mitx_users as (
                 , mitlearn_user_id asc
         ) as row_num
         , coalesce(
-            nullif(user_street_address, ''), nullif(user_address_city, ''), nullif(user_address_postal_code, '')
+            nullif(trim(user_street_address), '')
+            , nullif(trim(user_address_city), '')
+            , nullif(trim(user_address_postal_code), '')
         ) is not null as has_street_address
     from combined_users
 )
@@ -924,7 +926,10 @@ with mitx_users as (
         , row_number() over (
             partition by user_pk
             order by
-                (nullif(user_street_address, '') is null and nullif(user_address_postal_code, '') is null) asc
+                (
+                    nullif(trim(user_street_address), '') is null
+                    and nullif(trim(user_address_postal_code), '') is null
+                ) asc
                 , row_num asc
         ) as address_row_num
     from ranked_users
@@ -934,9 +939,9 @@ with mitx_users as (
 , address_view as (
     select
         user_pk
-        , user_street_address
-        , user_address_city
-        , user_address_postal_code
+        , nullif(trim(user_street_address), '') as user_street_address
+        , nullif(trim(user_address_city), '') as user_address_city
+        , nullif(trim(user_address_postal_code), '') as user_address_postal_code
     from ranked_addresses
     where address_row_num = 1
 )

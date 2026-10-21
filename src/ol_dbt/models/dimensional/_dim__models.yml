@@ -2312,7 +2312,8 @@ unit_tests:
     Bootcamps street with no city or postal code. Taking each part from the
     first account that has it would return the MITx Pro city and postal code
     beside the Bootcamps street. A Residential account that joined later and
-    has only a city does not replace a fuller address.
+    has only a city does not replace a fuller address. Blank and padded
+    values come out trimmed, and blank ones as NULL.
   model: dim_user
   given:
   - input: ref('stg__mitxpro__app__postgres__users_user')
@@ -2344,6 +2345,14 @@ unit_tests:
       user_street_address: 3 Bootcamps Street
       user_address_city: Boston
       user_address_postal_code: '02110'
+    - user_id: 5
+      user_username: dave-bootcamps
+      user_email: dave@example.com
+      user_is_active: true
+      user_joined_on: '2021-01-01T00:00:00'
+      user_street_address: ' 5 Padded Street '
+      user_address_city: ''
+      user_address_postal_code: '  '
   # Inputs the case above doesn't use.
   - input: ref('stg__mitlearn__app__postgres__users_user')
     rows: []
@@ -2392,6 +2401,11 @@ unit_tests:
       user_street_address: 3 Bootcamps Street
       user_address_city: Boston
       user_address_postal_code: '02110'
+    - email: dave@example.com
+      user_bootcamps_username: dave-bootcamps
+      user_street_address: 5 Padded Street
+      user_address_city:
+      user_address_postal_code:
 - name: test_afact_learner_courserun_progress_status_and_needs_attention
   description: >
     Pins completion_status and needs_attention_since, one learner per case.
