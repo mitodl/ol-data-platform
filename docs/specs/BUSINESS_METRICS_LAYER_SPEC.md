@@ -326,7 +326,7 @@ metric:                         # OpenMetadata CreateMetric body
   reviewers: [{type: team, name: <team>}]
   tags:
     - {tagFQN: <glossary>.<term>, source: Glossary, labelType: Manual, state: Confirmed}
-status: Approved                # entityStatus; applied by PATCH, not part of CreateMetric
+status: Approved                # Draft or Approved; applied by PATCH, not part of CreateMetric
 implemented_by:
   - dbt_model: afact_learner_courserun_progress
     columns: [completion_status]
@@ -344,6 +344,8 @@ implemented_by:
   not build) and the columns that carry the metric. The first entry is the defining
   implementation; later entries are places it is served from.
 - `metricExpression` is optional and is documentation only. The column is the definition.
+- `status` is `Draft` or `Approved`. Approval is the pull request that changes the file
+  (§6, "Status and approval").
 
 ### 5.2 Naming
 
@@ -365,8 +367,9 @@ workflow's path filter. It needs no credentials and no network. Errors:
   named after its metric;
 - `metric` sets a field CreateMetric does not have, or one sync owns (`id`,
   `fullyQualifiedName`);
-- a value in `metric`, or `status`, does not fit the server's schema (a wrong type, a value
-  outside an enum, a nested object missing a required key).
+- a value in `metric` does not fit the server's schema (a wrong type, a value outside an
+  enum, a nested object missing a required key);
+- `status` is anything other than `Draft` or `Approved`.
 
 The schema is not hand-written. `lib/openmetadata_metric_schema.json` is a committed
 snapshot of CreateMetric cut from the server's published OpenAPI document, stamped with the
@@ -424,6 +427,20 @@ bot never wrote is compared with the file. This needs no stored state of our own
 check has to precede the PUT: a PUT that changes a structural field (e.g. `metricType`)
 records the bot as `updatedBy` while the server keeps the human-edited description, and a
 check made afterwards would see the bot and let the PATCH overwrite it.
+
+Status and approval: decided 2026-10-21. A file's `status` is `Draft` or `Approved`, and
+approving the pull request that changes the file approves the metric. The sync bot is not a
+metric reviewer and is not made one. In 2.0.5 only a move from In Review to Approved or
+Rejected checks that the updater is a reviewer (`EntityUpdater.updateEntityStatus`,
+`checkUpdatedByReviewer`). Draft to Approved and any move out of Unprocessed, where a sync
+PUT leaves the status (`setDefaultStatus`), are unchecked, so the bot applies a file's
+status without being a reviewer. Reviewers are either all users or exactly one team
+(`validateReviewers`), so the bot could not sit beside a reviewing team. A metric someone
+moves to In Review in the UI is status drift: sync reports it and writes nothing for that
+metric. With `--force`, the PATCH to Approved fails with a 403 ("User '<bot>' is not a
+reviewer") when the metric has reviewers, and sync reports that metric as failed, carries on
+with the rest, and exits non-zero. A forced run that also PUTs a structural change resets the
+status to Unprocessed first and so does not hit the check.
 
 Descriptions: the server stores `DescriptionSanitizer.sanitize(description)` on create, PUT
 and PATCH, which HTML-encodes text (`'` as `&#39;`, `"` as `&#34;`), so sync compares
@@ -506,9 +523,11 @@ Nothing here blocks phase 1.
   because CreateMetric has no status and `setDefaultStatus` fills it, which is why sync
   PUTs only for a structural change and then PATCHes the status back. A PUT merges tags
   and never removes one (`updateTags`).
-- Approval workflow: none of the workflow definitions 2.0.5 seeds triggers on `metric`
-  (only glossaryTerm, recognizerFeedback and AI assets), so creating a Metric with
-  reviewers does not set its status. When a metric has reviewers, only one of them may move it
-  from In Review to Approved or Rejected (`updateEntityStatus`), so a sync bot that is not
-  a reviewer fails that PATCH. Whether a custom workflow on our server targets metrics is
-  not checked.
+- Approval workflow: decided 2026-10-21 (§6, "Status and approval"). Approval is the pull
+  request; files set only Draft or Approved, and the sync bot is not a reviewer. None of the
+  workflow definitions 2.0.5 seeds triggers on `metric` (only glossaryTerm,
+  recognizerFeedback and AI assets), so creating a Metric with reviewers does not set its
+  status. Still unchecked: whether a custom workflow on our server targets metrics, and
+  whether Deprecated (or Archived) should become settable from a file when a metric is
+  retired. Neither the reviewer 403 nor the PUT's reset to Unprocessed has been observed on a
+  server.

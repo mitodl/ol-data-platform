@@ -22,7 +22,7 @@ metric:                         # an OpenMetadata CreateMetric body
   reviewers: [{type: team, name: <business team>}]
   tags:
   - {tagFQN: <glossary>.<term>, source: Glossary, labelType: Manual, state: Confirmed}
-status: Draft                   # entityStatus; applied by PATCH, not part of CreateMetric
+status: Draft                   # Draft or Approved; applied by PATCH, not part of CreateMetric
 implemented_by:
 - dbt_model: afact_learner_courserun_progress
   columns: [completion_status]
@@ -32,10 +32,10 @@ implemented_by:
 
 `metric` uses OpenMetadata's field names, so the file needs no translation. The
 fields it may set, their shapes and their enum values (`metricType`,
-`unitOfMeasurement`, `granularity`, `status`, ...) are the server's own: see
+`unitOfMeasurement`, `granularity`, ...) are the server's own: see
 `CreateMetric` in
 `src/ol_dbt_cli/ol_dbt_cli/lib/openmetadata_metric_schema.json`, a snapshot of
-the request schema our OpenMetadata publishes. Two differences from that
+the request schema our OpenMetadata publishes. The differences from that
 schema:
 
 - `owners` and `reviewers` are `{type: team | user, name: ...}`. OpenMetadata
@@ -48,6 +48,8 @@ schema:
   metric has in OpenMetadata.
 - `domains`, `dataProducts` and `extension` are not allowed: a bot's PUT does
   not change them on an existing metric, so a file change would never land.
+- `status` takes only `Draft` or `Approved` of the server's statuses (see
+  "Status and approval").
 
 A glossary term is a `tags` entry with `source: Glossary`. `metricExpression`
 is documentation only.
@@ -57,6 +59,30 @@ carry the metric. The first entry is the defining implementation; later entries
 are places it is served from, e.g. a StarRocks view that selects the column.
 An entry may instead give an `fqn` (with a `type`, default `table`) for an
 OpenMetadata entity dbt does not build. CI cannot check those.
+
+## Status and approval
+
+`status` is `Draft` or `Approved`, nothing else. Approval is the pull request
+that changes the file: a reviewer who approves that PR approves the metric, and
+sync then sets `Approved` in OpenMetadata. In Review, Rejected, Deprecated,
+Archived and Unprocessed are not set from files.
+
+The sync bot is not a metric reviewer, and should not be made one. In
+OpenMetadata 2.0.5 only a move from In Review to Approved or Rejected checks
+that the updater is one of the metric's reviewers
+(`EntityUpdater.updateEntityStatus`). Draft to Approved, and any move out of
+Unprocessed (where a sync PUT leaves the status), are not checked, so the bot
+can apply a file's status without being a reviewer. Reviewers are either all
+users or exactly one team (`validateReviewers`), so the bot could not sit
+beside a reviewing team anyway.
+
+When someone moves a metric to In Review in the UI, the next sync reports it as
+drift and exits non-zero without writing that metric. With `--force`, the
+PATCH to Approved fails with OpenMetadata's 403 ("User '<bot>'
+is not a reviewer") when the metric has reviewers; sync reports that metric as
+failed, carries on with the others, and exits non-zero. A forced run that also
+PUTs a structural change does not hit the check, because the PUT resets the
+status to Unprocessed first.
 
 ## Naming
 
@@ -84,8 +110,9 @@ touches `metrics/`, the dbt project or the CLI. It fails when:
 - two files declare the same metric, the name breaks the convention, or the
   file is not named after the metric;
 - `metric` sets a field `CreateMetric` does not have;
-- a value in `metric`, or `status`, does not fit the schema snapshot (a wrong
-  type, a value outside an enum, a nested object missing a required key).
+- a value in `metric` does not fit the schema snapshot (a wrong type, a value
+  outside an enum, a nested object missing a required key);
+- `status` is anything other than `Draft` or `Approved`.
 
 Changing or removing a column that carries a metric therefore means changing
 the metric file in the same PR, where the reviewer sees it.
