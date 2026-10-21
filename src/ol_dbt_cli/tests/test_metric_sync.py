@@ -103,6 +103,8 @@ class FakeOpenMetadata(OpenMetadataClient):
         self.history: dict[str, list[dict[str, Any]]] = {}
         self.lineage: list[dict[str, Any]] = []
         self.calls: list[tuple[str, str]] = []
+        # Metrics whose GET answers 500.
+        self.broken: set[str] = set()
 
     def writes(self) -> list[tuple[str, str]]:
         return [c for c in self.calls if c[0] != "GET"]
@@ -139,6 +141,8 @@ class FakeOpenMetadata(OpenMetadataClient):
                 return {"id": "term-1"}
             case ("GET", "tables", "name", fqn) if unquote(fqn) in self.tables:
                 return {"id": self.tables[unquote(fqn)]}
+            case ("GET", "metrics", "name", name) if name in self.broken:
+                raise OpenMetadataError(f"{method} {path} -> 500: boom", 500)
             case ("GET", "metrics", "name", name) if name in self.metrics:
                 return copy.deepcopy(self.metrics[name])
             case ("GET", "metrics", metric_id, "versions"):
@@ -159,19 +163,31 @@ class FakeOpenMetadata(OpenMetadataClient):
                 return copy.deepcopy(metric)
             case ("PUT", "lineage"):
                 self.lineage.append(body)
-                return {}
+                # LineageResource.addLineage answers 200 with no body.
+                return None
         raise OpenMetadataError(f"{method} {path} -> 404: not found", 404)
+
+    def _related_refs(self, body: dict[str, Any]) -> list[dict[str, Any]]:
+        """Turn CreateMetric's relatedMetrics FQNs into the references the entity holds."""
+        return [
+            {"id": self.metrics[fqn]["id"], "type": "metric", "fullyQualifiedName": fqn}
+            for fqn in body.get("relatedMetrics", [])
+        ]
 
     def _put_metric(self, body: dict[str, Any]) -> dict[str, Any]:
         live = self.metrics.get(body["name"])
         if live is None:
             created = {**copy.deepcopy(body), "id": f"metric-{len(self.metrics) + 1}", "version": 0.1}
+            created["relatedMetrics"] = self._related_refs(body)
             created.update(fullyQualifiedName=body["name"], entityStatus="Unprocessed", updatedBy=BOT)
             created["description"] = _sanitize(body.get("description"))
             self.metrics[body["name"]] = created
             self._record(created)
             return copy.deepcopy(created)
         updated = {**copy.deepcopy(body), "id": live["id"], "fullyQualifiedName": live["fullyQualifiedName"]}
+        # MetricUpdater replaces both relationship lists with the body's.
+        updated["relatedMetrics"] = self._related_refs(body)
+        updated["assets"] = body.get("assets", [])
         # keepsStoredDescription for a bot PUT; otherwise updateDescription sanitizes.
         updated["description"] = live.get("description") or _sanitize(body.get("description"))
         if live.get("owners"):
@@ -393,6 +409,8 @@ def test_owners_reviewers_and_glossary_terms_resolve_by_name(server: FakeOpenMet
     [
         {"reviewers": [{"type": "team", "name": "nobody"}]},
         {"assets": [{"id": "table-1", "type": "table"}]},
+        {"domains": ["Learning"]},
+        {"tags": [{"tagFQN": "Tier.Tier1", "source": "Tier", "labelType": "Manual", "state": "Confirmed"}]},
         {"tags": [{"tagFQN": "Learning.Missing", "source": "Glossary", "labelType": "Manual", "state": "Confirmed"}]},
     ],
 )
@@ -402,6 +420,35 @@ def test_unresolved_name_skips_only_that_metric(
     _edit_file(metrics_dir, "certified_learners", **fields)
     assert _sync(metrics_dir) is True
     assert set(server.metrics) == {"learner_completion_status"}
+
+
+def test_a_failed_read_skips_only_that_metric(server: FakeOpenMetadata, metrics_dir: Path) -> None:
+    server.broken.add("certified_learners")
+    assert _sync(metrics_dir) is True
+    assert set(server.metrics) == {"learner_completion_status"}
+
+
+@pytest.mark.parametrize("file_related", [None, []])
+def test_a_put_keeps_assets_and_the_related_metrics_the_file_does_not_set(
+    server: FakeOpenMetadata, metrics_dir: Path, file_related: list[str] | None
+) -> None:
+    _sync(metrics_dir)
+    metric = server.metrics["certified_learners"]
+    other = server.metrics["learner_completion_status"]
+    metric["assets"] = [{"id": "dashboard-1", "type": "dashboard", "name": "Contract health"}]
+    metric["relatedMetrics"] = [{"id": other["id"], "type": "metric", "fullyQualifiedName": other["name"]}]
+    fields: dict[str, Any] = {"metricType": "SUM"}
+    if file_related is not None:
+        fields["relatedMetrics"] = file_related
+    _edit_file(metrics_dir, "certified_learners", **fields)
+    assert _sync(metrics_dir, names=("certified_learners",)) is False
+    metric = server.metrics["certified_learners"]
+    assert metric["metricType"] == "SUM"
+    assert metric["assets"] == [{"id": "dashboard-1", "type": "dashboard"}]
+    # An explicit empty list in the file clears them.
+    assert [r["fullyQualifiedName"] for r in metric["relatedMetrics"]] == (
+        [] if file_related == [] else ["learner_completion_status"]
+    )
 
 
 def test_version_mismatch_stops_before_the_first_file(server: FakeOpenMetadata, metrics_dir: Path) -> None:
@@ -426,6 +473,8 @@ def test_structural_changes_ignore_server_keys_and_extra_tags() -> None:
     # A field the file dropped is cleared by the PUT, so it counts.
     assert structural_changes(body, {**live, "granularity": "DAY"}) == ["granularity"]
     assert structural_changes({**body, "metricType": "SUM"}, live) == ["metricType"]
+    # A property the file dropped from a measure stays on the server unless the PUT replaces it.
+    assert structural_changes({**body, "measures": [{"name": "a"}]}, live) == ["measures"]
 
 
 def test_descriptions_compare_after_the_server_encoding_is_undone() -> None:
@@ -448,7 +497,7 @@ class _Response(io.BytesIO):
         self.close()
 
 
-def test_client_sends_json_patch_and_maps_404_to_none(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_client_sends_json_patch_maps_404_to_none_and_reads_an_empty_body(monkeypatch: pytest.MonkeyPatch) -> None:
     sent: list[Any] = []
 
     def fake_open(req: Any, timeout: int) -> _Response:
@@ -457,6 +506,8 @@ def test_client_sends_json_patch_and_maps_404_to_none(monkeypatch: pytest.Monkey
             raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, io.BytesIO(b"{}"))  # type: ignore[arg-type]
         if req.full_url.endswith("/broken"):
             raise urllib.error.HTTPError(req.full_url, 500, "Error", {}, io.BytesIO(b"boom"))  # type: ignore[arg-type]
+        if req.full_url.endswith("/lineage"):
+            return _Response(b"")
         return _Response(b'{"ok": true}')
 
     monkeypatch.setattr(openmetadata._OPENER, "open", fake_open)
@@ -471,3 +522,4 @@ def test_client_sends_json_patch_and_maps_404_to_none(monkeypatch: pytest.Monkey
     assert sent[-1].get_header("Content-type") == "application/json-patch+json"
     assert sent[-1].get_header("Authorization") == "Bearer token"
     assert json.loads(sent[-1].data) == ops
+    assert client.request("PUT", "/v1/lineage", {"edge": {}}) is None

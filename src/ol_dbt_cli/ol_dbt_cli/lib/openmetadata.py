@@ -80,7 +80,7 @@ class OpenMetadataClient:
         query: dict[str, str] | None = None,
         content_type: str = "application/json",
     ) -> Any:
-        """Send one request and return the decoded JSON response.
+        """Send one request and return the decoded JSON response, or ``None`` when the body is empty.
 
         :raises OpenMetadataError: on any HTTP error status.
         """
@@ -92,10 +92,12 @@ class OpenMetadataClient:
         req = urllib.request.Request(url, data=data, method=method, headers=headers)  # noqa: S310
         try:
             with _OPENER.open(req, timeout=HTTP_TIMEOUT_SECONDS) as resp:
-                return json.loads(resp.read())
+                payload = resp.read()
         except urllib.error.HTTPError as exc:
             msg = f"{method} {path} -> {exc.code}: {exc.read().decode(errors='replace')[:500]}"
             raise OpenMetadataError(msg, exc.code) from exc
+        # PUT /v1/lineage answers 200 with no body (LineageResource.addLineage).
+        return json.loads(payload) if payload else None
 
     def get_or_none(self, path: str, query: dict[str, str] | None = None) -> Any:
         """GET *path*, returning ``None`` when OpenMetadata answers 404."""

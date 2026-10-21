@@ -60,14 +60,20 @@ SCHEMA_VERSION_KEY = "x-openmetadata-version"
 _SCHEMA_REF_PREFIX = "#/components/schemas/"
 _CREATE_METRIC = "CreateMetric"
 _SYNC_OWNED = "`ol-dbt metrics sync` resolves it; remove it."
+# A bot's PUT keeps existing domains and data products and ignores extension
+# changes (EntityUpdater.updateDomains, updateDataProducts, updateExtension in
+# 2.0.5), and sync PATCHes none of them.
+_BOT_PUT_KEEPS = "A bot's PUT does not change it on an existing metric, so a change to it in a file would never land."
 # Fields a file may not set, and why. `assets` is a CreateMetric field, but it
-# takes entity ids, which only exist in the live catalog, and a GET returns it
-# only when asked for, so sync could neither send nor compare it.
+# takes entity ids, which only exist in the live catalog.
 EXCLUDED_FIELDS = {
     "id": _SYNC_OWNED,
     "fullyQualifiedName": _SYNC_OWNED,
     "assets": "It takes catalog ids a file cannot know. List the tables under `implemented_by`; sync links them "
     "by lineage.",
+    "domains": _BOT_PUT_KEEPS,
+    "dataProducts": _BOT_PUT_KEEPS,
+    "extension": _BOT_PUT_KEEPS,
 }
 
 # OpenMetadata references an owner or reviewer by id, which only exists in the

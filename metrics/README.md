@@ -44,7 +44,10 @@ schema:
   OpenMetadata has.
 - `id` and `fullyQualifiedName` belong to sync.
 - `assets` is not allowed: it takes catalog ids a file cannot know. The tables
-  under `implemented_by` become lineage instead.
+  under `implemented_by` become lineage instead. Sync keeps the assets a
+  metric has in OpenMetadata.
+- `domains`, `dataProducts` and `extension` are not allowed: a bot's PUT does
+  not change them on an existing metric, so a file change would never land.
 
 A glossary term is a `tags` entry with `source: Glossary`. `metricExpression`
 is documentation only.

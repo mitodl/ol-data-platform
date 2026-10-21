@@ -10,10 +10,12 @@ and MetricRepository), a PUT to an existing Metric:
   and ``setDefaultStatus`` fills it before the update is compared;
 - replaces reviewers with the body's, so a body without them clears them;
 - merges tags and never removes one (``updateTags``);
-- replaces the metric's own fields (``MetricUpdater.entitySpecificUpdate``).
+- replaces the metric's own fields and its related metrics and assets
+  (``MetricUpdater.entitySpecificUpdate``), so a body without them clears them.
 
 So sync PUTs only to create the metric or change one of its own fields, sends
-the live reviewers when the file does not set any, and then PATCHes
+the live reviewers and related metrics when the file does not set them and the
+live assets always, and then PATCHes
 description, owners, reviewers and status wherever they still differ. An
 unchanged file writes no Metric field; it re-PUTs its lineage edges, which
 the server upserts.
@@ -52,7 +54,7 @@ STATUS_FIELD = "entityStatus"
 # (EntityRepository.setDefaultStatus).
 PUT_DEFAULT_STATUS = "Unprocessed"
 # Fields GET /v1/metrics/name/{fqn} returns only when asked for.
-METRIC_FIELDS = "owners,reviewers,tags,domains,dataProducts,relatedMetrics,extension"
+METRIC_FIELDS = "owners,reviewers,tags,relatedMetrics,assets"
 STARROCKS_TAG = "starrocks"
 TAG_COLLECTIONS = {"Glossary": "glossaryTerms", "Classification": "tags"}
 
@@ -70,8 +72,9 @@ _REPLACED_FIELDS = (
     "measures",
     "filters",
 )
-# CreateMetric names these by FQN; the entity holds references.
-_FQN_LIST_FIELDS = ("relatedMetrics", "domains", "dataProducts")
+# Keys the server derives from others, e.g. a measure's fullyQualifiedName
+# (MetricRepository.setFullyQualifiedName).
+_GENERATED_KEYS = frozenset({"fullyQualifiedName"})
 
 
 @dataclass(frozen=True)
@@ -149,7 +152,9 @@ def create_body(
     :param reviewers: resolved reviewer references, ``[]`` to clear them;
         ``None`` when the file does not set ``reviewers``, in which case the
         live reviewers are sent so the PUT keeps them.
-    :param live: the metric as OpenMetadata has it, or ``None``.
+    :param live: the metric as OpenMetadata has it, or ``None``. Its assets,
+        and its related metrics when the file sets none, are sent so a PUT
+        keeps them.
     """
     body = copy.deepcopy(metric.body)
     if owners is not None:
@@ -158,6 +163,11 @@ def create_body(
         body["reviewers"] = reviewers
     elif live is not None and _live_refs(live.get("reviewers")):
         body["reviewers"] = _live_refs(live.get("reviewers"))
+    if live is not None:
+        if live.get("assets"):
+            body["assets"] = _live_refs(live["assets"])
+        if "relatedMetrics" not in body and live.get("relatedMetrics"):
+            body["relatedMetrics"] = [r["fullyQualifiedName"] for r in live["relatedMetrics"]]
     return body
 
 
@@ -168,12 +178,18 @@ def _tag_key(tag: dict[str, Any]) -> tuple[str, str]:
 def _matches(want: Any, have: Any) -> bool:
     """Whether the live value *have* already says what the file's *want* says.
 
-    The server adds keys of its own (e.g. a measure's fullyQualifiedName), so a
-    mapping matches when every key the file sets matches; a list matches when
-    it pairs off item for item, in any order.
+    A mapping matches when every key the file sets matches and the live value
+    has no other key with a value, except those the server derives; a key the
+    file dropped would otherwise stay on the server. A list matches when it
+    pairs off item for item, in any order.
     """
     if isinstance(want, dict):
-        return isinstance(have, dict) and all(k in have and _matches(v, have[k]) for k, v in want.items())
+        if not isinstance(have, dict):
+            return False
+        dropped = have.keys() - want.keys() - _GENERATED_KEYS
+        return all(have[k] in (None, "", []) for k in dropped) and all(
+            k in have and _matches(v, have[k]) for k, v in want.items()
+        )
     if isinstance(want, list):
         if not isinstance(have, list) or len(want) != len(have):
             return False
@@ -191,14 +207,16 @@ def structural_changes(body: dict[str, Any], live: dict[str, Any]) -> list[str]:
     """List the fields a PUT has to change on *live* to match *body*, leaving out those sync PATCHes."""
     changed = set()
     for key, want in body.items():
-        if key == "name" or key in _PATCHED_FIELDS:
+        # assets is always the live list (create_body).
+        if key in ("name", "assets") or key in _PATCHED_FIELDS:
             continue
         have = live.get(key)
         if key == "tags":
             # A PUT merges tags and never removes one, so only a missing tag is a change.
             if not {_tag_key(t) for t in want} <= {_tag_key(t) for t in have or []}:
                 changed.add(key)
-        elif key in _FQN_LIST_FIELDS:
+        elif key == "relatedMetrics":
+            # CreateMetric names them by FQN; the entity holds references.
             if set(want) != {r["fullyQualifiedName"] for r in have or []}:
                 changed.add(key)
         elif not _matches(want, have):

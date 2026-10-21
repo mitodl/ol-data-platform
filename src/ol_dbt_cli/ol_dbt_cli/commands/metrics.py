@@ -163,7 +163,10 @@ def _sync_one(
         owner_refs = client.named_refs(owners) if owners is not None else None
         reviewer_refs = client.named_refs(reviewers) if reviewers is not None else None
         for tag in metric.body.get("tags", []):
-            collection = TAG_COLLECTIONS[tag["source"]]
+            collection = TAG_COLLECTIONS.get(tag["source"])
+            if collection is None:
+                msg = f"tag {tag['tagFQN']} has source {tag['source']!r}, not {' or '.join(TAG_COLLECTIONS)}"
+                raise ValueError(msg)
             client.request("GET", f"/v1/{collection}/name/{quote_fqn(tag['tagFQN'])}")
         sources, skipped = lineage_sources(metric, manifest, service)
         source_ids = [client.entity_id(s.entity_type, s.fqn) for s in sources]
@@ -176,11 +179,15 @@ def _sync_one(
             "OpenMetadata has no service for"
         )
 
-    live: dict[str, Any] | None = client.get_or_none(_metric_path(metric.name), query={"fields": METRIC_FIELDS})
+    try:
+        live: dict[str, Any] | None = client.get_or_none(_metric_path(metric.name), query={"fields": METRIC_FIELDS})
+        synced = live
+        if live is not None and live.get("updatedBy") != bot:
+            synced = last_synced_version(client.request("GET", f"/v1/metrics/{live['id']}/versions"), bot)
+    except RuntimeError as exc:
+        console.print(f"[bold red]failed[/]    {name}: {escape(str(exc))}")
+        return False
     body = create_body(metric, owner_refs, reviewer_refs, live)
-    synced = live
-    if live is not None and live.get("updatedBy") != bot:
-        synced = last_synced_version(client.request("GET", f"/v1/metrics/{live['id']}/versions"), bot)
     # Before any write: a PUT records the bot as updatedBy, after which a human
     # edit would no longer show as drift.
     found = drift(metric, body, live, synced)
