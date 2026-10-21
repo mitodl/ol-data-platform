@@ -53,8 +53,7 @@ CATEGORY_PROPOSAL_DOMINANT_TAG_COUNT = int(
     os.environ.get("CATEGORY_PROPOSAL_DOMINANT_TAG_COUNT", "3")
 )
 
-# Same reasoning as SUMMARY_MODEL_VERSION/BEDROCK_SUMMARY_MODEL_VERSION
-# (ml.lib.summarize): a model id is only valid for one vendor's API.
+# A model id is only valid for one vendor's API, so Bedrock gets its own.
 CATEGORY_MODEL_VERSION = os.environ.get("CATEGORY_MODEL_VERSION", "claude-haiku-4-5")
 BEDROCK_CATEGORY_MODEL_VERSION = os.environ.get(
     "BEDROCK_CATEGORY_MODEL_VERSION",
@@ -228,9 +227,8 @@ def build_category_label_client(
 ) -> AnthropicCategoryLabelClient | OpenAICategoryLabelClient:
     """Build the client whose model_version comes from run config, else a default.
 
-    Mirrors ml.lib.summarize.build_summary_client's dispatch and
-    model_version/bedrock_model_version split -- same reasoning: Bedrock's model
-    id namespace differs from the plain Anthropic/OpenAI one.
+    Bedrock's model id namespace differs from the plain Anthropic/OpenAI one,
+    hence the model_version/bedrock_model_version split.
     """
     return build_llm_client(
         llm,
