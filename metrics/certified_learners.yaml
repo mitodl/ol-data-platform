@@ -12,15 +12,17 @@ metric:
     once at the contract grain.
 
     The content engagement depth views publish it per course run as
-    certificates_earned. Not the same measure as certified_learners on the
-    monthly engagement trend views, which counts learners whose certificate was
+    certificates_earned. Not the same measure as newly_certified_learners on the
+    monthly engagement trend views (still also published there under its old
+    name, certified_learners), which counts learners whose certificate was
     issued in that month.
   metricType: COUNT
   unitOfMeasurement: COUNT
+  owners: [{type: team, name: data-platform}]
   metricExpression:
     language: SQL
     code: count(distinct case when is_certified then user_fk end)
-status: Approved
+status: Draft
 implemented_by:
 - dbt_model: afact_learner_courserun_progress
   columns: [is_certified]

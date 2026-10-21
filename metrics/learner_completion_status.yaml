@@ -17,13 +17,14 @@ metric:
     are never marked revoked. The population is course enrollments with a
     learner and a course run.
   metricType: OTHER
+  owners: [{type: team, name: data-platform}]
   metricExpression:
     language: SQL
     code: >-
       case when is_certified then 'certified' when is_passing then 'passed'
       when grade_value > 0 or last_active_on is not null then 'in_progress'
       else 'not_started' end
-status: Approved
+status: Draft
 implemented_by:
 - dbt_model: afact_learner_courserun_progress
   columns: [completion_status, is_in_progress, is_not_started]
