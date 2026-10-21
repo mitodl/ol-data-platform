@@ -4,16 +4,8 @@
   {#- Appzi's spacing changes between templates (e.g. "|" table rows), so parsers match text, not spacing. -#}
   {%- set newline = codepoint_char(10) -%}
   {%- set lines_trimmed = regexp_replace_all(body, "'[ \t]*\n[ \t]*'", newline) -%}
-  {#- Only the table layout (a "|" row right above the header, also inside a Zendesk
-      notification) has table rows, and only whole lines of "|" are rows. Any other "|"
-      may be the learner's. -#}
-  {%- set table_rows_removed -%}
-    case
-        when {{ regexp_like(body, "'\|[ \t]*\n\s*Instantly Capture Insightful Customer Feedback'") }}
-            then {{ regexp_replace_all(lines_trimmed, "'(\n\|[ \t|]*)+\n'", newline) }}
-        else {{ lines_trimmed }}
-    end
-  {%- endset -%}
+  {#- Appzi answers are one line, so a line of only "|" is always a table row. -#}
+  {%- set table_rows_removed = regexp_replace_all(lines_trimmed, "'(\n\|[ \t|]*)+\n'", newline) -%}
   {%- set blank_lines_collapsed = regexp_replace_all(
       table_rows_removed, "'\n{3,}'", dbt.concat([newline, newline])
   ) -%}

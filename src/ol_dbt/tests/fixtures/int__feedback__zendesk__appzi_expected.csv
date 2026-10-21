@@ -91,9 +91,4 @@ Page Origin
 |
 
 learner@example.com",unspecified,
-18,"Bug: first paragraph
-
-|
-
-second paragraph",page_url,https://learn.mit.edu/
-20,Bug: The quiz page is blank.,page_url,https://learn.mit.edu/
+18,Bug: The quiz page is blank.,page_url,https://learn.mit.edu/
