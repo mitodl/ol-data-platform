@@ -64,6 +64,8 @@ params:
   order_by_cols:
   - '["cluster_size", false]'
   - '["conversation_date", false]'
+  - '["source", false]'
+  - '["conversation_id", false]'
   order_desc: true
   percent_metric_calculation: row_limit
   percent_metrics: []
