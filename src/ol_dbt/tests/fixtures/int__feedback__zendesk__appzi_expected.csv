@@ -1,0 +1,44 @@
+source_record_ref,text,subject_type,subject_url
+1,Bug: The video does not load.,page_url,https://learn.mit.edu/search?q=supply+chain
+2,"Idea: Use ""list"" here",page_url,https://ocw.mit.edu/newsletter/
+3,Idea,page_url,https://learn.mit.edu/
+4,"Instantly Capture Insightful Customer Feedback
+
+You can respond to learner@example.com by replying to this email
+
+New feedback on Portal MIT Learn / MIT Learn soft launch
+
+from Chrome 140 @ 1280 x 1024 on Desktop, Windows 10
+
+🐞 Bug
+
+ *
+
+What did you find?
+
+ The video does not load.
+
+ *
+
+Page Origin
+
+ learn.mit.edu/search?q=supp[...] (http://kgwv.mjt.lu/lnk/AAAA/2/BBBB/aHR0cHM6Ly9sZWFybi5taXQuZWR1L3NlYXJjaD9xPXN1cHBseStjaGFpbg)
+
+learner@example.com
+
+Check it Out! (http://kgwv.mjt.lu/lnk/AAAA/3/CCCC/aHR0cHM6Ly9wb3J0YWwuYXBwemkuY29tLw)
+
+support@appzi.io",unspecified,
+5,Bug: Sometimes it crashes,page_url,https://learn.mit.edu/
+7,"Thanks, see my feedback below.
+
+&gt; Instantly Capture Insightful Customer Feedback
+
+&gt; 🐞 Bug",unspecified,
+8,My certificate is missing.,unspecified,
+9,,unspecified,
+10,delete my account,unspecified,
+11,I never receive the email,unspecified,
+12,Bug: I cannot type my gender,page_url,https://learn.mit.edu/
+13,Bug: The course cannot be read.,page_url,https://learn.mit.edu/
+14,not working,unspecified,
