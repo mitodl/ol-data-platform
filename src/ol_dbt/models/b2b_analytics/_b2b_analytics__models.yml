@@ -386,23 +386,23 @@ models:
       enrolling_learners, not via its own value.
     config:
       meta:
-        api_description: Course enrollments made this month. A learner who enrolled
-          in six courses counts six times. Withheld when the learner count it is based
-          on is withheld.
+        api_description: Course enrollments made this month that are still active.
+          A learner who enrolled in six courses counts six times. Withheld when the
+          learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
           - enrolling_learners
   - name: enrolling_learners
     description: >
-      Distinct learners who newly enrolled in the month. They are the cohort
-      new_enrollments is attributable to. Enrolling is not activity, so
-      this is not a subset of monthly_active_learners.
+      Distinct learners with an active enrollment created in the month. They
+      are the cohort new_enrollments is attributable to. Enrolling is not
+      activity, so this is not a subset of monthly_active_learners.
     config:
       meta:
-        api_description: Learners who enrolled in at least one course this month.
-          Withheld when too few learners are in the group to report without identifying
-          them.
+        api_description: Learners with at least one course enrollment made this month
+          that is still active. Withheld when too few learners are in the group to
+          report without identifying them.
         cohort:
           role: secondary
           uncontained: true
@@ -439,8 +439,9 @@ models:
       video_watchers.
     config:
       meta:
-        api_description: Videos watched this month, counting every view. Withheld
-          when the learner count it is based on is withheld.
+        api_description: 'Videos watched this month. A video counts once for each
+          day a learner plays it, so replaying it the same day doesn''t add to the
+          total. Withheld when the learner count it is based on is withheld.'
         cohort:
           role: derived
           derived_from:
@@ -464,8 +465,10 @@ models:
       problem_attempters.
     config:
       meta:
-        api_description: Problem attempts this month, counting every attempt. Withheld
-          when the learner count it is based on is withheld.
+        api_description: 'Problems attempted this month. A problem counts once for
+          each day a learner submits an answer to it, so resubmitting it the same
+          day doesn''t add to the total. Withheld when the learner count it is based
+          on is withheld.'
         cohort:
           role: derived
           derived_from:
@@ -681,9 +684,9 @@ models:
     description: Distinct learners with an active enrollment in this course run.
     config:
       meta:
-        api_description: Learners who have ever enrolled in this course run. When
-          too few learners are in the group, the whole row is withheld to avoid identifying
-          them.
+        api_description: Learners whose enrollment in this course run is still active.
+          When too few learners are in the group, the whole row is withheld to avoid
+          identifying them.
         cohort:
           role: primary
   - name: engaged_learners
@@ -712,11 +715,13 @@ models:
           - engaged_learners
   - name: total_videos_watched
     description: >
-      Videos watched, all-time. This is an EVENT count. Floor it via video_watchers.
+      Videos played, all-time (distinct videos per learner per day, summed).
+      This is an EVENT count. Floor it via video_watchers.
     config:
       meta:
-        api_description: Videos watched in this course run, counting every view. Withheld
-          when the learner count it is based on is withheld.
+        api_description: 'Videos watched in this course run. A video counts once for
+          each day a learner plays it, so replaying it the same day doesn''t add to
+          the total. Withheld when the learner count it is based on is withheld.'
         cohort:
           role: derived
           derived_from:
@@ -755,8 +760,10 @@ models:
       problem_attempters.
     config:
       meta:
-        api_description: Problem attempts in this course run, counting every attempt.
-          Withheld when the learner count it is based on is withheld.
+        api_description: 'Problems attempted in this course run. A problem counts
+          once for each day a learner submits an answer to it, so resubmitting it
+          the same day doesn''t add to the total. Withheld when the learner count
+          it is based on is withheld.'
         cohort:
           role: derived
           derived_from:
@@ -779,7 +786,7 @@ models:
       engaged learner, so learners who attempted nothing count as 0.
     config:
       meta:
-        api_description: Average problem attempts per learner who did anything in
+        api_description: Average problems attempted per learner who did anything in
           the course. Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
@@ -1091,23 +1098,23 @@ models:
       enrolling_learners, not via its own value.
     config:
       meta:
-        api_description: Course enrollments made this month. A learner who enrolled
-          in six courses counts six times. Withheld when the learner count it is based
-          on is withheld.
+        api_description: Course enrollments made this month that are still active.
+          A learner who enrolled in six courses counts six times. Withheld when the
+          learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
           - enrolling_learners
   - name: enrolling_learners
     description: >
-      Distinct learners who newly enrolled in the month. They are the cohort
-      new_enrollments is attributable to. Enrolling is not activity, so
-      this is not a subset of monthly_active_learners.
+      Distinct learners with an active enrollment created in the month. They
+      are the cohort new_enrollments is attributable to. Enrolling is not
+      activity, so this is not a subset of monthly_active_learners.
     config:
       meta:
-        api_description: Learners who enrolled in at least one course this month.
-          Withheld when too few learners are in the group to report without identifying
-          them.
+        api_description: Learners with at least one course enrollment made this month
+          that is still active. Withheld when too few learners are in the group to
+          report without identifying them.
         cohort:
           role: secondary
           uncontained: true
@@ -1144,8 +1151,9 @@ models:
       video_watchers.
     config:
       meta:
-        api_description: Videos watched this month, counting every view. Withheld
-          when the learner count it is based on is withheld.
+        api_description: 'Videos watched this month. A video counts once for each
+          day a learner plays it, so replaying it the same day doesn''t add to the
+          total. Withheld when the learner count it is based on is withheld.'
         cohort:
           role: derived
           derived_from:
@@ -1169,8 +1177,10 @@ models:
       problem_attempters.
     config:
       meta:
-        api_description: Problem attempts this month, counting every attempt. Withheld
-          when the learner count it is based on is withheld.
+        api_description: 'Problems attempted this month. A problem counts once for
+          each day a learner submits an answer to it, so resubmitting it the same
+          day doesn''t add to the total. Withheld when the learner count it is based
+          on is withheld.'
         cohort:
           role: derived
           derived_from:
@@ -1300,9 +1310,9 @@ models:
       this contract.
     config:
       meta:
-        api_description: Learners who have ever enrolled in this course run. When
-          too few learners are in the group, the whole row is withheld to avoid identifying
-          them.
+        api_description: Learners whose enrollment in this course run is still active.
+          When too few learners are in the group, the whole row is withheld to avoid
+          identifying them.
         cohort:
           role: primary
   - name: engaged_learners
@@ -1330,12 +1340,14 @@ models:
           - engaged_learners
   - name: total_videos_watched
     description: >
-      Videos watched in this course run, an EVENT count. Floor it via
+      Videos played in this course run (distinct videos per learner per day,
+      summed), an EVENT count. Floor it via
       video_watchers.
     config:
       meta:
-        api_description: Videos watched in this course run, counting every view. Withheld
-          when the learner count it is based on is withheld.
+        api_description: 'Videos watched in this course run. A video counts once for
+          each day a learner plays it, so replaying it the same day doesn''t add to
+          the total. Withheld when the learner count it is based on is withheld.'
         cohort:
           role: derived
           derived_from:
@@ -1376,8 +1388,10 @@ models:
       problem_attempters.
     config:
       meta:
-        api_description: Problem attempts in this course run, counting every attempt.
-          Withheld when the learner count it is based on is withheld.
+        api_description: 'Problems attempted in this course run. A problem counts
+          once for each day a learner submits an answer to it, so resubmitting it
+          the same day doesn''t add to the total. Withheld when the learner count
+          it is based on is withheld.'
         cohort:
           role: derived
           derived_from:
@@ -1400,7 +1414,7 @@ models:
       cohorts, for the same reason as avg_videos_per_engaged_learner.
     config:
       meta:
-        api_description: Average problem attempts per learner who did anything in
+        api_description: Average problems attempted per learner who did anything in
           the course. Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
