@@ -26,6 +26,13 @@
 #   role: measure     computed, and needs no rule beyond the row being published
 #   role: dimension   a key, label or attribute of the grain
 # ol-dbt validate (cohort_policy) holds the declarations of one model together.
+#
+# config.meta.api_description is the description ol-analytics-api publishes for
+# the response field a column feeds, written for an organization's managers
+# rather than for analysts. The API's exposure contract test asserts each field's
+# description equals it, so change the API's wording here first, then copy the
+# exported file into ol-analytics-api. A column the API reads only as a filter
+# (sso_organization_id) has none.
 version: 2
 models:
 - name: mv_b2b_contract_utilization
@@ -39,6 +46,7 @@ models:
       only).
     config:
       meta:
+        api_description: Internal identifier for the organization.
         cohort:
           role: dimension
   - name: sso_organization_id
@@ -54,12 +62,14 @@ models:
     description: Display name of the organization.
     config:
       meta:
+        api_description: The organization's name.
         cohort:
           role: dimension
   - name: contract_pk
     description: Surrogate key of the B2B contract.
     config:
       meta:
+        api_description: Internal identifier for the contract.
         cohort:
           role: dimension
   - name: contract_id
@@ -71,24 +81,28 @@ models:
       dim_contract; a caller holding a contract from mitxonline has this one.
     config:
       meta:
+        api_description: The contract's ID in MITx Online.
         cohort:
           role: dimension
   - name: b2b_contract_name
     description: Display name of the contract.
     config:
       meta:
+        api_description: The contract's name.
         cohort:
           role: dimension
   - name: b2b_contract_is_active
     description: Whether the contract is currently active.
     config:
       meta:
+        api_description: Whether the contract is currently active.
         cohort:
           role: dimension
   - name: b2b_contract_start_date
     description: Contract start date.
     config:
       meta:
+        api_description: When the contract starts. Empty if no start date is set.
         cohort:
           role: dimension
   - name: b2b_contract_end_date
@@ -97,30 +111,40 @@ models:
       mv_b2b_mit_admin_contract_health.
     config:
       meta:
+        api_description: When the contract ends. Empty if it has no end date.
         cohort:
           role: dimension
   - name: seat_limit
     description: b2b_contract_max_learners.
     config:
       meta:
+        api_description: How many seats the contract includes. Empty or zero means
+          unlimited.
         cohort:
           role: dimension
   - name: b2b_contract_membership_type
     description: Contract membership type.
     config:
       meta:
+        api_description: The contract's membership type. Empty if not set.
         cohort:
           role: dimension
   - name: seats_consumed
     description: Distinct learners enrolled in any course run under this contract.
     config:
       meta:
+        api_description: Learners enrolled in at least one course under the contract.
+          When too few learners are in the group, the whole row is withheld to avoid
+          identifying them.
         cohort:
           role: primary
   - name: active_learners
     description: Distinct learners with an active enrollment under this contract.
     config:
       meta:
+        api_description: Learners on the contract whose enrollment is still active.
+          Withheld when too few learners are in the group to report without identifying
+          them.
         cohort:
           role: secondary
           contained_in: seats_consumed
@@ -129,6 +153,7 @@ models:
       to it. Removed once ol-analytics-api and mit-learn read certified_learners.
     config:
       meta:
+        api_description: 'Deprecated: use certified_learners, which this always equals.'
         cohort:
           role: secondary
           contained_in: seats_consumed
@@ -137,6 +162,9 @@ models:
       hold its non-revoked certificate.
     config:
       meta:
+        api_description: Learners on the contract who earned a certificate that hasn't
+          been revoked. Withheld when too few learners are in the group to report
+          without identifying them.
         cohort:
           role: secondary
           contained_in: seats_consumed
@@ -144,12 +172,16 @@ models:
     description: seats_consumed / seat_limit * 100.
     config:
       meta:
+        api_description: Percentage of the contract's seats in use. Empty when the
+          contract has unlimited seats.
         cohort:
           role: measure
   - name: completion_rate_pct
     description: certified_learners / seats_consumed * 100.
     config:
       meta:
+        api_description: Percentage of enrolled learners who earned a certificate.
+          Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -166,6 +198,7 @@ models:
       only).
     config:
       meta:
+        api_description: Internal identifier for the organization.
         cohort:
           role: dimension
   - name: sso_organization_id
@@ -181,12 +214,14 @@ models:
     description: Display name of the organization.
     config:
       meta:
+        api_description: The organization's name.
         cohort:
           role: dimension
   - name: contract_pk
     description: Surrogate key of the B2B contract.
     config:
       meta:
+        api_description: Internal identifier for the contract.
         cohort:
           role: dimension
   - name: contract_id
@@ -198,42 +233,51 @@ models:
       dim_contract; a caller holding a contract from mitxonline has this one.
     config:
       meta:
+        api_description: The contract's ID in MITx Online.
         cohort:
           role: dimension
   - name: b2b_contract_name
     description: Display name of the contract.
     config:
       meta:
+        api_description: The contract's name.
         cohort:
           role: dimension
   - name: courserun_pk
     description: Surrogate key of the course run.
     config:
       meta:
+        api_description: Internal identifier for the course run.
         cohort:
           role: dimension
   - name: courserun_readable_id
     description: Human-readable course run identifier.
     config:
       meta:
+        api_description: The course run's ID, e.g. course-v1:MITxT+14.310x+2T2026.
         cohort:
           role: dimension
   - name: courserun_title
     description: Course run title.
     config:
       meta:
+        api_description: The course's title.
         cohort:
           role: dimension
   - name: enrolled_learners
     description: Distinct learners enrolled in this course run.
     config:
       meta:
+        api_description: Learners enrolled in this course run. When too few learners
+          are in the group, the whole row is withheld to avoid identifying them.
         cohort:
           role: primary
   - name: active_learners
     description: Distinct learners with an active enrollment.
     config:
       meta:
+        api_description: Enrolled learners whose enrollment is still active. Withheld
+          when too few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: enrolled_learners
@@ -241,6 +285,8 @@ models:
     description: Distinct learners with a passing grade.
     config:
       meta:
+        api_description: Enrolled learners with a passing grade. Withheld when too
+          few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: enrolled_learners
@@ -248,6 +294,9 @@ models:
     description: Distinct learners with a non-revoked certificate.
     config:
       meta:
+        api_description: Enrolled learners who earned a certificate that hasn't been
+          revoked. Withheld when too few learners are in the group to report without
+          identifying them.
         cohort:
           role: secondary
           contained_in: enrolled_learners
@@ -255,6 +304,8 @@ models:
     description: active_learners / enrolled_learners * 100.
     config:
       meta:
+        api_description: Percentage of enrolled learners whose enrollment is still
+          active. Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -263,6 +314,8 @@ models:
     description: certified_learners / enrolled_learners * 100.
     config:
       meta:
+        api_description: Percentage of enrolled learners who earned a certificate.
+          Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -283,6 +336,7 @@ models:
       only).
     config:
       meta:
+        api_description: Internal identifier for the organization.
         cohort:
           role: dimension
   - name: sso_organization_id
@@ -297,12 +351,14 @@ models:
     description: Display name of the organization.
     config:
       meta:
+        api_description: The organization's name.
         cohort:
           role: dimension
   - name: activity_year_and_month
     description: The month this row aggregates, as YYYY-MM.
     config:
       meta:
+        api_description: The month, e.g. 2026-08.
         cohort:
           role: dimension
   - name: monthly_active_learners
@@ -312,6 +368,10 @@ models:
       Enrolling or being issued a certificate does not count as activity.
     config:
       meta:
+        api_description: 'Learners who did course work this month: watched a video,
+          attempted a problem, posted in a discussion, used the chatbot or moved through
+          course pages. Enrolling or earning a certificate alone doesn''t count. Withheld
+          when too few learners are in the group to report without identifying them.'
         cohort:
           role: secondary
           uncontained: true
@@ -322,6 +382,9 @@ models:
       enrolling_learners, not via its own value.
     config:
       meta:
+        api_description: Course enrollments made this month. A learner who enrolled
+          in six courses counts six times. Withheld when the learner count it is based
+          on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -333,6 +396,9 @@ models:
       this is not a subset of monthly_active_learners.
     config:
       meta:
+        api_description: Learners who enrolled in at least one course this month.
+          Withheld when too few learners are in the group to report without identifying
+          them.
         cohort:
           role: secondary
           uncontained: true
@@ -343,6 +409,8 @@ models:
       certified_learners.
     config:
       meta:
+        api_description: Certificates earned this month. A learner who earned two
+          counts twice. Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -354,6 +422,9 @@ models:
       monthly_active_learners.
     config:
       meta:
+        api_description: Learners who earned at least one certificate this month.
+          Withheld when too few learners are in the group to report without identifying
+          them.
         cohort:
           role: secondary
           uncontained: true
@@ -364,6 +435,8 @@ models:
       video_watchers.
     config:
       meta:
+        api_description: Videos watched this month, counting every view. Withheld
+          when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -375,6 +448,8 @@ models:
       monthly_active_learners.
     config:
       meta:
+        api_description: Learners who watched at least one video this month. Withheld
+          when too few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: monthly_active_learners
@@ -385,6 +460,8 @@ models:
       problem_attempters.
     config:
       meta:
+        api_description: Problem attempts this month, counting every attempt. Withheld
+          when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -395,6 +472,8 @@ models:
       cohort total_problems_attempted is attributable to.
     config:
       meta:
+        api_description: Learners who attempted at least one problem this month. Withheld
+          when too few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: monthly_active_learners
@@ -404,6 +483,8 @@ models:
       chatbot_users.
     config:
       meta:
+        api_description: Chatbot interactions this month. Withheld when the learner
+          count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -414,6 +495,8 @@ models:
       total_chatbot_interactions is attributable to.
     config:
       meta:
+        api_description: Learners who used the chatbot this month. Withheld when too
+          few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: monthly_active_learners
@@ -424,6 +507,8 @@ models:
       subset of it, so ol-analytics-api gates the whole row on it.
     config:
       meta:
+        api_description: Learners who did course work, enrolled or earned a certificate
+          this month.
         cohort:
           role: primary
 
@@ -439,6 +524,7 @@ models:
       only).
     config:
       meta:
+        api_description: Internal identifier for the organization.
         cohort:
           role: dimension
   - name: sso_organization_id
@@ -454,12 +540,14 @@ models:
     description: Display name of the organization.
     config:
       meta:
+        api_description: The organization's name.
         cohort:
           role: dimension
   - name: contract_pk
     description: Surrogate key of the B2B contract.
     config:
       meta:
+        api_description: Internal identifier for the contract.
         cohort:
           role: dimension
   - name: contract_id
@@ -471,24 +559,28 @@ models:
       dim_contract; a caller holding a contract from mitxonline has this one.
     config:
       meta:
+        api_description: The contract's ID in MITx Online.
         cohort:
           role: dimension
   - name: b2b_contract_name
     description: Display name of the contract.
     config:
       meta:
+        api_description: The contract's name.
         cohort:
           role: dimension
   - name: program_pk
     description: Surrogate key of the program.
     config:
       meta:
+        api_description: Internal identifier for the program.
         cohort:
           role: dimension
   - name: program_title
     description: Program title.
     config:
       meta:
+        api_description: The program's title.
         cohort:
           role: dimension
   - name: total_courses
@@ -498,18 +590,25 @@ models:
       completion rates aren't understated for partial-program contracts.
     config:
       meta:
+        api_description: Courses in the program that the contract covers.
         cohort:
           role: dimension
   - name: enrolled_in_contract_courses
     description: Learners enrolled in any contract course belonging to this program.
     config:
       meta:
+        api_description: Learners enrolled in at least one of the program's courses
+          under the contract. When too few learners are in the group, the whole row
+          is withheld to avoid identifying them.
         cohort:
           role: primary
   - name: enrolled_via_program
     description: Learners who explicitly enrolled via the program pathway (tfact_enrollment.program_fk).
     config:
       meta:
+        api_description: Of those learners, how many enrolled in the program itself
+          rather than directly in one of its courses. Withheld when too few learners
+          are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: enrolled_in_contract_courses
@@ -518,6 +617,10 @@ models:
       program (approximation).
     config:
       meta:
+        api_description: Learners who earned a certificate in at least one of the
+          program's courses under the contract. This isn't the same as completing
+          the whole program. Withheld when too few learners are in the group to report
+          without identifying them.
         cohort:
           role: secondary
           contained_in: enrolled_in_contract_courses
@@ -538,6 +641,7 @@ models:
       only).
     config:
       meta:
+        api_description: Internal identifier for the organization.
         cohort:
           role: dimension
   - name: sso_organization_id
@@ -552,24 +656,30 @@ models:
     description: Display name of the organization.
     config:
       meta:
+        api_description: The organization's name.
         cohort:
           role: dimension
   - name: courserun_readable_id
     description: Human-readable course run identifier.
     config:
       meta:
+        api_description: The course run's ID, e.g. course-v1:MITxT+14.310x+2T2026.
         cohort:
           role: dimension
   - name: courserun_title
     description: Course run title.
     config:
       meta:
+        api_description: The course's title.
         cohort:
           role: dimension
   - name: total_enrolled_learners
     description: Distinct learners with an active enrollment in this course run.
     config:
       meta:
+        api_description: Learners who have ever enrolled in this course run. When
+          too few learners are in the group, the whole row is withheld to avoid identifying
+          them.
         cohort:
           role: primary
   - name: engaged_learners
@@ -579,6 +689,10 @@ models:
       denominator of both avg_* columns and of engagement_rate_pct.
     config:
       meta:
+        api_description: 'Enrolled learners who did anything in the course: watched
+          a video, attempted a problem, posted in a discussion, used the chatbot or
+          moved through course pages. Withheld when too few learners are in the group
+          to report without identifying them.'
         cohort:
           role: secondary
           contained_in: total_enrolled_learners
@@ -586,6 +700,8 @@ models:
     description: engaged_learners / total_enrolled_learners * 100.
     config:
       meta:
+        api_description: Percentage of enrolled learners who did anything in the course.
+          Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -595,6 +711,8 @@ models:
       Videos watched, all-time. This is an EVENT count. Floor it via video_watchers.
     config:
       meta:
+        api_description: Videos watched in this course run, counting every view. Withheld
+          when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -606,6 +724,9 @@ models:
       engaged_learners.
     config:
       meta:
+        api_description: Learners who watched at least one video in this course run.
+          Withheld when too few learners are in the group to report without identifying
+          them.
         cohort:
           role: secondary
           contained_in: engaged_learners
@@ -615,6 +736,8 @@ models:
       learner, so learners who watched nothing count as 0.
     config:
       meta:
+        api_description: Average videos watched per learner who did anything in the
+          course. Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -628,6 +751,8 @@ models:
       problem_attempters.
     config:
       meta:
+        api_description: Problem attempts in this course run, counting every attempt.
+          Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -638,6 +763,9 @@ models:
       cohort total_problems_attempted is attributable to.
     config:
       meta:
+        api_description: Learners who attempted at least one problem in this course
+          run. Withheld when too few learners are in the group to report without identifying
+          them.
         cohort:
           role: secondary
           contained_in: engaged_learners
@@ -647,6 +775,8 @@ models:
       engaged learner, so learners who attempted nothing count as 0.
     config:
       meta:
+        api_description: Average problem attempts per learner who did anything in
+          the course. Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -658,6 +788,8 @@ models:
       chatbot_users.
     config:
       meta:
+        api_description: Chatbot interactions in this course run. Withheld when the
+          learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -668,6 +800,8 @@ models:
       total_chatbot_interactions is attributable to.
     config:
       meta:
+        api_description: Learners who used the chatbot in this course run. Withheld
+          when too few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: engaged_learners
@@ -675,6 +809,8 @@ models:
     description: chatbot_users / total_enrolled_learners * 100.
     config:
       meta:
+        api_description: Percentage of enrolled learners who used the chatbot. Withheld
+          when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -696,6 +832,8 @@ models:
       holders.
     config:
       meta:
+        api_description: Certificates earned in this course run. Withheld when too
+          few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: total_enrolled_learners
@@ -714,6 +852,7 @@ models:
       only).
     config:
       meta:
+        api_description: Internal identifier for the organization.
         cohort:
           role: dimension
   - name: sso_organization_id
@@ -729,12 +868,14 @@ models:
     description: Display name of the organization.
     config:
       meta:
+        api_description: The organization's name.
         cohort:
           role: dimension
   - name: contract_pk
     description: Surrogate key of the B2B contract.
     config:
       meta:
+        api_description: Internal identifier for the contract.
         cohort:
           role: dimension
   - name: contract_id
@@ -746,12 +887,14 @@ models:
       dim_contract; a caller holding a contract from mitxonline has this one.
     config:
       meta:
+        api_description: The contract's ID in MITx Online.
         cohort:
           role: dimension
   - name: b2b_contract_name
     description: Display name of the contract.
     config:
       meta:
+        api_description: The contract's name.
         cohort:
           role: dimension
   - name: b2b_contract_is_active
@@ -760,12 +903,14 @@ models:
       health_status.
     config:
       meta:
+        api_description: Whether the contract is currently active.
         cohort:
           role: dimension
   - name: b2b_contract_start_date
     description: Contract start date.
     config:
       meta:
+        api_description: When the contract starts. Empty if no start date is set.
         cohort:
           role: dimension
   - name: b2b_contract_end_date
@@ -773,30 +918,40 @@ models:
       Contract end date. It drives the at_risk 90-day window.
     config:
       meta:
+        api_description: When the contract ends. Empty if it has no end date.
         cohort:
           role: dimension
   - name: seat_limit
     description: b2b_contract_max_learners.
     config:
       meta:
+        api_description: How many seats the contract includes. Empty or zero means
+          unlimited.
         cohort:
           role: dimension
   - name: b2b_contract_membership_type
     description: Contract membership type.
     config:
       meta:
+        api_description: The contract's membership type. Empty if not set.
         cohort:
           role: dimension
   - name: seats_consumed
     description: Distinct learners enrolled in any course run under this contract.
     config:
       meta:
+        api_description: Learners enrolled in at least one course under the contract.
+          When too few learners are in the group, the whole row is withheld to avoid
+          identifying them.
         cohort:
           role: primary
   - name: active_learners
     description: Distinct learners with an active enrollment under this contract.
     config:
       meta:
+        api_description: Learners on the contract whose enrollment is still active.
+          Withheld when too few learners are in the group to report without identifying
+          them.
         cohort:
           role: secondary
           contained_in: seats_consumed
@@ -804,6 +959,9 @@ models:
     description: Distinct learners holding a non-revoked certificate under this contract.
     config:
       meta:
+        api_description: Learners on the contract who earned a certificate that hasn't
+          been revoked. Withheld when too few learners are in the group to report
+          without identifying them.
         cohort:
           role: secondary
           contained_in: seats_consumed
@@ -811,12 +969,16 @@ models:
     description: seats_consumed / seat_limit * 100.
     config:
       meta:
+        api_description: Percentage of the contract's seats in use. Empty when the
+          contract has unlimited seats.
         cohort:
           role: measure
   - name: completion_rate_pct
     description: certified_learners / seats_consumed * 100.
     config:
       meta:
+        api_description: Percentage of enrolled learners who earned a certificate.
+          Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -828,6 +990,10 @@ models:
       (utilization >= 50% and not at_risk), early_stage (everything else).
     config:
       meta:
+        api_description: 'Overall contract health: inactive (the contract isn''t active),
+          high_utilization (90% or more of seats in use), at_risk (under 25% of seats
+          in use and the contract ends within 90 days), healthy (50% or more of seats
+          in use), or early_stage (anything else).'
         cohort:
           role: measure
 - name: mv_b2b_contract_monthly_engagement_trend
@@ -850,6 +1016,7 @@ models:
       only).
     config:
       meta:
+        api_description: Internal identifier for the organization.
         cohort:
           role: dimension
   - name: sso_organization_id
@@ -864,12 +1031,14 @@ models:
     description: Display name of the organization.
     config:
       meta:
+        api_description: The organization's name.
         cohort:
           role: dimension
   - name: contract_pk
     description: Surrogate key of the B2B contract.
     config:
       meta:
+        api_description: Internal identifier for the contract.
         cohort:
           role: dimension
   - name: contract_id
@@ -879,18 +1048,21 @@ models:
       ol-analytics-api filters contracts on.
     config:
       meta:
+        api_description: The contract's ID in MITx Online.
         cohort:
           role: dimension
   - name: b2b_contract_name
     description: Display name of the contract.
     config:
       meta:
+        api_description: The contract's name.
         cohort:
           role: dimension
   - name: activity_year_and_month
     description: The month this row aggregates, as YYYY-MM.
     config:
       meta:
+        api_description: The month, e.g. 2026-08.
         cohort:
           role: dimension
   - name: monthly_active_learners
@@ -901,6 +1073,10 @@ models:
       in both rows, so contract rows do not partition the org's learner count.
     config:
       meta:
+        api_description: 'Learners who did course work this month: watched a video,
+          attempted a problem, posted in a discussion, used the chatbot or moved through
+          course pages. Enrolling or earning a certificate alone doesn''t count. Withheld
+          when too few learners are in the group to report without identifying them.'
         cohort:
           role: secondary
           uncontained: true
@@ -911,6 +1087,9 @@ models:
       enrolling_learners, not via its own value.
     config:
       meta:
+        api_description: Course enrollments made this month. A learner who enrolled
+          in six courses counts six times. Withheld when the learner count it is based
+          on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -922,6 +1101,9 @@ models:
       this is not a subset of monthly_active_learners.
     config:
       meta:
+        api_description: Learners who enrolled in at least one course this month.
+          Withheld when too few learners are in the group to report without identifying
+          them.
         cohort:
           role: secondary
           uncontained: true
@@ -932,6 +1114,8 @@ models:
       certified_learners.
     config:
       meta:
+        api_description: Certificates earned this month. A learner who earned two
+          counts twice. Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -943,6 +1127,9 @@ models:
       monthly_active_learners.
     config:
       meta:
+        api_description: Learners who earned at least one certificate this month.
+          Withheld when too few learners are in the group to report without identifying
+          them.
         cohort:
           role: secondary
           uncontained: true
@@ -953,6 +1140,8 @@ models:
       video_watchers.
     config:
       meta:
+        api_description: Videos watched this month, counting every view. Withheld
+          when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -964,6 +1153,8 @@ models:
       monthly_active_learners.
     config:
       meta:
+        api_description: Learners who watched at least one video this month. Withheld
+          when too few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: monthly_active_learners
@@ -974,6 +1165,8 @@ models:
       problem_attempters.
     config:
       meta:
+        api_description: Problem attempts this month, counting every attempt. Withheld
+          when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -984,6 +1177,8 @@ models:
       cohort total_problems_attempted is attributable to.
     config:
       meta:
+        api_description: Learners who attempted at least one problem this month. Withheld
+          when too few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: monthly_active_learners
@@ -993,6 +1188,8 @@ models:
       chatbot_users.
     config:
       meta:
+        api_description: Chatbot interactions this month. Withheld when the learner
+          count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -1003,6 +1200,8 @@ models:
       total_chatbot_interactions is attributable to.
     config:
       meta:
+        api_description: Learners who used the chatbot this month. Withheld when too
+          few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: monthly_active_learners
@@ -1013,6 +1212,8 @@ models:
       subset of it, so ol-analytics-api gates the whole row on it.
     config:
       meta:
+        api_description: Learners who did course work, enrolled or earned a certificate
+          this month.
         cohort:
           role: primary
 - name: mv_b2b_contract_content_engagement_depth
@@ -1034,6 +1235,7 @@ models:
       only).
     config:
       meta:
+        api_description: Internal identifier for the organization.
         cohort:
           role: dimension
   - name: sso_organization_id
@@ -1048,12 +1250,14 @@ models:
     description: Display name of the organization.
     config:
       meta:
+        api_description: The organization's name.
         cohort:
           role: dimension
   - name: contract_pk
     description: Surrogate key of the B2B contract.
     config:
       meta:
+        api_description: Internal identifier for the contract.
         cohort:
           role: dimension
   - name: contract_id
@@ -1063,24 +1267,28 @@ models:
       ol-analytics-api filters contracts on.
     config:
       meta:
+        api_description: The contract's ID in MITx Online.
         cohort:
           role: dimension
   - name: b2b_contract_name
     description: Display name of the contract.
     config:
       meta:
+        api_description: The contract's name.
         cohort:
           role: dimension
   - name: courserun_readable_id
     description: Course run identifier (e.g. course-v1:MITx+6.00+2026).
     config:
       meta:
+        api_description: The course run's ID, e.g. course-v1:MITxT+14.310x+2T2026.
         cohort:
           role: dimension
   - name: courserun_title
     description: Display title of the course run.
     config:
       meta:
+        api_description: The course's title.
         cohort:
           role: dimension
   - name: total_enrolled_learners
@@ -1088,6 +1296,9 @@ models:
       this contract.
     config:
       meta:
+        api_description: Learners who have ever enrolled in this course run. When
+          too few learners are in the group, the whole row is withheld to avoid identifying
+          them.
         cohort:
           role: primary
   - name: engaged_learners
@@ -1096,6 +1307,10 @@ models:
       activity in this course run. A certificate alone does not count.
     config:
       meta:
+        api_description: 'Enrolled learners who did anything in the course: watched
+          a video, attempted a problem, posted in a discussion, used the chatbot or
+          moved through course pages. Withheld when too few learners are in the group
+          to report without identifying them.'
         cohort:
           role: secondary
           contained_in: total_enrolled_learners
@@ -1103,6 +1318,8 @@ models:
     description: engaged_learners as a percentage of total_enrolled_learners.
     config:
       meta:
+        api_description: Percentage of enrolled learners who did anything in the course.
+          Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -1113,6 +1330,8 @@ models:
       video_watchers.
     config:
       meta:
+        api_description: Videos watched in this course run, counting every view. Withheld
+          when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -1124,6 +1343,9 @@ models:
       engaged_learners.
     config:
       meta:
+        api_description: Learners who watched at least one video in this course run.
+          Withheld when too few learners are in the group to report without identifying
+          them.
         cohort:
           role: secondary
           contained_in: engaged_learners
@@ -1135,6 +1357,8 @@ models:
       published engaged_learners recovers the total.
     config:
       meta:
+        api_description: Average videos watched per learner who did anything in the
+          course. Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -1148,6 +1372,8 @@ models:
       problem_attempters.
     config:
       meta:
+        api_description: Problem attempts in this course run, counting every attempt.
+          Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -1158,6 +1384,9 @@ models:
       total_problems_attempted is attributable to.
     config:
       meta:
+        api_description: Learners who attempted at least one problem in this course
+          run. Withheld when too few learners are in the group to report without identifying
+          them.
         cohort:
           role: secondary
           contained_in: engaged_learners
@@ -1167,6 +1396,8 @@ models:
       cohorts, for the same reason as avg_videos_per_engaged_learner.
     config:
       meta:
+        api_description: Average problem attempts per learner who did anything in
+          the course. Withheld when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -1178,6 +1409,8 @@ models:
       chatbot_users.
     config:
       meta:
+        api_description: Chatbot interactions in this course run. Withheld when the
+          learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -1188,6 +1421,8 @@ models:
       total_chatbot_interactions is attributable to.
     config:
       meta:
+        api_description: Learners who used the chatbot in this course run. Withheld
+          when too few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: engaged_learners
@@ -1195,6 +1430,8 @@ models:
     description: chatbot_users as a percentage of total_enrolled_learners.
     config:
       meta:
+        api_description: Percentage of enrolled learners who used the chatbot. Withheld
+          when the learner count it is based on is withheld.
         cohort:
           role: derived
           derived_from:
@@ -1216,6 +1453,8 @@ models:
       holders.
     config:
       meta:
+        api_description: Certificates earned in this course run. Withheld when too
+          few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: total_enrolled_learners
