@@ -8,7 +8,7 @@ with micromasters_course_keys as (
 
 , mitxonline_program_requirements as (
     select
-        program_id
+        cast(program_id as varchar) as program_id
         , course_id
         , cast(null as varchar) as course_readable_id
         -- An elective is one option in a "choose N of M" set, so it is not required on its
@@ -24,7 +24,7 @@ with micromasters_course_keys as (
 
 , mitxpro_program_requirements as (
     select
-        program_id
+        cast(program_id as varchar) as program_id
         , course_id
         , cast(null as varchar) as course_readable_id
         -- xPRO programs have no elective sets: every course in one is required.
@@ -42,7 +42,7 @@ with micromasters_course_keys as (
     -- program→course membership (not which elective set), deduplicate here. A course is
     -- either Core or Elective in a program, never both, so the flag survives the distinct.
     select distinct
-        r.program_id
+        cast(r.program_id as varchar) as program_id
         , cast(null as integer) as course_id  -- MicroMasters uses readable_id path
         , ck.course_readable_id
         , r.programrequirement_type = 'Core' as is_required
@@ -54,12 +54,35 @@ with micromasters_course_keys as (
     inner join micromasters_course_keys ck on r.course_id = ck.course_id
 )
 
+, edxorg_program_requirements as (
+    -- Preserve edX.org program memberships not already represented by MITx Online or
+    -- MicroMasters requirements. Normalize the API course key to the edX.org course key.
+    select
+        cast(program_courses.program_uuid as varchar) as program_id
+        , cast(null as integer) as course_id
+        , coalesce(mitx_courses.course_readable_id, program_courses.course_readable_id) as course_readable_id
+        , true as is_required
+        , 'edxorg' as platform
+        , 'edxorg' as platform_code
+        , cast(null as integer) as course_order
+    from {{ ref('int__edxorg__mitx_program_courses') }} as program_courses
+    left join {{ ref('int__mitx__programs') }} as mitx_programs
+        on program_courses.program_name = mitx_programs.program_title
+    left join {{ ref('int__mitx__courses') }} as mitx_courses
+        on
+            replace(program_courses.course_readable_id, 'MITx/', '')
+            = replace(mitx_courses.course_readable_id, 'course-v1:MITxT+', '')
+    where mitx_programs.program_title is null
+)
+
 , combined_requirements as (
     select * from mitxonline_program_requirements
     union all
     select * from mitxpro_program_requirements
     union all
     select * from micromasters_requirements
+    union all
+    select * from edxorg_program_requirements
 )
 
 -- Join to dimensions to get FKs
@@ -92,6 +115,10 @@ with micromasters_course_keys as (
                 and combined_requirements.platform_code = dim_course.primary_platform)
             -- MicroMasters path: courses run on edxorg; match on readable_id scoped to edxorg
             or (combined_requirements.platform_code = 'micromasters'
+                and combined_requirements.course_readable_id = dim_course.course_readable_id
+                and dim_course.primary_platform = 'edxorg')
+            -- Other edX.org MITx programs use API course keys normalized above
+            or (combined_requirements.platform_code = 'edxorg'
                 and combined_requirements.course_readable_id = dim_course.course_readable_id
                 and dim_course.primary_platform = 'edxorg')
         )
