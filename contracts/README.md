@@ -57,7 +57,7 @@ count it as a failure, so the contract still shows Success in OpenMetadata
 (`DataContractRepository.validateSchemaFieldsAgainstEntity`). The `ol-dbt
 contracts` commands fail on it; OpenMetadata's own status and alerts won't.
 
-OpenMetadata 2.0.2 stores `sla` but never evaluates it, so for a `dbt_model`
+OpenMetadata 2.0.5 stores `sla` but never evaluates it, so for a `dbt_model`
 contract the lakehouse code location builds the model's Dagster freshness check
 from it: the check fails once the table's last update is older than
 `refreshFrequency` plus `maxLatency` (a month counts as 31 days, a year as 366).
