@@ -21,14 +21,16 @@ from anthropic import Anthropic, AnthropicBedrock, APIError
 from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
 from ml.lib.courseware.schemas import ScopeExtraction
 from ml.lib.courseware.scopes import Scope
+from ml.lib.courseware.tracing import TRACE_TAGS, attach_call
 from ml.lib.courseware.verify import verify_passage
+from ml.resources.opik_auth import traced
 from pydantic import BaseModel, ValidationError
 
 log = logging.getLogger(__name__)
 
 EXTRACTOR_ID = "courseware_claims_v1"
-DEFAULT_MODEL = "claude-opus-5-5"
-BEDROCK_DEFAULT_MODEL = "us.anthropic.claude-opus-5-5"
+DEFAULT_MODEL = "claude-haiku-5-5"
+BEDROCK_DEFAULT_MODEL = "us.anthropic.claude-haiku-5-5"
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 DEFAULT_EFFORT: Effort = "medium"
 # Streaming, so the SDK's HTTP timeout does not bound long outputs.
@@ -162,8 +164,18 @@ class _ModelResult:
     cache_creation_input_tokens: int
 
 
+@traced(
+    "courseware_extract_scope",
+    tags=TRACE_TAGS,
+    ignore_arguments=["client", "trace_metadata"],
+)
 def call_model(
-    client: Anthropic | AnthropicBedrock, model_id: str, effort: Effort, message: str
+    client: Anthropic | AnthropicBedrock,
+    model_id: str,
+    effort: Effort,
+    message: str,
+    *,
+    trace_metadata: dict[str, Any],
 ) -> _ModelResult:
     """Ask for one scope's extraction as a record_extraction tool call.
 
@@ -173,9 +185,12 @@ def call_model(
     prompt asks for it, and the input is validated here. The system prompt is the
     cached prefix shared by every call.
 
+    :param trace_metadata: what identifies the call on its Opik span
+        (extraction_key and scope)
     :raises ExtractionError: when no attempt returns a valid extraction
     """
     error: Exception | str | None = None
+    usages = []
     for _ in range(ATTEMPTS):
         with client.messages.stream(
             model=model_id,
@@ -193,6 +208,14 @@ def call_model(
             output_config={"effort": effort},
         ) as stream:
             response = stream.get_final_message()
+        usages.append(response.usage)
+        attach_call(
+            client,
+            model_id,
+            usages,
+            template=SYSTEM_PROMPT,
+            metadata=trace_metadata,
+        )
         if response.stop_reason == "refusal":
             msg = f"refused: {response.stop_details}"
             raise ExtractionError(msg)
@@ -357,10 +380,21 @@ def extract_scopes(  # noqa: PLR0913
     extractions, claims, evidence = [], [], []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {
-            pool.submit(call_model, client, model_id, effort, scope_message(scope)): (
-                scope,
-                key,
-            )
+            pool.submit(
+                call_model,
+                client,
+                model_id,
+                effort,
+                scope_message(scope),
+                trace_metadata={
+                    "extraction_key": key,
+                    "prompt_version": PROMPT_VERSION,
+                    "effort": effort,
+                    "platform": scope.course.platform,
+                    "courserun_readable_id": scope.course.courserun_readable_id,
+                    "scope_key": scope.scope_key,
+                },
+            ): (scope, key)
             for scope, key in pending
         }
         for future in as_completed(futures):
