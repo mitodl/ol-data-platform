@@ -464,3 +464,15 @@ def test_summarize_and_checkpoint_raises_when_every_call_fails() -> None:
             (catalog, "some_db.feedback_summaries"),
             max_concurrency=1,
         )
+
+
+def test_fetch_summary_prompt_warns_when_opik_differs_from_the_embedded_copy(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(summarize, "get_prompt", lambda *_args, **_kwargs: PROMPT)
+
+    with caplog.at_level("WARNING", logger="ml.lib.summarize"):
+        prompt = summarize.fetch_summary_prompt()
+
+    assert prompt is PROMPT
+    assert "differs from SUMMARY_PROMPT" in caplog.text

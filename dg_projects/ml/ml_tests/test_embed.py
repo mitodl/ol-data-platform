@@ -358,8 +358,7 @@ def test_build_embedding_client_dispatches_to_bedrock() -> None:
 
 def test_build_embedding_client_honors_bedrock_model_version_override() -> None:
     """model_version is ignored for a Bedrock client -- only bedrock_model_version
-    applies, mirroring build_summary_client's model_version/bedrock_model_version
-    split.
+    applies.
     """
     bedrock_client = boto3.client("bedrock-runtime", region_name="us-east-1")
 
