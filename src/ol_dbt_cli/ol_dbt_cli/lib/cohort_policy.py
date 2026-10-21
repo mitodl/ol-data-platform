@@ -72,17 +72,20 @@ class ColumnCohort(BaseModel):
         return self
 
 
-def column_meta(column: Mapping[str, Any], key: str) -> Any:
+def column_meta(column: Mapping[str, Any], key: str, default: Any = None) -> Any:
     """Return a column's ``key`` from ``config.meta`` or the older column-level ``meta``.
 
     dbt copies either spelling into the manifest, so a declaration under the older
     one must not leave the model unchecked.
+
+    :param default: What to return when neither spelling has the key, so a caller
+        can tell an absent key from one set to null.
     """
     config = column.get("config")
     for meta in (config.get("meta") if isinstance(config, dict) else None, column.get("meta")):
         if isinstance(meta, dict) and key in meta:
             return meta[key]
-    return None
+    return default
 
 
 def _field_message(detail: Mapping[str, Any]) -> str:

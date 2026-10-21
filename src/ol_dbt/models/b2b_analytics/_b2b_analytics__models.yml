@@ -29,10 +29,14 @@
 #
 # config.meta.api_description is the description ol-analytics-api publishes for
 # the response field a column feeds, written for an organization's managers
-# rather than for analysts. The API's exposure contract test asserts each field's
-# description equals it, so change the API's wording here first, then copy the
-# exported file into ol-analytics-api. A column the API reads only as a filter
-# (sso_organization_id) has none.
+# rather than for analysts. The API's exposure contract test asserts that the
+# description of each field its declarative endpoints (organizations, contracts,
+# MIT admin contract health) read from these views equals it, so change that
+# wording here first, then copy the exported file into ol-analytics-api. A
+# column the API reads only as a filter (sso_organization_id) has none. The
+# learner views its hand-written queries read (mv_b2b_learner_enrollment,
+# mv_b2b_learner, mv_b2b_contract_courserun) declare none and are not checked
+# yet (witan task tk-api-description-for-the-b2b-learner-views-behind-5fbac0).
 version: 2
 models:
 - name: mv_b2b_contract_utilization

@@ -43,11 +43,18 @@ must be a `ref()`. The cohort roles are described in
 response field the column feeds, copied as written. A column has one only when
 someone declared it, so a consumer has to treat its absence as "not declared"
 rather than as an empty description. ol-analytics-api fails its contract test
-when a field it returns from a column has a different description, or the
-column has none. Its wording therefore changes here first: edit
-`config.meta.api_description`, export, merge, then copy the file into the
-application. Write a folded YAML block as `>-`: the export refuses the final
-newline that `>` keeps.
+when a field one of its declarative b2b_dashboard endpoints returns from a
+column has a different description, or the column has none. That wording
+therefore changes here first: edit `config.meta.api_description`, export,
+merge, then copy the file into the application. The fields its hand-written
+queries return from `mv_b2b_learner_enrollment`, `mv_b2b_learner` and
+`mv_b2b_contract_courserun` are not checked yet, and those views declare no
+`api_description` (witan task
+tk-api-description-for-the-b2b-learner-views-behind-5fbac0).
+
+Write a folded YAML block as `>-`: the export refuses the final newline that
+`>` keeps. A key present with no value (`api_description:` or `null`) is
+refused too.
 
 ## Consumers
 

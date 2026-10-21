@@ -216,8 +216,9 @@ def test_a_changed_api_description_makes_the_file_stale(tmp_path: Path) -> None:
     assert _check(dbt_dir, exposures_dir) == [("api_dashboard", "api_dashboard.json does not match the model YAML")]
 
 
-@pytest.mark.parametrize("value", ["", "Ends in a newline.\n", " Leading space.", 3, ["a list"]])
+@pytest.mark.parametrize("value", [None, "", "Ends in a newline.\n", " Leading space.", 3, ["a list"]])
 def test_an_api_description_no_field_could_match_is_a_problem(tmp_path: Path, value: object) -> None:
+    # None is also what a bare ``api_description:`` key loads as.
     dbt_dir = _project(tmp_path)
     _set_meta(dbt_dir, 1, 1, {"api_description": value})
 
@@ -225,5 +226,20 @@ def test_an_api_description_no_field_could_match_is_a_problem(tmp_path: Path, va
         "api_dashboard": [
             "mv_learner.email has a config.meta.api_description that is not a non-empty string without "
             "surrounding whitespace (write a folded block as >-, not >)"
+        ]
+    }
+
+
+def test_an_invalid_api_description_and_cohort_on_one_model_are_both_reported(tmp_path: Path) -> None:
+    dbt_dir = _project(tmp_path)
+    models_file = dbt_dir / "models" / "_models.yml"
+    models_file.write_text(models_file.read_text().replace("role: dimension", "role: headline"))
+    _set_meta(dbt_dir, 0, 1, {"api_description": ""})
+
+    assert render_exposure_contracts(dbt_dir).problems == {
+        "api_dashboard": [
+            "mv_trend.enrolled_learners has a config.meta.api_description that is not a non-empty string "
+            "without surrounding whitespace (write a folded block as >-, not >)",
+            "mv_trend has an invalid config.meta.cohort; see the cohort_policy check",
         ]
     }

@@ -11,11 +11,15 @@ The application checks its models against that file.
 
 ``api_description`` is the text the application publishes for the response
 field a column feeds, written for the application's readers, next to the
-column's own ``description`` for analysts. ol-analytics-api asserts that each
-field's description equals it, so the wording has one source. Only the
-application knows which columns it returns (it reads some only as filters), so
-a column without one is not a problem here; the application's check names the
-column when a field needs one.
+column's own ``description`` for analysts. ol-analytics-api asserts that the
+description of each field its declarative b2b_dashboard endpoints read from a
+view column equals it, so for those fields the wording has one source. The
+fields its hand-written queries return from mv_b2b_learner_enrollment,
+mv_b2b_learner and mv_b2b_contract_courserun are not checked yet, and those
+views declare none (witan task tk-api-description-for-the-b2b-learner-views-behind-5fbac0).
+Only the application knows which columns it returns (it reads some only as
+filters), so a column without one is not a problem here; the application's
+check names the column when a field needs one.
 
 The file is generated from the model YAML, whose column set ``yaml_sql_sync``
 already holds to the SQL. Columns are listed in the order the YAML documents
@@ -48,6 +52,7 @@ DEFAULT_EXPOSURES_DIR = Path("exposures")
 EXPORT_COMMAND = "ol-dbt exposures export"
 
 _REF = re.compile(r"""^ref\(\s*['"]([^'"]+)['"]\s*\)$""")
+_UNDECLARED = object()
 
 
 @dataclass
@@ -89,12 +94,14 @@ def _api_description_problems(model_name: str, columns: list[dict[str, Any]]) ->
     """Return a problem for each column whose ``api_description`` the application could never match.
 
     A folded ``>`` block keeps its final newline, which no field description has,
-    so surrounding whitespace is refused rather than exported.
+    so surrounding whitespace is refused rather than exported. A key present with
+    no value (``api_description:`` or ``null``) is refused too: it reads as declared
+    but would export as undeclared.
     """
     problems = []
     for column in columns:
-        text = column_meta(column, "api_description")
-        if text is None or (isinstance(text, str) and text and text == text.strip()):
+        text = column_meta(column, "api_description", _UNDECLARED)
+        if text is _UNDECLARED or (isinstance(text, str) and text and text == text.strip()):
             continue
         problems.append(
             f"{model_name}.{column['name']} has a config.meta.api_description that is not a non-empty string "
@@ -135,10 +142,7 @@ def render_exposure_contracts(dbt_dir: Path) -> ExposureContracts:
             if not columns:
                 problems.append(f"{model_name} has no columns declared in YAML")
                 continue
-            column_problems = _api_description_problems(model_name, columns)
-            if column_problems:
-                problems.extend(column_problems)
-                continue
+            problems.extend(_api_description_problems(model_name, columns))
             try:
                 models[model_name] = {"columns": [_contract_column(column) for column in columns]}
             except ValidationError:
