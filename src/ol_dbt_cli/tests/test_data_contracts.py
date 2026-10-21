@@ -97,6 +97,10 @@ def test_repo_dim_user_sla_is_26_hours() -> None:
             {"refreshFrequency": {"interval": 6, "unit": "hour"}, "maxLatency": {"value": 30, "unit": "minute"}},
             timedelta(hours=6, minutes=30),
         ),
+        (
+            {"refreshFrequency": {"interval": 1, "unit": "day"}, "maxLatency": {"value": 0, "unit": "hour"}},
+            timedelta(days=1),
+        ),
         ({"refreshFrequency": {"interval": 2, "unit": "week"}}, timedelta(weeks=2)),
         ({"refreshFrequency": {"interval": 1, "unit": "month"}}, timedelta(days=31)),
         ({"refreshFrequency": {"interval": 1, "unit": "year"}}, timedelta(days=366)),
@@ -116,14 +120,18 @@ def test_freshness_bound(tmp_path: Path, sla: Any, expected: timedelta | None) -
     [
         ("daily", "must be a mapping"),
         ({"refreshFrequency": {"interval": 1, "unit": "minute"}}, r"`sla\.refreshFrequency`"),
-        ({"refreshFrequency": {"interval": 0, "unit": "day"}}, "positive integer `interval`"),
-        ({"refreshFrequency": {"interval": "1", "unit": "day"}}, "positive integer `interval`"),
-        ({"refreshFrequency": {"interval": True, "unit": "day"}}, "positive integer `interval`"),
-        ({"refreshFrequency": {"value": 1, "unit": "day"}}, "positive integer `interval`"),
+        ({"refreshFrequency": {"interval": 0, "unit": "day"}}, "integer `interval` of at least 1"),
+        ({"refreshFrequency": {"interval": "1", "unit": "day"}}, "integer `interval` of at least 1"),
+        ({"refreshFrequency": {"interval": True, "unit": "day"}}, "integer `interval` of at least 1"),
+        ({"refreshFrequency": {"value": 1, "unit": "day"}}, "integer `interval` of at least 1"),
         ({"refreshFrequency": 1}, r"`sla\.refreshFrequency`"),
         (
             {"refreshFrequency": {"interval": 1, "unit": "day"}, "maxLatency": {"value": 1, "unit": "week"}},
             r"`sla\.maxLatency`",
+        ),
+        (
+            {"refreshFrequency": {"interval": 1, "unit": "day"}, "maxLatency": {"value": -1, "unit": "hour"}},
+            "integer `value` of at least 0",
         ),
         ({"maxLatency": {"value": 2, "unit": "hour"}}, "which is missing"),
     ],

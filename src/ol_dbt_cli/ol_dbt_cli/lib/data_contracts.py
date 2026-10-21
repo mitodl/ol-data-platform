@@ -106,6 +106,13 @@ _LATENCY_UNITS = {
     "hour": timedelta(hours=1),
     "day": timedelta(days=1),
 }
+# Each duration field's amount key, units and least amount. The schema only
+# types the amount as an integer: a zero refresh interval would make every
+# check fail, but a zero latency is no grace past the refresh.
+_SLA_DURATION_FIELDS: dict[str, tuple[str, dict[str, timedelta], int]] = {
+    "refreshFrequency": ("interval", _REFRESH_UNITS, 1),
+    "maxLatency": ("value", _LATENCY_UNITS, 0),
+}
 
 
 @dataclass(frozen=True)
@@ -204,17 +211,19 @@ def load_contracts(contracts_dir: Path) -> list[DataContract]:
     return contracts
 
 
-def _sla_duration(path: Path, raw: Any, field: str, amount_key: str, units: dict[str, timedelta]) -> timedelta:
+def _sla_duration(path: Path, sla: dict[str, Any], field: str) -> timedelta:
+    amount_key, units, minimum = _SLA_DURATION_FIELDS[field]
+    raw = sla[field]
     amount = raw.get(amount_key) if isinstance(raw, dict) else None
     if (
         not isinstance(amount, int)
         or isinstance(amount, bool)
-        or amount < 1
+        or amount < minimum
         or not isinstance(raw, dict)
         or raw.get("unit") not in units
     ):
         msg = (
-            f"{path}: `sla.{field}` needs a positive integer `{amount_key}` and a `unit` "
+            f"{path}: `sla.{field}` needs an integer `{amount_key}` of at least {minimum} and a `unit` "
             f"of {', '.join(units)}, got {raw!r}"
         )
         raise ValueError(msg)
@@ -245,9 +254,9 @@ def freshness_bound(contract: DataContract) -> timedelta | None:
             msg = f"{contract.path}: `sla.maxLatency` is grace on `sla.refreshFrequency`, which is missing"
             raise ValueError(msg)
         return None
-    bound = _sla_duration(contract.path, sla["refreshFrequency"], "refreshFrequency", "interval", _REFRESH_UNITS)
+    bound = _sla_duration(contract.path, sla, "refreshFrequency")
     if "maxLatency" in sla:
-        bound += _sla_duration(contract.path, sla["maxLatency"], "maxLatency", "value", _LATENCY_UNITS)
+        bound += _sla_duration(contract.path, sla, "maxLatency")
     return bound
 
 
