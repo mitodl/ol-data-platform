@@ -19,7 +19,6 @@ from ol_orchestrate.lib.embeddings.documents import Document, md5_hex
 from ol_orchestrate.lib.embeddings.models import (
     EmbeddingBatch,
     EmbeddingModelSpec,
-    InputType,
     OlLlmEmbedder,
 )
 from ol_orchestrate.lib.embeddings.pipeline import (
@@ -33,6 +32,7 @@ from ol_orchestrate.lib.embeddings.strategy import (
 )
 from pydantic import ValidationError
 from pydantic_ai.embeddings import TestEmbeddingModel
+from pydantic_ai.embeddings.result import EmbedInputType
 
 MODEL = EmbeddingModelSpec(model="openai:text-embedding-3-large", dimensions=4)
 WHOLE = WholeDocumentChunker(encoding="cl100k_base", max_tokens=100)
@@ -44,9 +44,11 @@ class FakeEmbedder:
     def __init__(self, spec: EmbeddingModelSpec = MODEL) -> None:
         self.spec = spec
         self.calls: list[list[str]] = []
-        self.input_types: list[InputType] = []
+        self.input_types: list[EmbedInputType] = []
 
-    def embed(self, texts: Sequence[str], *, input_type: InputType) -> EmbeddingBatch:
+    def embed(
+        self, texts: Sequence[str], *, input_type: EmbedInputType
+    ) -> EmbeddingBatch:
         self.calls.append(list(texts))
         self.input_types.append(input_type)
         return EmbeddingBatch(

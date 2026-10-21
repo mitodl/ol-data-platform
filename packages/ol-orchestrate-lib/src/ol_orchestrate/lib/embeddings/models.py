@@ -7,13 +7,12 @@ ol-llm leaves it to the caller.
 """
 
 from collections.abc import Iterator, Sequence
-from typing import Literal, Protocol
+from typing import Protocol
 
 import tiktoken
 from ol_llm import Attribution, UseCase, embed_sync, load_catalog
 from pydantic import BaseModel, ConfigDict, Field
-
-InputType = Literal["document", "query"]
+from pydantic_ai.embeddings.result import EmbedInputType
 
 # OpenAI accepts 2,048 inputs and 300,000 tokens per embeddings request. The token
 # budget leaves room for the provider's tokenizer counting differently.
@@ -121,7 +120,9 @@ class Embedder(Protocol):
         """The model the vectors come from."""
         ...
 
-    def embed(self, texts: Sequence[str], *, input_type: InputType) -> EmbeddingBatch:
+    def embed(
+        self, texts: Sequence[str], *, input_type: EmbedInputType
+    ) -> EmbeddingBatch:
         """Return one vector per text, in order."""
         ...
 
@@ -160,7 +161,9 @@ class OlLlmEmbedder:
         """
         return self._spec
 
-    def embed(self, texts: Sequence[str], *, input_type: InputType) -> EmbeddingBatch:
+    def embed(
+        self, texts: Sequence[str], *, input_type: EmbedInputType
+    ) -> EmbeddingBatch:
         """Embed texts in requests from ``spec.request_batches``.
 
         :param texts: the texts
@@ -168,8 +171,9 @@ class OlLlmEmbedder:
             searched with; some models embed the two differently
         :returns: one vector per text, in order, and the total input tokens
         :rtype: EmbeddingBatch
-        :raises ValueError: when a request returns the wrong number of vectors or
-            vectors that are not ``spec.vector_length`` long
+        :raises ValueError: when a request returns vectors that are not
+            ``spec.vector_length`` long. ol-llm raises ``LLMInvalidOutput`` itself
+            when the vector count does not match the texts.
         """
         vectors: list[list[float]] = []
         input_tokens = 0
@@ -181,9 +185,6 @@ class OlLlmEmbedder:
                 dimensions=self._spec.dimensions,
                 attribution=self._attribution,
             )
-            if len(result.embeddings) != len(batch):
-                msg = f"{len(batch)} texts returned {len(result.embeddings)} vectors"
-                raise ValueError(msg)
             if result.dimensions != self._spec.vector_length:
                 msg = (
                     f"{self._spec.model} returned vectors {result.dimensions} long, "

@@ -24,8 +24,8 @@ from ol_orchestrate.lib.embeddings.learn import (
 from ol_orchestrate.lib.embeddings.models import (
     EmbeddingBatch,
     EmbeddingModelSpec,
-    InputType,
 )
+from pydantic_ai.embeddings.result import EmbedInputType
 from qdrant_client import models
 
 from tests.lib import mit_learn_vector_search as learn
@@ -76,7 +76,9 @@ class FakeEmbedder:
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
 
-    def embed(self, texts: Sequence[str], *, input_type: InputType) -> EmbeddingBatch:
+    def embed(
+        self, texts: Sequence[str], *, input_type: EmbedInputType
+    ) -> EmbeddingBatch:
         assert input_type == "document"
         self.calls.append(list(texts))
         return EmbeddingBatch(

@@ -19,9 +19,9 @@ from ol_orchestrate.lib.embeddings.evaluation import (
 from ol_orchestrate.lib.embeddings.models import (
     EmbeddingBatch,
     EmbeddingModelSpec,
-    InputType,
 )
 from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy
+from pydantic_ai.embeddings.result import EmbedInputType
 
 STRATEGY = EmbeddingStrategy(
     strategy_id="exp_whole",
@@ -47,9 +47,11 @@ class QueryEmbedder:
     spec = STRATEGY.model
 
     def __init__(self) -> None:
-        self.input_types: list[InputType] = []
+        self.input_types: list[EmbedInputType] = []
 
-    def embed(self, texts: Sequence[str], *, input_type: InputType) -> EmbeddingBatch:
+    def embed(
+        self, texts: Sequence[str], *, input_type: EmbedInputType
+    ) -> EmbeddingBatch:
         self.input_types.append(input_type)
         return EmbeddingBatch(
             vectors=[QUERY_VECTORS[text] for text in texts], input_tokens=len(texts)
