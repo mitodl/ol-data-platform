@@ -571,9 +571,12 @@ models:
           - open-learning.identifiability.direct-identifier
           - open-learning.ferpa-classification.directory-information
   - name: full_name
-    description: str, user full name. Very small number of edX.org users have blank
-      full name, their name couldn't be populated from other sources if they don't
-      have their accounts linked on MicroMasters.
+    description: str, user full name. Null when no linked account has one, so it is
+      never an empty string, a string of spaces, or a Learn dict string. Some edX.org
+      users have no name unless their accounts are linked on MicroMasters or MIT Learn.
+    tests:
+    - dbt_utils.expression_is_true:
+        expression: is null or (trim(full_name) <> '' and full_name not like '%familyName%')
     config:
       meta:
         openmetadata:
