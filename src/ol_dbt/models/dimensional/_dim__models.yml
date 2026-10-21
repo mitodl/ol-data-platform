@@ -511,9 +511,9 @@ models:
       and Global Alumni accounts have no join date, so they rank last. Populated for
       edX.org, MITx Pro, Bootcamps, Emeritus, Global Alumni and MicroMasters accounts.
   - name: user_address_city
-    description: str, city of the address in user_street_address. For a user whose
-      only address is a MITx Residential account, which carries a city but no street
-      address or postal code, it is that city alone.
+    description: str, city of the address in user_street_address. When no account
+      has a street address or postal code, it is the city alone. MITx Residential
+      accounts carry only a city.
   - name: user_address_postal_code
     description: str, postal code of the address in user_street_address.
   - name: latest_income_usd
