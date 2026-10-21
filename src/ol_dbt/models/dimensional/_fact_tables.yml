@@ -750,7 +750,9 @@ models:
       runs are covered by edxorg rows.
       edxorg: person_course.completed when person_course has a grade for the learner
       and run and completed is not null; otherwise true when user_info_combo has a
-      certificate verify_uuid for the run, and false when it does not.
+      certificate with a grade and a non-empty verify_uuid for the run, and false
+      when it does not. user_info_combo rows without a certificate grade are left
+      out, so a learner and run with no grade in either source has no row.
       residential: the source has no passed flag, so true when letter_grade is not
       empty.
     config:
