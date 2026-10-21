@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ from ol_dbt_cli.lib.data_contracts import (
     DATA_CONTRACT_CHECK,
     check_data_contracts,
     create_request,
+    freshness_bound,
     load_contracts,
     om_data_type,
     om_fqn,
@@ -75,6 +77,106 @@ def test_repo_contracts_load() -> None:
     contracts = load_contracts(REPO_CONTRACTS_DIR)
     assert [c.body["name"] for c in contracts] == ["dim_user"]
     assert contracts[0].entity.kind == "dbt_model"
+
+
+def test_repo_dim_user_sla_is_26_hours() -> None:
+    # The layer-wide default the lakehouse freshness check had before dim_user's
+    # contract became the declaration of its bound.
+    (contract,) = [c for c in load_contracts(REPO_CONTRACTS_DIR) if c.body["name"] == "dim_user"]
+    assert freshness_bound(contract) == timedelta(hours=26)
+
+
+@pytest.mark.parametrize(
+    ("sla", "expected"),
+    [
+        (None, None),
+        ({}, None),
+        ({"availabilityTime": "09:00 UTC"}, None),
+        ({"refreshFrequency": {"interval": 1, "unit": "day"}}, timedelta(days=1)),
+        (
+            {"refreshFrequency": {"interval": 6, "unit": "hour"}, "maxLatency": {"value": 30, "unit": "minute"}},
+            timedelta(hours=6, minutes=30),
+        ),
+        (
+            {"refreshFrequency": {"interval": 1, "unit": "day"}, "maxLatency": {"value": 0, "unit": "hour"}},
+            timedelta(days=1),
+        ),
+        ({"refreshFrequency": {"interval": 2, "unit": "week"}}, timedelta(weeks=2)),
+        ({"refreshFrequency": {"interval": 1, "unit": "month"}}, timedelta(days=31)),
+        ({"refreshFrequency": {"interval": 1, "unit": "year"}}, timedelta(days=366)),
+    ],
+)
+def test_freshness_bound(tmp_path: Path, sla: Any, expected: timedelta | None) -> None:
+    data = _contract(DIM_USER)
+    if sla is not None:
+        data["contract"]["sla"] = sla
+    _write(tmp_path, "c", data)
+    (contract,) = load_contracts(tmp_path)
+    assert freshness_bound(contract) == expected
+
+
+@pytest.mark.parametrize(
+    ("sla", "message"),
+    [
+        ("daily", "must be a mapping"),
+        ({"refreshFrequency": {"interval": 1, "unit": "minute"}}, r"`sla\.refreshFrequency`"),
+        ({"refreshFrequency": {"interval": 0, "unit": "day"}}, "integer `interval` of at least 1"),
+        ({"refreshFrequency": {"interval": "1", "unit": "day"}}, "integer `interval` of at least 1"),
+        ({"refreshFrequency": {"interval": True, "unit": "day"}}, "integer `interval` of at least 1"),
+        ({"refreshFrequency": {"value": 1, "unit": "day"}}, "integer `interval` of at least 1"),
+        ({"refreshFrequency": 1}, r"`sla\.refreshFrequency`"),
+        (
+            {"refreshFrequency": {"interval": 1, "unit": "day"}, "maxLatency": {"value": 1, "unit": "week"}},
+            r"`sla\.maxLatency`",
+        ),
+        (
+            {"refreshFrequency": {"interval": 1, "unit": "day"}, "maxLatency": {"value": -1, "unit": "hour"}},
+            "integer `value` of at least 0",
+        ),
+        ({"maxLatency": {"value": 2, "unit": "hour"}}, "which is missing"),
+    ],
+)
+def test_malformed_sla_fails_load(tmp_path: Path, sla: Any, message: str) -> None:
+    # Loading is what `ol-dbt validate --only data_contract` does first, so a bad
+    # SLA fails dbt PR CI instead of the code location that reads it.
+    data = _contract(DIM_USER)
+    data["contract"]["sla"] = sla
+    _write(tmp_path, "c", data)
+    with pytest.raises(ValueError, match=message):
+        load_contracts(tmp_path)
+
+
+OM_ONLY_BINDINGS = [
+    {"type": "table", "dbt_source": "raw.users_user"},
+    {"type": "table", "fqn": "svc.db.s.t"},
+]
+
+
+@pytest.mark.parametrize("entity", OM_ONLY_BINDINGS)
+@pytest.mark.parametrize(
+    "sla",
+    [
+        {"maxLatency": {"value": 2, "unit": "hour"}},
+        {"refreshFrequency": {"interval": 1, "unit": "day"}, "maxLatency": {"value": 2, "unit": "hour"}},
+    ],
+)
+def test_om_only_sla_has_no_bound(tmp_path: Path, entity: dict[str, str], sla: dict[str, Any]) -> None:
+    # OpenMetadata accepts maxLatency alone, and only a dbt_model SLA becomes a
+    # Dagster check, so these load and yield no bound.
+    data = _contract(entity)
+    data["contract"]["sla"] = sla
+    _write(tmp_path, "c", data)
+    (contract,) = load_contracts(tmp_path)
+    assert freshness_bound(contract) is None
+
+
+@pytest.mark.parametrize("entity", OM_ONLY_BINDINGS)
+def test_om_only_malformed_sla_fails_load(tmp_path: Path, entity: dict[str, str]) -> None:
+    data = _contract(entity)
+    data["contract"]["sla"] = {"maxLatency": {"value": 1, "unit": "week"}}
+    _write(tmp_path, "c", data)
+    with pytest.raises(ValueError, match=r"`sla\.maxLatency`"):
+        load_contracts(tmp_path)
 
 
 def test_intact_model_passes(tmp_path: Path) -> None:

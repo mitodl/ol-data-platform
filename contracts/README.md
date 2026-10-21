@@ -18,7 +18,7 @@ contract:                    # an OpenMetadata CreateDataContract body, minus `e
   owners: [{type: team, name: data-platform}]   # optional; resolved to ids on sync
   schema: [{name: user_pk, dataType: VARCHAR, constraint: PRIMARY_KEY}, ...]
   semantics: [{name: hasOwner, description: ..., rule: '<JsonLogic>', enabled: true}]
-  sla: {refreshFrequency: {interval: 1, unit: day}}
+  sla: {refreshFrequency: {interval: 1, unit: day}, maxLatency: {value: 2, unit: hour}}
 ```
 
 `contract` uses OpenMetadata's native shape rather than ODCS. OpenMetadata's
@@ -47,12 +47,23 @@ The `entity` binding says which asset the contract is for:
 | `schema` columns, all bindings | OpenMetadata, against its catalog | after ingestion, on `ol-dbt contracts validate` or OpenMetadata's daily run |
 | `schema` types, all bindings | `ol-dbt contracts sync` / `validate` only | same as above |
 | `semantics` | OpenMetadata | same as above |
-| `sla` | nothing in OpenMetadata 2.0.2 (stored, never evaluated) | Dagster freshness checks enforce freshness |
+| `sla` shape | `ol-dbt validate --only data_contract` (dbt PR CI) | every PR, before merge |
+| `sla`, `dbt_model` bindings | the asset's Dagster freshness check (lakehouse code location) | hourly, by `dbt_layer_freshness_sensor` |
 
 OpenMetadata 2.0.2 reports a retyped column in `typeMismatchFields` but doesn't
 count it as a failure, so the contract still shows Success in OpenMetadata
 (`DataContractRepository.validateSchemaFieldsAgainstEntity`). The `ol-dbt
 contracts` commands fail on it; OpenMetadata's own status and alerts won't.
+
+OpenMetadata 2.0.2 stores `sla` but never evaluates it, so for a `dbt_model`
+contract the lakehouse code location builds the model's Dagster freshness check
+from it: the check fails once the table's last update is older than
+`refreshFrequency` plus `maxLatency` (a month counts as 31 days, a year as 366).
+That check replaces the 26-hour default the dimensional, mart and reporting
+groups otherwise get, and a contracted model in any other group gets one too.
+A `dbt_model` contract that sets `maxLatency` must also set `refreshFrequency`,
+since the latency is grace on it. `sla` on `dbt_source` and `fqn` contracts is
+recorded in OpenMetadata only, so either field may stand alone there.
 
 The CI check fails when a contracted column is missing from the model or source
 YAML, is no longer selected by the model SQL, has no `data_type`, or has a type
