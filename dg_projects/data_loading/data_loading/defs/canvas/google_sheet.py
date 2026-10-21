@@ -1,8 +1,18 @@
+"""Read the Canvas course IDs to export from a Google Sheet."""
+
 import json
+from typing import Any
 
 import pygsheets
-from dagster import OpExecutionContext
+from dagster import ConfigurableResource, OpExecutionContext
 from google.oauth2 import service_account
+
+
+class GoogleSheetConfig(ConfigurableResource):
+    service_account_json: dict[str, Any]  # Service account JSON credentials
+    # Google Sheet ID for canvas course IDs
+    sheet_id: str = "13AoothEhEvWs2cJEEfZETm7E6h3-ZY4tD11KX_ARe1A"
+    worksheet_id: int = 1472315099  # Worksheet ID (gid) within the Google Sheet
 
 
 def fetch_canvas_course_ids_from_google_sheet(

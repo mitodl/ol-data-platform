@@ -12,6 +12,8 @@ dependencies = [
     # is a single resolved version across the image (no two-manifest drift).
     "ol-dlt",
     "ol-orchestrate-lib",
+    # the Canvas course ID sheet (data_loading.defs.canvas.google_sheet)
+    "pygsheets>=2.0.6",
 ]
 
 [project.entry-points]
