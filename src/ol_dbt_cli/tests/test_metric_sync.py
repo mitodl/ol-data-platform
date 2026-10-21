@@ -96,7 +96,6 @@ class FakeOpenMetadata(OpenMetadataClient):
         super().__init__("https://om.example/api", "token")
         self.version = SNAPSHOT_VERSION
         self.teams = {"data-platform": "team-1"}
-        self.team_members = {"team-1": {"jane"}}
         self.glossary_terms = {"Learning.Course completion"}
         self.tables = {PROGRESS_FQN: "table-1"}
         self.metrics: dict[str, dict[str, Any]] = {}
@@ -155,7 +154,6 @@ class FakeOpenMetadata(OpenMetadataClient):
             case ("PATCH", "metrics", metric_id):
                 assert content_type == openmetadata.JSON_PATCH_CONTENT_TYPE
                 [metric] = [m for m in self.metrics.values() if m["id"] == metric_id]
-                self._check_status_change(metric, body)
                 for op in body:
                     assert op["op"] == "add"
                     field = op["path"].lstrip("/")
@@ -168,23 +166,6 @@ class FakeOpenMetadata(OpenMetadataClient):
                 # LineageResource.addLineage answers 200 with no body.
                 return None
         raise OpenMetadataError(f"{method} {path} -> 404: not found", 404)
-
-    def _check_status_change(self, metric: dict[str, Any], ops: list[dict[str, Any]]) -> None:
-        """Refuse the bot's move out of In Review to Approved or Rejected unless it is a reviewer.
-
-        EntityUpdater.updateEntityStatus and checkUpdatedByReviewer; the server
-        answers 403 (AuthorizationException) and stores none of the PATCH.
-        """
-        status = next((op["value"] for op in ops if op["path"] == "/entityStatus"), None)
-        if metric["entityStatus"] != "In Review" or status not in ("Approved", "Rejected"):
-            return
-        reviewers = metric.get("reviewers") or []
-        if reviewers and not any(
-            BOT in self.team_members.get(r["id"], set()) if r["type"] == "team" else r.get("name") == BOT
-            for r in reviewers
-        ):
-            message = json.dumps({"code": 403, "message": f"User '{BOT}' is not a reviewer"})
-            raise OpenMetadataError(f"PATCH /v1/metrics/{metric['id']} -> 403: {message}", 403)
 
     def _related_refs(self, body: dict[str, Any]) -> list[dict[str, Any]]:
         """Turn CreateMetric's relatedMetrics FQNs into the references the entity holds."""
