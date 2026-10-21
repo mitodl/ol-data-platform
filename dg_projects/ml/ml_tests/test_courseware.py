@@ -1,14 +1,16 @@
 from types import SimpleNamespace
 
+import httpx2
 import polars as pl
 import pytest
-from ml.lib.courseware import local, scopes
+from ml.lib.courseware import extract, local, scopes
 from ml.lib.courseware.extract import (
     CLAIM_SCHEMA,
     EVIDENCE_SCHEMA,
     EXTRACTION_SCHEMA,
     ExtractionTables,
     _claim_row,
+    _ModelResult,
     extraction_key,
 )
 from ml.lib.courseware.schemas import (
@@ -236,3 +238,35 @@ def test_local_extract_replaces_claims_a_cut_off_run_left_behind(tmp_path, monke
     assert claims["label"].to_list() == ["new"]
     stored = pl.read_parquet(output_dir / "courseware_claim_extraction.parquet")
     assert stored["extraction_key"].to_list() == ["k1"]
+
+
+def test_extract_scopes_keeps_the_batch_when_a_stream_drops(monkeypatch):
+    built = scopes.build_scopes(
+        pl.concat(
+            [_rows(["first"]), _rows(["second"]).with_columns(scope_id=pl.lit("seq-2"))]
+        )
+    )
+    empty = ScopeExtraction.model_validate(
+        {
+            "summary": "s",
+            "concepts": [],
+            "skills": [],
+            "assumed_knowledge": [],
+            "assessment_expectations": [],
+            "learning_outcomes": [],
+            "declared_prerequisites": [],
+            "audience": [],
+            "notes": [],
+        }
+    )
+
+    def call_model(*args):
+        message = args[-1]
+        if "second" in message:
+            msg = "peer closed connection"
+            raise httpx2.RemoteProtocolError(msg)
+        return _ModelResult(empty, "end_turn", 1, 1, 0, 0)
+
+    monkeypatch.setattr(extract, "call_model", call_model)
+    tables = extract.extract_scopes(built, object(), model_id="model", max_workers=1)
+    assert tables.extractions["scope_id"].to_list() == ["seq-1"]
