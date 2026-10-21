@@ -4,8 +4,11 @@ from collections.abc import Callable
 
 import httpx2
 import pytest
+import tenacity
 from anthropic import Anthropic, AnthropicBedrock
 from google import genai
+from google.genai import _api_client as genai_api_client
+from google.genai import errors as genai_errors
 from ml.resources.llm import LLMClientFactory
 from openai import OpenAI
 
@@ -243,3 +246,62 @@ def test_get_client_gemini_requires_an_api_key_outside_vertex_ai(
 
     with pytest.raises(ValueError, match="GEMINI_API_KEY"):
         LLMClientFactory(client_class="gemini").get_client()
+
+
+def _set_gemini_backend(monkeypatch: pytest.MonkeyPatch, *, vertexai: bool) -> None:
+    if vertexai:
+        monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "true")
+        monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+        monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "global")
+    else:
+        monkeypatch.delenv("GOOGLE_GENAI_USE_VERTEXAI", raising=False)
+        monkeypatch.setenv("GEMINI_API_KEY", "gemini-test")
+
+
+@pytest.mark.parametrize("vertexai", [True, False])
+def test_get_client_gemini_retries_a_rate_limited_request(
+    monkeypatch: pytest.MonkeyPatch,
+    vertexai: bool,  # noqa: FBT001
+) -> None:
+    """Embedding on Vertex is one text per request, so without a retry every 429
+    drops a row until the next run.
+    """
+    _set_gemini_backend(monkeypatch, vertexai=vertexai)
+    client = LLMClientFactory(client_class="gemini").get_client()
+    assert isinstance(client, genai.Client)
+    attempts: list[int] = []
+
+    def fake_request_once(*_args: object) -> genai_api_client.HttpResponse:
+        attempts.append(1)
+        if len(attempts) < 3:
+            raise genai_errors.ClientError(429, {"error": {"message": "slow down"}})
+        return genai_api_client.HttpResponse(headers={}, response_stream=["{}"])
+
+    monkeypatch.setattr(client._api_client, "_request_once", fake_request_once)
+    monkeypatch.setattr(client._api_client._retry, "wait", tenacity.wait_none())
+
+    client._api_client.request("post", "models/test:predict", {})
+
+    assert len(attempts) == 3
+
+
+@pytest.mark.parametrize("vertexai", [True, False])
+def test_get_client_gemini_stops_retrying_after_three_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+    vertexai: bool,  # noqa: FBT001
+) -> None:
+    _set_gemini_backend(monkeypatch, vertexai=vertexai)
+    client = LLMClientFactory(client_class="gemini").get_client()
+    assert isinstance(client, genai.Client)
+    attempts: list[int] = []
+
+    def fake_request_once(*_args: object) -> genai_api_client.HttpResponse:
+        attempts.append(1)
+        raise genai_errors.ClientError(429, {"error": {"message": "slow down"}})
+
+    monkeypatch.setattr(client._api_client, "_request_once", fake_request_once)
+    monkeypatch.setattr(client._api_client._retry, "wait", tenacity.wait_none())
+
+    with pytest.raises(genai_errors.ClientError):
+        client._api_client.request("post", "models/test:predict", {})
+    assert len(attempts) == 3

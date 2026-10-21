@@ -273,6 +273,60 @@ models:
     - accepted_values:
         arguments:
           values: [courserun, course, platform]
+  - name: extractor_id
+    description: str, the extractor version's id the run is approved for
+    tests:
+    - not_null
+  - name: prompt_version
+    description: str, the prompt version the run is approved for
+    tests:
+    - not_null
+  - name: schema_version
+    description: str, the output schema version the run is approved for
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [platform, courserun_readable_id]
+
+- name: int__courseware__extraction_source_checksums
+  description: One row per course run in int__courseware__extraction_sources that
+    int__courseware__extraction_allowlist approves, with a checksum of the text its
+    extraction scopes are built from and the extractor version it is approved for.
+    The courseware extraction sensor reports the checksum as the run's data version
+    while that version is the deployed extractor's, so a run is re-extracted only
+    when its text changes or it is promoted to a new version.
+  config:
+    meta:
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the course run
+    tests:
+    - not_null
+  - name: source_count
+    description: int, number of source rows the run's scopes read
+  - name: text_checksum
+    description: str, md5 over every source row's title, position, reference and text,
+      in reading order
+    tests:
+    - not_null
+  - name: extractor_id
+    description: str, the extractor version's id the run is approved for
+    tests:
+    - not_null
+  - name: prompt_version
+    description: str, the prompt version the run is approved for
+    tests:
+    - not_null
+  - name: schema_version
+    description: str, the output schema version the run is approved for
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [platform, courserun_readable_id]

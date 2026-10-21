@@ -1,0 +1,229 @@
+always_filter_main_dttm: false
+cache_timeout: null
+catalog: ol_data_lake_production
+columns:
+- advanced_data_type: null
+  column_name: conversation_date
+  datetime_format: null
+  description: Date of the conversation's first message.
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: true
+  python_date_format: null
+  type: TIMESTAMP(6)
+  verbose_name: Date
+- advanced_data_type: null
+  column_name: courserun_readable_id
+  datetime_format: null
+  description: Course run the conversation is about.
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: Course Run ID
+- advanced_data_type: null
+  column_name: category_label
+  datetime_format: null
+  description: Feedback category of the conversation's cluster.
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: Category
+- advanced_data_type: null
+  column_name: conversation_year
+  datetime_format: null
+  description: Year of the conversation's first message.
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: Year
+- advanced_data_type: null
+  column_name: chat_agent
+  datetime_format: null
+  description: Learn AI chatbot agent. Empty for other sources.
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: Chat Agent
+- advanced_data_type: null
+  column_name: conversation_summary
+  datetime_format: null
+  description: AI-generated summary of the conversation.
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: Summary
+- advanced_data_type: null
+  column_name: category_description
+  datetime_format: null
+  description: AI-generated description of the cluster's category.
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: Category Description
+- advanced_data_type: null
+  column_name: conversation_id
+  datetime_format: null
+  description: 'For Zendesk, the ticket ID. Open the ticket at https://odl.zendesk.com/agent/tickets/<ID>.
+    For other sources, the ID of the chat, forum thread or feedback item in that system.'
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: Conversation ID
+- advanced_data_type: null
+  column_name: conversation_text
+  datetime_format: null
+  description: Full conversation text with personal information removed. Turns are
+    separated by a line of dashes.
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: Conversation
+- advanced_data_type: null
+  column_name: conversation_month
+  datetime_format: null
+  description: Month of the conversation's first message.
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: Month
+- advanced_data_type: null
+  column_name: course_title
+  datetime_format: null
+  description: Title of the course run the conversation is about.
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: Course Title
+- advanced_data_type: null
+  column_name: cluster_key
+  datetime_format: null
+  description: ID of the cluster the conversation belongs to.
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: Cluster ID
+- advanced_data_type: null
+  column_name: source_url
+  datetime_format: null
+  description: Link to the conversation in its source system.
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: Source Link
+- advanced_data_type: null
+  column_name: source
+  datetime_format: null
+  description: Where the feedback came from, e.g. Zendesk or the Learn AI tutor.
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: Source
+- advanced_data_type: null
+  column_name: cluster_size
+  datetime_format: null
+  description: Number of conversations in the same cluster.
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT
+  verbose_name: Conversations in Cluster
+currency_code_column: null
+database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
+default_endpoint: null
+description: Auto refreshed at 2026-10-21T10:34:54.608006+00:00
+extra: null
+fetch_values_predicate: null
+filter_select_enabled: true
+folders: null
+main_dttm_col: conversation_date
+metrics:
+- currency: null
+  d3format: null
+  description: null
+  expression: COUNT(*)
+  extra: null
+  metric_name: count
+  metric_type: count
+  verbose_name: Conversations
+  warning_text: null
+normalize_columns: false
+offset: 0
+params: null
+schema: ol_warehouse_production_reporting
+sql: null
+table_name: feedback_conversation_report
+template_params: null
+uuid: e02fbc40-6fc3-4fdb-8983-26bd1751de05
+version: 1.0.0
