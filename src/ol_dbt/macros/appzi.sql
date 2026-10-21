@@ -1,10 +1,7 @@
 {# Parse the Appzi survey emails that reach Zendesk as tickets. #}
 
 {% macro appzi_normalize(body) %}
-  {#- Appzi changes its email spacing between templates (from 2026-10-15 every block
-      is also wrapped in "|" rows). Stripping spaces, tabs and "|" around each line
-      break and collapsing blank lines gives one layout, so the parsers below match
-      text, not spacing. -#}
+  {#- Appzi's spacing changes between templates (e.g. "|" table rows), so parsers match text, not spacing. -#}
   {%- set newline = codepoint_char(10) -%}
   {%- set lines_trimmed = regexp_replace_all(body, "'[ \t|]*\n[ \t|]*'", newline) -%}
   {%- set blank_lines_collapsed = regexp_replace_all(
