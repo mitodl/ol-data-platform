@@ -6,4 +6,4 @@ select
     , conversation_ref
     , occurred_at
 from {{ ref('int__feedback__zendesk') }}
-where {{ is_appzi_email('text') }}
+where {{ is_appzi_email(appzi_normalize('text')) }}

@@ -599,7 +599,8 @@ unit_tests:
 - name: test_int__feedback__zendesk_strips_the_appzi_template
   description: >
     Appzi emails keep only the feedback type and answer, digests drop out, a changed
-    template keeps the whole email, other comments pass through, and subject_url
+    template keeps the whole email in either layout, other comments pass through,
+    and subject_url
     is the decoded page URL without its EMAIL parameter. Spacing does not matter:
     the old layout, the table layout that wraps each block in "|" rows, an email
     cut off before its first question, and a notification with nothing typed above
