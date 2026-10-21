@@ -107,16 +107,6 @@ metadata:
     filterType: filter_select
     id: NATIVE_FILTER--JJmQzXziLKAHQQXt49-p
     name: Course Run Readable ID
-    requiredFirst:
-      nativeEvent:
-        isTrusted: true
-      target:
-        checked: false
-        className: ant-wave-target css-1rlszik
-        disabled: false
-        id: filters_NATIVE_FILTER--JJmQzXziLKAHQQXt49-p_controlValues_defaultToFirstItem
-        prefixCls: ant-checkbox
-        type: checkbox
     scope:
       excluded: []
       rootPath:
