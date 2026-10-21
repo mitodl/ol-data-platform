@@ -46,6 +46,8 @@
         ~ "(solutions?|answers?|keys?)($| ?#?[0-9]| (set|key)([^a-z]|$))"
         ~ "|(^|[^a-z])(solutions?|answers?|keys?) (to|for) [^:]*(" ~ graded ~ "|projects?|problems? ?[0-9])'"
     ) -%}
+    {#- "key ideas" and "key results" in an opening summarise a lecture; they are not an answer key -#}
+    {%- set teaching_key = "' key (ideas|concepts|results|points|terms|takeaways|findings|features|topics|skills)'" -%}
     {%- set head_key = (
         "'solutions? (to|for) (the )?([0-9.]+ )?(selected |practice |sample |in-class |additional )?(" ~ graded ~ ")"
         ~ "|(" ~ graded ~ "|section)[ _]?#?[0-9]*[a-z]?:?[ _](solutions?|answers|answer key|key)([^a-z]|$)"
@@ -66,7 +68,7 @@
                 or {{ regexp_like(title, title_weak) }}
             )
         )
-        or coalesce({{ regexp_like(text_head, head_key) }}, false)
+        or coalesce({{ regexp_like(regexp_replace_all(text_head, teaching_key, "' main topics'"), head_key) }}, false)
         or (
             coalesce({{ marker_count }}, 0) >= 3
             and {{ regexp_like("concat(" ~ title ~ ", ' ', " ~ name ~ ")", "'" ~ marked ~ "'") }}
