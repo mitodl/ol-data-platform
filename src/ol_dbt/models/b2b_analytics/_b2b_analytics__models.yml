@@ -422,9 +422,11 @@ models:
   - name: certified_learners
     description: >
       Deprecated, the old name for newly_certified_learners and always equal to
-      it. The certified_learners metric means learners holding an unrevoked
-      certificate for a run, which is not this month's count. Removed once
-      ol-analytics-api and mit-learn read newly_certified_learners.
+      it. mv_b2b_mit_admin_contract_health, mv_b2b_enrollment_completion_funnel
+      and mv_b2b_contract_utilization publish certified_learners as the learners
+      holding an unrevoked certificate for a run, which is not this month's
+      count. Removed once ol-analytics-api and mit-learn read
+      newly_certified_learners.
     config:
       meta:
         cohort:
@@ -1145,9 +1147,11 @@ models:
   - name: certified_learners
     description: >
       Deprecated, the old name for newly_certified_learners and always equal to
-      it. The certified_learners metric means learners holding an unrevoked
-      certificate for a run, which is not this month's count. Removed once
-      ol-analytics-api and mit-learn read newly_certified_learners.
+      it. mv_b2b_mit_admin_contract_health, mv_b2b_enrollment_completion_funnel
+      and mv_b2b_contract_utilization publish certified_learners as the learners
+      holding an unrevoked certificate for a run, which is not this month's
+      count. Removed once ol-analytics-api and mit-learn read
+      newly_certified_learners.
     config:
       meta:
         cohort:

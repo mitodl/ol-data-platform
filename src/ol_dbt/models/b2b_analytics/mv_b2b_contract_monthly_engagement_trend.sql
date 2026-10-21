@@ -38,9 +38,10 @@
 -- or certified in the month) and is the cohort the API gates the whole row on.
 --
 -- certified_learners is the old name for newly_certified_learners, kept until
--- ol-analytics-api and mit-learn read the new one. The name now belongs to the
--- certified_learners metric (learners holding an unrevoked certificate for a run),
--- which is what the contract health, funnel and utilization views publish.
+-- ol-analytics-api and mit-learn read the new one. mv_b2b_mit_admin_contract_health,
+-- mv_b2b_enrollment_completion_funnel and mv_b2b_contract_utilization publish
+-- certified_learners as the learners holding an unrevoked certificate for a run,
+-- which is not this view's count of learners certified in the month.
 --
 -- A learner is counted under the contract they enrolled in the course run
 -- under, so a learner active under two contracts contributes to both rows --
