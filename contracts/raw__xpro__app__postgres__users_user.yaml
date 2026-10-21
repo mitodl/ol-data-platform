@@ -1,0 +1,28 @@
+---
+# OpenMetadata data contract for a raw table dim_user is built from. See README.md in this directory.
+entity:
+  type: table
+  dbt_source: ol_warehouse_raw_data.raw__xpro__app__postgres__users_user
+contract:
+  name: raw__xpro__app__postgres__users_user
+  displayName: raw__xpro__app__postgres__users_user
+  description: xPro application user accounts. dim_user takes mitxpro_application_user_id
+    and email from these columns.
+  entityStatus: Approved
+  owners:
+  - type: team
+    name: data-platform
+  schema:
+  - name: id
+    dataType: BIGINT
+  - name: email
+    dataType: VARCHAR
+  semantics:
+  - name: hasOwner
+    description: The table has at least one owner to route contract failures to.
+    rule: '{"!!": [{"var": "owners.0"}]}'
+    enabled: true
+  - name: hasDescription
+    description: The table has a description.
+    rule: '{"!!": [{"var": "description"}]}'
+    enabled: true
