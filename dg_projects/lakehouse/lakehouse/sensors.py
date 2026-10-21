@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import time
 from collections.abc import Mapping
 
 from dagster import (
@@ -195,6 +196,13 @@ def iceberg_snapshot_pointer_lag_sensor(
     )
 
 
+# How long one tick of asset_check_openmetadata_sensor keeps starting writes.
+# ol-infrastructure sets DAGSTER_SENSOR_GRPC_TIMEOUT_SECONDS to 300, and a tick
+# that times out advances no cursor, so a batch too slow for one tick would be
+# retried without end.
+OPENMETADATA_PUSH_SECONDS_PER_TICK = 120
+
+
 def build_asset_check_openmetadata_sensor(
     table_fqns: Mapping[AssetKey, str],
 ) -> SensorDefinition:
@@ -224,15 +232,20 @@ def build_asset_check_openmetadata_sensor(
         if not context.cursor:
             context.update_cursor(latest_check_evaluation_cursor(context.instance))
             return
+        deadline = time.monotonic() + OPENMETADATA_PUSH_SECONDS_PER_TICK
         records = check_evaluation_records(context.instance, int(context.cursor))
         if not records:
             return
-        pushed = push_check_evaluations(
-            records, table_fqns, openmetadata_api.client, context.log
+        pushed, handled = push_check_evaluations(
+            records, table_fqns, openmetadata_api.client, context.log, deadline
         )
         context.log.info(
-            "Pushed %d of %d check evaluations to OpenMetadata", pushed, len(records)
+            "Pushed %d check evaluations to OpenMetadata, up to event %d of %d-%d",
+            pushed,
+            handled,
+            records[0].storage_id,
+            records[-1].storage_id,
         )
-        context.update_cursor(str(records[-1].storage_id))
+        context.update_cursor(str(handled))
 
     return asset_check_openmetadata_sensor

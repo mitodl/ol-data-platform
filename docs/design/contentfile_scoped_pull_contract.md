@@ -299,6 +299,65 @@ learn a course published. Narrowed to two candidates, not yet decided between th
 (Polling OCW Studio's `publish_date` column already in the warehouse was considered and set aside
 — the two options above stay closer to the current push-based, low-latency model.)
 
+**Decided 2026-10-19: the bucket sensor.** `ocw_content_publish_sensor` (data_loading,
+`defs/ingestion/ocw_content_sensor.py`) polls every five minutes and requests one load scoped to
+the courses published since its last tick. It ships stopped. The reasons:
+
+- The platform can ship it alone. The webhook needs a receiver, and nothing in the platform
+  accepts a call from ocw-studio today: it means a new authenticated endpoint (or a queue the
+  sensor reads) built in ol-infrastructure. On the sending side ocw-studio needs no code: `OpenCatalogWebhookStep` posts
+  `{"webhook_key", "prefix": "<site url>/", "version": "live"}` to every URL in
+  `OPEN_CATALOG_URLS`, after the upload and the CDN purge, so adding a platform URL there is a
+  config change in ocw-studio's environment.
+- The bucket has a cheap publish signal. An online publish writes the course's
+  `courses/<slug>/data.json` with the rest of its build (for the 39 courses published 2026-10-16
+  to 2026-10-19 the last object landed at most 3 s after it), so the `LastModified` of that one
+  object is the course's last publish. One HEAD per course (2,603 prefixes, 2,590 with a
+  `data.json`) took 16 s from a laptop with 32 in flight, against 206 s and 456 requests for a
+  listing of all 455,605 objects. At five minutes that is ~750,000 HEAD requests a day.
+- `LastModified` only says _when_ to look. Whether a course changed is still decided by its ETag
+  digest in dlt state, so a publish or a mass rebuild that rewrites identical bytes costs one
+  listing of the course and no Tika calls.
+- The bucket is in our AWS account (`ocw_site` stack in ol-infrastructure), so S3 event
+  notifications to SQS are possible. They would cut the five minutes to seconds but need a queue,
+  an EventBridge rule and IAM for the Dagster role. The scoped load below is what either trigger
+  calls, so moving to events later changes only the sensor.
+
+How a scoped load behaves (`ocw_content_source(courses=[...])`):
+
+- It reads a named course only when its digest changed (`force=True` reads it regardless), and
+  records the new digest in the same dlt state the daily sweep reads, so the sweep skips it.
+- It never unpublishes. A named course gone from the bucket, or whose prefix has no `data.json`,
+  is skipped and its state left as it was: it does not mark the prefix empty, does not count
+  toward the 10% limit, and does not move the sweep's resume point. Only the sweep, which has seen
+  the whole bucket, settles those.
+- It stops at the byte budget like the sweep, and the asset drains it, so a large named set is
+  safe to request. From the launchpad, a named set is run config on `ocw_content_ingest`:
+  `ops: {ocw_content_ingest: {config: {courses: [<slug>, ...]}}}`.
+
+How the sensor and the sweep share the state:
+
+- Each load saves the whole dlt state, and a load restores the one saved by the newest load id
+  (dlt's filesystem destination, `get_stored_state`). Two loads at once would drop what the earlier one recorded, e.g. the gone courses a
+  sweep unpublished, which the next sweep would unpublish and count against the limit again. So
+  the sensor waits while a sweep or scoped load is running, and the schedule ticks hourly from
+  04:35 to 09:35 and starts the day's one sweep at the first tick nothing is running. A load
+  started by hand from the UI is not seen by either.
+- More than 50 courses written per poll interval is a mass rebuild (138 courses per five minutes at
+  the median on 2026-10-14; the busiest day of single publishes since had 30). The sensor skips
+  those and the sweep reads them. The limit scales with the window, so the publishes that piled up
+  while a load ran are not taken for a rebuild.
+- The cursor moves when a run is requested, so the courses of a scoped run that fails wait for the
+  next sweep.
+
+It ends at the raw load. `integrations__learn__ocw_content_files` still rebuilds with the daily
+lakehouse run, and telling Learn a course changed is the sender this section is about, which is
+still not built. Publish-to-row latency (target: one poll plus the settle time plus the run) is
+only measurable once the sensor runs in production.
+
+Unpublish is unchanged: the platform learns of it from the sweep, up to a day late. Learn's own
+webhook still unpublishes immediately.
+
 Whichever is chosen, it needs to account for **unpublish**, which the existing Learn-facing webhook
 also handles and which happens immediately today. If that webhook is retired outright, the platform
 side needs an equivalent immediate signal for a course being unpublished — the §7 daily
