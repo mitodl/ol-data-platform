@@ -132,7 +132,13 @@ models:
       accounts, so it may differ from the address the organization enrolled
       them under. It is not a join key.
   - name: full_name
-    description: dim_user.full_name. It is often null.
+    description: >
+      dim_user.full_name, trimmed, with a blank name folded into null. It is
+      often null. dim_user falls back to first name, a space and last name,
+      which is ' ' for a learner who set neither; folded to null, that name
+      sorts with the missing ones rather than before every name. A name MIT Learn
+      stored as a dict string ("{'givenName': ...}") is passed through
+      unchanged; that is dim_user's to fix.
   - name: enrollment_created_on
     description: >
       When this run's enrollment was created, in ISO-8601. The API exposes it
@@ -314,7 +320,9 @@ models:
     description: >
       dim_user.email. It is not a join key; see mv_b2b_learner_enrollment.
   - name: full_name
-    description: dim_user.full_name. It is often null.
+    description: >
+      dim_user.full_name, trimmed, with a blank name folded into null, as in
+      mv_b2b_learner_enrollment. It is often null.
   - name: membership_source
     description: >
       How the learner is attached to the organization. roster means they are on
@@ -358,9 +366,13 @@ models:
       The number of distinct non-revoked mitxonline program certificates the
       learner holds for programs that contain a course they enrolled in, active
       or not, under the organization's contracts. That bound keeps a
-      certificate earned outside the licence from being reported. The API's
-      certificates_earned is courses_certified plus
-      program_certificates_earned.
+      certificate earned outside the licence from being reported.
+  - name: certificates_earned
+    description: >
+      courses_certified plus program_certificates_earned: every non-revoked
+      course and program certificate counted above. The API publishes it as
+      certificates_earned. It discloses the learner's outcomes, so a reader
+      withholds it on outcomes_shared as it does the two counts it adds.
   - name: last_active_on
     description: >
       The latest last_active_on across the learner's active enrollments under
