@@ -65,13 +65,6 @@ with enrollment_detail as (
     from course_enrollment_detail
         inner join course
             on course_enrollment_detail.course_readable_id = course.course_readable_id
-            and course.primary_platform = case
-                when course_enrollment_detail.platform = '{{ var("mitxonline") }}' then 'mitxonline'
-                when course_enrollment_detail.platform = '{{ var("edxorg") }}' then 'edxorg'
-                when course_enrollment_detail.platform in (
-                    '{{ var("mitxpro") }}', '{{ var("emeritus") }}', '{{ var("global_alumni") }}'
-                ) then 'mitxpro'
-            end
             and course.is_current = true
         inner join program_course
             on course.course_pk = program_course.course_fk
@@ -145,5 +138,8 @@ left join combined_users as combined_users2
     on enrollment_detail.user_hashed_id = combined_users2.user_hashed_id
 left join courses_detail
     on enrollment_detail.platform_name = courses_detail.platform
-    and enrollment_detail.program_readable_id = courses_detail.program_readable_id
+    and (
+            enrollment_detail.program_readable_id = courses_detail.program_readable_id
+        or (enrollment_detail.program_readable_id is null
+            and enrollment_detail.program_title = courses_detail.program_title))
     and enrollment_detail.user_email = courses_detail.user_email
