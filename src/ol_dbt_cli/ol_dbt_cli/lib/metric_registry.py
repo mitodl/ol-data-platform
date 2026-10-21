@@ -6,7 +6,7 @@ Each file defines one metric and names the columns that carry it:
       name: learner_completion_status
       description: ...
       metricType: OTHER
-    status: Approved              # entityStatus; sync applies it by PATCH
+    status: Approved              # Draft or Approved; sync applies it by PATCH
     implemented_by:
       - dbt_model: afact_learner_courserun_progress
         columns: [completion_status]
@@ -89,6 +89,13 @@ _NAMED_REFERENCES = {
     },
 }
 _NAMED_REFERENCE_FIELDS = ("owners", "reviewers")
+
+# The pull request that changes a file is the approval, so a file says only
+# whether its metric is approved. The sync bot is not a reviewer: OpenMetadata
+# 2.0.5 lets only a reviewer move a metric from In Review to Approved or
+# Rejected (EntityUpdater.updateEntityStatus), and reviewers are all users or
+# exactly one team (validateReviewers), so the bot cannot sit beside a team.
+FILE_STATUSES = ("Draft", "Approved")
 
 
 _TOP_LEVEL_KEYS = frozenset({"metric", "status", "implemented_by"})
@@ -287,7 +294,17 @@ def _check_body(metric: MetricDefinition, report: ValidationReport) -> None:
             f"`metric.{key}` is not a field the file may set",
             EXCLUDED_FIELDS.get(key, unknown_hint),
         )
-    document = {"metric": metric.body} | ({} if metric.status is None else {"status": metric.status})
+    if metric.status is not None and metric.status not in FILE_STATUSES:
+        report.add(
+            METRIC_REGISTRY_CHECK,
+            Severity.ERROR,
+            label,
+            f"`status` is {metric.status!r}; a metric file sets only {' or '.join(FILE_STATUSES)}",
+            "Approval happens on the pull request that changes this file. In Review, Rejected, Deprecated and "
+            "OpenMetadata's other statuses are not set from files: the sync bot is not a metric reviewer, and "
+            "OpenMetadata lets only a reviewer approve or reject a metric that is In Review.",
+        )
+    document = {"metric": metric.body}
     # Draft 4 is the JSON Schema dialect an OpenAPI 3.0 schema object is closest to.
     # A value of the wrong type fails several keywords at once; one finding per value says enough.
     errors: dict[str, str] = {}

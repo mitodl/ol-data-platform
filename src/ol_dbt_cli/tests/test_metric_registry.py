@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 from ol_dbt_cli.lib.metric_registry import (
+    FILE_STATUSES,
     METRIC_REGISTRY_CHECK,
     SCHEMA_SNAPSHOT,
     SCHEMA_VERSION_KEY,
@@ -253,9 +254,26 @@ def test_non_string_metric_keys_are_reported(tmp_path: Path) -> None:
     ]
 
 
-def test_unknown_status_errors(tmp_path: Path) -> None:
-    (message,) = _run(tmp_path, _metric(status="Live"))
-    assert message.startswith("`status`: 'Live' is not one of ")
+SNAPSHOT_STATUSES = json.loads(SCHEMA_SNAPSHOT.read_text())["properties"]["status"]["enum"]
+
+
+@pytest.mark.parametrize("status", FILE_STATUSES)
+def test_draft_and_approved_pass(tmp_path: Path, status: str) -> None:
+    assert _run(tmp_path, _metric(status=status)) == []
+
+
+@pytest.mark.parametrize("status", [*(s for s in SNAPSHOT_STATUSES if s not in FILE_STATUSES), "Live", ["Approved"]])
+def test_status_other_than_draft_or_approved_errors(tmp_path: Path, status: Any) -> None:
+    _write(tmp_path, _metric(status=status))
+    report = ValidationReport()
+    check_metric_registry(load_metrics(tmp_path), *_project(*INTACT), report)
+    (issue,) = report.issues
+    assert issue.message == f"`status` is {status!r}; a metric file sets only Draft or Approved"
+    assert issue.detail.startswith("Approval happens on the pull request")
+
+
+def test_file_statuses_are_openmetadata_statuses() -> None:
+    assert set(FILE_STATUSES) <= set(SNAPSHOT_STATUSES)
 
 
 def test_status_is_optional(tmp_path: Path) -> None:
