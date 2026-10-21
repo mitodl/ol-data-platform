@@ -266,6 +266,29 @@ def get_prompt_version(name: str, default_template: str | None = None) -> str:
     return LOCAL_PROMPT_VERSION
 
 
+def publish_prompt_version(name: str, template: str) -> str:
+    """Record template as name's newest Prompt Library version and return it.
+
+    For prompts that stay authoritative in code, where rendering an Opik edit
+    would change what is sent without changing what the caller records as the
+    prompt version (the courseware extractor keys every row on a hash of its code
+    prompt). Opik versions what ran instead: create_prompt adds a version only
+    when the template differs from the latest, so calling this every run is
+    idempotent. Returns LOCAL_PROMPT_VERSION when Opik is unavailable or the
+    publish fails in any way: this is provenance, never a reason to fail a run.
+    """
+    client = get_opik_client()
+    if client is None:
+        return LOCAL_PROMPT_VERSION
+    try:
+        prompt = client.create_prompt(name=name, prompt=template)
+        version = prompt.version or prompt.commit
+    except Exception:
+        log.warning("Opik prompt publish failed for %s", name, exc_info=True)
+        return LOCAL_PROMPT_VERSION
+    return version or LOCAL_PROMPT_VERSION
+
+
 def render_prompt(name: str, default_template: str, **variables: Any) -> str:
     """Render a Prompt Library entry (mustache {{var}} placeholders).
 

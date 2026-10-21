@@ -27,8 +27,8 @@ from pydantic import BaseModel, ValidationError
 log = logging.getLogger(__name__)
 
 EXTRACTOR_ID = "courseware_claims_v1"
-DEFAULT_MODEL = "claude-opus-5-5"
-BEDROCK_DEFAULT_MODEL = "us.anthropic.claude-opus-5-5"
+DEFAULT_MODEL = "claude-haiku-5-5"
+BEDROCK_DEFAULT_MODEL = "us.anthropic.claude-haiku-5-5"
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 DEFAULT_EFFORT: Effort = "medium"
 # Streaming, so the SDK's HTTP timeout does not bound long outputs.
