@@ -87,7 +87,15 @@
 {%- endmacro %}
 
 
-{# courseware_answer_markers: how many "Solution:" or "Answer:" labels the first 50,000 characters hold #}
+{#
+    courseware_answer_markers: how many "Solution:" or "Answer:" labels the first 50,000
+    characters hold. "Expected length of answer:" and "Your answer:" ask for an answer
+    rather than give one, so they are not counted.
+#}
 {% macro courseware_answer_markers(text) -%}
-    {{ array_length(regexp_extract_all("substr(" ~ text ~ ", 1, 50000)", "'(?i)(solution|answer)s?\\s*:'")) }}
+    {%- set head = "substr(" ~ text ~ ", 1, 50000)" -%}
+    (
+        {{ array_length(regexp_extract_all(head, "'(?i)(solution|answer)s?\\s*:'")) }}
+        - {{ array_length(regexp_extract_all(head, "'(?i)(of|your)\\s+(solution|answer)s?\\s*:'")) }}
+    )
 {%- endmacro %}
