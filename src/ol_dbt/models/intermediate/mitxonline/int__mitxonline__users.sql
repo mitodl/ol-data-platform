@@ -47,8 +47,24 @@ with users as (
     select * from {{ ref('stg__mitxonline__openedx__mysql__auth_user') }}
 )
 
+-- A user can hold more than one Open edX username (e.g. one renamed when the account was
+-- retired). Keep one, or every join on user_id below repeats the user, and so does every
+-- model that reads this one: synced first, then the latest.
 , openedxuser_mapping as (
-    select * from {{ ref('stg__mitxonline__app__postgres__openedx_openedxuser') }}
+    select *
+    from (
+        select
+            *
+            , row_number() over (
+                partition by user_id
+                order by
+                    openedxuser_has_been_synced desc nulls last
+                    , openedxuser_updated_on desc nulls last
+                    , openedxuser_id desc
+            ) as openedxuser_row_num
+        from {{ ref('stg__mitxonline__app__postgres__openedx_openedxuser') }}
+    ) as ranked
+    where openedxuser_row_num = 1
 )
 
 select
