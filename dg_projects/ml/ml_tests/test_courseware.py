@@ -40,6 +40,25 @@ def test_verify_passage(passage, status):
     assert verify_passage(passage, SOURCE).status == status
 
 
+def test_verify_passage_rejects_a_quote_stitched_from_distant_sentences():
+    # most of its trigrams are in the source, but in two places a sentence apart
+    passage = (
+        "k-means follows a completely different methodology we need to know the "
+        "number of clusters in advance"
+    )
+    assert verify_passage(passage, SOURCE) == ("unverified", None, None)
+
+
+def test_verify_passage_near_match_offsets_cover_the_quoted_stretch():
+    match = verify_passage(
+        "for k-means clustering we need know the number of clusters in advance", SOURCE
+    )
+    assert match.status == "fuzzy"
+    assert SOURCE[match.char_start : match.char_end] == (
+        "for k-means clustering, we need to know the number of clusters in advance"
+    )
+
+
 def test_verify_passage_offsets_index_the_source():
     match = verify_passage("we need to know the number of clusters", SOURCE)
     assert SOURCE[match.char_start : match.char_end] == (

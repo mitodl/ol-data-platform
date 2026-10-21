@@ -200,6 +200,6 @@ models:
     - accepted_values:
         values: [exact, fuzzy, unverified, unknown_source]
   - name: char_start
-    description: int, offset of an exact match in the source text
+    description: int, offset of an exact or fuzzy match in the source text
   - name: char_end
-    description: int, end offset of an exact match in the source text
+    description: int, end offset of an exact or fuzzy match in the source text
