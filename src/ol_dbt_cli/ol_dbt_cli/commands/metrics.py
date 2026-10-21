@@ -196,7 +196,7 @@ def _sync_one(
         # Even a structural PUT would end the review by resetting the status to
         # Unprocessed, so --force does not reach past this.
         console.print(
-            f"[bold red]in review[/]  {name}: In Review in OpenMetadata, and sync does not override a review "
+            f"[bold red]in review[/] {name}: In Review in OpenMetadata, and sync does not override a review "
             "in progress, even with --force. A reviewer approves or rejects it in OpenMetadata, or someone moves "
             "it out of In Review; then sync again."
         )
@@ -265,7 +265,7 @@ def sync(
             name=["--force"],
             help=(
                 "Overwrite description, owners, reviewers or status that were edited in OpenMetadata since the "
-                "last sync."
+                "last sync. Never overrides a metric that is In Review: sync writes nothing for it."
             ),
         ),
     ] = False,
