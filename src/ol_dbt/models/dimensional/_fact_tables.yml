@@ -27,7 +27,10 @@ models:
     description: >
       Surrogate primary key. Generated from (enrollment_id, platform, enrollment_type).
     tests:
-    - unique
+    - unique:
+        config:
+          # The model keeps no dedup, so any duplicate key is a lost grain upstream.
+          error_if: ">0"
     - not_null
   - name: enrollment_id
     description: Source system enrollment ID
@@ -249,7 +252,10 @@ models:
     description: >
       Surrogate primary key. Generated from (order_id, line_id, platform).
     tests:
-    - unique
+    - unique:
+        config:
+          # The model keeps no dedup, so any duplicate key is a lost grain upstream.
+          error_if: ">0"
     - not_null
   - name: order_id
     description: Source system order ID
@@ -475,7 +481,10 @@ models:
   - name: certificate_key
     description: Surrogate key for certificate
     tests:
-    - unique
+    - unique:
+        config:
+          # The model keeps no dedup, so any duplicate key is a lost grain upstream.
+          error_if: ">0"
     - not_null
   - name: certificate_id
     description: Source system certificate ID
@@ -602,7 +611,10 @@ models:
   - name: grade_key
     description: Surrogate key for grade record
     tests:
-    - unique
+    - unique:
+        config:
+          # The model keeps no dedup, so any duplicate key is a lost grain upstream.
+          error_if: ">0"
     - not_null
   - name: grade_id
     description: >
@@ -912,15 +924,6 @@ unit_tests:
       courseruncertificate_created_on: "2024-04-02T00:00:00"
       courseruncertificate_updated_on: "2024-04-02T00:00:00"
       courseruncertificate_issued_on: "2024-04-02T00:00:00"
-    # Two dim_user rows match this learner, so the certificate enters twice under one
-    # key. It is still one certificate and stays current.
-    - courseruncertificate_id: 501
-      user_id: 5
-      courserun_readable_id: "course-v1:MITxT+Unknown"
-      courseruncertificate_is_revoked: false
-      courseruncertificate_created_on: "2024-05-01T00:00:00"
-      courseruncertificate_updated_on: "2024-05-01T00:00:00"
-      courseruncertificate_issued_on: "2024-05-01T00:00:00"
   - input: ref('int__mitxpro__courserun_certificates')
     rows: []
   - input: ref('int__edxorg__mitx_courserun_certificates')
@@ -959,14 +962,6 @@ unit_tests:
       email: "carol@example.com"
       mitxonline_application_user_id:
       edxorg_openedx_user_id: 30
-    - user_pk: "USER_5A"
-      email: "five-a@example.com"
-      mitxonline_application_user_id: 5
-      edxorg_openedx_user_id:
-    - user_pk: "USER_5B"
-      email: "five-b@example.com"
-      mitxonline_application_user_id: 5
-      edxorg_openedx_user_id:
   - input: ref('dim_course_run')
     rows:
     - courserun_pk: "RUN_MITXONLINE"
@@ -1028,10 +1023,68 @@ unit_tests:
       certificate_is_revoked: false
       certificate_issued_on: "2024-04-02T00:00:00"
       is_current: true
-    - platform: "mitxonline"
-      user_fk: "USER_5A"
-      certificate_is_revoked: false
-      certificate_issued_on: "2024-05-01T00:00:00"
+- name: test_tfact_certificate_keeps_one_row_per_micromasters_certificate
+  description: >
+    int__micromasters__course_certificates repeats a course certificate once per
+    program the course counts toward. The fact does not keep the program, so the
+    certificate is one row.
+  model: tfact_certificate
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__courserun_certificates')
+    rows: []
+  - input: ref('int__mitxpro__courserun_certificates')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_certificates')
+    rows: []
+  - input: ref('int__micromasters__course_certificates')
+    rows:
+    - user_email: "dee@example.com"
+      courserun_readable_id: "MITx/14.73x/2020"
+      micromasters_program_id: 1
+      courseruncertificate_uuid: "mm-uuid"
+      courseruncertificate_created_on: "2020-05-02T00:00:00"
+    - user_email: "dee@example.com"
+      courserun_readable_id: "MITx/14.73x/2020"
+      micromasters_program_id: 2
+      courseruncertificate_uuid: "mm-uuid"
+      courseruncertificate_created_on: "2020-05-02T00:00:00"
+  - input: ref('int__mitxonline__program_certificates')
+    rows: []
+  - input: ref('int__mitxpro__program_certificates')
+    rows: []
+  - input: ref('int__edxorg__mitx_program_certificates')
+    rows: []
+  - input: ref('int__bootcamps__courserun_certificates')
+    rows: []
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_DEE"
+      email: "dee@example.com"
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "RUN_EDXORG"
+      courserun_readable_id: "MITx/14.73x/2020"
+      platform: "edxorg"
+      is_current: true
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_MICROMASTERS"
+      platform_readable_id: "micromasters"
+  - input: ref('dim_certificate_type')
+    rows:
+    - certificate_type_pk: "CERT_TYPE_VERIFIED"
+      certificate_type_code: "verified"
+  - input: ref('dim_program')
+    rows: []
+  expect:
+    rows:
+    - platform: "micromasters"
+      user_fk: "USER_DEE"
+      courserun_fk: "RUN_EDXORG"
+      certificate_uuid: "mm-uuid"
       is_current: true
 - name: test_tfact_certificate_moves_is_current_to_a_newer_certificate
   description: >
@@ -1497,11 +1550,11 @@ unit_tests:
 - name: test_tfact_enrollment_resolves_emeritus_global_alumni_fks
   description: >
     Emeritus learners match dim_user by student id, falling back to email; Global
-    Alumni learners match by email, falling back to student id. Both platforms resolve
-    their course run through the xPro run that carries the same external run code,
-    or,
-    when no xPro run does, through the platform's own dim_course_run row for that
-    code.
+    Alumni learners match by email, falling back to student id. A student id two
+    dim_user rows hold (one id under two emails) resolves to no one. Both platforms
+    resolve their course run through the xPro run that carries the same external
+    run code (the earliest created, when two do), or, when no xPro run does,
+    through the platform's own dim_course_run row for that code.
   model: tfact_enrollment
   overrides:
     macros:
@@ -1527,6 +1580,15 @@ unit_tests:
       courserun_readable_id: "course-v1:xPRO+A+R1"
     - courserun_external_readable_id: ""
       courserun_readable_id: "course-v1:xPRO+NOCODE+R1"
+    # two xPro runs carry one code: the earlier-created one takes it
+    - courserun_external_readable_id: "RUN-B"
+      courserun_readable_id: "course-v1:xPRO+B+R1"
+      courserun_id: 10
+      courserun_created_on: "2026-10-02T00:00:00"
+    - courserun_external_readable_id: "RUN-B"
+      courserun_readable_id: "course-v1:xPRO+Bx+R1"
+      courserun_id: 20
+      courserun_created_on: "2026-10-14T00:00:00"
   - input: ref('stg__emeritus__api__bigquery__user_enrollments')
     rows:
       # run code with no xPro run: resolves to the platform-native dim_course_run row
@@ -1553,6 +1615,14 @@ unit_tests:
       enrollment_created_on: "2024-03-01T00:00:00"
       enrollment_updated_on: "2024-03-02T00:00:00"
       is_enrolled: true
+      # run code two xPro runs share: resolves to the earlier-created run, once
+    - user_id: "E-4"
+      user_email: "e4@example.com"
+      user_full_name: "Eve Four"
+      courserun_external_readable_id: "RUN-B"
+      enrollment_created_on: "2024-03-01T00:00:00"
+      enrollment_updated_on: "2024-03-02T00:00:00"
+      is_enrolled: true
   - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
     rows:
       # matched by email
@@ -1565,6 +1635,17 @@ unit_tests:
       user_email:
       courserun_external_readable_id: "RUN-A"
       is_enrolled: false
+      # student id under two emails, so two dim_user rows: the email match is used and
+      # the id fallback does not repeat the enrollment
+    - user_id: "G-4"
+      user_email: "g4@example.com"
+      courserun_external_readable_id: "RUN-A"
+      is_enrolled: true
+      # no email and that shared id: matches no one, and is not repeated
+    - user_id: "G-4"
+      user_email:
+      courserun_external_readable_id: "RUN-Y"
+      is_enrolled: true
       # run code with no xPro run: resolves to the platform-native dim_course_run row
     - user_id: "G-3"
       user_email: "g3@example.com"
@@ -1591,6 +1672,15 @@ unit_tests:
     - user_pk: "USER_G3"
       global_alumni_user_id: "G-3"
       email: "g3@example.com"
+    - user_pk: "USER_E4"
+      emeritus_user_id: "E-4"
+      email: "e4@example.com"
+    - user_pk: "USER_G4"
+      global_alumni_user_id: "G-4"
+      email: "g4@example.com"
+    - user_pk: "USER_G4_OTHER_EMAIL"
+      global_alumni_user_id: "G-4"
+      email: "g4-other@example.com"
   - input: ref('dim_course_run')
     rows:
     - courserun_pk: "RUN_A_XPRO"
@@ -1604,6 +1694,14 @@ unit_tests:
     - courserun_pk: "RUN_Y_GLOBAL_ALUMNI"
       courserun_readable_id: "RUN-Y"
       platform: "global_alumni"
+      is_current: true
+    - courserun_pk: "RUN_B_XPRO"
+      courserun_readable_id: "course-v1:xPRO+B+R1"
+      platform: "mitxpro"
+      is_current: true
+    - courserun_pk: "RUN_BX_XPRO"
+      courserun_readable_id: "course-v1:xPRO+Bx+R1"
+      platform: "mitxpro"
       is_current: true
   - input: ref('dim_program')
     rows: []
@@ -1653,17 +1751,36 @@ unit_tests:
       platform_fk: "PLATFORM_GLOBAL_ALUMNI"
       enrollment_type: "course"
       enrollment_is_active: true
+    - platform: "emeritus"
+      user_fk: "USER_E4"
+      courserun_fk: "RUN_B_XPRO"
+      platform_fk: "PLATFORM_EMERITUS"
+      enrollment_type: "course"
+      enrollment_is_active: true
+    - platform: "global_alumni"
+      user_fk: "USER_G4"
+      courserun_fk: "RUN_A_XPRO"
+      platform_fk: "PLATFORM_GLOBAL_ALUMNI"
+      enrollment_type: "course"
+      enrollment_is_active: true
+    - platform: "global_alumni"
+      user_fk:
+      courserun_fk: "RUN_Y_GLOBAL_ALUMNI"
+      platform_fk: "PLATFORM_GLOBAL_ALUMNI"
+      enrollment_type: "course"
+      enrollment_is_active: true
 - name: test_tfact_enrollment_keys_emeritus_enrollment_id_on_the_staging_grain
   description: >
     An Emeritus enrollment_id is keyed on run code, email and first and last name,
     never the
-    student id, so a student id filled in on a later load is the same enrollment (one
-    row),
-    while a different email is a different enrollment. The name is keyed as first
-    and last, so
-    two splits of one name ("William" + "Lo Cubilla" and "William Lo" + "Cubilla")
-    stay
-    separate rows.
+    student id, so a student id filled in on a later load keeps the enrollment's key
+    (the
+    E-9 row has the key the row had without a student id; staging keeps one row per
+    that
+    grain, so the two never arrive together), while a different email is a different
+    enrollment. The name is keyed as first and last, so two splits of one name
+    ("William" +
+    "Lo Cubilla" and "William Lo" + "Cubilla") stay separate rows.
   model: tfact_enrollment
   overrides:
     macros:
@@ -1687,14 +1804,7 @@ unit_tests:
     rows: []
   - input: ref('stg__emeritus__api__bigquery__user_enrollments')
     rows:
-      # no student id yet
-    - user_id:
-      user_email: "kay@example.com"
-      user_first_name: "Kay"
-      user_last_name: "Lee"
-      courserun_external_readable_id: "RUN-A"
-      is_enrolled: true
-      # the same enrollment after the student id is filled in
+      # the enrollment after its student id is filled in
     - user_id: "E-9"
       user_email: "kay@example.com"
       user_first_name: "Kay"
@@ -1812,6 +1922,80 @@ unit_tests:
       grade_id: "7001"
       grade_date_key: 20240115
       user_fk: "NEW_USER_PK"
+      platform: "mitxonline"
+      grade_value: 0.95
+      is_passing: true
+      letter_grade: "A"
+      grade_created_on: "2024-01-15T00:00:00"
+      grade_updated_on: "2024-01-15T00:00:00"
+- name: test_tfact_grade_rewrites_a_key_the_target_holds_twice_as_one_row
+  description: >
+    A grade a past run wrote twice (before its source was fixed) is re-selected
+    and written once, so delete+insert replaces both copies. Its timestamp is
+    below the watermark and its user_fk has not changed, so nothing else would
+    re-select it, and a snapshot with both copies would write it twice again.
+  model: tfact_grade
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__courserun_grades')
+    rows:
+    - courserungrade_id: 7001
+      user_id: 555
+      courserun_readable_id: "course-v1:MITxT+1"
+      courserun_platform: "MITx Online"
+      courserungrade_grade: 0.95
+      courserungrade_letter_grade: "A"
+      courserungrade_is_passing: true
+      courserungrade_created_on: "2024-01-15T00:00:00"
+      courserungrade_updated_on: "2024-01-15T00:00:00"
+  - input: ref('int__mitxpro__courserun_grades')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_grades')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_grades')
+    rows: []
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_PK"
+      mitxonline_application_user_id: 555
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_MITXONLINE"
+      platform_readable_id: "mitxonline"
+  - input: this
+    rows:
+    - &stored_copy
+      grade_key: "e466cc3cac58c5170c9703eed3b27a11"  # pragma: allowlist secret
+      grade_id: "7001"
+      grade_date_key: 20240115
+      user_fk: "USER_PK"
+      platform: "mitxonline"
+      grade_value: 0.95
+      is_passing: true
+      letter_grade: "A"
+      grade_created_on: "2024-01-15T00:00:00"
+      grade_updated_on: "2024-01-15T00:00:00"
+    - *stored_copy
+    - grade_key: "unrelated-later-grade"
+      grade_id: "9999"
+      grade_date_key: 20240201
+      user_fk: "SOME_OTHER_USER_PK"
+      platform: "mitxonline"
+      grade_value: 0.80
+      is_passing: true
+      letter_grade: "B"
+      grade_created_on: "2024-02-01T00:00:00"
+      grade_updated_on: "2024-02-01T00:00:00"
+  expect:
+    rows:
+    - grade_key: "e466cc3cac58c5170c9703eed3b27a11"  # pragma: allowlist secret
+      grade_id: "7001"
+      grade_date_key: 20240115
+      user_fk: "USER_PK"
       platform: "mitxonline"
       grade_value: 0.95
       is_passing: true
