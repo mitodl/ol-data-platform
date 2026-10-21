@@ -20,6 +20,13 @@ description, owners, reviewers and status wherever they still differ. An
 unchanged file writes no Metric field; it re-PUTs its lineage edges, which
 the server upserts.
 
+A file's status is Draft or Approved, and the bot is not a metric reviewer.
+OpenMetadata checks the updater only on a move from In Review to Approved or
+Rejected (``EntityUpdater.updateEntityStatus``), so a metric someone moved to
+In Review is drift, and with ``--force`` the bot's PATCH back to Approved is
+refused with a 403 and reported as a failure for that metric. A move out of
+Unprocessed, where a PUT leaves the status, is not checked.
+
 The server stores ``DescriptionSanitizer.sanitize(description)`` on create,
 PUT and PATCH. That is the OWASP HTML sanitizer, which decodes the text and
 re-encodes ``& < > " ' + = @ ` `` as entities (``learner's`` is stored as

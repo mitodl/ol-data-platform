@@ -96,6 +96,7 @@ class FakeOpenMetadata(OpenMetadataClient):
         super().__init__("https://om.example/api", "token")
         self.version = SNAPSHOT_VERSION
         self.teams = {"data-platform": "team-1"}
+        self.team_members = {"team-1": {"jane"}}
         self.glossary_terms = {"Learning.Course completion"}
         self.tables = {PROGRESS_FQN: "table-1"}
         self.metrics: dict[str, dict[str, Any]] = {}
@@ -154,6 +155,7 @@ class FakeOpenMetadata(OpenMetadataClient):
             case ("PATCH", "metrics", metric_id):
                 assert content_type == openmetadata.JSON_PATCH_CONTENT_TYPE
                 [metric] = [m for m in self.metrics.values() if m["id"] == metric_id]
+                self._check_status_change(metric, body)
                 for op in body:
                     assert op["op"] == "add"
                     field = op["path"].lstrip("/")
@@ -166,6 +168,23 @@ class FakeOpenMetadata(OpenMetadataClient):
                 # LineageResource.addLineage answers 200 with no body.
                 return None
         raise OpenMetadataError(f"{method} {path} -> 404: not found", 404)
+
+    def _check_status_change(self, metric: dict[str, Any], ops: list[dict[str, Any]]) -> None:
+        """Refuse the bot's move out of In Review to Approved or Rejected unless it is a reviewer.
+
+        EntityUpdater.updateEntityStatus and checkUpdatedByReviewer; the server
+        answers 403 (AuthorizationException) and stores none of the PATCH.
+        """
+        status = next((op["value"] for op in ops if op["path"] == "/entityStatus"), None)
+        if metric["entityStatus"] != "In Review" or status not in ("Approved", "Rejected"):
+            return
+        reviewers = metric.get("reviewers") or []
+        if reviewers and not any(
+            BOT in self.team_members.get(r["id"], set()) if r["type"] == "team" else r.get("name") == BOT
+            for r in reviewers
+        ):
+            message = json.dumps({"code": 403, "message": f"User '{BOT}' is not a reviewer"})
+            raise OpenMetadataError(f"PATCH /v1/metrics/{metric['id']} -> 403: {message}", 403)
 
     def _related_refs(self, body: dict[str, Any]) -> list[dict[str, Any]]:
         """Turn CreateMetric's relatedMetrics FQNs into the references the entity holds."""
@@ -345,6 +364,35 @@ def test_ui_edit_to_a_synced_field_is_drift_until_forced(
 
     assert _sync(metrics_dir, names=("certified_learners",), force=True) is False
     assert server.metrics["certified_learners"][field] == synced
+
+
+def test_ui_move_to_in_review_is_drift_and_a_forced_approval_fails_for_that_metric_only(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir)
+    server.edit_in_ui("certified_learners", "jane", reviewers=TEAM_REF, entityStatus="In Review")
+    capsys.readouterr()
+    server.calls.clear()
+
+    # The drift check reads the status before any write, so the bot never tries to approve.
+    assert _sync(metrics_dir) is True
+    # Rich wraps lines at the console width.
+    out = " ".join(capsys.readouterr().out.split())
+    assert "entityStatus (In Review in OpenMetadata, Approved in the file)" in out
+    assert ("PUT", "/v1/lineage") in server.writes()
+    assert all(path != "/v1/metrics/metric-1" for _, path in server.writes())
+    assert server.metrics["certified_learners"]["entityStatus"] == "In Review"
+
+    # --force tries, and the server refuses a bot that is not a reviewer.
+    server.calls.clear()
+    assert _sync(metrics_dir, force=True) is True
+    out = " ".join(capsys.readouterr().out.split())
+    assert "failed" in out
+    assert f"User '{BOT}' is not a reviewer" in out
+    assert ("PATCH", "/v1/metrics/metric-1") in server.calls
+    assert server.metrics["certified_learners"]["entityStatus"] == "In Review"
+    # The other metric still synced.
+    assert "synced learner_completion_status" in out
 
 
 def test_ui_owners_naming_the_same_team_are_not_drift(server: FakeOpenMetadata, metrics_dir: Path) -> None:
