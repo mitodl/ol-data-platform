@@ -429,6 +429,8 @@ models:
       newly_certified_learners.
     config:
       meta:
+        api_description: 'Deprecated: use newly_certified_learners, which this always
+          equals.'
         cohort:
           role: secondary
           uncontained: true
@@ -1154,6 +1156,8 @@ models:
       newly_certified_learners.
     config:
       meta:
+        api_description: 'Deprecated: use newly_certified_learners, which this always
+          equals.'
         cohort:
           role: secondary
           uncontained: true
