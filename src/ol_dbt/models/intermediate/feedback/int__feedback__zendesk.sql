@@ -1,6 +1,9 @@
 -- Grain: one public, requester-authored comment = one turn.
 with ticket_comment as (
-    select * from {{ ref('int__zendesk__ticket_comment') }}
+    select
+        *
+        , {{ appzi_normalize('comment_plain_body') }} as appzi_body
+    from {{ ref('int__zendesk__ticket_comment') }}
 )
 
 , ticket as (
@@ -21,8 +24,8 @@ with ticket_comment as (
             partition by ticket_comment.ticket_id
             order by ticket_comment.comment_created_at, ticket_comment.comment_id
         ) as turn_index
-        , {{ is_appzi_email('ticket_comment.comment_plain_body') }} as is_appzi
-        , {{ appzi_untable('ticket_comment.comment_plain_body') }} as appzi_body
+        , ticket_comment.appzi_body
+        , {{ is_appzi_email('ticket_comment.appzi_body') }} as is_appzi
     from ticket_comment
     inner join ticket on ticket_comment.ticket_id = ticket.ticket_id
     where
@@ -30,7 +33,7 @@ with ticket_comment as (
         and ticket_comment.comment_author_user_id = ticket.ticket_requester_user_id
         -- Zendesk's own demo content, not feedback anyone gave us.
         and coalesce(ticket_comment.comment_source_channel, '') != 'sample_ticket'
-        and not {{ is_appzi_notice('ticket_comment.comment_plain_body') }}
+        and not {{ is_appzi_notice('ticket_comment.appzi_body') }}
 )
 
 , parsed_turns as (
@@ -38,12 +41,14 @@ with ticket_comment as (
         requester_turns.*
         , case
             when requester_turns.is_appzi
-                then {{ appzi_feedback_text('requester_turns.appzi_body') }}
+                then {{ appzi_feedback_text(
+                    'requester_turns.appzi_body', 'requester_turns.comment_plain_body'
+                ) }}
             else requester_turns.comment_plain_body
         end as text
         , case
             when requester_turns.is_appzi
-                then {{ appzi_page_url('requester_turns.comment_plain_body') }}
+                then {{ appzi_page_url('requester_turns.appzi_body') }}
         end as appzi_page_url
     from requester_turns
 )

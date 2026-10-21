@@ -1,10 +1,25 @@
 {# Parse the Appzi survey emails that reach Zendesk as tickets. #}
 
+{% macro appzi_normalize(body) %}
+  {#- Appzi changes its email spacing between templates (from 2026-10-15 every block
+      is also wrapped in "|" rows). Stripping spaces, tabs and "|" around each line
+      break and collapsing blank lines gives one layout, so the parsers below match
+      text, not spacing. -#}
+  {%- set newline = codepoint_char(10) -%}
+  {%- set lines_trimmed = regexp_replace_all(body, "'[ \t|]*\n[ \t|]*'", newline) -%}
+  {%- set blank_lines_collapsed = regexp_replace_all(
+      lines_trimmed, "'\n{3,}'", dbt.concat([newline, newline])
+  ) -%}
+  {{ regexp_replace_all(blank_lines_collapsed, "'^[\s|]+|[\s|]+$'", "''") }}
+{% endmacro %}
+
+
+{#- The macros below take a body that went through appzi_normalize. -#}
+
 {% macro is_appzi_email(body) %}
-  {#- Anchored so a human reply quoting an Appzi email is not matched. The table
-      layout starts with rows of "|". -#}
+  {#- Anchored so a human reply quoting an Appzi email is not matched. -#}
   {%- set pattern -%}
-    '^[|\s]*(\[https://appzistatic[^\]]*\]\S*\s*)?Instantly Capture Insightful Customer Feedback'
+    '^(\[https://appzistatic[^\]]*\]\S*\s*)?Instantly Capture Insightful Customer Feedback'
   {%- endset -%}
   {#- An Appzi email that starts at its first question, without the header. -#}
   {%- set cut_off_pattern -%}'(?s)^[*•][^\n]*\n.*\n\nFeedback Origin'{%- endset -%}
@@ -34,27 +49,19 @@
 {% endmacro %}
 
 
-{% macro appzi_untable(body) %}
-  {#- From 2026-10-15 Appzi wraps each block in "|" rows. Removing them gives the
-      older layout that appzi_feedback_text parses. -#}
-  {{ regexp_replace_all(
-      body
-      , "' ?\n\n \|\n\n\| \n\n'"
-      , dbt.concat(["' '", codepoint_char(10), codepoint_char(10)])
-  ) }}
-{% endmacro %}
-
-
-{% macro appzi_feedback_text(body) %}
-  {#- "<type>: <answer>". An unmatched body comes back whole, so a template change loses no text. -#}
-  {%- set type_pattern -%}'\n\n\S+ ([A-Za-z]+) \n\n {1,2}\*\n\n'{%- endset -%}
-  {%- set answer_pattern -%}'(?s)\*\n\n[^\n]*\n\n (.*?) \n\n {1,2}\*\n\nFeedback Origin'{%- endset -%}
-  {#- Fallback for a cut-off email: its spacing differs, and some use "•" for "*".
-      Naming MIT Learn's three questions keeps it off an earlier "*". -#}
+{% macro appzi_feedback_text(body, raw_body) %}
+  {#- "<type>: <answer>". An unmatched email comes back as raw_body, so a template
+      change loses no text. -#}
+  {#- The type line starts with an emoji, which keeps a short answer such as
+      "not working" from reading as a type. -#}
+  {%- set type_pattern -%}'\n\n[^\x00-\x7F]+ ([A-Za-z]+)\n\n\*\n\n'{%- endset -%}
+  {%- set answer_pattern -%}'(?s)\*\n\n[^\n]*\n\n(.*?)\n\n\*\n\nFeedback Origin'{%- endset -%}
+  {#- Fallback for a cut-off email, where some use "•" for "*". Naming MIT Learn's
+      three questions keeps it off an earlier "*". -#}
   {%- set cut_off_answer_pattern -%}
-    '(?s)[*•] ?\n{0,2}What (?:did you find|is your suggestion|did you like)\? ?\n\n ?(.*?) ?\n\n {0,2}[*•] ?\n\nFeedback Origin'
+    '(?s)[*•] ?\n{0,2}What (?:did you find|is your suggestion|did you like)\?\n\n(.*?)\n\n[*•]\n\nFeedback Origin'
   {%- endset -%}
-  {%- set no_answer_pattern -%}'\n\n\S+ [A-Za-z]+ \n\n {1,2}\*\n\nFeedback Origin'{%- endset -%}
+  {%- set no_answer_pattern -%}'\n\n[^\x00-\x7F]+ [A-Za-z]+\n\n\*\n\nFeedback Origin'{%- endset -%}
   {#- Sent in place of the feedback when the Appzi plan limit is reached. -#}
   {%- set excerpt_pattern -%}'(?s)Excerpt: (.*?)\n\nYour portal has exceeded'{%- endset -%}
   {%- set feedback_type = regexp_extract_or_null(body, type_pattern, 1) -%}
@@ -69,7 +76,7 @@
           ]) }}
       when {{ excerpt }} is not null then {{ html_unescape(excerpt) }}
       when {{ regexp_like(body, no_answer_pattern) }} then {{ feedback_type }}
-      else {{ body }}
+      else {{ raw_body }}
   end
 {% endmacro %}
 
@@ -78,7 +85,7 @@
   {#- The Feedback Origin link ends in the page URL as base64url. The EMAIL parameter
       goes because PII masking does not cover this column. -#}
   {%- set pattern -%}
-    'Feedback Origin \n\n [^\n(]*(?:\(|&lt;)http[^)\s&]*/(aHR0[A-Za-z0-9_-]*)'
+    'Feedback Origin\n\n[^\n(]*(?:\(|&lt;)http[^)\s&]*/(aHR0[A-Za-z0-9_-]*)'
   {%- endset -%}
   {%- set page_url = base64url_decode_or_null(regexp_extract_or_null(body, pattern, 1)) -%}
   {%- set without_email = regexp_replace_with_backreferences(
