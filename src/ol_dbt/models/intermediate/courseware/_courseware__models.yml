@@ -59,7 +59,11 @@ models:
   description: Every claim extraction, and whether it is current, the one its scope
     part is read from now. A scope's newest complete reading is current, so a run
     that extracts only some parts of a new reading changes nothing until the rest
-    succeed.
+    succeed. A scope the run's extraction sources no longer have has no current extraction.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: extraction_key
     description: str, sha256 of everything the call depended on (extractor, prompt

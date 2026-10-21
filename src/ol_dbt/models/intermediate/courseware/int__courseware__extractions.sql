@@ -21,9 +21,21 @@
     A reading is dated by the newest extraction that records it. Text that changes
     and then changes back writes nothing new (every key is stored), so the later
     reading stays current until the scope is read again.
+
+    A scope the run's sources no longer have (a sequential since read as context,
+    say) has no current extraction, or its old claims would be counted beside the
+    new.
 #}
 with extractions as (
     select * from {{ source('courseware_intermediate', 'courseware_claim_extraction') }}
+)
+
+, current_scopes as (
+    select distinct
+        platform
+        , courserun_readable_id
+        , scope_id
+    from {{ ref('int__courseware__extraction_sources') }}
 )
 
 , readings as (
@@ -175,7 +187,15 @@ select
     , extractions.cache_read_input_tokens
     , extractions.cache_creation_input_tokens
     , extractions.extracted_at
-    , (current_extractions.extraction_key is not null) as is_current
+    , (
+        current_extractions.extraction_key is not null
+        and current_scopes.scope_id is not null
+    ) as is_current
 from extractions
 left join current_extractions
     on extractions.extraction_key = current_extractions.extraction_key
+left join current_scopes
+    on
+        extractions.platform = current_scopes.platform
+        and extractions.courserun_readable_id = current_scopes.courserun_readable_id
+        and extractions.scope_id = current_scopes.scope_id
