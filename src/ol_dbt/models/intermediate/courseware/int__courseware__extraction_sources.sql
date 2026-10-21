@@ -14,7 +14,8 @@
     randomized variants of one question. Files are dropped by the export's own exclusion
     rules, except about_page: Learn leaves the about pages out of search, but the
     description and prerequisites stated there are what the context scope is for.
-    Answer keys and solution sets (courseware_answer_document) are never read.
+    Answer keys and solution sets (courseware_answer_key over the file's path, minus its
+    extension, and the opening of its text) are never read.
 
     The build covers the runs int__courseware__extraction_allowlist approves.
     var('courseware_courseruns') replaces that with a list of runs, for local
@@ -224,7 +225,7 @@ with content as (
             ))
 )
 
--- answer keys and solution sets are never read (courseware_answer_document)
+-- answer keys and solution sets are never read (courseware_answer_key); an Open edX file has no title
 , unscoped_documents as (
     select documents.*
     from documents
@@ -235,7 +236,12 @@ with content as (
             and documents.content_file_path = excluded_paths.content_file_path
     where
         excluded_paths.content_file_path is null
-        and not {{ courseware_answer_document('documents.content_file_path') }}
+        and not {{ courseware_answer_key(
+            regexp_replace_all('documents.content_file_path', "'[.][A-Za-z0-9]+$'", "''")
+            , "''"
+            , courseware_text_head('documents.content_file_text')
+            , courseware_answer_markers('documents.content_file_text')
+        ) }}
 )
 
 -- every html body's links, including those of a body Tika failed on or found empty
