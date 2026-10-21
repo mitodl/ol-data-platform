@@ -354,6 +354,11 @@ models:
     description: Platform identifier string
     tests:
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.platform
   - name: order_state
     description: Order state (fulfilled, cancelled, etc.)
     tests:
@@ -453,6 +458,11 @@ models:
     description: Platform identifier string
     tests:
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.platform
   - name: payment_method_fk
     description: >
       Foreign key to dim_payment_method. NULL for refund transactions and zero-dollar
@@ -708,6 +718,11 @@ models:
     - not_null
     - accepted_values:
         values: ['mitxonline', 'mitxpro', 'edxorg', 'residential']
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.platform
   - name: grade_value
     description: Numeric grade value between 0.0 and 1.0
     config:

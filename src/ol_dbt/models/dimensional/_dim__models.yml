@@ -1741,6 +1741,11 @@ models:
       edxorg).
     tests:
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.platform
   - name: courserun_readable_id
     description: string, course run id as recorded on the event.
     tests:
@@ -1845,6 +1850,11 @@ models:
       residential, bootcamps).
     tests:
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.platform
   - name: enrollment_created_on
     description: string, ISO-8601 timestamp the reported enrollment was created. Carried
       from tfact_enrollment.
