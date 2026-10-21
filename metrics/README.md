@@ -89,12 +89,17 @@ Unprocessed, which would end a review without a reviewer or undo a rejection.
 
 - In Review clears when a reviewer approves or rejects the metric in
   OpenMetadata, or someone moves it out of In Review.
-- Rejected means a reviewer turned the definition down. It clears with a change
-  to the metric file (e.g. back to `Draft` with the definition fixed) and
-  someone moving the metric out of Rejected in OpenMetadata.
+- Rejected means a reviewer turned the definition down. Sync reads only the
+  live status, so moving the metric out of Rejected in OpenMetadata releases
+  it. The expected process is to change the metric file in a pull request as
+  well (e.g. back to `Draft` with the definition fixed), but sync does not
+  check for that. Moved out with no file change, a file that says `Approved`
+  differs from the live status and from the bot's last write, so sync reports
+  status drift and writes nothing, and `--force` would approve it again. A
+  file that says `Draft`, with the metric moved to Draft, syncs.
 
-The next sync then proceeds, reporting drift if the status differs from the
-file.
+Once the hold clears, the next sync proceeds, reporting drift if the status
+differs from the file.
 
 ## Naming
 

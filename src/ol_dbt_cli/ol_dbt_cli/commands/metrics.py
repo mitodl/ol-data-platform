@@ -201,7 +201,7 @@ def _sync_one(
         # Even a structural PUT would reset the status to Unprocessed, so
         # --force does not reach past this.
         label, message = hold
-        console.print(f"[bold red]{label}[/]{' ' * (_LABEL_WIDTH - len(label))}{name}: {message}")
+        console.print(f"[bold red]{label.ljust(_LABEL_WIDTH)}[/]{name}: {message}")
         return False
     body = create_body(metric, owner_refs, reviewer_refs, live)
     # Before any write: a PUT records the bot as updatedBy, after which a human

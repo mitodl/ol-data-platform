@@ -400,6 +400,26 @@ def test_a_metric_in_review_or_rejected_is_left_alone_and_fails_while_the_others
     assert [e["edge"]["toEntity"]["id"] for e in server.lineage] == [server.metrics["learner_completion_status"]["id"]]
 
 
+@pytest.mark.parametrize("file_status", ["Approved", "Draft"])
+def test_moving_a_rejected_metric_to_draft_releases_it(
+    server: FakeOpenMetadata, metrics_dir: Path, file_status: str
+) -> None:
+    _sync(metrics_dir)
+    server.edit_in_ui("certified_learners", "jane", entityStatus="Rejected")
+    path = metrics_dir / "certified_learners.yaml"
+    path.write_text(path.read_text().replace("status: Approved", f"status: {file_status}"))
+    server.edit_in_ui("certified_learners", "jane", entityStatus="Draft")
+    if file_status == "Approved":
+        # The file was not changed, so the move reads as status drift.
+        assert _sync(metrics_dir, names=("certified_learners",)) is True
+        assert server.metrics["certified_learners"]["entityStatus"] == "Draft"
+        assert _sync(metrics_dir, names=("certified_learners",), force=True) is False
+        assert server.metrics["certified_learners"]["entityStatus"] == "Approved"
+    else:
+        assert _sync(metrics_dir, names=("certified_learners",)) is False
+        assert server.metrics["certified_learners"]["entityStatus"] == "Draft"
+
+
 @pytest.mark.parametrize("status", sorted(REVIEW_HOLDS))
 def test_dry_run_reports_a_metric_in_review_or_rejected(
     server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str], status: str

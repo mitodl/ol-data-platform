@@ -27,9 +27,12 @@ review: it resets In Review to Unprocessed, and a move out of Unprocessed is
 not checked. So sync writes nothing for a metric that is In Review, lineage
 included, with or without ``--force``, until a reviewer approves or rejects it
 or someone moves it out of In Review. A Rejected metric is held the same way:
-a reviewer turned the definition down, and a PUT or PATCH from the file would
-quietly undo that. It takes a file change (e.g. back to Draft with the
-definition fixed) and someone moving it out of Rejected in OpenMetadata.
+a reviewer turned the definition down, and any PUT resets the status to
+Unprocessed, as would a status PATCH when the file sets a status. The guard
+reads only the live status, so moving the metric out of Rejected releases it;
+the expected process is to change the file too (e.g. back to Draft with the
+definition fixed). Moved out with no file change, a file that says Approved
+shows status drift, and ``--force`` would approve it again.
 
 The server stores ``DescriptionSanitizer.sanitize(description)`` on create,
 PUT and PATCH. That is the OWASP HTML sanitizer, which decodes the text and

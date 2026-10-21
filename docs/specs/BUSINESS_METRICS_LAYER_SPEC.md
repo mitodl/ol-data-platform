@@ -444,9 +444,12 @@ it writes nothing for that metric (no PUT, no PATCH, no lineage edge), with or w
 non-zero; `--dry-run` reports the same. Skipping only the status PATCH would not do, because
 a structural PUT alone resets the status to Unprocessed, ending a review without a reviewer
 or undoing a rejection. In Review clears when a reviewer approves or rejects the metric, or
-anyone moves it out of In Review. Rejected (decided 2026-10-21) clears with a change to the
-metric file (e.g. back to Draft with the definition fixed) and someone moving the metric out
-of Rejected in OpenMetadata.
+anyone moves it out of In Review. Rejected (decided 2026-10-21) clears when someone moves the
+metric out of Rejected; the guard reads only the live status. The expected process also
+changes the metric file (e.g. back to Draft with the definition fixed), which sync does not
+check. Moved out with no file change, a file that says Approved is status drift, so sync
+writes nothing unless `--force`, which would approve it again; a file that says Draft, with
+the metric moved to Draft, syncs.
 
 Descriptions: the server stores `DescriptionSanitizer.sanitize(description)` on create, PUT
 and PATCH, which HTML-encodes text (`'` as `&#39;`, `"` as `&#34;`), so sync compares
