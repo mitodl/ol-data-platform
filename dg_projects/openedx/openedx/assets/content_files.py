@@ -191,10 +191,12 @@ HTML_CONTENT_TYPE = "text/html"
 # has static/<name> and ../static/<name>. A link copied from a rendered page
 # carries the asset key instead, sometimes of another run, behind a
 # /assets/courseware/v1/<hash>/ prefix when it came from Studio's CDN, or the
-# old-style /c4x/<org>/<course>/asset/<name> form.
+# old-style /c4x/<org>/<course>/asset/<name> form. The LMS writes the key's
+# +block@ as +block/ when it rewrites a /static/ link (static_replace), so a link
+# copied from a rendered page can have either.
 _STATIC_PATH_PATTERN = re.compile(r"^(?:\.{1,2}/)*/?static/([^?#]+)")
 _ASSET_KEY_PATTERN = re.compile(
-    r"asset-v1:[^/?#]+?\+type@asset\+block@([^/?#]+)|/c4x/[^/]+/[^/]+/asset/([^?#]+)"
+    r"asset-v1:[^/?#]+?\+type@asset\+block[@/]([^/?#]+)|/c4x/[^/]+/[^/]+/asset/([^?#]+)"
 )
 
 

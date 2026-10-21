@@ -672,6 +672,8 @@ def test_static_references_cover_relative_and_legacy_links():
         b'<a href="/c4x/MITx/6.002x/asset/e%20notes.pdf">e</a>'
         b'<a href="https://courses.edx.org/c4x/MITx/6.002x/asset/f.pdf">f</a>'
         b'<a href="/statics/g.pdf">not static/</a>'
+        b'<a href="/assets/courseware/v1/0a1b/asset-v1:MITx+6.002x+2T2026'
+        b'+type@asset+block/h.pdf">h, as the LMS rewrites /static/</a>'
     )
 
     assert static_references(html) == [
@@ -681,6 +683,7 @@ def test_static_references_cover_relative_and_legacy_links():
         "static/d.pdf",
         "static/e notes.pdf",
         "static/f.pdf",
+        "static/h.pdf",
     ]
 
 
