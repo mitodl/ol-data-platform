@@ -72,17 +72,20 @@ class ColumnCohort(BaseModel):
         return self
 
 
-def column_cohort(column: Mapping[str, Any]) -> Any:
-    """Return a column's cohort block from ``config.meta`` or the older column-level ``meta``.
+def column_meta(column: Mapping[str, Any], key: str, default: Any = None) -> Any:
+    """Return a column's ``key`` from ``config.meta`` or the older column-level ``meta``.
 
     dbt copies either spelling into the manifest, so a declaration under the older
     one must not leave the model unchecked.
+
+    :param default: What to return when neither spelling has the key, so a caller
+        can tell an absent key from one set to null.
     """
     config = column.get("config")
     for meta in (config.get("meta") if isinstance(config, dict) else None, column.get("meta")):
-        if isinstance(meta, dict) and "cohort" in meta:
-            return meta["cohort"]
-    return None
+        if isinstance(meta, dict) and key in meta:
+            return meta[key]
+    return default
 
 
 def _field_message(detail: Mapping[str, Any]) -> str:
@@ -101,7 +104,7 @@ def _model_issues(columns: Sequence[Mapping[str, Any]]) -> list[str]:
     cohorts: dict[str, ColumnCohort] = {}
     for column in columns:
         name = str(column.get("name", "<unnamed column>"))
-        raw = column_cohort(column)
+        raw = column_meta(column, "cohort")
         if raw is None:
             issues.append(f"{name} declares no config.meta.cohort")
             continue
@@ -157,7 +160,7 @@ def check_cohort_policy(dbt_dir: Path, report: ValidationReport) -> None:
             if not isinstance(model, dict):
                 continue
             columns = [column for column in model.get("columns") or [] if isinstance(column, dict)]
-            if not any(column_cohort(column) is not None for column in columns):
+            if not any(column_meta(column, "cohort") is not None for column in columns):
                 continue
             for message in _model_issues(columns):
                 report.add(
