@@ -195,7 +195,7 @@ def _sheet_context(service_account_json):
     return SimpleNamespace(
         resources=SimpleNamespace(
             google_sheet_config=SimpleNamespace(
-                service_account_json=service_account_json,
+                service_account_json=lambda: service_account_json,
                 sheet_id="sheet-1",
                 worksheet_id=0,
             )

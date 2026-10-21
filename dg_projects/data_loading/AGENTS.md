@@ -37,12 +37,12 @@ src/ol_dlt/                         # the standalone dlt project (pure dlt)
 dg_projects/data_loading/
 ├── data_loading/
 │   ├── definitions.py              # load_from_defs_folder + DagsterDltResource
-│   └── defs/ingestion/
-│       ├── __init__.py             # maps DAGSTER_ENVIRONMENT -> DLT_PROFILE
-│       ├── translators.py          # RawDataDltTranslator + EdxorgDltTranslator
-│       ├── assets.py               # build_ingest_assets() factory + per-source @dlt_assets
-│       ├── schedules.py
-│       └── sensor.py               # edxorg upstream multi_asset_sensor
+│   ├── defs/ingestion/
+│   │   ├── __init__.py             # maps DAGSTER_ENVIRONMENT -> DLT_PROFILE
+│   │   ├── translators.py          # RawDataDltTranslator + EdxorgDltTranslator
+│   │   ├── assets.py               # build_ingest_assets() factory + per-source @dlt_assets
+│   │   ├── schedules.py
+│   │   └── sensor.py               # edxorg upstream multi_asset_sensor
 │   └── defs/canvas/                # Canvas course exports (not dlt), see above
 └── data_loading_tests/test_translators.py
 ```
