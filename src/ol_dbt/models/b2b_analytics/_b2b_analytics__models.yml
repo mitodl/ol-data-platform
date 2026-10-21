@@ -410,7 +410,7 @@ models:
     description: >
       Unrevoked certificates earned in the month, an EVENT count (learner x
       course run), whether or not the enrollment is still active. Floor it via
-      certified_learners.
+      newly_certified_learners.
     config:
       meta:
         api_description: Certificates earned this month. A learner who earned two
@@ -418,8 +418,19 @@ models:
         cohort:
           role: derived
           derived_from:
-          - certified_learners
+          - newly_certified_learners
   - name: certified_learners
+    description: >
+      Deprecated, the old name for newly_certified_learners and always equal to
+      it. The certified_learners metric means learners holding an unrevoked
+      certificate for a run, which is not this month's count. Removed once
+      ol-analytics-api and mit-learn read newly_certified_learners.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          uncontained: true
+  - name: newly_certified_learners
     description: >
       Distinct learners who earned a certificate in the month. Earning a
       certificate is not activity, so this is not a subset of
@@ -1122,7 +1133,7 @@ models:
     description: >
       Unrevoked certificates earned in the month, an EVENT count (learner x
       course run), whether or not the enrollment is still active. Floor it via
-      certified_learners.
+      newly_certified_learners.
     config:
       meta:
         api_description: Certificates earned this month. A learner who earned two
@@ -1130,8 +1141,19 @@ models:
         cohort:
           role: derived
           derived_from:
-          - certified_learners
+          - newly_certified_learners
   - name: certified_learners
+    description: >
+      Deprecated, the old name for newly_certified_learners and always equal to
+      it. The certified_learners metric means learners holding an unrevoked
+      certificate for a run, which is not this month's count. Removed once
+      ol-analytics-api and mit-learn read newly_certified_learners.
+    config:
+      meta:
+        cohort:
+          role: secondary
+          uncontained: true
+  - name: newly_certified_learners
     description: >
       Distinct learners who earned a certificate in the month. Earning a
       certificate is not activity, so this is not a subset of
