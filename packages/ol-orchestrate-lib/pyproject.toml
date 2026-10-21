@@ -43,7 +43,7 @@ repository = "https://github.com/mitodl/ol-data-platform"
 [project.optional-dependencies]
 embeddings = [
     "langchain-text-splitters==1.1.2",
-    "ol-llm[bedrock,google,openai]",
+    "ol-llm[bedrock,google,openai]==0.0.3",
     "qdrant-client~=1.18.0",
     "tiktoken~=0.13.0",
 ]
@@ -54,10 +54,6 @@ embeddings = [
 override-dependencies = [
     "pyiceberg>=0.11.1",
 ]
-
-[tool.uv.sources]
-# ol-llm's embed_sync is in mitodl/ol-llm#14, not yet released.
-ol-llm = { git = "https://github.com/mitodl/ol-llm", rev = "1ed59e4", subdirectory = "python" }
 
 [build-system]
 requires = ["hatchling"]

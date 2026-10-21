@@ -3017,8 +3017,8 @@ dev = [{ name = "ruff" }]
 
 [[package]]
 name = "ol-llm"
-version = "0.0.2"
-source = { git = "https://github.com/mitodl/ol-llm?subdirectory=python&rev=1ed59e4#1ed59e4752cb2e1ca118175ff35cd267175b5d6c" }
+version = "0.0.3"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
@@ -3026,6 +3026,10 @@ dependencies = [
     { name = "opik" },
     { name = "pydantic" },
     { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/04/b4/72950ac8a991c6128b21edc4cfdd7b4547befe4a7e75e3fe4bde7fc90658/ol_llm-0.0.3.tar.gz", hash = "sha256:30ac90d7e768bc9ff6643a2779ff0627a369fe0254827a0b5da798c55a81fbef", size = 180545, upload-time = "2026-10-21T16:25:24.246Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/90/eb/467c67e637c68389acbf006291b57cf333659e1c529179868c3307dacd45/ol_llm-0.0.3-py3-none-any.whl", hash = "sha256:cebd48cc5de59f90ccdbcbb2a92fe48c185ec059c339e8af86417077188f6fbe", size = 81564, upload-time = "2026-10-21T16:25:22.933Z" },
 ]
 
 [package.optional-dependencies]
@@ -3091,7 +3095,7 @@ requires-dist = [
     { name = "httpx2", specifier = ">=2.2.0" },
     { name = "hvac", specifier = "~=2.4.0" },
     { name = "langchain-text-splitters", marker = "extra == 'embeddings'", specifier = "==1.1.2" },
-    { name = "ol-llm", extras = ["bedrock", "google", "openai"], marker = "extra == 'embeddings'", git = "https://github.com/mitodl/ol-llm?subdirectory=python&rev=1ed59e4" },
+    { name = "ol-llm", extras = ["bedrock", "google", "openai"], marker = "extra == 'embeddings'", specifier = "==0.0.3" },
     { name = "pandas", specifier = "~=3.0.0" },
     { name = "polars", specifier = ">=1.35.1" },
     { name = "psycopg2-binary", specifier = "~=2.9.10" },
@@ -3242,7 +3246,7 @@ wheels = [
 
 [[package]]
 name = "opik"
-version = "2.2.87"
+version = "2.2.94"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3-stubs", extra = ["bedrock-runtime"] },
@@ -3266,9 +3270,9 @@ dependencies = [
     { name = "uuid6" },
     { name = "watchfiles" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c9/66/5fbddb7f10d455f1ba32f298ed907ef1b33a6ac41621757be6bc42e645f6/opik-2.2.87.tar.gz", hash = "sha256:12df4d75260d984908a1af25d8e59596d96ded801823fdca4a240bc943d4f6d7", size = 1369266, upload-time = "2026-10-01T13:31:31.918Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/eb/56/a433a491c46e15bf56bfd439fb18312e92eb2539345d40c869054be1e644/opik-2.2.94.tar.gz", hash = "sha256:5ad6dab275d23cc2820500ba97a65a077dd818bc592bc9bf59e22abcb5389259", size = 1397362, upload-time = "2026-10-07T14:26:53.644Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9f/99/860ad5774c7d583ef3d942cd7cf40f1730e4f203be870489b63ff527c24f/opik-2.2.87-py3-none-any.whl", hash = "sha256:fb681e7e278a8d9267266381686ed78c2386f84adaa4fb4378b4319ffc6cd0f3", size = 2098717, upload-time = "2026-10-01T13:31:30.226Z" },
+    { url = "https://files.pythonhosted.org/packages/f0/1d/15d3b9fd58e60ae789c3ae33931f679600ea4e107c2c555315ef71f22889/opik-2.2.94-py3-none-any.whl", hash = "sha256:f87cd0e890fbf684915ccd09ca102ebf9861ecb2896e3c605723cea7ffadc262", size = 2134186, upload-time = "2026-10-07T14:26:51.506Z" },
 ]
 
 [[package]]
