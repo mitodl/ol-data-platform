@@ -146,6 +146,39 @@ def test_malformed_sla_fails_load(tmp_path: Path, sla: Any, message: str) -> Non
         load_contracts(tmp_path)
 
 
+OM_ONLY_BINDINGS = [
+    {"type": "table", "dbt_source": "raw.users_user"},
+    {"type": "table", "fqn": "svc.db.s.t"},
+]
+
+
+@pytest.mark.parametrize("entity", OM_ONLY_BINDINGS)
+@pytest.mark.parametrize(
+    "sla",
+    [
+        {"maxLatency": {"value": 2, "unit": "hour"}},
+        {"refreshFrequency": {"interval": 1, "unit": "day"}, "maxLatency": {"value": 2, "unit": "hour"}},
+    ],
+)
+def test_om_only_sla_has_no_bound(tmp_path: Path, entity: dict[str, str], sla: dict[str, Any]) -> None:
+    # OpenMetadata accepts maxLatency alone, and only a dbt_model SLA becomes a
+    # Dagster check, so these load and yield no bound.
+    data = _contract(entity)
+    data["contract"]["sla"] = sla
+    _write(tmp_path, "c", data)
+    (contract,) = load_contracts(tmp_path)
+    assert freshness_bound(contract) is None
+
+
+@pytest.mark.parametrize("entity", OM_ONLY_BINDINGS)
+def test_om_only_malformed_sla_fails_load(tmp_path: Path, entity: dict[str, str]) -> None:
+    data = _contract(entity)
+    data["contract"]["sla"] = {"maxLatency": {"value": 1, "unit": "week"}}
+    _write(tmp_path, "c", data)
+    with pytest.raises(ValueError, match=r"`sla\.maxLatency`"):
+        load_contracts(tmp_path)
+
+
 def test_intact_model_passes(tmp_path: Path) -> None:
     report = _run(tmp_path, _contract(DIM_USER), _registry(_node("dim_user", {"user_pk": "varchar"})), {"user_pk"})
     assert report.issues == []

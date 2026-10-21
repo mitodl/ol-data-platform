@@ -61,7 +61,9 @@ from it: the check fails once the table's last update is older than
 `refreshFrequency` plus `maxLatency` (a month counts as 31 days, a year as 366).
 That check replaces the 26-hour default the dimensional, mart and reporting
 groups otherwise get, and a contracted model in any other group gets one too.
-`sla` on `dbt_source` and `fqn` contracts is recorded in OpenMetadata only.
+A `dbt_model` contract that sets `maxLatency` must also set `refreshFrequency`,
+since the latency is grace on it. `sla` on `dbt_source` and `fqn` contracts is
+recorded in OpenMetadata only, so either field may stand alone there.
 
 The CI check fails when a contracted column is missing from the model or source
 YAML, is no longer selected by the model SQL, has no `data_type`, or has a type

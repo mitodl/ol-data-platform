@@ -85,7 +85,7 @@ def contract_freshness_bounds(
     bounds = {}
     for contract in contracts:
         bound = freshness_bound(contract)
-        if bound is None or contract.entity.kind != "dbt_model":
+        if bound is None:
             continue
         key = model_key(contract.entity.target)
         if key is None:

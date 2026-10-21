@@ -236,12 +236,15 @@ def freshness_bound(contract: DataContract) -> timedelta | None:
     The asset is due once per ``refreshFrequency`` and may land up to
     ``maxLatency`` after that, so the bound is their sum. OpenMetadata stores
     the SLA but never evaluates it; the lakehouse code location turns this
-    bound into the asset's Dagster freshness check.
+    bound into the asset's Dagster freshness check, which only a ``dbt_model``
+    binding gets.
 
-    :returns: ``None`` when the contract sets no ``sla.refreshFrequency``.
+    :returns: ``None`` for a ``dbt_source`` or ``fqn`` binding, or when the
+        contract sets no ``sla.refreshFrequency``.
     :rtype: timedelta | None
-    :raises ValueError: when ``sla`` is not a mapping, or ``refreshFrequency``
-        or ``maxLatency`` does not match OpenMetadata's contractSLA shape.
+    :raises ValueError: when ``sla`` is not a mapping, ``refreshFrequency``
+        or ``maxLatency`` does not match OpenMetadata's contractSLA shape, or a
+        ``dbt_model`` contract sets ``maxLatency`` without ``refreshFrequency``.
     """
     sla = contract.body.get("sla")
     if sla is None:
@@ -249,15 +252,18 @@ def freshness_bound(contract: DataContract) -> timedelta | None:
     if not isinstance(sla, dict):
         msg = f"{contract.path}: `sla` must be a mapping, got {sla!r}"
         raise ValueError(msg)
-    if "refreshFrequency" not in sla:
+    refresh = _sla_duration(contract.path, sla, "refreshFrequency") if "refreshFrequency" in sla else None
+    latency = _sla_duration(contract.path, sla, "maxLatency") if "maxLatency" in sla else timedelta()
+    # OpenMetadata accepts either field alone, and only a dbt_model SLA becomes
+    # a Dagster check, so only there is a latency without a refresh an error.
+    if contract.entity.kind != "dbt_model":
+        return None
+    if refresh is None:
         if "maxLatency" in sla:
             msg = f"{contract.path}: `sla.maxLatency` is grace on `sla.refreshFrequency`, which is missing"
             raise ValueError(msg)
         return None
-    bound = _sla_duration(contract.path, sla, "refreshFrequency")
-    if "maxLatency" in sla:
-        bound += _sla_duration(contract.path, sla, "maxLatency")
-    return bound
+    return refresh + latency
 
 
 def manifest_node(binding: EntityBinding, manifest: ManifestRegistry) -> ManifestModel | None:
