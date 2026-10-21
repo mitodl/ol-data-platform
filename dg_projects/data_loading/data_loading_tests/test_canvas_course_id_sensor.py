@@ -17,15 +17,17 @@ from types import SimpleNamespace
 
 import dagster as dg
 import pytest
-from canvas.lib.canvas import fetch_canvas_course_ids_from_google_sheet
-from canvas.sensors.canvas import (
+from dagster import DagsterRunStatus
+from dagster._core.test_utils import create_run_for_test
+from data_loading.defs.canvas.google_sheet import (
+    fetch_canvas_course_ids_from_google_sheet,
+)
+from data_loading.defs.canvas.sensor import (
     PARTITION_NAME_TAG,
     PENDING_RUN_STATUSES,
     partition_changes,
     partitions_with_a_run_in_flight,
 )
-from dagster import DagsterRunStatus
-from dagster._core.test_utils import create_run_for_test
 
 EXISTING = {"1001", "1002", "1003"}
 
@@ -189,11 +191,18 @@ def test_no_runs_at_all(instance) -> None:
 # ── fetch_canvas_course_ids_from_google_sheet ─────────────────────────────────
 
 
-def _sheet_context(service_account_json):
+class _VaultUnavailableError(Exception):
+    pass
+
+
+def _sheet_context_with_vault_down():
+    def unreadable():
+        raise _VaultUnavailableError
+
     return SimpleNamespace(
         resources=SimpleNamespace(
             google_sheet_config=SimpleNamespace(
-                service_account_json=service_account_json,
+                service_account_json=unreadable,
                 sheet_id="sheet-1",
                 worksheet_id=0,
             )
@@ -208,6 +217,8 @@ def test_missing_credentials_reads_as_failure_not_as_an_empty_sheet() -> None:
     This used to return set(). The sensor could not tell that from a genuinely
     empty sheet, so a transient Vault problem diffed every partition into the
     delete set and wiped the entire Canvas partition definition -- taking any
-    in-flight export down with it.
+    in-flight export down with it. A failed Vault read now raises, so the tick
+    fails before any partition is diffed.
     """
-    assert fetch_canvas_course_ids_from_google_sheet(_sheet_context(None)) is None
+    with pytest.raises(_VaultUnavailableError):
+        fetch_canvas_course_ids_from_google_sheet(_sheet_context_with_vault_down())

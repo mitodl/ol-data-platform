@@ -1,11 +1,11 @@
-"""Tests for the Canvas assets."""
+"""Tests for the Canvas course export webhook, moved here from the canvas location."""
 
 from types import SimpleNamespace
 from typing import Any
 
 import dagster as dg
 import pytest
-from canvas.assets.canvas import course_content_metadata
+from delivery.assets.canvas import course_content_metadata
 
 COURSE_ID = "155"
 

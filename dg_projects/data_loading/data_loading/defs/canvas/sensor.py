@@ -1,3 +1,5 @@
+"""Keep the canvas_course_ids partitions in step with the course ID sheet."""
+
 import json
 
 from dagster import (
@@ -5,6 +7,7 @@ from dagster import (
     AssetKey,
     DagsterRunStatus,
     DefaultSensorStatus,
+    Definitions,
     DeleteDynamicPartitionsRequest,
     RunRequest,
     RunsFilter,
@@ -12,8 +15,19 @@ from dagster import (
     SkipReason,
     sensor,
 )
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 
-from canvas.lib.canvas import fetch_canvas_course_ids_from_google_sheet
+from data_loading.defs.canvas.google_sheet import (
+    fetch_canvas_course_ids_from_google_sheet,
+)
+
+# Only the export. The webhook to MIT Learn (canvas/course_content_metadata) is
+# in delivery, and a sensor can only request assets in its own code location;
+# delivery's canvas_course_export_webhook_sensor picks each new export up.
+CANVAS_EXPORT_ASSET_KEYS = [
+    AssetKey(["canvas", "course_content"]),
+    AssetKey(["canvas", "course_metadata"]),
+]
 
 # Dagster's own run tag. Hardcoded rather than imported: the constant lives in
 # the private dagster._core.storage.tags, but the tag string itself is stable
@@ -77,12 +91,15 @@ def partition_changes(
     description="Sensor to monitor a Google Sheet for Canvas course IDs to export.",
     minimum_interval_seconds=60 * 60,  # Check every 1 hour
     required_resource_keys={"google_sheet_config"},
-    default_status=DefaultSensorStatus.STOPPED,
-    asset_selection=[
-        AssetKey(["canvas", "course_content"]),
-        AssetKey(["canvas", "course_metadata"]),
-        AssetKey(["canvas", "course_content_metadata"]),
-    ],
+    # RUNNING in production in the canvas location at the move (an hourly tick
+    # in production Loki, none in QA's). Instigator state is keyed on location
+    # name, so here it would otherwise start STOPPED.
+    default_status=(
+        DefaultSensorStatus.RUNNING
+        if DAGSTER_ENV == "production"
+        else DefaultSensorStatus.STOPPED
+    ),
+    asset_selection=CANVAS_EXPORT_ASSET_KEYS,
 )
 def canvas_google_sheet_course_id_sensor(context):
     google_sheet_course_ids = fetch_canvas_course_ids_from_google_sheet(context)
@@ -113,11 +130,7 @@ def canvas_google_sheet_course_id_sensor(context):
 
     run_requests = [
         RunRequest(
-            asset_selection=[
-                AssetKey(["canvas", "course_content"]),
-                AssetKey(["canvas", "course_metadata"]),
-                AssetKey(["canvas", "course_content_metadata"]),
-            ],
+            asset_selection=CANVAS_EXPORT_ASSET_KEYS,
             partition_key=course_id,
         )
         for course_id in new_course_ids
@@ -148,3 +161,6 @@ def canvas_google_sheet_course_id_sensor(context):
         run_requests=run_requests,
         cursor=json.dumps(updated_ids),
     )
+
+
+defs = Definitions(sensors=[canvas_google_sheet_course_id_sensor])
