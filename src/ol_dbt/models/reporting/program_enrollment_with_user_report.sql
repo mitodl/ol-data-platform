@@ -25,6 +25,7 @@ with enrollment_detail as (
 , courses_detail as (
     select
         course_enrollment_detail.platform
+        , program.program_title
         , program.program_readable_id
         , course_enrollment_detail.user_email
         , count(
@@ -72,6 +73,7 @@ with enrollment_detail as (
             on program_course.program_fk = program.program_pk
     group by
         course_enrollment_detail.platform
+        , program.program_title
         , program.program_readable_id
         , course_enrollment_detail.user_email
 )
