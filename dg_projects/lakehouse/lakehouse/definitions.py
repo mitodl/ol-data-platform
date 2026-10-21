@@ -75,7 +75,10 @@ from lakehouse.assets.lakehouse.dbt_starrocks import (
 from lakehouse.assets.qa_mirror import build_qa_mirror_assets
 from lakehouse.assets.qa_observation_drift import qa_observation_drift
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
-from lakehouse.assets.superset import build_superset_dataset_assets
+from lakehouse.assets.superset import (
+    build_superset_dataset_assets,
+    superset_dataset_keys,
+)
 from lakehouse.lib.contract_freshness import (
     build_freshness_checks,
     contract_freshness_bounds,
@@ -395,9 +398,11 @@ if TRINO_SUPERSET_DATABASE_ID == STARROCKS_SUPERSET_DATABASE_ID:
     raise ValueError(msg)
 _schema_base = "ol_warehouse_production"
 
-superset_model_keys = [
-    key for key in dbt_model_keys if key.path[0] in dbt_models_for_superset_datasets
-]
+superset_model_keys = superset_dataset_keys(
+    dbt_model_keys,
+    *get_manifest_and_translator_from_dbt_assets([full_dbt_project])[:2],
+    layers=dbt_models_for_superset_datasets,
+)
 superset_assets = build_superset_dataset_assets(
     superset_model_keys,
     database_id=TRINO_SUPERSET_DATABASE_ID,

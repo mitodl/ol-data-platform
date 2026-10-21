@@ -4,7 +4,11 @@ from typing import Any
 
 import pytest
 from dagster import AssetKey, materialize
-from lakehouse.assets.superset import build_superset_dataset_assets
+from dagster_dbt import DagsterDbtTranslator
+from lakehouse.assets.superset import (
+    build_superset_dataset_assets,
+    superset_dataset_keys,
+)
 
 DBT_KEYS = [
     AssetKey(["mart", "Refreshed_Model"]),
@@ -190,3 +194,42 @@ def test_a_subset_touches_only_the_selected_datasets():
 def test_non_trino_database_needs_its_own_id():
     with pytest.raises(ValueError, match="requires an explicit database_id"):
         build_superset_dataset_assets(DBT_KEYS, database_name="starrocks")
+
+
+def _model(name: str, layer: str, meta: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "resource_type": "model",
+        "name": name,
+        "unique_id": f"model.open_learning.{name}",
+        "fqn": ["open_learning", layer, name],
+        "config": {"meta": meta},
+        "meta": meta,
+    }
+
+
+class LayerKeyTranslator(DagsterDbtTranslator):
+    def get_asset_key(self, dbt_resource_props: Any) -> AssetKey:
+        return AssetKey([dbt_resource_props["fqn"][1], dbt_resource_props["name"]])
+
+
+def test_superset_dataset_keys_skip_models_that_opt_out():
+    manifest = {
+        "nodes": {
+            "model.open_learning.dim_a": _model("dim_a", "dimensional", {}),
+            "model.open_learning.tfact_text": _model(
+                "tfact_text", "dimensional", {"superset_dataset": False}
+            ),
+            "model.open_learning.int_b": _model("int_b", "intermediate", {}),
+        }
+    }
+    keys = [
+        AssetKey(["dimensional", "dim_a"]),
+        AssetKey(["dimensional", "tfact_text"]),
+        AssetKey(["intermediate", "int_b"]),
+    ]
+
+    selected = superset_dataset_keys(
+        keys, manifest, LayerKeyTranslator(), layers={"dimensional"}
+    )
+
+    assert selected == [AssetKey(["dimensional", "dim_a"])]

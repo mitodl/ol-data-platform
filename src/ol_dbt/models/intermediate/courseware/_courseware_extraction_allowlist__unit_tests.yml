@@ -1,0 +1,99 @@
+---
+unit_tests:
+- name: test_int__courseware__extraction_allowlist_most_specific_row
+  description: >
+    A run takes its own allowlist row over its course's, and its course's over its
+    platform's. A run no row names is left out, and a run row approves a run that
+    dim_course_run has no current row for.
+  model: int__courseware__extraction_allowlist
+  given:
+  - input: ref('dim_course_run')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", course_fk: a,
+      is_current: true}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+2T", course_fk: a,
+      is_current: true}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+C+1T", course_fk: c,
+      is_current: true}
+    - {platform: mitxpro, courserun_readable_id: "course-v1:xPRO+D+1T", course_fk: d,
+      is_current: true}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: a, course_readable_id: "course-v1:X+A"}
+    - {course_pk: c, course_readable_id: "course-v1:X+C"}
+    - {course_pk: d, course_readable_id: "course-v1:xPRO+D"}
+  - input: ref('courseware_extraction_allowlist')
+    rows:
+    - {platform: mitxonline, course_readable_id: null, courserun_readable_id: null}
+    - {platform: mitxonline, course_readable_id: "course-v1:X+A", courserun_readable_id: null}
+    - {platform: mitxonline, course_readable_id: null, courserun_readable_id: "course-v1:X+A+1T"}
+    - {platform: residential, course_readable_id: null, courserun_readable_id: "course-v1:MITx+R+1T"}
+  expect:
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", allowlist_level: courserun}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+2T", allowlist_level: course}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+C+1T", allowlist_level: platform}
+    - {platform: residential, courserun_readable_id: "course-v1:MITx+R+1T", allowlist_level: courserun}
+
+- name: test_int__courseware__extraction_sources_reads_only_allowlisted_runs
+  description: >
+    With no var naming runs, the sources are built for the runs
+    int__courseware__extraction_allowlist approves and no others.
+  model: int__courseware__extraction_sources
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows:
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/reading1.pdf, content_file_extension: .pdf, content_file_text: Reading
+        one.}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r2, content_file_extraction_status: extracted,
+      content_file_path: static/reading2.pdf, content_file_extension: .pdf, content_file_text: Reading
+        two.}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: r1, allowlist_level: courserun}
+  expect:
+    rows:
+    - {courserun_readable_id: r1, scope_id: materials, source_ref: static/reading1.pdf}
+
+- name: test_int__courseware__extraction_sources_var_replaces_the_allowlist
+  description: >
+    var('courseware_courseruns') names the runs to build for local work, in place
+    of
+    the allowlist, so a run the allowlist does not approve is built and an approved
+    run the var leaves out is not.
+  model: int__courseware__extraction_sources
+  overrides:
+    vars:
+      courseware_courseruns: [r2]
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows:
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/reading1.pdf, content_file_extension: .pdf, content_file_text: Reading
+        one.}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r2, content_file_extraction_status: extracted,
+      content_file_path: static/reading2.pdf, content_file_extension: .pdf, content_file_text: Reading
+        two.}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: r1, allowlist_level: courserun}
+  expect:
+    rows:
+    - {courserun_readable_id: r2, scope_id: materials, source_ref: static/reading2.pdf}

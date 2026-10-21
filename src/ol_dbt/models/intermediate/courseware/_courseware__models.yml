@@ -1,0 +1,228 @@
+---
+version: 2
+
+models:
+- name: int__courseware__extraction_sources
+  description: The text the courseware claim extractor reads, one row per source item
+    of each scope (a sequential, the course context, or the course documents) of an
+    Open edX course run, in reading order. Problem text is the question side only.
+  config:
+    meta:
+      # The text it reads (raw__openedx__s3__course_transcript_text and
+      # course_document_text, raw__edxorg__s3__course_xml_blocks) is absent from QA raw.
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the course run
+    tests:
+    - not_null
+  - name: course_title
+    description: str, the course block's title from dim_course_content
+  - name: scope_id
+    description: str, the sequential's block id, or 'context' or 'materials'
+    tests:
+    - not_null
+  - name: scope_kind
+    description: str, unit, context or materials
+    tests:
+    - accepted_values:
+        values: [unit, context, materials]
+  - name: scope_title
+    description: str, the sequential's title or the scope's name
+  - name: scope_position
+    description: int, the scope's order in the course; 0 for context, 9999 for materials
+  - name: source_position
+    description: int, the source's order within its scope, from 1
+  - name: source_ref
+    description: str, the block id for blocks, the export path for files
+    tests:
+    - not_null
+  - name: source_kind
+    description: str, html, problem, video_transcript, document, about_page, tabs_page
+      or info_page
+  - name: source_title
+    description: str, the block's display name or the file's path
+  - name: source_text
+    description: str, the text as the extractor reads it
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [platform, courserun_readable_id, scope_id, source_ref]
+
+- name: int__courseware__extractions
+  description: Every claim extraction, and whether it is current, the one its scope
+    part is read from now. A scope's newest complete reading is current, so a run
+    that extracts only some parts of a new reading changes nothing until the rest
+    succeed.
+  columns:
+  - name: extraction_key
+    description: str, sha256 of everything the call depended on (extractor, prompt
+      and schema versions, model, effort, run, scope and the full message text)
+    tests:
+    - not_null
+    - unique
+  - name: extractor_id
+    description: str, the extractor, e.g. courseware_claims_v1
+  - name: prompt_version
+    description: str, hash of the system prompt
+  - name: schema_version
+    description: str, hash of the output JSON schema
+  - name: model_id
+    description: str, the model id as sent to the provider
+  - name: effort
+    description: str, output_config.effort for the call
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the run the scope belongs to
+  - name: scope_id
+    description: str, the sequential block id, or 'context' or 'materials'
+  - name: scope_kind
+    description: str, unit, context or materials
+  - name: scope_title
+    description: str, the sequential title or the scope name
+  - name: scope_position
+    description: int, the scope's order in the course; 0 for context, 9999 for materials
+  - name: scope_part
+    description: int, which part of a scope split to fit the input budget, from 1
+  - name: scope_part_count
+    description: int, how many parts the scope was split into
+  - name: input_text_checksum
+    description: str, sha256 of the source text the call read
+  - name: scope_part_checksums
+    description: str, every part's input_text_checksum, in order and comma-separated,
+      as the run that made this call split the scope
+  - name: source_count
+    description: int, number of sources the call read
+  - name: truncated_source_count
+    description: int, number of those sources cut to the per-source limit
+  - name: sources_json
+    description: str, JSON list of {source_id, source_ref, included_chars, total_chars}
+  - name: summary
+    description: str, the model's summary of the scope
+  - name: notes_json
+    description: str, JSON list of the model's notes plus truncation notes
+  - name: stop_reason
+    description: str, the response's stop_reason
+  - name: input_tokens
+    description: int, uncached input tokens billed
+  - name: output_tokens
+    description: int, output tokens billed, thinking included
+  - name: cache_read_input_tokens
+    description: int, input tokens read from the prompt cache
+  - name: cache_creation_input_tokens
+    description: int, input tokens written to the prompt cache
+  - name: extracted_at
+    description: timestamp, when the call returned
+  - name: is_current
+    description: boolean, whether this is the extraction its scope part is read from
+      now
+    tests:
+    - not_null
+
+- name: int__courseware__claims
+  description: Every extracted claim with its scope, extractor version, evidence counts
+    and normalized concept label key.
+  columns:
+  - name: extraction_key
+    description: str, the extraction the claim came from
+    tests:
+    - not_null
+  - name: claim_ordinal
+    description: int, the claim's position in the extraction
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run the scope belongs to
+  - name: scope_id
+    description: str, the sequential's block id, or 'context' or 'materials'
+  - name: scope_kind
+    description: str, unit, context or materials
+  - name: scope_title
+    description: str, the sequential's title or the scope's name
+  - name: scope_position
+    description: int, the scope's order in the course
+  - name: scope_part
+    description: int, which part of a split scope the claim came from, from 1
+  - name: extractor_id
+    description: str, the extractor version
+  - name: prompt_version
+    description: str, hash of the system prompt
+  - name: model_id
+    description: str, the model that made the claim
+  - name: extracted_at
+    description: timestamp, when the extraction returned
+  - name: is_current
+    description: boolean, whether the claim's extraction is the one its scope part
+      is read from now (int__courseware__extractions)
+  - name: claim_kind
+    description: str, concept, skill, assumed_knowledge, assessment_expectation, learning_outcome,
+      declared_prerequisite or audience
+  - name: label
+    description: str, the model's canonical label; the statement for outcomes and
+      audience
+  - name: description
+    description: str, the model's description of how the scope treats the claim
+  - name: concept_kind
+    description: str, concept, method, tool, dataset or application (concepts only)
+  - name: teaching_status
+    description: str, taught, reviewed, used or mentioned (concepts and skills)
+  - name: how_used
+    description: str, where the material relies on assumed knowledge
+  - name: flagged_as_prior
+    description: boolean, whether the material frames assumed knowledge as prior
+  - name: bloom_process
+    description: str, Bloom revised cognitive process (assessments and outcomes)
+  - name: knowledge_type
+    description: str, Bloom revised knowledge type (outcomes)
+  - name: prerequisite_kind
+    description: str, prerequisite, corequisite, recommended or explicitly_none
+  - name: course_ref
+    description: str, a course a declared prerequisite names
+  - name: related_concept_labels_json
+    description: str, JSON list of concept labels an assessment or outcome names
+  - name: concept_label_key
+    description: str, the label as normalized by the courseware_label_key macro (lowercase,
+      plus and hash signs spelled out, separators collapsed), for concept, assumed
+      knowledge and declared prerequisite claims; null for a label with no letters
+      or numbers
+  - name: evidence_count
+    description: int, evidence passages quoted for the claim
+  - name: verified_evidence_count
+    description: int, passages found in the source text (exact or fuzzy)
+  - name: is_verified
+    description: boolean, whether at least one evidence passage was found in the source
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [extraction_key, claim_ordinal]
+
+- name: int__courseware__extraction_allowlist
+  description: One row per course run that courseware_extraction_allowlist approves
+    for claim extraction, with the level of the allowlist row that approved it. int__courseware__extraction_sources
+    is built for these runs only.
+  config:
+    meta:
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the approved run
+    tests:
+    - not_null
+  - name: allowlist_level
+    description: str, courserun, course or platform, the most specific allowlist row
+      that matched the run
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [courserun, course, platform]
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [platform, courserun_readable_id]
