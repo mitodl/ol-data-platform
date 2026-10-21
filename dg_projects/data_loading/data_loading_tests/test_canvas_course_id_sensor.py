@@ -17,15 +17,17 @@ from types import SimpleNamespace
 
 import dagster as dg
 import pytest
-from canvas.lib.canvas import fetch_canvas_course_ids_from_google_sheet
-from canvas.sensors.canvas import (
+from dagster import DagsterRunStatus
+from dagster._core.test_utils import create_run_for_test
+from data_loading.defs.canvas.google_sheet import (
+    fetch_canvas_course_ids_from_google_sheet,
+)
+from data_loading.defs.canvas.sensor import (
     PARTITION_NAME_TAG,
     PENDING_RUN_STATUSES,
     partition_changes,
     partitions_with_a_run_in_flight,
 )
-from dagster import DagsterRunStatus
-from dagster._core.test_utils import create_run_for_test
 
 EXISTING = {"1001", "1002", "1003"}
 

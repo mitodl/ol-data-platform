@@ -30,6 +30,17 @@ _REPO = defs.get_repository_def()
 # module-level import above cached.
 _ENVIRONMENT_SENSITIVE_ROOTS = frozenset({"data_loading", "ol_orchestrate"})
 
+# Moved from the canvas code location (issue #2260) with their keys unchanged,
+# so their materialization history and partitions carry over.
+_CANVAS_EXPORT_ASSET_KEYS = frozenset(
+    {"canvas/course_content", "canvas/course_metadata"}
+)
+
+# The Canvas instigators that were RUNNING in production in the canvas location.
+_CANVAS_INSTIGATOR_NAMES = frozenset(
+    {"canvas_course_export_schedule", "canvas_google_sheet_course_id_sensor"}
+)
+
 # The four tables RFC 12711 step 8's pilot slice reads.
 _B2B_PILOT_ASSET_KEYS = (
     "ol_warehouse_raw_data/raw__mitxonline__app__postgres__b2b_organizationpage",
@@ -87,8 +98,13 @@ def _repository_for(environment: str) -> Iterator[Any]:
 def test_code_location_builds() -> None:
     asset_keys = {k.to_user_string() for k in _REPO.assets_defs_by_key}
     assert asset_keys, "code location exposed no assets"
-    # Every ingest asset lands under the raw-data key prefix...
-    assert all(k.startswith("ol_warehouse_raw_data/") for k in asset_keys)
+    # Every ingest asset lands under the raw-data key prefix, except the Canvas
+    # course exports, which keep the keys they had in the canvas location...
+    assert all(
+        k.startswith("ol_warehouse_raw_data/") or k in _CANVAS_EXPORT_ASSET_KEYS
+        for k in asset_keys
+    )
+    assert asset_keys >= _CANVAS_EXPORT_ASSET_KEYS
     # ...and the headline sources (simple, edxorg S3, edxorg programs) are present.
     for expected in (
         "ol_warehouse_raw_data/raw__oll__google_sheets__courses",
@@ -144,6 +160,41 @@ def test_schedules_and_sensors_load() -> None:
         "edxorg_upstream_changes_sensor",
         "ocw_content_publish_sensor",
     }
+
+
+@pytest.mark.parametrize("environment", ["dev", "ci", "qa", "production"])
+def test_canvas_instigators_start_running_in_production_only(environment: str) -> None:
+    """Read off the built repository, so the wiring and the status are both pinned.
+
+    Both were RUNNING in production in the canvas location and never ticked in
+    QA. Instigator state is keyed on location name, so without the production
+    default they would arrive STOPPED and the exports would stop.
+    """
+    expected = "RUNNING" if environment == "production" else "STOPPED"
+    with _repository_for(environment) as repo:
+        instigators = {
+            instigator.name: instigator
+            for instigator in [*repo.schedule_defs, *repo.sensor_defs]
+            if instigator.name in _CANVAS_INSTIGATOR_NAMES
+        }
+        assert set(instigators) == _CANVAS_INSTIGATOR_NAMES
+        assert {
+            instigator.default_status.value for instigator in instigators.values()
+        } == {expected}
+
+
+def test_canvas_sheet_sensor_requests_only_local_assets() -> None:
+    """The webhook asset is in delivery, and a sensor cannot launch it from here.
+
+    A run request naming canvas/course_content_metadata would fail at launch,
+    taking the new course's export with it.
+    """
+    sensor = _REPO.get_sensor_def("canvas_google_sheet_course_id_sensor")
+    selected = {
+        key.to_user_string()
+        for key in sensor.asset_selection.resolve(_REPO.asset_graph)
+    }
+    assert selected == _CANVAS_EXPORT_ASSET_KEYS
 
 
 def test_dlt_resource_present() -> None:
