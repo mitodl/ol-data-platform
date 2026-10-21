@@ -406,7 +406,8 @@ against a schema the server no longer publishes, and `refresh-schema` comes firs
 
 1. Resolve owner and reviewer names to ids, and check each glossary `tagFQN` exists.
 2. `GET /v1/metrics/name/{name}` and run the drift check below on what comes back. Nothing
-   has been written at this point.
+   has been written at this point. A metric that is In Review stops here (see "Status and
+   approval" below).
 3. `PUT /v1/metrics` with the `metric` body, only when the metric does not exist or one of
    its own fields differs. This creates the entity or updates its structural fields.
 4. `PATCH /v1/metrics/{id}` for description, owners, reviewers and status where they still
@@ -435,12 +436,13 @@ Rejected checks that the updater is a reviewer (`EntityUpdater.updateEntityStatu
 `checkUpdatedByReviewer`). Draft to Approved and any move out of Unprocessed, where a sync
 PUT leaves the status (`setDefaultStatus`), are unchecked, so the bot applies a file's
 status without being a reviewer. Reviewers are either all users or exactly one team
-(`validateReviewers`), so the bot could not sit beside a reviewing team. A metric someone
-moves to In Review in the UI is status drift: sync reports it and writes nothing for that
-metric. With `--force`, the PATCH to Approved fails with a 403 ("User '<bot>' is not a
-reviewer") when the metric has reviewers, and sync reports that metric as failed, carries on
-with the rest, and exits non-zero. A forced run that also PUTs a structural change resets the
-status to Unprocessed first and so does not hit the check.
+(`validateReviewers`), so the bot could not sit beside a reviewing team. Sync does not
+override a review in progress: when the live status is In Review it writes nothing for that
+metric (no PUT, no PATCH, no lineage edge), with or without `--force`, reports it as failed,
+continues with the rest and exits non-zero; `--dry-run` reports the same. Skipping only the
+status PATCH would not do, because a structural PUT alone resets In Review to Unprocessed and
+ends the review without a reviewer. A reviewer approving or rejecting the metric, or anyone
+moving it out of In Review, clears it.
 
 Descriptions: the server stores `DescriptionSanitizer.sanitize(description)` on create, PUT
 and PATCH, which HTML-encodes text (`'` as `&#39;`, `"` as `&#34;`), so sync compares
@@ -527,7 +529,7 @@ Nothing here blocks phase 1.
   request; files set only Draft or Approved, and the sync bot is not a reviewer. None of the
   workflow definitions 2.0.5 seeds triggers on `metric` (only glossaryTerm,
   recognizerFeedback and AI assets), so creating a Metric with reviewers does not set its
-  status. Still unchecked: whether a custom workflow on our server targets metrics, and
-  whether Deprecated (or Archived) should become settable from a file when a metric is
-  retired. Neither the reviewer 403 nor the PUT's reset to Unprocessed has been observed on a
-  server.
+  status. A metric In Review is never written by sync, `--force` included. Still unchecked:
+  whether a custom workflow on our server targets metrics, and whether Deprecated (or
+  Archived) should become settable from a file when a metric is retired. The PUT's reset to
+  Unprocessed has not been observed on a server.

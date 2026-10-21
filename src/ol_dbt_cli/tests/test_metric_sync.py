@@ -366,33 +366,54 @@ def test_ui_edit_to_a_synced_field_is_drift_until_forced(
     assert server.metrics["certified_learners"][field] == synced
 
 
-def test_ui_move_to_in_review_is_drift_and_a_forced_approval_fails_for_that_metric_only(
-    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+IN_REVIEW_MESSAGE = "certified_learners: In Review in OpenMetadata, and sync does not override a review in progress"
+
+
+@pytest.mark.parametrize("structural", [False, True])
+@pytest.mark.parametrize("force", [False, True])
+def test_a_metric_in_review_is_left_alone_and_fails_while_the_others_sync(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str], force: bool, structural: bool
 ) -> None:
     _sync(metrics_dir)
     server.edit_in_ui("certified_learners", "jane", reviewers=TEAM_REF, entityStatus="In Review")
-    capsys.readouterr()
+    if structural:
+        # A PUT alone would reset In Review to Unprocessed.
+        _edit_file(metrics_dir, "certified_learners", metricType="SUM")
+    metric_id = server.metrics["certified_learners"]["id"]
+    version = server.metrics["certified_learners"]["version"]
     server.calls.clear()
+    server.lineage.clear()
+    capsys.readouterr()
 
-    # The drift check reads the status before any write, so the bot never tries to approve.
-    assert _sync(metrics_dir) is True
+    assert _sync(metrics_dir, force=force) is True
     # Rich wraps lines at the console width.
     out = " ".join(capsys.readouterr().out.split())
-    assert "entityStatus (In Review in OpenMetadata, Approved in the file)" in out
-    assert ("PUT", "/v1/lineage") in server.writes()
-    assert all(path != "/v1/metrics/metric-1" for _, path in server.writes())
-    assert server.metrics["certified_learners"]["entityStatus"] == "In Review"
-
-    # --force tries, and the server refuses a bot that is not a reviewer.
-    server.calls.clear()
-    assert _sync(metrics_dir, force=True) is True
-    out = " ".join(capsys.readouterr().out.split())
-    assert "failed" in out
-    assert f"User '{BOT}' is not a reviewer" in out
-    assert ("PATCH", "/v1/metrics/metric-1") in server.calls
-    assert server.metrics["certified_learners"]["entityStatus"] == "In Review"
-    # The other metric still synced.
+    assert IN_REVIEW_MESSAGE in out
+    assert "drift" not in out
+    assert "overriding" not in out
+    assert ("PUT", "/v1/metrics") not in server.writes()
+    assert ("PATCH", f"/v1/metrics/{metric_id}") not in server.writes()
+    assert all(e["edge"]["toEntity"]["id"] != metric_id for e in server.lineage)
+    metric = server.metrics["certified_learners"]
+    assert (metric["entityStatus"], metric["version"]) == ("In Review", version)
+    # The other metric still synced, lineage included.
     assert "synced learner_completion_status" in out
+    assert [e["edge"]["toEntity"]["id"] for e in server.lineage] == [server.metrics["learner_completion_status"]["id"]]
+
+
+def test_dry_run_reports_a_metric_in_review(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir)
+    server.edit_in_ui("certified_learners", "jane", entityStatus="In Review")
+    server.calls.clear()
+    capsys.readouterr()
+    assert _sync(metrics_dir, dry_run=True, force=True) is True
+    out = " ".join(capsys.readouterr().out.split())
+    assert IN_REVIEW_MESSAGE in out
+    assert "would certified_learners" not in out
+    assert "would learner_completion_status" in out
+    assert server.writes() == []
 
 
 def test_ui_owners_naming_the_same_team_are_not_drift(server: FakeOpenMetadata, metrics_dir: Path) -> None:

@@ -22,10 +22,11 @@ the server upserts.
 
 A file's status is Draft or Approved, and the bot is not a metric reviewer.
 OpenMetadata checks the updater only on a move from In Review to Approved or
-Rejected (``EntityUpdater.updateEntityStatus``), so a metric someone moved to
-In Review is drift, and with ``--force`` the bot's PATCH back to Approved is
-refused with a 403 and reported as a failure for that metric. A move out of
-Unprocessed, where a PUT leaves the status, is not checked.
+Rejected (``EntityUpdater.updateEntityStatus``). A PUT would still end a
+review: it resets In Review to Unprocessed, and a move out of Unprocessed is
+not checked. So sync writes nothing for a metric that is In Review, lineage
+included, with or without ``--force``, until a reviewer approves or rejects it
+or someone moves it out of In Review.
 
 The server stores ``DescriptionSanitizer.sanitize(description)`` on create,
 PUT and PATCH. That is the OWASP HTML sanitizer, which decodes the text and
@@ -60,6 +61,8 @@ STATUS_FIELD = "entityStatus"
 # Status CreateMetric cannot carry, so a PUT leaves it on the server
 # (EntityRepository.setDefaultStatus).
 PUT_DEFAULT_STATUS = "Unprocessed"
+# A review in progress, which only a reviewer may end by approving or rejecting.
+IN_REVIEW_STATUS = "In Review"
 # Fields GET /v1/metrics/name/{fqn} returns only when asked for.
 METRIC_FIELDS = "owners,reviewers,tags,relatedMetrics,assets"
 STARROCKS_TAG = "starrocks"

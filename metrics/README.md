@@ -76,13 +76,16 @@ can apply a file's status without being a reviewer. Reviewers are either all
 users or exactly one team (`validateReviewers`), so the bot could not sit
 beside a reviewing team anyway.
 
-When someone moves a metric to In Review in the UI, the next sync reports it as
-drift and exits non-zero without writing that metric. With `--force`, the
-PATCH to Approved fails with OpenMetadata's 403 ("User '<bot>'
-is not a reviewer") when the metric has reviewers; sync reports that metric as
-failed, carries on with the others, and exits non-zero. A forced run that also
-PUTs a structural change does not hit the check, because the PUT resets the
-status to Unprocessed first.
+Sync does not override a review in progress. When a metric is In Review in
+OpenMetadata, sync writes nothing for it (no PUT, no PATCH, no lineage edge),
+with or without `--force` and whether or not the file changed a structural
+field, reports it as failed, carries on with the others, and exits non-zero.
+`--dry-run` reports the same. Skipping only the status PATCH would not be
+enough: a structural PUT alone resets In Review to Unprocessed
+(`setDefaultStatus`), which ends the review without a reviewer. To clear it, a
+reviewer approves or rejects the metric in OpenMetadata, or someone moves it
+out of In Review, and the next sync proceeds (reporting drift if the status
+then differs from the file).
 
 ## Naming
 
@@ -160,6 +163,8 @@ snapshot. For each file it:
    wrote the metric (the newest version in its history whose `updatedBy` is the
    bot), and the change differs from the file, it reports them and exits
    non-zero without writing, unless `--force`. The edit then belongs in a pull request.
+   A metric that is In Review is left alone even with `--force` (see "Status and
+   approval").
    A file change to a field nobody edited in OpenMetadata syncs whatever else
    was edited there;
 3. PUTs the `metric` body only to create the metric or to change one of its own
