@@ -22,7 +22,7 @@ metric:                         # an OpenMetadata CreateMetric body
   reviewers: [{type: team, name: <business team>}]
   tags:
   - {tagFQN: <glossary>.<term>, source: Glossary, labelType: Manual, state: Confirmed}
-status: Draft                   # Draft or Approved; applied by PATCH, not part of CreateMetric
+status: Draft                   # required: Draft or Approved; applied by PATCH, not part of CreateMetric
 implemented_by:
 - dbt_model: afact_learner_courserun_progress
   columns: [completion_status]
@@ -48,8 +48,9 @@ schema:
   metric has in OpenMetadata.
 - `domains`, `dataProducts` and `extension` are not allowed: a bot's PUT does
   not change them on an existing metric, so a file change would never land.
-- `status` takes only `Draft` or `Approved` of the server's statuses (see
-  "Status and approval").
+- `status` is required and takes only `Draft` or `Approved` of the server's
+  statuses (see "Status and approval"). A PUT resets the status in
+  OpenMetadata, so sync always restores it from the file.
 
 A glossary term is a `tags` entry with `source: Glossary`. `metricExpression`
 is documentation only.
@@ -129,7 +130,7 @@ touches `metrics/`, the dbt project or the CLI. It fails when:
 - `metric` sets a field `CreateMetric` does not have;
 - a value in `metric` does not fit the schema snapshot (a wrong type, a value
   outside an enum, a nested object missing a required key);
-- `status` is anything other than `Draft` or `Approved`.
+- `status` is missing, or is anything other than `Draft` or `Approved`.
 
 Changing or removing a column that carries a metric therefore means changing
 the metric file in the same PR, where the reviewer sees it.

@@ -28,7 +28,7 @@ not checked. So sync writes nothing for a metric that is In Review, lineage
 included, with or without ``--force``, until a reviewer approves or rejects it
 or someone moves it out of In Review. A Rejected metric is held the same way:
 a reviewer turned the definition down, and any PUT resets the status to
-Unprocessed, as would a status PATCH when the file sets a status. The guard
+Unprocessed, as would the status PATCH. The guard
 reads only the live status, so moving the metric out of Rejected releases it;
 the expected process is to change the file too (e.g. back to Draft with the
 definition fixed). Moved out with no file change, a file that says Approved
@@ -271,8 +271,8 @@ def drift(
 ) -> list[str]:
     """List the fields someone other than the sync bot changed since the bot last wrote them.
 
-    Only description, owners, reviewers and status are compared, and only
-    where the file sets them. Owners and reviewers compare as sets of entity
+    Only description, owners, reviewers and status are compared, the first
+    three only where the file sets them. Owners and reviewers compare as sets of entity
     references. A field is drift when its live value differs both from
     the file's and from *synced*, so a file change to a field nobody touched
     in OpenMetadata is not drift, and neither is an edit that already matches
@@ -295,19 +295,15 @@ def drift(
     for field in ("owners", "reviewers"):
         if field in metric.body and edited(field, body[field], lambda a, b: _ref_set(a) == _ref_set(b)):
             found.append(field)
-    if metric.status is not None and edited(STATUS_FIELD, metric.status, operator.eq):
+    if edited(STATUS_FIELD, metric.status, operator.eq):
         found.append(f"{STATUS_FIELD} ({live.get(STATUS_FIELD)} in OpenMetadata, {metric.status} in the file)")
     return found
 
 
-def patch_ops(
-    metric: MetricDefinition, body: dict[str, Any], current: dict[str, Any], status: str | None
-) -> list[dict[str, Any]]:
+def patch_ops(metric: MetricDefinition, body: dict[str, Any], current: dict[str, Any]) -> list[dict[str, Any]]:
     """JSON Patch operations that make *current* match the file.
 
     :param current: the metric as it stands before the PATCH.
-    :param status: the status to leave, the file's or, when it sets none, the
-        one the metric had before a PUT reset it; ``None`` leaves it alone.
     """
     ops: list[dict[str, Any]] = []
     if "description" in body and not same_description(current.get("description"), body["description"]):
@@ -315,8 +311,8 @@ def patch_ops(
     for field in ("owners", "reviewers"):
         if field in metric.body and _ref_set(current.get(field)) != _ref_set(body[field]):
             ops.append({"op": "add", "path": f"/{field}", "value": body[field]})
-    if status is not None and current.get(STATUS_FIELD) != status:
-        ops.append({"op": "add", "path": f"/{STATUS_FIELD}", "value": status})
+    if current.get(STATUS_FIELD) != metric.status:
+        ops.append({"op": "add", "path": f"/{STATUS_FIELD}", "value": metric.status})
     return ops
 
 

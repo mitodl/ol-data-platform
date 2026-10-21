@@ -276,10 +276,14 @@ def test_file_statuses_are_openmetadata_statuses() -> None:
     assert set(FILE_STATUSES) <= set(SNAPSHOT_STATUSES)
 
 
-def test_status_is_optional(tmp_path: Path) -> None:
+def test_a_file_without_status_errors(tmp_path: Path) -> None:
     data = _metric()
     del data["status"]
-    assert _run(tmp_path, data) == []
+    _write(tmp_path, data)
+    report = ValidationReport()
+    check_metric_registry(load_metrics(tmp_path), *_project(*INTACT), report)
+    (issue,) = report.issues
+    assert (issue.model, issue.message) == (f"{NAME}.yaml", "`status` is missing; a metric file sets Draft or Approved")
 
 
 @pytest.mark.parametrize(

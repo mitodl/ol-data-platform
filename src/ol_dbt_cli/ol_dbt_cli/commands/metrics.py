@@ -165,7 +165,7 @@ def _sync_one(
             raise ValueError(msg)
         status_problem = file_status_problem(metric.status)
         if status_problem is not None:
-            raise ValueError(". ".join(status_problem))
+            raise ValueError(f"{metric.path.name}: " + ". ".join(status_problem))
         owners = metric.body.get("owners")
         reviewers = metric.body.get("reviewers")
         # An empty list clears the field; only an absent key leaves it to OpenMetadata.
@@ -218,10 +218,9 @@ def _sync_one(
 
     changes = structural_changes(body, live) if live is not None else []
     needs_put = live is None or bool(changes)
-    status = metric.status or (live or {}).get(STATUS_FIELD)
     action = "create" if live is None else f"update {', '.join(changes)}" if changes else "no field changes"
     if dry_run:
-        ops = patch_ops(metric, body, after_put(body, live) if needs_put else live or {}, status)
+        ops = patch_ops(metric, body, after_put(body, live) if needs_put else live or {})
         console.print(f"[green]would[/]     {name}: {escape(action)}")
         if ops:
             console.print(f"  then PATCH {', '.join(op['path'].lstrip('/') for op in ops)}")
@@ -235,7 +234,7 @@ def _sync_one(
             current = client.request("GET", _metric_path(metric.name), query={"fields": METRIC_FIELDS})
         else:
             current = live
-        ops = patch_ops(metric, body, current, status)
+        ops = patch_ops(metric, body, current)
         if ops:
             current = client.request("PATCH", f"/v1/metrics/{current['id']}", ops, content_type=JSON_PATCH_CONTENT_TYPE)
         for source, source_id in zip(sources, source_ids, strict=True):

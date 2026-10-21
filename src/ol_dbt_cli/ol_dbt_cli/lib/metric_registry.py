@@ -6,7 +6,7 @@ Each file defines one metric and names the columns that carry it:
       name: learner_completion_status
       description: ...
       metricType: OTHER
-    status: Approved              # Draft or Approved; sync applies it by PATCH
+    status: Approved              # required: Draft or Approved; sync applies it by PATCH
     implemented_by:
       - dbt_model: afact_learner_courserun_progress
         columns: [completion_status]
@@ -105,8 +105,14 @@ def file_status_problem(status: Any) -> tuple[str, str] | None:
     :returns: the problem and how to fix it, or ``None`` when the file may set it.
     :rtype: tuple[str, str] | None
     """
-    if status is None or status in FILE_STATUSES:
+    if status in FILE_STATUSES:
         return None
+    if status is None:
+        return (
+            f"`status` is missing; a metric file sets {' or '.join(FILE_STATUSES)}",
+            "Add `status: Draft`, or `status: Approved` once the definition is approved. Every PUT resets the "
+            "status in OpenMetadata, and sync restores it only from the file.",
+        )
     return (
         f"`status` is {status!r}; a metric file sets only {' or '.join(FILE_STATUSES)}",
         "Approval happens on the pull request that changes this file. In Review, Rejected, Deprecated and "

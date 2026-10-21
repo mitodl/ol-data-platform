@@ -541,11 +541,59 @@ def test_a_status_a_file_may_not_set_is_unresolved_with_no_writes(
     capsys.readouterr()
     assert _sync(metrics_dir) is True
     out = " ".join(capsys.readouterr().out.split())
-    assert f"unresolved certified_learners: `status` is '{status}'; a metric file sets only Draft or Approved" in out
+    assert (
+        f"unresolved certified_learners: certified_learners.yaml: `status` is '{status}'; a metric file sets only "
+        "Draft or Approved" in out
+    )
     assert ("GET", "/v1/metrics/name/certified_learners") not in server.calls
     assert all(e["edge"]["toEntity"]["id"] != metric_id for e in server.lineage)
     assert server.metrics["certified_learners"]["entityStatus"] == "Approved"
     assert "synced learner_completion_status" in out
+
+
+def test_a_file_without_status_is_unresolved_with_no_writes(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir)
+    server.edit_in_ui("certified_learners", "jane", entityStatus="Draft")
+    path = metrics_dir / "certified_learners.yaml"
+    path.write_text(path.read_text().replace("status: Approved\n", ""))
+    # A PUT resets the status, so a file that took it from OpenMetadata would lose it to a failed PATCH.
+    _edit_file(metrics_dir, "certified_learners", metricType="SUM")
+    metric_id = server.metrics["certified_learners"]["id"]
+    server.calls.clear()
+    capsys.readouterr()
+    assert _sync(metrics_dir) is True
+    out = " ".join(capsys.readouterr().out.split())
+    assert (
+        "unresolved certified_learners: certified_learners.yaml: `status` is missing; a metric file sets Draft or "
+        "Approved" in out
+    )
+    assert ("PUT", "/v1/metrics") not in server.writes()
+    assert ("PATCH", f"/v1/metrics/{metric_id}") not in server.writes()
+    assert server.metrics["certified_learners"]["entityStatus"] == "Draft"
+    assert "synced learner_completion_status" in out
+
+
+def test_a_failed_patch_after_a_put_is_repaired_by_the_next_sync(server: FakeOpenMetadata, metrics_dir: Path) -> None:
+    _sync(metrics_dir, names=("certified_learners",))
+    _edit_file(metrics_dir, "certified_learners", metricType="SUM", description="Learners with a certificate.")
+    request = server.request
+
+    def failing_patch(method: str, path: str, *args: Any, **kwargs: Any) -> Any:
+        if method == "PATCH":
+            raise OpenMetadataError(f"{method} {path} -> 503: unavailable", 503)
+        return request(method, path, *args, **kwargs)
+
+    server.request = failing_patch  # type: ignore[method-assign]
+    assert _sync(metrics_dir, names=("certified_learners",)) is True
+    del server.request
+    metric = server.metrics["certified_learners"]
+    assert (metric["metricType"], metric["entityStatus"]) == ("SUM", "Unprocessed")
+
+    assert _sync(metrics_dir, names=("certified_learners",)) is False
+    metric = server.metrics["certified_learners"]
+    assert (metric["entityStatus"], metric["description"]) == ("Approved", "Learners with a certificate.")
 
 
 def test_a_failed_read_skips_only_that_metric(server: FakeOpenMetadata, metrics_dir: Path) -> None:
