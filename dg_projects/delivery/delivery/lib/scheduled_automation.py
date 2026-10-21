@@ -16,8 +16,9 @@ move. That flag is unconditional: it would have seeded them RUNNING in a fresh
 QA or local instance too, where the old location had them STOPPED -- including
 ``ovs_videos_stale_cleanup_sensor``, which dispatches delete webhooks. The same
 holds for everything moved in since, each RUNNING in production when it moved:
-the two failure notification sensors from ``data_platform`` and
-``instructor_onboarding_daily_schedule`` from ``lakehouse``.
+the two failure notification sensors from ``data_platform``,
+``instructor_onboarding_daily_schedule`` from ``lakehouse`` and
+``b2b_organization_list_sensor`` from ``b2b_organization``.
 
 Registration is the enforcing move. An instigator left out of ``Definitions`` is
 not stopped, it is absent, and nothing in the Dagster UI can start it. The two
@@ -98,6 +99,12 @@ INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # outside production would write the real repo. Moved from lakehouse, where
     # it carried the same production-only entry. RUNNING in production.
     "instructor_onboarding_daily_schedule": frozenset({"production"}),
+    # Exports each B2B organization's administration report to the partners
+    # bucket. Moved from b2b_organization (issue #2260). RUNNING in production
+    # and absent from QA's daemon logs at the move. Its reads name the
+    # production warehouse schemas outright, so a QA tick would put production
+    # partner data in the QA bucket.
+    "b2b_organization_list_sensor": frozenset({"production"}),
     # Dispatches ovs_videos_webhook_job per discovered partition. RUNNING in
     # production.
     "ovs_videos_discovery_sensor": frozenset({"production"}),

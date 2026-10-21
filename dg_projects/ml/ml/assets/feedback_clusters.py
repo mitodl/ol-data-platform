@@ -252,7 +252,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v8",
+            code_version="feedback_clusters_v9",
         ),
         "feedback_cluster_candidate": AssetOut(
             key=AssetKey(["intermediate", "feedback_cluster_candidate"]),
@@ -262,7 +262,7 @@ class FeedbackClustersConfig(Config):
                 "write_mode": "append",
                 "schema_update_mode": "update",
             },
-            code_version="feedback_clusters_v8",
+            code_version="feedback_clusters_v9",
             # Not required: a failed run writes feedback_cluster_run with no candidates.
             is_required=False,
         ),
@@ -336,6 +336,9 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
             "embedding_vector",
         ]
     ).collect()
+    # UMAP and HDBSCAN depend on row order, and Iceberg's changes as the table is
+    # written, so the same data could give different new categories
+    embeddings_df = embeddings_df.sort("feedback_conversation_pk")
 
     if config.sample_limit is not None and config.sample_limit < embeddings_df.height:
         # Random, not head(): the table's row order isn't meaningful.

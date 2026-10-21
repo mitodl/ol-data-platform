@@ -1,0 +1,28 @@
+---
+# OpenMetadata data contract for a raw table dim_user is built from. See README.md in this directory.
+entity:
+  type: table
+  dbt_source: ol_warehouse_raw_data.raw__irx__edxorg__bigquery__mitx_user_info_combo
+contract:
+  name: raw__irx__edxorg__bigquery__mitx_user_info_combo
+  displayName: raw__irx__edxorg__bigquery__mitx_user_info_combo
+  description: edX.org learner profiles from IRx. dim_user takes edxorg_openedx_user_id
+    and email from these columns.
+  entityStatus: Approved
+  owners:
+  - type: team
+    name: data-platform
+  schema:
+  - name: user_id
+    dataType: BIGINT
+  - name: email
+    dataType: VARCHAR
+  semantics:
+  - name: hasOwner
+    description: The table has at least one owner to route contract failures to.
+    rule: '{"!!": [{"var": "owners.0"}]}'
+    enabled: true
+  - name: hasDescription
+    description: The table has a description.
+    rule: '{"!!": [{"var": "description"}]}'
+    enabled: true
