@@ -128,9 +128,26 @@ with mitx_users as (
             , user_address_street
             , user_address_city
             , user_address_postal_code
+            -- Enrollment rows often tie on both dates. The trailing columns make the pick
+            -- deterministic, and must stay in step with int__combined__users.
             , row_number() over (
                 partition by coalesce(user_id, user_email, user_full_name)
-                order by user_gdpr_consent_date desc, enrollment_created_on desc
+                order by
+                    user_gdpr_consent_date desc
+                    , enrollment_created_on desc
+                    , enrollment_updated_on desc
+                    , user_id asc
+                    , user_email asc
+                    , user_full_name asc
+                    , user_address_country asc
+                    , user_gender asc
+                    , user_company asc
+                    , user_job_title asc
+                    , user_industry asc
+                    , user_address_street asc
+                    , user_address_city asc
+                    , user_address_state asc
+                    , user_address_postal_code asc
             ) as row_num
         from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
     )
@@ -151,9 +168,24 @@ with mitx_users as (
             , user_address_street
             , user_address_city
             , user_address_postal_code
+            -- Same deterministic tie-break as emeritus_users.
             , row_number() over (
                 partition by user_email
-                order by user_gdpr_consent_date desc, courserun_start_on desc
+                order by
+                    user_gdpr_consent_date desc
+                    , courserun_start_on desc
+                    , user_id asc
+                    , user_email asc
+                    , user_full_name asc
+                    , user_address_country asc
+                    , user_gender asc
+                    , user_company asc
+                    , user_job_title asc
+                    , user_industry asc
+                    , user_address_street asc
+                    , user_address_city asc
+                    , user_address_state asc
+                    , user_address_postal_code asc
             ) as row_num
         from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
     )
@@ -278,7 +310,8 @@ with mitx_users as (
 , learn_user_topic_interests as (
     select
         profile_topic_interests.profile_id
-        , array_agg(topic.learningresourcetopic_name) as topic_interests
+        -- Sorted so the array is the same on every build.
+        , array_agg(topic.learningresourcetopic_name order by topic.learningresourcetopic_name) as topic_interests
     from {{ ref('stg__mitlearn__app__postgres__profiles_profile_topic_interests') }} as profile_topic_interests
     join {{ ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopic') }} as topic
         on profile_topic_interests.learningresourcetopic_id = topic.learningresourcetopic_id
@@ -773,6 +806,20 @@ with mitx_users as (
                 ) desc
                 , id_source asc
                 , id_source_user_id asc
+                -- Accounts with no join dates (Emeritus, Global Alumni) can still tie here, e.g.
+                -- one student id sent under two emails. Ordering by every column the base row
+                -- supplies makes row_num unique wherever the output could differ.
+                , email asc
+                , full_name asc
+                , address_country asc
+                , highest_education asc
+                , gender asc
+                , birth_year asc
+                , company asc
+                , job_title asc
+                , industry asc
+                , address_state asc
+                , mitlearn_user_id asc
         ) as row_num
         , coalesce(
             nullif(user_street_address, ''), nullif(user_address_city, ''), nullif(user_address_postal_code, '')
@@ -848,12 +895,12 @@ with mitx_users as (
         , max(user_joined_on_bootcamps) as user_joined_on_bootcamps
         -- Fallback full_name in case the base row (most recent platform) has a null name.
         -- Cross-platform users may have their base row on a platform with null full_name.
-        -- FILTER ensures arbitrary() only sees non-null values, making the fallback reliable.
-        , arbitrary(full_name) filter (where full_name is not null) as agg_full_name
+        -- Takes the next account in base-row order that has one, so the pick is stable.
+        , min_by(full_name, row_num) filter (where full_name is not null) as agg_full_name
         -- Fallback address_state for cross-platform users whose base row is from a platform
         -- that null-codes address_state (e.g. Emeritus, Global Alumni, Residential).
-        , arbitrary(address_state) filter (where address_state is not null) as agg_address_state
-    from combined_users
+        , min_by(address_state, row_num) filter (where address_state is not null) as agg_address_state
+    from ranked_users
     group by user_pk
 )
 

@@ -15,8 +15,9 @@ from ol_orchestrate.lib.failed_partitions import (
 )
 from ol_orchestrate.lib.sentry import PARTITION_NAME_TAG
 from ol_orchestrate.sensors.failure_notification import (
+    CHECK_EVALUATIONS_PER_TICK,
     FAILURE_NOTIFICATION_SENSORS,
-    MAX_CHECK_EVALUATIONS_PER_TICK,
+    MAX_FAILURES_PER_MESSAGE,
     MAX_METADATA_ENTRIES_PER_FAILURE,
     MAX_SENTRY_ERROR_LENGTH,
     MAX_SLACK_TEXT_LENGTH,
@@ -1036,7 +1037,7 @@ def test_collect_reads_oldest_first_so_a_backlog_cannot_be_skipped() -> None:
 
     Reading descending returns the *newest* batch above the cursor; advancing
     past it permanently drops every older event once a backlog exceeds
-    MAX_CHECK_EVALUATIONS_PER_TICK.
+    CHECK_EVALUATIONS_PER_TICK.
     """
     captured: dict[str, Any] = {}
     backlog = [
@@ -1044,7 +1045,7 @@ def test_collect_reads_oldest_first_so_a_backlog_cannot_be_skipped() -> None:
             storage_id,
             _evaluation(asset=f"asset_{storage_id}", passed=False, severity=ERROR),
         )
-        for storage_id in range(1, MAX_CHECK_EVALUATIONS_PER_TICK + 1)
+        for storage_id in range(1, CHECK_EVALUATIONS_PER_TICK + 1)
     ]
 
     failures, next_cursor = collect_new_check_failures(
@@ -1052,23 +1053,45 @@ def test_collect_reads_oldest_first_so_a_backlog_cannot_be_skipped() -> None:
     )
 
     assert captured["ascending"] is True, "descending order silently drops backlog"
-    assert captured["limit"] == MAX_CHECK_EVALUATIONS_PER_TICK
-    assert len(failures) == MAX_CHECK_EVALUATIONS_PER_TICK
-    # Newest of the ascending batch: nothing older is stranded, nothing newer
-    # is re-delivered.
-    assert next_cursor == str(backlog[-1].storage_id)
+    assert captured["limit"] == CHECK_EVALUATIONS_PER_TICK
+    # One Slack message's worth, with the cursor on the last failure returned,
+    # so the rest of the batch is read again next tick rather than dropped.
+    assert len(failures) == MAX_FAILURES_PER_MESSAGE
+    assert next_cursor == str(backlog[MAX_FAILURES_PER_MESSAGE - 1].storage_id)
+
+
+def test_collect_reads_past_passing_checks_to_the_end_of_the_batch() -> None:
+    """Most evaluations pass, so a tick has to scan far more than it reports."""
+    captured: dict[str, Any] = {}
+    batch = [
+        _record(storage_id, _evaluation(asset="a", passed=True, severity=ERROR))
+        for storage_id in range(1, CHECK_EVALUATIONS_PER_TICK)
+    ]
+    batch.append(
+        _record(
+            CHECK_EVALUATIONS_PER_TICK,
+            _evaluation(asset="b", passed=False, severity=ERROR),
+        )
+    )
+
+    failures, next_cursor = collect_new_check_failures(
+        _instance_returning(batch, captured), 0
+    )
+
+    assert len(failures) == 1
+    assert next_cursor == str(CHECK_EVALUATIONS_PER_TICK)
 
 
 def test_a_full_batch_of_failures_stays_within_slacks_block_limit() -> None:
     """Regression: Slack rejects chat.postMessage payloads over 50 blocks.
 
     asset_check_failure_message adds one header block on top of one detail
-    block per failure, so a full MAX_CHECK_EVALUATIONS_PER_TICK-sized batch
+    block per failure, so a full MAX_FAILURES_PER_MESSAGE-sized message
     of failures must leave room for that header.
     """
     failures = [
         _check_failure(f"run-{i}", f"asset_{i}")
-        for i in range(MAX_CHECK_EVALUATIONS_PER_TICK)
+        for i in range(MAX_FAILURES_PER_MESSAGE)
     ]
 
     blocks = asset_check_failure_message(failures)
