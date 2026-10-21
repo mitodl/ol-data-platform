@@ -476,3 +476,34 @@ def test_fetch_summary_prompt_warns_when_opik_differs_from_the_embedded_copy(
 
     assert prompt is PROMPT
     assert "differs from SUMMARY_PROMPT" in caplog.text
+
+
+def test_summarize_and_checkpoint_returns_the_existing_tables_column_order() -> None:
+    """The io_manager upserts the returned frame by position, so it must match a
+    table created before idempotency_key and prompt_template_hash existed, after
+    checkpoint_chunk's union_by_name has appended them.
+    """
+    table = _FakeTable()
+    table._column_names = [
+        "feedback_conversation_pk",
+        "source_slug",
+        "conversation_ref",
+        "turn_count",
+        "conversation_summary",
+        "summary_model_version",
+        "prompt_version",
+        "embedding_input",
+        "summarized_at",
+    ]
+    catalog = _FakeCatalog(table)
+    df = pl.DataFrame([_conversation_row(conversation_ref="1")])
+
+    with override_models(FunctionModel(_summarize)):
+        result, _ = summarize.summarize_and_checkpoint(
+            df,
+            SUMMARIZER,
+            (catalog, "some_db.feedback_summaries"),
+            max_concurrency=1,
+        )
+
+    assert result.columns == table._column_names

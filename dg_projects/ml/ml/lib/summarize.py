@@ -27,16 +27,19 @@ from pyiceberg.catalog import Catalog
 
 JOIN_COLS = ["feedback_conversation_pk"]
 
+# Columns added after the table first existed go last, in the order they were
+# added: checkpoint_chunk's union_by_name appends them to an existing table, and
+# the io_manager's upsert of the asset's return casts by position.
 SUMMARIZE_CHECKPOINT_SCHEMA = {
     **dict.fromkeys([*JOIN_COLS, "source_slug", "conversation_ref"], pl.String),
     "turn_count": pl.Int64,
     "conversation_summary": pl.String,
     "summary_model_version": pl.String,
     "prompt_version": pl.String,
-    "prompt_template_hash": pl.String,
-    "idempotency_key": pl.String,
     "embedding_input": pl.String,
     "summarized_at": pl.Datetime(time_zone="UTC"),
+    "prompt_template_hash": pl.String,
+    "idempotency_key": pl.String,
 }
 
 # Bounds how many LLM calls a crash can lose (feedback_dagster_asset_spec.md).
