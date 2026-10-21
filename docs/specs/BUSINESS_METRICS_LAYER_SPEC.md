@@ -406,8 +406,8 @@ against a schema the server no longer publishes, and `refresh-schema` comes firs
 
 1. Resolve owner and reviewer names to ids, and check each glossary `tagFQN` exists.
 2. `GET /v1/metrics/name/{name}` and run the drift check below on what comes back. Nothing
-   has been written at this point. A metric that is In Review stops here (see "Status and
-   approval" below).
+   has been written at this point. A metric that is In Review or Rejected stops here (see
+   "Status and approval" below).
 3. `PUT /v1/metrics` with the `metric` body, only when the metric does not exist or one of
    its own fields differs. This creates the entity or updates its structural fields.
 4. `PATCH /v1/metrics/{id}` for description, owners, reviewers and status where they still
@@ -433,16 +433,20 @@ Status and approval: decided 2026-10-21. A file's `status` is `Draft` or `Approv
 approving the pull request that changes the file approves the metric. The sync bot is not a
 metric reviewer and is not made one. In 2.0.5 only a move from In Review to Approved or
 Rejected checks that the updater is a reviewer, and only when the metric has reviewers
-(`EntityUpdater.updateEntityStatus`, `checkUpdatedByReviewer`). Draft to Approved and any move out of Unprocessed, where a sync
-PUT leaves the status (`setDefaultStatus`), are unchecked, so the bot applies a file's
+(`EntityUpdater.updateEntityStatus`, `checkUpdatedByReviewer`). Draft to Approved and any
+move out of Unprocessed, where a sync PUT leaves the status (`setDefaultStatus`), are
+unchecked, so the bot applies a file's
 status without being a reviewer. Reviewers are either all users or exactly one team
 (`validateReviewers`), so the bot could not sit beside a reviewing team. Sync does not
-override a review in progress: when the live status is In Review it writes nothing for that
-metric (no PUT, no PATCH, no lineage edge), with or without `--force`, reports it as failed,
-continues with the rest and exits non-zero; `--dry-run` reports the same. Skipping only the
-status PATCH would not do, because a structural PUT alone resets In Review to Unprocessed and
-ends the review without a reviewer. A reviewer approving or rejecting the metric, or anyone
-moving it out of In Review, clears it.
+override a review in progress or a rejection: when the live status is In Review or Rejected
+it writes nothing for that metric (no PUT, no PATCH, no lineage edge), with or without
+`--force`, prints one line for it, counts it as failed, continues with the rest and exits
+non-zero; `--dry-run` reports the same. Skipping only the status PATCH would not do, because
+a structural PUT alone resets the status to Unprocessed, ending a review without a reviewer
+or undoing a rejection. In Review clears when a reviewer approves or rejects the metric, or
+anyone moves it out of In Review. Rejected (decided 2026-10-21) clears with a change to the
+metric file (e.g. back to Draft with the definition fixed) and someone moving the metric out
+of Rejected in OpenMetadata.
 
 Descriptions: the server stores `DescriptionSanitizer.sanitize(description)` on create, PUT
 and PATCH, which HTML-encodes text (`'` as `&#39;`, `"` as `&#34;`), so sync compares
@@ -529,7 +533,7 @@ Nothing here blocks phase 1.
   request; files set only Draft or Approved, and the sync bot is not a reviewer. None of the
   workflow definitions 2.0.5 seeds triggers on `metric` (only glossaryTerm,
   recognizerFeedback and AI assets), so creating a Metric with reviewers does not set its
-  status. A metric In Review is never written by sync, `--force` included. Still unchecked:
-  whether a custom workflow on our server targets metrics, and whether Deprecated (or
-  Archived) should become settable from a file when a metric is retired. The PUT's reset to
-  Unprocessed has not been observed on a server.
+  status. A metric In Review or Rejected is never written by sync, `--force` included. Still
+  unchecked: whether a custom workflow on our server targets metrics, and whether Deprecated
+  (or Archived) should become settable from a file when a metric is retired. The PUT's reset
+  to Unprocessed has not been observed on a server.

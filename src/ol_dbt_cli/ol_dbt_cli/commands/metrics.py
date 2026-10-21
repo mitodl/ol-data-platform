@@ -34,8 +34,8 @@ from ol_dbt_cli.lib.metric_registry import (
     load_metrics,
 )
 from ol_dbt_cli.lib.metric_sync import (
-    IN_REVIEW_STATUS,
     METRIC_FIELDS,
+    REVIEW_HOLD_STATUSES,
     STATUS_FIELD,
     TAG_COLLECTIONS,
     after_put,
@@ -136,6 +136,10 @@ def _check_server_version(client: OpenMetadataClient) -> None:
         sys.exit(1)
 
 
+# Sync output labels are padded to this many columns.
+_LABEL_WIDTH = 10
+
+
 def _metric_path(name: str) -> str:
     return f"/v1/metrics/name/{quote_fqn(name)}"
 
@@ -192,14 +196,12 @@ def _sync_one(
     except RuntimeError as exc:
         console.print(f"[bold red]failed[/]    {name}: {escape(str(exc))}")
         return False
-    if live is not None and live.get(STATUS_FIELD) == IN_REVIEW_STATUS:
-        # Even a structural PUT would end the review by resetting the status to
-        # Unprocessed, so --force does not reach past this.
-        console.print(
-            f"[bold red]in review[/] {name}: In Review in OpenMetadata, and sync does not override a review "
-            "in progress, even with --force. A reviewer approves or rejects it in OpenMetadata, or someone moves "
-            "it out of In Review; then sync again."
-        )
+    hold = REVIEW_HOLD_STATUSES.get(live[STATUS_FIELD]) if live is not None else None
+    if hold is not None:
+        # Even a structural PUT would reset the status to Unprocessed, so
+        # --force does not reach past this.
+        label, message = hold
+        console.print(f"[bold red]{label}[/]{' ' * (_LABEL_WIDTH - len(label))}{name}: {message}")
         return False
     body = create_body(metric, owner_refs, reviewer_refs, live)
     # Before any write: a PUT records the bot as updatedBy, after which a human
@@ -265,7 +267,7 @@ def sync(
             name=["--force"],
             help=(
                 "Overwrite description, owners, reviewers or status that were edited in OpenMetadata since the "
-                "last sync. Never overrides a metric that is In Review: sync writes nothing for it."
+                "last sync. Never overrides a metric that is In Review or Rejected: sync writes nothing for it."
             ),
         ),
     ] = False,
@@ -296,9 +298,9 @@ def sync(
     the server's version differs from the CreateMetric snapshot's. A metric
     whose description, owners, reviewers or status someone changed in OpenMetadata
     since the last sync is reported and left alone unless --force, so the edit
-    can become a pull request. A metric that is In Review in OpenMetadata is
-    reported and left alone even with --force. Exits non-zero when any metric
-    did not sync.
+    can become a pull request. A metric that is In Review or Rejected in
+    OpenMetadata is reported and left alone even with --force. Exits non-zero
+    when any metric did not sync.
     """
     metrics, manifest = _load(dbt_dir_path, metrics_dir_path, manifest_path, names)
     client = OpenMetadataClient.from_env()

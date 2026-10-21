@@ -26,7 +26,10 @@ Rejected (``EntityUpdater.updateEntityStatus``). A PUT would still end a
 review: it resets In Review to Unprocessed, and a move out of Unprocessed is
 not checked. So sync writes nothing for a metric that is In Review, lineage
 included, with or without ``--force``, until a reviewer approves or rejects it
-or someone moves it out of In Review.
+or someone moves it out of In Review. A Rejected metric is held the same way:
+a reviewer turned the definition down, and a PUT or PATCH from the file would
+quietly undo that. It takes a file change (e.g. back to Draft with the
+definition fixed) and someone moving it out of Rejected in OpenMetadata.
 
 The server stores ``DescriptionSanitizer.sanitize(description)`` on create,
 PUT and PATCH. That is the OWASP HTML sanitizer, which decodes the text and
@@ -61,8 +64,22 @@ STATUS_FIELD = "entityStatus"
 # Status CreateMetric cannot carry, so a PUT leaves it on the server
 # (EntityRepository.setDefaultStatus).
 PUT_DEFAULT_STATUS = "Unprocessed"
-# A review in progress, which only a reviewer may end by approving or rejecting.
-IN_REVIEW_STATUS = "In Review"
+# Live statuses sync never writes over, even with --force: a review in
+# progress, which only a reviewer may end, and a reviewer's rejection. Each maps
+# to the sync label and what clears it.
+REVIEW_HOLD_STATUSES = {
+    "In Review": (
+        "in review",
+        "In Review in OpenMetadata, and sync does not override a review in progress, even with --force. A "
+        "reviewer approves or rejects it in OpenMetadata, or someone moves it out of In Review; then sync again.",
+    ),
+    "Rejected": (
+        "rejected",
+        "Rejected by a reviewer in OpenMetadata, and sync does not override a rejection, even with --force. Change "
+        "the metric file (e.g. back to Draft with the definition fixed) and move the metric out of Rejected in "
+        "OpenMetadata; then sync again.",
+    ),
+}
 # Fields GET /v1/metrics/name/{fqn} returns only when asked for.
 METRIC_FIELDS = "owners,reviewers,tags,relatedMetrics,assets"
 STARROCKS_TAG = "starrocks"

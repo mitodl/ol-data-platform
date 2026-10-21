@@ -347,18 +347,31 @@ def test_ui_edit_to_a_synced_field_is_drift_until_forced(
     assert server.metrics["certified_learners"][field] == synced
 
 
-IN_REVIEW_MESSAGE = "certified_learners: In Review in OpenMetadata, and sync does not override a review in progress"
+# The status a person sets in the UI, the sync line (label padded to 10 columns) and how it continues.
+REVIEW_HOLDS = {
+    "In Review": "in review certified_learners: In Review in OpenMetadata, and sync does not override a review in "
+    "progress, even with --force. A reviewer approves or rejects it",
+    "Rejected": "rejected  certified_learners: Rejected by a reviewer in OpenMetadata, and sync does not override a "
+    "rejection, even with --force. Change the metric file (e.g. back to Draft with the definition fixed) and move "
+    "the metric out of Rejected",
+}
 
 
+@pytest.mark.parametrize("status", sorted(REVIEW_HOLDS))
 @pytest.mark.parametrize("structural", [False, True])
 @pytest.mark.parametrize("force", [False, True])
-def test_a_metric_in_review_is_left_alone_and_fails_while_the_others_sync(
-    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str], force: bool, structural: bool
+def test_a_metric_in_review_or_rejected_is_left_alone_and_fails_while_the_others_sync(
+    server: FakeOpenMetadata,
+    metrics_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+    force: bool,
+    structural: bool,
+    status: str,
 ) -> None:
     _sync(metrics_dir)
-    server.edit_in_ui("certified_learners", "jane", reviewers=TEAM_REF, entityStatus="In Review")
+    server.edit_in_ui("certified_learners", "jane", reviewers=TEAM_REF, entityStatus=status)
     if structural:
-        # A PUT alone would reset In Review to Unprocessed.
+        # A PUT alone would reset the status to Unprocessed.
         _edit_file(metrics_dir, "certified_learners", metricType="SUM")
     metric_id = server.metrics["certified_learners"]["id"]
     version = server.metrics["certified_learners"]["version"]
@@ -367,31 +380,37 @@ def test_a_metric_in_review_is_left_alone_and_fails_while_the_others_sync(
     capsys.readouterr()
 
     assert _sync(metrics_dir, force=force) is True
+    raw = capsys.readouterr().out
     # Rich wraps lines at the console width.
-    out = " ".join(capsys.readouterr().out.split())
-    assert IN_REVIEW_MESSAGE in out
+    out = " ".join(raw.split())
+    assert " ".join(REVIEW_HOLDS[status].split()) in out
+    # One line for the metric, besides the StarRocks lineage it skips, with its padded label.
+    lines = [line for line in raw.splitlines() if "certified_learners:" in line and not line.startswith("skipped")]
+    assert len(lines) == 1
+    assert lines[0].startswith(REVIEW_HOLDS[status].split(":")[0] + ":")
     assert "drift" not in out
     assert "overriding" not in out
     assert ("PUT", "/v1/metrics") not in server.writes()
     assert ("PATCH", f"/v1/metrics/{metric_id}") not in server.writes()
     assert all(e["edge"]["toEntity"]["id"] != metric_id for e in server.lineage)
     metric = server.metrics["certified_learners"]
-    assert (metric["entityStatus"], metric["version"]) == ("In Review", version)
+    assert (metric["entityStatus"], metric["version"]) == (status, version)
     # The other metric still synced, lineage included.
     assert "synced learner_completion_status" in out
     assert [e["edge"]["toEntity"]["id"] for e in server.lineage] == [server.metrics["learner_completion_status"]["id"]]
 
 
-def test_dry_run_reports_a_metric_in_review(
-    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize("status", sorted(REVIEW_HOLDS))
+def test_dry_run_reports_a_metric_in_review_or_rejected(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str], status: str
 ) -> None:
     _sync(metrics_dir)
-    server.edit_in_ui("certified_learners", "jane", entityStatus="In Review")
+    server.edit_in_ui("certified_learners", "jane", entityStatus=status)
     server.calls.clear()
     capsys.readouterr()
     assert _sync(metrics_dir, dry_run=True, force=True) is True
     out = " ".join(capsys.readouterr().out.split())
-    assert IN_REVIEW_MESSAGE in out
+    assert " ".join(REVIEW_HOLDS[status].split()) in out
     assert "would certified_learners" not in out
     assert "would learner_completion_status" in out
     assert server.writes() == []
