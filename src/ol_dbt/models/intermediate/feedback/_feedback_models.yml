@@ -603,7 +603,8 @@ unit_tests:
     is the decoded page URL without its EMAIL parameter. Spacing does not matter:
     the old layout, the table layout that wraps each block in "|" rows, an email
     cut off before its first question, and a notification with nothing typed above
-    the reply line are all parsed. A two-word answer is not read as a feedback type.
+    the reply line are all parsed. A two-word answer is not read as a feedback type,
+    and a "|" in an answer is kept.
     The emails are in tests/fixtures/int__feedback__zendesk__appzi_*.csv.
   model: int__feedback__zendesk
   given:
