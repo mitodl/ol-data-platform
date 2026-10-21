@@ -17,6 +17,7 @@ from dagster import (
     AssetCheckSeverity,
     AssetKey,
     AssetsDefinition,
+    FreshnessPolicy,
     build_last_update_freshness_checks,
 )
 from dagster_dbt.asset_utils import get_asset_key_for_model
@@ -98,6 +99,28 @@ def contract_freshness_bounds(
             continue
         bounds[key] = bound
     return bounds
+
+
+def with_uncontracted_freshness_policy(
+    dbt_assets: AssetsDefinition,
+    keys: Iterable[AssetKey],
+    contract_bounds: Mapping[AssetKey, timedelta],
+    policy: FreshnessPolicy,
+) -> AssetsDefinition:
+    """Attach *policy* to each of *keys* that has no contract bound.
+
+    A contracted asset's check is its one freshness signal: a policy with its
+    own windows would report it stale before a longer contract bound expires.
+    ``map_asset_specs`` keeps the op, the hoisted dbt-test checks and every key.
+    """
+    policy_keys = set(keys) - contract_bounds.keys()
+    return dbt_assets.map_asset_specs(
+        lambda spec: (
+            spec.replace_attributes(freshness_policy=policy)
+            if spec.key in policy_keys
+            else spec
+        )
+    )
 
 
 def build_freshness_checks(

@@ -60,9 +60,11 @@ from lakehouse.assets.lake_orphan_sweep import (
 from lakehouse.assets.lakehouse.dbt import (
     DBT_REPO_DIR,
     DBT_TARGET,
+    DIMENSIONAL_FRESHNESS_POLICY,
     dbt_docs_artifacts_job,
     dbt_project,
     dbt_source_freshness_job,
+    dimensional_asset_keys,
     dimensional_schema_change_checks,
     full_dbt_project,
 )
@@ -79,6 +81,7 @@ from lakehouse.lib.contract_freshness import (
     contract_freshness_bounds,
     dbt_model_key_lookup,
     find_contracts_dir,
+    with_uncontracted_freshness_policy,
 )
 from lakehouse.lib.dbt_environment import (
     DBT_AUTOMATION_ENABLED,
@@ -361,6 +364,19 @@ dbt_models_for_superset_datasets = {
     "reporting",
     "dimensional",
 }  # relevant dbt models to sync with superset
+
+# The freshness bound each dbt model with a data contract SLA (contracts/) is
+# checked against, in place of its layer's default.
+dbt_contract_bounds = contract_freshness_bounds(
+    load_contracts(find_contracts_dir()),
+    dbt_model_key_lookup(full_dbt_project),
+)
+full_dbt_project = with_uncontracted_freshness_policy(
+    full_dbt_project,
+    keys=dimensional_asset_keys,
+    contract_bounds=dbt_contract_bounds,
+    policy=DIMENSIONAL_FRESHNESS_POLICY,
+)
 dbt_model_keys = full_dbt_project.keys
 
 TRINO_SUPERSET_DATABASE_ID = int(os.environ.get("TRINO_SUPERSET_DATABASE_ID", "1"))
@@ -753,10 +769,7 @@ freshness_checked_assets = [
 dbt_layer_freshness_checks = build_freshness_checks(
     default_keys=freshness_checked_assets,
     default_bound=timedelta(hours=26),
-    contract_bounds=contract_freshness_bounds(
-        load_contracts(find_contracts_dir()),
-        dbt_model_key_lookup(full_dbt_project),
-    ),
+    contract_bounds=dbt_contract_bounds,
 )
 
 dbt_layer_freshness_sensor = build_sensor_for_freshness_checks(

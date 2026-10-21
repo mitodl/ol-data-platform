@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 import yaml
-from dagster import AssetKey
+from dagster import AssetKey, FreshnessPolicy
 from dagster_dbt import dbt_assets
 from lakehouse.lib import contract_freshness
 from lakehouse.lib.contract_freshness import (
@@ -16,6 +16,7 @@ from lakehouse.lib.contract_freshness import (
     contract_freshness_bounds,
     dbt_model_key_lookup,
     find_contracts_dir,
+    with_uncontracted_freshness_policy,
 )
 from ol_dbt_cli.lib.data_contracts import load_contracts
 
@@ -160,9 +161,8 @@ def _manifest_node(name: str) -> dict[str, Any]:
     }
 
 
-def test_dbt_model_key_lookup_only_resolves_selected_models() -> None:
-    names = ["dim_user", "stg_user"]
-    manifest = {
+def _manifest(names: list[str]) -> dict[str, Any]:
+    return {
         "metadata": {"project_name": "pkg"},
         "nodes": {f"model.pkg.{n}": _manifest_node(n) for n in names},
         "sources": {},
@@ -178,7 +178,9 @@ def test_dbt_model_key_lookup_only_resolves_selected_models() -> None:
         "groups": {},
     }
 
-    @dbt_assets(manifest=manifest, exclude="stg_user")
+
+def test_dbt_model_key_lookup_only_resolves_selected_models() -> None:
+    @dbt_assets(manifest=_manifest(["dim_user", "stg_user"]), exclude="stg_user")
     def project(): ...
 
     lookup = dbt_model_key_lookup(project)
@@ -187,6 +189,33 @@ def test_dbt_model_key_lookup_only_resolves_selected_models() -> None:
     # In the manifest but selected out of this definition: no asset to check.
     assert lookup("stg_user") is None
     assert lookup("missing") is None
+
+
+def test_freshness_policy_skips_contracted_assets(tmp_path: Path) -> None:
+    # A weekly contract would otherwise pass its check while a 48-hour policy
+    # reported the asset stale.
+    @dbt_assets(manifest=_manifest(["dim_user", "dim_course"]))
+    def project(): ...
+
+    _write_contract(
+        tmp_path,
+        "dim_user",
+        {"type": "table", "dbt_model": "dim_user"},
+        {"refreshFrequency": {"interval": 1, "unit": "week"}},
+    )
+    bounds = contract_freshness_bounds(
+        load_contracts(tmp_path), dbt_model_key_lookup(project)
+    )
+    policy = FreshnessPolicy.time_window(
+        fail_window=timedelta(hours=48), warn_window=timedelta(hours=30)
+    )
+
+    mapped = with_uncontracted_freshness_policy(
+        project, keys=project.keys, contract_bounds=bounds, policy=policy
+    )
+
+    policies = {key: spec.freshness_policy for key, spec in mapped.specs_by_key.items()}
+    assert policies == {AssetKey(["dim_user"]): None, AssetKey(["dim_course"]): policy}
 
 
 class TestContractsDir:
