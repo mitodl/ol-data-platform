@@ -6,7 +6,16 @@ on those columns. Its CI cannot build this project, and the published dbt docs
 are built on a target where those views are disabled. So for every exposure of
 type application, ``ol-dbt exposures export`` writes ``exposures/<name>.json``:
 the columns of each model the exposure depends on, with their cohort
-declarations. The application checks its models against that file.
+declarations and, where a column has one, its ``config.meta.api_description``.
+The application checks its models against that file.
+
+``api_description`` is the text the application publishes for the response
+field a column feeds, written for the application's readers, next to the
+column's own ``description`` for analysts. ol-analytics-api asserts that each
+field's description equals it, so the wording has one source. Only the
+application knows which columns it returns (it reads some only as filters), so
+a column without one is not a problem here; the application's check names the
+column when a field needs one.
 
 The file is generated from the model YAML, whose column set ``yaml_sql_sync``
 already holds to the SQL. Columns are listed in the order the YAML documents
@@ -28,7 +37,7 @@ from typing import TYPE_CHECKING, Any
 import yaml
 from pydantic import ValidationError
 
-from ol_dbt_cli.lib.cohort_policy import ColumnCohort, column_cohort
+from ol_dbt_cli.lib.cohort_policy import ColumnCohort, column_meta
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
 if TYPE_CHECKING:
@@ -67,10 +76,31 @@ def _contract_column(column: dict[str, Any]) -> dict[str, Any]:
     :raises ValidationError: The column's cohort block is invalid.
     """
     entry: dict[str, Any] = {"name": column["name"]}
-    cohort = column_cohort(column)
+    cohort = column_meta(column, "cohort")
     if cohort is not None:
         entry["cohort"] = ColumnCohort.model_validate(cohort).model_dump(mode="json", exclude_defaults=True)
+    api_description = column_meta(column, "api_description")
+    if api_description is not None:
+        entry["api_description"] = api_description
     return entry
+
+
+def _api_description_problems(model_name: str, columns: list[dict[str, Any]]) -> list[str]:
+    """Return a problem for each column whose ``api_description`` the application could never match.
+
+    A folded ``>`` block keeps its final newline, which no field description has,
+    so surrounding whitespace is refused rather than exported.
+    """
+    problems = []
+    for column in columns:
+        text = column_meta(column, "api_description")
+        if text is None or (isinstance(text, str) and text and text == text.strip()):
+            continue
+        problems.append(
+            f"{model_name}.{column['name']} has a config.meta.api_description that is not a non-empty string "
+            "without surrounding whitespace (write a folded block as >-, not >)"
+        )
+    return problems
 
 
 def render_exposure_contracts(dbt_dir: Path) -> ExposureContracts:
@@ -104,6 +134,10 @@ def render_exposure_contracts(dbt_dir: Path) -> ExposureContracts:
             columns = columns_by_model.get(model_name)
             if not columns:
                 problems.append(f"{model_name} has no columns declared in YAML")
+                continue
+            column_problems = _api_description_problems(model_name, columns)
+            if column_problems:
+                problems.extend(column_problems)
                 continue
             try:
                 models[model_name] = {"columns": [_contract_column(column) for column in columns]}
@@ -182,7 +216,7 @@ def check_exposure_contracts(dbt_dir: Path, exposures_dir: Path, report: Validat
                 Severity.ERROR,
                 name,
                 f"{path.name} does not match the model YAML",
-                f"A column the application reads, or its cohort declaration, changed. {regenerate}",
+                "A column the application reads, its cohort declaration or its api_description changed. " + regenerate,
             )
     if exposures_dir.is_dir():
         for path in sorted(exposures_dir.glob("*.json")):
