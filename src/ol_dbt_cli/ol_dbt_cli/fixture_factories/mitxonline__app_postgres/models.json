@@ -401,6 +401,51 @@
         }
       }
     },
+    "cms_productpagefaq": {
+      "model": "cms.ProductPageFAQ",
+      "managed": true,
+      "columns": {
+        "id": {
+          "field": "AutoField",
+          "internal_type": "AutoField",
+          "null": false,
+          "primary_key": true,
+          "unique": true
+        },
+        "sort_order": {
+          "field": "IntegerField",
+          "internal_type": "IntegerField",
+          "null": true,
+          "primary_key": false,
+          "unique": false
+        },
+        "page_id": {
+          "field": "ParentalKey",
+          "internal_type": "ParentalKey",
+          "null": false,
+          "primary_key": false,
+          "unique": false,
+          "foreign_key": {
+            "table": "wagtailcore_page",
+            "column": "id"
+          }
+        },
+        "question": {
+          "field": "TextField",
+          "internal_type": "TextField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        },
+        "answer": {
+          "field": "RichTextField",
+          "internal_type": "TextField",
+          "null": false,
+          "primary_key": false,
+          "unique": false
+        }
+      }
+    },
     "cms_programpage": {
       "model": "cms.ProgramPage",
       "managed": true,

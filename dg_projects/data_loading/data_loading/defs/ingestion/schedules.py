@@ -248,34 +248,78 @@ course_xml_blocks_ingest_schedule = dg.ScheduleDefinition(
 )
 
 OCW_CONTENT_SCHEDULE_NAME = "ocw_content_ingest_daily_schedule"
+# Defined in ocw_content_sensor, named here so the schedule can wait for its runs.
+OCW_CONTENT_SENSOR_NAME = "ocw_content_publish_sensor"
+# Carried by the sweep and by every scoped load. The run coordinator's
+# tag_concurrency_limits in ol-infrastructure (dagster_instance.yaml) caps runs
+# with this key at one, so a load requested while another is starting waits in
+# the queue. The in-flight checks below only keep the sensor and schedule from
+# requesting runs that would sit there.
+OCW_CONTENT_RUN_TAGS = {"ocw/content_load": "true"}
 
 
-def no_ocw_content_run_in_flight(context: dg.ScheduleEvaluationContext) -> bool:
-    """Skip a tick while the previous run is still reading courses.
+def ocw_content_run_in_flight(instance: dg.DagsterInstance) -> bool:
+    """Tell whether a sweep or a scoped OCW content load has not finished.
 
-    The first run reads every course and can outlast a day. A second run
-    starting from the same saved state would read the same courses and append
-    them twice.
+    Each load saves the source's whole dlt state, and a load restores the one
+    saved by the newest load id. So of two loads at once, one drops what the
+    other recorded: the sweep's resume point,
+    the prefixes it saw empty, the gone courses it unpublished (which the next
+    sweep would then unpublish and count against the limit again). A run
+    started by hand is seen, and queued behind the others, only if it is
+    launched with ``OCW_CONTENT_RUN_TAGS``. The schedule's own name is checked
+    too because a sweep started before that tag existed carries only it, and
+    the first sweep can outlast a day.
     """
+    return any(
+        instance.get_run_records(
+            dg.RunsFilter(tags=tags, statuses=list(IN_FLIGHT_RUN_STATUSES)),
+            limit=1,
+        )
+        for tags in (
+            OCW_CONTENT_RUN_TAGS,
+            {"dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME},
+        )
+    )
+
+
+def ocw_content_sweep_due(context: dg.ScheduleEvaluationContext) -> bool:
+    """Start the day's sweep at the first tick no OCW content load is running.
+
+    The first sweep reads every course and can outlast a day, and a scoped load
+    from ocw_content_publish_sensor can be running when the 04:35 tick fires.
+    Either way the tick waits (see ``ocw_content_run_in_flight``), and the
+    hourly ticks after it start the sweep once nothing is running, unless one
+    already started that day.
+    """
+    if ocw_content_run_in_flight(context.instance):
+        return False
+    tick = context.scheduled_execution_time
+    if tick is None:
+        msg = "The OCW content schedule was evaluated without a tick time."
+        raise ValueError(msg)
     return not context.instance.get_run_records(
         dg.RunsFilter(
             tags={"dagster/schedule_name": OCW_CONTENT_SCHEDULE_NAME},
-            statuses=list(IN_FLIGHT_RUN_STATUSES),
+            created_after=tick.replace(hour=0, minute=0, second=0, microsecond=0),
         ),
         limit=1,
     )
 
 
 # OCW course pages and resource text for MIT Learn's ContentFiles, ahead of the
-# lakehouse's non_airbyte_staging_daily at 06:00. RUNNING by default in
+# lakehouse's non_airbyte_staging_daily at 06:00. One sweep a day, at the first
+# hourly tick from 04:35 that nothing else is loading (see
+# ocw_content_sweep_due), so it can start as late as 09:35. RUNNING by default in
 # production only: the source always reads the production OCW bucket, and every
 # changed course costs Tika calls.
 ocw_content_ingest_schedule = dg.ScheduleDefinition(
     name=OCW_CONTENT_SCHEDULE_NAME,
     target=dg.AssetSelection.keys(["ol_warehouse_raw_data", ocw_content.RAW_TABLE]),
-    cron_schedule="35 4 * * *",
+    cron_schedule="35 4-9 * * *",
     execution_timezone="Etc/UTC",
-    should_execute=no_ocw_content_run_in_flight,
+    should_execute=ocw_content_sweep_due,
+    tags=OCW_CONTENT_RUN_TAGS,
     default_status=(
         dg.DefaultScheduleStatus.RUNNING
         if DAGSTER_ENV == "production"

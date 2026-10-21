@@ -1,5 +1,5 @@
 ---
-# Raw tables of the mitxonline/app_postgres unit for the local lake: the 20 that
+# Raw tables of the mitxonline/app_postgres unit for the local lake: the 21 that
 # the +integrations__learn__mitxonline_* models read. Loaded by
 # `ol-dbt fixtures load`. The columns are from `ol-dbt fixtures capture`, which
 # leaves out Airbyte's _airbyte_meta struct. Every row is invented: nothing here
@@ -121,6 +121,27 @@ tables:
       order: 0
       page_id: 11
       linked_instructor_page_id: 12
+  raw__mitxonline__app__postgres__cms_productpagefaq:
+    columns:
+      _airbyte_raw_id: string
+      _airbyte_extracted_at: long
+      _airbyte_generation_id: long
+      id: long
+      page_id: long
+      question: string
+      answer: string
+      sort_order: long
+    rows:
+    - id: 1
+      page_id: 10
+      question: Do I need to install anything?
+      answer: <p>No. Everything runs in the local lake.</p>
+      sort_order: 0
+    - id: 2
+      page_id: 10
+      question: Is this a real course?
+      answer: <p>No. It exists only in the local fixtures.</p>
+      sort_order: 1
   raw__mitxonline__app__postgres__cms_programpage:
     columns:
       _airbyte_raw_id: string

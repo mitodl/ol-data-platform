@@ -312,6 +312,7 @@
         'raw__mitxonline__app__postgres__cms_coursepage_topics': none,
         'raw__mitxonline__app__postgres__cms_instructorpage': none,
         'raw__mitxonline__app__postgres__cms_instructorpagelink': none,
+        'raw__mitxonline__app__postgres__cms_productpagefaq': none,
         'raw__mitxonline__app__postgres__cms_programpage': none,
         'raw__mitxonline__app__postgres__cms_signatoryindexpage': none,
         'raw__mitxonline__app__postgres__cms_signatorypage': none,

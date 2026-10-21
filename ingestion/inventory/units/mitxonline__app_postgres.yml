@@ -49,6 +49,7 @@ airbyte:
     - cms_coursepage_topics
     - cms_instructorpage
     - cms_instructorpagelink
+    - cms_productpagefaq
     - cms_programpage
     - cms_signatoryindexpage
     - cms_signatorypage
@@ -194,6 +195,13 @@ tables:
   modeled: true
 - name: cms_instructorpagelink
   raw_table: raw__mitxonline__app__postgres__cms_instructorpagelink
+  sync_mode: full_refresh_overwrite
+  namespace: public
+  primary_key:
+  - - id
+  modeled: true
+- name: cms_productpagefaq
+  raw_table: raw__mitxonline__app__postgres__cms_productpagefaq
   sync_mode: full_refresh_overwrite
   namespace: public
   primary_key:

@@ -1445,3 +1445,12 @@
         {%- endfor %}
     ) as varchar)
 {%- endmacro %}
+
+{# StarRocks takes DuckDB's json_object(key, value, ...) form, not Trino's key: value. #}
+{% macro starrocks__json_object_from_pairs(pairs) -%}
+    cast(json_object(
+        {%- for key, expr in pairs %}
+        {% if not loop.first %}, {% endif %}'{{ key }}', {{ expr }}
+        {%- endfor %}
+    ) as varchar)
+{%- endmacro %}

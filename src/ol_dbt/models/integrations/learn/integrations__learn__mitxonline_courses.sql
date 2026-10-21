@@ -13,7 +13,12 @@ with courses as (
 )
 
 , pages as (
-    select * from {{ ref('int__mitxonline__catalog_pages') }}
+    select
+        *
+        -- MITx Online's pages API lists a page to MIT Learn only when it is live and in the
+        -- Learn catalog, and MIT Learn's ETL reads full_description's sections from there
+        , page_is_live and page_is_in_learn_catalog as page_is_listed_to_learn
+    from {{ ref('int__mitxonline__catalog_pages') }}
     where course_id is not null
 )
 
@@ -139,6 +144,12 @@ select
     , 'mitxonline' as etl_source
     , 'mitxonline' as platform
     , pages.page_description as description
+    , coalesce(pages.page_is_listed_to_learn, false) as has_catalog_page
+    , case when pages.page_is_listed_to_learn then pages.page_about end as about
+    , case when pages.page_is_listed_to_learn then pages.page_what_you_learn end as what_you_learn
+    , case when pages.page_is_listed_to_learn then pages.page_prerequisites end as prerequisites
+    -- The pages API lists a page without FAQs with an empty array
+    , case when pages.page_is_listed_to_learn then coalesce(pages.page_faqs, '[]') end as faqs
     , pages.page_feature_image_src as image_url
     , pages.wagtail_page_id is not null as has_page
     , (

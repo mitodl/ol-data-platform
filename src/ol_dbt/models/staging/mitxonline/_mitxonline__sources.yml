@@ -543,14 +543,23 @@ sources:
       description: int, foreign key to b2b_contractpage (page_ptr_id)
 
   - name: raw__mitxonline__app__postgres__users_user
+    description: MITx Online application user accounts
+    config:
+      meta:
+        # Tier1 because it carries a data contract (contracts/).
+        openmetadata:
+          owner: data-platform
+          tier: Tier.Tier1
     columns:
     - name: id
+      data_type: bigint
       description: int, sequential ID representing one user in MITx Online
     - name: password
       description: str, hashed password
     - name: username
       description: str, name chosen by user
     - name: email
+      data_type: varchar
       description: str, user email associated with their account
     - name: name
       description: str, the user's full name
@@ -566,6 +575,9 @@ sources:
       description: boolean, used for app permissions
     - name: is_superuser
       description: boolean, used for app permissions
+    - name: global_id
+      data_type: varchar
+      description: str, identifier for the user across MIT Open Learning platforms
 
   - name: raw__mitxonline__app__postgres__courses_course
     columns:
@@ -833,11 +845,19 @@ sources:
 
   - name: raw__mitxonline__openedx__mysql__auth_user
     description: MITx Online open edX users
+    config:
+      meta:
+        # Tier1 because it carries a data contract (contracts/).
+        openmetadata:
+          owner: data-platform
+          tier: Tier.Tier1
     columns:
     - name: id
+      data_type: bigint
       description: int, sequential ID representing a user on MITx Online open edX
         platform
     - name: username
+      data_type: varchar
       description: str, unique username on the open edX platform
     - name: password
       description: str, hashed password
@@ -846,6 +866,7 @@ sources:
     - name: last_name
       description: str, user's last name. This field is not populated on production.
     - name: email
+      data_type: varchar
       description: str, user's email associated with their account
     - name: is_active
       description: boolean, used to soft delete users
@@ -1924,6 +1945,23 @@ sources:
       description: int, foreign key to wagtail_page referring to the linked instructor
         page
 
+  - name: raw__mitxonline__app__postgres__cms_productpagefaq
+    description: The frequently asked questions on a course or program page, in the
+      order the page shows them
+    columns:
+    - name: id
+      description: int, primary key for cms_productpagefaq
+    - name: page_id
+      description: int, foreign key to wagtailcore_page referring to the course or
+        program page
+    - name: question
+      description: str, the question
+    - name: answer
+      description: str, the answer, as Wagtail rich text (stored HTML)
+    - name: sort_order
+      description: int, the question's position on the page, from 0. Wagtail's Orderable
+        sets it when an editor saves the page.
+
   - name: raw__mitxonline__app__postgres__courses_coursestopic
     columns:
     - name: id
@@ -1999,15 +2037,23 @@ sources:
 
   - name: raw__mitxonline__app__postgres__openedx_openedxuser
     description: Mapping of MITx Online users to open edX users
+    config:
+      meta:
+        # Tier1 because it carries a data contract (contracts/).
+        openmetadata:
+          owner: data-platform
+          tier: Tier.Tier1
     columns:
     - name: id
       description: int, the primary key for the openedx_openedxuser table
     - name: user_id
+      data_type: bigint
       description: int, the foreign key referencing the users_user table in the MITx
         Online app
     - name: platform
       description: str, the platform where the user is registered. e.g. "edx"
     - name: edx_username
+      data_type: varchar
       description: str, the username of the user on the open edX platform
     - name: has_been_synced
       description: boolean, indicating whether a corresponding user has been created
