@@ -1,9 +1,10 @@
 {# Parse the Appzi survey emails that reach Zendesk as tickets. #}
 
 {% macro is_appzi_email(body) %}
-  {#- Anchored so a human reply quoting an Appzi email is not matched. -#}
+  {#- Anchored so a human reply quoting an Appzi email is not matched. The table
+      layout starts with rows of "|". -#}
   {%- set pattern -%}
-    '^(\[https://appzistatic[^\]]*\]\S*\s*)?Instantly Capture Insightful Customer Feedback'
+    '^[|\s]*(\[https://appzistatic[^\]]*\]\S*\s*)?Instantly Capture Insightful Customer Feedback'
   {%- endset -%}
   {#- An Appzi email that starts at its first question, without the header. -#}
   {%- set cut_off_pattern -%}'(?s)^[*•][^\n]*\n.*\n\nFeedback Origin'{%- endset -%}
@@ -30,6 +31,17 @@
           or {{ body }} like '%Request to Install Appzi Feedback Button%'
       )
   )
+{% endmacro %}
+
+
+{% macro appzi_untable(body) %}
+  {#- From 2026-10-15 Appzi wraps each block in "|" rows. Removing them gives the
+      older layout that appzi_feedback_text parses. -#}
+  {{ regexp_replace_all(
+      body
+      , "' ?\n\n \|\n\n\| \n\n'"
+      , dbt.concat(["' '", codepoint_char(10), codepoint_char(10)])
+  ) }}
 {% endmacro %}
 
 

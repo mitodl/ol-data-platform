@@ -22,6 +22,7 @@ with ticket_comment as (
             order by ticket_comment.comment_created_at, ticket_comment.comment_id
         ) as turn_index
         , {{ is_appzi_email('ticket_comment.comment_plain_body') }} as is_appzi
+        , {{ appzi_untable('ticket_comment.comment_plain_body') }} as appzi_body
     from ticket_comment
     inner join ticket on ticket_comment.ticket_id = ticket.ticket_id
     where
@@ -37,7 +38,7 @@ with ticket_comment as (
         requester_turns.*
         , case
             when requester_turns.is_appzi
-                then {{ appzi_feedback_text('requester_turns.comment_plain_body') }}
+                then {{ appzi_feedback_text('requester_turns.appzi_body') }}
             else requester_turns.comment_plain_body
         end as text
         , case
