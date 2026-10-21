@@ -75,8 +75,10 @@ DIM_USER = {"type": "table", "dbt_model": "dim_user"}
 
 def test_repo_contracts_load() -> None:
     contracts = load_contracts(REPO_CONTRACTS_DIR)
-    assert [c.body["name"] for c in contracts] == ["dim_user"]
-    assert contracts[0].entity.kind == "dbt_model"
+    by_name = {c.body["name"]: c for c in contracts}
+    assert len(by_name) == len(contracts)
+    assert by_name["dim_user"].entity.kind == "dbt_model"
+    assert all(c.body["owners"] == [{"type": "team", "name": "data-platform"}] for c in contracts)
 
 
 def test_repo_dim_user_sla_is_26_hours() -> None:
@@ -290,6 +292,17 @@ def test_om_fqn_and_request(tmp_path: Path) -> None:
     assert body["entity"] == {"id": "abc", "type": "table"}
     assert body["owners"] == [{"id": "t1", "type": "team"}]
     assert "entity" not in contract.body
+
+
+def test_om_fqn_lowercases_the_relation(tmp_path: Path) -> None:
+    _write(tmp_path, "c", _contract({"type": "table", "dbt_model": "Enrollment_Activity_Counts_Dataset"}))
+    [contract] = load_contracts(tmp_path)
+    registry = _registry(_node("Enrollment_Activity_Counts_Dataset", {}))
+    assert (
+        om_fqn(contract.entity, registry, "Starburst Galaxy")
+        == "Starburst Galaxy.ol_data_lake_production.ol_warehouse_production_dimensional."
+        "enrollment_activity_counts_dataset"
+    )
 
 
 @pytest.mark.parametrize(

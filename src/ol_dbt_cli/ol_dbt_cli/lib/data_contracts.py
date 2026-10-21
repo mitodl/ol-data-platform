@@ -280,6 +280,10 @@ def om_fqn(binding: EntityBinding, manifest: ManifestRegistry, service: str) -> 
 
     A dbt binding becomes ``service.database.schema.table`` from the manifest,
     so the manifest must come from the target OpenMetadata catalogs (production).
+    The relation is lowercased because the lake's Glue catalog stores names
+    lowercase and Trino folds identifiers, so OpenMetadata catalogs a model
+    named ``Enrollment_Activity_Counts_Dataset`` as
+    ``enrollment_activity_counts_dataset``, and its name lookup is case-sensitive.
 
     :raises ValueError: when a dbt binding names a node the manifest lacks.
     """
@@ -289,7 +293,8 @@ def om_fqn(binding: EntityBinding, manifest: ManifestRegistry, service: str) -> 
     if node is None:
         msg = f"{binding.kind} {binding.target!r} is not in the manifest"
         raise ValueError(msg)
-    return ".".join((service, node.database, node.schema, node.identifier or node.name))
+    relation = (node.database, node.schema, node.identifier or node.name)
+    return ".".join((service, *(part.lower() for part in relation)))
 
 
 def create_request(contract: DataContract, entity_id: str, owners: list[dict[str, str]] | None) -> dict[str, Any]:
