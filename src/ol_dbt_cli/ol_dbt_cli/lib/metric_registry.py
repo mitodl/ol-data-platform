@@ -91,11 +91,28 @@ _NAMED_REFERENCES = {
 _NAMED_REFERENCE_FIELDS = ("owners", "reviewers")
 
 # The pull request that changes a file is the approval, so a file says only
-# whether its metric is approved. The sync bot is not a reviewer: OpenMetadata
-# 2.0.5 lets only a reviewer move a metric from In Review to Approved or
-# Rejected (EntityUpdater.updateEntityStatus), and reviewers are all users or
-# exactly one team (validateReviewers), so the bot cannot sit beside a team.
+# whether its metric is approved. The sync bot is not a reviewer: when a metric
+# has reviewers, OpenMetadata 2.0.5 lets only one of them move it from In Review
+# to Approved or Rejected (EntityUpdater.updateEntityStatus), and reviewers are
+# all users or exactly one team (validateReviewers), so the bot cannot sit
+# beside a team.
 FILE_STATUSES = ("Draft", "Approved")
+
+
+def file_status_problem(status: Any) -> tuple[str, str] | None:
+    """Say why a file may not set *status*.
+
+    :returns: the problem and how to fix it, or ``None`` when the file may set it.
+    :rtype: tuple[str, str] | None
+    """
+    if status is None or status in FILE_STATUSES:
+        return None
+    return (
+        f"`status` is {status!r}; a metric file sets only {' or '.join(FILE_STATUSES)}",
+        "Approval happens on the pull request that changes this file. In Review, Rejected, Deprecated and "
+        "OpenMetadata's other statuses are not set from files: the sync bot is not a metric reviewer, and when "
+        "a metric has reviewers OpenMetadata lets only one of them approve or reject it while it is In Review.",
+    )
 
 
 _TOP_LEVEL_KEYS = frozenset({"metric", "status", "implemented_by"})
@@ -294,16 +311,9 @@ def _check_body(metric: MetricDefinition, report: ValidationReport) -> None:
             f"`metric.{key}` is not a field the file may set",
             EXCLUDED_FIELDS.get(key, unknown_hint),
         )
-    if metric.status is not None and metric.status not in FILE_STATUSES:
-        report.add(
-            METRIC_REGISTRY_CHECK,
-            Severity.ERROR,
-            label,
-            f"`status` is {metric.status!r}; a metric file sets only {' or '.join(FILE_STATUSES)}",
-            "Approval happens on the pull request that changes this file. In Review, Rejected, Deprecated and "
-            "OpenMetadata's other statuses are not set from files: the sync bot is not a metric reviewer, and "
-            "OpenMetadata lets only a reviewer approve or reject a metric that is In Review.",
-        )
+    status_problem = file_status_problem(metric.status)
+    if status_problem is not None:
+        report.add(METRIC_REGISTRY_CHECK, Severity.ERROR, label, *status_problem)
     document = {"metric": metric.body}
     # Draft 4 is the JSON Schema dialect an OpenAPI 3.0 schema object is closest to.
     # A value of the wrong type fails several keywords at once; one finding per value says enough.

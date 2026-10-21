@@ -508,6 +508,26 @@ def test_unresolved_name_skips_only_that_metric(
     assert set(server.metrics) == {"learner_completion_status"}
 
 
+@pytest.mark.parametrize("status", ["In Review", "Rejected", "Deprecated"])
+def test_a_status_a_file_may_not_set_is_unresolved_with_no_writes(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str], status: str
+) -> None:
+    _sync(metrics_dir)
+    path = metrics_dir / "certified_learners.yaml"
+    path.write_text(path.read_text().replace("status: Approved", f"status: {status}"))
+    metric_id = server.metrics["certified_learners"]["id"]
+    server.calls.clear()
+    server.lineage.clear()
+    capsys.readouterr()
+    assert _sync(metrics_dir) is True
+    out = " ".join(capsys.readouterr().out.split())
+    assert f"unresolved certified_learners: `status` is '{status}'; a metric file sets only Draft or Approved" in out
+    assert ("GET", "/v1/metrics/name/certified_learners") not in server.calls
+    assert all(e["edge"]["toEntity"]["id"] != metric_id for e in server.lineage)
+    assert server.metrics["certified_learners"]["entityStatus"] == "Approved"
+    assert "synced learner_completion_status" in out
+
+
 def test_a_failed_read_skips_only_that_metric(server: FakeOpenMetadata, metrics_dir: Path) -> None:
     server.broken.add("certified_learners")
     assert _sync(metrics_dir) is True

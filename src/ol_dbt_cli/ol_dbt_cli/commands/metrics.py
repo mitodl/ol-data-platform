@@ -30,6 +30,7 @@ from ol_dbt_cli.lib.metric_registry import (
     SCHEMA_VERSION_KEY,
     MetricDefinition,
     build_schema_snapshot,
+    file_status_problem,
     load_metrics,
 )
 from ol_dbt_cli.lib.metric_sync import (
@@ -158,6 +159,9 @@ def _sync_one(
         if excluded:
             msg = " ".join(f"`metric.{f}` is not a field the file may set. {EXCLUDED_FIELDS[f]}" for f in excluded)
             raise ValueError(msg)
+        status_problem = file_status_problem(metric.status)
+        if status_problem is not None:
+            raise ValueError(". ".join(status_problem))
         owners = metric.body.get("owners")
         reviewers = metric.body.get("reviewers")
         # An empty list clears the field; only an absent key leaves it to OpenMetadata.
