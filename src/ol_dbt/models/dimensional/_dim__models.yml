@@ -506,10 +506,12 @@ models:
   - name: user_street_address
     description: str, street address. Person-level - street address, city and postal
       code are taken together from one of the user's accounts, so all three describe
-      the same address. That is the account with the latest join date that has a street
-      address or postal code, ties broken by platform and then platform id. Emeritus
-      and Global Alumni accounts have no join date, so they rank last. Populated for
-      edX.org, MITx Pro, Bootcamps, Emeritus, Global Alumni and MicroMasters accounts.
+      the same address. Accounts are ordered as for the demographic columns, by the
+      latest join date across the user's linked platforms, ties broken by platform
+      and then platform id, and the first one with a street address or postal code
+      is used. Emeritus and Global Alumni accounts have no join date, so they rank
+      last. Populated for edX.org, MITx Pro, Bootcamps, Emeritus, Global Alumni and
+      MicroMasters accounts.
   - name: user_address_city
     description: str, city of the address in user_street_address. When no account
       has a street address or postal code, it is the city alone. MITx Residential

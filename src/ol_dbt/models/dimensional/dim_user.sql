@@ -862,6 +862,12 @@ with mitx_users as (
 -- have only a city (Residential), so a city-only account never replaces a fuller address.
 -- Take one row rather than min_by per column, which skips NULLs on DuckDB and would fill
 -- each part from a different account.
+-- For review: row_num is the order the demographic columns use, the latest join date across
+-- the user's linked platforms. For the MITx row that date can be the Learn or MITx Online
+-- signup, though its address comes from edX.org, so a newer signup there can put an older
+-- address ahead of a newer MITx Pro or Bootcamps one. Option A (here): one order for every
+-- column. Option B: order addresses by the join date of the account that supplies them,
+-- ignoring the Learn and MITx Online dates, so the address can differ from the demographics.
 , ranked_addresses as (
     select
         user_pk
