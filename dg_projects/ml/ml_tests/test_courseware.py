@@ -130,6 +130,12 @@ def test_build_scopes_splits_at_source_boundaries(monkeypatch):
     # ids restart in each part, so a part's prompt depends only on its own sources
     assert [source.source_id for source in built[1].sources] == ["S01", "S02"]
     assert built[0].course.outline == ("Lecture 1",)
+    # each part records every part's checksum, so the whole reading can be matched
+    assert (
+        built[0].scope_part_checksums
+        == built[1].scope_part_checksums
+        == (f"{built[0].input_text_checksum},{built[1].input_text_checksum}")
+    )
 
 
 def test_extraction_key_changes_with_input_text():

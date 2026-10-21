@@ -68,6 +68,7 @@ EXTRACTION_SCHEMA = {
     "scope_part": pl.Int64,
     "scope_part_count": pl.Int64,
     "input_text_checksum": pl.String,
+    "scope_part_checksums": pl.String,
     "source_count": pl.Int64,
     "truncated_source_count": pl.Int64,
     "sources_json": pl.String,
@@ -300,6 +301,7 @@ def _rows(
         "scope_part": scope.part,
         "scope_part_count": scope.part_count,
         "input_text_checksum": scope.input_text_checksum,
+        "scope_part_checksums": scope.scope_part_checksums,
         "source_count": len(scope.sources),
         "truncated_source_count": sum(source.truncated for source in scope.sources),
         "sources_json": json.dumps(
