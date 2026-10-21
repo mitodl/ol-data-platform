@@ -9,10 +9,11 @@
 
     This is the question side of the split https://github.com/mitodl/hq/discussions/13220
     asks for, until that lands upstream. RE2 and Java regex have no backreferences, so
-    each answer element is removed with a pattern of its own that runs to its own closing
-    tag. One pattern for all of them would stop at the first closing tag of any, and
-    leave the rest of a solution that holds a hint. Self-closing answer elements go
-    first, or their pattern would run on to the next closing tag of that name.
+    the pattern is one alternative per answer element, each running to its own closing
+    tag; a shared closing-tag group would stop at the first closing tag of any, and
+    leave the rest of a solution that holds a hint. Matching is leftmost-first, so a
+    hint inside a solution goes with the solution. Self-closing answer elements go
+    first, or their alternative would run on to the next closing tag of that name.
 #}
 {% macro courseware_problem_question_text(raw_xml) -%}
     {%- set answer_elements = [
@@ -20,16 +21,14 @@
         'correcthint', 'optionhint', 'stringequalhint', 'numericalhint', 'compoundhint',
         'targetedfeedbackset', 'feedback', 'answer', 'script', 'style',
     ] -%}
-    {%- set stripped = namespace(text=regexp_replace_all(raw_xml, "'(?s)<!--.*?-->'", "' '")) -%}
-    {%- set stripped.text = regexp_replace_all(
-        stripped.text, "'<(" ~ answer_elements | join('|') ~ ")\\b[^>]*/>'", "' '"
-    ) -%}
+    {%- set elements = namespace(paired=[]) -%}
     {%- for element in answer_elements -%}
-        {%- set stripped.text = regexp_replace_all(
-            stripped.text, "'(?s)<" ~ element ~ "\\b[^>]*>.*?</" ~ element ~ "\\s*>'", "' '"
-        ) -%}
+        {%- set elements.paired = elements.paired + ["<" ~ element ~ "\\b[^>]*>.*?</" ~ element ~ "\\s*>"] -%}
     {%- endfor -%}
-    {%- set text = regexp_replace_all(stripped.text, "'<[^>]*>'", "' '") -%}
+    {%- set text = regexp_replace_all(raw_xml, "'(?s)<!--.*?-->'", "' '") -%}
+    {%- set text = regexp_replace_all(text, "'<(" ~ answer_elements | join('|') ~ ")\\b[^>]*/>'", "' '") -%}
+    {%- set text = regexp_replace_all(text, "'(?s)" ~ elements.paired | join('|') ~ "'", "' '") -%}
+    {%- set text = regexp_replace_all(text, "'<[^>]*>'", "' '") -%}
     {%- set text = "replace(replace(replace(replace(" ~ text ~ ", '&lt;', '<'), '&gt;', '>'), '&quot;', '\"'), '&nbsp;', ' ')" -%}
     {%- set text = "replace(replace(" ~ text ~ ", '&#39;', ''''), '&amp;', '&')" -%}
     {{ strip_whitespace(regexp_replace_all(text, "'\\s+'", "' '")) }}
