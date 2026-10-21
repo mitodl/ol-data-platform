@@ -428,6 +428,16 @@ def resolve_embedding_text(
     )
 
 
+def has_embeddable_text(text: str | None) -> bool:
+    """Whether embed_and_checkpoint sends this resolved_text to the client at all.
+
+    A blank text is skipped along with a null one: Vertex's :predict drops an empty
+    text from the request, so the embedding count stops matching and the whole
+    sub-batch fails.
+    """
+    return text is not None and bool(text.strip())
+
+
 def filter_unembedded(
     source_df: pl.DataFrame,
     already_embedded_df: pl.DataFrame,
@@ -741,13 +751,7 @@ def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
     """
     log = context.log if context is not None else logger
     catalog, table_identifier = checkpoint_target
-    # A blank text is skipped too: Vertex's :predict drops an empty text from the
-    # request, so the embedding count stops matching and the whole sub-batch fails.
-    rows = [
-        row
-        for row in df.to_dicts()
-        if row["resolved_text"] is not None and row["resolved_text"].strip()
-    ]
+    rows = [row for row in df.to_dicts() if has_embeddable_text(row["resolved_text"])]
 
     consecutive_failed_chunks = 0
     chunk_dfs: list[pl.DataFrame] = []
