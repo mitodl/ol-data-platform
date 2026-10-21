@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import opik
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+from ml.resources.llm import COGNITIVE_SERVICES_SCOPE
 from ol_llm import (
     KeycloakClient,
     Settings,
@@ -35,8 +36,6 @@ log = logging.getLogger(__name__)
 
 OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "dagster-ml")
 LOCAL_PROMPT_VERSION = "local"
-
-COGNITIVE_SERVICES_SCOPE = "https://cognitiveservices.azure.com/.default"
 
 _configured = False
 _opik_client: opik.Opik | None = None
@@ -66,6 +65,7 @@ def configure_ol_llm(vault: Vault) -> bool:
     Azure OpenAI, when LLM_AZURE_ENDPOINT is set, authenticates with an Entra
     token from DefaultAzureCredential, as LLMClientFactory does.
 
+    Tracing is on only with OPIK_URL_OVERRIDE set and OPIK_TRACK_DISABLE unset.
     The Keycloak client is read from Vault (secret-operations/sso/opik, KV v1).
     A read failure is logged and leaves tracing off rather than failing the code
     location: tracing is observability, not a pipeline dependency.
@@ -88,8 +88,16 @@ def configure_ol_llm(vault: Vault) -> bool:
         )
     configure(settings)
 
-    keycloak = _opik_keycloak_client(vault) if is_opik_configured() else None
-    configure_tracing(TracingConfig(enabled=keycloak is not None, keycloak=keycloak))
+    # from_env keeps OPIK_TRACK_DISABLE and OL_LLM_TRACE_CONTENT in effect.
+    tracing = TracingConfig.from_env()
+    keycloak = (
+        _opik_keycloak_client(vault)
+        if tracing.enabled and is_opik_configured()
+        else None
+    )
+    configure_tracing(
+        dataclasses.replace(tracing, enabled=keycloak is not None, keycloak=keycloak)
+    )
     _configured = keycloak is not None
     return _configured
 

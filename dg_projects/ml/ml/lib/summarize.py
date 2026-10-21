@@ -106,16 +106,28 @@ def summary_use_case(model: str) -> UseCase:
 def fetch_summary_prompt() -> ManagedPrompt[TextTemplate]:
     """Fetch the summary prompt labeled with this deployment's environment.
 
+    Warns when the labeled version's text differs from SUMMARY_PROMPT. The
+    template hash is part of every row's key, so a run that then falls back to
+    SUMMARY_PROMPT re-summarizes every conversation, and the next run that
+    reaches Opik does it again.
+
     :returns: the prompt, or SUMMARY_PROMPT marked degraded when Opik could not
         be reached.
     :rtype: ManagedPrompt[TextTemplate]
     :raises LookupError: if Opik has no version of the prompt with this label.
     """
-    return get_prompt(
-        SUMMARY_PROMPT_NAME,
-        project_name=OPIK_PROJECT_NAME,
-        default=TextTemplate(template=SUMMARY_PROMPT),
+    embedded = TextTemplate(template=SUMMARY_PROMPT)
+    prompt = get_prompt(
+        SUMMARY_PROMPT_NAME, project_name=OPIK_PROJECT_NAME, default=embedded
     )
+    if prompt.source == "opik" and prompt.template_hash != embedded.template_hash:
+        logger.warning(
+            "Opik's %s %s differs from SUMMARY_PROMPT; copy it into the code so "
+            "an Opik outage does not re-summarize every conversation",
+            prompt.name,
+            prompt.version,
+        )
+    return prompt
 
 
 def needs_summary(row: dict[str, Any]) -> bool:
