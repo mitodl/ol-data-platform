@@ -32,6 +32,11 @@ models:
           # The model keeps no dedup, so any duplicate key is a lost grain upstream.
           error_if: ">0"
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.enrollment
   - name: enrollment_id
     description: Source system enrollment ID
     tests:
@@ -43,6 +48,11 @@ models:
     - not_null
     - accepted_values:
         values: ['course', 'program']
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.enrollment
   - name: enrollment_date_key
     description: >
       Foreign key to dim_date for enrollment creation date. Null for Global Alumni,
@@ -63,6 +73,11 @@ models:
         where: "user_fk is not null"
         config:
           severity: warn
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.learner
   - name: courserun_fk
     description: Foreign key to dim_course_run (null for program enrollments)
     tests:
@@ -109,13 +124,28 @@ models:
     description: Platform identifier string
     tests:
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.platform
   - name: enrollment_is_active
     description: Boolean indicating if enrollment is currently active. This is the
       canonical "currently enrolled" flag; enrollment_status records why an enrollment
       changed, is null on edX.org and Residential, and 'deferred' marks active audit
       enrollments on MITx Online but inactive ones on xPro and Bootcamps
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.active-enrollment
   - name: enrollment_mode
     description: Enrollment mode (audit, verified, etc.)
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.enrollment-mode
   - name: enrollment_status
     description: Enrollment status
   - name: enrollment_created_on
@@ -324,6 +354,11 @@ models:
     description: Platform identifier string
     tests:
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.platform
   - name: order_state
     description: Order state (fulfilled, cancelled, etc.)
     tests:
@@ -423,6 +458,11 @@ models:
     description: Platform identifier string
     tests:
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.platform
   - name: payment_method_fk
     description: >
       Foreign key to dim_payment_method. NULL for refund transactions and zero-dollar
@@ -486,6 +526,11 @@ models:
           # The model keeps no dedup, so any duplicate key is a lost grain upstream.
           error_if: ">0"
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.certificate
   - name: certificate_id
     description: Source system certificate ID
     tests:
@@ -541,6 +586,11 @@ models:
     description: Platform identifier string
     tests:
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.platform
   - name: certificate_scope
     description: Scope of certificate - 'course' for course run certificates, 'program'
       for program certificates
@@ -548,6 +598,11 @@ models:
     - not_null
     - accepted_values:
         values: ['course', 'program']
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.certificate
   - name: certificate_uuid
     description: Universally unique identifier for certificate
   - name: certificate_is_revoked
@@ -663,17 +718,37 @@ models:
     - not_null
     - accepted_values:
         values: ['mitxonline', 'mitxpro', 'edxorg', 'residential']
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.platform
   - name: grade_value
     description: Numeric grade value between 0.0 and 1.0
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.ferpa-classification.education-record
   - name: is_passing
     description: >
       Boolean indicating whether the learner passed the course run. Residential has
       no passing flag, so it is true when the letter grade is not empty.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.ferpa-classification.education-record
   - name: letter_grade
     description: >
       Letter grade string (e.g. 'Pass', 'Fail'). Available for MITx Online, MITx
       Pro and Residential;
       null for edX.org.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.ferpa-classification.education-record
   - name: grade_created_on
     description: Grade creation timestamp (for incremental processing). Null for edX.org.
   - name: grade_updated_on
