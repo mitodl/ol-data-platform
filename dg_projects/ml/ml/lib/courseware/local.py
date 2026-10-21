@@ -26,16 +26,20 @@ from ml.lib.courseware.scopes import CHARS_PER_TOKEN, build_scopes
 from ml.resources.llm import LLMClientFactory
 
 app = cyclopts.App(help=__doc__)
-OUTPUT_TABLES = (
-    "courseware_claim_extraction",
-    "courseware_claim",
-    "courseware_claim_evidence",
-)
+EXTRACTION_TABLE = "courseware_claim_extraction"
 
 
 def _existing(output_dir: Path, table: str) -> pl.DataFrame | None:
     path = output_dir / f"{table}.parquet"
     return pl.read_parquet(path) if path.exists() else None
+
+
+def _write(frame: pl.DataFrame, output_dir: Path, table: str) -> None:
+    """Replace a table's file whole, so an interrupted write leaves the old one."""
+    path = output_dir / f"{table}.parquet"
+    staged = path.with_suffix(".parquet.tmp")
+    frame.write_parquet(staged)
+    staged.replace(path)
 
 
 @app.command
@@ -74,7 +78,7 @@ def extract(  # noqa: PLR0913
         if not scope_title or scope.scope_title in scope_title
     ]
     output_dir.mkdir(parents=True, exist_ok=True)
-    stored = _existing(output_dir, "courseware_claim_extraction")
+    stored = _existing(output_dir, EXTRACTION_TABLE)
     existing_keys = set(stored["extraction_key"]) if stored is not None else set()
 
     if dry_run:
@@ -109,12 +113,22 @@ def extract(  # noqa: PLR0913
         existing_keys=existing_keys,
         max_workers=max_workers,
     )
-    for table, new_rows in zip(
-        OUTPUT_TABLES, (tables.extractions, tables.claims, tables.evidence), strict=True
+    # A stored extraction key is what makes a re-run skip a scope, so the extraction
+    # table is written last. A run cut off before it leaves claim and evidence rows
+    # with no extraction, which are dropped here and written again.
+    for table, new_rows in (
+        ("courseware_claim_evidence", tables.evidence),
+        ("courseware_claim", tables.claims),
+        (EXTRACTION_TABLE, tables.extractions),
     ):
         previous = _existing(output_dir, table)
-        combined = new_rows if previous is None else pl.concat([previous, new_rows])
-        combined.write_parquet(output_dir / f"{table}.parquet")
+        if previous is not None:
+            previous = previous.filter(pl.col("extraction_key").is_in(existing_keys))
+        _write(
+            new_rows if previous is None else pl.concat([previous, new_rows]),
+            output_dir,
+            table,
+        )
     print(  # noqa: T201
         f"{tables.extractions.height} extractions, {tables.claims.height} claims, "
         f"{tables.evidence.height} evidence rows; "

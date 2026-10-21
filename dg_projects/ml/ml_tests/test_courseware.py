@@ -1,7 +1,16 @@
+from types import SimpleNamespace
+
 import polars as pl
 import pytest
-from ml.lib.courseware import scopes
-from ml.lib.courseware.extract import _claim_row, extraction_key
+from ml.lib.courseware import local, scopes
+from ml.lib.courseware.extract import (
+    CLAIM_SCHEMA,
+    EVIDENCE_SCHEMA,
+    EXTRACTION_SCHEMA,
+    ExtractionTables,
+    _claim_row,
+    extraction_key,
+)
 from ml.lib.courseware.schemas import (
     AudienceClaim,
     ConceptClaim,
@@ -197,3 +206,33 @@ def test_string_fields_keep_text_that_parses_as_json():
     )
     assert claim.label == '{"a": 1}'
     assert claim.evidence == [Evidence(source_id="S01", passage="a b c")]
+
+
+def test_local_extract_replaces_claims_a_cut_off_run_left_behind(tmp_path, monkeypatch):
+    # a run cut off after writing claims left a row for an extraction it never
+    # stored; the next run extracts that scope again and keeps one copy
+    sources = tmp_path / "sources.parquet"
+    _rows(["some text"]).write_parquet(sources)
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    orphan = pl.DataFrame(
+        [{"extraction_key": "k1", "label": "old"}], schema=CLAIM_SCHEMA
+    )
+    orphan.write_parquet(output_dir / "courseware_claim.parquet")
+    tables = ExtractionTables(
+        extractions=pl.DataFrame([{"extraction_key": "k1"}], schema=EXTRACTION_SCHEMA),
+        claims=pl.DataFrame(
+            [{"extraction_key": "k1", "label": "new"}], schema=CLAIM_SCHEMA
+        ),
+        evidence=pl.DataFrame(schema=EVIDENCE_SCHEMA),
+    )
+    monkeypatch.setattr(local, "AnthropicBedrock", object)
+    monkeypatch.setattr(
+        local, "LLMClientFactory", lambda **_: SimpleNamespace(get_client=object)
+    )
+    monkeypatch.setattr(local, "extract_scopes", lambda *_, **__: tables)
+    local.extract(sources, output_dir)
+    claims = pl.read_parquet(output_dir / "courseware_claim.parquet")
+    assert claims["label"].to_list() == ["new"]
+    stored = pl.read_parquet(output_dir / "courseware_claim_extraction.parquet")
+    assert stored["extraction_key"].to_list() == ["k1"]
