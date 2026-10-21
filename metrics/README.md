@@ -67,22 +67,24 @@ that changes the file: a reviewer who approves that PR approves the metric, and
 sync then sets `Approved` in OpenMetadata. In Review, Rejected, Deprecated,
 Archived and Unprocessed are not set from files.
 
-The sync bot is not a metric reviewer, and should not be made one. In
-OpenMetadata 2.0.5 only a move from In Review to Approved or Rejected checks
-that the updater is one of the metric's reviewers
-(`EntityUpdater.updateEntityStatus`). Draft to Approved, and any move out of
-Unprocessed (where a sync PUT leaves the status), are not checked, so the bot
-can apply a file's status without being a reviewer. Reviewers are either all
-users or exactly one team (`validateReviewers`), so the bot could not sit
-beside a reviewing team anyway.
+The sync bot is not a metric reviewer, and should not be made one. The rules in
+this paragraph and the next are read from the OpenMetadata 2.0.5 source and
+have not been observed on a server. Only a move from In Review to Approved or Rejected checks the
+updater, and only when the metric has reviewers: the updater must then be one
+of them, or OpenMetadata answers 403 "User '<bot>' is not a reviewer"
+(`EntityUpdater.updateEntityStatus`, `checkUpdatedByReviewer`). Draft to
+Approved, and any move out of Unprocessed (where a sync PUT leaves the status,
+`setDefaultStatus`), are not checked, so the bot can apply a file's status
+without being a reviewer. Reviewers are either all users or exactly one team
+(`validateReviewers`), so the bot could not sit beside a reviewing team anyway.
 
 Sync does not override a review in progress. When a metric is In Review in
 OpenMetadata, sync writes nothing for it (no PUT, no PATCH, no lineage edge),
 with or without `--force` and whether or not the file changed a structural
 field, reports it as failed, carries on with the others, and exits non-zero.
 `--dry-run` reports the same. Skipping only the status PATCH would not be
-enough: a structural PUT alone resets In Review to Unprocessed
-(`setDefaultStatus`), which ends the review without a reviewer. To clear it, a
+enough: going by the same source, a structural PUT alone resets In Review to
+Unprocessed, which ends the review without a reviewer. To clear it, a
 reviewer approves or rejects the metric in OpenMetadata, or someone moves it
 out of In Review, and the next sync proceeds (reporting drift if the status
 then differs from the file).

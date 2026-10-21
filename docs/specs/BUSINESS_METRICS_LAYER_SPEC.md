@@ -432,8 +432,8 @@ check made afterwards would see the bot and let the PATCH overwrite it.
 Status and approval: decided 2026-10-21. A file's `status` is `Draft` or `Approved`, and
 approving the pull request that changes the file approves the metric. The sync bot is not a
 metric reviewer and is not made one. In 2.0.5 only a move from In Review to Approved or
-Rejected checks that the updater is a reviewer (`EntityUpdater.updateEntityStatus`,
-`checkUpdatedByReviewer`). Draft to Approved and any move out of Unprocessed, where a sync
+Rejected checks that the updater is a reviewer, and only when the metric has reviewers
+(`EntityUpdater.updateEntityStatus`, `checkUpdatedByReviewer`). Draft to Approved and any move out of Unprocessed, where a sync
 PUT leaves the status (`setDefaultStatus`), are unchecked, so the bot applies a file's
 status without being a reviewer. Reviewers are either all users or exactly one team
 (`validateReviewers`), so the bot could not sit beside a reviewing team. Sync does not
