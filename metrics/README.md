@@ -129,10 +129,10 @@ snapshot. For each file it:
    `implemented_by` tables by name, and writes nothing for that metric when one
    is missing;
 2. reads the live metric and checks for drift: when someone other than the sync
-   bot changed the description, reviewers or status since the bot last wrote
-   the metric (the newest version in its history whose `updatedBy` is the bot),
-   and the change differs from the file, it reports them and exits non-zero
-   without writing, unless `--force`. The edit then belongs in a pull request.
+   bot changed the description, owners, reviewers or status since the bot last
+   wrote the metric (the newest version in its history whose `updatedBy` is the
+   bot), and the change differs from the file, it reports them and exits
+   non-zero without writing, unless `--force`. The edit then belongs in a pull request.
    A file change to a field nobody edited in OpenMetadata syncs whatever else
    was edited there;
 3. PUTs the `metric` body only to create the metric or to change one of its own

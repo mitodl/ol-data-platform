@@ -249,7 +249,10 @@ def sync(
         bool,
         Parameter(
             name=["--force"],
-            help="Overwrite description, reviewers or status that were edited in OpenMetadata since the last sync.",
+            help=(
+                "Overwrite description, owners, reviewers or status that were edited in OpenMetadata since the "
+                "last sync."
+            ),
         ),
     ] = False,
     names: Annotated[
@@ -277,7 +280,7 @@ def sync(
 
     Reads OM_SERVER_URL and OM_BOT_JWT_TOKEN. Stops before the first file when
     the server's version differs from the CreateMetric snapshot's. A metric
-    whose description, reviewers or status someone changed in OpenMetadata
+    whose description, owners, reviewers or status someone changed in OpenMetadata
     since the last sync is reported and left alone unless --force, so the edit
     can become a pull request. Exits non-zero when any metric did not sync.
     """

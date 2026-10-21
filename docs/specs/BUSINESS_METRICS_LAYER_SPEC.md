@@ -414,10 +414,10 @@ against a schema the server no longer publishes, and `refresh-schema` comes firs
 
 Drift: step 2 reads the live entity's `updatedBy`. When the last change was not made by
 the sync's bot, it reads `GET /v1/metrics/{id}/versions` and takes the newest version whose
-`updatedBy` is the bot. Each version is a full snapshot of the entity, reviewers included
-(`EntityRepository.storeEntityHistory` stores the original loaded with the PUT/PATCH
-fields). A description, reviewers or status that differs both from that version and from
-the file was edited by someone else, so sync reports it and exits non-zero without
+`updatedBy` is the bot. Each version is a full snapshot of the entity, owners and
+reviewers included (`EntityRepository.storeEntityHistory` stores the original loaded with
+the PUT/PATCH fields). A description, owners, reviewers or status that differs both from
+that version and from the file was edited by someone else, so sync reports it and exits non-zero without
 writing, unless `--force`. The edit then becomes a pull request. A file change to a field
 nobody edited syncs even when someone edited another field (e.g. a tag), and a metric the
 bot never wrote is compared with the file. This needs no stored state of our own. The

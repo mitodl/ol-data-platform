@@ -28,7 +28,7 @@ re-encodes ``& < > " ' + = @ ` `` as entities (``learner's`` is stored as
 Drift is a field sync owns that someone else changed since the bot last wrote
 the metric: the live value is compared with the newest version in
 ``GET /v1/metrics/{id}/versions`` whose ``updatedBy`` is the bot. Each version
-there is a full snapshot of the entity, reviewers included
+there is a full snapshot of the entity, owners and reviewers included
 (``EntityRepository.listVersions``, ``storeEntityHistory``).
 """
 
@@ -241,8 +241,9 @@ def drift(
 ) -> list[str]:
     """List the fields someone other than the sync bot changed since the bot last wrote them.
 
-    Only description, reviewers and status are compared, and only where the
-    file sets them. A field is drift when its live value differs both from
+    Only description, owners, reviewers and status are compared, and only
+    where the file sets them. Owners and reviewers compare as sets of entity
+    references. A field is drift when its live value differs both from
     the file's and from *synced*, so a file change to a field nobody touched
     in OpenMetadata is not drift, and neither is an edit that already matches
     the file.
@@ -261,8 +262,9 @@ def drift(
     found = []
     if "description" in body and edited("description", body["description"], same_description):
         found.append("description")
-    if "reviewers" in metric.body and edited("reviewers", body["reviewers"], lambda a, b: _ref_set(a) == _ref_set(b)):
-        found.append("reviewers")
+    for field in ("owners", "reviewers"):
+        if field in metric.body and edited(field, body[field], lambda a, b: _ref_set(a) == _ref_set(b)):
+            found.append(field)
     if metric.status is not None and edited(STATUS_FIELD, metric.status, operator.eq):
         found.append(f"{STATUS_FIELD} ({live.get(STATUS_FIELD)} in OpenMetadata, {metric.status} in the file)")
     return found

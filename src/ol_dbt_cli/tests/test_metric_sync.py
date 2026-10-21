@@ -322,12 +322,17 @@ def test_ui_tag_edit_after_a_quoted_description_is_not_description_drift(
 
 @pytest.mark.parametrize(
     ("field", "ui_value"),
-    [("description", "Edited in the UI."), ("entityStatus", "Deprecated"), ("reviewers", [])],
+    [
+        ("description", "Edited in the UI."),
+        ("entityStatus", "Deprecated"),
+        ("reviewers", []),
+        ("owners", [{"id": "user-9", "type": "user"}]),
+    ],
 )
 def test_ui_edit_to_a_synced_field_is_drift_until_forced(
     server: FakeOpenMetadata, metrics_dir: Path, field: str, ui_value: Any
 ) -> None:
-    _edit_file(metrics_dir, "certified_learners", reviewers=TEAM)
+    _edit_file(metrics_dir, "certified_learners", owners=TEAM, reviewers=TEAM)
     _sync(metrics_dir, names=("certified_learners",))
     synced = copy.deepcopy(server.metrics["certified_learners"][field])
     server.edit_in_ui("certified_learners", "jane", **{field: ui_value})
@@ -340,6 +345,16 @@ def test_ui_edit_to_a_synced_field_is_drift_until_forced(
 
     assert _sync(metrics_dir, names=("certified_learners",), force=True) is False
     assert server.metrics["certified_learners"][field] == synced
+
+
+def test_ui_owners_naming_the_same_team_are_not_drift(server: FakeOpenMetadata, metrics_dir: Path) -> None:
+    _edit_file(metrics_dir, "certified_learners", owners=TEAM)
+    _sync(metrics_dir, names=("certified_learners",))
+    # The same reference, in the shape the server returns it.
+    server.edit_in_ui("certified_learners", "jane", owners=[{**TEAM_REF[0], "name": "data-platform"}])
+    server.calls.clear()
+    assert _sync(metrics_dir, names=("certified_learners",)) is False
+    assert server.writes() == [("PUT", "/v1/lineage")]
 
 
 def test_ui_edit_to_a_field_sync_does_not_compare_is_not_drift(server: FakeOpenMetadata, metrics_dir: Path) -> None:
@@ -355,13 +370,15 @@ def test_file_change_after_an_unrelated_ui_edit_syncs_without_force(
 ) -> None:
     _sync(metrics_dir)
     server.edit_in_ui("certified_learners", "jane", tags=[TIER1])
-    _edit_file(metrics_dir, "certified_learners", description="Learners with a certificate.", reviewers=TEAM)
+    _edit_file(
+        metrics_dir, "certified_learners", description="Learners with a certificate.", owners=TEAM, reviewers=TEAM
+    )
     capsys.readouterr()
     assert _sync(metrics_dir, names=("certified_learners",)) is False
     assert "drift" not in capsys.readouterr().out
     metric = server.metrics["certified_learners"]
     assert metric["description"] == "Learners with a certificate."
-    assert metric["reviewers"] == TEAM_REF
+    assert metric["owners"] == metric["reviewers"] == TEAM_REF
     assert metric["tags"] == [TIER1]
 
 
