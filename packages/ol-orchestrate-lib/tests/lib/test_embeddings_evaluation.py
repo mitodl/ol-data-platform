@@ -187,3 +187,30 @@ def test_a_report_on_other_queries_is_not_logged() -> None:
             project_name="ol-data-platform",
             client_factory=MagicMock,
         )
+
+
+def test_a_report_on_an_older_version_of_the_set_is_not_logged() -> None:
+    report = evaluate_retrieval(STRATEGY, QUERIES, CORPUS, QueryEmbedder())
+    relabeled = [
+        QUERIES[0],
+        EvalQuery(query_id="q2", text="right", relevant_doc_keys=frozenset({"a"})),
+    ]
+    with pytest.raises(ValueError, match="not the evaluation set's"):
+        log_opik_experiment(
+            report,
+            relabeled,
+            eval_set_name="set",
+            project_name="ol-data-platform",
+            client_factory=MagicMock,
+        )
+
+
+def test_query_ids_must_be_unique() -> None:
+    duplicated = [
+        QUERIES[0],
+        EvalQuery(query_id="q1", text="right", relevant_doc_keys=frozenset({"a"})),
+    ]
+    with pytest.raises(ValueError, match="unique"):
+        evaluate_retrieval(STRATEGY, duplicated, CORPUS, QueryEmbedder())
+    with pytest.raises(ValueError, match="unique"):
+        eval_set_dataset_name("set", duplicated)

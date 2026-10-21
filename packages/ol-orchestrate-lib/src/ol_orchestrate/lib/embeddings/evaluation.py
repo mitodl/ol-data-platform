@@ -147,6 +147,7 @@ class QueryScores(BaseModel):
 class RetrievalReport(BaseModel):
     """A strategy's scores on an evaluation set.
 
+    :param eval_set_hash: :func:`eval_set_hash` of the queries the report scored
     :param means: each metric's mean over the queries
     :param query_input_tokens: tokens spent embedding the queries
     """
@@ -154,6 +155,7 @@ class RetrievalReport(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     strategy: EmbeddingStrategy
+    eval_set_hash: str
     queries: list[QueryScores]
     means: dict[str, float]
     query_input_tokens: int
@@ -198,7 +200,8 @@ def evaluate_retrieval(
     :returns: per-query rankings and scores, and their means
     :rtype: RetrievalReport
     :raises ValueError: when the embedder is not for the strategy's model, there
-        are no queries or no cutoffs, or a cutoff is below 1
+        are no queries, two queries share an id, there are no cutoffs, or a cutoff
+        is below 1
     """
     if embedder.spec != strategy.model:
         msg = f"embedder is for {embedder.spec.model_id}, not {strategy.model.model_id}"
@@ -209,6 +212,7 @@ def evaluate_retrieval(
     if not cutoffs or min(cutoffs) < 1:
         msg = "cutoffs must be one or more values of at least 1"
         raise ValueError(msg)
+    queries_hash = eval_set_hash(queries)
     batch = embedder.embed([query.text for query in queries], input_type="query")
     doc_keys, vectors = corpus
     rankings = exact_search(
@@ -231,6 +235,7 @@ def evaluate_retrieval(
     }
     return RetrievalReport(
         strategy=strategy,
+        eval_set_hash=queries_hash,
         queries=query_scores,
         means=means,
         query_input_tokens=batch.input_tokens,
@@ -251,22 +256,41 @@ class _RankingMetric(base_metric.BaseMetric):
         return score_result.ScoreResult(name=self.name, value=scores[self.name])
 
 
+def eval_set_hash(queries: Sequence[EvalQuery]) -> str:
+    """Hash one version of an evaluation set: its ids, texts and relevant documents.
+
+    The order of the queries does not change it.
+
+    :param queries: the evaluation set
+    :returns: 12 hex digits
+    :rtype: str
+    :raises ValueError: when two queries share an id, since a query's results are
+        looked up by its id
+    """
+    ids = [query.query_id for query in queries]
+    if len(set(ids)) != len(ids):
+        msg = "query ids must be unique within an evaluation set"
+        raise ValueError(msg)
+    items = sorted(
+        json.dumps(_dataset_item(query), sort_keys=True) for query in queries
+    )
+    return md5_hex("\n".join(items))[:12]
+
+
 def eval_set_dataset_name(eval_set_name: str, queries: Sequence[EvalQuery]) -> str:
     """Name the Opik dataset of one version of an evaluation set.
 
     ``opik.evaluate`` scores every item in a dataset, so a dataset must hold
     exactly one version of the set: a dropped query would have no ranking, and
-    a changed one would be scored twice. The name ends with a hash of the items.
+    a changed one would be scored twice. The name ends with :func:`eval_set_hash`.
 
     :param eval_set_name: the evaluation set's name
     :param queries: the evaluation set
     :returns: ``{eval_set_name}-{12 hex digits}``
     :rtype: str
+    :raises ValueError: when two queries share an id
     """
-    items = sorted(
-        json.dumps(_dataset_item(query), sort_keys=True) for query in queries
-    )
-    return f"{eval_set_name}-{md5_hex('\n'.join(items))[:12]}"
+    return f"{eval_set_name}-{eval_set_hash(queries)}"
 
 
 def _dataset_item(query: EvalQuery) -> dict[str, Any]:
@@ -298,12 +322,13 @@ def log_opik_experiment(
     :param client_factory: builds the Opik client
     :returns: the experiment's id
     :rtype: str
-    :raises ValueError: when the report does not cover exactly ``queries``
+    :raises ValueError: when the report was not computed on this version of
+        ``queries``, or two queries share an id
     """
-    by_query = {scores.query_id: scores for scores in report.queries}
-    if set(by_query) != {query.query_id for query in queries}:
+    if report.eval_set_hash != eval_set_hash(queries):
         msg = "the report's queries are not the evaluation set's"
         raise ValueError(msg)
+    by_query = {scores.query_id: scores for scores in report.queries}
     dataset = client_factory().get_or_create_dataset(
         name=eval_set_dataset_name(eval_set_name, queries)
     )
