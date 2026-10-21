@@ -20,18 +20,16 @@ class GoogleSheetConfig(ConfigurableResource):
     sheet_id: str = "13AoothEhEvWs2cJEEfZETm7E6h3-ZY4tD11KX_ARe1A"
     worksheet_id: int = 1472315099  # Worksheet ID (gid) within the Google Sheet
 
-    def service_account_json(self) -> dict[str, Any] | None:
-        """Return the service account key, or ``None`` if Vault can't supply it.
+    def service_account_json(self) -> dict[str, Any]:
+        """Read the service account key from Vault.
 
-        ``None`` rather than raising, for the reason in
-        :func:`fetch_canvas_course_ids_from_google_sheet`.
+        A failed read raises rather than returning nothing, so the sensor tick
+        fails visibly instead of skipping, and never gets as far as diffing an
+        unread sheet against the partitions.
         """
-        try:
-            return self.vault.client.secrets.kv.v1.read_secret(
-                mount_point=self.mount_point, path=self.config_path
-            )["data"]
-        except Exception:  # noqa: BLE001
-            return None
+        return self.vault.client.secrets.kv.v1.read_secret(
+            mount_point=self.mount_point, path=self.config_path
+        )["data"]
 
 
 def fetch_canvas_course_ids_from_google_sheet(
@@ -44,15 +42,12 @@ def fetch_canvas_course_ids_from_google_sheet(
     partitions and deletes the difference, so "we could not read the sheet" and
     "the sheet lists no courses" cannot both be ``set()``: the first would delete
     every Canvas partition, taking any in-flight run for one down with it
-    (DAGSTER-2B).
+    (DAGSTER-2B). A failed Vault read raises, which keeps it out of that diff
+    the same way and fails the tick where it can be seen.
     """
     sheet_config = context.resources.google_sheet_config
 
     service_account_json = sheet_config.service_account_json()
-    if service_account_json is None:
-        context.log.error("No google service account credentials found in vault")
-        return None
-
     creds_dict = (
         service_account_json
         if isinstance(service_account_json, dict)
