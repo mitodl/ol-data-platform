@@ -184,11 +184,25 @@ snapshot. For each file it:
    was edited there;
 3. PUTs the `metric` body only to create the metric or to change one of its own
    fields (type, unit, expression, ...);
-4. PATCHes description, owners, reviewers and `status` where they still differ.
-   A bot's PUT keeps a stored description and existing owners and resets the
-   status, so these land only by PATCH;
+4. PATCHes description, owners, reviewers and `status` where they still differ,
+   and the file's digest when it changed (below). A bot's PUT keeps a stored
+   description, existing owners and custom properties and resets the status,
+   so these land only by PATCH;
 5. PUTs a table-to-metric lineage edge per `implemented_by` table. OpenMetadata
    stores no column lineage for a Metric, so the columns stay in this file.
+
+Sync records a SHA-256 of what the file declares (`metric`, `status` and
+`implemented_by`) in the metric's `metricFileSha256` custom property, and
+PATCHes it whenever the file changed, even when no other field did. That
+write makes the bot the author of the newest version. Without it, a file that
+adopts an edit made in OpenMetadata (e.g. copies a description someone wrote
+there) would write nothing, the bot's last version would keep the old value,
+and the next file change to that field would read as drift. The property is a
+string custom property on the metric type, defined by ol-infrastructure
+(`om_server_config`). When it is not defined, OpenMetadata refuses the PATCH
+and sync fails that metric, saying so. `--dry-run` lists it among the fields
+it would PATCH. It is not part of the drift check, and a file cannot set it
+(`extension` is not allowed).
 
 An unchanged file writes only the lineage edges, which OpenMetadata upserts.
 OpenMetadata stores descriptions HTML-encoded (`learner's` as `learner&#39;s`),

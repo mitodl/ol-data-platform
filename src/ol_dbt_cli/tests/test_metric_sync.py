@@ -4,14 +4,16 @@ The stand-in replaces only ``OpenMetadataClient.request``, so name lookups,
 404 handling and the command's ordering run as they would against a server.
 Its PUT and PATCH follow what the OpenMetadata 2.0.5 source does for a bot
 (see ``ol_dbt_cli.lib.metric_sync``); that behaviour is not checked against a
-live server here. It does not consolidate a user's edits within a session the
-way the server does, which sync does not depend on: it reads only the newest
-version the bot wrote.
+live server here. A PATCH that changes nothing records no version, and a PATCH
+by whoever wrote the current version folds into it, as the server does for one
+user within its session timeout (``EntityUpdater.consolidateChanges``, every
+call here being within it).
 """
 
 from __future__ import annotations
 
 import copy
+import dataclasses
 import html
 import io
 import json
@@ -28,7 +30,13 @@ from ol_dbt_cli.commands import metrics as metrics_command
 from ol_dbt_cli.lib import openmetadata
 from ol_dbt_cli.lib.manifest import ManifestModel, ManifestRegistry
 from ol_dbt_cli.lib.metric_registry import SCHEMA_SNAPSHOT, SCHEMA_VERSION_KEY, load_metrics
-from ol_dbt_cli.lib.metric_sync import lineage_sources, same_description, structural_changes
+from ol_dbt_cli.lib.metric_sync import (
+    FILE_DIGEST_PROPERTY,
+    file_digest,
+    lineage_sources,
+    same_description,
+    structural_changes,
+)
 from ol_dbt_cli.lib.openmetadata import OpenMetadataClient, OpenMetadataError
 
 FIXTURES = Path(__file__).parent / "fixtures" / "metrics"
@@ -105,20 +113,67 @@ class FakeOpenMetadata(OpenMetadataClient):
         self.calls: list[tuple[str, str]] = []
         # Metrics whose GET answers 500.
         self.broken: set[str] = set()
+        # String custom properties defined on the metric type.
+        self.custom_properties = {FILE_DIGEST_PROPERTY}
 
     def writes(self) -> list[tuple[str, str]]:
         return [c for c in self.calls if c[0] != "GET"]
 
     def edit_in_ui(self, name: str, user: str, **fields: Any) -> None:
         """Apply a person's PATCH, which the server sanitizes like any other."""
-        metric = self.metrics[name]
+        updated = copy.deepcopy(self.metrics[name])
         if "description" in fields:
             fields["description"] = _sanitize(fields["description"])
-        metric.update(fields, updatedBy=user, version=round(metric["version"] + 0.1, 1))
-        self._record(metric)
+        updated.update(fields)
+        self._store_patch(updated, user)
 
     def _record(self, metric: dict[str, Any]) -> None:
         self.history.setdefault(metric["name"], []).append(copy.deepcopy(metric))
+
+    def _store_patch(self, updated: dict[str, Any], user: str) -> dict[str, Any]:
+        """Store a PATCH the way EntityUpdater.storeUpdate does."""
+        current = self.metrics[updated["name"]]
+        bookkeeping = ("updatedBy", "version")
+        if {k: v for k, v in updated.items() if k not in bookkeeping} == {
+            k: v for k, v in current.items() if k not in bookkeeping
+        }:
+            return copy.deepcopy(current)
+        history = self.history[updated["name"]]
+        if current["version"] > 0.1 and current["updatedBy"] == user:
+            updated.update(updatedBy=user, version=current["version"])
+            history[-1] = copy.deepcopy(updated)
+        else:
+            updated.update(updatedBy=user, version=round(current["version"] + 0.1, 1))
+            history.append(copy.deepcopy(updated))
+        self.metrics[updated["name"]] = updated
+        return copy.deepcopy(updated)
+
+    def _patch(self, metric: dict[str, Any], op: dict[str, Any]) -> None:
+        """Apply one JSON Patch operation as RFC 6902 has it: a parent must exist, and replace needs the member."""
+        *parents, key = op["path"].lstrip("/").split("/")
+        target = metric
+        for parent in parents:
+            if not isinstance(target.get(parent), dict):
+                raise OpenMetadataError(f"PATCH -> 400: no {parent} to apply {op['path']} to", 400)
+            target = target[parent]
+        assert op["op"] in ("add", "replace")
+        if op["op"] == "replace" and key not in target:
+            raise OpenMetadataError(f"PATCH -> 400: no {op['path']} to replace", 400)
+        target[key] = _sanitize(op["value"]) if op["path"] == "/description" else copy.deepcopy(op["value"])
+
+    def _check_extension(self, path: str, original: dict[str, Any], updated: dict[str, Any]) -> None:
+        """Validate each added or changed custom property (EntityUpdater.updateExtension)."""
+        before = original.get("extension") or {}
+        for key, value in (updated.get("extension") or {}).items():
+            if before.get(key) == value:
+                continue
+            if key not in self.custom_properties:
+                message = f"Unknown custom field {key}"
+            elif not isinstance(value, str):
+                message = f"Custom field {key} has invalid JSON [$: {type(value).__name__} found, string expected]"
+            else:
+                continue
+            raise OpenMetadataError(f"PATCH {path} -> 400: {json.dumps({'code': 400, 'message': message})}", 400)
 
     def request(
         self,
@@ -153,14 +208,12 @@ class FakeOpenMetadata(OpenMetadataClient):
                 return self._put_metric(body)
             case ("PATCH", "metrics", metric_id):
                 assert content_type == openmetadata.JSON_PATCH_CONTENT_TYPE
-                [metric] = [m for m in self.metrics.values() if m["id"] == metric_id]
+                [original] = [m for m in self.metrics.values() if m["id"] == metric_id]
+                updated = copy.deepcopy(original)
                 for op in body:
-                    assert op["op"] == "add"
-                    field = op["path"].lstrip("/")
-                    metric[field] = _sanitize(op["value"]) if field == "description" else op["value"]
-                metric.update(updatedBy=BOT, version=round(metric["version"] + 0.1, 1))
-                self._record(metric)
-                return copy.deepcopy(metric)
+                    self._patch(updated, op)
+                self._check_extension(path, original, updated)
+                return self._store_patch(updated, BOT)
             case ("PUT", "lineage"):
                 self.lineage.append(body)
                 # LineageResource.addLineage answers 200 with no body.
@@ -194,6 +247,9 @@ class FakeOpenMetadata(OpenMetadataClient):
             updated["owners"] = live["owners"]
         updated["reviewers"] = body.get("reviewers") or []
         updated["tags"] = live.get("tags", []) + [t for t in body.get("tags", []) if t not in live.get("tags", [])]
+        # A bot's PUT keeps the stored extension (updateExtension).
+        if "extension" in live:
+            updated["extension"] = live["extension"]
         updated.update(entityStatus="Unprocessed", updatedBy=BOT, version=round(live["version"] + 0.1, 1))
         self.metrics[body["name"]] = updated
         self._record(updated)
@@ -238,7 +294,7 @@ def test_dry_run_writes_nothing(
     assert server.writes() == []
     out = capsys.readouterr().out
     assert out.count("would") == 2
-    assert "then PATCH entityStatus" in out
+    assert "then PATCH entityStatus, extension" in out
     assert "skipped" in out
     assert "mv_b2b_learner_enrollment" in out
 
@@ -434,6 +490,105 @@ def test_dry_run_reports_a_metric_in_review_or_rejected(
     assert "would certified_learners" not in out
     assert "would learner_completion_status" in out
     assert server.writes() == []
+
+
+def _digest(metrics_dir: Path, name: str) -> str:
+    [metric] = [m for m in load_metrics(metrics_dir) if m.name == name]
+    return file_digest(metric)
+
+
+def test_a_ui_edit_the_file_adopts_is_not_drift_when_the_file_changes_again(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir, names=("certified_learners",))
+    server.edit_in_ui("certified_learners", "jane", description="Edited in the UI.")
+    _edit_file(metrics_dir, "certified_learners", description="Edited in the UI.")
+    capsys.readouterr()
+    assert _sync(metrics_dir, names=("certified_learners",)) is False
+    # Only the digest changed, in a version by the bot that holds jane's description.
+    assert "no field changes; patched extension/metricFileSha256" in " ".join(capsys.readouterr().out.split())
+    metric = server.metrics["certified_learners"]
+    assert (metric["updatedBy"], metric["description"]) == (BOT, "Edited in the UI.")
+
+    _edit_file(metrics_dir, "certified_learners", description="Changed again in a later PR.")
+    assert _sync(metrics_dir, names=("certified_learners",)) is False
+    assert "drift" not in capsys.readouterr().out
+    assert server.metrics["certified_learners"]["description"] == "Changed again in a later PR."
+
+
+@pytest.mark.parametrize(
+    ("extension", "patched"),
+    [
+        (None, "extension"),
+        ({"tier": "gold"}, "extension/metricFileSha256"),
+        ({FILE_DIGEST_PROPERTY: "0" * 64}, "extension/metricFileSha256"),
+    ],
+)
+def test_a_missing_or_stale_digest_is_written_alone(
+    server: FakeOpenMetadata,
+    metrics_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+    extension: dict[str, str] | None,
+    patched: str,
+) -> None:
+    server.custom_properties.add("tier")
+    _sync(metrics_dir, names=("certified_learners",))
+    # As the bot left a metric synced before the digest, or for an older file.
+    metric = server.metrics["certified_learners"]
+    metric.pop("extension")
+    if extension is not None:
+        metric["extension"] = extension
+    server.calls.clear()
+    capsys.readouterr()
+    assert _sync(metrics_dir, names=("certified_learners",)) is False
+    assert f"no field changes; patched {patched}" in " ".join(capsys.readouterr().out.split())
+    assert ("PUT", "/v1/metrics") not in server.calls
+    digest = _digest(metrics_dir, "certified_learners")
+    assert server.metrics["certified_learners"]["extension"] == {**(extension or {}), FILE_DIGEST_PROPERTY: digest}
+
+
+def test_a_digest_that_matches_the_file_is_not_written_again(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir)
+    assert {n: m["extension"] for n, m in server.metrics.items()} == {
+        n: {FILE_DIGEST_PROPERTY: _digest(metrics_dir, n)} for n in server.metrics
+    }
+    server.calls.clear()
+    capsys.readouterr()
+    assert _sync(metrics_dir, dry_run=True) is False
+    assert "then PATCH" not in capsys.readouterr().out
+    assert _sync(metrics_dir) is False
+    assert set(server.writes()) == {("PUT", "/v1/lineage")}
+
+
+def test_an_undefined_digest_property_fails_each_metric_loudly(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    server.custom_properties.clear()
+    assert _sync(metrics_dir) is True
+    out = " ".join(capsys.readouterr().out.split())
+    for name in ("certified_learners", "learner_completion_status"):
+        assert (
+            f"failed {name}: OpenMetadata has no `metricFileSha256` custom property on the metric type, where sync "
+            "records the digest of each metric file. It must be defined there (ol-infrastructure om_server_config)"
+        ) in out
+    assert "Unknown custom field metricFileSha256" in out
+    assert "synced" not in out
+    # The server refuses the whole PATCH, so the status the PUT reset stays reset.
+    assert all(m["entityStatus"] == "Unprocessed" and "extension" not in m for m in server.metrics.values())
+
+
+def test_the_digest_covers_what_the_file_declares_in_any_key_order(metrics_dir: Path) -> None:
+    [metric] = [m for m in load_metrics(metrics_dir) if m.name == "certified_learners"]
+    reordered = dataclasses.replace(metric, body=dict(reversed(list(metric.body.items()))))
+    assert file_digest(reordered) == file_digest(metric)
+    for changed in (
+        dataclasses.replace(metric, status="Draft"),
+        dataclasses.replace(metric, implemented_by=metric.implemented_by[:1]),
+        dataclasses.replace(metric, body={**metric.body, "displayName": "Learners certified"}),
+    ):
+        assert file_digest(changed) != file_digest(metric)
 
 
 def test_ui_owners_naming_the_same_team_are_not_drift(server: FakeOpenMetadata, metrics_dir: Path) -> None:

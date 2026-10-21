@@ -16,9 +16,9 @@ and MetricRepository), a PUT to an existing Metric:
 So sync PUTs only to create the metric or change one of its own fields, sends
 the live reviewers and related metrics when the file does not set them and the
 live assets always, and then PATCHes
-description, owners, reviewers and status wherever they still differ. An
-unchanged file writes no Metric field; it re-PUTs its lineage edges, which
-the server upserts.
+description, owners, reviewers and status wherever they still differ, with
+the file's digest (below) when it changed. An unchanged file writes no Metric
+field; it re-PUTs its lineage edges, which the server upserts.
 
 A file's status is Draft or Approved, and the bot is not a metric reviewer.
 OpenMetadata checks the updater only on a move from In Review to Approved or
@@ -44,11 +44,26 @@ the metric: the live value is compared with the newest version in
 ``GET /v1/metrics/{id}/versions`` whose ``updatedBy`` is the bot. Each version
 there is a full snapshot of the entity, owners and reviewers included
 (``EntityRepository.listVersions``, ``storeEntityHistory``).
+
+A file that adopts an edit made in OpenMetadata changes no field, so without
+a write the bot's newest version would keep the old value, and the next file
+change to that field would read as drift. Sync therefore keeps a SHA-256 of
+what the file declares in the metric's ``metricFileSha256`` custom property
+(defined on the metric type by ol-infrastructure) and PATCHes it whenever the
+file changed. A PATCH that changes only ``extension`` records a new version
+with the caller as ``updatedBy`` (``updateExtension``, ``updateVersion``), and
+that version holds the adopted value. When the bot also wrote the version
+before it within the session timeout, OpenMetadata folds the two into one
+version (``EntityUpdater.consolidateChanges``); either way the newest bot
+version is the one just written. A bot's PUT keeps the stored extension
+(``updateExtension``), so the marker lands only by PATCH.
 """
 
 from __future__ import annotations
 
 import copy
+import dataclasses
+import hashlib
 import html
 import json
 import operator
@@ -84,7 +99,11 @@ REVIEW_HOLD_STATUSES = {
     ),
 }
 # Fields GET /v1/metrics/name/{fqn} returns only when asked for.
-METRIC_FIELDS = "owners,reviewers,tags,relatedMetrics,assets"
+METRIC_FIELDS = "owners,reviewers,tags,relatedMetrics,assets,extension"
+EXTENSION_FIELD = "extension"
+# The custom property holding file_digest(), a string property on the metric
+# type that ol-infrastructure defines (om_server_config).
+FILE_DIGEST_PROPERTY = "metricFileSha256"
 STARROCKS_TAG = "starrocks"
 TAG_COLLECTIONS = {"Glossary": "glossaryTerms", "Classification": "tags"}
 
@@ -167,6 +186,16 @@ def last_synced_version(history: dict[str, Any], bot: str) -> dict[str, Any] | N
         if version.get("updatedBy") == bot:
             return version
     return None
+
+
+def file_digest(metric: MetricDefinition) -> str:
+    """SHA-256 of what the metric file declares: its ``metric`` body, ``status`` and ``implemented_by``."""
+    declared = {
+        "metric": metric.body,
+        "status": metric.status,
+        "implemented_by": [dataclasses.asdict(i) for i in metric.implemented_by],
+    }
+    return hashlib.sha256(json.dumps(declared, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def create_body(
@@ -256,13 +285,14 @@ def structural_changes(body: dict[str, Any], live: dict[str, Any]) -> list[str]:
 
 
 def after_put(body: dict[str, Any], live: dict[str, Any] | None) -> dict[str, Any]:
-    """Predict the PATCHed fields of the metric a bot PUT of *body* leaves (see the module docstring)."""
+    """Predict the PATCHed fields and extension of the metric a bot PUT of *body* leaves (see the module docstring)."""
     live = live or {}
     return {
         "description": live.get("description") or body.get("description"),
         "owners": live.get("owners") or body.get("owners"),
         "reviewers": body.get("reviewers"),
         STATUS_FIELD: PUT_DEFAULT_STATUS,
+        EXTENSION_FIELD: live.get(EXTENSION_FIELD),
     }
 
 
@@ -301,7 +331,7 @@ def drift(
 
 
 def patch_ops(metric: MetricDefinition, body: dict[str, Any], current: dict[str, Any]) -> list[dict[str, Any]]:
-    """JSON Patch operations that make *current* match the file.
+    """JSON Patch operations that make *current* match the file and record its digest.
 
     :param current: the metric as it stands before the PATCH.
     """
@@ -313,6 +343,14 @@ def patch_ops(metric: MetricDefinition, body: dict[str, Any], current: dict[str,
             ops.append({"op": "add", "path": f"/{field}", "value": body[field]})
     if current.get(STATUS_FIELD) != metric.status:
         ops.append({"op": "add", "path": f"/{STATUS_FIELD}", "value": metric.status})
+    digest = file_digest(metric)
+    extension = current.get(EXTENSION_FIELD)
+    if extension is None:
+        ops.append({"op": "add", "path": f"/{EXTENSION_FIELD}", "value": {FILE_DIGEST_PROPERTY: digest}})
+    elif extension.get(FILE_DIGEST_PROPERTY) != digest:
+        # JSON Patch replaces only a member that exists.
+        op = "replace" if FILE_DIGEST_PROPERTY in extension else "add"
+        ops.append({"op": op, "path": f"/{EXTENSION_FIELD}/{FILE_DIGEST_PROPERTY}", "value": digest})
     return ops
 
 

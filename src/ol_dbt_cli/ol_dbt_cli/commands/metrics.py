@@ -34,6 +34,7 @@ from ol_dbt_cli.lib.metric_registry import (
     load_metrics,
 )
 from ol_dbt_cli.lib.metric_sync import (
+    FILE_DIGEST_PROPERTY,
     METRIC_FIELDS,
     REVIEW_HOLD_STATUSES,
     STATUS_FIELD,
@@ -51,6 +52,7 @@ from ol_dbt_cli.lib.metric_sync import (
 from ol_dbt_cli.lib.openmetadata import (
     JSON_PATCH_CONTENT_TYPE,
     OpenMetadataClient,
+    OpenMetadataError,
     load_catalog_manifest,
     quote_fqn,
 )
@@ -142,6 +144,21 @@ _LABEL_WIDTH = 10
 
 def _metric_path(name: str) -> str:
     return f"/v1/metrics/name/{quote_fqn(name)}"
+
+
+def _write_failure(exc: RuntimeError) -> str:
+    # CatalogExceptionMessage.unknownCustomField, answered with a 400.
+    if (
+        isinstance(exc, OpenMetadataError)
+        and exc.status == 400
+        and f"Unknown custom field {FILE_DIGEST_PROPERTY}" in str(exc)
+    ):
+        return (
+            f"OpenMetadata has no `{FILE_DIGEST_PROPERTY}` custom property on the metric type, where sync records "
+            "the digest of each metric file. It must be defined there (ol-infrastructure om_server_config) before "
+            f"metrics can sync. {exc}"
+        )
+    return str(exc)
 
 
 def _sync_one(
@@ -240,7 +257,7 @@ def _sync_one(
         for source, source_id in zip(sources, source_ids, strict=True):
             client.request("PUT", "/v1/lineage", lineage_edge(source_id, source, current["id"], metric.path.name))
     except RuntimeError as exc:
-        console.print(f"[bold red]failed[/]    {name}: {escape(str(exc))}")
+        console.print(f"[bold red]failed[/]    {name}: {escape(_write_failure(exc))}")
         return False
     patched = f"; patched {', '.join(op['path'].lstrip('/') for op in ops)}" if ops else ""
     console.print(f"[green]synced[/]    {name} (v{current['version']}): {escape(action + patched)}")
@@ -298,8 +315,10 @@ def sync(
     whose description, owners, reviewers or status someone changed in OpenMetadata
     since the last sync is reported and left alone unless --force, so the edit
     can become a pull request. A metric that is In Review or Rejected in
-    OpenMetadata is reported and left alone even with --force. Exits non-zero
-    when any metric did not sync.
+    OpenMetadata is reported and left alone even with --force. Each file's
+    digest is recorded in the metric's metricFileSha256 custom property, which
+    ol-infrastructure defines on the metric type. Exits non-zero when any
+    metric did not sync.
     """
     metrics, manifest = _load(dbt_dir_path, metrics_dir_path, manifest_path, names)
     client = OpenMetadataClient.from_env()
