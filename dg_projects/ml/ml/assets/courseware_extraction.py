@@ -41,6 +41,7 @@ from ml.lib.courseware.extract import (
     covered_keys,
     extract_scopes,
     extraction_key,
+    scope_inputs,
 )
 from ml.lib.courseware.prompts import SYSTEM_PROMPT
 from ml.lib.courseware.scopes import build_scopes
@@ -71,6 +72,7 @@ CHECKSUMS_KEY = AssetKey(
 EXTRACTION_KEY = AssetKey(["intermediate", "courseware_claim_extraction"])
 CLAIM_KEY = AssetKey(["intermediate", "courseware_claim"])
 EVIDENCE_KEY = AssetKey(["intermediate", "courseware_claim_evidence"])
+SCOPE_INPUT_KEY = AssetKey(["intermediate", "courseware_scope_input"])
 EXTRACTION_PROMPT_NAME = "courseware-claim-extraction"
 # The extractor version this code runs, as courseware_extraction_allowlist names it.
 EXTRACTOR_VERSION = {
@@ -276,7 +278,7 @@ def evidence_check(evidence: pl.DataFrame, min_exact_share: float) -> AssetCheck
             # once (see the module docstring).
             automation_condition=upstream_or_code_changes(),
         )
-        for key in (CLAIM_KEY, EVIDENCE_KEY, EXTRACTION_KEY)
+        for key in (CLAIM_KEY, EVIDENCE_KEY, EXTRACTION_KEY, SCOPE_INPUT_KEY)
     },
     check_specs=[
         AssetCheckSpec(
@@ -410,6 +412,14 @@ def courseware_extraction(
                 tables.extractions["output_tokens"].sum() or 0
             ),
         },
+    )
+    # Every scope part as read now, extracted or skipped, so dbt can tell which
+    # stored reading is the current text's.
+    observed = scope_inputs(scopes)
+    yield Output(
+        observed,
+        output_name=SCOPE_INPUT_KEY.path[-1],
+        metadata={"row_count": MetadataValue.int(observed.height)},
     )
     yield evidence_check(tables.evidence, config.min_exact_evidence_share)
 

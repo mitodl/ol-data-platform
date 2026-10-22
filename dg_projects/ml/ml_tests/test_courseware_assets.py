@@ -278,6 +278,11 @@ def test_extraction_writes_each_scope_once(tables, calls, catalog):
     assert second.success
     assert calls == ["record_extraction", "record_extraction"]
     assert tables["courseware_claim_extraction"].height == 2
+    # every read records its scopes' inputs, the skipped ones too
+    observed = tables["courseware_scope_input"]
+    assert observed["observed_at"].n_unique() == 2
+    assert sorted(observed["scope_id"]) == ["seq-1", "seq-1", "seq-2", "seq-2"]
+    assert set(observed["courserun_readable_id"]) == {COURSERUN}
 
 
 @pytest.mark.usefixtures("catalog")

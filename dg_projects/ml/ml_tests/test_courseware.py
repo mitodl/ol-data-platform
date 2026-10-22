@@ -15,6 +15,7 @@ from ml.lib.courseware.extract import (
     _ModelResult,
     extraction_key,
     header_version,
+    scope_inputs,
     stored_extraction_key,
 )
 from ml.lib.courseware.extract import _rows as _rows_for
@@ -352,6 +353,28 @@ def test_either_key_scheme_skips_what_the_other_extracted(
     # a header change is re-extracted only when asked for
     assert _stored_marks(tmp_path, capsys, "Edited.", key_on_header=False) == 1
     assert _stored_marks(tmp_path, capsys, "Edited.", key_on_header=True) == 0
+
+
+def test_scope_inputs_match_what_an_extraction_of_the_part_stores(tmp_path, capsys):
+    rows = _course_rows("About it.", "Lecture 2", "some text")
+    built = scopes.build_scopes(rows)
+    scope = _lecture_one(rows)
+    extraction, _, _ = _rows_for(scope, "key", "model", "medium", _result())
+    observed = (
+        scope_inputs(built).filter(pl.col("scope_id") == "seq-1").row(0, named=True)
+    )
+    columns = ("scope_part", "scope_part_count", "input_text_checksum")
+    assert {c: observed[c] for c in columns} == {c: extraction[c] for c in columns}
+    assert scope_inputs(built)["observed_at"].n_unique() == 1
+    # observe records every scope of the run, and a dry run records nothing
+    sources = tmp_path / "sources.parquet"
+    rows.write_parquet(sources)
+    local.extract(sources, tmp_path / "dry", dry_run=True)
+    assert not (tmp_path / "dry" / "courseware_scope_input.parquet").exists()
+    local.observe(sources, tmp_path / "out")
+    stored = pl.read_parquet(tmp_path / "out" / "courseware_scope_input.parquet")
+    assert sorted(stored["scope_id"]) == ["context", "seq-1", "seq-2"]
+    capsys.readouterr()
 
 
 def _golden_scope() -> scopes.Scope:
