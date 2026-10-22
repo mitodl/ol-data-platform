@@ -14,6 +14,12 @@ from pathlib import Path
 import cyclopts
 import polars as pl
 from anthropic import AnthropicBedrock
+from ml.lib.courseware.answer_check import (
+    DEFAULT_SOURCE_KINDS,
+    check_sources,
+    check_version,
+    pending_sources,
+)
 from ml.lib.courseware.describe import describe_concepts
 from ml.lib.courseware.extract import (
     BEDROCK_DEFAULT_MODEL,
@@ -33,6 +39,8 @@ from ml.resources.llm import LLMClientFactory
 app = cyclopts.App(help=__doc__)
 # Descriptions are short, batched and many; the small model is the default.
 BEDROCK_DESCRIPTION_MODEL = "us.anthropic.claude-haiku-5-5"
+# Answer checks are short and many; the small model is the default.
+BEDROCK_ANSWER_CHECK_MODEL = "us.anthropic.claude-haiku-5-5"
 EXTRACTION_TABLE = "courseware_claim_extraction"
 
 
@@ -47,6 +55,15 @@ def _write(frame: pl.DataFrame, output_dir: Path, table: str) -> None:
     staged = path.with_suffix(".parquet.tmp")
     frame.write_parquet(staged)
     staged.replace(path)
+
+
+def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
+    previous = _existing(output_dir, table)
+    _write(
+        new_rows if previous is None else pl.concat([previous, new_rows]),
+        output_dir,
+        table,
+    )
 
 
 @app.command
@@ -152,12 +169,6 @@ def _latest_run(
     if rows is None or run_id is None:
         return None
     return rows.filter(pl.col("resolution_run_id") == run_id)
-
-
-def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
-    previous = _existing(output_dir, table)
-    combined = new_rows if previous is None else pl.concat([previous, new_rows])
-    combined.write_parquet(output_dir / f"{table}.parquet")
 
 
 @app.command
@@ -299,6 +310,65 @@ def describe(
     combined = new_rows if previous is None else pl.concat([previous, new_rows])
     combined.write_parquet(output_dir / f"{table}.parquet")
     print(f"{new_rows.height} concepts described")  # noqa: T201
+
+
+@app.command(name="answer-check")
+def answer_check(  # noqa: PLR0913
+    sources: Path,
+    output_dir: Path,
+    *,
+    courserun: list[str] | None = None,
+    source_kind: list[str] | None = None,
+    model_id: str = BEDROCK_ANSWER_CHECK_MODEL,
+    effort: Effort = "low",
+    aws_region: str = "us-east-1",
+    dry_run: bool = False,
+) -> None:
+    """Ask a small model which sources read as answer keys, for review.
+
+    :param sources: int__courseware__extraction_sources exported to parquet
+    :param output_dir: where courseware_answer_check is read and appended
+    :param courserun: limit to these courserun_readable_ids
+    :param source_kind: the source kinds to check (default: document)
+    :param model_id: Bedrock model or inference profile id
+    :param effort: output_config.effort
+    :param aws_region: Bedrock region
+    :param dry_run: print how many sources would be checked, call nothing
+    """
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    rows = pl.read_parquet(sources)
+    if courserun:
+        rows = rows.filter(pl.col("courserun_readable_id").is_in(courserun))
+    kinds = tuple(source_kind) if source_kind else DEFAULT_SOURCE_KINDS
+    table = "courseware_answer_check"
+    previous = _existing(output_dir, table)
+    if dry_run:
+        pending, to_check, _ = pending_sources(
+            rows, check_version(model_id, effort), previous, kinds
+        )
+        print(  # noqa: T201
+            f"{len(pending)} sources of kind {', '.join(kinds)} need a verdict; "
+            f"{len(to_check)} distinct texts would be sent, the rest reuse one"
+        )
+        return
+    client = LLMClientFactory(
+        client_class="bedrock", aws_region=aws_region
+    ).get_client()
+    if not isinstance(client, AnthropicBedrock):
+        msg = f"bedrock client_class built a {type(client).__name__}"
+        raise TypeError(msg)
+    new_rows = check_sources(
+        rows,
+        client,
+        model_id=model_id,
+        effort=effort,
+        existing=previous,
+        source_kinds=kinds,
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _append(output_dir, table, new_rows)
+    flagged = new_rows.filter(pl.col("is_answer_document")).height
+    print(f"{new_rows.height} sources checked, {flagged} flagged")  # noqa: T201
 
 
 if __name__ == "__main__":

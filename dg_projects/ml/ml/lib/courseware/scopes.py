@@ -20,6 +20,9 @@ DESCRIPTION_PAGES = (
     "about/overview.html",
     "about/description.html",
 )
+# An OCW course's description is a context source of this kind, keyed by the course's
+# own path rather than a file name.
+DESCRIPTION_SOURCE_KIND = "course_description"
 
 
 @dataclass(frozen=True)
@@ -107,10 +110,12 @@ def _course(rows: pl.DataFrame) -> Course:
     )
     context = rows.filter(pl.col("scope_kind") == "context")
     description = ""
-    for page in DESCRIPTION_PAGES:
-        texts = context.filter(pl.col("source_ref") == page)["source_text"]
+    for texts in (
+        *(context.filter(pl.col("source_ref") == page) for page in DESCRIPTION_PAGES),
+        context.filter(pl.col("source_kind") == DESCRIPTION_SOURCE_KIND),
+    ):
         if len(texts):
-            description = texts[0][:COURSE_DESCRIPTION_MAX_CHARS]
+            description = texts["source_text"][0][:COURSE_DESCRIPTION_MAX_CHARS]
             break
     first = rows.row(0, named=True)
     return Course(
