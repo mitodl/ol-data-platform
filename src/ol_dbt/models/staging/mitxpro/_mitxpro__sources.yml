@@ -827,14 +827,23 @@ sources:
         is the parent topic for 'Technology:Data Science'
 
   - name: raw__xpro__app__postgres__users_user
+    description: xPro application user accounts
+    config:
+      meta:
+        # Tier1 because it carries a data contract (contracts/).
+        openmetadata:
+          owner: data-platform
+          tier: Tier.Tier1
     columns:
     - name: id
+      data_type: bigint
       description: int, sequential ID representing one user in xPro
     - name: password
       description: str, hashed password
     - name: username
       description: str, name chosen by user
     - name: email
+      data_type: varchar
       description: str, user email associated with their account
     - name: name
       description: str, the user's full name

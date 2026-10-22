@@ -13,7 +13,13 @@ from dagster import (
 
 # Not exported from the top-level dagster namespace; see openedx/sensors/openedx.py.
 from dagster._core.definitions.data_version import DATA_VERSION_TAG
-from ml.assets.courseware_extraction import EXTRACTION_TEXT_KEY, text_checksums
+from ml.assets.courseware_extraction import (
+    EXTRACTION_TEXT_KEY,
+    EXTRACTOR_VERSION,
+    approved,
+    extraction_text_version,
+    text_checksums,
+)
 from ml.lib.courseware.warehouse import (
     COURSERUN_PARTITIONS,
     COURSEWARE_PLATFORMS,
@@ -26,19 +32,26 @@ from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_string
     minimum_interval_seconds=3600,
     default_status=DefaultSensorStatus.STOPPED,
     description=(
-        "Registers a courseware_courserun partition for every run in "
-        "int__courseware__extraction_source_checksums and reports each run's text "
-        "checksum as courseware/extraction_text's data version. "
-        "courseware_automation_sensor then extracts the runs whose version moved."
+        "Registers a courseware_courserun partition for every run "
+        "courseware_extraction_allowlist approves for the deployed extractor "
+        "version, and reports each one's text checksum as "
+        "courseware/extraction_text's data version. courseware_automation_sensor "
+        "then extracts the runs whose version moved."
     ),
 )
 def courseware_extraction_text_sensor(context: SensorEvaluationContext):
-    """Report every course run's text checksum, once per change to the table.
+    """Report every approved course run's text checksum, once per change.
 
-    The cursor is a digest of the whole checksum table, so a tick where nothing
-    changed reports nothing. Observations go out only for runs already registered:
-    the daemon records asset events before it adds partitions, so a run registered
-    on this tick is observed on the next, and the cursor is held back until then.
+    int__courseware__extraction_source_checksums holds only allowlisted runs, each
+    with the extractor version it is approved for. A run approved for any other
+    version than this code's is neither registered nor observed, so its extraction
+    waits until its allowlist row is promoted.
+
+    The cursor is a digest of the whole checksum table and this code's extractor
+    version, so a tick where neither changed reports nothing. Observations go out
+    only for runs already registered: the daemon records asset events before it
+    adds partitions, so a run registered on this tick is observed on the next, and
+    the cursor is held back until then.
     """
     rows = text_checksums().sort("platform", "courserun_readable_id")
     unknown = set(rows["platform"]) - set(COURSEWARE_PLATFORMS)
@@ -46,20 +59,31 @@ def courseware_extraction_text_sensor(context: SensorEvaluationContext):
         msg = f"int__courseware__extraction_sources has unknown platforms {unknown}"
         raise ValueError(msg)
     digest = hashlib.sha256(
-        "\n".join("|".join(row) for row in rows.iter_rows()).encode()
+        "\n".join(
+            ["|".join(EXTRACTOR_VERSION.values())]
+            + ["|".join(row) for row in rows.iter_rows()]
+        ).encode()
     ).hexdigest()
     if digest == context.cursor:
         return SensorResult()
 
+    ready = approved(rows)
+    if ready.height < rows.height:
+        context.log.warning(
+            "%d allowlisted course runs are approved for another extractor version "
+            "than %s and wait for courseware_extraction_allowlist to promote them",
+            rows.height - ready.height,
+            "-".join(EXTRACTOR_VERSION.values()),
+        )
     valid = [
         row
-        for row in rows.iter_rows(named=True)
+        for row in ready.iter_rows(named=True)
         if not contains_invalid_partition_strings(row["courserun_readable_id"])
     ]
-    if len(valid) < rows.height:
+    if len(valid) < ready.height:
         context.log.warning(
             "Skipping %d course runs whose id is not a valid partition key",
-            rows.height - len(valid),
+            ready.height - len(valid),
         )
     registered = set(
         COURSERUN_PARTITIONS.get_partition_keys(
@@ -75,7 +99,7 @@ def courseware_extraction_text_sensor(context: SensorEvaluationContext):
             partition=MultiPartitionKey(
                 {"platform": row["platform"], "courserun": row["courserun_readable_id"]}
             ),
-            tags={DATA_VERSION_TAG: row["text_checksum"]},
+            tags={DATA_VERSION_TAG: extraction_text_version(row["text_checksum"])},
         )
         for row in valid
         if row["courserun_readable_id"] in registered

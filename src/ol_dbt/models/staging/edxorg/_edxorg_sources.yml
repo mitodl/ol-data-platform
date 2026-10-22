@@ -310,13 +310,21 @@ sources:
     description: source table contains users from edX.org, MITxOnline/xPro open edx
       sources and complete enrollments/certificates fields from edX.org provided by
       IRx
+    config:
+      meta:
+        # Tier1 because it carries a data contract (contracts/).
+        openmetadata:
+          owner: data-platform
+          tier: Tier.Tier1
     columns:
     - name: user_id
+      data_type: bigint
       description: int, Numerical user ID of a learner on a specific edX platform
         - MITx Online/xPro open edx or edx.org
     - name: username
       description: str, The username of the learner on the edX platform (not unique)
     - name: email
+      data_type: varchar
       description: str, The email address of the learner on the edX platform
     - name: id_map_hash_id
       description: str, A hashed ID mapping learner user ID's to external systems
