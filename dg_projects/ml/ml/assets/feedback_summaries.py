@@ -183,7 +183,7 @@ def feedback_summaries(
                 table_name="feedback_summaries",
             )
             # idempotency_key is a newer column -- a table upserted before it
-            # existed won't have it until checkpoint_chunk's schema evolution
+            # existed won't have it until upsert_chunk's schema evolution
             # next runs; select only what's actually there.
             select_cols = [
                 col
