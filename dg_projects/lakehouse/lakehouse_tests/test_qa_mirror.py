@@ -2,17 +2,19 @@
 
 Rendering is tested in `src/ol_dbt_cli/tests/test_qa_mirror.py`. What is left
 here is the Dagster side: the statements run in an order that leaves no stale
-copy behind, and nothing but a person can trigger a refresh.
+copy behind, and the plan check copies nothing.
 """
 
 from pathlib import Path
 from typing import Any
 
 import pytest
-from dagster import Failure, build_asset_context
+from dagster import Failure, build_asset_check_context, build_asset_context
 from lakehouse.assets.qa_mirror import (
     _mirror_asset,
+    _plan_check,
     build_qa_mirror_assets,
+    build_qa_mirror_checks,
 )
 from ol_dbt_cli.lib.qa_mirror import MirrorDeclarationError, MirrorTable
 from pymysql.err import OperationalError
@@ -194,14 +196,48 @@ def test_each_unit_gets_its_own_concurrency_pool() -> None:
     assert len(set(pools.values())) == len(pools)
 
 
-def test_the_real_inventory_builds_one_manual_asset_per_mirrored_unit() -> None:
+def test_the_plan_check_describes_and_explains_but_copies_nothing() -> None:
+    starrocks = FakeStarRocks(PRODUCTION)
+    check = _plan_check(TABLE.unit, [TABLE, TABLE])
+    result = check(build_asset_check_context(), starrocks)
+
+    assert result.passed
+    assert [s.split()[0] for s in starrocks.statements] == [
+        "DESCRIBE",
+        "EXPLAIN",
+        "DESCRIBE",
+        "EXPLAIN",
+    ]
+    assert starrocks.non_idempotent == []
+
+
+def test_a_declaration_production_no_longer_fits_fails_the_plan_check() -> None:
+    # Raised, not passed=False: the Sentry failure hook fires on a failed step.
+    renamed = MirrorTable(
+        unit=TABLE.unit, raw_table=TABLE.raw_table, columns={"gone": "copy"}, where=None
+    )
+    with pytest.raises(MirrorDeclarationError):
+        _plan_check(TABLE.unit, [renamed])(
+            build_asset_check_context(), FakeStarRocks(PRODUCTION)
+        )
+
+
+def test_every_mirror_asset_has_a_plan_check() -> None:
+    assets = {next(iter(asset.keys)) for asset in build_qa_mirror_assets()}
+    checked = {
+        key.asset_key for check in build_qa_mirror_checks() for key in check.check_keys
+    }
+    assert checked == assets
+
+
+def test_the_real_inventory_builds_one_unpartitioned_asset_per_mirrored_unit() -> None:
     assets = build_qa_mirror_assets()
     keys = {key.to_user_string() for asset in assets for key in asset.keys}
     assert "qa_mirror/zendesk/api" in keys
     assert "qa_mirror/edxorg/tracking_logs" in keys
     for asset in assets:
-        # QA_DATA_TOPOLOGY_SPEC.md §1: a refresh copies production PII into QA,
-        # so each one has to be something a person asked for.
+        # The refresh is the monthly schedule's job (QA_DATA_TOPOLOGY_SPEC.md
+        # §1). An AutomationCondition would refresh it on some other cadence.
         assert asset.partitions_def is None
         assert all(
             condition is None

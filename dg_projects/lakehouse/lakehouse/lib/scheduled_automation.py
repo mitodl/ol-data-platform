@@ -189,6 +189,13 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # the file is wrong about which tables hold rows. QA only: it reads
     # ol_warehouse_qa_raw, and its asset is registered nowhere else.
     "qa_observation_drift_daily": frozenset({"qa"}),
+    # Refresh every QA mirror, and plan every mirror's copy without running it.
+    # Production only: the mirror reads production and writes QA, and its
+    # assets are registered nowhere else. Monthly sits well inside every unit's
+    # mirror_max_age_days, and the daily plan catches a production schema
+    # change between refreshes (QA_DATA_TOPOLOGY_SPEC.md §1).
+    "qa_mirror_monthly": frozenset({"production"}),
+    "qa_mirror_plan_daily": frozenset({"production"}),
 }
 
 _UNDECLARED_ENVIRONMENTS = {
