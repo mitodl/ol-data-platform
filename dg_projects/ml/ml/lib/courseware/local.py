@@ -14,34 +14,34 @@ from pathlib import Path
 import cyclopts
 import polars as pl
 from anthropic import AnthropicBedrock
+from ml.lib.courseware.answer_check import (
+    DEFAULT_SOURCE_KINDS,
+    check_sources,
+    check_version,
+    pending_sources,
+)
 from ml.lib.courseware.describe import describe_concepts
 from ml.lib.courseware.extract import (
     BEDROCK_DEFAULT_MODEL,
     DEFAULT_EFFORT,
-    EXTRACTION_SCHEMA,
     Effort,
-    covered_keys,
     extract_scopes,
     extraction_key,
-    scope_inputs,
-    stored_extraction_key,
 )
 from ml.lib.courseware.graph import compute_graph, previous_membership
 from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
 from ml.lib.courseware.resolve import EMBEDDING_DIM as RESOLUTION_EMBEDDING_DIM
 from ml.lib.courseware.resolve import ResolutionState, resolve_concepts
-from ml.lib.courseware.scopes import CHARS_PER_TOKEN, Scope, build_scopes
+from ml.lib.courseware.scopes import CHARS_PER_TOKEN, build_scopes
 from ml.lib.embed import BedrockEmbeddingClient, build_embedding_client
 from ml.resources.llm import LLMClientFactory
 
 app = cyclopts.App(help=__doc__)
 # Descriptions are short, batched and many; the small model is the default.
 BEDROCK_DESCRIPTION_MODEL = "us.anthropic.claude-haiku-5-5"
-OUTPUT_TABLES = (
-    "courseware_claim_extraction",
-    "courseware_claim",
-    "courseware_claim_evidence",
-)
+# Answer checks are short and many; the small model is the default.
+BEDROCK_ANSWER_CHECK_MODEL = "us.anthropic.claude-haiku-5-5"
+EXTRACTION_TABLE = "courseware_claim_extraction"
 
 
 def _existing(output_dir: Path, table: str) -> pl.DataFrame | None:
@@ -49,57 +49,21 @@ def _existing(output_dir: Path, table: str) -> pl.DataFrame | None:
     return pl.read_parquet(path) if path.exists() else None
 
 
-def _write(rows: pl.DataFrame, output_dir: Path, table: str) -> None:
-    """Replace a table's file whole, so a crash leaves the old file or the new one."""
+def _write(frame: pl.DataFrame, output_dir: Path, table: str) -> None:
+    """Replace a table's file whole, so an interrupted write leaves the old one."""
     path = output_dir / f"{table}.parquet"
     staged = path.with_suffix(".parquet.tmp")
-    rows.write_parquet(staged)
+    frame.write_parquet(staged)
     staged.replace(path)
 
 
-def _require_current_keys(stored: pl.DataFrame) -> None:
-    """Refuse a directory whose extractions still carry keys of the old scheme.
-
-    Their keys would all miss, so every scope would be extracted and billed again.
-
-    :raises ValueError: when the directory needs ``local rekey`` first
-    """
-    msg = "extraction keys predate the current scheme; run `local rekey` first"
-    if "header_version" not in stored.columns:
-        raise ValueError(msg)
-    for row in stored.filter(pl.col("header_version").is_null()).iter_rows(named=True):
-        if stored_extraction_key(row) != row["extraction_key"]:
-            raise ValueError(msg)
-
-
-def _read_scopes(sources: Path, courserun: list[str] | None) -> list[Scope]:
-    rows = pl.read_parquet(sources)
-    if courserun:
-        rows = rows.filter(pl.col("courserun_readable_id").is_in(courserun))
-    return [
-        scope
-        for _, run_rows in rows.group_by("platform", "courserun_readable_id")
-        for scope in build_scopes(run_rows)
-    ]
-
-
-@app.command
-def observe(
-    sources: Path, output_dir: Path, *, courserun: list[str] | None = None
-) -> None:
-    """Record every scope part's current input without extracting anything.
-
-    extract records it too; this is for a directory whose extractions are all
-    stored, e.g. after `rekey`.
-
-    :param sources: int__courseware__extraction_sources exported to parquet
-    :param output_dir: where courseware_scope_input is appended
-    :param courserun: limit to these courserun_readable_ids
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-    observed = scope_inputs(_read_scopes(sources, courserun))
-    _append(output_dir, "courseware_scope_input", observed)
-    print(f"{observed.height} scope parts observed")  # noqa: T201
+def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
+    previous = _existing(output_dir, table)
+    _write(
+        new_rows if previous is None else pl.concat([previous, new_rows]),
+        output_dir,
+        table,
+    )
 
 
 @app.command
@@ -113,7 +77,6 @@ def extract(  # noqa: PLR0913
     effort: Effort = DEFAULT_EFFORT,
     aws_region: str = "us-east-1",
     max_workers: int = 6,
-    key_on_header: bool = False,
     dry_run: bool = False,
 ) -> None:
     """Extract claims for every scope of the runs in a sources parquet file.
@@ -126,22 +89,21 @@ def extract(  # noqa: PLR0913
     :param effort: output_config.effort
     :param aws_region: Bedrock region
     :param max_workers: concurrent model calls
-    :param key_on_header: re-extract scopes whose course header changed since they
-        were extracted, or whose header was never recorded (extraction_key)
     :param dry_run: print the scopes and their estimated input size, call nothing
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
-    run_scopes = _read_scopes(sources, courserun)
+    rows = pl.read_parquet(sources)
+    if courserun:
+        rows = rows.filter(pl.col("courserun_readable_id").is_in(courserun))
     scopes = [
         scope
-        for scope in run_scopes
+        for _, run_rows in rows.group_by("platform", "courserun_readable_id")
+        for scope in build_scopes(run_rows)
         if not scope_title or scope.scope_title in scope_title
     ]
     output_dir.mkdir(parents=True, exist_ok=True)
-    stored = _existing(output_dir, "courseware_claim_extraction")
-    if stored is not None:
-        _require_current_keys(stored)
-    existing_keys = covered_keys(stored) if stored is not None else set()
+    stored = _existing(output_dir, EXTRACTION_TABLE)
+    existing_keys = set(stored["extraction_key"]) if stored is not None else set()
 
     if dry_run:
         system_tokens = len(SYSTEM_PROMPT) // CHARS_PER_TOKEN
@@ -150,8 +112,7 @@ def extract(  # noqa: PLR0913
             tokens = system_tokens + len(scope_message(scope)) // CHARS_PER_TOKEN
             stored_marker = (
                 "stored"
-                if extraction_key(scope, model_id, effort, key_on_header=key_on_header)
-                in existing_keys
+                if extraction_key(scope, model_id, effort) in existing_keys
                 else ""
             )
             total += 0 if stored_marker else tokens
@@ -162,7 +123,6 @@ def extract(  # noqa: PLR0913
         print(f"{len(scopes)} scopes, ~{total:,} input tokens to send")  # noqa: T201
         return
 
-    _append(output_dir, "courseware_scope_input", scope_inputs(run_scopes))
     client = LLMClientFactory(
         client_class="bedrock", aws_region=aws_region
     ).get_client()
@@ -176,71 +136,29 @@ def extract(  # noqa: PLR0913
         effort=effort,
         existing_keys=existing_keys,
         max_workers=max_workers,
-        key_on_header=key_on_header,
     )
-    for table, new_rows in zip(
-        OUTPUT_TABLES, (tables.extractions, tables.claims, tables.evidence), strict=True
+    # A stored extraction key is what makes a re-run skip a scope, so the extraction
+    # table is written last. A run cut off before it leaves claim and evidence rows
+    # with no extraction, which are dropped here and written again.
+    for table, new_rows in (
+        ("courseware_claim_evidence", tables.evidence),
+        ("courseware_claim", tables.claims),
+        (EXTRACTION_TABLE, tables.extractions),
     ):
         previous = _existing(output_dir, table)
-        combined = new_rows if previous is None else pl.concat([previous, new_rows])
-        combined.write_parquet(output_dir / f"{table}.parquet")
+        if previous is not None:
+            previous = previous.filter(pl.col("extraction_key").is_in(existing_keys))
+        _write(
+            new_rows if previous is None else pl.concat([previous, new_rows]),
+            output_dir,
+            table,
+        )
     print(  # noqa: T201
         f"{tables.extractions.height} extractions, {tables.claims.height} claims, "
         f"{tables.evidence.height} evidence rows; "
         f"{tables.extractions['input_tokens'].sum():,} in / "
         f"{tables.extractions['output_tokens'].sum():,} out tokens"
     )
-
-
-@app.command
-def rekey(output_dir: Path) -> None:
-    """Re-key extractions stored before keys left out the course header.
-
-    Their keys hashed the whole message. Their rows hold every column the current
-    key hashes (stored_extraction_key without key_on_header), so it is recomputed
-    exactly and nothing is re-extracted. Their header_version stays null, because
-    the header they read was not stored. Rows written since record header_version
-    and are left alone.
-
-    Claims and evidence are written before the extraction table, which holds the
-    old keys until last, so a re-run after a crash finishes the job.
-
-    :param output_dir: the directory holding the three extraction tables
-    """
-    extractions = pl.read_parquet(output_dir / "courseware_claim_extraction.parquet")
-    if "header_version" not in extractions.columns:
-        extractions = extractions.with_columns(
-            header_version=pl.lit(None, dtype=pl.String)
-        )
-    new_keys = {
-        row["extraction_key"]: stored_extraction_key(row)
-        for row in extractions.filter(pl.col("header_version").is_null()).iter_rows(
-            named=True
-        )
-    }
-    rekeyed = {
-        "courseware_claim_extraction": extractions.select(list(EXTRACTION_SCHEMA)),
-        "courseware_claim": pl.read_parquet(output_dir / "courseware_claim.parquet"),
-        "courseware_claim_evidence": pl.read_parquet(
-            output_dir / "courseware_claim_evidence.parquet"
-        ),
-    }
-    rekeyed = {
-        table: rows.with_columns(pl.col("extraction_key").replace(new_keys))
-        for table, rows in rekeyed.items()
-    }
-    if rekeyed["courseware_claim_extraction"]["extraction_key"].is_duplicated().any():
-        msg = "extractions that differ only in their course header share a new key"
-        raise ValueError(msg)
-    for table in ("courseware_claim", "courseware_claim_evidence"):
-        _write(rekeyed[table], output_dir, table)
-    _write(
-        rekeyed["courseware_claim_extraction"],
-        output_dir,
-        "courseware_claim_extraction",
-    )
-    changed = sum(old != new for old, new in new_keys.items())
-    print(f"{changed} of {extractions.height} extractions re-keyed")  # noqa: T201
 
 
 @app.command
@@ -251,12 +169,6 @@ def _latest_run(
     if rows is None or run_id is None:
         return None
     return rows.filter(pl.col("resolution_run_id") == run_id)
-
-
-def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
-    previous = _existing(output_dir, table)
-    combined = new_rows if previous is None else pl.concat([previous, new_rows])
-    combined.write_parquet(output_dir / f"{table}.parquet")
 
 
 @app.command
@@ -398,6 +310,65 @@ def describe(
     combined = new_rows if previous is None else pl.concat([previous, new_rows])
     combined.write_parquet(output_dir / f"{table}.parquet")
     print(f"{new_rows.height} concepts described")  # noqa: T201
+
+
+@app.command(name="answer-check")
+def answer_check(  # noqa: PLR0913
+    sources: Path,
+    output_dir: Path,
+    *,
+    courserun: list[str] | None = None,
+    source_kind: list[str] | None = None,
+    model_id: str = BEDROCK_ANSWER_CHECK_MODEL,
+    effort: Effort = "low",
+    aws_region: str = "us-east-1",
+    dry_run: bool = False,
+) -> None:
+    """Ask a small model which sources read as answer keys, for review.
+
+    :param sources: int__courseware__extraction_sources exported to parquet
+    :param output_dir: where courseware_answer_check is read and appended
+    :param courserun: limit to these courserun_readable_ids
+    :param source_kind: the source kinds to check (default: document)
+    :param model_id: Bedrock model or inference profile id
+    :param effort: output_config.effort
+    :param aws_region: Bedrock region
+    :param dry_run: print how many sources would be checked, call nothing
+    """
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    rows = pl.read_parquet(sources)
+    if courserun:
+        rows = rows.filter(pl.col("courserun_readable_id").is_in(courserun))
+    kinds = tuple(source_kind) if source_kind else DEFAULT_SOURCE_KINDS
+    table = "courseware_answer_check"
+    previous = _existing(output_dir, table)
+    if dry_run:
+        pending, to_check, _ = pending_sources(
+            rows, check_version(model_id, effort), previous, kinds
+        )
+        print(  # noqa: T201
+            f"{len(pending)} sources of kind {', '.join(kinds)} need a verdict; "
+            f"{len(to_check)} distinct texts would be sent, the rest reuse one"
+        )
+        return
+    client = LLMClientFactory(
+        client_class="bedrock", aws_region=aws_region
+    ).get_client()
+    if not isinstance(client, AnthropicBedrock):
+        msg = f"bedrock client_class built a {type(client).__name__}"
+        raise TypeError(msg)
+    new_rows = check_sources(
+        rows,
+        client,
+        model_id=model_id,
+        effort=effort,
+        existing=previous,
+        source_kinds=kinds,
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _append(output_dir, table, new_rows)
+    flagged = new_rows.filter(pl.col("is_answer_document")).height
+    print(f"{new_rows.height} sources checked, {flagged} flagged")  # noqa: T201
 
 
 if __name__ == "__main__":
