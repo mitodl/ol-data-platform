@@ -2,8 +2,8 @@
 
 One model call per scope part. The output is three tables keyed by extraction_key:
 courseware_claim_extraction (one row per call), courseware_claim and
-courseware_claim_evidence. dbt builds the dimensional facts from them; nothing
-here resolves labels across scopes or courses.
+courseware_claim_evidence. dbt builds the dimensional facts, concepts and bridges
+from them; nothing here resolves labels across scopes or courses.
 """
 
 import hashlib

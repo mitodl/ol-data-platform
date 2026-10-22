@@ -1,11 +1,15 @@
 -- One row per extracted claim, as the model stated it. Labels and descriptions are
--- never edited here.
+-- never edited here; concept_fk is the only resolved column.
 with claims as (
     select * from {{ ref('int__courseware__claims') }}
 )
 
 , extractions as (
     select * from {{ ref('dim_courseware_extraction') }}
+)
+
+, assignments as (
+    select * from {{ ref('int__courseware__concept_assignments') }}
 )
 
 select
@@ -30,6 +34,7 @@ select
     , claims.prerequisite_kind
     , claims.course_ref
     , claims.related_concept_labels_json
+    , assignments.concept_id as concept_fk
     , claims.evidence_count
     , claims.verified_evidence_count
     , claims.is_verified
@@ -38,3 +43,5 @@ select
 from claims
 inner join extractions
     on claims.extraction_key = extractions.extraction_key
+left join assignments
+    on claims.concept_label_key = assignments.concept_label_key
