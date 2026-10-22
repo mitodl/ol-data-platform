@@ -153,9 +153,15 @@ models:
     tests:
     - not_null
   - name: user_full_name
-    description: str, user full name on MITxOnline
+    description: str, user full name. Null for the few learners with no name on any
+      linked account, so its not_null test only warns.
     tests:
-    - not_null
+    # warn, not error: dim_user publishes a missing name as null, where it used to be
+    # ' ', which passed. The project default errors above 10 failing rows, which new
+    # enrollments of learners without a name could reach.
+    - not_null:
+        config:
+          severity: warn
   - name: user_address_country
     description: str, country code in user's profile on MITx Online
   - name: user_highest_education
