@@ -130,6 +130,56 @@ models:
     tests:
     - not_null
 
+- name: int__courseware__answer_document_review
+  description: The course documents to review for answer keys, one row per document
+    that courseware_answer_key excludes from extraction or that the answer check model
+    flagged among the sources still read. Open edX and OCW.
+  config:
+    meta:
+      # reads course_document_text, which is absent from QA raw
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro, residential or ocw
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the course run
+    tests:
+    - not_null
+  - name: source_ref
+    description: str, the export path of an Open edX file, the content_file_key of
+      an OCW resource
+    tests:
+    - not_null
+  - name: source_name
+    description: str, the name the rule read (path without extension, OCW directory
+      name); null for a document only the model flagged
+  - name: source_title
+    description: str, the lowercased OCW title, or the title the model saw
+  - name: text_head
+    description: str, the first 300 characters of the text, lowercased
+  - name: review_reason
+    description: str, excluded_by_rule or flagged_by_model
+    tests:
+    - accepted_values:
+        values: [excluded_by_rule, flagged_by_model]
+  - name: is_excluded_by_rule
+    description: boolean, courseware_answer_key reads the document as an answer key
+  - name: is_flagged_by_model
+    description: boolean, the latest answer check read the source as mainly answers
+  - name: model_reason
+    description: str, the model's reason for the flag
+  - name: check_version
+    description: str, the answer check version that flagged it
+  - name: model_id
+    description: str, the model that flagged it
+  - name: checked_at
+    description: timestamp, when the flag was recorded for the source
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [platform, courserun_readable_id, source_ref]
+
 - name: int__courseware__claims
   description: Every extracted claim with its scope, extractor version, evidence counts
     and normalized concept label key.
@@ -234,6 +284,60 @@ models:
     - accepted_values:
         arguments:
           values: [courserun, course, platform]
+  - name: extractor_id
+    description: str, the extractor version's id the run is approved for
+    tests:
+    - not_null
+  - name: prompt_version
+    description: str, the prompt version the run is approved for
+    tests:
+    - not_null
+  - name: schema_version
+    description: str, the output schema version the run is approved for
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [platform, courserun_readable_id]
+
+- name: int__courseware__extraction_source_checksums
+  description: One row per course run in int__courseware__extraction_sources that
+    int__courseware__extraction_allowlist approves, with a checksum of the text its
+    extraction scopes are built from and the extractor version it is approved for.
+    The courseware extraction sensor reports the checksum as the run's data version
+    while that version is the deployed extractor's, so a run is re-extracted only
+    when its text changes or it is promoted to a new version.
+  config:
+    meta:
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the course run
+    tests:
+    - not_null
+  - name: source_count
+    description: int, number of source rows the run's scopes read
+  - name: text_checksum
+    description: str, md5 over every source row's title, position, reference and text,
+      in reading order
+    tests:
+    - not_null
+  - name: extractor_id
+    description: str, the extractor version's id the run is approved for
+    tests:
+    - not_null
+  - name: prompt_version
+    description: str, the prompt version the run is approved for
+    tests:
+    - not_null
+  - name: schema_version
+    description: str, the output schema version the run is approved for
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [platform, courserun_readable_id]

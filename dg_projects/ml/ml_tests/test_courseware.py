@@ -266,7 +266,7 @@ def test_extract_scopes_keeps_the_batch_when_a_stream_drops(monkeypatch):
         }
     )
 
-    def call_model(*args):
+    def call_model(*args, **_):
         message = args[-1]
         if "second" in message:
             msg = "peer closed connection"
