@@ -1,6 +1,7 @@
 """Tests for ml.lib.iceberg_helpers, against a real SQLite-backed Iceberg catalog."""
 
 import polars as pl
+import pytest
 from ml.lib.iceberg_helpers import upsert_chunk
 from pyiceberg.catalog.sql import SqlCatalog
 
@@ -99,3 +100,14 @@ def test_upsert_chunk_replaces_only_rows_matching_every_join_column(
         ("m", "three"),
         ("n", "two"),
     ]
+
+
+def test_upsert_chunk_refuses_duplicate_keys_before_writing(
+    iceberg_catalog: SqlCatalog,
+) -> None:
+    _table_without_key(iceberg_catalog)
+    with pytest.raises(ValueError, match="duplicate rows"):
+        upsert_chunk(
+            iceberg_catalog, TABLE, _chunk(("a", "one", "k"), ("a", "two", "k")), ["pk"]
+        )
+    assert [row["value"] for row in _stored(iceberg_catalog)] == ["old", "old"]

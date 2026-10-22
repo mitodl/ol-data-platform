@@ -339,8 +339,7 @@ def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning 
         # feedback_summaries is in non_dbt_singleton_tables()
         # (ol_orchestrate.lib.iceberg_maintenance), so nightly maintenance expires
         # the snapshots each chunk writes.
-        upsert_chunk(catalog, table_identifier, chunk_df, JOIN_COLS)
-        upserted.append(chunk_df)
+        upserted.append(upsert_chunk(catalog, table_identifier, chunk_df, JOIN_COLS))
 
     rows = unsummarized_df.to_dicts()
     checkpoint(skipped_frame([row for row in rows if not needs_summary(row)]))
