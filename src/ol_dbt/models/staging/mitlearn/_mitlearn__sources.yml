@@ -19,8 +19,10 @@ sources:
     - name: _airbyte_generation_id
       description: Airbyte generation identifier for this record
     - name: id
+      data_type: bigint
       description: Primary key, unique identifier for the user
     - name: email
+      data_type: varchar
       description: User's email address, used for login and notifications
     - name: is_staff
       description: Boolean flag indicating if user has staff privileges
@@ -49,11 +51,18 @@ sources:
     - name: scim_username
       description: Username as managed by SCIM identity provider
     - name: scim_external_id
+      data_type: varchar
       description: External identifier from SCIM identity provider
     - name: global_id
+      data_type: varchar
       description: Global unique identifier across MIT Learning platforms
 
     config:
+      meta:
+        # Tier1 because it carries a data contract (contracts/).
+        openmetadata:
+          owner: data-platform
+          tier: Tier.Tier1
       freshness:
         warn_after: {count: 1, period: day}
         error_after: {count: 2, period: day}

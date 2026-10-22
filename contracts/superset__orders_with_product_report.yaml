@@ -1,0 +1,92 @@
+---
+# OpenMetadata data contract for the Superset dataset over orders_with_product_report. See README.md in this directory.
+entity:
+  type: dashboardDataModel
+  fqn: Superset.model.353
+contract:
+  name: superset__orders_with_product_report
+  displayName: Superset dataset orders_with_product_report
+  description: Superset dataset over orders_with_product_report, behind the Orders
+    dashboard's Order detail table. The schema lists the columns that chart and the
+    dashboard's native filters use.
+  entityStatus: Approved
+  owners:
+  - type: team
+    name: data-platform
+  schema:
+  - name: platform
+    dataType: VARCHAR
+  - name: order_id
+    dataType: BIGINT
+  - name: line_id
+    dataType: BIGINT
+  - name: coupon_code
+    dataType: VARCHAR
+  - name: b2border_contract_number
+    dataType: VARCHAR
+  - name: coupon_name
+    dataType: VARCHAR
+  - name: coupon_redeemed_on
+    dataType: VARCHAR
+  - name: coupon_type
+    dataType: VARCHAR
+  - name: discount
+    dataType: VARCHAR
+  - name: order_created_on
+    dataType: VARCHAR
+  - name: order_reference_number
+    dataType: VARCHAR
+  - name: order_state
+    dataType: VARCHAR
+  - name: order_tax_amount
+    dataType: DECIMAL
+  - name: order_tax_country_code
+    dataType: VARCHAR
+  - name: order_tax_rate_name
+    dataType: VARCHAR
+  - name: order_total_price_paid_plus_tax
+    dataType: DECIMAL
+  - name: order_total_price_paid
+    dataType: DECIMAL
+  - name: order_type
+    dataType: VARCHAR
+  - name: product_id
+    dataType: BIGINT
+  - name: product_readable_id
+    dataType: VARCHAR
+  - name: product_type
+    dataType: VARCHAR
+  - name: receipt_authorization_code
+    dataType: VARCHAR
+  - name: receipt_bill_to_address_state
+    dataType: VARCHAR
+  - name: receipt_payment_amount
+    dataType: DECIMAL
+  - name: receipt_payment_currency
+    dataType: VARCHAR
+  - name: receipt_payment_card_number
+    dataType: VARCHAR
+  - name: receipt_payment_card_type
+    dataType: VARCHAR
+  - name: receipt_payment_method
+    dataType: VARCHAR
+  - name: receipt_payment_timestamp
+    dataType: VARCHAR
+  - name: receipt_payer_name
+    dataType: VARCHAR
+  - name: receipt_payer_email
+    dataType: VARCHAR
+  - name: receipt_payer_ip_address
+    dataType: VARCHAR
+  - name: receipt_transaction_id
+    dataType: VARCHAR
+  - name: redeemed_email
+    dataType: VARCHAR
+  - name: unit_price
+    dataType: DECIMAL
+  - name: user_email
+    dataType: VARCHAR
+  - name: user_id
+    dataType: BIGINT
+  - name: product_name
+    dataType: VARCHAR

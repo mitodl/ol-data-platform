@@ -1,0 +1,32 @@
+---
+unit_tests:
+- name: test_int__courseware__extractions_current_only_for_scopes_the_sources_still_have
+  description: >
+    The newest extraction of a scope part is current while the run's sources still
+    have that scope. A sequential since read as context keeps its old extraction,
+    which is no longer current, so its claims are not counted beside the context
+    scope's.
+  model: int__courseware__extractions
+  given:
+  - input: source('courseware_intermediate', 'courseware_claim_extraction')
+    rows:
+    - {extraction_key: old_unit, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      scope_id: overview, scope_part: 1, scope_part_count: 1, input_text_checksum: o1,
+      scope_part_checksums: o1, extractor_id: v1, prompt_version: p, schema_version: c,
+      model_id: m, effort: medium, extracted_at: "2026-10-01T00:00:00"}
+    - {extraction_key: old_context, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      scope_id: context, scope_part: 1, scope_part_count: 1, extractor_id: v1, prompt_version: p,
+      schema_version: c, model_id: m, effort: medium, input_text_checksum: c1, scope_part_checksums: c1,
+      extracted_at: "2026-10-01T00:00:00"}
+    - {extraction_key: new_context, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      scope_id: context, scope_part: 1, scope_part_count: 1, extractor_id: v1, prompt_version: p,
+      schema_version: c, model_id: m, effort: medium, input_text_checksum: c2, scope_part_checksums: c2,
+      extracted_at: "2026-10-17T00:00:00"}
+  - input: ref('int__courseware__extraction_sources')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: context}
+  expect:
+    rows:
+    - {extraction_key: old_unit, is_current: false}
+    - {extraction_key: old_context, is_current: false}
+    - {extraction_key: new_context, is_current: true}

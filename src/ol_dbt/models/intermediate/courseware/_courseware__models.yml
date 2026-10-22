@@ -6,6 +6,12 @@ models:
   description: The text the courseware claim extractor reads, one row per source item
     of each scope (a sequential, the course context, or the course documents) of an
     Open edX course run, in reading order. Problem text is the question side only.
+    Module overview and summary sequentials are read in the context scope, as in mit-learn's
+    unit builder. OCW courses are scoped by page group, section page or calendar session,
+    with answer keys left out; a link to a resource also takes what the resource's
+    description links, a problem set goes to the session whose calendar row releases
+    it, and a course taught through three or more page groups does not read its textbook
+    section.
   config:
     meta:
       # The text it reads (raw__openedx__s3__course_transcript_text and
@@ -13,17 +19,19 @@ models:
       qa_buildable: false
   columns:
   - name: platform
-    description: str, mitxonline, mitxpro or residential
+    description: str, mitxonline, mitxpro, residential or ocw
     tests:
     - not_null
   - name: courserun_readable_id
-    description: str, the course run
+    description: str, the course run; for OCW, Learn's run id
     tests:
     - not_null
   - name: course_title
-    description: str, the course block's title from dim_course_content
+    description: str, the course block's title from dim_course_content, or the OCW
+      course title
   - name: scope_id
-    description: str, the sequential's block id, or 'context' or 'materials'
+    description: str, the sequential's block id, an OCW page key or session-N / week-N,
+      or 'context' or 'materials'
     tests:
     - not_null
   - name: scope_kind
@@ -34,16 +42,18 @@ models:
   - name: scope_title
     description: str, the sequential's title or the scope's name
   - name: scope_position
-    description: int, the scope's order in the course; 0 for context, 9999 for materials
+    description: int, the unit's order among the run's units, from 1; 0 for context,
+      9999 for materials
   - name: source_position
     description: int, the source's order within its scope, from 1
   - name: source_ref
-    description: str, the block id for blocks, the export path for files
+    description: str, the block id for blocks, the export path for files, the OCW
+      content file key
     tests:
     - not_null
   - name: source_kind
-    description: str, html, problem, video_transcript, document, about_page, tabs_page
-      or info_page
+    description: str, html, problem, video_transcript, document, about_page, tabs_page,
+      info_page, page (OCW) or course_description (OCW)
   - name: source_title
     description: str, the block's display name or the file's path
   - name: source_text
@@ -52,9 +62,138 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [platform, courserun_readable_id, scope_id, source_ref]
 
+- name: int__courseware__extractions
+  description: Every claim extraction, and whether it is current, the one its scope
+    part is read from now. A scope's newest complete reading is current, so a run
+    that extracts only some parts of a new reading changes nothing until the rest
+    succeed. A scope the run's extraction sources no longer have has no current extraction.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: extraction_key
+    description: str, sha256 of everything the call depended on (extractor, prompt
+      and schema versions, model, effort, run, scope and the full message text)
+    tests:
+    - not_null
+    - unique
+  - name: extractor_id
+    description: str, the extractor, e.g. courseware_claims_v1
+  - name: prompt_version
+    description: str, hash of the system prompt
+  - name: schema_version
+    description: str, hash of the output JSON schema
+  - name: model_id
+    description: str, the model id as sent to the provider
+  - name: effort
+    description: str, output_config.effort for the call
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the run the scope belongs to
+  - name: scope_id
+    description: str, the sequential block id, or 'context' or 'materials'
+  - name: scope_kind
+    description: str, unit, context or materials
+  - name: scope_title
+    description: str, the sequential title or the scope name
+  - name: scope_position
+    description: int, the scope's order in the course; 0 for context, 9999 for materials
+  - name: scope_part
+    description: int, which part of a scope split to fit the input budget, from 1
+  - name: scope_part_count
+    description: int, how many parts the scope was split into
+  - name: input_text_checksum
+    description: str, sha256 of the source text the call read
+  - name: scope_part_checksums
+    description: str, every part's input_text_checksum, in order and comma-separated,
+      as the run that made this call split the scope
+  - name: source_count
+    description: int, number of sources the call read
+  - name: truncated_source_count
+    description: int, number of those sources cut to the per-source limit
+  - name: sources_json
+    description: str, JSON list of {source_id, source_ref, included_chars, total_chars}
+  - name: summary
+    description: str, the model's summary of the scope
+  - name: notes_json
+    description: str, JSON list of the model's notes plus truncation notes
+  - name: stop_reason
+    description: str, the response's stop_reason
+  - name: input_tokens
+    description: int, uncached input tokens billed
+  - name: output_tokens
+    description: int, output tokens billed, thinking included
+  - name: cache_read_input_tokens
+    description: int, input tokens read from the prompt cache
+  - name: cache_creation_input_tokens
+    description: int, input tokens written to the prompt cache
+  - name: extracted_at
+    description: timestamp, when the call returned
+  - name: is_current
+    description: boolean, whether this is the extraction its scope part is read from
+      now
+    tests:
+    - not_null
+
+- name: int__courseware__answer_document_review
+  description: The course documents to review for answer keys, one row per document
+    that courseware_answer_key excludes from extraction or that the answer check model
+    flagged among the sources still read. Open edX and OCW.
+  config:
+    meta:
+      # reads course_document_text, which is absent from QA raw
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro, residential or ocw
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the course run
+    tests:
+    - not_null
+  - name: source_ref
+    description: str, the export path of an Open edX file, the content_file_key of
+      an OCW resource
+    tests:
+    - not_null
+  - name: source_name
+    description: str, the name the rule read (path without extension, OCW directory
+      name); null for a document only the model flagged
+  - name: source_title
+    description: str, the lowercased OCW title, or the title the model saw
+  - name: text_head
+    description: str, the first 300 characters of the text, lowercased
+  - name: review_reason
+    description: str, excluded_by_rule or flagged_by_model
+    tests:
+    - accepted_values:
+        values: [excluded_by_rule, flagged_by_model]
+  - name: is_excluded_by_rule
+    description: boolean, courseware_answer_key reads the document as an answer key
+  - name: is_flagged_by_model
+    description: boolean, the latest answer check read the source as mainly answers
+  - name: model_reason
+    description: str, the model's reason for the flag
+  - name: check_version
+    description: str, the answer check version that flagged it
+  - name: model_id
+    description: str, the model that flagged it
+  - name: checked_at
+    description: timestamp, when the flag was recorded for the source
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [platform, courserun_readable_id, source_ref]
+
 - name: int__courseware__claims
   description: Every extracted claim with its scope, extractor version, evidence counts
     and normalized concept label key.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: extraction_key
     description: str, the extraction the claim came from
@@ -85,8 +224,8 @@ models:
   - name: extracted_at
     description: timestamp, when the extraction returned
   - name: is_current
-    description: boolean, whether the claim's extraction is the newest for its scope
-      part
+    description: boolean, whether the claim's extraction is the one its scope part
+      is read from now (int__courseware__extractions)
   - name: claim_kind
     description: str, concept, skill, assumed_knowledge, assessment_expectation, learning_outcome,
       declared_prerequisite or audience
@@ -152,6 +291,18 @@ models:
     - accepted_values:
         arguments:
           values: [courserun, course, platform]
+  - name: extractor_id
+    description: str, the extractor version's id the run is approved for
+    tests:
+    - not_null
+  - name: prompt_version
+    description: str, the prompt version the run is approved for
+    tests:
+    - not_null
+  - name: schema_version
+    description: str, the output schema version the run is approved for
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [platform, courserun_readable_id]
@@ -159,6 +310,10 @@ models:
 - name: int__courseware__concept_mentions
   description: One row per (current verified claim, concept label) it names, including
     the concept labels assessments and learning outcomes list.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: platform
     description: str, mitxonline, mitxpro or residential
@@ -199,6 +354,10 @@ models:
 - name: int__courseware__concept_labels
   description: One row per normalized concept label key across every course, with
     its most used surface form, kind and description. The input to concept resolution.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: concept_label_key
     description: str, the normalized label key
@@ -248,6 +407,10 @@ models:
 - name: int__courseware__concept_assignments
   description: Which concept each normalized label belongs to, from the newest resolution
     run. Labels extracted since that run have a null concept_id until the next run.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: concept_label_key
     description: str, the normalized label key
@@ -296,6 +459,10 @@ models:
 
 - name: int__courseware__resolved_concept_mentions
   description: Concept mentions with the concept id their label is assigned to.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: platform
     description: str, mitxonline, mitxpro or residential
@@ -354,6 +521,10 @@ models:
 - name: int__courseware__concept_relation_evidence
   description: Every observation that two concepts are related, per relation, evidence
     source (adjudication, course_sequence, co_taught, co_assessed) and course run.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: from_concept_id
     description: str, the narrower, dependent or lower-id concept, as in bridge_concept_relation
@@ -387,15 +558,13 @@ models:
     tests:
     - unique
     - not_null
-
 - name: int__courseware__extraction_source_checksums
   description: One row per course run in int__courseware__extraction_sources that
-    courseware_extraction_allowlist approves, with a checksum of the text its extraction
-    scopes are built from and the extractor version it is approved for. The courseware
-    extraction sensor reports the checksum as the run's data version while that version
-    is the deployed extractor's, so a run is re-extracted only when its text changes
-    or it is promoted to a new version. Runs the allowlist does not name are left
-    out.
+    int__courseware__extraction_allowlist approves, with a checksum of the text its
+    extraction scopes are built from and the extractor version it is approved for.
+    The courseware extraction sensor reports the checksum as the run's data version
+    while that version is the deployed extractor's, so a run is re-extracted only
+    when its text changes or it is promoted to a new version.
   config:
     meta:
       qa_buildable: false
@@ -416,8 +585,7 @@ models:
     tests:
     - not_null
   - name: extractor_id
-    description: str, the extractor version's id the run is approved for, from its
-      most specific courseware_extraction_allowlist row
+    description: str, the extractor version's id the run is approved for
     tests:
     - not_null
   - name: prompt_version
@@ -431,3 +599,439 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [platform, courserun_readable_id]
+
+unit_tests:
+- name: test_int__courseware__extraction_sources_scopes_ocw_course
+  description: >
+    The site publishes visualizations/light1/ but no visualizations/ page, so light1
+    is a unit of its own and its notes are read there, not dropped. "Review of Aqueous
+    Solutions" and a lecture opening "Solution of dynamic equilibrium equations" name
+    topics, so they stay in materials; ps1_key and "Mock Exam Key" are answer keys
+    and are left out. c2's readings page links c1's aqueous solutions notes, which
+    stay c1's: c2 does not read them and they still count as unlinked in c1.
+  model: int__courseware__extraction_sources
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
+      - c2
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
+        the course.</p>}
+    - {course_slug: c2, courserun_readable_id: run2, course_title: Course Two, course_description_html: <p>Another
+        course.</p>}
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run2, course_slug: c2, content_file_key: courses/c2/pages/readings/,
+      content_type: page, title: Readings, file_extension: null, content_tags: null,
+      content: '<p>Readings.</p><a href="/courses/c1/resources/mit5_111f08_lec3">Aqueous</a>'}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/visualizations/light1/,
+      content_type: page, title: Light, file_extension: null, content_tags: null,
+      content: '<p>Light and optics.</p><a href="/courses/c1/resources/light_notes">Notes</a>'}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/light_notes/,
+      content_type: pdf, title: Light Notes, file_extension: .pdf, content_tags: null,
+      content: Notes on light and optics.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/mit5_111f08_lec3/,
+      content_type: pdf, title: Review of Aqueous Solutions, file_extension: .pdf,
+      content_tags: null, content: Review of aqueous solutions. An aqueous solution
+        is a solute in water.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/mit2_092f09_lec15/,
+      content_type: pdf, title: mit2_092f09_lec15.pdf, file_extension: .pdf, content_tags: null,
+      content: Solution of dynamic equilibrium equations by direct integration.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ps1_key/,
+      content_type: pdf, title: ps1_key, file_extension: .pdf, content_tags: null,
+      content: 1. The force is 3 N.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/mock_exam/,
+      content_type: pdf, title: Mock Exam Key, file_extension: .pdf, content_tags: null,
+      content: 1. Beowulf is an epic.}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
+  expect:
+    rows:
+    - {scope_id: context, scope_kind: context, scope_title: Course context, source_ref: courses/c2/,
+      source_kind: course_description}
+    - {scope_id: courses/c2/pages/readings/, scope_kind: unit, scope_title: Readings,
+      source_ref: courses/c2/pages/readings/, source_kind: page}
+    - {scope_id: context, scope_kind: context, scope_title: Course context, source_ref: courses/c1/,
+      source_kind: course_description}
+    - {scope_id: courses/c1/pages/visualizations/light1/, scope_kind: unit, scope_title: Light,
+      source_ref: courses/c1/pages/visualizations/light1/, source_kind: page}
+    - {scope_id: courses/c1/pages/visualizations/light1/, scope_kind: unit, scope_title: Light,
+      source_ref: courses/c1/resources/light_notes/, source_kind: document}
+    - {scope_id: materials, scope_kind: materials, scope_title: Course materials,
+      source_ref: courses/c1/resources/mit5_111f08_lec3/, source_kind: document}
+    - {scope_id: materials, scope_kind: materials, scope_title: Course materials,
+      source_ref: courses/c1/resources/mit2_092f09_lec15/, source_kind: document}
+
+- name: test_int__courseware__extraction_sources_reads_ocw_solution_file_names
+  description: >
+    A file name carries "sol" glued to other letters both in answer keys and in
+    topics. Solnhofen limestone, Solis and Wets, and lab 2's solids are teaching
+    material and stay; exam_smpsolqii2a (a sample answer to exam question II-2A)
+    and samplesol are answer keys and are left out.
+  model: int__courseware__extraction_sources
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
+        the course.</p>}
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/solnhofenlimestone/,
+      content_type: file, title: SolnhofenLimestone.txt, file_extension: .txt, content_tags: '["Assignments"]',
+      content: Measure the yield strength of Solnhofen limestone.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ses5_solis_wets/,
+      content_type: pdf, title: ses5_solis_wets.pdf, file_extension: .pdf, content_tags: '["Lecture
+        Notes"]', content: Minimization by Random Search Techniques by Solis and Wets.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/catialab2solids/,
+      content_type: pdf, title: catialab2solids.pdf, file_extension: .pdf, content_tags: '["Laboratory
+        Assignments"]', content: 'Recitation 1: Introduction to Digital Project.'}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/exam_smpsolqii2a/,
+      content_type: pdf, title: exam_smpsolqii2a.pdf, file_extension: .pdf, content_tags: '["Exams"]',
+      content: Ohio County Election 2004 Results. Answer to Question II-2A.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/samplesoltxt/,
+      content_type: file, title: samplesol.txt, file_extension: .txt, content_tags: '["Problem
+        Sets"]', content: 'Edit Distance: 73'}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
+  expect:
+    rows:
+    - {scope_id: context, source_ref: courses/c1/}
+    - {scope_id: materials, source_ref: courses/c1/resources/solnhofenlimestone/}
+    - {scope_id: materials, source_ref: courses/c1/resources/ses5_solis_wets/}
+    - {scope_id: materials, source_ref: courses/c1/resources/catialab2solids/}
+
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
+- name: test_int__courseware__extraction_sources_reads_ocw_mixed_solution_types
+  description: >
+    "Multiple Assignment Types with Solutions" tags answer keys and the material
+    they go with, so the tag alone does not leave a resource out. The facilitation
+    guide stays; hw3sol is left out by its name, and the Exam Solutions file by its
+    type.
+  model: int__courseware__extraction_sources
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
+        the course.</p>}
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/facilitation_guide_pdf/,
+      content_type: pdf, title: Workshop Facilitation Guide, file_extension: .pdf,
+      content_tags: '["Multiple Assignment Types with Solutions"]', content: Planning
+        the workshop and its learning goals.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/hw3sol/,
+      content_type: pdf, title: 'Solutions to Homework 3: Decision Analysis', file_extension: .pdf,
+      content_tags: '["Multiple Assignment Types with Solutions"]', content: The expected
+        value of perfect information is 12.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/review2/,
+      content_type: pdf, title: Quiz 2 Review, file_extension: .pdf, content_tags: '["Exams","Exam
+        Solutions"]', content: 1. The runtime is O(n log n).}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
+  expect:
+    rows:
+    - {scope_id: context, source_ref: courses/c1/}
+    - {scope_id: materials, source_ref: courses/c1/resources/facilitation_guide_pdf/}
+
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
+- name: test_int__courseware__extraction_sources_follows_ocw_resource_descriptions
+  description: >
+    Session 10's page links a video clip whose description links the session notes.
+    The clip has no transcript, so int__ocw__content_files drops it, but the notes
+    are
+    read in the page's unit, after the page, and do not land in materials. The clip's
+    link to another course's notes is left to that course.
+  model: int__courseware__extraction_sources
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
+        the course.</p>}
+  - input: ref('stg__ocw__s3__course_content')
+    rows:
+    - {course_slug: c1, coursecontent_kind: resource, coursecontent_s3_key: courses/c1/resources/clip-1-quotient-rule/data.json,
+      coursecontent_body: '<p><a href="/courses/c1/resources/ses10a/">Accompanying
+        Notes (PDF)</a></p> <p><a href="/courses/c0/resources/lec4/">Lecture 4</a></p>'}
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/differentiation/,
+      content_type: page, title: Differentiation, file_extension: null, content_tags: null,
+      content: '<p>Part A.</p><a href="/courses/c1/pages/differentiation/session-10-quotient-rule/">Session
+        10</a>'}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/differentiation/session-10-quotient-rule/,
+      content_type: page, title: 'Session 10: Quotient Rule', file_extension: null,
+      content_tags: null, content: '<p>The quotient rule.</p><a href="/courses/c1/resources/clip-1-quotient-rule/">Clip
+        1</a><a href="/courses/c1/resources/ex10prb/">Problems</a>'}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ses10a/,
+      content_type: pdf, title: MIT18_01SCF10_Ses10a.pdf, file_extension: .pdf, content_tags: null,
+      content: The derivative of u/v is (u'v - uv')/v^2.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ex10prb/,
+      content_type: pdf, title: MIT18_01SCF10_ex10prb.pdf, file_extension: .pdf, content_tags: null,
+      content: Differentiate x/(x+1).}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
+  expect:
+    rows:
+    - {scope_id: context, source_position: 1, source_ref: courses/c1/}
+    - {scope_id: courses/c1/pages/differentiation/, source_position: 1, source_ref: courses/c1/pages/differentiation/}
+    - {scope_id: courses/c1/pages/differentiation/, source_position: 2, source_ref: courses/c1/pages/differentiation/session-10-quotient-rule/}
+    - {scope_id: courses/c1/pages/differentiation/, source_position: 3, source_ref: courses/c1/resources/ses10a/}
+    - {scope_id: courses/c1/pages/differentiation/, source_position: 4, source_ref: courses/c1/resources/ex10prb/}
+
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
+- name: test_int__courseware__extraction_sources_skips_ocw_textbook_in_week_courses
+  description: >
+    c1 teaches through three weeks, so its Online Textbook is reference reading: the
+    textbook page and the chapter only it links are not read, and the chapter does
+    not
+    land in materials. c2 is its Open Textbook, which it reads as a unit.
+  model: int__courseware__extraction_sources
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
+        the course.</p>}
+    - {course_slug: c2, courserun_readable_id: run2, course_title: Course Two, course_description_html: <p>Another
+        course.</p>}
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-1/,
+      content_type: page, title: 'Week 1', file_extension: null, content_tags: null,
+      content: <p>Kinematics.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-1/lesson-1/,
+      content_type: page, title: Lesson 1, file_extension: null, content_tags: null,
+      content: <p>Position.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-2/,
+      content_type: page, title: 'Week 2', file_extension: null, content_tags: null,
+      content: <p>Forces.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-2/lesson-2/,
+      content_type: page, title: Lesson 2, file_extension: null, content_tags: null,
+      content: <p>Newton.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-3/,
+      content_type: page, title: 'Week 3', file_extension: null, content_tags: null,
+      content: <p>Energy.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-3/lesson-3/,
+      content_type: page, title: Lesson 3, file_extension: null, content_tags: null,
+      content: <p>Work.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/online-textbook/,
+      content_type: page, title: Online Textbook, file_extension: null, content_tags: null,
+      content: '<p>The textbook.</p><a href="/courses/c1/resources/chapter1/">Chapter
+        1</a>'}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/chapter1/,
+      content_type: pdf, title: Chapter 1, file_extension: .pdf, content_tags: null,
+      content: Chapter 1. Kinematics in one dimension.}
+    - {courserun_readable_id: run2, course_slug: c2, content_file_key: courses/c2/pages/open-textbook/,
+      content_type: page, title: Open Textbook, file_extension: null, content_tags: null,
+      content: '<p>The book.</p><a href="/courses/c2/resources/chapter1/">Chapter
+        1</a>'}
+    - {courserun_readable_id: run2, course_slug: c2, content_file_key: courses/c2/resources/chapter1/,
+      content_type: pdf, title: Chapter 1, file_extension: .pdf, content_tags: null,
+      content: Chapter 1. Limits.}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
+  expect:
+    rows:
+    - {scope_id: context, source_ref: courses/c1/}
+    - {scope_id: courses/c1/pages/week-1/, source_ref: courses/c1/pages/week-1/}
+    - {scope_id: courses/c1/pages/week-1/, source_ref: courses/c1/pages/week-1/lesson-1/}
+    - {scope_id: courses/c1/pages/week-2/, source_ref: courses/c1/pages/week-2/}
+    - {scope_id: courses/c1/pages/week-2/, source_ref: courses/c1/pages/week-2/lesson-2/}
+    - {scope_id: courses/c1/pages/week-3/, source_ref: courses/c1/pages/week-3/}
+    - {scope_id: courses/c1/pages/week-3/, source_ref: courses/c1/pages/week-3/lesson-3/}
+    - {scope_id: context, source_ref: courses/c2/}
+    - {scope_id: courses/c2/pages/open-textbook/, source_ref: courses/c2/pages/open-textbook/}
+    - {scope_id: courses/c2/pages/open-textbook/, source_ref: courses/c2/resources/chapter1/}
+
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
+      - c2
+- name: test_int__courseware__extraction_sources_counts_ocw_groups_by_section
+  description: >
+    c1's three page groups are all inside its Lecture Notes section, so it is not
+    taught by groups and reads its Online Textbook as a unit.
+  model: int__courseware__extraction_sources
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
+        the course.</p>}
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/,
+      content_type: page, title: Lecture Notes, file_extension: null, content_tags: null,
+      content: <p>Notes.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-1/,
+      content_type: page, title: Part 1, file_extension: null, content_tags: null,
+      content: <p>Kinematics.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-1/lesson-1/,
+      content_type: page, title: Lesson 1, file_extension: null, content_tags: null,
+      content: <p>Position.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-2/,
+      content_type: page, title: Part 2, file_extension: null, content_tags: null,
+      content: <p>Forces.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-2/lesson-2/,
+      content_type: page, title: Lesson 2, file_extension: null, content_tags: null,
+      content: <p>Newton.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/online-textbook/,
+      content_type: page, title: Online Textbook, file_extension: null, content_tags: null,
+      content: '<p>The textbook.</p><a href="/courses/c1/resources/chapter1/">Chapter
+        1</a>'}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/chapter1/,
+      content_type: pdf, title: Chapter 1, file_extension: .pdf, content_tags: null,
+      content: Chapter 1. Kinematics in one dimension.}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
+  expect:
+    rows:
+    - {scope_id: context, source_ref: courses/c1/}
+    - {scope_id: courses/c1/pages/lecture-notes/, source_ref: courses/c1/pages/lecture-notes/}
+    - {scope_id: courses/c1/pages/lecture-notes/part-1/, source_ref: courses/c1/pages/lecture-notes/part-1/}
+    - {scope_id: courses/c1/pages/lecture-notes/part-1/, source_ref: courses/c1/pages/lecture-notes/part-1/lesson-1/}
+    - {scope_id: courses/c1/pages/lecture-notes/part-2/, source_ref: courses/c1/pages/lecture-notes/part-2/}
+    - {scope_id: courses/c1/pages/lecture-notes/part-2/, source_ref: courses/c1/pages/lecture-notes/part-2/lesson-2/}
+    - {scope_id: courses/c1/pages/online-textbook/, source_ref: courses/c1/pages/online-textbook/}
+    - {scope_id: courses/c1/pages/online-textbook/, source_ref: courses/c1/resources/chapter1/}
+
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
+- name: test_int__courseware__extraction_sources_places_ocw_problem_sets_at_release
+  description: >
+    The calendar's session 2 row says "Problem set 1 out", so ps1, which only the
+    Assignments page links, is read in session 2. Session 1's lecture notes row
+    already links ps2, so "PS 2 out" in session 2 leaves it in session 1.
+  model: int__courseware__extraction_sources
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
+        the course.</p>}
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/calendar/,
+      content_type: page, title: Calendar, file_extension: null, content_tags: null,
+      content: '<table><tr><th>SES #</th><th>TOPICS</th><th>KEY DATES</th></tr><tr><td>1</td><td>Introduction</td><td></td></tr><tr><td>2</td><td>Limits</td><td>Problem
+        set 1 out<br>PS 2 out</td></tr></table>'}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/,
+      content_type: page, title: Lecture Notes, file_extension: null, content_tags: null,
+      content: '<table><tr><th>SES #</th><th>TOPICS</th></tr><tr><td>1</td><td><a
+        href="/courses/c1/resources/ps2/">PS 2</a></td></tr></table>'}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/assignments/,
+      content_type: page, title: Assignments, file_extension: null, content_tags: null,
+      content: '<p>Problem sets.</p><a href="/courses/c1/resources/ps1/">Problem Set
+        1</a>'}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ps1/,
+      content_type: pdf, title: ps1.pdf, file_extension: .pdf, content_tags: null,
+      content: 1. Find the limit of sin(x)/x.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ps2/,
+      content_type: pdf, title: ps2.pdf, file_extension: .pdf, content_tags: null,
+      content: 1. Differentiate x^2.}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
+  expect:
+    rows:
+    - {scope_id: context, scope_title: Course context, source_ref: courses/c1/}
+    - {scope_id: session-1, scope_title: 'Session 1: Introduction', source_ref: courses/c1/resources/ps2/}
+    - {scope_id: session-2, scope_title: 'Session 2: Limits', source_ref: courses/c1/resources/ps1/}
+    - {scope_id: courses/c1/pages/assignments/, scope_title: Assignments, source_ref: courses/c1/pages/assignments/}
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1

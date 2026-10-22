@@ -69,7 +69,7 @@ def courseware_extraction_text_sensor(context: SensorEvaluationContext):
 
     ready = approved(rows)
     if ready.height < rows.height:
-        context.log.info(
+        context.log.warning(
             "%d allowlisted course runs are approved for another extractor version "
             "than %s and wait for courseware_extraction_allowlist to promote them",
             rows.height - ready.height,

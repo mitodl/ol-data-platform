@@ -661,7 +661,6 @@ def test_sensor_registers_only_approved_runs(tables):
     assert result.dynamic_partitions_requests[0].partition_keys == [COURSERUN]
 
 
-# -------------------------------------------------------------------- resolution
 def labels(*keys: str) -> pl.DataFrame:
     return pl.DataFrame(
         {

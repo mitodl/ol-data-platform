@@ -1,0 +1,98 @@
+---
+# OpenMetadata data contract for the Superset dataset over enrollment_detail_report. See README.md in this directory.
+entity:
+  type: dashboardDataModel
+  fqn: Superset.model.112
+contract:
+  name: superset__enrollment_detail_report
+  displayName: Superset dataset enrollment_detail_report
+  description: Superset dataset over enrollment_detail_report, behind Enrollment Detail
+    by Learner and Combined Learners Search. The schema lists the columns their charts
+    and native filters use.
+  entityStatus: Approved
+  owners:
+  - type: team
+    name: data-platform
+  schema:
+  - name: platform
+    dataType: VARCHAR
+  - name: courserunenrollment_id
+    dataType: VARCHAR
+  - name: course_readable_id
+    dataType: VARCHAR
+  - name: courserun_is_current
+    dataType: BOOLEAN
+  - name: courserun_readable_id
+    dataType: VARCHAR
+  - name: courserun_start_on
+    dataType: VARCHAR
+  - name: courserun_end_on
+    dataType: VARCHAR
+  - name: courserun_title
+    dataType: VARCHAR
+  - name: courserunenrollment_created_on
+    dataType: VARCHAR
+  - name: courserunenrollment_enrollment_mode
+    dataType: VARCHAR
+  - name: courserunenrollment_enrollment_status
+    dataType: VARCHAR
+  - name: courserunenrollment_is_active
+    dataType: BOOLEAN
+  - name: courserunenrollment_upgraded_on
+    dataType: VARCHAR
+  - name: courseruncertificate_created_on
+    dataType: VARCHAR
+  - name: courseruncertificate_is_earned
+    dataType: BOOLEAN
+  - name: courseruncertificate_url
+    dataType: VARCHAR
+  - name: courserungrade_grade
+    dataType: DOUBLE
+  - name: courserungrade_is_passing
+    dataType: BOOLEAN
+  - name: organization_name
+    dataType: VARCHAR
+  - name: user_country_code
+    dataType: VARCHAR
+  - name: user_highest_education
+    dataType: VARCHAR
+  - name: user_full_name
+    dataType: VARCHAR
+  - name: user_username
+    dataType: VARCHAR
+  - name: user_email
+    dataType: VARCHAR
+  - name: num_of_course_passed
+    dataType: BIGINT
+  - name: coupon_code
+    dataType: VARCHAR
+  - name: coupon_name
+    dataType: VARCHAR
+  - name: discount
+    dataType: DOUBLE
+  - name: order_id
+    dataType: BIGINT
+  - name: order_reference_number
+    dataType: VARCHAR
+  - name: order_state
+    dataType: VARCHAR
+  - name: program_order_id
+    dataType: BIGINT
+  - name: program_coupon_code
+    dataType: VARCHAR
+  - name: receipt_payment_amount
+    dataType: DOUBLE
+  - name: receipt_payment_method
+    dataType: VARCHAR
+  - name: receipt_payment_timestamp
+    dataType: VARCHAR
+  - name: receipt_payer_email
+    dataType: VARCHAR
+  - name: unit_price
+    dataType: DECIMAL
+  - name: program_name
+    dataType: VARCHAR
+  - name: redeemed_email
+    dataType: VARCHAR
+  - name: receipt_url
+    dataType: VARCHAR

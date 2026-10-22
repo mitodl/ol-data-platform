@@ -128,7 +128,26 @@ def test_content_text_row_allows_a_missing_file_extension() -> None:
     )
     assert row["file_extension"] is None
     assert row["size_bytes"] == "1024"
-    assert list(row) == list(course_xml_blocks.CONTENT_TEXT_FIELDS)
+    assert list(row) == list(course_xml_blocks.DOCUMENT_TEXT_FIELDS)
+    # Files written before the asset recorded static references have none.
+    assert row["static_references"] is None
+
+
+def test_document_text_row_keeps_static_references_as_json() -> None:
+    row = course_xml_blocks._row(  # noqa: SLF001
+        json.dumps(
+            {
+                **_DOCUMENT,
+                "file_path": "html/intro.html",
+                "static_references": ["static/slides.pdf", "static/notes.pdf"],
+            }
+        ),
+        course_xml_blocks.OPENEDX_DOCUMENT_TEXT,
+    )
+    assert json.loads(row["static_references"]) == [
+        "static/slides.pdf",
+        "static/notes.pdf",
+    ]
 
 
 def test_content_text_row_still_requires_content() -> None:
