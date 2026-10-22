@@ -161,7 +161,7 @@ def feedback_embeddings(
                 table_name="feedback_embeddings",
             )
             # idempotency_key is a newer column -- a table upserted before it
-            # existed won't have it until checkpoint_embedding_chunk's schema
+            # existed won't have it until upsert_chunk's schema
             # evolution next runs, and those rows are embedded again once.
             stored_key = (
                 pl.col("idempotency_key")

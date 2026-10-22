@@ -1,18 +1,20 @@
 """Tests for the feedback_embeddings asset's run accounting."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import polars as pl
 import pytest
 from dagster import Failure, IOManager, materialize
 from ml.assets.feedback_embeddings import (
     FeedbackEmbeddingsConfig,
+    database_name,
     feedback_embeddings,
 )
 from ml.lib import embed
 from ol_llm.testing import override_embedding_models
 from pydantic_ai.embeddings import TestEmbeddingModel
 from pydantic_ai.exceptions import ModelHTTPError
+from pyiceberg.catalog.sql import SqlCatalog
 
 MODEL = "openai:text-embedding-3-large"
 
@@ -56,9 +58,16 @@ def _upstream(stored: pl.DataFrame | None = None):
     return frame
 
 
+@pytest.fixture
+def catalog(iceberg_catalog: SqlCatalog) -> SqlCatalog:
+    iceberg_catalog.create_namespace(database_name)
+    return iceberg_catalog
+
+
 def _materialize(
     io_manager: _CapturingIOManager,
     config: FeedbackEmbeddingsConfig,
+    catalog: SqlCatalog,
     stored: pl.DataFrame | None = None,
 ):
     with (
@@ -66,11 +75,7 @@ def _materialize(
             "ml.assets.feedback_embeddings.get_dbt_model_as_dataframe",
             side_effect=_upstream(stored),
         ),
-        patch("ml.assets.feedback_embeddings.get_glue_catalog", return_value=None),
-        patch(
-            "ml.lib.embed.checkpoint_embedding_chunk",
-            MagicMock(side_effect=lambda _catalog, _table, chunk_df: chunk_df),
-        ),
+        patch("ml.assets.feedback_embeddings.get_glue_catalog", return_value=catalog),
         # The TestEmbeddingModel override is a context variable, which
         # process_batch's worker threads would not see.
         override_embedding_models(TestEmbeddingModel()),
@@ -86,7 +91,7 @@ def _materialize(
         )
 
 
-def test_blank_and_null_text_count_as_no_text_not_failed() -> None:
+def test_blank_and_null_text_count_as_no_text_not_failed(catalog: SqlCatalog) -> None:
     io_manager = _CapturingIOManager()
 
     result = _materialize(
@@ -97,6 +102,7 @@ def test_blank_and_null_text_count_as_no_text_not_failed() -> None:
             embedding_dim=3,
             max_concurrency=1,
         ),
+        catalog,
     )
 
     assert io_manager.written is not None
@@ -114,7 +120,9 @@ def test_blank_and_null_text_count_as_no_text_not_failed() -> None:
     assert metadata["embedding_model"].value == MODEL
 
 
-def test_a_stored_vector_is_kept_for_the_same_text_and_redone_for_a_new_one() -> None:
+def test_a_stored_vector_is_kept_for_the_same_text_and_redone_for_a_new_one(
+    catalog: SqlCatalog,
+) -> None:
     model = embed.resolve_embedding_model(MODEL, 3)
     stored = pl.DataFrame(
         {
@@ -135,6 +143,7 @@ def test_a_stored_vector_is_kept_for_the_same_text_and_redone_for_a_new_one() ->
         FeedbackEmbeddingsConfig(
             embedding_model=MODEL, embedding_dim=3, max_concurrency=1
         ),
+        catalog,
         stored,
     )
 
@@ -146,13 +155,33 @@ def test_a_stored_vector_is_kept_for_the_same_text_and_redone_for_a_new_one() ->
     assert metadata["already_embedded_count"].value == 2
 
 
-def test_a_table_without_idempotency_key_reembeds_every_conversation() -> None:
-    stored = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1", "pk-5"],
-            "embedding_model_version": ["text-embedding-3-large"] * 2,
-            "embedding_dim": [3, 3],
-        }
+def test_a_table_without_idempotency_key_reembeds_every_conversation(
+    catalog: SqlCatalog,
+) -> None:
+    """The deploy case: the real table predates idempotency_key and holds the
+    conversations the run embeds again.
+    """
+    model = embed.resolve_embedding_model(MODEL, 3)
+    old_rows = embed._embedded_frame(
+        model,
+        [
+            (
+                {
+                    "feedback_conversation_pk": f"pk-{ref}",
+                    "source_slug": "zendesk",
+                    "conversation_ref": ref,
+                    "turn_count": 3,
+                    "embedding_input": "summary",
+                    "idempotency_key": None,
+                },
+                [0.0] * 3,
+            )
+            for ref in ("1", "5")
+        ],
+    ).drop("idempotency_key")
+    identifier = f"{database_name}.feedback_embeddings"
+    catalog.create_table(identifier, schema=old_rows.to_arrow().schema).append(
+        old_rows.to_arrow()
     )
     io_manager = _CapturingIOManager()
 
@@ -161,14 +190,21 @@ def test_a_table_without_idempotency_key_reembeds_every_conversation() -> None:
         FeedbackEmbeddingsConfig(
             embedding_model=MODEL, embedding_dim=3, max_concurrency=1
         ),
-        stored,
+        catalog,
+        old_rows,
     )
 
     assert io_manager.written is not None
     assert io_manager.written["conversation_ref"].to_list() == ["1", "5"]
+    stored = catalog.load_table(identifier).scan().to_polars().sort("conversation_ref")
+    assert stored["idempotency_key"].to_list() == [
+        model.key("hello"),
+        model.key("world"),
+    ]
+    assert stored["embedding_vector"].to_list() == [[1.0] * 3, [1.0] * 3]
 
 
-def test_a_run_that_stops_raises_failure() -> None:
+def test_a_run_that_stops_raises_failure(catalog: SqlCatalog) -> None:
     class _Denied(TestEmbeddingModel):
         async def embed(self, inputs, *, input_type, settings=None):  # noqa: ARG002
             raise ModelHTTPError(status_code=401, model_name="test")
@@ -178,8 +214,7 @@ def test_a_run_that_stops_raises_failure() -> None:
             "ml.assets.feedback_embeddings.get_dbt_model_as_dataframe",
             side_effect=_upstream(),
         ),
-        patch("ml.assets.feedback_embeddings.get_glue_catalog", return_value=None),
-        patch("ml.lib.embed.checkpoint_embedding_chunk", MagicMock()),
+        patch("ml.assets.feedback_embeddings.get_glue_catalog", return_value=catalog),
         override_embedding_models(_Denied()),
         pytest.raises(Failure, match="stopped with model"),
     ):
