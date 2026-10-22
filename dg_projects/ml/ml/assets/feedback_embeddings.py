@@ -18,6 +18,7 @@ from ml.lib.embed import (
     build_embedding_client,
     embed_and_checkpoint,
     filter_unembedded,
+    has_embeddable_text,
     resolve_embedding_text,
 )
 from ml.resources.llm import LLMClientFactory
@@ -216,16 +217,19 @@ def feedback_embeddings(
         context=context,
     )
 
-    # A null resolved_text or a failed API call is dropped from embeddings_df
-    # entirely, so this difference counts both -- including rows never attempted
-    # because of an early abort.
+    # A null or blank resolved_text or a failed API call is dropped from
+    # embeddings_df entirely, so this difference counts both -- including rows
+    # never attempted because of an early abort.
     dropped_count = unembedded_df.height - embeddings_df.height
-    # No text yet (redaction hasn't reached it) is skipped without a call, not failed.
-    no_text_count = unembedded_df["resolved_text"].null_count()
+    # No text yet (redaction hasn't reached it) or blank text is skipped without a
+    # call, not failed.
+    no_text_count = sum(
+        not has_embeddable_text(text) for text in unembedded_df["resolved_text"]
+    )
     failed_count = dropped_count - no_text_count
-    # len(errors) rather than dropped_count: a null resolved_text is dropped
-    # without an API call or an error message, so dropped_count alone would
-    # overstate how many embed calls actually ran.
+    # len(errors) rather than dropped_count: a null or blank resolved_text is
+    # dropped without an API call or an error message, so dropped_count alone
+    # would overstate how many embed calls actually ran.
     attempted_count = embeddings_df.height + len(errors)
 
     context.log.info(

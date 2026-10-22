@@ -1,0 +1,46 @@
+---
+# OpenMetadata data contract for the Superset dataset over marts__combined_course_enrollment_detail. See README.md in this directory.
+entity:
+  type: dashboardDataModel
+  fqn: Superset.model.54
+contract:
+  name: superset__marts__combined_course_enrollment_detail
+  displayName: Superset dataset marts__combined_course_enrollment_detail
+  description: Superset dataset over marts__combined_course_enrollment_detail, on
+    10 dashboards. The schema lists the columns the tracked dashboards' charts select,
+    group or filter on.
+  entityStatus: Approved
+  owners:
+  - type: team
+    name: data-platform
+  schema:
+  - name: platform
+    dataType: VARCHAR
+  - name: course_readable_id
+    dataType: VARCHAR
+  - name: course_title
+    dataType: VARCHAR
+  - name: courserun_readable_id
+    dataType: VARCHAR
+  - name: courserun_title
+    dataType: VARCHAR
+  - name: courserun_is_current
+    dataType: BOOLEAN
+  - name: courserun_start_on
+    dataType: VARCHAR
+  - name: courserun_end_on
+    dataType: VARCHAR
+  - name: courserun_upgrade_deadline
+    dataType: VARCHAR
+  - name: courserunenrollment_enrollment_status
+    dataType: VARCHAR
+  - name: courserunenrollment_is_active
+    dataType: BOOLEAN
+  - name: courseruncertificate_is_earned
+    dataType: BOOLEAN
+  - name: courserungrade_grade
+    dataType: DOUBLE
+  - name: courserungrade_is_passing
+    dataType: BOOLEAN
+  - name: user_email
+    dataType: VARCHAR

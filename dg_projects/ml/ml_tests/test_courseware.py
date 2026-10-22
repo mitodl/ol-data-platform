@@ -1,8 +1,19 @@
+from types import SimpleNamespace
+
+import httpx2
 import polars as pl
 import pytest
-from ml.lib.courseware import scopes
+from ml.lib.courseware import extract, local, scopes
 from ml.lib.courseware.describe import _concept_inputs
-from ml.lib.courseware.extract import _claim_row, extraction_key
+from ml.lib.courseware.extract import (
+    CLAIM_SCHEMA,
+    EVIDENCE_SCHEMA,
+    EXTRACTION_SCHEMA,
+    ExtractionTables,
+    _claim_row,
+    _ModelResult,
+    extraction_key,
+)
 from ml.lib.courseware.schemas import (
     AudienceClaim,
     ConceptClaim,
@@ -39,6 +50,25 @@ SOURCE = (
 )
 def test_verify_passage(passage, status):
     assert verify_passage(passage, SOURCE).status == status
+
+
+def test_verify_passage_rejects_a_quote_stitched_from_distant_sentences():
+    # most of its trigrams are in the source, but in two places a sentence apart
+    passage = (
+        "k-means follows a completely different methodology we need to know the "
+        "number of clusters in advance"
+    )
+    assert verify_passage(passage, SOURCE) == ("unverified", None, None)
+
+
+def test_verify_passage_near_match_offsets_cover_the_quoted_stretch():
+    match = verify_passage(
+        "for k-means clustering we need know the number of clusters in advance", SOURCE
+    )
+    assert match.status == "fuzzy"
+    assert SOURCE[match.char_start : match.char_end] == (
+        "for k-means clustering, we need to know the number of clusters in advance"
+    )
 
 
 def test_verify_passage_offsets_index_the_source():
@@ -101,6 +131,12 @@ def test_build_scopes_splits_at_source_boundaries(monkeypatch):
     # ids restart in each part, so a part's prompt depends only on its own sources
     assert [source.source_id for source in built[1].sources] == ["S01", "S02"]
     assert built[0].course.outline == ("Lecture 1",)
+    # each part records every part's checksum, so the whole reading can be matched
+    assert (
+        built[0].scope_part_checksums
+        == built[1].scope_part_checksums
+        == (f"{built[0].input_text_checksum},{built[1].input_text_checksum}")
+    )
 
 
 def test_extraction_key_changes_with_input_text():
@@ -198,3 +234,65 @@ def test_string_fields_keep_text_that_parses_as_json():
     )
     assert claim.label == '{"a": 1}'
     assert claim.evidence == [Evidence(source_id="S01", passage="a b c")]
+
+
+def test_local_extract_replaces_claims_a_cut_off_run_left_behind(tmp_path, monkeypatch):
+    # a run cut off after writing claims left a row for an extraction it never
+    # stored; the next run extracts that scope again and keeps one copy
+    sources = tmp_path / "sources.parquet"
+    _rows(["some text"]).write_parquet(sources)
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    orphan = pl.DataFrame(
+        [{"extraction_key": "k1", "label": "old"}], schema=CLAIM_SCHEMA
+    )
+    orphan.write_parquet(output_dir / "courseware_claim.parquet")
+    tables = ExtractionTables(
+        extractions=pl.DataFrame([{"extraction_key": "k1"}], schema=EXTRACTION_SCHEMA),
+        claims=pl.DataFrame(
+            [{"extraction_key": "k1", "label": "new"}], schema=CLAIM_SCHEMA
+        ),
+        evidence=pl.DataFrame(schema=EVIDENCE_SCHEMA),
+    )
+    monkeypatch.setattr(local, "AnthropicBedrock", object)
+    monkeypatch.setattr(
+        local, "LLMClientFactory", lambda **_: SimpleNamespace(get_client=object)
+    )
+    monkeypatch.setattr(local, "extract_scopes", lambda *_, **__: tables)
+    local.extract(sources, output_dir)
+    claims = pl.read_parquet(output_dir / "courseware_claim.parquet")
+    assert claims["label"].to_list() == ["new"]
+    stored = pl.read_parquet(output_dir / "courseware_claim_extraction.parquet")
+    assert stored["extraction_key"].to_list() == ["k1"]
+
+
+def test_extract_scopes_keeps_the_batch_when_a_stream_drops(monkeypatch):
+    built = scopes.build_scopes(
+        pl.concat(
+            [_rows(["first"]), _rows(["second"]).with_columns(scope_id=pl.lit("seq-2"))]
+        )
+    )
+    empty = ScopeExtraction.model_validate(
+        {
+            "summary": "s",
+            "concepts": [],
+            "skills": [],
+            "assumed_knowledge": [],
+            "assessment_expectations": [],
+            "learning_outcomes": [],
+            "declared_prerequisites": [],
+            "audience": [],
+            "notes": [],
+        }
+    )
+
+    def call_model(*args):
+        message = args[-1]
+        if "second" in message:
+            msg = "peer closed connection"
+            raise httpx2.RemoteProtocolError(msg)
+        return _ModelResult(empty, "end_turn", 1, 1, 0, 0)
+
+    monkeypatch.setattr(extract, "call_model", call_model)
+    tables = extract.extract_scopes(built, object(), model_id="model", max_workers=1)
+    assert tables.extractions["scope_id"].to_list() == ["seq-1"]

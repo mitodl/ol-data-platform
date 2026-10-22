@@ -52,6 +52,77 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [platform, courserun_readable_id, scope_id, source_ref]
 
+- name: int__courseware__extractions
+  description: Every claim extraction, and whether it is current, the one its scope
+    part is read from now. A scope's newest complete reading is current, so a run
+    that extracts only some parts of a new reading changes nothing until the rest
+    succeed.
+  columns:
+  - name: extraction_key
+    description: str, sha256 of everything the call depended on (extractor, prompt
+      and schema versions, model, effort, run, scope and the full message text)
+    tests:
+    - not_null
+    - unique
+  - name: extractor_id
+    description: str, the extractor, e.g. courseware_claims_v1
+  - name: prompt_version
+    description: str, hash of the system prompt
+  - name: schema_version
+    description: str, hash of the output JSON schema
+  - name: model_id
+    description: str, the model id as sent to the provider
+  - name: effort
+    description: str, output_config.effort for the call
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the run the scope belongs to
+  - name: scope_id
+    description: str, the sequential block id, or 'context' or 'materials'
+  - name: scope_kind
+    description: str, unit, context or materials
+  - name: scope_title
+    description: str, the sequential title or the scope name
+  - name: scope_position
+    description: int, the scope's order in the course; 0 for context, 9999 for materials
+  - name: scope_part
+    description: int, which part of a scope split to fit the input budget, from 1
+  - name: scope_part_count
+    description: int, how many parts the scope was split into
+  - name: input_text_checksum
+    description: str, sha256 of the source text the call read
+  - name: scope_part_checksums
+    description: str, every part's input_text_checksum, in order and comma-separated,
+      as the run that made this call split the scope
+  - name: source_count
+    description: int, number of sources the call read
+  - name: truncated_source_count
+    description: int, number of those sources cut to the per-source limit
+  - name: sources_json
+    description: str, JSON list of {source_id, source_ref, included_chars, total_chars}
+  - name: summary
+    description: str, the model's summary of the scope
+  - name: notes_json
+    description: str, JSON list of the model's notes plus truncation notes
+  - name: stop_reason
+    description: str, the response's stop_reason
+  - name: input_tokens
+    description: int, uncached input tokens billed
+  - name: output_tokens
+    description: int, output tokens billed, thinking included
+  - name: cache_read_input_tokens
+    description: int, input tokens read from the prompt cache
+  - name: cache_creation_input_tokens
+    description: int, input tokens written to the prompt cache
+  - name: extracted_at
+    description: timestamp, when the call returned
+  - name: is_current
+    description: boolean, whether this is the extraction its scope part is read from
+      now
+    tests:
+    - not_null
+
 - name: int__courseware__claims
   description: Every extracted claim with its scope, extractor version, evidence counts
     and normalized concept label key.
@@ -85,8 +156,8 @@ models:
   - name: extracted_at
     description: timestamp, when the extraction returned
   - name: is_current
-    description: boolean, whether the claim's extraction is the newest for its scope
-      part
+    description: boolean, whether the claim's extraction is the one its scope part
+      is read from now (int__courseware__extractions)
   - name: claim_kind
     description: str, concept, skill, assumed_knowledge, assessment_expectation, learning_outcome,
       declared_prerequisite or audience

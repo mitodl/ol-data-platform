@@ -50,6 +50,9 @@ sources:
       description: int, how many parts the scope was split into
     - name: input_text_checksum
       description: str, sha256 of the source text the call read
+    - name: scope_part_checksums
+      description: str, every part's input_text_checksum, in order and comma-separated,
+        as the run that made this call split the scope
     - name: source_count
       description: int, number of sources the call read
     - name: truncated_source_count
@@ -132,9 +135,9 @@ sources:
     - name: verification_status
       description: str, exact, fuzzy, unverified or unknown_source
     - name: char_start
-      description: int, offset of an exact match in the source text
+      description: int, offset of an exact or fuzzy match in the source text
     - name: char_end
-      description: int, end offset of an exact match in the source text
+      description: int, end offset of an exact or fuzzy match in the source text
   # Concept identity (ml.lib.courseware.resolve). Registry, assignment and relation
   # rows are full snapshots per resolution run; the newest run in
   # courseware_resolution_run is current, and earlier runs are history.

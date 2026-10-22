@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
 
+import httpx2
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock, APIError
 from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
@@ -67,6 +68,7 @@ EXTRACTION_SCHEMA = {
     "scope_part": pl.Int64,
     "scope_part_count": pl.Int64,
     "input_text_checksum": pl.String,
+    "scope_part_checksums": pl.String,
     "source_count": pl.Int64,
     "truncated_source_count": pl.Int64,
     "sources_json": pl.String,
@@ -299,6 +301,7 @@ def _rows(
         "scope_part": scope.part,
         "scope_part_count": scope.part_count,
         "input_text_checksum": scope.input_text_checksum,
+        "scope_part_checksums": scope.scope_part_checksums,
         "source_count": len(scope.sources),
         "truncated_source_count": sum(source.truncated for source in scope.sources),
         "sources_json": json.dumps(
@@ -364,7 +367,8 @@ def extract_scopes(  # noqa: PLR0913
             scope, key = futures[future]
             try:
                 result = future.result()
-            except (ExtractionError, APIError):
+            # the SDK does not wrap a connection that drops mid-stream in an APIError
+            except (ExtractionError, APIError, httpx2.TransportError):
                 log.exception(
                     "Extraction failed for %s %s",
                     scope.course.courserun_readable_id,
