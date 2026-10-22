@@ -72,7 +72,12 @@ from lakehouse.assets.lakehouse.dbt_starrocks import (
     starrocks_dbt_assets,
     starrocks_dbt_cli,
 )
-from lakehouse.assets.qa_mirror import build_qa_mirror_assets
+from lakehouse.assets.qa_mirror import (
+    build_qa_mirror_assets,
+    build_qa_mirror_checks,
+    qa_mirror_plan_schedules,
+    qa_mirror_refresh_schedules,
+)
 from lakehouse.assets.qa_observation_drift import qa_observation_drift
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import (
@@ -578,10 +583,17 @@ airbyte_drift_schedules = (
 # role is denied production Glue. Registered in no other environment, so there
 # is nothing a QA or dev code location could run against production by mistake.
 qa_mirror_assets = build_qa_mirror_assets() if DAGSTER_ENV == "production" else []
+qa_mirror_checks = build_qa_mirror_checks() if DAGSTER_ENV == "production" else []
+qa_mirror_schedules = [
+    *(("qa_mirror_monthly", s) for s in qa_mirror_refresh_schedules(qa_mirror_assets)),
+    *(("qa_mirror_plan_daily", s) for s in qa_mirror_plan_schedules(qa_mirror_checks)),
+]
 
 # QA only: it describes ol_warehouse_qa_raw, and the QA role is the one already
 # reading those tables (iceberg_raw_orphan_files). Daily, so a load or a
-# hand-run mirror that lands a table is reported within a day.
+# hand-run mirror that lands a table is reported within a day. 05:00 so the
+# monthly mirror refresh (06:00 on the 1st), which drops each table before it
+# recreates it, has most of a day to finish before the next drift run.
 qa_observation_drift_assets = [qa_observation_drift] if DAGSTER_ENV == "qa" else []
 qa_observation_drift_schedules = (
     [
@@ -593,7 +605,7 @@ qa_observation_drift_schedules = (
                     name="qa_observation_drift_daily_job",
                     selection=AssetSelection.assets(qa_observation_drift),
                 ),
-                cron_schedule="0 12 * * *",
+                cron_schedule="0 5 * * *",
                 execution_timezone="UTC",
                 default_status=DefaultScheduleStatus.RUNNING,
             ),
@@ -813,7 +825,14 @@ defs = Definitions(
             *qa_observation_drift_assets,
         ]
     ),
-    asset_checks=[*dbt_layer_freshness_checks, *dimensional_schema_change_checks],
+    asset_checks=[
+        *dbt_layer_freshness_checks,
+        *dimensional_schema_change_checks,
+        # A plan check reports a broken declaration by raising, so it needs
+        # the Sentry hook the assets get. AssetChecksDefinition subclasses
+        # AssetsDefinition, so with_failure_hooks attaches it.
+        *with_failure_hooks(qa_mirror_checks),
+    ],
     resources=resources_dict,
     executor=executor_for_environment(
         DAGSTER_ENV, in_kubernetes="KUBERNETES_SERVICE_HOST" in os.environ
@@ -886,6 +905,7 @@ defs = Definitions(
             ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),
             *airbyte_drift_schedules,
             *qa_observation_drift_schedules,
+            *qa_mirror_schedules,
             ("posthog_staging_hourly", posthog_staging_schedule),
             *non_airbyte_staging_schedules,
             ("learn_integrations_qa_daily", learn_integrations_qa_schedule),
