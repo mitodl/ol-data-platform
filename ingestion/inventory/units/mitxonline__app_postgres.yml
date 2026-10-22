@@ -473,6 +473,11 @@ tables:
   primary_key:
   - - id
   modeled: true
+# xmin incremental, so a product deleted in MITx Online stays in production raw
+# until the dlt cutover (replace). Accepted 2026-10-21: the Learn views take
+# prices from the CMS pages, not this table. On 2026-10-21, 183 rows pointed at
+# course runs gone from courses_courserun (upGrad UAI_SOURCE variants). They
+# reach int__mitxonline__ecommerce_product, dim_product and the order models.
 - name: ecommerce_product
   raw_table: raw__mitxonline__app__postgres__ecommerce_product
   sync_mode: incremental_deduped_history
@@ -585,6 +590,10 @@ tables:
   primary_key:
   - - id
   modeled: true
+# xmin incremental, so a deleted page stays in production raw until the dlt
+# cutover. Accepted 2026-10-21: int__mitxonline__catalog_pages inner-joins it to
+# the full-refresh cms_coursepage and cms_programpage, so a deleted catalog page
+# never reaches the Learn views. Join from a full-refresh table, not this one.
 - name: wagtailcore_page
   raw_table: raw__mitxonline__app__postgres__wagtailcore_page
   sync_mode: incremental_deduped_history

@@ -20,7 +20,6 @@ select
     , scope_inputs.scope_part
     , scope_inputs.scope_part_count
     , scope_inputs.input_text_checksum
-    , scope_inputs.header_version
     , scope_inputs.observed_at
 from scope_inputs
 inner join latest_reads
