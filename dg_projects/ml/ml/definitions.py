@@ -22,11 +22,20 @@ from ml.assets.feedback_embeddings import feedback_embeddings
 from ml.assets.feedback_redacted import feedback_redacted
 from ml.assets.feedback_sentiment_eval import feedback_sentiment_eval
 from ml.assets.feedback_summaries import feedback_summaries
+from ml.assets.learn_embeddings import (
+    content_file_embedding_chunks,
+    content_file_embedding_vectors,
+    embedding_strategies,
+    learn_content_file_text,
+    topic_embedding_chunks,
+    topic_embedding_vectors,
+)
 from ml.assets.risk_probability import student_risk_probability
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import configure_opik_keycloak_auth
 from ml.sensors.courseware import courseware_extraction_text_sensor
 from ml.sensors.feedback_clusters import feedback_clusters_growth_sensor
+from ml.sensors.learn_embeddings import learn_content_file_text_sensor
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
@@ -38,6 +47,7 @@ from ol_orchestrate.lib.utils import (
     s3_uploads_bucket,
     unauthenticated_vault,
 )
+from ol_orchestrate.resources.embeddings import EmbeddingsResource, ProviderKeySecret
 
 init_sentry("ml")
 
@@ -126,6 +136,25 @@ courseware_automation_sensor = AutomationConditionSensorDefinition(
     default_status=DefaultSensorStatus.STOPPED,
 )
 
+# Chunking and embedding of Learn's content files and topics. Every run it launches
+# carries LEARN_EMBEDDINGS_TAG, so ol-infrastructure's run_coordinator
+# tag_concurrency_limits can bound the model calls and the concurrent commits to
+# the vector tables, as for courseware. Stopped by default: the first build of each
+# table is a backfill launched by hand.
+LEARN_EMBEDDINGS_TAG = "learn_embeddings/model_calls"
+learn_embeddings_automation_sensor = AutomationConditionSensorDefinition(
+    name="learn_embeddings_automation_sensor",
+    target=AssetSelection.assets(
+        content_file_embedding_chunks,
+        content_file_embedding_vectors,
+        topic_embedding_chunks,
+        topic_embedding_vectors,
+        embedding_strategies,
+    ),
+    run_tags={LEARN_EMBEDDINGS_TAG: "true"},
+    default_status=DefaultSensorStatus.STOPPED,
+)
+
 iceberg_catalog = IcebergCatalogConfig(
     properties={
         "type": "glue",
@@ -139,6 +168,13 @@ iceberg_catalog = IcebergCatalogConfig(
         "s3.connect-timeout": "10",
         "s3.request-timeout": "120",
     }
+)
+
+dynamic_partitions_io_manager = PolarsIcebergIOManager(
+    name="iceberg_io_manager",
+    config=iceberg_catalog,
+    reader_override="pyiceberg",
+    db_io_manager="custom",
 )
 
 # Create unified definitions
@@ -158,16 +194,12 @@ defs = Definitions(
             config=iceberg_catalog,
             reader_override="pyiceberg",
         ),
-        # The same catalog for courseware extraction, whose partitions have a
-        # dynamic dimension. Dagster's default DbIOManager resolves a multi-partition
-        # key range without the instance, which a dynamic dimension needs, so
-        # writing fails; dagster-iceberg's custom one reads the run's keys directly.
-        "courseware_io_manager": PolarsIcebergIOManager(
-            name="iceberg_io_manager",
-            config=iceberg_catalog,
-            reader_override="pyiceberg",
-            db_io_manager="custom",
-        ),
+        # The same catalog for the assets whose partitions have a dynamic
+        # dimension. Dagster's default DbIOManager resolves a multi-partition key
+        # range without the instance, which a dynamic dimension needs, so writing
+        # fails; dagster-iceberg's custom one reads the run's keys directly.
+        "courseware_io_manager": dynamic_partitions_io_manager,
+        "learn_embeddings_io_manager": dynamic_partitions_io_manager,
         "s3file_io_manager": default_file_object_io_manager(
             dagster_env=DAGSTER_ENV,
             bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
@@ -194,6 +226,17 @@ defs = Definitions(
         # API, so this needs its own client_class/key. Which Bedrock embedding
         # model to keep is still open (§B.1's bake-off); bedrock_embeddings is the
         # default deployed envs need since no OPENAI_API_KEY is provisioned there.
+        # The Learn embedding assets call models through ol-llm, which reads the
+        # provider key from the environment; the resource copies it from Vault.
+        "embeddings": EmbeddingsResource(
+            vault=vault,
+            environment=DAGSTER_ENV,
+            provider_keys=[
+                ProviderKeySecret(
+                    env_var="OPENAI_API_KEY", vault_path="pipelines/openai"
+                )
+            ],
+        ),
         "embedding_llm": LLMClientFactory(
             client_class=os.environ.get(
                 "EMBEDDING_PROVIDER",
@@ -218,6 +261,12 @@ defs = Definitions(
             feedback_sentiment_eval,
             courseware_extraction_text,
             courseware_extraction,
+            learn_content_file_text,
+            content_file_embedding_chunks,
+            content_file_embedding_vectors,
+            topic_embedding_chunks,
+            topic_embedding_vectors,
+            embedding_strategies,
         ]
     ),
     jobs=[
@@ -233,5 +282,7 @@ defs = Definitions(
         feedback_clusters_growth_sensor,
         courseware_extraction_text_sensor,
         courseware_automation_sensor,
+        learn_content_file_text_sensor,
+        learn_embeddings_automation_sensor,
     ],
 )
