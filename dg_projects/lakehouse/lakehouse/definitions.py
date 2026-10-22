@@ -72,7 +72,12 @@ from lakehouse.assets.lakehouse.dbt_starrocks import (
     starrocks_dbt_assets,
     starrocks_dbt_cli,
 )
-from lakehouse.assets.qa_mirror import build_qa_mirror_assets, build_qa_mirror_checks
+from lakehouse.assets.qa_mirror import (
+    build_qa_mirror_assets,
+    build_qa_mirror_checks,
+    qa_mirror_plan_schedules,
+    qa_mirror_refresh_schedules,
+)
 from lakehouse.assets.qa_observation_drift import qa_observation_drift
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import (
@@ -579,42 +584,10 @@ airbyte_drift_schedules = (
 # is nothing a QA or dev code location could run against production by mistake.
 qa_mirror_assets = build_qa_mirror_assets() if DAGSTER_ENV == "production" else []
 qa_mirror_checks = build_qa_mirror_checks() if DAGSTER_ENV == "production" else []
-# The refresh plans every table itself before it drops anything, so the monthly
-# job leaves the plan checks to their own daily job. max_concurrent keeps one
-# run from putting every unit's production scan on StarRocks at once.
-qa_mirror_schedules = (
-    [
-        (
-            "qa_mirror_monthly",
-            ScheduleDefinition(
-                name="qa_mirror_monthly_schedule",
-                job=define_asset_job(
-                    name="qa_mirror_monthly_job",
-                    selection=AssetSelection.groups("qa_mirror").without_checks(),
-                    config={"execution": {"config": {"max_concurrent": 3}}},
-                ),
-                cron_schedule="0 6 1 * *",
-                execution_timezone="UTC",
-                default_status=DefaultScheduleStatus.RUNNING,
-            ),
-        ),
-        (
-            "qa_mirror_plan_daily",
-            ScheduleDefinition(
-                name="qa_mirror_plan_daily_schedule",
-                job=define_asset_job(
-                    name="qa_mirror_plan_daily_job",
-                    selection=AssetSelection.checks(*qa_mirror_checks),
-                ),
-                cron_schedule="0 11 * * *",
-                execution_timezone="UTC",
-                default_status=DefaultScheduleStatus.RUNNING,
-            ),
-        ),
-    ]
-    if qa_mirror_checks
-    else []
-)
+qa_mirror_schedules = [
+    *(("qa_mirror_monthly", s) for s in qa_mirror_refresh_schedules(qa_mirror_assets)),
+    *(("qa_mirror_plan_daily", s) for s in qa_mirror_plan_schedules(qa_mirror_checks)),
+]
 
 # QA only: it describes ol_warehouse_qa_raw, and the QA role is the one already
 # reading those tables (iceberg_raw_orphan_files). Daily, so a load or a

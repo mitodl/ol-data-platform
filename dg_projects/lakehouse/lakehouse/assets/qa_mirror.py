@@ -29,11 +29,16 @@ from dagster import (
     AssetExecutionContext,
     AssetKey,
     AssetsDefinition,
+    AssetSelection,
+    DefaultScheduleStatus,
     Failure,
     MaterializeResult,
     MetadataValue,
+    ScheduleDefinition,
     asset,
     asset_check,
+    define_asset_job,
+    multiprocess_executor,
 )
 from ol_dbt_cli.lib.inventory import load_units
 from ol_dbt_cli.lib.qa_mirror import (
@@ -45,6 +50,8 @@ from ol_dbt_cli.lib.qa_mirror import (
 
 from lakehouse.lib.inventory import INVENTORY_DIR
 from lakehouse.resources.starrocks import StarRocksResource
+
+QA_MIRROR_REFRESH_MAX_CONCURRENT = 3
 
 
 def _render(
@@ -213,4 +220,60 @@ def build_qa_mirror_checks() -> list[AssetChecksDefinition]:
     return [
         _plan_check(unit, tables)
         for unit, tables in mirror_tables(load_units(INVENTORY_DIR)).items()
+    ]
+
+
+def qa_mirror_refresh_schedules(
+    assets: list[AssetsDefinition],
+) -> list[ScheduleDefinition]:
+    """Build the monthly refresh of every qa_mirror asset, if there are any.
+
+    A missing inventory leaves only qa_mirror_inventory_missing, and this still
+    schedules it, so the refresh fails monthly naming the path. The refresh
+    plans every table itself before it drops anything, so it leaves the plan
+    checks to their own daily job.
+
+    The job names its executor rather than passing executor run config, because
+    that config's shape depends on the code location's executor: production's
+    default multi_or_in_process_executor rejects the bare ``max_concurrent``
+    k8s_job_executor takes.
+    """
+    if not assets:
+        return []
+    return [
+        ScheduleDefinition(
+            name="qa_mirror_monthly_schedule",
+            job=define_asset_job(
+                name="qa_mirror_monthly_job",
+                selection=AssetSelection.groups("qa_mirror").without_checks(),
+                # Keeps one run from putting every unit's production scan on
+                # StarRocks at once.
+                executor_def=multiprocess_executor.configured(
+                    {"max_concurrent": QA_MIRROR_REFRESH_MAX_CONCURRENT}
+                ),
+            ),
+            cron_schedule="0 6 1 * *",
+            execution_timezone="UTC",
+            default_status=DefaultScheduleStatus.RUNNING,
+        )
+    ]
+
+
+def qa_mirror_plan_schedules(
+    checks: list[AssetChecksDefinition],
+) -> list[ScheduleDefinition]:
+    """Build the daily run of every copy-planning check, if there are any."""
+    if not checks:
+        return []
+    return [
+        ScheduleDefinition(
+            name="qa_mirror_plan_daily_schedule",
+            job=define_asset_job(
+                name="qa_mirror_plan_daily_job",
+                selection=AssetSelection.checks(*checks),
+            ),
+            cron_schedule="0 11 * * *",
+            execution_timezone="UTC",
+            default_status=DefaultScheduleStatus.RUNNING,
+        )
     ]
