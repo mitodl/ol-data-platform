@@ -60,7 +60,7 @@ def test_small_run_writes_a_failed_run_row_with_no_candidates() -> None:
                             full_refresh=True,
                             min_cluster_size=5,
                             umap_n_components=5,
-                            embedding_model_version="text-embedding-3-small",
+                            embedding_model="openai:text-embedding-3-small",
                             embedding_dim=8,
                             feedback_since=None,
                             platforms=None,
@@ -108,7 +108,7 @@ def test_promoted_full_refresh_is_rejected_without_a_review() -> None:
             FeedbackClustersConfig(
                 is_promoted=True,
                 full_refresh=True,
-                embedding_model_version="text-embedding-3-small",
+                embedding_model="openai:text-embedding-3-small",
                 embedding_dim=8,
                 feedback_since=None,
                 platforms=None,
@@ -136,7 +136,7 @@ def test_incremental_run_with_no_live_members_in_its_input_writes_nothing() -> N
     ):
         result = _run_feedback_clusters(
             FeedbackClustersConfig(
-                embedding_model_version="text-embedding-3-small",
+                embedding_model="openai:text-embedding-3-small",
                 embedding_dim=8,
                 feedback_since=None,
                 platforms=None,
@@ -165,7 +165,7 @@ def test_run_clusters_embeddings_in_conversation_pk_order() -> None:
     ):
         result = _run_feedback_clusters(
             FeedbackClustersConfig(
-                embedding_model_version="text-embedding-3-small",
+                embedding_model="openai:text-embedding-3-small",
                 embedding_dim=8,
                 feedback_since=None,
                 platforms=None,
