@@ -32,6 +32,7 @@ from __future__ import annotations
 import copy
 import re
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -88,6 +89,30 @@ _WAREHOUSE_TYPE_ALIASES = {
 SCHEMA_TYPED_ENTITIES = frozenset({"table", "dashboardDataModel"})
 
 _TYPE_HEAD = re.compile(r"^\s*([A-Za-z]+)")
+
+# The units OpenMetadata's contractSLA schema (2.0.2) allows for
+# refreshFrequency and maxLatency. timedelta has no month or year, so those
+# take their longest length: a bound that fires before a calendar-monthly
+# refresh is due would be a false alarm every short month.
+_REFRESH_UNITS = {
+    "hour": timedelta(hours=1),
+    "day": timedelta(days=1),
+    "week": timedelta(weeks=1),
+    "month": timedelta(days=31),
+    "year": timedelta(days=366),
+}
+_LATENCY_UNITS = {
+    "minute": timedelta(minutes=1),
+    "hour": timedelta(hours=1),
+    "day": timedelta(days=1),
+}
+# Each duration field's amount key, units and least amount. The schema only
+# types the amount as an integer: a zero refresh interval would make every
+# check fail, but a zero latency is no grace past the refresh.
+_SLA_DURATION_FIELDS: dict[str, tuple[str, dict[str, timedelta], int]] = {
+    "refreshFrequency": ("interval", _REFRESH_UNITS, 1),
+    "maxLatency": ("value", _LATENCY_UNITS, 0),
+}
 
 
 @dataclass(frozen=True)
@@ -178,8 +203,67 @@ def load_contracts(contracts_dir: Path) -> list[DataContract]:
                 f"column types for {', '.join(sorted(SCHEMA_TYPED_ENTITIES))}. Use semantics rules instead."
             )
             raise ValueError(msg)
-        contracts.append(DataContract(path=path, entity=binding, body=body))
+        contract = DataContract(path=path, entity=binding, body=body)
+        # Parsed here so a malformed SLA fails `ol-dbt validate` in CI rather
+        # than the lakehouse code location that builds freshness checks from it.
+        freshness_bound(contract)
+        contracts.append(contract)
     return contracts
+
+
+def _sla_duration(path: Path, sla: dict[str, Any], field: str) -> timedelta:
+    amount_key, units, minimum = _SLA_DURATION_FIELDS[field]
+    raw = sla[field]
+    amount = raw.get(amount_key) if isinstance(raw, dict) else None
+    if (
+        not isinstance(amount, int)
+        or isinstance(amount, bool)
+        or amount < minimum
+        or not isinstance(raw, dict)
+        or raw.get("unit") not in units
+    ):
+        msg = (
+            f"{path}: `sla.{field}` needs an integer `{amount_key}` of at least {minimum} and a `unit` "
+            f"of {', '.join(units)}, got {raw!r}"
+        )
+        raise ValueError(msg)
+    return amount * units[raw["unit"]]
+
+
+def freshness_bound(contract: DataContract) -> timedelta | None:
+    """How long after its last update the contracted asset counts as stale, from its ``sla``.
+
+    The asset is due once per ``refreshFrequency`` and may land up to
+    ``maxLatency`` after that, so the bound is their sum. OpenMetadata stores
+    the SLA but never evaluates it; the lakehouse code location turns this
+    bound into the asset's Dagster freshness check, which only a ``dbt_model``
+    binding gets.
+
+    :returns: ``None`` for a ``dbt_source`` or ``fqn`` binding, or when the
+        contract sets no ``sla.refreshFrequency``.
+    :rtype: timedelta | None
+    :raises ValueError: when ``sla`` is not a mapping, ``refreshFrequency``
+        or ``maxLatency`` does not match OpenMetadata's contractSLA shape, or a
+        ``dbt_model`` contract sets ``maxLatency`` without ``refreshFrequency``.
+    """
+    sla = contract.body.get("sla")
+    if sla is None:
+        return None
+    if not isinstance(sla, dict):
+        msg = f"{contract.path}: `sla` must be a mapping, got {sla!r}"
+        raise ValueError(msg)
+    refresh = _sla_duration(contract.path, sla, "refreshFrequency") if "refreshFrequency" in sla else None
+    latency = _sla_duration(contract.path, sla, "maxLatency") if "maxLatency" in sla else timedelta()
+    # OpenMetadata accepts either field alone, and only a dbt_model SLA becomes
+    # a Dagster check, so only there is a latency without a refresh an error.
+    if contract.entity.kind != "dbt_model":
+        return None
+    if refresh is None:
+        if "maxLatency" in sla:
+            msg = f"{contract.path}: `sla.maxLatency` is grace on `sla.refreshFrequency`, which is missing"
+            raise ValueError(msg)
+        return None
+    return refresh + latency
 
 
 def manifest_node(binding: EntityBinding, manifest: ManifestRegistry) -> ManifestModel | None:
@@ -196,6 +280,10 @@ def om_fqn(binding: EntityBinding, manifest: ManifestRegistry, service: str) -> 
 
     A dbt binding becomes ``service.database.schema.table`` from the manifest,
     so the manifest must come from the target OpenMetadata catalogs (production).
+    The relation is lowercased because the lake's Glue catalog stores names
+    lowercase and Trino folds identifiers, so OpenMetadata catalogs a model
+    named ``Enrollment_Activity_Counts_Dataset`` as
+    ``enrollment_activity_counts_dataset``, and its name lookup is case-sensitive.
 
     :raises ValueError: when a dbt binding names a node the manifest lacks.
     """
@@ -205,7 +293,8 @@ def om_fqn(binding: EntityBinding, manifest: ManifestRegistry, service: str) -> 
     if node is None:
         msg = f"{binding.kind} {binding.target!r} is not in the manifest"
         raise ValueError(msg)
-    return ".".join((service, node.database, node.schema, node.identifier or node.name))
+    relation = (node.database, node.schema, node.identifier or node.name)
+    return ".".join((service, *(part.lower() for part in relation)))
 
 
 def create_request(contract: DataContract, entity_id: str, owners: list[dict[str, str]] | None) -> dict[str, Any]:

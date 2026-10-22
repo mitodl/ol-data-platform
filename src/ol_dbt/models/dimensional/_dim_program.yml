@@ -24,6 +24,11 @@ models:
     tests:
     - unique
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.program
   - name: source_id
     description: >
       Program ID from the source system. This is used as a join key when linking
@@ -36,6 +41,11 @@ models:
   - name: program_readable_id
     description: Business key - readable program identifier. Null for edX.org programs
       which do not have a consistent program identifier across sources.
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.program
   - name: program_name
     description: Program name
   - name: program_title
@@ -80,6 +90,11 @@ models:
       'micromasters')
     tests:
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.platform
   - name: platform_fk
     description: Foreign key to dim_platform, resolved from the platform string
   - name: first_published_date

@@ -34,10 +34,20 @@ models:
     - unique:
         where: "is_current = true"
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.course
   - name: course_readable_id
     description: Business key - readable course ID (e.g., course-v1:MITx+6.00.1x)
     tests:
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.course
   - name: source_id
     description: >
       Integer source system ID for this course. Null for edxorg courses — edxorg
@@ -62,6 +72,11 @@ models:
     - accepted_values:
         values: ['mitxonline', 'mitxpro', 'edxorg', 'ocw', 'residential', 'bootcamps',
           'emeritus', 'global_alumni']
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.platform
   - name: effective_date
     description: >
       Timestamp (UTC) when this SCD Type 2 version became effective. Populated as

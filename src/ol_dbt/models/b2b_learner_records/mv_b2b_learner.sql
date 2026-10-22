@@ -177,7 +177,8 @@ select
     u.user_pk,
     u.user_global_id,
     u.email,
-    u.full_name,
+    -- dim_user falls back to first + ' ' + last, which reads ' ' when both are empty.
+    nullif(trim(u.full_name), '')                                                       as full_name,
     case
         when m.on_roster = 1 and m.is_enrolled = 1 then 'both'
         when m.on_roster = 1                        then 'roster'
@@ -190,6 +191,8 @@ select
     coalesce(er.courses_passed, 0)                                                      as courses_passed,
     coalesce(er.courses_certified, 0)                                                   as courses_certified,
     coalesce(pc.program_certificates_earned, 0)                                         as program_certificates_earned,
+    coalesce(er.courses_certified, 0)
+        + coalesce(pc.program_certificates_earned, 0)                                   as certificates_earned,
     er.last_active_on,
     coalesce(er.courses_in_progress, 0)                                                 as courses_in_progress,
     c.outcomes_shared,

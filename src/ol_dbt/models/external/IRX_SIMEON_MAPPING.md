@@ -169,7 +169,7 @@ course list, so the same list drives the tabular files and the `courses/` prefix
 Size caution: `legacy_openedx` carries a 32Gi memory limit in ol-infrastructure specifically
 "because of studentmodule loading to memory". `get_dbt_model_as_dataframe` returns a
 `pl.LazyFrame`, so the export asset must `sink_csv` it rather than `.collect().write_csv()` the way
-`b2b_organization/assets/data_export.py` does.
+`dg_projects/delivery/delivery/assets/b2b_organization.py` does.
 
 ### `course_ids.csv`
 `course_id` — single column. No `irx__` equivalent, and there does not need to be one. The legacy

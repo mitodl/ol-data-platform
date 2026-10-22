@@ -18,6 +18,7 @@ again would duplicate every dbt test case.
 """
 
 import logging
+import time
 from collections.abc import Mapping, Sequence
 from http import HTTPStatus
 from typing import Any
@@ -133,7 +134,8 @@ def push_check_evaluations(
     table_fqns: Mapping[AssetKey, str],
     client: OpenMetadataApiClient,
     log: logging.Logger,
-) -> int:
+    deadline: float,
+) -> tuple[int, int]:
     """Write each check evaluation in *records* to OpenMetadata as a test case result.
 
     Evaluations of dbt tests and of assets with no table in *table_fqns* are
@@ -142,52 +144,74 @@ def push_check_evaluations(
     batch is retried. A retry re-posts the results written before the error,
     which OpenMetadata refuses with a 409 and this counts as written.
 
+    OpenMetadata writes are slow (a production tick on 2026-10-20 took 35
+    seconds for 12 results), so a batch can hold more pushable evaluations than
+    fit in a sensor tick. Once ``time.monotonic()``
+    passes *deadline*, no further write is started and the rest of the batch is
+    left for the next tick. The first record is always handled, so every tick
+    makes progress.
+
     :param records: asset check evaluation event log records, oldest first.
-    :returns: how many results were written.
-    :rtype: int
+    :param deadline: a ``time.monotonic()`` value.
+    :returns: how many results were written, and the storage id of the last
+        record handled, which is where the sensor's cursor goes.
+    :rtype: tuple[int, int]
     """
-    evaluations = [
-        (
-            record.event_log_entry,
-            record.event_log_entry.dagster_event.event_specific_data,
-        )
-        for record in records
-    ]
-    pushable = [
-        (entry, evaluation, table_fqns[evaluation.asset_key])
-        for entry, evaluation in evaluations
-        if evaluation.asset_key in table_fqns
-        and not set(evaluation.metadata or {}) >= DBT_PROVENANCE_KEYS
-    ]
-    if not pushable:
-        return 0
+    test_case_fqns: dict[tuple[AssetKey, str], str | None] = {}
+    pushed = 0
+    handled = records[0].storage_id - 1
+    for record in records:
+        evaluation = record.event_log_entry.dagster_event.event_specific_data
+        if evaluation.asset_key not in table_fqns or (
+            set(evaluation.metadata or {}) >= DBT_PROVENANCE_KEYS
+        ):
+            handled = record.storage_id
+            continue
+        # Gated on any record handled, not on a result written: a batch of checks
+        # on tables OpenMetadata lacks writes nothing but still costs two
+        # requests per check.
+        if handled >= records[0].storage_id and time.monotonic() > deadline:
+            break
+        if not test_case_fqns:
+            _ensure_test_definition(client)
+        table_fqn = table_fqns[evaluation.asset_key]
+        key = (evaluation.asset_key, evaluation.check_name)
+        if key not in test_case_fqns:
+            test_case_fqns[key] = _ensure_test_case(client, evaluation, table_fqn, log)
+        if (test_case_fqn := test_case_fqns[key]) is not None:
+            _post_result(
+                client,
+                test_case_fqn,
+                test_case_result_request(
+                    evaluation, int(record.event_log_entry.timestamp * 1000)
+                ),
+            )
+            pushed += 1
+        handled = record.storage_id
+    return pushed, handled
+
+
+def _ensure_test_definition(client: OpenMetadataApiClient) -> None:
     if not _exists(
         client, f"v1/dataQuality/testDefinitions/name/{TEST_DEFINITION_NAME}"
     ):
         client.send("PUT", "v1/dataQuality/testDefinitions", TEST_DEFINITION_REQUEST)
-    test_case_fqns: dict[tuple[AssetKey, str], str | None] = {}
-    pushed = 0
-    for entry, evaluation, table_fqn in pushable:
-        key = (evaluation.asset_key, evaluation.check_name)
-        if key not in test_case_fqns:
-            test_case_fqns[key] = _ensure_test_case(client, evaluation, table_fqn, log)
-        test_case_fqn = test_case_fqns[key]
-        if test_case_fqn is None:
-            continue
-        try:
-            client.send(
-                "POST",
-                "v1/dataQuality/testCases/testCaseResults/"
-                f"{quote(test_case_fqn, safe='')}",
-                test_case_result_request(evaluation, int(entry.timestamp * 1000)),
-            )
-        except httpx.HTTPStatusError as exc:
-            # A result is unique on (test case, timestamp), so a 409 is this
-            # evaluation already written by a tick that failed later in its batch.
-            if exc.response.status_code != HTTPStatus.CONFLICT:
-                raise
-        pushed += 1
-    return pushed
+
+
+def _post_result(
+    client: OpenMetadataApiClient, test_case_fqn: str, result: dict[str, Any]
+) -> None:
+    try:
+        client.send(
+            "POST",
+            f"v1/dataQuality/testCases/testCaseResults/{quote(test_case_fqn, safe='')}",
+            result,
+        )
+    except httpx.HTTPStatusError as exc:
+        # A result is unique on (test case, timestamp), so a 409 is this
+        # evaluation already written by a tick that failed later in its batch.
+        if exc.response.status_code != HTTPStatus.CONFLICT:
+            raise
 
 
 def _exists(client: OpenMetadataApiClient, endpoint: str) -> bool:
