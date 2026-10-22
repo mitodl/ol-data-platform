@@ -619,6 +619,90 @@ models:
   - name: max_weekly_hours
     description: int, most weekly hours; null if the page does not give one.
 
+- name: integrations__learn__program_certificates
+  description: >
+    MicroMasters + MITx Online program certificates exposed for MIT Learn's
+    warehouse-pull ETL, replacing the Hightouch sync into MIT Learn's
+    external.programcertificate table (mitodl/hq#12954). One row per
+    certificate. Sourced from int__micromasters__program_certificates.
+    NOTE: this model does not follow the readable_id/title/etl_source-enum
+    shape from docs/learn_marts_contract.md — that contract targets catalog
+    resources feeding MIT Learn's LearningResource model, whereas this feeds
+    a distinct fact model (profiles.ProgramCertificate) keyed by
+    record_hash.
+  columns:
+  - name: record_hash
+    description: >
+      Hashed certificate identifier from int__micromasters__program_certificates
+      (program_certificate_hashed_id). Primary/upsert key for MIT Learn's
+      profiles.ProgramCertificate.
+    tests: [not_null, unique]
+  - name: program_title
+    description: Program title at the time of certificate issuance.
+  - name: user_full_name
+    description: Certificate recipient's full name.
+  - name: user_email
+    description: >
+      Certificate recipient's email, preferring MicroMasters/MITx Online/
+      edX.org email in that order depending on program type and completion
+      date (see int__micromasters__program_certificates). Empty string, not
+      NULL, when no email could be resolved.
+    tests: [not_null]
+  - name: user_edxorg_id
+    description: Certificate recipient's edX.org user id, when resolvable.
+  - name: user_edxorg_username
+    description: Certificate recipient's edX.org username, when resolvable.
+  - name: user_mitxonline_username
+    description: Certificate recipient's MITx Online username, when resolvable.
+  - name: micromasters_program_id
+    description: MicroMasters program id for the completed program, when applicable.
+  - name: mitxonline_program_id
+    description: >
+      MITx Online program id for the completed program. For an edX.org
+      MicroMasters certificate, the id of the MITx Online program its title
+      maps to in edxorg_to_mitxonline_program_mapping. Null when the title has
+      no mapping; the warning means a new edX.org title needs a seed row.
+    tests:
+    - not_null:
+        config:
+          severity: warn
+  - name: user_first_name
+    description: Certificate recipient's first name.
+  - name: user_last_name
+    description: Certificate recipient's last name.
+  - name: user_gender
+    description: Certificate recipient's self-reported gender, when available.
+  - name: user_year_of_birth
+    description: Certificate recipient's self-reported birth year, when available.
+  - name: user_country
+    description: Certificate recipient's self-reported country, when available.
+  - name: user_address_state_or_territory
+    description: Certificate recipient's self-reported state/territory, when available.
+  - name: user_address_city
+    description: Certificate recipient's self-reported city, when available.
+  - name: user_address_postal_code
+    description: Certificate recipient's self-reported postal code, when available.
+  - name: user_street_address
+    description: Certificate recipient's self-reported street address, when available.
+  - name: program_completion_timestamp
+    description: >
+      When the recipient completed the program's certificate requirements.
+      NULL for "override" certificates (a hardcoded list of recipients
+      granted a certificate outside the normal completion-tracking path,
+      with no completion time to report).
+  - name: last_modified
+    description: >
+      No genuine last-modified signal exists in the source lineage (a
+      certificate is issued once and essentially never revised); reuses
+      program_completion_timestamp as the closest available proxy so MIT
+      Learn's generic incremental-pull machinery (which requires this
+      column on every integrations__learn__* view) still functions.
+      Falls back to current_timestamp for override certificates (see
+      program_completion_timestamp), so that row is simply re-upserted
+      (a no-op) on every incremental run instead of never matching an
+      incremental `since` filter.
+    tests: [not_null]
+
 - name: integrations__learn__mit_edx_courses
   description: >
     MIT edX (MITx on edX.org) courses exposed for MIT Learn's Trino-pull ETL.
@@ -952,3 +1036,40 @@ unit_tests:
     - {readable_id: program-2, has_page: false, published: false, certification: false,
       prices: [0], start_date: "2019-01-01T00:00:00.000", has_catalog_page: false,
       about: null, what_you_learn: null, prerequisites: null, faqs: null}
+- name: test_integrations__learn__program_certificates_maps_edxorg_programs_to_mitxonline
+  description: >
+    A non-DEDP certificate has no MITx Online program id upstream, so it takes
+    the id of the MITx Online program its edX.org title maps to, per SDS track.
+    A DEDP certificate keeps the id it already has, and a title with no mapping
+    stays null.
+  model: integrations__learn__program_certificates
+  given:
+  - input: ref('int__micromasters__program_certificates')
+    rows:
+    - {program_certificate_hashed_id: scm, program_title: Supply Chain Management,
+      micromasters_program_id: 1, mitxonline_program_id: null, program_completion_timestamp: "2020-01-01T00:00:00.000"}
+    - {program_certificate_hashed_id: sds-methods, program_title: Statistics and Data
+        Science (Methods Track), micromasters_program_id: 4, mitxonline_program_id: null,
+      program_completion_timestamp: "2020-01-01T00:00:00.000"}
+    - {program_certificate_hashed_id: dedp, program_title: 'Data, Economics, and Design
+        of Policy: Public Policy', micromasters_program_id: null, mitxonline_program_id: 2,
+      program_completion_timestamp: "2024-01-01T00:00:00.000"}
+    - {program_certificate_hashed_id: unmapped, program_title: Statistics and Data
+        Science, micromasters_program_id: 4, mitxonline_program_id: null, program_completion_timestamp: null}
+  - input: ref('edxorg_to_mitxonline_program_mapping')
+    rows:
+    - {edxorg_program_title: Supply Chain Management, mitxonline_program_readable_id: program-v1:MITxT+SCM}
+    - {edxorg_program_title: Statistics and Data Science (Methods Track), mitxonline_program_readable_id: program-v1:MITxT+SDS-Methods-Track}
+    - {edxorg_program_title: 'Data, Economics, and Design of Policy: Public Policy',
+      mitxonline_program_readable_id: program-v1:MITx+Other}
+  - input: ref('int__mitxonline__programs')
+    rows:
+    - {program_id: 44, program_readable_id: program-v1:MITxT+SCM}
+    - {program_id: 46, program_readable_id: program-v1:MITxT+SDS-Methods-Track}
+    - {program_id: 99, program_readable_id: program-v1:MITx+Other}
+  expect:
+    rows:
+    - {record_hash: scm, mitxonline_program_id: 44}
+    - {record_hash: sds-methods, mitxonline_program_id: 46}
+    - {record_hash: dedp, mitxonline_program_id: 2}
+    - {record_hash: unmapped, mitxonline_program_id: null}

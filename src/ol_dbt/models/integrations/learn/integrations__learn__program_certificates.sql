@@ -31,12 +31,28 @@
   row gets re-upserted (a no-op) on every incremental run rather than
   being incrementally skippable, which is a fine tradeoff for a
   literally-one-row edge case.
+
+  mitxonline_program_id is null upstream for every non-DEDP certificate:
+  int__mitx__programs only links a MicroMasters program to a MITx Online one
+  for DEDP. The edX.org programs have since moved to MITx Online, so the id is
+  filled here from edxorg_to_mitxonline_program_mapping. It is not filled in
+  int__micromasters__program_certificates because that model derives
+  program_readable_id from mitxonline_program_id, and
+  marts__micromasters_program_certificates exposes the result.
 #}
 
 {{ config(meta={'qa_branches': ['micromasters/app_postgres', 'mitxonline/app_postgres', 'mitxonline/mysql']}) }}
 
 with certificates as (
     select * from {{ ref('int__micromasters__program_certificates') }}
+)
+
+, program_mapping as (
+    select * from {{ ref('edxorg_to_mitxonline_program_mapping') }}
+)
+
+, mitxonline_programs as (
+    select * from {{ ref('int__mitxonline__programs') }}
 )
 
 select
@@ -48,7 +64,7 @@ select
     , certificates.user_edxorg_username
     , certificates.user_mitxonline_username
     , certificates.micromasters_program_id
-    , certificates.mitxonline_program_id
+    , coalesce(certificates.mitxonline_program_id, mitxonline_programs.program_id) as mitxonline_program_id
     , certificates.user_first_name
     , certificates.user_last_name
     , certificates.user_gender
@@ -66,4 +82,8 @@ select
         , {{ current_timestamptz() }}
     ) as last_modified
 from certificates
+left join program_mapping
+    on certificates.program_title = program_mapping.edxorg_program_title
+left join mitxonline_programs
+    on program_mapping.mitxonline_program_readable_id = mitxonline_programs.program_readable_id
 where certificates.program_certificate_hashed_id is not null
