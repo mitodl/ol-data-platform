@@ -591,7 +591,9 @@ qa_mirror_schedules = [
 
 # QA only: it describes ol_warehouse_qa_raw, and the QA role is the one already
 # reading those tables (iceberg_raw_orphan_files). Daily, so a load or a
-# hand-run mirror that lands a table is reported within a day.
+# hand-run mirror that lands a table is reported within a day. 05:00 so the
+# monthly mirror refresh (06:00 on the 1st), which drops each table before it
+# recreates it, has most of a day to finish before the next drift run.
 qa_observation_drift_assets = [qa_observation_drift] if DAGSTER_ENV == "qa" else []
 qa_observation_drift_schedules = (
     [
@@ -603,7 +605,7 @@ qa_observation_drift_schedules = (
                     name="qa_observation_drift_daily_job",
                     selection=AssetSelection.assets(qa_observation_drift),
                 ),
-                cron_schedule="0 12 * * *",
+                cron_schedule="0 5 * * *",
                 execution_timezone="UTC",
                 default_status=DefaultScheduleStatus.RUNNING,
             ),
