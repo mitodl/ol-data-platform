@@ -8,7 +8,8 @@ concepts a learner would look up (a dataset, a course-specific exercise), so
 user-facing surfaces can leave them out.
 
 A concept is described again only when its inputs or the prompt or model change;
-rows are added, never replaced, like the extractions.
+rows are added, never replaced, like the extractions. The Dagster asset describes
+only under a prompt version courseware_description_approval approves.
 """
 
 import hashlib
@@ -49,6 +50,11 @@ not the notes. Do not state facts the notes and general knowledge do not support
 
 Call record_descriptions once with one entry per id.
 """
+
+# What courseware_description_approval names to approve this prompt.
+DESCRIPTION_PROMPT_VERSION = hashlib.sha256(DESCRIPTION_PROMPT.encode()).hexdigest()[
+    :12
+]
 
 # Descriptions are short, batched and many; the small model is the default.
 DESCRIPTION_MODEL = "claude-haiku-5-5"
