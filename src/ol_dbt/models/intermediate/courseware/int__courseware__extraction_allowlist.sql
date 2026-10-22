@@ -1,5 +1,5 @@
 -- One row per course run that courseware_extraction_allowlist approves for claim
--- extraction. A run takes its own row, else its course's (through
+-- extraction, with the extractor version it is approved for. A run takes its own row, else its course's (through
 -- dim_course_run.course_fk, so a run with no dim_course course matches only run and
 -- platform rows), else its platform's. A run row approves its run even when
 -- dim_course_run has no current row for it.
@@ -46,6 +46,9 @@ with allowlist as (
             when allowlist.course_readable_id is not null then 'course'
             else 'platform'
         end as allowlist_level
+        , allowlist.extractor_id
+        , allowlist.prompt_version
+        , allowlist.schema_version
         , row_number() over (
             partition by candidate_runs.platform, candidate_runs.courserun_readable_id
             order by
@@ -76,5 +79,8 @@ select
     platform
     , courserun_readable_id
     , allowlist_level
+    , extractor_id
+    , prompt_version
+    , schema_version
 from matches
 where match_rank = 1

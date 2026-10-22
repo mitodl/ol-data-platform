@@ -37,6 +37,12 @@
 -- contributing_learners counts every learner behind the row (active, enrolling
 -- or certified in the month) and is the cohort the API gates the whole row on.
 --
+-- certified_learners is the old name for newly_certified_learners, kept until
+-- ol-analytics-api and mit-learn read the new one. mv_b2b_mit_admin_contract_health,
+-- mv_b2b_enrollment_completion_funnel and mv_b2b_contract_utilization publish
+-- certified_learners as the learners holding an unrevoked certificate for a run,
+-- which is not this view's count of learners certified in the month.
+--
 -- A learner is counted under the contract they enrolled in the course run
 -- under, so a learner active under two contracts contributes to both rows --
 -- the contract rows therefore do not partition the org's learner count, and
@@ -62,6 +68,7 @@ select
     count(distinct case when lm.new_enrollments > 0 then lm.user_fk end)      as enrolling_learners,
     sum(lm.certificates_earned)                                               as certificates_earned,
     count(distinct case when lm.certificates_earned > 0 then lm.user_fk end)  as certified_learners,
+    count(distinct case when lm.certificates_earned > 0 then lm.user_fk end)  as newly_certified_learners,
     sum(lm.videos_played)                                                     as total_videos_watched,
     count(distinct case when lm.videos_played > 0 then lm.user_fk end)        as video_watchers,
     sum(lm.problems_attempted)                                                as total_problems_attempted,

@@ -1,0 +1,32 @@
+---
+metric:
+  name: learner_completion_status
+  displayName: Course completion status
+  description: >-
+    Where a learner stands in a course run, one of certified, passed, in_progress
+    or not_started. certified when the learner holds an unrevoked course
+    certificate for the run, whether or not the grade is passing; else passed
+    when the grade is passing; else in_progress when the grade is above zero or
+    the learner has tracked activity in the run; else not_started.
+
+    One rule for every platform, with inputs that differ by platform:
+    residential has grades and activity but no certificates (never certified);
+    bootcamps has certificates but no grades or activity (only certified and
+    not_started); emeritus and global_alumni have enrollments only (not_started
+    unless the learner has xPRO data for the same run); edX.org certificates
+    are never marked revoked. The population is course enrollments with a
+    learner and a course run.
+  metricType: OTHER
+  owners: [{type: team, name: data-platform}]
+  metricExpression:
+    language: SQL
+    code: >-
+      case when is_certified then 'certified' when is_passing then 'passed'
+      when grade_value > 0 or last_active_on is not null then 'in_progress'
+      else 'not_started' end
+status: Draft
+implemented_by:
+- dbt_model: afact_learner_courserun_progress
+  columns: [completion_status, is_in_progress, is_not_started]
+- dbt_model: mv_b2b_learner_enrollment
+  columns: [completion_status, is_in_progress, is_not_started]
