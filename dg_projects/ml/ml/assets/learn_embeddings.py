@@ -468,14 +468,17 @@ def topic_embedding_vectors(
     """Embed the topic chunks, reusing every stored vector of the model."""
     chunks = require_table(LAYER, TOPIC_CHUNKS_KEY.path[-1]).collect()
     vectors = read_table(LAYER, TOPIC_VECTORS_KEY.path[-1])
+    # The table is one row per topic and strategy, so it is read once and the
+    # stored-vector lookups search it in memory.
+    stored = vectors.collect() if vectors is not None else None
     rows, metadata, failures = embed_vectors(
         context,
         config,
         embeddings,
         doc_kind=TOPIC_DOC_KIND,
         chunks=chunks,
-        vectors=vectors,
-        stored=vectors.collect() if vectors is not None else None,
+        vectors=stored.lazy() if stored is not None else None,
+        stored=stored,
     )
     yield Output(rows, metadata=metadata)
     _fail_on_request_failures(failures)

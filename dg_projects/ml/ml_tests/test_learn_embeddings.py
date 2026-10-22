@@ -335,17 +335,26 @@ def test_topic_point_id_is_the_topic_uuid(tables):
         ]
     )
 
-    result = materialize(
-        [topic_embedding_chunks, topic_embedding_vectors],
-        resources={"io_manager": Warehouse(tables), "embeddings": fake_embeddings()},
-    )
+    def build():
+        return materialize(
+            [topic_embedding_chunks, topic_embedding_vectors],
+            resources={
+                "io_manager": Warehouse(tables),
+                "embeddings": fake_embeddings(),
+            },
+        )
 
-    assert result.success
+    assert build().success
     chunk = tables[TOPIC_CHUNKS_KEY.path[-1]].row(0, named=True)
     assert (chunk["point_id"], chunk["chunk_text"]) == (TOPIC_UUID, "Calculus")
     vectors = tables[TOPIC_VECTORS_KEY.path[-1]]
     assert vectors["strategy_id"].to_list() == ["learn_v1_topics"]
     assert CALLS == [["Calculus"]]
+
+    CALLS.clear()
+    assert build().success
+    assert CALLS == []
+    assert tables[TOPIC_VECTORS_KEY.path[-1]].equals(vectors)
 
 
 # ----------------------------------------------------------------------- vectors
