@@ -2,23 +2,29 @@
 version: 2
 
 sources:
-# Written by the courseware claim extractor (dg_projects/ml, ml.lib.courseware) into
-# the intermediate schema, the same way the feedback assets write theirs. Rows are
-# never updated: a new prompt, schema, model or input text adds rows under a new
-# extraction_key.
+# Written by the courseware assets in dg_projects/ml (ml.assets.courseware_*) into
+# the intermediate schema through the Iceberg IO manager, the same way the feedback
+# assets write theirs; database/schema resolve to what ml.lib.courseware.warehouse
+# writes. dev_local reads them as the glue__ views `ol-dbt local register` creates.
+# Rows are never updated: a new prompt, schema, model or input text adds rows under
+# a new extraction_key.
 - name: courseware_intermediate
   loader: dagster
   database: '{{ target.database | default(none) }}'
   schema: '{{ target.schema }}_intermediate'
   tables:
   - name: courseware_claim_extraction
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_claim_extraction]
     description: One row per model call, i.e. one scope part of a course run read
       by one extractor version and model.
     columns:
     - name: extraction_key
       description: str, sha256 of the extractor version (extractor, prompt and schema
-        versions, model, effort) and the scope's own input (run, scope, title, part
-        and input_text_checksum); not of the course header
+        versions, model, effort) and the scope part's own input (run, scope, title,
+        part and input_text_checksum); not of the course header
       tests:
       - unique
       - not_null
@@ -51,10 +57,12 @@ sources:
       description: int, how many parts the scope was split into
     - name: input_text_checksum
       description: str, sha256 of the source text the call read
+    - name: scope_part_checksums
+      description: str, every part's input_text_checksum, in order and comma-separated,
+        as the run that made this call split the scope
     - name: header_version
       description: str, hash of the course header the call read (title, outline, description);
-        null for extractions recorded before it was. A 'reused' row has its original's,
-        the header its claims were made under
+        null for extractions recorded before it was
     - name: source_count
       description: int, number of sources the call read
     - name: truncated_source_count
@@ -66,9 +74,7 @@ sources:
     - name: notes_json
       description: str, JSON list of the model's notes plus truncation notes
     - name: stop_reason
-      description: str, the response's stop_reason, or 'reused' when the rows were
-        copied from an extraction of the same text (content_key) with no model call
-        and zero tokens
+      description: str, the response's stop_reason
     - name: input_tokens
       description: int, uncached input tokens billed
     - name: output_tokens
@@ -80,9 +86,13 @@ sources:
     - name: extracted_at
       description: timestamp, when the call returned
   - name: courseware_scope_input
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_scope_input]
     description: One row per scope part each time the extractor reads a course run,
       extracted or skipped, with the input it computed. int__courseware__extractions
-      matches extractions to a run's latest rows to pick the current one.
+      matches a scope's readings to the run's latest read to pick the current one.
     columns:
     - name: platform
       description: str, mitxonline, mitxpro or residential
@@ -107,6 +117,10 @@ sources:
         arguments:
           column_list: [platform, courserun_readable_id, scope_id, scope_part, observed_at]
   - name: courseware_claim
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_claim]
     description: One row per claim in an extraction, as the model returned it.
     columns:
     - name: extraction_key
@@ -115,6 +129,10 @@ sources:
       - not_null
     - name: claim_ordinal
       description: int, the claim's position in the extraction, from 1
+    - name: platform
+      description: str, the extraction's platform; the table is partitioned by it
+    - name: courserun_readable_id
+      description: str, the extraction's course run; the table is partitioned by it
     - name: claim_kind
       description: str, concept, skill, assumed_knowledge, assessment_expectation,
         learning_outcome, declared_prerequisite or audience
@@ -145,6 +163,10 @@ sources:
     - dbt_expectations.expect_compound_columns_to_be_unique:
         column_list: [extraction_key, claim_ordinal]
   - name: courseware_claim_evidence
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_claim_evidence]
     description: One row per evidence passage, verified against the source text the
       call read (int__courseware__extraction_sources.source_text).
     columns:
@@ -154,6 +176,10 @@ sources:
       - not_null
     - name: claim_ordinal
       description: int, the claim within the extraction
+    - name: platform
+      description: str, the extraction's platform; the table is partitioned by it
+    - name: courserun_readable_id
+      description: str, the extraction's course run; the table is partitioned by it
     - name: evidence_ordinal
       description: int, the passage's position within the claim, from 1
     - name: source_id
@@ -166,9 +192,9 @@ sources:
     - name: verification_status
       description: str, exact, fuzzy, unverified or unknown_source
     - name: char_start
-      description: int, offset of an exact match in the source text
+      description: int, offset of an exact or fuzzy match in the source text
     - name: char_end
-      description: int, end offset of an exact match in the source text
+      description: int, end offset of an exact or fuzzy match in the source text
   # Concept identity (ml.lib.courseware.resolve). Registry, assignment and relation
   # rows are full snapshots per resolution run; the newest run in
   # courseware_resolution_run is current, and earlier runs are history.
@@ -333,3 +359,35 @@ sources:
       description: str, the model that wrote the description
     - name: described_at
       description: timestamp, when the description was written
+  - name: courseware_answer_check
+    description: A small model's verdict on whether an extraction source reads as
+      an answer key or worked solutions (ml.lib.courseware.answer_check), one row
+      per source per check version and source text. A copy of a text already checked
+      reuses its verdict.
+    columns:
+    - name: platform
+      description: str, mitxonline, mitxpro, residential or ocw
+    - name: courserun_readable_id
+      description: str, the run the source belongs to
+    - name: source_ref
+      description: str, the source's ref in int__courseware__extraction_sources
+    - name: source_kind
+      description: str, the source's kind, e.g. document
+    - name: source_title
+      description: str, the source's title as the model saw it
+    - name: source_checksum
+      description: str, sha256 of the source text
+    - name: is_answer_document
+      description: boolean, true when the model read the source as mainly answers
+        to graded work
+    - name: reason
+      description: str, the model's reason, at most 20 words
+    - name: checker_id
+      description: str, the checker, e.g. courseware_answer_check_v1
+    - name: check_version
+      description: str, hash of the checker, prompt, excerpt size, model and effort
+    - name: model_id
+      description: str, the model that gave the verdict
+    - name: checked_at
+      description: timestamp, when the verdict was recorded for this source; a copy
+        that reuses a verdict gets the time it was recorded, not the time of the call

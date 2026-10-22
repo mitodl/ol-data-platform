@@ -213,15 +213,23 @@ seeds:
     description: str, the currency's name
 - name: courseware_extraction_allowlist
   description: >
-    The course runs whose courseware is assembled for claim extraction. A run takes
-    its own row, else its course's row, else its platform's row (course_readable_id
-    and courserun_readable_id both empty), and a run matching no row is left out of
-    int__courseware__extraction_sources. Approve a run by editing this file.
+    The course runs whose courseware is assembled for claim extraction, and the
+    extractor version each is approved for. A run takes its own row, else its
+    course's row, else its platform's row (course_readable_id and
+    courserun_readable_id both empty), and a run matching no row is left out of
+    int__courseware__extraction_sources and never extracted. The courseware
+    extraction sensor observes a run only while its approved version is the one the
+    deployed extractor runs, so a prompt or schema change extracts nothing until the
+    rows here name the new version. Approve a run, or a new version, by editing this
+    file. The version values are the ones dim_courseware_extraction shows.
   config:
     column_types:
       platform: varchar
       course_readable_id: varchar
       courserun_readable_id: varchar
+      extractor_id: varchar
+      prompt_version: varchar
+      schema_version: varchar
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -246,66 +254,21 @@ seeds:
       it (e.g. course-v1:UAI_SOURCE+UAI.4); empty for a run or platform row
   - name: courserun_readable_id
     description: str, the run this row approves; empty for a course or platform row
-
-- name: courseware_extraction_promotions
-  description: >
-    The courseware claim extractor version whose claims are current, per platform
-    with an optional per-run override. A run reads the row for its own
-    courserun_readable_id, else its platform's row (courserun_readable_id empty).
-    Every other extraction stays queryable but out of the rollups, so a trial run
-    or a second model's comparison run never becomes current by running last. The
-    version values are the ones dim_courseware_extraction shows. Promote by editing
-    this file.
-  config:
-    column_types:
-      platform: varchar
-      courserun_readable_id: varchar
-      extractor_id: varchar
-      prompt_version: varchar
-      schema_version: varchar
-      model_id: varchar
-      effort: varchar
-  tests:
-  - dbt_utils.unique_combination_of_columns:
-      arguments:
-        combination_of_columns:
-        - platform
-        - courserun_readable_id
-  columns:
-  - name: platform
-    description: str, mitxonline, mitxpro or residential
-    tests:
-    - not_null
-  - name: courserun_readable_id
-    description: str, the run this row overrides the platform's version for; empty
-      for the platform's version
-    tests:
-    # A mistyped run id would otherwise fall back to the platform's version unseen.
-    # Empty (platform) rows are skipped: relationships ignores null child values.
-    - relationships:
-        arguments:
-          to: ref('dim_course_run')
-          field: courserun_readable_id
-        config:
-          # The project only errors above 10 failing rows; this seed has a handful.
-          error_if: '!=0'
   - name: extractor_id
-    description: str, the promoted extractor, e.g. courseware_claims_v1
+    description: str, the extractor version's id, e.g. courseware_claims_v1
     tests:
-    - not_null
+    - not_null:
+        config:
+          error_if: ">0"
   - name: prompt_version
-    description: str, the promoted hash of the system prompt
+    description: str, the first 12 hex digits of the system prompt's sha256
     tests:
-    - not_null
+    - not_null:
+        config:
+          error_if: ">0"
   - name: schema_version
-    description: str, the promoted hash of the output JSON schema
+    description: str, the first 12 hex digits of the output schema's sha256
     tests:
-    - not_null
-  - name: model_id
-    description: str, the promoted model id as sent to the provider
-    tests:
-    - not_null
-  - name: effort
-    description: str, the promoted output_config.effort
-    tests:
-    - not_null
+    - not_null:
+        config:
+          error_if: ">0"

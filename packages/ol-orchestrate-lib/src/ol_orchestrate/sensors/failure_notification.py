@@ -76,11 +76,18 @@ SLACK_CHANNEL_BY_ENV = {
 }
 slack_channel = SLACK_CHANNEL_BY_ENV[DAGSTER_ENV]
 
-# Bounds a single tick's Slack payload and its event-log scan. A backlog larger
-# than this is drained over subsequent ticks via the cursor. Capped at 49, not
-# 50: asset_check_failure_message adds one header block on top of one detail
-# block per failure, and Slack rejects a chat.postMessage over 50 blocks.
-MAX_CHECK_EVALUATIONS_PER_TICK = 49
+# How many check evaluation events one tick of a check sensor reads. A backlog
+# larger than this drains over later ticks via the cursor. Almost every
+# evaluation is a dbt test (dagster-dbt makes each one an asset check), and at
+# the earlier 49 per 5-minute tick (14,112 a day) the sensors fell behind for
+# good: on 2026-10-20 the OpenMetadata push was writing evaluations from 46
+# hours earlier.
+CHECK_EVALUATIONS_PER_TICK = 500
+
+# Capped at 49, not 50: asset_check_failure_message adds one header block on
+# top of one detail block per failure, and Slack rejects a chat.postMessage over
+# 50 blocks.
+MAX_FAILURES_PER_MESSAGE = 49
 
 # Metadata dagster-dbt stamps on every check evaluation it builds from a dbt
 # result. Matched as a set: any one of these keys can occur on a hand-written
@@ -769,7 +776,7 @@ def is_inventory_check_outside_its_job(
 # Bounds on the substance appended to each failure's detail block. Kept small
 # on purpose: this appends to the block's existing text rather than adding a
 # block per failure, which is what keeps the 1-header-plus-1-block-per-failure
-# arithmetic behind MAX_CHECK_EVALUATIONS_PER_TICK intact.
+# arithmetic behind MAX_FAILURES_PER_MESSAGE intact.
 MAX_METADATA_ENTRIES_PER_FAILURE = 3
 MAX_METADATA_VALUE_LENGTH = 200
 MAX_DESCRIPTION_LENGTH = 300
@@ -883,7 +890,7 @@ def check_evaluation_records(instance: Any, cursor: int | None) -> Sequence[Any]
     ``ascending=True`` is load-bearing. The storage layer applies the LIMIT
     after ordering, so descending order returns the *newest* batch above the
     cursor; advancing the cursor past it would permanently skip any older
-    backlog beyond MAX_CHECK_EVALUATIONS_PER_TICK. Ascending returns the oldest
+    backlog beyond CHECK_EVALUATIONS_PER_TICK. Ascending returns the oldest
     events above the cursor, so a backlog drains in order, one batch per tick,
     with no gaps and no repeats.
     """
@@ -892,7 +899,7 @@ def check_evaluation_records(instance: Any, cursor: int | None) -> Sequence[Any]
             event_type=DagsterEventType.ASSET_CHECK_EVALUATION,
             after_cursor=cursor,
         ),
-        limit=MAX_CHECK_EVALUATIONS_PER_TICK,
+        limit=CHECK_EVALUATIONS_PER_TICK,
         ascending=True,
     )
 
@@ -908,32 +915,36 @@ def collect_new_check_failures(
     ``AssetCheckEvaluation`` itself carries none -- it is only on the
     surrounding event log record -- and the Slack message needs it to link
     back to the run that raised the failure.
+
+    At most MAX_FAILURES_PER_MESSAGE failures are returned, so a tick posts one
+    Slack message. The cursor then stops at the last of them and the rest of
+    the batch is read again next tick. Splitting a tick's failures over several
+    messages would not be safe: a failed post fails the tick, the cursor is not
+    saved, and the next tick would repost the messages that did go out.
     """
     records = check_evaluation_records(instance, cursor)
     if not records:
         return [], None
 
-    evaluations = [
-        (
-            record.event_log_entry.run_id,
-            record.event_log_entry.dagster_event.event_specific_data,
-        )
-        for record in records
-    ]
     # WARN-severity checks are advisory; only ERROR is worth a notification. dbt
     # tests are dropped because their run failure already reports them in full,
     # and the failed-partition inventory is announced only from its own job.
     job_names: dict[str, str | None] = {}
-    failures = [
-        (run_id, evaluation)
-        for run_id, evaluation in evaluations
-        if not evaluation.passed
-        and evaluation.severity == AssetCheckSeverity.ERROR
-        and not is_reported_by_the_run_failure_sensor(evaluation)
-        and not is_inventory_check_outside_its_job(
-            instance, run_id, evaluation, job_names
-        )
-    ]
+    failures = []
+    for record in records:
+        run_id = record.event_log_entry.run_id
+        evaluation = record.event_log_entry.dagster_event.event_specific_data
+        if (
+            not evaluation.passed
+            and evaluation.severity == AssetCheckSeverity.ERROR
+            and not is_reported_by_the_run_failure_sensor(evaluation)
+            and not is_inventory_check_outside_its_job(
+                instance, run_id, evaluation, job_names
+            )
+        ):
+            failures.append((run_id, evaluation))
+            if len(failures) == MAX_FAILURES_PER_MESSAGE:
+                return failures, str(record.storage_id)
     # The newest record of an ascending batch: nothing older is left behind,
     # nothing newer is re-delivered.
     return failures, str(records[-1].storage_id)

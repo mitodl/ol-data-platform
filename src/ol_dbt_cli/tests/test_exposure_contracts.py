@@ -175,3 +175,71 @@ def test_export_from_a_path_that_is_not_a_dbt_project_leaves_the_files_alone(tmp
     with pytest.raises(FileNotFoundError, match="is not a dbt project"):
         write_exposure_contracts(tmp_path / "src" / "ol_db", exposures_dir)
     assert (exposures_dir / "api_dashboard.json").read_text() == before
+
+
+def _set_meta(dbt_dir: Path, model: int, column: int, meta: dict[str, Any], *, column_level: bool = False) -> None:
+    models_file = dbt_dir / "models" / "_models.yml"
+    models = yaml.safe_load(models_file.read_text())
+    entry = models["models"][model]["columns"][column]
+    parent = entry if column_level else entry.setdefault("config", {})
+    parent.setdefault("meta", {}).update(meta)
+    models_file.write_text(yaml.safe_dump(models))
+
+
+def test_an_api_description_is_exported_after_the_cohort(tmp_path: Path) -> None:
+    dbt_dir = _project(tmp_path)
+    _set_meta(dbt_dir, 0, 1, {"api_description": "Learners enrolled in the course."})
+
+    text = render_exposure_contracts(dbt_dir).files["api_dashboard"]
+    assert (
+        '        {"name": "enrolled_learners", "cohort": {"role": "primary"}, '
+        '"api_description": "Learners enrolled in the course."}'
+    ) in text.splitlines()
+    assert '        {"name": "organization_key", "cohort": {"role": "dimension"}},' in text.splitlines()
+
+
+def test_an_api_description_under_the_older_column_meta_is_exported(tmp_path: Path) -> None:
+    dbt_dir = _project(tmp_path)
+    _set_meta(dbt_dir, 1, 0, {"api_description": "The learner's ID."}, column_level=True)
+
+    document = json.loads(render_exposure_contracts(dbt_dir).files["api_dashboard"])
+    assert document["models"]["mv_learner"]["columns"][0] == {"name": "user_id", "api_description": "The learner's ID."}
+
+
+def test_a_changed_api_description_makes_the_file_stale(tmp_path: Path) -> None:
+    dbt_dir = _project(tmp_path)
+    _set_meta(dbt_dir, 0, 1, {"api_description": "Learners enrolled in the course."})
+    exposures_dir = tmp_path / "exposures"
+    write_exposure_contracts(dbt_dir, exposures_dir)
+    _set_meta(dbt_dir, 0, 1, {"api_description": "Learners enrolled in the course run."})
+
+    assert _check(dbt_dir, exposures_dir) == [("api_dashboard", "api_dashboard.json does not match the model YAML")]
+
+
+@pytest.mark.parametrize("value", [None, "", "Ends in a newline.\n", " Leading space.", 3, ["a list"]])
+def test_an_api_description_no_field_could_match_is_a_problem(tmp_path: Path, value: object) -> None:
+    # None is also what a bare ``api_description:`` key loads as.
+    dbt_dir = _project(tmp_path)
+    _set_meta(dbt_dir, 1, 1, {"api_description": value})
+
+    assert render_exposure_contracts(dbt_dir).problems == {
+        "api_dashboard": [
+            "mv_learner.email has a config.meta.api_description that is not a non-empty string without "
+            "surrounding whitespace (write a folded block as >-, not >)"
+        ]
+    }
+
+
+def test_an_invalid_api_description_and_cohort_on_one_model_are_both_reported(tmp_path: Path) -> None:
+    dbt_dir = _project(tmp_path)
+    models_file = dbt_dir / "models" / "_models.yml"
+    models_file.write_text(models_file.read_text().replace("role: dimension", "role: headline"))
+    _set_meta(dbt_dir, 0, 1, {"api_description": ""})
+
+    assert render_exposure_contracts(dbt_dir).problems == {
+        "api_dashboard": [
+            "mv_trend.enrolled_learners has a config.meta.api_description that is not a non-empty string "
+            "without surrounding whitespace (write a folded block as >-, not >)",
+            "mv_trend has an invalid config.meta.cohort; see the cohort_policy check",
+        ]
+    }

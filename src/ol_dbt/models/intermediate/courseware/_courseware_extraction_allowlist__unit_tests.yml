@@ -24,16 +24,49 @@ unit_tests:
     - {course_pk: d, course_readable_id: "course-v1:xPRO+D"}
   - input: ref('courseware_extraction_allowlist')
     rows:
-    - {platform: mitxonline, course_readable_id: null, courserun_readable_id: null}
-    - {platform: mitxonline, course_readable_id: "course-v1:X+A", courserun_readable_id: null}
-    - {platform: mitxonline, course_readable_id: null, courserun_readable_id: "course-v1:X+A+1T"}
-    - {platform: residential, course_readable_id: null, courserun_readable_id: "course-v1:MITx+R+1T"}
+    - {platform: mitxonline, course_readable_id: null, courserun_readable_id: null,
+      extractor_id: v1, prompt_version: by_platform, schema_version: s}
+    - {platform: mitxonline, course_readable_id: "course-v1:X+A", courserun_readable_id: null,
+      extractor_id: v1, prompt_version: by_course, schema_version: s}
+    - {platform: mitxonline, course_readable_id: null, courserun_readable_id: "course-v1:X+A+1T",
+      extractor_id: v1, prompt_version: by_run, schema_version: s}
+    - {platform: residential, course_readable_id: null, courserun_readable_id: "course-v1:MITx+R+1T",
+      extractor_id: v1, prompt_version: by_run, schema_version: s}
   expect:
     rows:
-    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", allowlist_level: courserun}
-    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+2T", allowlist_level: course}
-    - {platform: mitxonline, courserun_readable_id: "course-v1:X+C+1T", allowlist_level: platform}
-    - {platform: residential, courserun_readable_id: "course-v1:MITx+R+1T", allowlist_level: courserun}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", allowlist_level: courserun,
+      prompt_version: by_run}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+2T", allowlist_level: course,
+      prompt_version: by_course}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+C+1T", allowlist_level: platform,
+      prompt_version: by_platform}
+    - {platform: residential, courserun_readable_id: "course-v1:MITx+R+1T", allowlist_level: courserun,
+      prompt_version: by_run}
+
+- name: test_int__courseware__extraction_source_checksums_takes_the_approved_version
+  description: >
+    A run takes the version int__courseware__extraction_allowlist approves it for.
+    A
+    run in the sources that the allowlist does not approve (one a local var selected)
+    is left out, so the extraction sensor never registers or observes it.
+  model: int__courseware__extraction_source_checksums
+  given:
+  - input: ref('int__courseware__extraction_sources')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", scope_id: s,
+      scope_kind: unit, scope_position: 1, source_position: 1, source_ref: r, source_text: t}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", scope_id: s,
+      scope_kind: unit, scope_position: 1, source_position: 2, source_ref: r2, source_text: u}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+B+1T", scope_id: s,
+      scope_kind: unit, scope_position: 1, source_position: 1, source_ref: r, source_text: t}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", allowlist_level: courserun,
+      extractor_id: v1, prompt_version: p1, schema_version: s1}
+  expect:
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", source_count: 2,
+      extractor_id: v1, prompt_version: p1, schema_version: s1}
 
 - name: test_int__courseware__extraction_sources_reads_only_allowlisted_runs
   description: >
@@ -57,6 +90,12 @@ unit_tests:
     - {content_file_source_system: mitxonline, courserun_readable_id: r2, content_file_extraction_status: extracted,
       content_file_path: static/reading2.pdf, content_file_extension: .pdf, content_file_text: Reading
         two.}
+  - input: ref('int__ocw__live_courses')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows: []
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
   - input: ref('int__courseware__extraction_allowlist')
     rows:
     - {platform: mitxonline, courserun_readable_id: r1, allowlist_level: courserun}
@@ -91,6 +130,12 @@ unit_tests:
     - {content_file_source_system: mitxonline, courserun_readable_id: r2, content_file_extraction_status: extracted,
       content_file_path: static/reading2.pdf, content_file_extension: .pdf, content_file_text: Reading
         two.}
+  - input: ref('int__ocw__live_courses')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows: []
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
   - input: ref('int__courseware__extraction_allowlist')
     rows:
     - {platform: mitxonline, courserun_readable_id: r1, allowlist_level: courserun}

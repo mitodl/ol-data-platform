@@ -9,7 +9,8 @@ metadata to MIT Learn over the webhook API. Sources currently delivered:
 - MIT edX programs
 
 It also pushes the instructor onboarding user list, read from the warehouse, to
-the access-forge GitHub repository.
+the access-forge GitHub repository, and each B2B organization's administration
+report to the B2B partners bucket.
 
 The extraction halves of these pipelines (sloan_course_metadata, video_api,
 video_metadata) still live here and move on to INGEST later.
@@ -28,7 +29,10 @@ from dagster import (
 from dagster_aws.s3 import S3Resource
 from ol_orchestrate.io_managers.filepath import S3FileObjectIOManager
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.lib.dagster_helpers import default_io_manager
+from ol_orchestrate.lib.dagster_helpers import (
+    default_file_object_io_manager,
+    default_io_manager,
+)
 from ol_orchestrate.lib.failures import with_failure_hooks
 from ol_orchestrate.lib.sentry import init_sentry
 from ol_orchestrate.lib.utils import (
@@ -41,6 +45,7 @@ from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.oauth import OAuthApiClientFactory
 from ol_orchestrate.sensors.failure_notification import FAILURE_NOTIFICATION_SENSORS
 
+from delivery.assets.b2b_organization import export_b2b_organization_data
 from delivery.assets.instructor_onboarding import (
     generate_instructor_onboarding_user_list,
     update_access_forge_repo,
@@ -61,6 +66,7 @@ from delivery.lib.scheduled_automation import (
     deliver_after_upstream,
     instigators_for_environment,
 )
+from delivery.sensors.b2b_organization import b2b_organization_list_sensor
 from delivery.sensors.ovs_videos import (
     ovs_videos_delete_job,
     ovs_videos_delete_partition_cleanup_sensor,
@@ -69,6 +75,15 @@ from delivery.sensors.ovs_videos import (
 )
 
 init_sentry("delivery")
+
+# Partners read their exports from this bucket over S3 or SFTP (ol-infrastructure
+# applications/b2b_partners_storage), one prefix per organization key.
+b2b_partners_bucket_map = {
+    "dev": {"bucket": "ol-devops-sandbox", "prefix": "pipeline-storage"},
+    "ci": {"bucket": "ol-b2b-partners-storage-ci", "prefix": ""},
+    "qa": {"bucket": "ol-b2b-partners-storage-qa", "prefix": ""},
+    "production": {"bucket": "ol-b2b-partners-storage-production", "prefix": ""},
+}
 
 # Initialize vault with resilient loading
 try:
@@ -141,6 +156,12 @@ instructor_onboarding_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.RUNNING,
 )
 
+# Launched by b2b_organization_list_sensor, one run per organization partition
+b2b_organization_data_export_job = define_asset_job(
+    name="b2b_organization_data_export_job",
+    selection=[export_b2b_organization_data],
+)
+
 # OVS videos jobs for manual triggering
 ovs_videos_api_job = define_asset_job(
     name="ovs_videos_api_job",
@@ -179,6 +200,11 @@ defs = Definitions(
             bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
             path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
         ),
+        "b2b_partners_io_manager": default_file_object_io_manager(
+            dagster_env=DAGSTER_ENV,
+            bucket=b2b_partners_bucket_map[DAGSTER_ENV]["bucket"],
+            path_prefix=b2b_partners_bucket_map[DAGSTER_ENV]["prefix"],
+        ),
         "vault": vault,
         "s3": S3Resource(),
         "sloan_api": OAuthApiClientFactory(deployment="sloan", vault=vault),
@@ -209,6 +235,8 @@ defs = Definitions(
             # Warehouse data pushed to the access-forge repository
             generate_instructor_onboarding_user_list,
             update_access_forge_repo,
+            # Warehouse data pushed to the B2B partners bucket
+            export_b2b_organization_data,
         ]
     ),
     # Registration, not default_status, is what keeps these out of the
@@ -230,10 +258,12 @@ defs = Definitions(
             mitpe_delivery_sensor,
             oll_delivery_sensor,
             mit_edx_programs_delivery_sensor,
+            b2b_organization_list_sensor,
             *FAILURE_NOTIFICATION_SENSORS,
         ]
     ),
     jobs=[
+        b2b_organization_data_export_job,
         ovs_videos_api_job,
         ovs_videos_webhook_job,
         ovs_videos_delete_job,
