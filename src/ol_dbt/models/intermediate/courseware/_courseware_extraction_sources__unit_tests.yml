@@ -8,7 +8,9 @@ unit_tests:
     units left are renumbered. As there, a staff-only sequential or chapter, or a
     sequential hidden from the table of contents, is neither a unit nor context and
     does not count toward its chapter's size. About pages other than the description
-    pages are prefixed with their field's name.
+    pages are prefixed with their field's name. A document a context sequential links
+    is read in context after the linking block, and one linked only from a staff-only
+    sequential stays in materials.
   model: int__courseware__extraction_sources
   given:
   - input: ref('dim_course_content')
@@ -127,7 +129,7 @@ unit_tests:
     rows:
     - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
       content_file_path: html/h_goals.html, content_file_extension: .html, content_file_text: "h_goals\
-        \ body", content_file_extraction_status: extracted}
+        \ body", content_file_extraction_status: extracted, content_file_static_references: '["static/goals.pdf"]'}
     - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
       content_file_path: html/h_l1.html, content_file_extension: .html, content_file_text: "h_l1\
         \ body", content_file_extraction_status: extracted}
@@ -145,7 +147,13 @@ unit_tests:
         \ body", content_file_extraction_status: extracted}
     - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
       content_file_path: html/h_staff.html, content_file_extension: .html, content_file_text: "h_staff\
-        \ body", content_file_extraction_status: extracted}
+        \ body", content_file_extraction_status: extracted, content_file_static_references: '["static/staff.pdf"]'}
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: static/goals.pdf, content_file_extension: .pdf, content_file_text: goals
+        pdf, content_file_extraction_status: extracted}
+    - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      content_file_path: static/staff.pdf, content_file_extension: .pdf, content_file_text: staff
+        pdf, content_file_extraction_status: extracted}
     - {content_file_source_system: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
       content_file_path: html/h_bonus.html, content_file_extension: .html, content_file_text: "h_bonus\
         \ body", content_file_extraction_status: extracted}
@@ -174,11 +182,16 @@ unit_tests:
       source_position: 3, source_ref: "block-v1:X+Y+1T2026+type@html+block@h_goals",
       source_text: "h_goals body"}
     - {scope_id: "context", scope_kind: context, scope_title: Course context, scope_position: 0,
-      source_position: 4, source_ref: "block-v1:X+Y+1T2026+type@html+block@h_summary",
+      source_position: 4, source_ref: static/goals.pdf, source_text: goals pdf}
+    - {scope_id: "context", scope_kind: context, scope_title: Course context, scope_position: 0,
+      source_position: 5, source_ref: "block-v1:X+Y+1T2026+type@html+block@h_summary",
       source_text: "h_summary body"}
     - {scope_id: "context", scope_kind: context, scope_title: Course context, scope_position: 0,
-      source_position: 5, source_ref: "block-v1:X+Y+1T2026+type@html+block@h_wrap",
+      source_position: 6, source_ref: "block-v1:X+Y+1T2026+type@html+block@h_wrap",
       source_text: "h_wrap body"}
+    - {scope_id: materials, scope_kind: materials, scope_title: Course materials,
+      scope_position: 9999, source_position: 1, source_ref: static/staff.pdf, source_text: staff
+        pdf}
     - {scope_id: "block-v1:X+Y+1T2026+type@sequential+block@l1", scope_kind: unit,
       scope_title: Lecture 1, scope_position: 1, source_position: 1, source_ref: "block-v1:X+Y+1T2026+type@html+block@h_l1",
       source_text: "h_l1 body"}

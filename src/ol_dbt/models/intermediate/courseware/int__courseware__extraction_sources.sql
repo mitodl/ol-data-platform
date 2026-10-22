@@ -15,7 +15,7 @@
                  _is_context_sequential), so the platform and Learn agree on units.
       materials  the run's static documents (slides, PDFs) that no unit's html links to.
                  A document an html block links to (content_file_static_references) is
-                 read in that block's unit instead.
+                 read right after that block, in its unit or in context.
 
     Problem text is the question side only (courseware_problem_question_text). A
     library_content block contributes its first problem, since its children are
@@ -340,6 +340,13 @@ with content as (
             and unit_blocks.platform = html_body.platform
             and unit_blocks.courserun_readable_id = html_body.courserun_readable_id
             and html_body.content_file_path = concat('html/', unit_blocks.html_filename, '.html')
+    -- a link places a document only from a sequential that is read, as a unit or as
+    -- context; one linked only from a staff-only or hidden sequential stays in materials
+    inner join classified_sequentials as sequential
+        on
+            unit_blocks.platform = sequential.platform
+            and unit_blocks.courserun_readable_id = sequential.courserun_readable_id
+            and unit_blocks.sequential_block_id = sequential.block_id
     cross join {{ unnest_json_array('html_body.content_file_static_references', 'linked', 'static_path') }}
 )
 
@@ -450,6 +457,25 @@ with content as (
             and unit_sources.courserun_readable_id = context_sequentials.courserun_readable_id
             and unit_sources.scope_id = context_sequentials.sequential_block_id
 
+    union all
+
+    select
+        linked_documents.platform
+        , linked_documents.courserun_readable_id
+        , 'context' as scope_id
+        , 1 as source_group
+        , linked_documents.source_order
+        , linked_documents.source_ref
+        , linked_documents.source_kind
+        , linked_documents.source_title
+        , linked_documents.source_text
+    from linked_documents
+    inner join context_sequentials
+        on
+            linked_documents.platform = context_sequentials.platform
+            and linked_documents.courserun_readable_id = context_sequentials.courserun_readable_id
+            and linked_documents.scope_id = context_sequentials.sequential_block_id
+    where linked_documents.link_rank = 1
 )
 
 , material_sources as (
