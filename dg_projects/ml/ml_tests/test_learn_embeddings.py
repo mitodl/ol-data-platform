@@ -40,7 +40,7 @@ from ml.assets.learn_embeddings import (
 from ml.lib import warehouse
 from ml.lib.learn_embeddings import STRATEGIES_PATH, TOPICS_RELATION, strategies
 from ml.sensors.learn_embeddings import learn_content_file_text_sensor
-from ol_llm import LLMUnavailable
+from ol_llm import LLMRejected, LLMUnavailable
 from ol_orchestrate.lib.embeddings.documents import md5_hex
 from ol_orchestrate.lib.embeddings.learn import LEARN_V1_CONTENT_FILES
 from ol_orchestrate.lib.embeddings.models import EmbeddingBatch, EmbeddingModelSpec
@@ -101,15 +101,21 @@ def tables(monkeypatch) -> dict[str, pl.DataFrame]:
 class FakeEmbedder:
     """Return ``[len(text), 1, 0, ...]`` and record each call's texts.
 
-    A text in ``failing`` makes its request raise LLMUnavailable.
+    A text in ``failing`` makes its request raise LLMUnavailable, and one in
+    ``rejected`` makes the provider reject it with a 400.
     """
 
     def __init__(
-        self, spec: EmbeddingModelSpec, calls: list[list[str]], failing: set[str]
+        self,
+        spec: EmbeddingModelSpec,
+        calls: list[list[str]],
+        failing: set[str],
+        rejected: set[str],
     ) -> None:
         self.spec = spec
         self.calls = calls
         self.failing = failing
+        self.rejected = rejected
 
     def embed(
         self, texts: Sequence[str], *, input_type: EmbedInputType
@@ -119,6 +125,11 @@ class FakeEmbedder:
         if self.failing & set(texts):
             msg = "provider down"
             raise LLMUnavailable(msg, use_case="test", model=self.spec.model)
+        if self.rejected & set(texts):
+            msg = "invalid input"
+            raise LLMRejected(
+                msg, use_case="test", model=self.spec.model, status_code=400
+            )
         return EmbeddingBatch(
             vectors=[
                 [float(len(text)), 1.0] + [0.0] * (VECTOR_LENGTH - 2) for text in texts
@@ -129,6 +140,7 @@ class FakeEmbedder:
 
 CALLS: list[list[str]] = []
 FAILING: set[str] = set()
+REJECTED: set[str] = set()
 
 
 class FakeEmbeddings(EmbeddingsResource):
@@ -136,13 +148,14 @@ class FakeEmbeddings(EmbeddingsResource):
         pass
 
     def embedder(self, strategy: EmbeddingStrategy) -> FakeEmbedder:  # type: ignore[override,unused-ignore]
-        return FakeEmbedder(strategy.model, CALLS, FAILING)
+        return FakeEmbedder(strategy.model, CALLS, FAILING, REJECTED)
 
 
 @pytest.fixture(autouse=True)
 def calls() -> list[list[str]]:
     CALLS.clear()
     FAILING.clear()
+    REJECTED.clear()
     return CALLS
 
 
@@ -425,6 +438,29 @@ def test_failed_requests_store_the_rest_and_fail_the_run(tables, monkeypatch):
     assert not result.success
     vectors = tables[CONTENT_FILE_VECTORS_KEY.path[-1]]
     assert vectors["input_checksum"].to_list() == [md5_hex("Fine.")]
+
+
+def test_a_rejected_request_is_split_so_only_the_bad_text_fails(tables, calls):
+    load_sources(tables, **{"block-v1:a": "Fine.", "block-v1:b": "Malformed."})
+    REJECTED.add("Malformed.")
+
+    result = build_content_files(tables)
+
+    assert not result.success
+    assert calls == [["Fine.", "Malformed."], ["Fine."], ["Malformed."]]
+    vectors = tables[CONTENT_FILE_VECTORS_KEY.path[-1]]
+    assert vectors["input_checksum"].to_list() == [md5_hex("Fine.")]
+
+
+def test_an_unavailable_provider_is_not_split(tables, calls):
+    load_sources(tables, **{"block-v1:a": "Fine.", "block-v1:b": "Unlucky."})
+    FAILING.add("Unlucky.")
+
+    result = build_content_files(tables)
+
+    assert not result.success
+    assert calls == [["Fine.", "Unlucky."]]
+    assert tables[CONTENT_FILE_VECTORS_KEY.path[-1]].is_empty()
 
 
 def test_candidate_vectors_survive_a_serving_run(tables):

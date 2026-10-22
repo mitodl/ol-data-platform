@@ -371,7 +371,8 @@ class StrategyOutcome:
     :param reused_texts: distinct texts whose stored vector was reused
     :param failed_chunks: chunks left without a vector, as their request failed
     :param input_tokens: tokens the provider reported
-    :param failure: the batch's description when a request failed
+    :param failure: the batches' descriptions when a chunk was left without a
+        vector
     """
 
     chunks: int
@@ -408,11 +409,15 @@ def embed_strategy(  # noqa: PLR0913
     """Embed a partition's chunks under a strategy, paying only for new texts.
 
     The texts whose checksum has a stored vector for the strategy's model are not
-    sent. The rest go one request per row through ol-llm's ``process_batch``, so a
-    failed request costs only its own chunks and an outage stops the batch. The
-    chunks of a failed request get no row, and the next run of the partition
-    sends them again. Automation re-requests a failed partition once; after that
-    the partition waits for its text or chunker to change, or a run by hand.
+    sent. The rest go through ol-llm's ``process_batch`` with each row one
+    request of up to the model's ``batch_size`` texts, and an outage stops the
+    batch. A request that fails for its input (a rejection or invalid output,
+    which the same texts would repeat) is sent again one text per request, so a
+    bad text costs only its own chunks; a rate limit or outage is not split, as
+    it says nothing about the texts. The chunks of a failed request get no row,
+    and the next run of the partition sends them again. Automation re-requests a
+    failed partition once; after that the partition waits for its text or
+    chunker to change, or a run by hand.
 
     :param strategy: the strategy
     :param chunks: the partition's chunks of the strategy's chunker
@@ -444,10 +449,10 @@ def embed_strategy(  # noqa: PLR0913
             embedded.update(zip(batch.checksums, result.vectors, strict=True))
             input_tokens += result.input_tokens
 
-    if new_texts:
+    def send(batches: list[RequestBatch]) -> BatchReport[RequestBatch]:
         try:
-            report: BatchReport[RequestBatch] = process_batch(
-                _request_batches(strategy, new_texts),
+            return process_batch(
+                batches,
                 lambda batch: embedder.embed(batch.texts, input_type="document"),
                 persist,
                 max_workers=max_workers,
@@ -455,9 +460,22 @@ def embed_strategy(  # noqa: PLR0913
                 logger=logger,
             )
         except BatchFailed as error:
-            report = error.report
-        if report.failures or report.circuit_opened_by is not None:
-            failure = report.describe()
+            return error.report
+
+    reports = []
+    if new_texts:
+        reports.append(send(_request_batches(strategy, new_texts)))
+        if reports[0].circuit_opened_by is None:
+            singles = [
+                RequestBatch((checksum,), (text,))
+                for failed in reports[0].failures
+                if not failed.retry_next_run and len(failed.row.texts) > 1
+                for checksum, text in zip(
+                    failed.row.checksums, failed.row.texts, strict=True
+                )
+            ]
+            if singles:
+                reports.append(send(singles))
 
     known.update(embedded)
     vectored = [
@@ -465,6 +483,10 @@ def embed_strategy(  # noqa: PLR0913
         for pair, checksum in zip(chunks, checksums, strict=True)
         if checksum in known
     ]
+    if len(vectored) < len(chunks):
+        failure = " Then one text per request: ".join(
+            report.describe() for report in reports
+        )
     outcome = embed_chunks(
         strategy, vectored, embedder, known_vectors=known, embedded_at=embedded_at
     )
