@@ -1,38 +1,11 @@
-slice_name: Program Enrollment and Certificate
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 378cfe46-2614-42e3-82f3-f161aa37e66d  # program_enrollment_with_user_report
+description: null
 params:
-  datasource: 162__table
-  viz_type: table
-  slice_id: 223
-  matrixify_enable: false
-  matrixify_mode_columns: disabled
-  matrixify_dimension_selection_mode_columns: members
-  matrixify_dimension_columns:
-    dimension: ''
-    values: []
-  matrixify_topn_value_columns: 10
-  matrixify_all_sort_by_columns: a_to_z
-  matrixify_topn_order_columns: true
-  matrixify_show_column_headers: true
-  matrixify_fit_columns_dynamically: true
-  matrixify_mode_rows: disabled
-  matrixify_dimension_selection_mode_rows: members
-  matrixify_dimension_rows:
-    dimension: ''
-    values: []
-  matrixify_topn_value_rows: 10
-  matrixify_all_sort_by_rows: a_to_z
-  matrixify_topn_order_rows: true
-  matrixify_show_row_labels: true
-  matrixify_row_height: 300
-  matrixify_charts_per_row: 3
-  matrixify_cell_title_template: ''
-  query_mode: raw
-  groupby: []
-  temporal_columns_lookup: {}
+  adhoc_filters: []
+  align_pn: false
   all_columns:
   - platform_name
   - program_type
@@ -70,15 +43,9 @@ params:
   - user_address_state_or_territory
   - user_address_postal_code
   - course_certificate_sum
-  percent_metrics: []
-  adhoc_filters: []
-  order_by_cols: []
-  server_pagination: false
-  row_limit: 50000
-  table_timestamp_format: smart_date
-  include_search: true
   allow_rearrange_columns: false
   allow_render_html: true
+  color_pn: true
   column_config:
     courses_taken_in_program:
       showCellBars: false
@@ -86,22 +53,46 @@ params:
       showCellBars: false
     user_id:
       showCellBars: false
-  show_cell_bars: true
-  align_pn: false
-  color_pn: true
   comparison_color_enabled: false
   comparison_color_scheme: Green
-  conditional_formatting: []
   comparison_type: values
+  conditional_formatting: []
   extra_form_data: {}
-  dashboards:
-  - 49
-query_context: '{"datasource":{"id":162,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["platform_name","program_type","program_name","program_track","program_readable_id","user_id","user_full_name","user_email","programenrollment_enrollment_status","programenrollment_enrollment_mode","programenrollment_is_active","programenrollment_created_on",{"expressionType":"SQL","label":"user_has_completed_program","sqlExpression":"CASE
-  WHEN programcertificate_created_on is not null then true else user_has_completed_program
-  end"},"programcertificate_created_on","programcertificate_url","programcertificate_is_revoked","program_is_live","program_title","user_industry","user_company","user_job_title","user_highest_education","program_complete_days","courses_taken_in_program","capstone_ind","user_birth_year","user_gender","user_address_country","user_street_address","user_address_city","user_address_state_or_territory","user_address_postal_code","course_certificate_sum"],"orderby":[],"annotation_layers":[],"row_limit":50000,"series_limit":0,"group_others_when_limit_reached":false,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"162__table","viz_type":"table","slice_id":223,"matrixify_enable":false,"matrixify_mode_columns":"disabled","matrixify_dimension_selection_mode_columns":"members","matrixify_dimension_columns":{"dimension":"","values":[]},"matrixify_topn_value_columns":10,"matrixify_all_sort_by_columns":"a_to_z","matrixify_topn_order_columns":true,"matrixify_show_column_headers":true,"matrixify_fit_columns_dynamically":true,"matrixify_mode_rows":"disabled","matrixify_dimension_selection_mode_rows":"members","matrixify_dimension_rows":{"dimension":"","values":[]},"matrixify_topn_value_rows":10,"matrixify_all_sort_by_rows":"a_to_z","matrixify_topn_order_rows":true,"matrixify_show_row_labels":true,"matrixify_row_height":300,"matrixify_charts_per_row":3,"matrixify_cell_title_template":"","query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["platform_name","program_type","program_name","program_track","program_readable_id","user_id","user_full_name","user_email","programenrollment_enrollment_status","programenrollment_enrollment_mode","programenrollment_is_active","programenrollment_created_on",{"expressionType":"SQL","label":"user_has_completed_program","sqlExpression":"CASE
-  WHEN programcertificate_created_on is not null then true else user_has_completed_program
-  end"},"programcertificate_created_on","programcertificate_url","programcertificate_is_revoked","program_is_live","program_title","user_industry","user_company","user_job_title","user_highest_education","program_complete_days","courses_taken_in_program","capstone_ind","user_birth_year","user_gender","user_address_country","user_street_address","user_address_city","user_address_state_or_territory","user_address_postal_code","course_certificate_sum"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"server_pagination":false,"row_limit":50000,"table_timestamp_format":"smart_date","include_search":true,"allow_rearrange_columns":false,"allow_render_html":true,"column_config":{"courses_taken_in_program":{"showCellBars":false},"program_complete_days":{"showCellBars":false},"user_id":{"showCellBars":false}},"show_cell_bars":true,"align_pn":false,"color_pn":true,"comparison_color_enabled":false,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[49],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
-cache_timeout: null
+  groupby: []
+  include_search: true
+  matrixify_all_sort_by_columns: a_to_z
+  matrixify_all_sort_by_rows: a_to_z
+  matrixify_cell_title_template: ''
+  matrixify_charts_per_row: 3
+  matrixify_dimension_columns:
+    dimension: ''
+    values: []
+  matrixify_dimension_rows:
+    dimension: ''
+    values: []
+  matrixify_dimension_selection_mode_columns: members
+  matrixify_dimension_selection_mode_rows: members
+  matrixify_enable: false
+  matrixify_fit_columns_dynamically: true
+  matrixify_mode_columns: disabled
+  matrixify_mode_rows: disabled
+  matrixify_row_height: 300
+  matrixify_show_column_headers: true
+  matrixify_show_row_labels: true
+  matrixify_topn_order_columns: true
+  matrixify_topn_order_rows: true
+  matrixify_topn_value_columns: 10
+  matrixify_topn_value_rows: 10
+  order_by_cols: []
+  percent_metrics: []
+  query_mode: raw
+  row_limit: 50000
+  server_pagination: false
+  show_cell_bars: true
+  table_timestamp_format: smart_date
+  temporal_columns_lookup: {}
+  viz_type: table
+slice_name: Program Enrollment and Certificate
 uuid: d9047161-f8d8-4af2-adb0-283c74b639f2
 version: 1.0.0
-dataset_uuid: 378cfe46-2614-42e3-82f3-f161aa37e66d
+viz_type: table
