@@ -50,9 +50,14 @@ def upsert_chunk(
         upsert of an asset's return casts by position, so a returned frame must
         be in this order.
     :rtype: pl.DataFrame
+    :raises ValueError: if two rows share a key. Table.upsert refused those before
+        writing anything; a delete and append would store both.
     """
     if chunk_df.height == 0:
         return chunk_df
+    if chunk_df.select(join_cols).is_duplicated().any():
+        msg = f"Chunk for {table_identifier} has duplicate rows for key {join_cols}"
+        raise ValueError(msg)
     table = catalog.create_table_if_not_exists(
         table_identifier, schema=chunk_df.to_arrow().schema
     )
