@@ -250,15 +250,10 @@ def test_olx_archive_paths_honour_valid_file_types(tmp_path):
     assert _ingested(olx, valid_file_types=[".py"]) == ["problems/set1.py"]
 
 
+# relative to the test run, so "future" never goes stale; tests compare order
 FUTURE_YEAR = datetime.datetime.now(tz=datetime.UTC).year + 10
-
-
 START_FUTURE = datetime.datetime(FUTURE_YEAR, 1, 1, tzinfo=datetime.UTC)
-
-
 START_LATER = datetime.datetime(FUTURE_YEAR + 1, 1, 1, tzinfo=datetime.UTC)
-
-
 START_PAST = datetime.datetime(2020, 1, 1, tzinfo=datetime.UTC)
 
 
@@ -482,6 +477,7 @@ def test_release_dates_parse_starts_as_utc(tmp_path, raw, expected):
     _assert_release_dates(olx, {"html/h_raw.xml": expected})
 
 
+# the second parses, then overflows converting to UTC
 @pytest.mark.parametrize("start", ["next tuesday", "0001-01-01T00:00:00+14:00"])
 def test_release_dates_malformed_start_ignored(tmp_path, caplog, start):
     """A chapter with an unparsable start is treated as undated, with a warning"""
@@ -1135,6 +1131,7 @@ def test_olx_archive_keeps_inline_video_transcripts(tmp_path):
     assert "static/subs_Inline.srt.sjson" in _ingested(olx)
 
 
+# non-UTF-8 bytes are malformed too, though the text is read leniently
 @pytest.mark.parametrize("broken", [b"<tab", b"<tab>\xff</tab>"])
 def test_olx_archive_malformed_xml_keeps_legacy_transcripts(tmp_path, broken):
     """Unknown video ids must not be read as "no video uses this transcript\""""
