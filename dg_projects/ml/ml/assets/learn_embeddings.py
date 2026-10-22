@@ -13,7 +13,7 @@ writes to Qdrant; projecting these tables into Learn's collections is a separate
 step.
 """
 
-from collections.abc import Collection
+from collections.abc import Collection, Iterable
 from datetime import UTC, datetime
 
 import polars as pl
@@ -331,6 +331,19 @@ def embed_vectors(  # noqa: PLR0913
     frames = []
     metadata: dict[str, MetadataValue] = {}
     failures = []
+    # This run's vectors by model and input checksum, so a later strategy of the
+    # same model reuses what an earlier one embedded.
+    this_run: dict[str, dict[str, list[float]]] = {}
+
+    def lookup(model_id: str, checksums: Iterable[str]) -> dict[str, list[float]]:
+        wanted = set(checksums)
+        found = {
+            checksum: vector
+            for checksum, vector in this_run.get(model_id, {}).items()
+            if checksum in wanted
+        }
+        return found | known_vectors(vectors, model_id, wanted - found.keys())
+
     for strategy in chosen:
         pairs = stored_chunks(
             chunks.filter(pl.col("chunker_id") == strategy.chunker.chunker_id)
@@ -339,10 +352,13 @@ def embed_vectors(  # noqa: PLR0913
             strategy,
             pairs,
             embeddings.embedder(strategy),
-            lambda model_id, checksums: known_vectors(vectors, model_id, checksums),
+            lookup,
             embedded_at=embedded_at,
             max_workers=config.max_workers,
             logger=context.log,
+        )
+        this_run.setdefault(strategy.model.model_id, {}).update(
+            zip(frame["input_checksum"], frame["vector"].to_list(), strict=True)
         )
         frames.append(frame)
         context.log.info(

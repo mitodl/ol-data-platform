@@ -463,6 +463,26 @@ def test_an_unavailable_provider_is_not_split(tables, calls):
     assert tables[CONTENT_FILE_VECTORS_KEY.path[-1]].is_empty()
 
 
+def test_a_later_strategy_of_the_same_model_reuses_this_runs_vectors(
+    tables, calls, monkeypatch
+):
+    load_sources(tables, **{"block-v1:a": "Text."})
+    strategy = strategies()["learn_v1_content_files"]
+    monkeypatch.setitem(
+        strategies(),
+        "exp_same_model",
+        strategy.model_copy(update={"strategy_id": "exp_same_model"}),
+    )
+
+    assert build_content_files(tables).success
+
+    assert calls == [["Text."]]
+    assert sorted(tables[CONTENT_FILE_VECTORS_KEY.path[-1]]["strategy_id"]) == [
+        "exp_same_model",
+        "learn_v1_content_files",
+    ]
+
+
 def test_candidate_vectors_survive_a_serving_run(tables):
     load_sources(tables, **{"block-v1:a": "Text."})
     dagster_instance = instance()
