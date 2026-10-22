@@ -1,0 +1,104 @@
+---
+version: 2
+snapshots:
+- name: snapshot_bridge_concept_relation
+  relation: ref('bridge_concept_relation')
+  description: >
+    History of concept-to-concept edges, one row per version of an edge's strength
+    or publishing decision. bridge_concept_relation is rebuilt from the current
+    evidence on every run, so without this an edge's support, relation_confidence
+    and is_published leave no trace once they change. Read it beside
+    afact_concept_graph_run (graph runs) by time. A new version is recorded when a
+    support count, the consistency, relation_confidence, review_status or the
+    publishing decision changes. co_taught_lift is left out of the check, because
+    its denominator counts every taught unit, so each extracted course would version
+    every complements edge without its own evidence changing. Resolution is one
+    run, and history starts at the first run. An edge whose evidence disappears has
+    its current version closed (dbt_valid_to set).
+  config:
+    schema: dimensional
+    unique_key: concept_relation_pk
+    strategy: check
+    check_cols:
+    - courserun_support
+    - scope_support
+    - course_scope_support
+    - reverse_courserun_support
+    - reverse_scope_support
+    - direction_consistency
+    - verdict_support
+    - contrary_verdict_support
+    - cross_signal_support
+    - relation_confidence
+    - review_status
+    - is_published
+    - unpublished_reason
+    hard_deletes: invalidate
+  columns:
+  - name: concept_relation_pk
+    description: str, bridge_concept_relation.concept_relation_pk, a surrogate key
+      of (from, to, relation)
+  - name: from_concept_fk
+    description: str, dim_concept.concept_pk of the narrower, dependent or lower-id
+      concept
+  - name: to_concept_fk
+    description: str, dim_concept.concept_pk of the broader, built-on or higher-id
+      concept
+  - name: relation
+    description: str, broader, builds_on, practiced_with, close, complements or related
+  - name: relation_family
+    description: str, hierarchy, sequence, practice, equivalence or association
+  - name: courserun_support
+    description: int, distinct course runs with course evidence for the edge in this
+      version
+  - name: scope_support
+    description: int, units across those runs that showed the edge
+  - name: course_scope_support
+    description: int, course relations only, scope_support with each course's reruns
+      counted once
+  - name: reverse_courserun_support
+    description: int, builds_on only, course runs showing the opposite direction
+  - name: reverse_scope_support
+    description: int, builds_on only, units showing the opposite direction
+  - name: direction_consistency
+    description: float, builds_on only, scope_support / (scope_support + reverse_scope_support)
+  - name: co_taught_lift
+    description: float, complements only, co-taught unit count over the count expected
+      by chance; carried along but not checked for changes
+  - name: verdict_support
+    description: int, adjudicated relations only, resolution verdicts agreeing with
+      the relation (at least 1)
+  - name: contrary_verdict_support
+    description: int, adjudicated relations only, resolution verdicts against it
+  - name: cross_signal_support
+    description: int, evidence for the pair from the other source (course units for
+      an adjudicated relation, connecting verdicts for a course relation)
+  - name: relation_confidence
+    description: float in [0, 1], the edge's relation_confidence in this version
+  - name: is_adjudicated
+    description: boolean, whether resolution adjudication proposed the edge
+  - name: has_sequence_evidence
+    description: boolean, whether course sequence showed the edge
+  - name: has_co_taught_evidence
+    description: boolean, whether co-taught units showed the edge
+  - name: has_co_assessed_evidence
+    description: boolean, whether co-assessed items showed the edge
+  - name: first_observed_at
+    description: timestamp, the earliest evidence for the edge
+  - name: last_observed_at
+    description: timestamp, the latest evidence for the edge
+  - name: review_status
+    description: str, proposed, accepted or rejected
+  - name: is_published
+    description: boolean, whether the edge was published in this version
+  - name: unpublished_reason
+    description: str, why the edge was not published in this version, as in bridge_concept_relation
+  - name: dbt_scd_id
+    description: Unique id of this version of the edge.
+  - name: dbt_updated_at
+    description: When dbt recorded this version.
+  - name: dbt_valid_from
+    description: When this version was first observed.
+  - name: dbt_valid_to
+    description: When this version stopped being current (changed, or its evidence
+      disappeared). Null for the current version.

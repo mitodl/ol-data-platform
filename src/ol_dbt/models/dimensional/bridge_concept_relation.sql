@@ -17,29 +17,89 @@
       courserun_support         distinct course runs with course evidence
       reverse_courserun_support builds_on only: runs where the opposite direction
                                 was observed
-      course_scope_support      builds_on only: scope_support with each course's
-                                reruns counted once (its run with the most units),
-                                since reruns of one course have near-identical text
+      course_scope_support      course relations only: scope_support with each
+                                course's reruns counted once (its run with the most
+                                units), since reruns of one course have
+                                near-identical text
       reverse_scope_support     builds_on only: the same for the opposite direction;
                                 direction_consistency is course_scope_support /
                                 (course_scope_support + reverse_scope_support)
       co_taught_lift            complements only: observed co-taught unit count
                                 over the count expected if the two were taught
                                 independently across all taught units
+      verdict_support, contrary_verdict_support
+                                adjudicated relations only: resolution verdicts
+                                agreeing with and against the relation
+      cross_signal_support      evidence for the pair from the other source: for
+                                an adjudicated relation, course evidence (units
+                                co-teaching, co-assessing or sequencing the pair,
+                                either direction, reruns counted once); for a
+                                course relation,
+                                verdicts saying the pair is connected
     first_observed_at and last_observed_at show how the edge has evolved; an edge
     whose evidence disappears (an extraction version replaced) drops out on the
     next build.
 
-    builds_on is the one relation this model publishes by rule, because one unit's
-    extraction is one model call and LLMs over-predict prerequisites. An edge is
-    published (is_published) when course_scope_support reaches
-    courseware_prerequisite_min_scope_support and direction_consistency reaches
-    courseware_prerequisite_min_direction_consistency, so only the dominant direction
-    of a contested pair can publish. Every supporting course contributes at least one
-    unit, so a course count could never publish an edge this misses. Unpublished edges keep their rows, with
-    unpublished_reason, for review. Every other relation is is_published, and its
-    consumers apply their own thresholds to the support columns as before.
+    relation_confidence combines those signals in [0, 1]. Each observation is
+    treated as an independent, noisy vote that the edge holds (noisy-OR), scaled by
+    the share of same-source evidence that agrees:
+      relation_confidence = consistency
+        * (1 - (1 - own_reliability) ^ own_support
+             * (1 - cross_signal_reliability) ^ cross_signal_support)
+    own_support is verdict_support for adjudicated relations (reliability 0.5 each,
+    a direct pairwise judgement) and course_scope_support for course relations (0.3
+    each, one extraction call implying the edge; a rerun of a course adds nothing,
+    as for publication). Cross-signal evidence counts 0.2 each,
+    because it says the pair is connected, not that this relation holds. consistency
+    is direction_consistency for builds_on, verdict_support / (verdict_support +
+    contrary_verdict_support) for adjudicated relations, and 1 otherwise. Adding
+    agreeing evidence never lowers the score and adding contrary evidence never
+    raises it. The reliabilities are priors until the gold set calibrates them.
+    verdict_support is at least 1: the relation is in the resolver's snapshot
+    because a verdict, or a carried edge's vote, proposed it, even when none of the
+    labels that voted is still assigned, so the proposal counts as one verdict. The
+    score is rounded to 4 places, so the snapshot does not version an edge over a
+    last-bit difference between engines or plans.
+
+    Publication (is_published, with unpublished_reason on the rest, which keep their
+    rows for review). Every relation other than builds_on and broader is published,
+    and its consumers apply their own thresholds to the support columns.
+    - builds_on publishes when course_scope_support reaches
+      courseware_prerequisite_min_scope_support and direction_consistency reaches
+      courseware_prerequisite_min_direction_consistency, because one unit's
+      extraction is one model call and LLMs over-predict prerequisites
+      (insufficient_support, contested_direction). Every supporting course
+      contributes at least one unit, so a course count could never publish an edge
+      this misses. Cross-signal agreement raises its
+      confidence but never publishes it: a broader verdict says the two concepts
+      are a kind or part of one another, which runs either way in learning order.
+    - broader is held to a strict partial order, first. Broader edges are ranked by
+      adjudication score (relation_confidence without the cross-signal term), then
+      by how many broader edges point at the broader concept (an edge into a concept
+      many others sit under is the likelier one), then by concept ids, so the order
+      is total. The ranking reads only the adjudicated table, so the walk does not
+      recompute the whole pipeline once per step on engines that inline CTEs. An
+      edge whose broader concept leads back to its narrower one through edges ranked
+      above it is the lowest-ranked edge of that cycle and is not published
+      (hierarchy_cycle). Every cycle loses its lowest-ranked edge, in one pass over
+      all broader edges, so where cycles overlap an edge can be cut for a cycle a cut
+      above it already broke (z < x for z < x < y < z, when x < y is cut for x < y <
+      w < x). assert_bridge_concept_relation_hierarchy_cycle_overprune counts the cut
+      edges a second pass over the survivors would keep, an upper bound on that.
+    - then broader and builds_on are exclusive per pair, in either direction. Of the
+      broader edges left and a builds_on edge that would publish, the one with the
+      higher relation_confidence publishes, broader on a tie (hierarchy_pair on the
+      builds_on edge, sequence_pair on the broader one). A broader edge cut by the
+      cycle rule does not contest, so its pair's builds_on edge can publish. Cycles
+      are decided first because a broader edge that loses its pair still counts in
+      the walk: at worst that unpublishes a weaker edge of a cycle that would
+      otherwise not publish, and it never publishes a cycle.
 #}
+{%- set verdict_reliability = courseware_verdict_reliability() -%}
+{%- set unit_reliability = 0.3 -%}
+{%- set cross_signal_reliability = 0.2 -%}
+{#- the acyclic test's default bound -#}
+{%- set max_cycle_length = 32 -%}
 with evidence as (
     select * from {{ ref('int__courseware__concept_relation_evidence') }}
 )
@@ -47,6 +107,10 @@ with evidence as (
 , course_runs as (
     select * from {{ ref('dim_course_run') }}
     where is_current
+)
+
+, adjudicated as (
+    select * from {{ ref('int__courseware__adjudicated_concept_relations') }}
 )
 
 , mentions as (
@@ -102,11 +166,15 @@ with evidence as (
     group by from_concept_id, to_concept_id, relation
 )
 
--- a run with no course_fk (e.g. residential) is keyed by its course's readable id
-, builds_on_course_runs as (
+-- units per course relation with each course's reruns counted once, per evidence
+-- source; a run with no course_fk (e.g. residential) is keyed by its course's
+-- readable id
+, course_relation_runs as (
     select
         evidence.from_concept_id
         , evidence.to_concept_id
+        , evidence.relation
+        , evidence.evidence_source
         , evidence.scope_count
         , coalesce(
             course_runs.course_fk
@@ -117,24 +185,77 @@ with evidence as (
         on
             evidence.platform = course_runs.platform
             and evidence.courserun_readable_id = course_runs.courserun_readable_id
-    where evidence.relation = 'builds_on'
+    where evidence.evidence_source != 'adjudication'
+)
+
+, course_support as (
+    select
+        from_concept_id
+        , to_concept_id
+        , relation
+        , sum(scope_count) as course_scope_support
+    from (
+        select
+            from_concept_id
+            , to_concept_id
+            , relation
+            , evidence_source
+            , course_key
+            , max(scope_count) as scope_count
+        from course_relation_runs
+        group by from_concept_id, to_concept_id, relation, evidence_source, course_key
+    ) as per_course
+    group by from_concept_id, to_concept_id, relation
 )
 
 , builds_on_course_support as (
     select
         from_concept_id
         , to_concept_id
-        , sum(scope_count) as course_scope_support
+        , course_scope_support
+    from course_support
+    where relation = 'builds_on'
+)
+
+, pair_course_support as (
+    select
+        least(from_concept_id, to_concept_id) as low_concept_id
+        , greatest(from_concept_id, to_concept_id) as high_concept_id
+        , sum(course_scope_support) as course_unit_count
+    from course_support
+    group by least(from_concept_id, to_concept_id), greatest(from_concept_id, to_concept_id)
+)
+
+, pair_verdict_support as (
+    select
+        least(from_concept_id, to_concept_id) as low_concept_id
+        , greatest(from_concept_id, to_concept_id) as high_concept_id
+        , max(pair_verdict_count) as connected_verdict_count
+    from adjudicated
+    group by least(from_concept_id, to_concept_id), greatest(from_concept_id, to_concept_id)
+)
+
+-- the adjudication terms of relation_confidence: the share of verdicts that agree,
+-- and the chance that every agreeing verdict is wrong; the proposal itself is the
+-- floor of one supporting verdict
+, adjudication_scores as (
+    select
+        from_concept_id
+        , to_concept_id
+        , relation
+        , verdict_support
+        , contrary_verdict_support
+        , cast(verdict_support as double) / (verdict_support + contrary_verdict_support) as verdict_consistency
+        , power(1.0 - {{ verdict_reliability }}, verdict_support) as verdict_miss
     from (
         select
             from_concept_id
             , to_concept_id
-            , course_key
-            , max(scope_count) as scope_count
-        from builds_on_course_runs
-        group by from_concept_id, to_concept_id, course_key
-    ) as per_course
-    group by from_concept_id, to_concept_id
+            , relation
+            , greatest(supporting_verdict_count, 1) as verdict_support
+            , contrary_verdict_count as contrary_verdict_support
+        from adjudicated
+    ) as adjudicated_support
 )
 
 , builds_on_direction as (
@@ -155,11 +276,10 @@ with evidence as (
             and support.to_concept_id = reverse_support.from_concept_id
 )
 
-, builds_on_publication as (
+, builds_on_support as (
     select
         from_concept_id
         , to_concept_id
-        , course_scope_support
         , reverse_scope_support
         , direction_consistency
         , case
@@ -170,53 +290,208 @@ with evidence as (
     from builds_on_direction
 )
 
+, signals as (
+    select
+        edges.*
+        , course_support.course_scope_support
+        , builds_on_support.reverse_scope_support
+        , builds_on_support.direction_consistency
+        , builds_on_support.unpublished_reason as support_unpublished_reason
+        , adjudication_scores.verdict_support
+        , adjudication_scores.contrary_verdict_support
+        , adjudication_scores.verdict_consistency
+        , adjudication_scores.verdict_miss
+        , case
+            when edges.is_adjudicated then coalesce(pair_course_support.course_unit_count, 0)
+            else coalesce(pair_verdict_support.connected_verdict_count, 0)
+        end as cross_signal_support
+    from edges
+    left join builds_on_support
+        on
+            edges.relation = 'builds_on'
+            and edges.from_concept_id = builds_on_support.from_concept_id
+            and edges.to_concept_id = builds_on_support.to_concept_id
+    left join course_support
+        on
+            edges.from_concept_id = course_support.from_concept_id
+            and edges.to_concept_id = course_support.to_concept_id
+            and edges.relation = course_support.relation
+    left join adjudication_scores
+        on
+            edges.from_concept_id = adjudication_scores.from_concept_id
+            and edges.to_concept_id = adjudication_scores.to_concept_id
+            and edges.relation = adjudication_scores.relation
+    left join pair_course_support
+        on
+            least(edges.from_concept_id, edges.to_concept_id) = pair_course_support.low_concept_id
+            and greatest(edges.from_concept_id, edges.to_concept_id) = pair_course_support.high_concept_id
+    left join pair_verdict_support
+        on
+            least(edges.from_concept_id, edges.to_concept_id) = pair_verdict_support.low_concept_id
+            and greatest(edges.from_concept_id, edges.to_concept_id) = pair_verdict_support.high_concept_id
+)
+
+, scored as (
+    select
+        signals.*
+        , round(
+            case
+                when signals.is_adjudicated then signals.verdict_consistency
+                else coalesce(signals.direction_consistency, 1.0)
+            end
+            * (
+                1.0
+                - case
+                    when signals.is_adjudicated then signals.verdict_miss
+                    else power(1.0 - {{ unit_reliability }}, signals.course_scope_support)
+                end
+                * power(1.0 - {{ cross_signal_reliability }}, signals.cross_signal_support)
+            )
+            , 4
+        ) as relation_confidence
+    from signals
+)
+
+-- broader edges in cycle-breaking order, lowest first
+, hierarchy_edges as (
+    {{ courseware_hierarchy_edges("(select * from adjudication_scores where relation = 'broader')") }}
+)
+
+{{ courseware_hierarchy_cycle_cuts('hierarchy_cycle_edges', 'hierarchy_edges', 'hierarchy_edges', max_cycle_length) }}
+
+-- each builds_on edge that clears its own support rule, against the strongest broader
+-- edge left on its pair (either direction)
+, pair_contest as (
+    select
+        builds_on_edges.from_concept_id
+        , builds_on_edges.to_concept_id
+        , builds_on_edges.relation_confidence > max(broader_edges.relation_confidence) as is_builds_on_preferred
+    from scored as builds_on_edges
+    inner join scored as broader_edges
+        on
+            least(builds_on_edges.from_concept_id, builds_on_edges.to_concept_id)
+            = least(broader_edges.from_concept_id, broader_edges.to_concept_id)
+            and greatest(builds_on_edges.from_concept_id, builds_on_edges.to_concept_id)
+            = greatest(broader_edges.from_concept_id, broader_edges.to_concept_id)
+    left join hierarchy_cycle_edges
+        on
+            broader_edges.from_concept_id = hierarchy_cycle_edges.from_concept_id
+            and broader_edges.to_concept_id = hierarchy_cycle_edges.to_concept_id
+    where
+        builds_on_edges.relation = 'builds_on'
+        and builds_on_edges.support_unpublished_reason is null
+        and broader_edges.relation = 'broader'
+        and hierarchy_cycle_edges.from_concept_id is null
+    group by builds_on_edges.from_concept_id, builds_on_edges.to_concept_id, builds_on_edges.relation_confidence
+)
+
+-- one row per losing edge: a builds_on edge appears once in pair_contest, and a
+-- broader edge loses once however many builds_on edges beat it
+, pair_exclusion as (
+    select
+        from_concept_id
+        , to_concept_id
+        , 'builds_on' as relation
+        , 'hierarchy_pair' as unpublished_reason
+    from pair_contest
+    where not is_builds_on_preferred
+    union all
+    select distinct
+        broader_edges.from_concept_id
+        , broader_edges.to_concept_id
+        , 'broader' as relation
+        , 'sequence_pair' as unpublished_reason
+    from pair_contest
+    inner join scored as broader_edges
+        on
+            least(pair_contest.from_concept_id, pair_contest.to_concept_id)
+            = least(broader_edges.from_concept_id, broader_edges.to_concept_id)
+            and greatest(pair_contest.from_concept_id, pair_contest.to_concept_id)
+            = greatest(broader_edges.from_concept_id, broader_edges.to_concept_id)
+    left join hierarchy_cycle_edges
+        on
+            broader_edges.from_concept_id = hierarchy_cycle_edges.from_concept_id
+            and broader_edges.to_concept_id = hierarchy_cycle_edges.to_concept_id
+    where
+        pair_contest.is_builds_on_preferred
+        and broader_edges.relation = 'broader'
+        and hierarchy_cycle_edges.from_concept_id is null
+)
+
+, publication as (
+    select
+        scored.from_concept_id
+        , scored.to_concept_id
+        , scored.relation
+        , coalesce(
+            scored.support_unpublished_reason
+            , case when hierarchy_cycle_edges.from_concept_id is not null then 'hierarchy_cycle' end
+            , pair_exclusion.unpublished_reason
+        ) as unpublished_reason
+    from scored
+    left join hierarchy_cycle_edges
+        on
+            scored.relation = 'broader'
+            and scored.from_concept_id = hierarchy_cycle_edges.from_concept_id
+            and scored.to_concept_id = hierarchy_cycle_edges.to_concept_id
+    left join pair_exclusion
+        on
+            scored.from_concept_id = pair_exclusion.from_concept_id
+            and scored.to_concept_id = pair_exclusion.to_concept_id
+            and scored.relation = pair_exclusion.relation
+)
+
 select
-    {{ dbt_utils.generate_surrogate_key(['edges.from_concept_id', 'edges.to_concept_id', 'edges.relation']) }}
+    {{ dbt_utils.generate_surrogate_key(['scored.from_concept_id', 'scored.to_concept_id', 'scored.relation']) }}
     as concept_relation_pk
-    , edges.from_concept_id as from_concept_fk
-    , edges.to_concept_id as to_concept_fk
-    , edges.relation
-    , case edges.relation
+    , scored.from_concept_id as from_concept_fk
+    , scored.to_concept_id as to_concept_fk
+    , scored.relation
+    , case scored.relation
         when 'broader' then 'hierarchy'
         when 'builds_on' then 'sequence'
         when 'practiced_with' then 'practice'
         when 'close' then 'equivalence'
         else 'association'
     end as relation_family
-    , edges.courserun_support
-    , edges.scope_support
+    , scored.courserun_support
+    , scored.scope_support
     , coalesce(reverse_edges.courserun_support, 0) as reverse_courserun_support
-    , builds_on_publication.course_scope_support
-    , builds_on_publication.reverse_scope_support
-    , builds_on_publication.direction_consistency
+    , scored.course_scope_support
+    , scored.reverse_scope_support
+    , scored.direction_consistency
     , case
-        when edges.relation = 'complements' and edges.co_taught_unit_count > 0
-            then edges.co_taught_unit_count * cast(unit_totals.taught_unit_count as double)
+        when scored.relation = 'complements' and scored.co_taught_unit_count > 0
+            then scored.co_taught_unit_count * cast(unit_totals.taught_unit_count as double)
             / (from_units.taught_unit_count * to_units.taught_unit_count)
     end as co_taught_lift
-    , edges.is_adjudicated
-    , edges.has_sequence_evidence
-    , edges.has_co_taught_evidence
-    , edges.has_co_assessed_evidence
-    , edges.first_observed_at
-    , edges.last_observed_at
+    , scored.verdict_support
+    , scored.contrary_verdict_support
+    , scored.cross_signal_support
+    , scored.relation_confidence
+    , scored.is_adjudicated
+    , scored.has_sequence_evidence
+    , scored.has_co_taught_evidence
+    , scored.has_co_assessed_evidence
+    , scored.first_observed_at
+    , scored.last_observed_at
     , 'proposed' as review_status
-    , builds_on_publication.unpublished_reason is null as is_published
-    , builds_on_publication.unpublished_reason
-from edges
+    , publication.unpublished_reason is null as is_published
+    , publication.unpublished_reason
+from scored
 cross join unit_totals
+inner join publication
+    on
+        scored.from_concept_id = publication.from_concept_id
+        and scored.to_concept_id = publication.to_concept_id
+        and scored.relation = publication.relation
 left join edges as reverse_edges
     on
-        edges.relation = 'builds_on'
+        scored.relation = 'builds_on'
         and reverse_edges.relation = 'builds_on'
-        and edges.from_concept_id = reverse_edges.to_concept_id
-        and edges.to_concept_id = reverse_edges.from_concept_id
-left join builds_on_publication
-    on
-        edges.relation = 'builds_on'
-        and edges.from_concept_id = builds_on_publication.from_concept_id
-        and edges.to_concept_id = builds_on_publication.to_concept_id
+        and scored.from_concept_id = reverse_edges.to_concept_id
+        and scored.to_concept_id = reverse_edges.from_concept_id
 left join concept_unit_counts as from_units
-    on edges.from_concept_id = from_units.concept_id
+    on scored.from_concept_id = from_units.concept_id
 left join concept_unit_counts as to_units
-    on edges.to_concept_id = to_units.concept_id
+    on scored.to_concept_id = to_units.concept_id
