@@ -719,6 +719,7 @@ def test_owners_reviewers_and_glossary_terms_resolve_by_name(server: FakeOpenMet
     [
         {"reviewers": [{"type": "team", "name": "nobody"}]},
         {"assets": [{"id": "table-1", "type": "table"}]},
+        {"lifeCycle": {"created": {"timestamp": 1760000000000}}},
         {"domains": ["Learning"]},
         {"tags": [{"tagFQN": "Tier.Tier1", "source": "Tier", "labelType": "Manual", "state": "Confirmed"}]},
         {"tags": [{"tagFQN": "Learning.Missing", "source": "Glossary", "labelType": "Manual", "state": "Confirmed"}]},

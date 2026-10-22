@@ -48,6 +48,8 @@ schema:
   metric has in OpenMetadata.
 - `domains`, `dataProducts` and `extension` are not allowed: a bot's PUT does
   not change them on an existing metric, so a file change would never land.
+- `lifeCycle` is not allowed: OpenMetadata keeps it current, and a PUT keeps
+  any live timestamp newer than the file's, so the file would never match.
 - `status` is required and takes only `Draft` or `Approved` of the server's
   statuses (see "Status and approval"). A PUT resets the status in
   OpenMetadata, so sync always restores it from the file.

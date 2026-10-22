@@ -180,7 +180,6 @@ def test_well_formed_nested_values_pass(tmp_path: Path) -> None:
         "owners": [{"type": "team", "name": "data-engineering"}],
         "reviewers": [{"type": "user", "name": "tmacey"}],
         "tags": [{"tagFQN": "Glossary.Term", "source": "Glossary", "labelType": "Manual", "state": "Confirmed"}],
-        "lifeCycle": {"created": {"timestamp": 1790744717397}},
     }
     assert _run(tmp_path, _metric(body)) == []
 
@@ -240,6 +239,11 @@ def test_openmetadata_enum_values_pass(tmp_path: Path) -> None:
 @pytest.mark.parametrize("field", ["id", "fullyQualifiedName", "glossaryTerms"])
 def test_field_the_file_may_not_set_errors(tmp_path: Path, field: str) -> None:
     assert _run(tmp_path, _metric({field: "x"})) == [f"`metric.{field}` is not a field the file may set"]
+
+
+def test_lifecycle_is_rejected_since_openmetadata_keeps_it(tmp_path: Path) -> None:
+    life_cycle = {"created": {"timestamp": 1790744717397}}
+    assert _run(tmp_path, _metric({"lifeCycle": life_cycle})) == ["`metric.lifeCycle` is not a field the file may set"]
 
 
 def test_assets_is_rejected_since_a_file_cannot_know_asset_ids(tmp_path: Path) -> None:

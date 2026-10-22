@@ -74,6 +74,11 @@ EXCLUDED_FIELDS = {
     "domains": _BOT_PUT_KEEPS,
     "dataProducts": _BOT_PUT_KEEPS,
     "extension": _BOT_PUT_KEEPS,
+    # A PUT keeps each live lifeCycle timestamp newer than the body's
+    # (EntityUpdater.updateLifeCycle in 2.0.5), so a file's would stop matching
+    # and be PUT on every sync.
+    "lifeCycle": "It records when the metric was created, updated and accessed, which OpenMetadata keeps up to "
+    "date itself; remove it.",
 }
 
 # OpenMetadata references an owner or reviewer by id, which only exists in the
