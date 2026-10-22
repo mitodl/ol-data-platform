@@ -106,6 +106,10 @@ sources:
       description: int, how many parts the scope was split into
     - name: input_text_checksum
       description: str, sha256 of the source text the part's call would read
+    - name: header_version
+      description: str, hash of the course header as read (title, outline, description;
+        ml.lib.courseware.extract.header_version); null for reads recorded before
+        it was
     - name: observed_at
       description: timestamp, when the extractor read the run; one value per read
     tests:

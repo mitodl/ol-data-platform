@@ -209,6 +209,9 @@ models:
     description: int, how many parts the latest read split the scope into
   - name: input_text_checksum
     description: str, sha256 of the source text the part's call would read
+  - name: header_version
+    description: str, hash of the course header as read; the same on every row of
+      a run
   - name: observed_at
     description: timestamp, when the extractor read the run
   tests:

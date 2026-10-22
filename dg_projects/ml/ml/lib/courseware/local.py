@@ -125,11 +125,16 @@ def _conform(rows: pl.DataFrame, table: str) -> pl.DataFrame:
 
 def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
     previous = _existing(output_dir, table)
-    _write(
-        new_rows if previous is None else pl.concat([previous, new_rows]),
-        output_dir,
-        table,
-    )
+    if previous is None:
+        _write(new_rows, output_dir, table)
+        return
+    # A file written before a column was added gets it as null (diagonal), but a
+    # column the new rows no longer carry is a rename or a drop, which diagonal would
+    # keep as a half-null column instead of failing.
+    if dropped := sorted(set(previous.columns) - set(new_rows.columns)):
+        msg = f"{table} rows no longer carry {dropped}, which the stored file has"
+        raise ValueError(msg)
+    _write(pl.concat([previous, new_rows], how="diagonal"), output_dir, table)
 
 
 def _read_scopes(sources: Path, courserun: list[str] | None) -> list[Scope]:
