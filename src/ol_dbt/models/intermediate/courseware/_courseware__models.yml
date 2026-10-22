@@ -109,6 +109,9 @@ models:
   - name: scope_part_checksums
     description: str, every part's input_text_checksum, in order and comma-separated,
       as the run that made this call split the scope
+  - name: header_version
+    description: str, hash of the course header the call read; null for extractions
+      recorded before it was
   - name: source_count
     description: int, number of sources the call read
   - name: truncated_source_count

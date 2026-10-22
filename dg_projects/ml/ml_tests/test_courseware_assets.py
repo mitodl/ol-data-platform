@@ -280,6 +280,22 @@ def test_extraction_writes_each_scope_once(tables, calls, catalog):
     assert tables["courseware_claim_extraction"].height == 2
 
 
+@pytest.mark.usefixtures("catalog")
+def test_extraction_skips_a_scope_stored_under_the_old_key_scheme(tables, calls):
+    tables["int__courseware__extraction_sources"] = sources("Lecture 1")
+    assert extract(tables).success
+    # as stored before keys left out the course header: another key, no header
+    tables["courseware_claim_extraction"] = (
+        tables["courseware_claim_extraction"]
+        .with_columns(extraction_key=pl.lit("old-key"))
+        .drop("header_version")
+    )
+
+    assert extract(tables).success
+
+    assert calls == ["record_extraction"]
+
+
 def test_extraction_writes_partitioned_iceberg_tables(calls, tmp_path, monkeypatch):
     """Through the Iceberg IO manager the deployment configures, on a local catalog."""
     properties = {

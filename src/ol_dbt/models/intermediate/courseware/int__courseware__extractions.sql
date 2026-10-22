@@ -176,6 +176,7 @@ select
     , extractions.scope_part_count
     , extractions.input_text_checksum
     , extractions.scope_part_checksums
+    , extractions.header_version
     , extractions.source_count
     , extractions.truncated_source_count
     , extractions.sources_json

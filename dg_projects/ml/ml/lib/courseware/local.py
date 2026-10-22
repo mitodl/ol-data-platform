@@ -24,9 +24,12 @@ from ml.lib.courseware.describe import describe_concepts
 from ml.lib.courseware.extract import (
     BEDROCK_DEFAULT_MODEL,
     DEFAULT_EFFORT,
+    EXTRACTION_SCHEMA,
     Effort,
+    covered_keys,
     extract_scopes,
     extraction_key,
+    stored_extraction_key,
 )
 from ml.lib.courseware.graph import compute_graph, previous_membership
 from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
@@ -57,6 +60,21 @@ def _write(frame: pl.DataFrame, output_dir: Path, table: str) -> None:
     staged.replace(path)
 
 
+def _require_current_keys(stored: pl.DataFrame) -> None:
+    """Refuse a directory whose extractions still carry keys of the old scheme.
+
+    Their keys would all miss, so every scope would be extracted and billed again.
+
+    :raises ValueError: when the directory needs ``local rekey`` first
+    """
+    msg = "extraction keys predate the current scheme; run `local rekey` first"
+    if "header_version" not in stored.columns:
+        raise ValueError(msg)
+    for row in stored.filter(pl.col("header_version").is_null()).iter_rows(named=True):
+        if stored_extraction_key(row) != row["extraction_key"]:
+            raise ValueError(msg)
+
+
 def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
     previous = _existing(output_dir, table)
     _write(
@@ -77,6 +95,7 @@ def extract(  # noqa: PLR0913
     effort: Effort = DEFAULT_EFFORT,
     aws_region: str = "us-east-1",
     max_workers: int = 6,
+    key_on_header: bool = False,
     dry_run: bool = False,
 ) -> None:
     """Extract claims for every scope of the runs in a sources parquet file.
@@ -89,6 +108,8 @@ def extract(  # noqa: PLR0913
     :param effort: output_config.effort
     :param aws_region: Bedrock region
     :param max_workers: concurrent model calls
+    :param key_on_header: re-extract scopes whose course header changed since they
+        were extracted, or whose header was never recorded (extraction_key)
     :param dry_run: print the scopes and their estimated input size, call nothing
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -103,7 +124,9 @@ def extract(  # noqa: PLR0913
     ]
     output_dir.mkdir(parents=True, exist_ok=True)
     stored = _existing(output_dir, EXTRACTION_TABLE)
-    existing_keys = set(stored["extraction_key"]) if stored is not None else set()
+    if stored is not None:
+        _require_current_keys(stored)
+    existing_keys = covered_keys(stored) if stored is not None else set()
 
     if dry_run:
         system_tokens = len(SYSTEM_PROMPT) // CHARS_PER_TOKEN
@@ -112,7 +135,8 @@ def extract(  # noqa: PLR0913
             tokens = system_tokens + len(scope_message(scope)) // CHARS_PER_TOKEN
             stored_marker = (
                 "stored"
-                if extraction_key(scope, model_id, effort) in existing_keys
+                if extraction_key(scope, model_id, effort, key_on_header=key_on_header)
+                in existing_keys
                 else ""
             )
             total += 0 if stored_marker else tokens
@@ -136,6 +160,7 @@ def extract(  # noqa: PLR0913
         effort=effort,
         existing_keys=existing_keys,
         max_workers=max_workers,
+        key_on_header=key_on_header,
     )
     # A stored extraction key is what makes a re-run skip a scope, so the extraction
     # table is written last. A run cut off before it leaves claim and evidence rows
@@ -310,6 +335,58 @@ def describe(
     combined = new_rows if previous is None else pl.concat([previous, new_rows])
     combined.write_parquet(output_dir / f"{table}.parquet")
     print(f"{new_rows.height} concepts described")  # noqa: T201
+
+
+@app.command
+def rekey(output_dir: Path) -> None:
+    """Re-key extractions stored before keys left out the course header.
+
+    Their keys hashed the whole message. Their rows hold every column the current
+    key hashes (stored_extraction_key without key_on_header), so it is recomputed
+    exactly and nothing is re-extracted. Their header_version stays null, because
+    the header they read was not stored, and any other column added to the table
+    since they were written is null too. Rows written since record header_version
+    and are left alone.
+
+    Claims and evidence are written before the extraction table, which holds the
+    old keys until last, so a re-run after a crash finishes the job.
+
+    :param output_dir: the directory holding the three extraction tables
+    """
+    extractions = pl.read_parquet(output_dir / f"{EXTRACTION_TABLE}.parquet")
+    extractions = extractions.with_columns(
+        pl.lit(None, dtype=dtype).alias(column)
+        for column, dtype in EXTRACTION_SCHEMA.items()
+        if column not in extractions.columns
+    )
+    new_keys = {
+        row["extraction_key"]: stored_extraction_key(row)
+        for row in extractions.filter(pl.col("header_version").is_null()).iter_rows(
+            named=True
+        )
+    }
+    rekeyed = {
+        table: rows.with_columns(pl.col("extraction_key").replace(new_keys))
+        for table, rows in (
+            (
+                "courseware_claim",
+                pl.read_parquet(output_dir / "courseware_claim.parquet"),
+            ),
+            (
+                "courseware_claim_evidence",
+                pl.read_parquet(output_dir / "courseware_claim_evidence.parquet"),
+            ),
+            (EXTRACTION_TABLE, extractions.select(list(EXTRACTION_SCHEMA))),
+        )
+    }
+    if rekeyed[EXTRACTION_TABLE]["extraction_key"].is_duplicated().any():
+        msg = "extractions that differ only in their course header share a new key"
+        raise ValueError(msg)
+    # dict order: the extraction table, which marks keys done, is written last
+    for table, rows in rekeyed.items():
+        _write(rows, output_dir, table)
+    changed = sum(old != new for old, new in new_keys.items())
+    print(f"{changed} of {extractions.height} extractions re-keyed")  # noqa: T201
 
 
 @app.command(name="answer-check")

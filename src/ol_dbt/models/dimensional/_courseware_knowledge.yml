@@ -57,6 +57,9 @@ models:
     description: str, the effort setting for the call
   - name: input_text_checksum
     description: str, sha256 of the source text the call read
+  - name: header_version
+    description: str, hash of the course header the call read; null for extractions
+      recorded before it was
   - name: source_count
     description: int, sources the call read
   - name: truncated_source_count

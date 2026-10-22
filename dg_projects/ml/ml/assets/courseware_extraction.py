@@ -34,9 +34,11 @@ from ml.lib.courseware.extract import (
     DEFAULT_EFFORT,
     DEFAULT_MODEL,
     EXTRACTOR_ID,
+    KEY_COLUMNS,
     PROMPT_VERSION,
     SCHEMA_VERSION,
     Effort,
+    covered_keys,
     extract_scopes,
     extraction_key,
 )
@@ -296,7 +298,8 @@ def courseware_extraction(
     """Extract claims for every scope of one course run that is not stored yet.
 
     Calls ml.lib.courseware.extract.extract_scopes over the run's scopes, skipping
-    every extraction_key already in courseware_claim_extraction. All three tables
+    every scope part a stored courseware_claim_extraction row already answers
+    (covered_keys). All three tables
     are append-only. Claims and evidence are written before the extraction rows,
     which mark a key as done. A run courseware_extraction_allowlist does not approve
     for this extractor version fails before anything is read or called, however it
@@ -315,14 +318,18 @@ def courseware_extraction(
     scopes = build_scopes(rows) if rows.height else []
 
     stored = read_table("intermediate", EXTRACTION_KEY.path[-1])
+    if stored is not None and "header_version" not in stored.collect_schema():
+        stored = stored.with_columns(header_version=pl.lit(None, dtype=pl.String))
+    # Every key a stored row answers, so rows keyed before keys left out the course
+    # header are not extracted again.
     existing_keys = (
-        set(
+        covered_keys(
             stored.filter(
                 (pl.col("platform") == platform)
                 & (pl.col("courserun_readable_id") == courserun)
             )
-            .select("extraction_key")
-            .collect()["extraction_key"]
+            .select("extraction_key", *KEY_COLUMNS, "header_version")
+            .collect()
         )
         if stored is not None
         else set()
