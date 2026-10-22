@@ -1,10 +1,9 @@
 {# The Postgres column is "CEUs". Airbyte (production) writes it as ceus, dlt (QA, and
    production after its cutover) snake-cases it to ce_us, and reflects numeric(5,2) as a
-   decimal where Airbyte wrote a double. #}
+   decimal where Airbyte wrote a double. ce_us wins if a table ever carries both, since dlt is
+   the loader the unit is moving to. #}
 {% set raw_certificate_pages = source('ol_warehouse_raw_data', 'raw__xpro__app__postgres__cms_certificatepage') %}
-{% set ceus_column = 'ceus' if not execute
-    or 'ceus' in adapter.get_columns_in_relation(raw_certificate_pages) | map(attribute='name') | map('lower')
-    else 'ce_us' %}
+{% set ceus_column = 'ce_us' if execute and relation_has_column(raw_certificate_pages, 'ce_us') else 'ceus' %}
 
 with source as (
     select * from {{ raw_certificate_pages }}

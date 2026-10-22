@@ -1263,8 +1263,8 @@ models:
   - name: cms_programpage_time_commitment
     description: str, short description indicating about the time commitments
   - name: cms_certificate_ceus
-    description: str, number of continuing education units or credits offered. e.g.
-      4.5
+    description: double, number of continuing education units or credits offered.
+      e.g. 4.5
   - name: program_topics
     description: str, list of topic names for all courses in the program
   - name: program_instructors
@@ -1369,8 +1369,8 @@ models:
   - name: cms_coursepage_catalog_details
     description: str, the description shown on the catalog page for this product
   - name: cms_certificate_ceus
-    description: str, number of continuing education units or credits offered. e.g.
-      4.5
+    description: double, number of continuing education units or credits offered.
+      e.g. 4.5
   - name: course_topics
     description: str, list of topic names for a course.
   - name: course_instructors
