@@ -105,6 +105,16 @@ def require_table(layer: str, table: str) -> pl.LazyFrame:
     return rows
 
 
+def latest_run_rows(
+    layer: str, table: str, run_column: str, run_id: str | None
+) -> pl.DataFrame | None:
+    """Return one run's rows of a per-run snapshot table, or None for no run."""
+    rows = read_table(layer, table)
+    if rows is None or run_id is None:
+        return None
+    return rows.filter(pl.col(run_column) == run_id).collect()
+
+
 def partition_courserun(key: MultiPartitionKey) -> tuple[str, str]:
     """Return (platform, courserun_readable_id) for an extraction partition."""
     dimensions = key.keys_by_dimension

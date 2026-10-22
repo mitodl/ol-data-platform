@@ -50,6 +50,9 @@ not the notes. Do not state facts the notes and general knowledge do not support
 Call record_descriptions once with one entry per id.
 """
 
+# Descriptions are short, batched and many; the small model is the default.
+DESCRIPTION_MODEL = "claude-haiku-5-5"
+BEDROCK_DESCRIPTION_MODEL = "us.anthropic.claude-haiku-5-5"
 DESCRIPTION_BATCH_SIZE = 40
 DESCRIPTION_MAX_TOKENS = 32_000
 
@@ -148,6 +151,38 @@ def _describe_batch(
         raise ValueError(msg) from error
 
 
+def description_version(model_id: str, effort: str) -> str:
+    """Hash of the prompt, model and effort; a change describes every concept again."""
+    return hashlib.sha256(
+        json.dumps([DESCRIPTION_PROMPT, model_id, effort]).encode()
+    ).hexdigest()[:12]
+
+
+def pending_concepts(
+    rows: pl.DataFrame, existing: pl.DataFrame | None, version: str
+) -> list[dict[str, Any]]:
+    """Return the concepts whose current inputs have no description at version.
+
+    :param rows: int__courseware__concept_description_inputs rows
+    :param existing: descriptions already stored
+    :param version: description_version for the run's model and effort
+    :returns: one entry per concept to describe, with its input_checksum
+    :rtype: list[dict[str, Any]]
+    """
+    done: set[tuple[str, str]] = set()
+    if existing is not None:
+        done = set(
+            existing.filter(pl.col("description_version") == version)
+            .select("concept_id", "input_checksum")
+            .iter_rows()
+        )
+    return [
+        entry
+        for entry in _concept_inputs(rows)
+        if (entry["concept_id"], entry["input_checksum"]) not in done
+    ]
+
+
 def describe_concepts(  # noqa: PLR0913
     rows: pl.DataFrame,
     client: Anthropic | AnthropicBedrock,
@@ -168,21 +203,8 @@ def describe_concepts(  # noqa: PLR0913
     :returns: the new description rows
     :rtype: pl.DataFrame
     """
-    version = hashlib.sha256(
-        json.dumps([DESCRIPTION_PROMPT, model_id, effort]).encode()
-    ).hexdigest()[:12]
-    done: set[tuple[str, str]] = set()
-    if existing is not None:
-        done = set(
-            existing.filter(pl.col("description_version") == version)
-            .select("concept_id", "input_checksum")
-            .iter_rows()
-        )
-    pending = [
-        entry
-        for entry in _concept_inputs(rows)
-        if (entry["concept_id"], entry["input_checksum"]) not in done
-    ]
+    version = description_version(model_id, effort)
+    pending = pending_concepts(rows, existing, version)
     batches = [list(batch) for batch in batched(pending, DESCRIPTION_BATCH_SIZE)]
     described_at = datetime.now(tz=UTC)
     output: list[dict[str, Any]] = []

@@ -20,7 +20,7 @@ from ml.lib.courseware.answer_check import (
     check_version,
     pending_sources,
 )
-from ml.lib.courseware.describe import describe_concepts
+from ml.lib.courseware.describe import BEDROCK_DESCRIPTION_MODEL, describe_concepts
 from ml.lib.courseware.extract import (
     BEDROCK_DEFAULT_MODEL,
     DEFAULT_EFFORT,
@@ -30,15 +30,17 @@ from ml.lib.courseware.extract import (
 )
 from ml.lib.courseware.graph import compute_graph, previous_membership
 from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
+from ml.lib.courseware.resolve import (
+    BEDROCK_ADJUDICATION_MODEL,
+    ResolutionState,
+    resolve_concepts,
+)
 from ml.lib.courseware.resolve import EMBEDDING_DIM as RESOLUTION_EMBEDDING_DIM
-from ml.lib.courseware.resolve import ResolutionState, resolve_concepts
 from ml.lib.courseware.scopes import CHARS_PER_TOKEN, build_scopes
 from ml.lib.embed import BedrockEmbeddingClient, build_embedding_client
 from ml.resources.llm import LLMClientFactory
 
 app = cyclopts.App(help=__doc__)
-# Descriptions are short, batched and many; the small model is the default.
-BEDROCK_DESCRIPTION_MODEL = "us.anthropic.claude-haiku-5-5"
 # Answer checks are short and many; the small model is the default.
 BEDROCK_ANSWER_CHECK_MODEL = "us.anthropic.claude-haiku-5-5"
 EXTRACTION_TABLE = "courseware_claim_extraction"
@@ -59,8 +61,11 @@ def _write(frame: pl.DataFrame, output_dir: Path, table: str) -> None:
 
 def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
     previous = _existing(output_dir, table)
+    # diagonal: a run table written before a column was added has nulls for it
     _write(
-        new_rows if previous is None else pl.concat([previous, new_rows]),
+        new_rows
+        if previous is None
+        else pl.concat([previous, new_rows], how="diagonal"),
         output_dir,
         table,
     )
@@ -161,7 +166,6 @@ def extract(  # noqa: PLR0913
     )
 
 
-@app.command
 def _latest_run(
     output_dir: Path, table: str, run_id: str | None
 ) -> pl.DataFrame | None:
@@ -176,7 +180,7 @@ def resolve(
     concept_labels: Path,
     output_dir: Path,
     *,
-    model_id: str = BEDROCK_DESCRIPTION_MODEL,
+    model_id: str = BEDROCK_ADJUDICATION_MODEL,
     aws_region: str = "us-east-1",
     rebuild: bool = False,
 ) -> None:
