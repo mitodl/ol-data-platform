@@ -15,12 +15,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
 
+import httpx2
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock, APIError
 from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
 from ml.lib.courseware.schemas import ScopeExtraction
 from ml.lib.courseware.scopes import Scope
+from ml.lib.courseware.tracing import TRACE_TAGS, attach_call
 from ml.lib.courseware.verify import verify_passage
+from ml.resources.opik_auth import traced
 from pydantic import BaseModel, ValidationError
 
 log = logging.getLogger(__name__)
@@ -67,6 +70,7 @@ EXTRACTION_SCHEMA = {
     "scope_part": pl.Int64,
     "scope_part_count": pl.Int64,
     "input_text_checksum": pl.String,
+    "scope_part_checksums": pl.String,
     "source_count": pl.Int64,
     "truncated_source_count": pl.Int64,
     "sources_json": pl.String,
@@ -160,8 +164,18 @@ class _ModelResult:
     cache_creation_input_tokens: int
 
 
+@traced(
+    "courseware_extract_scope",
+    tags=TRACE_TAGS,
+    ignore_arguments=["client", "trace_metadata"],
+)
 def call_model(
-    client: Anthropic | AnthropicBedrock, model_id: str, effort: Effort, message: str
+    client: Anthropic | AnthropicBedrock,
+    model_id: str,
+    effort: Effort,
+    message: str,
+    *,
+    trace_metadata: dict[str, Any],
 ) -> _ModelResult:
     """Ask for one scope's extraction as a record_extraction tool call.
 
@@ -171,9 +185,12 @@ def call_model(
     prompt asks for it, and the input is validated here. The system prompt is the
     cached prefix shared by every call.
 
+    :param trace_metadata: what identifies the call on its Opik span
+        (extraction_key and scope)
     :raises ExtractionError: when no attempt returns a valid extraction
     """
     error: Exception | str | None = None
+    usages = []
     for _ in range(ATTEMPTS):
         with client.messages.stream(
             model=model_id,
@@ -191,6 +208,14 @@ def call_model(
             output_config={"effort": effort},
         ) as stream:
             response = stream.get_final_message()
+        usages.append(response.usage)
+        attach_call(
+            client,
+            model_id,
+            usages,
+            template=SYSTEM_PROMPT,
+            metadata=trace_metadata,
+        )
         if response.stop_reason == "refusal":
             msg = f"refused: {response.stop_details}"
             raise ExtractionError(msg)
@@ -299,6 +324,7 @@ def _rows(
         "scope_part": scope.part,
         "scope_part_count": scope.part_count,
         "input_text_checksum": scope.input_text_checksum,
+        "scope_part_checksums": scope.scope_part_checksums,
         "source_count": len(scope.sources),
         "truncated_source_count": sum(source.truncated for source in scope.sources),
         "sources_json": json.dumps(
@@ -354,17 +380,29 @@ def extract_scopes(  # noqa: PLR0913
     extractions, claims, evidence = [], [], []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {
-            pool.submit(call_model, client, model_id, effort, scope_message(scope)): (
-                scope,
-                key,
-            )
+            pool.submit(
+                call_model,
+                client,
+                model_id,
+                effort,
+                scope_message(scope),
+                trace_metadata={
+                    "extraction_key": key,
+                    "prompt_version": PROMPT_VERSION,
+                    "effort": effort,
+                    "platform": scope.course.platform,
+                    "courserun_readable_id": scope.course.courserun_readable_id,
+                    "scope_key": scope.scope_key,
+                },
+            ): (scope, key)
             for scope, key in pending
         }
         for future in as_completed(futures):
             scope, key = futures[future]
             try:
                 result = future.result()
-            except (ExtractionError, APIError):
+            # the SDK does not wrap a connection that drops mid-stream in an APIError
+            except (ExtractionError, APIError, httpx2.TransportError):
                 log.exception(
                     "Extraction failed for %s %s",
                     scope.course.courserun_readable_id,

@@ -36,15 +36,24 @@ the source until a load reads nothing (``build_batched_assets`` in the
 data_loading code location), and the sweep resumes after the last course a
 load finished rather than listing the bucket from the start again.
 
+A load can also be scoped to named courses, which is how a course is loaded
+soon after it is published rather than at the next sweep (the
+``ocw_content_publish_sensor`` in the data_loading code location, which finds
+them by ``published_at``). A scoped load records each course's version in the
+same state, so the sweep does not read it again. It leaves the unpublish rules
+alone: it neither unpublishes a course nor counts toward the limit, because it
+has not seen the rest of the bucket.
+
 Tika credentials: see ``ol_dlt.tika``.
 
-Run standalone:
+Run standalone, as a sweep, or for the courses whose slugs follow it:
     DLT_PROFILE=dev TIKA_ACCESS_TOKEN=... python -m ol_dlt.sources.ocw_content
 """
 
 import hashlib
 import json
 import logging
+import sys
 from collections.abc import Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -120,6 +129,8 @@ BUDGET_BYTES = 2 * 1024**3
 WORKERS = 8
 # Courses listed ahead of the one being read.
 LISTING_WINDOW = 32
+# HEAD requests in flight at once when reading every course's publish time.
+PUBLISH_CHECK_WORKERS = 32
 
 # A run that would unpublish more of the known courses than this fails
 # instead: an unpublished course loses its ContentFiles in MIT Learn.
@@ -307,6 +318,30 @@ def list_courses(fs: s3fs.S3FileSystem, bucket: str) -> list[str]:
     return sorted(
         PurePosixPath(path).name for path in fs.ls(f"{bucket}/courses/", detail=False)
     )
+
+
+def published_at(fs: s3fs.S3FileSystem, bucket: str) -> dict[str, datetime]:
+    """Return when each course's ``data.json`` was last written, by slug.
+
+    An online publish writes ``data.json`` with the rest of the course's
+    build: for the 39 courses published 2026-10-16 to 2026-10-19, the build's
+    last object landed at most 3 s after it. So this is the time of the
+    course's last publish. A mass rebuild writes it too, often without
+    changing it. One HEAD per course, where a listing of every object in the
+    bucket takes ~456 requests.
+
+    :returns: The time, for each course that has a ``data.json``.
+    """
+    slugs = list_courses(fs, bucket)
+    with ThreadPoolExecutor(max_workers=PUBLISH_CHECK_WORKERS) as pool:
+        infos = pool.map(
+            lambda slug: _object_info(fs, bucket, f"courses/{slug}/data.json"), slugs
+        )
+        return {
+            slug: info["LastModified"]
+            for slug, info in zip(slugs, infos, strict=True)
+            if info is not None
+        }
 
 
 def list_course(fs: s3fs.S3FileSystem, bucket: str, slug: str) -> CourseObjects:
@@ -613,23 +648,34 @@ def _unpublished_rows(
 
 
 @dlt.source(name="ocw_content_ingest")
-def ocw_content_source(
+def ocw_content_source(  # noqa: PLR0913
     bucket: str = BUCKET,
     courses: Sequence[str] | None = None,
     budget_bytes: int = BUDGET_BYTES,
     table_format: config.TableFormat | None = None,
+    *,
+    force: bool = False,
 ) -> Any:  # noqa: ANN401
     """Load the content of the OCW courses that changed since the last load.
 
     :param bucket: The OCW live bucket.
-    :param courses: Slugs to read again whether or not they changed, e.g. to
-        retry files Tika failed on. Reads every changed course when None.
+    :param courses: Slugs to load on their own, e.g. the courses a publish
+        just wrote. A slug not in the bucket, or whose prefix has no
+        ``data.json``, is skipped and left to the sweep. Sweeps every course
+        when None.
     :param budget_bytes: How many source bytes one load may read. A course is
-        never split, so a load can exceed it by one course. Ignored when
-        ``courses`` is given.
+        never split, so a load can exceed it by one course. A scoped load stops
+        there too, and the next one skips the courses it read. Ignored with
+        ``force``, which would read them again.
     :param table_format: ``native`` or ``iceberg``; defaults to the active
         profile's.
+    :param force: Read the named ``courses`` whether or not they changed, e.g.
+        to retry files Tika failed on.
+    :raises ValueError: ``force`` without ``courses``.
     """
+    if force and courses is None:
+        msg = "force reads the named courses again; name them in courses."
+        raise ValueError(msg)
 
     @dlt.resource(
         name=RAW_TABLE,
@@ -678,6 +724,9 @@ def ocw_content_source(
                     version = course_version(slug, objects)
                     recorded = versions.get(slug)
                     if not any(content_kind(slug, key) for key in objects):
+                        if courses is not None:
+                            logger.info("%s has no data.json; left to the sweep", slug)
+                            continue
                         unpublish, versions[slug] = settle_empty_course(
                             recorded, version, now
                         )
@@ -688,7 +737,7 @@ def ocw_content_source(
                             yield pa.Table.from_pylist([row], schema=SCHEMA)
                         continue
                     if (
-                        courses is None
+                        not force
                         and not needs_read(recorded, version, now)
                         and not external_files_changed(
                             fs, bucket, external_files.get(slug)
@@ -719,8 +768,9 @@ def ocw_content_source(
                     else:
                         external_files.pop(slug, None)
                     spent += source_bytes
-                    if courses is None and spent >= budget_bytes:
-                        state["resume_after"] = slug
+                    if spent >= budget_bytes and not force:
+                        if courses is None:
+                            state["resume_after"] = slug
                         return
         finally:
             # Not waited for: when Tika is down, the calls in flight would each
@@ -736,10 +786,13 @@ def ocw_content_source(
 ocw_content_pipeline = config.pipeline_for("ocw", pipeline_name="ocw_content")
 
 
-def build_source() -> Any:  # noqa: ANN401
-    """Instantiate the source for the active profile."""
-    return config.with_nullable_load_id(ocw_content_source())
+def build_source(courses: Sequence[str] | None = None) -> Any:  # noqa: ANN401
+    """Instantiate the source for the active profile.
+
+    :param courses: Slugs to load on their own; sweeps every course when None.
+    """
+    return config.with_nullable_load_id(ocw_content_source(courses=courses))
 
 
 if __name__ == "__main__":
-    print(ocw_content_pipeline.run(build_source()))  # noqa: T201
+    print(ocw_content_pipeline.run(build_source(sys.argv[1:] or None)))  # noqa: T201
