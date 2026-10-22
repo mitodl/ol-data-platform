@@ -3,17 +3,28 @@
     source item in reading order.
 
     Scopes:
-      unit       one per sequential, its leaf blocks in course-tree order (dim_course_content)
-      context    the about pages, reachable tabs and course info pages
+      unit       one per sequential a learner can navigate to (not staff-only, alone or by
+                 its chapter, and not hidden from the table of contents), its leaf blocks
+                 in course-tree order (dim_course_content)
+      context    the about pages, reachable tabs and course info pages, then the blocks of
+                 the sequentials that describe the course or a module rather than teach:
+                 one titled "Module Overview and Learning Goals" wherever it sits, and a
+                 chapter's only sequential when its title starts a word with intro,
+                 overview, welcome, conclusion, summary or wrap. These are mit-learn's
+                 context-sequential rules (learning_resources/etl/utils.py,
+                 _is_context_sequential), so the platform and Learn agree on units.
       materials  the run's static documents (slides, PDFs) that no unit's html links to.
                  A document an html block links to (content_file_static_references) is
-                 read in that block's unit instead.
+                 read right after that block, in its unit or in context.
 
     Problem text is the question side only (courseware_problem_question_text). A
     library_content block contributes its first problem, since its children are
     randomized variants of one question. Files are dropped by the export's own exclusion
     rules, except about_page: Learn leaves the about pages out of search, but the
-    description and prerequisites stated there are what the context scope is for.
+    description and prerequisites stated there are what the context scope is for. Each
+    about page is one field of the about page, so its text is prefixed with the field's
+    name ("Prerequisites" then "None"); bare, "None" says nothing. The description pages
+    are left as they are, since the course header already gives them as DESCRIPTION.
     Answer keys and solution sets (courseware_answer_key over the file's path, minus its
     extension, and the opening of its text) are never read.
 
@@ -67,6 +78,9 @@
 {% set ocw_courses = var('courseware_ocw_courses', []) %}
 {% set honored_exclusions = ['unreferenced_static', 'unreachable_tab', 'legacy_announcements', 'non_content', 'course_settings'] %}
 {% set document_extensions = ['.pdf', '.pptx', '.ppt', '.docx', '.doc', '.txt', '.md'] %}
+{% set context_sequential_titles = ['module overview and learning goals'] %}
+{# ml.lib.courseware.scopes.DESCRIPTION_PAGES #}
+{% set description_pages = ['about/short_description.html', 'about/overview.html', 'about/description.html'] %}
 
 {% if courseruns or ocw_courses %}
     {% set courserun_filter = "('" ~ courseruns | join("', '") ~ "')" if courseruns else "('')" %}
@@ -184,6 +198,46 @@ with content as (
         and courserun_readable_id in {{ courserun_filter }}
 )
 
+-- as in #4095, a chapter's size counts only the sequentials a learner can navigate to,
+-- and the others are neither units nor context
+, sequentials as (
+    select
+        sequential.platform
+        , sequential.courserun_readable_id
+        , sequential.block_id
+        , sequential.block_title
+        , sequential.block_index
+        , lower(trim({{ regexp_replace_all('sequential.block_title', "'\\s+'", "' '") }})) as normalized_title
+        , count(*) over (
+            partition by sequential.platform, sequential.courserun_readable_id, sequential.chapter_block_id
+        ) as chapter_sequential_count
+    from content as sequential
+    left join content as chapter
+        on
+            sequential.platform = chapter.platform
+            and sequential.courserun_readable_id = chapter.courserun_readable_id
+            and sequential.chapter_block_id = chapter.block_id
+    where
+        sequential.block_category = 'sequential'
+        and coalesce({{ json_query_string('sequential.block_metadata', "'$.visible_to_staff_only'") }}, '') != 'true'
+        and coalesce({{ json_query_string('chapter.block_metadata', "'$.visible_to_staff_only'") }}, '') != 'true'
+        and coalesce({{ json_query_string('sequential.block_metadata', "'$.hide_from_toc'") }}, '') != 'true'
+)
+
+, classified_sequentials as (
+    select
+        *
+        , coalesce(
+            normalized_title in ('{{ context_sequential_titles | join("', '") }}')
+            or (
+                chapter_sequential_count = 1
+                and {{ regexp_like('normalized_title', "'\\b(intro|overview|welcome|conclusion|summary|wrap)'") }}
+            )
+            , false
+        ) as is_context_sequential
+    from sequentials
+)
+
 , units as (
     select
         platform
@@ -193,8 +247,17 @@ with content as (
         , row_number() over (
             partition by platform, courserun_readable_id order by block_index
         ) as scope_position
-    from content
-    where block_category = 'sequential'
+    from classified_sequentials
+    where not is_context_sequential
+)
+
+, context_sequentials as (
+    select
+        platform
+        , courserun_readable_id
+        , block_id as sequential_block_id
+    from classified_sequentials
+    where is_context_sequential
 )
 
 -- a library_content block's children are variants; keep the first
@@ -252,6 +315,7 @@ with content as (
         unit_blocks.platform
         , unit_blocks.courserun_readable_id
         , unit_blocks.sequential_block_id as scope_id
+        , 1 as source_group
         , unit_blocks.block_index as source_order
         , unit_blocks.block_id as source_ref
         , case unit_blocks.block_category
@@ -332,6 +396,13 @@ with content as (
             and unit_blocks.platform = html_body.platform
             and unit_blocks.courserun_readable_id = html_body.courserun_readable_id
             and html_body.content_file_path = concat('html/', unit_blocks.html_filename, '.html')
+    -- a link places a document only from a sequential that is read, as a unit or as
+    -- context; one linked only from a staff-only or hidden sequential stays in materials
+    inner join classified_sequentials as sequential
+        on
+            unit_blocks.platform = sequential.platform
+            and unit_blocks.courserun_readable_id = sequential.courserun_readable_id
+            and unit_blocks.sequential_block_id = sequential.block_id
     cross join {{ unnest_json_array('html_body.content_file_static_references', 'linked', 'static_path') }}
 )
 
@@ -388,22 +459,79 @@ with content as (
     where is_exact = 1 or (exact_matches = 0 and key_matches = 1)
 )
 
+, context_pages as (
+    select
+        *
+        , {{ regexp_extract_or_null('content_file_path', "'^([a-z]+)/'", 1) }} as page_folder
+        -- about/short_description.html -> Short description
+        , {{ regexp_replace_all(
+            regexp_replace_all(regexp_replace_all('content_file_path', "'^about/'", "''"), "'\\.html$'", "''")
+            , "'_'", "' '"
+        ) }} as about_field
+    from unscoped_documents
+    where content_file_extension = '.html'
+)
+
 , context_sources as (
     select
         platform
         , courserun_readable_id
         , 'context' as scope_id
+        , 0 as source_group
         , row_number() over (
             partition by platform, courserun_readable_id order by content_file_path
         ) as source_order
         , content_file_path as source_ref
-        , concat({{ regexp_extract_or_null('content_file_path', "'^([a-z]+)/'", 1) }}, '_page') as source_kind
+        , concat(page_folder, '_page') as source_kind
         , content_file_path as source_title
-        , content_file_text as source_text
-    from unscoped_documents
-    where
-        content_file_extension = '.html'
-        and {{ regexp_extract_or_null('content_file_path', "'^([a-z]+)/'", 1) }} in ('about', 'tabs', 'info')
+        , case
+            when page_folder = 'about' and content_file_path not in ('{{ description_pages | join("', '") }}')
+                then concat(
+                    upper(substr(about_field, 1, 1)), substr(about_field, 2), {{ codepoint_char(10) }}, content_file_text
+                )
+            else content_file_text
+        end as source_text
+    from context_pages
+    where page_folder in ('about', 'tabs', 'info')
+
+    union all
+
+    select
+        unit_sources.platform
+        , unit_sources.courserun_readable_id
+        , 'context' as scope_id
+        , unit_sources.source_group
+        , unit_sources.source_order
+        , unit_sources.source_ref
+        , unit_sources.source_kind
+        , unit_sources.source_title
+        , unit_sources.source_text
+    from unit_sources
+    inner join context_sequentials
+        on
+            unit_sources.platform = context_sequentials.platform
+            and unit_sources.courserun_readable_id = context_sequentials.courserun_readable_id
+            and unit_sources.scope_id = context_sequentials.sequential_block_id
+
+    union all
+
+    select
+        linked_documents.platform
+        , linked_documents.courserun_readable_id
+        , 'context' as scope_id
+        , 1 as source_group
+        , linked_documents.source_order
+        , linked_documents.source_ref
+        , linked_documents.source_kind
+        , linked_documents.source_title
+        , linked_documents.source_text
+    from linked_documents
+    inner join context_sequentials
+        on
+            linked_documents.platform = context_sequentials.platform
+            and linked_documents.courserun_readable_id = context_sequentials.courserun_readable_id
+            and linked_documents.scope_id = context_sequentials.sequential_block_id
+    where linked_documents.link_rank = 1
 )
 
 , material_sources as (
@@ -411,6 +539,7 @@ with content as (
         unscoped_documents.platform
         , unscoped_documents.courserun_readable_id
         , 'materials' as scope_id
+        , 0 as source_group
         , row_number() over (
             partition by unscoped_documents.platform, unscoped_documents.courserun_readable_id
             order by unscoped_documents.content_file_path
@@ -1329,6 +1458,7 @@ with content as (
         linked_documents.platform
         , linked_documents.courserun_readable_id
         , linked_documents.scope_id
+        , 1 as source_group
         , linked_documents.source_order
         , linked_documents.source_ref
         , linked_documents.source_kind
@@ -1369,6 +1499,7 @@ with content as (
         platform
         , courserun_readable_id
         , scope_id
+        , 0 as source_group
         , source_order
         , source_ref
         , source_kind
@@ -1407,7 +1538,7 @@ select
     , scoped_sources.scope_position
     , row_number() over (
         partition by scoped_sources.platform, scoped_sources.courserun_readable_id, scoped_sources.scope_id
-        order by scoped_sources.source_order, scoped_sources.source_ref
+        order by scoped_sources.source_group, scoped_sources.source_order, scoped_sources.source_ref
     ) as source_position
     , scoped_sources.source_ref
     , scoped_sources.source_kind

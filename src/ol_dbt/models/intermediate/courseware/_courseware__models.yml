@@ -6,10 +6,12 @@ models:
   description: The text the courseware claim extractor reads, one row per source item
     of each scope (a sequential, the course context, or the course documents) of an
     Open edX course run, in reading order. Problem text is the question side only.
-    OCW courses are scoped by page group, section page or calendar session, with answer
-    keys left out; a link to a resource also takes what the resource's description
-    links, a problem set goes to the session whose calendar row releases it, and a
-    course taught through three or more page groups does not read its textbook section.
+    Module overview and summary sequentials are read in the context scope, as in mit-learn's
+    unit builder. OCW courses are scoped by page group, section page or calendar session,
+    with answer keys left out; a link to a resource also takes what the resource's
+    description links, a problem set goes to the session whose calendar row releases
+    it, and a course taught through three or more page groups does not read its textbook
+    section.
   config:
     meta:
       # The text it reads (raw__openedx__s3__course_transcript_text and
@@ -40,7 +42,8 @@ models:
   - name: scope_title
     description: str, the sequential's title or the scope's name
   - name: scope_position
-    description: int, the scope's order in the course; 0 for context, 9999 for materials
+    description: int, the unit's order among the run's units, from 1; 0 for context,
+      9999 for materials
   - name: source_position
     description: int, the source's order within its scope, from 1
   - name: source_ref
@@ -63,7 +66,11 @@ models:
   description: Every claim extraction, and whether it is current, the one its scope
     part is read from now. A scope's newest complete reading is current, so a run
     that extracts only some parts of a new reading changes nothing until the rest
-    succeed.
+    succeed. A scope the run's extraction sources no longer have has no current extraction.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: extraction_key
     description: str, sha256 of everything the call depended on (extractor, prompt
@@ -183,6 +190,10 @@ models:
 - name: int__courseware__claims
   description: Every extracted claim with its scope, extractor version, evidence counts
     and normalized concept label key.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: extraction_key
     description: str, the extraction the claim came from
