@@ -435,6 +435,16 @@ models:
       Learn orders a program's courses. Null for a child program that is not shown
       as a course - its courses have positions of their own. Positions have gaps where
       a course in the tree has no live page.
+  - name: child_program_order
+    description: int, zero-based place of a child program among the program's child
+      programs, by its first node in the requirement tree. This is the order MIT Learn's
+      ETL lists child_programs in (get_program_ids_from_req_tree), and Learn numbers
+      a child program without a child_position after the program's other children
+      in this order. Null for a course.
+    tests:
+    - not_null:
+        config:
+          where: "child_resource_type = 'program'"
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -780,7 +790,8 @@ unit_tests:
     a position of its own; any other required program contributes its courses where
     its node is and has no position. A course met a second time keeps its first
     position, a course without a live page leaves a gap, and a required program
-    the API does not list (B2B-only) is skipped.
+    the API does not list (B2B-only) is skipped. Required programs are ordered by
+    their first node, not by readable id.
   model: integrations__learn__mitxonline_program_children
   given:
   - input: ref('stg__mitxonline__app__postgres__courses_program')
@@ -790,6 +801,7 @@ unit_tests:
     - {program_id: 3, program_readable_id: as-course, program_is_live: true, program_is_b2b_only: false,
       program_display_mode: course}
     - {program_id: 4, program_readable_id: b2b, program_is_live: true, program_is_b2b_only: true}
+    - {program_id: 5, program_readable_id: a-track, program_is_live: true, program_is_b2b_only: false}
   - input: ref('stg__mitxonline__app__postgres__courses_programrequirement')
     rows:
     - {program_id: 1, programrequirement_node_type: program_root, programrequirement_path: "0001"}
@@ -803,6 +815,10 @@ unit_tests:
       course_id: 13}
     - {program_id: 1, programrequirement_node_type: program, programrequirement_path: "000100010005",
       required_program_id: 4}
+    - {program_id: 1, programrequirement_node_type: program, programrequirement_path: "000100010006",
+      required_program_id: 5}
+    - {program_id: 1, programrequirement_node_type: program, programrequirement_path: "000100010007",
+      required_program_id: 2}
     - {program_id: 2, programrequirement_node_type: course, programrequirement_path: "000200010001",
       course_id: 12}
     - {program_id: 2, programrequirement_node_type: course, programrequirement_path: "000200010002",
@@ -826,19 +842,21 @@ unit_tests:
   expect:
     rows:
     - {readable_id: parent, child_resource_type: course, child_readable_id: course-11,
-      child_display_mode: null, child_position: 0}
+      child_display_mode: null, child_position: 0, child_program_order: null}
     - {readable_id: parent, child_resource_type: course, child_readable_id: course-14,
-      child_display_mode: null, child_position: 2}
+      child_display_mode: null, child_position: 2, child_program_order: null}
     - {readable_id: parent, child_resource_type: program, child_readable_id: as-course,
-      child_display_mode: course, child_position: 3}
+      child_display_mode: course, child_position: 3, child_program_order: 1}
     - {readable_id: parent, child_resource_type: course, child_readable_id: course-13,
-      child_display_mode: null, child_position: 4}
+      child_display_mode: null, child_position: 4, child_program_order: null}
     - {readable_id: parent, child_resource_type: program, child_readable_id: track,
-      child_display_mode: null, child_position: null}
+      child_display_mode: null, child_position: null, child_program_order: 0}
+    - {readable_id: parent, child_resource_type: program, child_readable_id: a-track,
+      child_display_mode: null, child_position: null, child_program_order: 2}
     - {readable_id: track, child_resource_type: course, child_readable_id: course-11,
-      child_display_mode: null, child_position: 1}
+      child_display_mode: null, child_position: 1, child_program_order: null}
     - {readable_id: track, child_resource_type: course, child_readable_id: course-14,
-      child_display_mode: null, child_position: 2}
+      child_display_mode: null, child_position: 2, child_program_order: null}
 
 - name: test_integrations__learn__mitxonline_courses_published_certification_and_numbers
   description: >
