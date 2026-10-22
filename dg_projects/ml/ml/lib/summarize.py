@@ -83,6 +83,14 @@ SUMMARY_PROMPT = (
     "Describe the need in general terms. Refer to courses by subject (for "
     'example, "a finance course"), not by title. Do not describe how support '
     "resolved it.\n\n"
+    "Describe a problem or request only if the learner states one about the "
+    "platform, a course, its materials, or the assistant. Problems the learner "
+    "analyzes as part of the course subject, such as a weakness in a policy or "
+    "case study they are discussing, are not feedback. If the text is an "
+    "introduction, an answer to an assignment or discussion prompt, or a "
+    "reflection on the course subject, say that in a few words and name the "
+    'topic, for example "The learner shared a reflection on supply chain '
+    'trade-offs."\n\n'
     "The text may be very short. Never ask for more text and never say there is "
     "nothing to summarize. If the text is too short to tell what the learner "
     "wanted, restate what it says in a few words.\n\n"
