@@ -618,6 +618,10 @@ models:
 - name: int__courseware__cited_concept_sources
   description: Every source a current, verified claim quotes, per concept the claim
     names.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: platform
     description: str, mitxonline, mitxpro or residential
@@ -638,6 +642,10 @@ models:
 - name: int__courseware__concept_tagging_fan_out
   description: Per dictionary phrase and concept, how many mentions the newest tagging
     run produced and how often the extractor agrees. The review queue for the dictionary.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: tagging_run_id
     description: str, the newest tagging run
