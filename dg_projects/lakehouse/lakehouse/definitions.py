@@ -754,7 +754,7 @@ resources_dict = {
         deployment="openmetadata",
         client_class="OpenMetadataApiClient",
         mount_point="secret-data",
-        config_path="pipelines/openmetadata",
+        config_path="pipelines/openmetadata-dagster-bot",
         vault=vault,
     ),
     "starrocks": StarRocksResource(
