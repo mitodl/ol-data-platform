@@ -90,6 +90,12 @@ unit_tests:
     - {content_file_source_system: mitxonline, courserun_readable_id: r2, content_file_extraction_status: extracted,
       content_file_path: static/reading2.pdf, content_file_extension: .pdf, content_file_text: Reading
         two.}
+  - input: ref('int__ocw__live_courses')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows: []
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
   - input: ref('int__courseware__extraction_allowlist')
     rows:
     - {platform: mitxonline, courserun_readable_id: r1, allowlist_level: courserun}
@@ -124,6 +130,12 @@ unit_tests:
     - {content_file_source_system: mitxonline, courserun_readable_id: r2, content_file_extraction_status: extracted,
       content_file_path: static/reading2.pdf, content_file_extension: .pdf, content_file_text: Reading
         two.}
+  - input: ref('int__ocw__live_courses')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows: []
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
   - input: ref('int__courseware__extraction_allowlist')
     rows:
     - {platform: mitxonline, courserun_readable_id: r1, allowlist_level: courserun}

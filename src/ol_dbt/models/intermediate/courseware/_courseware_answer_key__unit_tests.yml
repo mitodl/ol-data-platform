@@ -105,18 +105,25 @@ unit_tests:
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit18_01scf10_ps5/,
       content_type: pdf, title: Problem Set 5, file_extension: .pdf, content_tags: null,
       content: Problem Set 5 Solutions. 1. 2x}
-    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/ses5_solis_wets/,
-      content_type: pdf, title: ses5_solis_wets.pdf, file_extension: .pdf, content_tags: null,
-      content: 1. 2x}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/ans9/, content_type: pdf,
+      title: ans9.pdf, file_extension: .pdf, content_tags: null, content: 1. Run k
+        times and take the median.}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/exam_smpsolqii2a/,
+      content_type: pdf, title: exam_smpsolqii2a.pdf, file_extension: .pdf, content_tags: null,
+      content: Ohio county election results.}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/section22_ak/,
+      content_type: pdf, title: section22_ak.pdf, file_extension: .pdf, content_tags: null,
+      content: "7.014 Introductory Biology. Recitation Section 22 Answer Key May 2-3,\
+        \ 2005"}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit6_041f10_rec02/,
-      content_type: pdf, title: Recitation 2, file_extension: .pdf, content_tags: "Recitations,\
-        \ Solutions", content: 1. 2x}
+      content_type: pdf, title: Recitation 2, file_extension: .pdf, content_tags: '["Recitations",
+        "Problem Set Solutions"]', content: 1. 2x}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit8_01_final/,
       content_type: pdf, title: Final, file_extension: .pdf, content_tags: null, content: "1.\
         \ Solution: x = 3\n2. Solution: y = 4\n3. Solution: z = 5"}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/ps3_problem_2/,
-      content_type: video, title: Problem 2, file_extension: null, content_tags: "Problem-solving\
-        \ Videos, Solutions", content: null}
+      content_type: video, title: Problem 2, file_extension: null, content_tags: '["Problem-solving
+        Videos", "Problem Set Solutions"]', content: null}
     # topics and teaching material
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit5_111f08_lec3/,
       content_type: pdf, title: Review of Aqueous Solutions, file_extension: .pdf,
@@ -124,6 +131,12 @@ unit_tests:
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit2_092f09_lec15/,
       content_type: pdf, title: mit2_092f09_lec15.pdf, file_extension: .pdf, content_tags: null,
       content: Solution of dynamic equilibrium equations by direct integration.}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/ses5_solis_wets/,
+      content_type: pdf, title: ses5_solis_wets.pdf, file_extension: .pdf, content_tags: null,
+      content: Minimization by random search techniques by Solis and Wets.}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/solnhofenlimestone/,
+      content_type: file, title: SolnhofenLimestone.txt, file_extension: .txt, content_tags: null,
+      content: Peak stress of Solnhofen limestone.}
     - {courserun_readable_id: o1, content_file_key: courses/c1/resources/catialab2solids/,
       content_type: pdf, title: "CATIA Lab 2: Solids", file_extension: .pdf, content_tags: null,
       content: Extrude a sketch into a solid.}
@@ -205,7 +218,11 @@ unit_tests:
       is_flagged_by_model: false}
     - {platform: ocw, source_ref: courses/c1/resources/mit18_01scf10_ps5/, review_reason: excluded_by_rule,
       is_flagged_by_model: false}
-    - {platform: ocw, source_ref: courses/c1/resources/ses5_solis_wets/, review_reason: excluded_by_rule,
+    - {platform: ocw, source_ref: courses/c1/resources/ans9/, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: ocw, source_ref: courses/c1/resources/exam_smpsolqii2a/, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: ocw, source_ref: courses/c1/resources/section22_ak/, review_reason: excluded_by_rule,
       is_flagged_by_model: false}
     - {platform: ocw, source_ref: courses/c1/resources/mit6_041f10_rec02/, review_reason: excluded_by_rule,
       is_flagged_by_model: false}
@@ -221,6 +238,12 @@ unit_tests:
   model: int__courseware__extraction_sources
   given:
   - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows: []
+  - input: ref('stg__ocw__s3__course_content')
     rows: []
   - input: ref('int__combined__course_xml_blocks')
     rows: []
