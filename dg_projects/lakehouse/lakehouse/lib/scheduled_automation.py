@@ -182,8 +182,7 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     "learn_integrations_qa_daily": frozenset({"qa"}),
     # A sensor, not a schedule, gated here for the same reason. It writes check
     # results to OpenMetadata on tables named from the image's manifest, which
-    # is compiled for production, and only the production stack copies the bot
-    # token to secret-data/pipelines/openmetadata.
+    # is compiled for production.
     "asset_check_openmetadata": frozenset({"production"}),
     # Compares QA raw with the committed qa_observation.json and fails when
     # the file is wrong about which tables hold rows. QA only: it reads
