@@ -175,15 +175,14 @@ defs = Definitions(
         ),
         "vault": vault,
         "s3": S3Resource(),
-        # Category proposals and sentiment eval; feedback_summaries calls models
-        # through ol-llm (SUMMARY_MODEL in ml.lib.summarize). Bedrock in every
+        # Category proposals and sentiment eval; feedback_summaries and
+        # feedback_embeddings call models through ol-llm (SUMMARY_MODEL in
+        # ml.lib.summarize, EMBEDDING_MODEL in ml.lib.embed). Bedrock in every
         # deployed env (IAM metadata auth, no API key needed) -- only "dev" lacks
         # the Bedrock IAM role, so it needs an API key there.
-        # SUMMARY_PROVIDER/EMBEDDING_PROVIDER override the client_class picked here.
+        # SUMMARY_PROVIDER overrides the client_class picked here.
         # LLM_BASE_URL/LLM_AZURE_ENDPOINT are only required for
-        # 'openai_compatible'/'azure_openai' -- shared with embedding_llm below on
-        # the assumption local testing points both at the same gateway (e.g.
-        # Parley); set client_class independently per resource if that's not true.
+        # 'openai_compatible'/'azure_openai'.
         "llm": LLMClientFactory(
             client_class=os.environ.get(
                 "SUMMARY_PROVIDER",
@@ -191,20 +190,6 @@ defs = Definitions(
             ),
             base_url=os.environ.get("LLM_BASE_URL"),
             azure_endpoint=os.environ.get("LLM_AZURE_ENDPOINT"),
-        ),
-        # Separate resource, not a reused "llm": Anthropic/Bedrock has no embeddings
-        # API, so this needs its own client_class/key. Which Bedrock embedding
-        # model to keep is still open (§B.1's bake-off); bedrock_embeddings is the
-        # default deployed envs need since no OPENAI_API_KEY is provisioned there.
-        "embedding_llm": LLMClientFactory(
-            client_class=os.environ.get(
-                "EMBEDDING_PROVIDER",
-                "openai" if DAGSTER_ENV == "dev" else "bedrock_embeddings",
-            ),
-            # Only required (and only read) when EMBEDDING_PROVIDER='openai_compatible'
-            # -- e.g. a local gateway like Parley that fronts multiple providers
-            # behind one OpenAI-shaped API. Shared var with "llm" above.
-            base_url=os.environ.get("LLM_BASE_URL"),
         ),
     },
     assets=with_failure_hooks(

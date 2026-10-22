@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+import pydantic_ai.models
 import pytest
 from ol_llm import Settings, TracingConfig, configure, configure_tracing
 from pyiceberg.catalog.sql import SqlCatalog
@@ -13,6 +14,11 @@ os.environ.setdefault("DBT_SCHEMA_SUFFIX", "test")
 # which would turn tracing on and send get_prompt to an Opik that isn't there.
 configure(Settings(environment="ci"))
 configure_tracing(TracingConfig(enabled=False))
+
+# A test that reaches a real provider model (e.g. an ol-llm override left behind in
+# the caller's context while process_batch runs the call on a worker thread) fails
+# instead of sending a request.
+pydantic_ai.models.ALLOW_MODEL_REQUESTS = False
 
 
 @pytest.fixture
