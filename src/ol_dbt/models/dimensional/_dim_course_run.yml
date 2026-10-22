@@ -31,10 +31,20 @@ models:
       is_current=true when looking up by this key.
     tests:
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.course-run
   - name: courserun_readable_id
     description: Business key - unique identifier for course run
     tests:
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.course-run
   - name: course_fk
     description: >
       Foreign key to dim_course. Null when no matching course exists in dim_course
@@ -65,6 +75,11 @@ models:
     description: Platform identifier string
     tests:
     - not_null
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.platform
   - name: courserun_title
     description: Title of this specific course run
   - name: courserun_start_date_key

@@ -78,7 +78,8 @@ models:
   - name: extracted_at
     description: timestamp, when the call returned
   - name: is_current
-    description: boolean, whether this is the newest extraction of its scope part
+    description: boolean, whether this is the extraction its scope part is read from
+      now (int__courseware__extractions)
 
 - name: tfact_courseware_claim
   description: One row per extracted claim (concept, skill, assumed knowledge, assessment
@@ -157,8 +158,8 @@ models:
   - name: is_verified
     description: boolean, whether at least one passage was found in the source
   - name: is_current
-    description: boolean, whether the claim's extraction is the newest for its scope
-      part
+    description: boolean, whether the claim's extraction is the one its scope part
+      is read from now (int__courseware__extractions)
   - name: extracted_at
     description: timestamp, when the extraction returned
 
@@ -203,13 +204,17 @@ models:
     - accepted_values:
         values: [exact, fuzzy, unverified, unknown_source]
   - name: char_start
-    description: int, offset of an exact match in the source text
+    description: int, offset of an exact or fuzzy match in the source text
   - name: char_end
-    description: int, end offset of an exact match in the source text
+    description: int, end offset of an exact or fuzzy match in the source text
 
 - name: dim_concept
   description: Every concept id the resolver has minted, active or retired, with its
     display label, descriptions and lifecycle. review_status is 'proposed' until reviewed.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: concept_pk
     description: str, opaque UUID minted once by the resolver; never derived from
@@ -271,6 +276,10 @@ models:
 
 - name: dim_concept_alias
   description: Every normalized label a concept was extracted under.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: concept_alias_pk
     description: str, surrogate key of the label key

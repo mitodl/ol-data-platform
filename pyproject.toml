@@ -67,7 +67,7 @@ dev = [
     "dagster-webserver>=1.12.10",
     "mypy",
     "ol-dbt-cli",
-    "ol-orchestrate-lib",
+    "ol-orchestrate-lib[embeddings]",
     "pytest>=9.0.1,<10",
     "pytest-cov>=7.1,<8",
     "ruff",

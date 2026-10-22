@@ -146,3 +146,35 @@ def test_incremental_run_with_no_live_members_in_its_input_writes_nothing() -> N
 
     assert result.success is False
     assert io_manager.written == {}
+
+
+def test_run_clusters_embeddings_in_conversation_pk_order() -> None:
+    # Iceberg returns rows in any order; the run must not depend on it
+    io_manager = _CapturingIOManager()
+    reversed_embeddings = _small_embeddings_lazyframe(5).reverse()
+    with (
+        patch(
+            "ml.assets.feedback_clusters.get_dbt_model_as_dataframe",
+            return_value=reversed_embeddings,
+        ),
+        patch("ml.assets.feedback_clusters.get_glue_catalog", return_value=MagicMock()),
+        patch(
+            "ml.assets.feedback_clusters._live_cluster_keys",
+            return_value=("live-run", {"0": "key-a", "1": "key-a"}),
+        ),
+    ):
+        result = _run_feedback_clusters(
+            FeedbackClustersConfig(
+                embedding_model_version="text-embedding-3-small",
+                embedding_dim=8,
+                feedback_since=None,
+                platforms=None,
+            ),
+            io_manager,
+        )
+
+    assert result.success is True
+    written_pks = io_manager.written["feedback_cluster_candidate"][
+        "feedback_conversation_pk"
+    ]
+    assert written_pks.to_list() == ["0", "1", "2", "3", "4"]

@@ -1,0 +1,64 @@
+---
+# OpenMetadata data contract for enrollment_activity_counts_dataset. See README.md in this directory.
+entity:
+  type: table
+  dbt_model: Enrollment_Activity_Counts_Dataset
+contract:
+  name: enrollment_activity_counts_dataset
+  displayName: enrollment_activity_counts_dataset
+  description: Daily enrollment, unenrollment, certificate and enrollment-mode counts
+    per course run and learner. Superset dataset Superset.model.169 reads it for Course
+    Enrollment Activity, Course Engagement and the six MicroMasters Finance dashboards.
+    The schema lists the columns the tracked dashboards' charts and native filters
+    use, which is every column.
+  entityStatus: Approved
+  owners:
+  - type: team
+    name: data-platform
+  schema:
+  - name: user_email
+    dataType: VARCHAR
+  - name: user_gender
+    dataType: VARCHAR
+  - name: user_country_code
+    dataType: VARCHAR
+  - name: user_highest_education
+    dataType: VARCHAR
+  - name: courserun_is_current
+    dataType: BOOLEAN
+  - name: platform
+    dataType: VARCHAR
+  - name: course_readable_id
+    dataType: VARCHAR
+  - name: courserun_readable_id
+    dataType: VARCHAR
+  - name: activity_date
+    dataType: VARCHAR
+  - name: certificate_count
+    dataType: BIGINT
+  - name: enrollment_count
+    dataType: BIGINT
+  - name: unenrolled_count
+    dataType: BIGINT
+  - name: audit_count
+    dataType: BIGINT
+  - name: verified_count
+    dataType: BIGINT
+  semantics:
+  - name: hasOwner
+    description: The table has at least one owner to route contract failures to.
+    rule: '{"!!": [{"var": "owners.0"}]}'
+    enabled: true
+  - name: hasDescription
+    description: The table has a description.
+    rule: '{"!!": [{"var": "description"}]}'
+    enabled: true
+  # Dagster's freshness check fails once the table is older than
+  # refreshFrequency + maxLatency (26 hours), so a late nightly build does not page.
+  sla:
+    refreshFrequency:
+      interval: 1
+      unit: day
+    maxLatency:
+      value: 2
+      unit: hour
