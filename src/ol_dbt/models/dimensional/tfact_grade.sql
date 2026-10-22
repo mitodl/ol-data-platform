@@ -173,12 +173,16 @@ with mitxonline_grades as (
 
 -- Snapshot of the target's current (grade_key, user_fk) pairs, used to re-select rows
 -- whose user_fk has gone stale after a dim_user re-key (the source row itself did not
--- change, so the activity-timestamp watermark alone would never catch it).
+-- change, so the activity-timestamp watermark alone would never catch it). One row per
+-- key: a key a past run wrote twice would otherwise match each source row twice and be
+-- written twice again. It is re-selected instead, so delete+insert leaves one copy.
 , stale_user_fk_lookup as (
     select
         grade_key
-        , user_fk as stored_user_fk
+        , max(user_fk) as stored_user_fk
+        , count(*) > 1 as stored_has_copies
     from {{ this }}
+    group by grade_key
 )
 {% endif %}
 
@@ -212,35 +216,14 @@ with mitxonline_grades as (
         or gwf.grade_created_on is null
         -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
         or sufk.stored_user_fk is distinct from gwf.user_fk
+        or sufk.stored_has_copies
     )
     {% endif %}
 )
 
--- Defensive dedup: UNION ALL across platform CTEs has no upstream uniqueness guarantee.
--- If any intermediate develops grain drift this guard prevents duplicate grade_key values
--- from corrupting incremental MERGE operations.
--- Note: QUALIFY is not supported by Trino; using ROW_NUMBER subquery instead.
-, final_deduped as (
-    select
-        grade_key
-        , grade_id
-        , grade_date_key
-        , user_fk
-        , courserun_fk
-        , platform_fk
-        , platform
-        , grade_value
-        , is_passing
-        , letter_grade
-        , grade_created_on
-        , grade_updated_on
-        , row_number() over (
-            partition by grade_key
-            order by coalesce(grade_updated_on, grade_created_on) desc nulls last
-        ) as _row_num
-    from final
-)
-
+-- No dedup here: each lookup above is unique on its join key, so a duplicate grade_key
+-- means a source or a lookup lost its grain. The error-severity unique test on grade_key
+-- reports it. A row_number here would keep one copy's FKs at random.
 select
     grade_key
     , grade_id
@@ -254,5 +237,4 @@ select
     , letter_grade
     , grade_created_on
     , grade_updated_on
-from final_deduped
-where _row_num = 1
+from final

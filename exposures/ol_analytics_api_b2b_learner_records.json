@@ -61,6 +61,7 @@
         {"name": "courses_passed"},
         {"name": "courses_certified"},
         {"name": "program_certificates_earned"},
+        {"name": "certificates_earned"},
         {"name": "last_active_on"},
         {"name": "courses_in_progress"},
         {"name": "outcomes_shared"},

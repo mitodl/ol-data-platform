@@ -2,14 +2,7 @@
 -- version and model, and what it cost. Versions are rows, never overwrites, so two
 -- extractors or models can be compared on the same scopes.
 with extractions as (
-    select * from {{ source('courseware_intermediate', 'courseware_claim_extraction') }}
-)
-
-, current_extractions as (
-    select distinct
-        extraction_key
-        , is_current
-    from {{ ref('int__courseware__claims') }}
+    select * from {{ ref('int__courseware__extractions') }}
 )
 
 , course_runs as (
@@ -51,10 +44,8 @@ select
     , extractions.cache_read_input_tokens
     , extractions.cache_creation_input_tokens
     , extractions.extracted_at
-    , coalesce(current_extractions.is_current, false) as is_current
+    , extractions.is_current
 from extractions
-left join current_extractions
-    on extractions.extraction_key = current_extractions.extraction_key
 left join course_runs
     on
         extractions.platform = course_runs.platform
