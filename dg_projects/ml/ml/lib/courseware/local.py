@@ -29,9 +29,12 @@ from ml.lib.courseware.extract import (
     EVIDENCE_SCHEMA,
     EXTRACTION_SCHEMA,
     Effort,
+    ExtractionTables,
+    content_key,
     covered_keys,
     extract_scopes,
     extraction_key,
+    reusable_content_keys,
     scope_inputs,
     stored_extraction_key,
 )
@@ -67,6 +70,19 @@ def _write(frame: pl.DataFrame, output_dir: Path, table: str) -> None:
     staged = path.with_suffix(".parquet.tmp")
     frame.write_parquet(staged)
     staged.replace(path)
+
+
+def _stored_tables(
+    output_dir: Path, stored: pl.DataFrame | None
+) -> ExtractionTables | None:
+    """Read the stored claims and evidence, so new copies of their text reuse them."""
+    if stored is None:
+        return None
+    claims = _existing(output_dir, "courseware_claim")
+    evidence = _existing(output_dir, "courseware_claim_evidence")
+    if claims is None or evidence is None:
+        return None
+    return ExtractionTables(extractions=stored, claims=claims, evidence=evidence)
 
 
 def _require_current(output_dir: Path) -> pl.DataFrame | None:
@@ -209,14 +225,21 @@ def extract(  # noqa: PLR0913
     if dry_run:
         system_tokens = len(SYSTEM_PROMPT) // CHARS_PER_TOKEN
         total = 0
+        # a scope part with the text of a stored or earlier one is copied, not sent
+        seen = reusable_content_keys(stored) if stored is not None else set()
         for scope in scopes:
             tokens = system_tokens + len(scope_message(scope)) // CHARS_PER_TOKEN
-            stored_marker = (
-                "stored"
-                if extraction_key(scope, model_id, effort, key_on_header=key_on_header)
+            content = content_key(scope, model_id, effort, key_on_header=key_on_header)
+            if (
+                extraction_key(scope, model_id, effort, key_on_header=key_on_header)
                 in existing_keys
-                else ""
-            )
+            ):
+                stored_marker = "stored"
+            elif content in seen:
+                stored_marker = "reused"
+            else:
+                stored_marker = ""
+            seen.add(content)
             total += 0 if stored_marker else tokens
             print(  # noqa: T201
                 f"{scope.course.courserun_readable_id} {scope.scope_key:<70.70} "
@@ -239,6 +262,7 @@ def extract(  # noqa: PLR0913
         model_id=model_id,
         effort=effort,
         existing_keys=existing_keys,
+        reusable=_stored_tables(output_dir, stored),
         max_workers=max_workers,
         key_on_header=key_on_header,
     )
@@ -266,7 +290,6 @@ def extract(  # noqa: PLR0913
     )
 
 
-@app.command
 def _latest_run(
     output_dir: Path, table: str, run_id: str | None
 ) -> pl.DataFrame | None:
