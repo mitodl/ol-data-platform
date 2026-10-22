@@ -1194,8 +1194,8 @@ def validate(
                                JSON function (json_parse, json_query, ...) outside a dispatch
                                macro (ERROR)
     16. exposure_contract    — exposures/<name>.json of every application exposure matches the
-                               columns and cohort declarations of the models it depends on;
-                               regenerate with `ol-dbt exposures export` (ERROR)
+                               columns, cohort declarations and api_descriptions of the models
+                               it depends on; regenerate with `ol-dbt exposures export` (ERROR)
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.

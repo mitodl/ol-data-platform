@@ -9,7 +9,7 @@ unit_tests:
     key.
   model: int__courseware__claims
   given:
-  - input: source('courseware_intermediate', 'courseware_claim_extraction')
+  - input: ref('int__courseware__extractions')
     rows:
     - {extraction_key: k, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
       scope_id: s, scope_part: 1, extracted_at: "2026-10-17T00:00:00"}
@@ -25,9 +25,6 @@ unit_tests:
     - {extraction_key: k, claim_ordinal: 8, claim_kind: concept, label: "+"}
   - input: source('courseware_intermediate', 'courseware_claim_evidence')
     rows: []
-  - input: ref('int__courseware__extractions')
-    rows:
-    - {extraction_key: k, scope_position: 1, is_current: true}
   expect:
     rows:
     - {claim_ordinal: 1, concept_label_key: c}

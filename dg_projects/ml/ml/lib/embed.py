@@ -149,16 +149,37 @@ class OpenAIEmbeddingClient:
 
 
 class GeminiEmbeddingClient:
-    """Adapts a google-genai client to the EmbeddingClient protocol."""
+    """Adapts a google-genai client (Gemini API or Vertex AI) to the
+    EmbeddingClient protocol.
 
-    # Gemini's embed_content accepts up to 250 texts per request.
-    max_request_batch_size = 250
+    The request a google-genai embed_content call makes depends on the backend and
+    the model. The Gemini API sends every model to :batchEmbedContents, one request
+    per Content. On Vertex AI the SDK sends gemini-embedding-001 and the
+    text-embedding-* models to :predict, and every other gemini-* model to
+    :embedContent, which embeds exactly one Content per call. Vertex also documents
+    gemini-embedding-001 as one input text per request, and :predict as at most
+    20,000 tokens per request with up to 2,048 tokens per text
+    (https://docs.cloud.google.com/vertex-ai/generative-ai/docs/embeddings/get-text-embeddings).
+    """
+
     max_input_chars: int | None = None
 
     def __init__(self, client: genai.Client, model_version: str, dim: int) -> None:
         self._client = client
         self.model_version = model_version
         self.dim = dim
+        self._vertexai = client.vertexai
+        if not self._vertexai:
+            # Not a documented Gemini API cap; it's what this has run with.
+            self.max_request_batch_size = 250
+        elif model_version.startswith(
+            ("text-embedding-", "text-multilingual-embedding-")
+        ):
+            # Vertex's REST reference allows five texts per request for these, which
+            # also keeps a full batch of 2,048-token texts under the 20,000 cap.
+            self.max_request_batch_size = 5
+        else:
+            self.max_request_batch_size = 1
 
     @traced(
         "feedback_embed_gemini",
@@ -170,18 +191,33 @@ class GeminiEmbeddingClient:
     ) -> list[list[float]]:
         if trace_metadata is not None:
             attach_span_metadata(trace_metadata)
+        # One Content per text. The SDK folds a bare list of strings into a single
+        # Content with one Part per string, which gemini-embedding-2 and Vertex's
+        # :embedContent models embed as one aggregated vector. Separate Contents get
+        # one vector each on the Gemini API, and make the SDK raise on Vertex's
+        # :embedContent models instead of aggregating.
         # Order is the API's own contract (response.embeddings lines up with the
         # input contents list), unlike OpenAI's which documents an index field --
         # nothing to sort by here.
         response = self._client.models.embed_content(
             model=self.model_version,
-            contents=texts,
+            contents=[
+                genai_types.Content(parts=[genai_types.Part(text=text)])
+                for text in texts
+            ],
             config=genai_types.EmbedContentConfig(output_dimensionality=self.dim),
         )
+        embeddings = response.embeddings or []
+        if len(embeddings) != len(texts):
+            msg = (
+                f"{self.model_version} returned {len(embeddings)} embeddings for "
+                f"{len(texts)} texts (vertexai={self._vertexai})"
+            )
+            raise ValueError(msg)
         # No response-level usage field -- token_count is per-embedding, so summed.
         token_count = sum(
             embedding.statistics.token_count
-            for embedding in response.embeddings
+            for embedding in embeddings
             if embedding.statistics is not None
             and embedding.statistics.token_count is not None
         )
@@ -193,9 +229,9 @@ class GeminiEmbeddingClient:
                     "total_tokens": token_count,
                 },
                 model=self.model_version,
-                provider="google_ai",
+                provider="google_vertexai" if self._vertexai else "google_ai",
             )
-        return [embedding.values for embedding in response.embeddings]
+        return [embedding.values for embedding in embeddings]
 
 
 class BedrockEmbeddingClient:
@@ -390,6 +426,16 @@ def resolve_embedding_text(
             "resolved_text",
         ]
     )
+
+
+def has_embeddable_text(text: str | None) -> bool:
+    """Whether embed_and_checkpoint sends this resolved_text to the client at all.
+
+    A blank text is skipped along with a null one: Vertex's :predict drops an empty
+    text from the request, so the embedding count stops matching and the whole
+    sub-batch fails.
+    """
+    return text is not None and bool(text.strip())
 
 
 def filter_unembedded(
@@ -668,7 +714,8 @@ def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
             conversation_ref, turn_count, embedding_input, resolved_text columns,
             e.g. resolve_embedding_text's output. A null resolved_text (upstream
             summary/redaction not ready yet) is skipped and retried next run, same
-            as a failed API call (#2542's checkpointing precedent).
+            as a failed API call (#2542's checkpointing precedent). An empty or
+            whitespace-only one is skipped the same way.
         client: an object with an `embed_batch(texts: list[str]) -> list[list[float]]`
             method, e.g. an OpenAIEmbeddingClient wrapping LLMClientFactory.
         checkpoint_target: (catalog, table_identifier) passed through to
@@ -704,7 +751,7 @@ def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
     """
     log = context.log if context is not None else logger
     catalog, table_identifier = checkpoint_target
-    rows = [row for row in df.to_dicts() if row["resolved_text"] is not None]
+    rows = [row for row in df.to_dicts() if has_embeddable_text(row["resolved_text"])]
 
     consecutive_failed_chunks = 0
     chunk_dfs: list[pl.DataFrame] = []

@@ -2,17 +2,16 @@
     Every extracted claim with its extraction's scope and version, its evidence counts,
     and the key that groups its label with the same label elsewhere.
 
-    is_current comes from int__courseware__extractions: the newest extraction of each
-    scope part under its run's promoted extractor version, so rollups read one
-    version per scope while the others stay comparable. A claim is verified when at
-    least one of its passages was found in the source text.
+    is_current is int__courseware__extractions': a claim is current when its extraction
+    is the one its scope part is read from now. A claim is verified when at least one
+    of its passages was found in the source text.
 
     concept_label_key is a string normalization only (the courseware_label_key macro).
     Resolving synonyms and variants across courses ("k-means" and "k-means
     clustering") is a separate step that will map these keys onto dim_concept.
 #}
 with extractions as (
-    select * from {{ source('courseware_intermediate', 'courseware_claim_extraction') }}
+    select * from {{ ref('int__courseware__extractions') }}
 )
 
 , claims as (
@@ -21,20 +20,6 @@ with extractions as (
 
 , evidence as (
     select * from {{ source('courseware_intermediate', 'courseware_claim_evidence') }}
-)
-
-, extraction_status as (
-    select * from {{ ref('int__courseware__extractions') }}
-)
-
-, ranked_extractions as (
-    select
-        extractions.*
-        , extraction_status.scope_position as current_scope_position
-        , extraction_status.is_current
-    from extractions
-    inner join extraction_status
-        on extractions.extraction_key = extraction_status.extraction_key
 )
 
 , evidence_counts as (
@@ -48,19 +33,19 @@ with extractions as (
 )
 
 select
-    ranked_extractions.platform
-    , ranked_extractions.courserun_readable_id
-    , ranked_extractions.scope_id
-    , ranked_extractions.scope_kind
-    , ranked_extractions.scope_title
-    , ranked_extractions.current_scope_position as scope_position
-    , ranked_extractions.scope_part
-    , ranked_extractions.extraction_key
-    , ranked_extractions.extractor_id
-    , ranked_extractions.model_id
-    , ranked_extractions.prompt_version
-    , ranked_extractions.extracted_at
-    , ranked_extractions.is_current
+    extractions.platform
+    , extractions.courserun_readable_id
+    , extractions.scope_id
+    , extractions.scope_kind
+    , extractions.scope_title
+    , extractions.scope_position
+    , extractions.scope_part
+    , extractions.extraction_key
+    , extractions.extractor_id
+    , extractions.model_id
+    , extractions.prompt_version
+    , extractions.extracted_at
+    , extractions.is_current
     , claims.claim_ordinal
     , claims.claim_kind
     , claims.label
@@ -82,8 +67,8 @@ select
     , coalesce(evidence_counts.verified_evidence_count, 0) as verified_evidence_count
     , coalesce(evidence_counts.verified_evidence_count, 0) > 0 as is_verified
 from claims
-inner join ranked_extractions
-    on claims.extraction_key = ranked_extractions.extraction_key
+inner join extractions
+    on claims.extraction_key = extractions.extraction_key
 left join evidence_counts
     on
         claims.extraction_key = evidence_counts.extraction_key

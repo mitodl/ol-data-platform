@@ -1,6 +1,9 @@
+from types import SimpleNamespace
+
+import httpx2
 import polars as pl
 import pytest
-from ml.lib.courseware import local, scopes
+from ml.lib.courseware import extract, local, scopes
 from ml.lib.courseware.describe import _concept_inputs
 from ml.lib.courseware.extract import (
     CLAIM_SCHEMA,
@@ -53,6 +56,25 @@ SOURCE = (
 )
 def test_verify_passage(passage, status):
     assert verify_passage(passage, SOURCE).status == status
+
+
+def test_verify_passage_rejects_a_quote_stitched_from_distant_sentences():
+    # most of its trigrams are in the source, but in two places a sentence apart
+    passage = (
+        "k-means follows a completely different methodology we need to know the "
+        "number of clusters in advance"
+    )
+    assert verify_passage(passage, SOURCE) == ("unverified", None, None)
+
+
+def test_verify_passage_near_match_offsets_cover_the_quoted_stretch():
+    match = verify_passage(
+        "for k-means clustering we need know the number of clusters in advance", SOURCE
+    )
+    assert match.status == "fuzzy"
+    assert SOURCE[match.char_start : match.char_end] == (
+        "for k-means clustering, we need to know the number of clusters in advance"
+    )
 
 
 def test_verify_passage_offsets_index_the_source():
@@ -115,6 +137,26 @@ def test_build_scopes_splits_at_source_boundaries(monkeypatch):
     # ids restart in each part, so a part's prompt depends only on its own sources
     assert [source.source_id for source in built[1].sources] == ["S01", "S02"]
     assert built[0].course.outline == ("Lecture 1",)
+    # each part records every part's checksum, so the whole reading can be matched
+    assert (
+        built[0].scope_part_checksums
+        == built[1].scope_part_checksums
+        == (f"{built[0].input_text_checksum},{built[1].input_text_checksum}")
+    )
+
+
+def test_course_description_from_about_page_or_ocw_description():
+    about = _rows(["The about page."], scope_kind="context").with_columns(
+        pl.lit("about/overview.html").alias("source_ref"),
+        pl.lit("about_page").alias("source_kind"),
+    )
+    assert scopes.build_scopes(about)[0].course.description == "The about page."
+    ocw = _rows(["An OCW course."], scope_kind="context").with_columns(
+        pl.lit("ocw").alias("platform"),
+        pl.lit("courses/18-06-linear-algebra-spring-2010/").alias("source_ref"),
+        pl.lit("course_description").alias("source_kind"),
+    )
+    assert scopes.build_scopes(ocw)[0].course.description == "An OCW course."
 
 
 def test_extraction_key_changes_with_input_text():
@@ -175,24 +217,18 @@ def test_extraction_key_ignores_the_course_header():
 
 
 def _result() -> _ModelResult:
-    return _ModelResult(
-        extraction=ScopeExtraction(
-            summary="s",
-            concepts=[],
-            skills=[],
-            assumed_knowledge=[],
-            assessment_expectations=[],
-            learning_outcomes=[],
-            declared_prerequisites=[],
-            audience=[],
-            notes=[],
-        ),
-        stop_reason="tool_use",
-        input_tokens=1,
-        output_tokens=1,
-        cache_read_input_tokens=0,
-        cache_creation_input_tokens=0,
+    empty = ScopeExtraction(
+        summary="s",
+        concepts=[],
+        skills=[],
+        assumed_knowledge=[],
+        assessment_expectations=[],
+        learning_outcomes=[],
+        declared_prerequisites=[],
+        audience=[],
+        notes=[],
     )
+    return _ModelResult(empty, "tool_use", 1, 1, 0, 0)
 
 
 def test_stored_extraction_rows_recompute_their_key():
@@ -213,7 +249,7 @@ def _old_style_outputs(output_dir) -> scopes.Scope:
     )
     claims = pl.DataFrame({"extraction_key": ["old-key"], "claim_ordinal": [1]})
     claims.write_parquet(output_dir / "courseware_claim.parquet")
-    claims.with_columns(evidence_ordinal=pl.lit(1, pl.Int64)).write_parquet(
+    claims.with_columns(evidence_ordinal=pl.lit(1)).write_parquet(
         output_dir / "courseware_claim_evidence.parquet"
     )
     return scope
@@ -222,7 +258,11 @@ def _old_style_outputs(output_dir) -> scopes.Scope:
 def _stored_keys(output_dir) -> list[list[str]]:
     return [
         pl.read_parquet(output_dir / f"{table}.parquet")["extraction_key"].to_list()
-        for table in local.OUTPUT_TABLES
+        for table in (
+            local.EXTRACTION_TABLE,
+            "courseware_claim",
+            "courseware_claim_evidence",
+        )
     ]
 
 
@@ -234,6 +274,7 @@ def test_rekey_recomputes_keys_without_re_extracting(tmp_path):
     assert _stored_keys(tmp_path) == [[key]] * 3
     stored = pl.read_parquet(tmp_path / "courseware_claim_extraction.parquet")
     assert stored["header_version"].to_list() == [None]
+    assert stored.columns == list(EXTRACTION_SCHEMA)
 
 
 def test_rekey_recovers_from_a_crash_after_the_first_write(tmp_path, monkeypatch):
@@ -257,130 +298,6 @@ def test_rekey_recovers_from_a_crash_after_the_first_write(tmp_path, monkeypatch
     assert _stored_keys(tmp_path) == [[extraction_key(scope, "model", "medium")]] * 3
 
 
-def test_rekey_adds_columns_an_older_table_lacks(tmp_path):
-    _old_style_outputs(tmp_path)
-    path = tmp_path / "courseware_claim_extraction.parquet"
-    pl.read_parquet(path).drop("cache_creation_input_tokens").write_parquet(path)
-    local.rekey(tmp_path)
-    for table, schema in local.OUTPUT_SCHEMAS.items():
-        stored = pl.read_parquet(tmp_path / f"{table}.parquet")
-        assert stored.schema == pl.Schema(schema)
-    stored = pl.read_parquet(path)
-    assert stored["cache_creation_input_tokens"].to_list() == [None]
-
-
-def test_rekey_refuses_a_column_the_schema_dropped(tmp_path):
-    _old_style_outputs(tmp_path)
-    path = tmp_path / "courseware_claim.parquet"
-    pl.read_parquet(path).with_columns(retired=pl.lit(1)).write_parquet(path)
-    with pytest.raises(ValueError, match="retired"):
-        local.rekey(tmp_path)
-
-
-def test_rekey_refuses_a_column_whose_type_changed(tmp_path):
-    _old_style_outputs(tmp_path)
-    path = tmp_path / "courseware_claim.parquet"
-    pl.read_parquet(path).with_columns(claim_ordinal=pl.lit(1.5)).write_parquet(path)
-    with pytest.raises(ValueError, match="claim_ordinal"):
-        local.rekey(tmp_path)
-    assert pl.read_parquet(path)["claim_ordinal"].to_list() == [1.5]
-
-
-class _StubFactory:
-    def __init__(self, **_):
-        pass
-
-    def get_client(self):
-        return _StubClient()
-
-
-class _StubClient:
-    pass
-
-
-def _extract_with_labels(monkeypatch, sources, output_dir, labels: list[str]) -> None:
-    """Run local extract with the model replaced by claims carrying these labels."""
-
-    def fake_extract_scopes(scopes_, _client, *, existing_keys, **_):
-        extractions, claims, evidence = [], [], []
-        for scope in scopes_:
-            key = extraction_key(scope, "model", "medium")
-            if key in existing_keys:
-                continue
-            extraction, _, _ = _rows_for(scope, key, "model", "medium", _result())
-            extractions.append(extraction)
-            for ordinal, label in enumerate(labels, start=1):
-                claims.append(
-                    {"extraction_key": key, "claim_ordinal": ordinal, "label": label}
-                )
-                evidence.append(
-                    {"extraction_key": key, "claim_ordinal": ordinal, "passage": label}
-                )
-        return ExtractionTables(
-            extractions=pl.DataFrame(extractions, schema=EXTRACTION_SCHEMA),
-            claims=pl.DataFrame(claims, schema=CLAIM_SCHEMA),
-            evidence=pl.DataFrame(evidence, schema=EVIDENCE_SCHEMA),
-        )
-
-    monkeypatch.setattr(local, "LLMClientFactory", _StubFactory)
-    monkeypatch.setattr(local, "AnthropicBedrock", _StubClient)
-    monkeypatch.setattr(local, "extract_scopes", fake_extract_scopes)
-    local.extract(sources, output_dir, model_id="model", effort="medium")
-
-
-@pytest.mark.parametrize("crash_at", [1, 2])
-def test_extract_recovers_from_a_crash_between_writes(tmp_path, monkeypatch, crash_at):
-    sources = tmp_path / "sources.parquet"
-    _course_rows("About it.", "Lecture 2", "some text").write_parquet(sources)
-    output_dir = tmp_path / "out"
-    write = local._write
-    written: list[str] = []
-
-    def crash_after(rows, directory, table):
-        if len(written) == crash_at:
-            raise KeyboardInterrupt
-        write(rows, directory, table)
-        written.append(table)
-
-    monkeypatch.setattr(local, "_write", crash_after)
-    with pytest.raises(KeyboardInterrupt):
-        _extract_with_labels(monkeypatch, sources, output_dir, ["first", "attempt"])
-    # claims were written, the extraction rows that mark them done were not
-    assert written[0] == "courseware_claim"
-    assert not (output_dir / "courseware_claim_extraction.parquet").exists()
-    monkeypatch.setattr(local, "_write", write)
-    _extract_with_labels(monkeypatch, sources, output_dir, ["second"])
-    extractions, claims, evidence = (
-        pl.read_parquet(output_dir / f"{table}.parquet")
-        for table in local.OUTPUT_TABLES
-    )
-    assert extractions.height == len(scopes.build_scopes(pl.read_parquet(sources)))
-    assert set(claims["extraction_key"]) == set(extractions["extraction_key"])
-    # one claim and one evidence row per extraction, all from the second attempt
-    assert claims["label"].to_list() == ["second"] * extractions.height
-    assert evidence["passage"].to_list() == ["second"] * extractions.height
-    # a further run stores nothing new
-    _extract_with_labels(monkeypatch, sources, output_dir, ["third"])
-    assert pl.read_parquet(output_dir / "courseware_claim.parquet").height == (
-        extractions.height
-    )
-
-
-def test_extract_refuses_an_older_claim_table_before_calling_the_model(
-    tmp_path, monkeypatch
-):
-    sources = tmp_path / "sources.parquet"
-    _course_rows("About it.", "Lecture 2", "some text").write_parquet(sources)
-    output_dir = tmp_path / "out"
-    output_dir.mkdir()
-    pl.DataFrame({"extraction_key": ["leftover"], "claim_ordinal": [1]}).write_parquet(
-        output_dir / "courseware_claim.parquet"
-    )
-    # without the check the model is called and the append fails after it
-    with pytest.raises(ValueError, match="courseware_claim predates"):
-        _extract_with_labels(monkeypatch, sources, output_dir, ["paid for"])
-
-
 def test_extract_refuses_keys_that_need_rekey(tmp_path, capsys):
     sources = tmp_path / "sources.parquet"
     _course_rows("About it.", "Lecture 2", "some text").write_parquet(sources)
@@ -393,13 +310,14 @@ def test_extract_refuses_keys_that_need_rekey(tmp_path, capsys):
             sources, output_dir, model_id="model", effort="medium", dry_run=True
         )
 
-    with pytest.raises(ValueError, match="predates the current schema"):
+    with pytest.raises(ValueError, match="local rekey"):
         dry_run()  # no header_version column
-    for table in local.OUTPUT_TABLES:
-        path = output_dir / f"{table}.parquet"
-        local._conform(pl.read_parquet(path), table).write_parquet(path)
-    with pytest.raises(ValueError, match="keys predate the current scheme"):
-        dry_run()  # the current schema, but a null-header row on an old key
+    extractions = pl.read_parquet(output_dir / "courseware_claim_extraction.parquet")
+    extractions.with_columns(header_version=pl.lit(None, pl.String)).write_parquet(
+        output_dir / "courseware_claim_extraction.parquet"
+    )
+    with pytest.raises(ValueError, match="local rekey"):
+        dry_run()  # the column, but a null-header row on an old key
     local.rekey(output_dir)
     dry_run()
     assert capsys.readouterr().out.count(" stored\n") == 1
@@ -427,7 +345,7 @@ def test_either_key_scheme_skips_what_the_other_extracted(
     key = extraction_key(scope, "model", "medium", key_on_header=stored_on_header)
     extraction, _, _ = _rows_for(scope, key, "model", "medium", _result())
     (tmp_path / "out").mkdir()
-    pl.DataFrame([extraction], schema=EXTRACTION_SCHEMA).write_parquet(
+    pl.DataFrame([extraction]).write_parquet(
         tmp_path / "out" / "courseware_claim_extraction.parquet"
     )
     assert _stored_marks(tmp_path, capsys, "About it.", key_on_header=False) == 1
@@ -483,6 +401,7 @@ def _golden_scope() -> scopes.Scope:
         scope_position=2,
         part=1,
         part_count=2,
+        scope_part_checksums="a,b",
         sources=(source,),
     )
 
@@ -597,3 +516,65 @@ def test_string_fields_keep_text_that_parses_as_json():
     )
     assert claim.label == '{"a": 1}'
     assert claim.evidence == [Evidence(source_id="S01", passage="a b c")]
+
+
+def test_local_extract_replaces_claims_a_cut_off_run_left_behind(tmp_path, monkeypatch):
+    # a run cut off after writing claims left a row for an extraction it never
+    # stored; the next run extracts that scope again and keeps one copy
+    sources = tmp_path / "sources.parquet"
+    _rows(["some text"]).write_parquet(sources)
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    orphan = pl.DataFrame(
+        [{"extraction_key": "k1", "label": "old"}], schema=CLAIM_SCHEMA
+    )
+    orphan.write_parquet(output_dir / "courseware_claim.parquet")
+    tables = ExtractionTables(
+        extractions=pl.DataFrame([{"extraction_key": "k1"}], schema=EXTRACTION_SCHEMA),
+        claims=pl.DataFrame(
+            [{"extraction_key": "k1", "label": "new"}], schema=CLAIM_SCHEMA
+        ),
+        evidence=pl.DataFrame(schema=EVIDENCE_SCHEMA),
+    )
+    monkeypatch.setattr(local, "AnthropicBedrock", object)
+    monkeypatch.setattr(
+        local, "LLMClientFactory", lambda **_: SimpleNamespace(get_client=object)
+    )
+    monkeypatch.setattr(local, "extract_scopes", lambda *_, **__: tables)
+    local.extract(sources, output_dir)
+    claims = pl.read_parquet(output_dir / "courseware_claim.parquet")
+    assert claims["label"].to_list() == ["new"]
+    stored = pl.read_parquet(output_dir / "courseware_claim_extraction.parquet")
+    assert stored["extraction_key"].to_list() == ["k1"]
+
+
+def test_extract_scopes_keeps_the_batch_when_a_stream_drops(monkeypatch):
+    built = scopes.build_scopes(
+        pl.concat(
+            [_rows(["first"]), _rows(["second"]).with_columns(scope_id=pl.lit("seq-2"))]
+        )
+    )
+    empty = ScopeExtraction.model_validate(
+        {
+            "summary": "s",
+            "concepts": [],
+            "skills": [],
+            "assumed_knowledge": [],
+            "assessment_expectations": [],
+            "learning_outcomes": [],
+            "declared_prerequisites": [],
+            "audience": [],
+            "notes": [],
+        }
+    )
+
+    def call_model(*args, **_):
+        message = args[-1]
+        if "second" in message:
+            msg = "peer closed connection"
+            raise httpx2.RemoteProtocolError(msg)
+        return _ModelResult(empty, "end_turn", 1, 1, 0, 0)
+
+    monkeypatch.setattr(extract, "call_model", call_model)
+    tables = extract.extract_scopes(built, object(), model_id="model", max_workers=1)
+    assert tables.extractions["scope_id"].to_list() == ["seq-1"]

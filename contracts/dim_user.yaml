@@ -11,6 +11,9 @@ contract:
     Superset datasets join on user_pk and the per-platform user ids below, so
     those columns must not be dropped or retyped without a coordinated change.
   entityStatus: Approved
+  owners:
+  - type: team
+    name: data-platform
   schema:
   - name: user_pk
     dataType: VARCHAR
@@ -47,7 +50,12 @@ contract:
     description: The table has a description.
     rule: '{"!!": [{"var": "description"}]}'
     enabled: true
+  # Dagster's freshness check fails once the table is older than
+  # refreshFrequency + maxLatency (26 hours), so a late nightly build does not page.
   sla:
     refreshFrequency:
       interval: 1
       unit: day
+    maxLatency:
+      value: 2
+      unit: hour
