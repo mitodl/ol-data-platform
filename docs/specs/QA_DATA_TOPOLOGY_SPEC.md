@@ -71,12 +71,14 @@ deciding it.
 What runs now, all from production:
 
 - `qa_mirror_monthly_schedule` (06:00 UTC on the 1st) materializes every `qa_mirror` asset, at
-  most 3 at a time. Monthly sits inside every unit's `mirror_max_age_days` (90 for all twelve
-  mirror units as of 2026-10-22).
+  most 3 at a time within that run (a refresh by hand alongside it is not counted). Monthly sits
+  inside every unit's `mirror_max_age_days` (90 for all twelve mirror units as of 2026-10-22).
 - Each mirror asset carries a `copy_plans_against_production` check that renders and `EXPLAIN`s
   every table's copy without running it. `qa_mirror_plan_daily_schedule` runs the checks at
-  11:00 UTC, so a declaration production no longer fits fails within a day. The check raises
-  rather than returning a failed result, so it reaches Sentry through the failure hook.
+  11:00 UTC, so an allowlisted column production no longer has, or a `where` naming a column or
+  function it cannot resolve, fails within a day. A `where` wrong only through an implicit cast
+  still plans (§8) and fails first in the monthly CTAS. The check raises rather than returning a
+  failed result, so it reaches Sentry through the failure hook.
 
 A refresh by hand is still there for when QA needs a newer copy than the last tick.
 

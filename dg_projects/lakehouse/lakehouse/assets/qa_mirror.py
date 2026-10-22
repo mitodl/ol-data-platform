@@ -15,7 +15,8 @@ Refreshed monthly by qa_mirror_monthly_schedule, and by hand whenever someone
 needs a newer copy (QA_DATA_TOPOLOGY_SPEC.md §1). Each asset also carries a
 check that renders and plans every table's copy against production without
 running it, scheduled daily, so a production column dropped or renamed out from
-under an allowlist fails within a day rather than at the next refresh. QA's
+under an allowlist fails within a day rather than at the next refresh (with the
+limits of EXPLAIN noted in _render). QA's
 qa_observation_drift fails on a copy older than its unit's mirror_max_age_days.
 """
 
