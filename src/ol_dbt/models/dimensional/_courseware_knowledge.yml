@@ -60,6 +60,14 @@ models:
   - name: header_version
     description: str, hash of the course header the call read; null for extractions
       recorded before it was
+  - name: current_header_version
+    description: str, header_version of the run's course header at the extractor's
+      latest read (int__courseware__latest_scope_inputs); null when the run was never
+      read, or last read before reads recorded it
+  - name: is_header_stale
+    description: boolean, whether the course header changed since the call read it.
+      The key leaves the header out, so a stale extraction stays current until the
+      run is re-extracted with key_on_header. Null when either version is unknown
   - name: source_count
     description: int, sources the call read
   - name: truncated_source_count
