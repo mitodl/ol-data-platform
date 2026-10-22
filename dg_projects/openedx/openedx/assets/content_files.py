@@ -31,14 +31,17 @@ import hashlib
 import json
 import logging
 import mimetypes
+import re
 import tarfile
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from functools import partial
+from html.parser import HTMLParser
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
+from urllib.parse import unquote
 
 import httpx2 as httpx
 import jsonlines
@@ -181,6 +184,60 @@ def _content_type(relative_path: str) -> str:
     return mime_type or "application/octet-stream"
 
 
+HTML_CONTENT_TYPE = "text/html"
+
+# How an html body links a file in the course's static/ directory. Studio writes
+# /static/<name>, which the LMS rewrites per request, and hand-written html also
+# has static/<name> and ../static/<name>. A link copied from a rendered page
+# carries the asset key instead, sometimes of another run, behind a
+# /assets/courseware/v1/<hash>/ prefix when it came from Studio's CDN, or the
+# old-style /c4x/<org>/<course>/asset/<name> form. The LMS writes the key's
+# +block@ as +block/ when it rewrites a /static/ link (static_replace), so a link
+# copied from a rendered page can have either.
+_STATIC_PATH_PATTERN = re.compile(r"^(?:\.{1,2}/)*/?static/([^?#]+)")
+_ASSET_KEY_PATTERN = re.compile(
+    r"asset-v1:[^/?#]+?\+type@asset\+block[@/]([^/?#]+)|/c4x/[^/]+/[^/]+/asset/([^?#]+)"
+)
+
+
+class _LinkedUrls(HTMLParser):
+    """Collect the href and src attribute values of every element."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.urls: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:  # noqa: ARG002
+        self.urls.extend(
+            value for name, value in attrs if name in {"href", "src"} and value
+        )
+
+
+def static_references(html_bytes: bytes) -> list[str]:
+    """Return the static/ paths an html body links to, sorted and de-duplicated.
+
+    Tika's text keeps an anchor's text but not its href, so this is the only
+    record of which unit a slide deck or handout belongs to. Paths are spelled
+    as the bundle spells them (static/<name>), so they join to file_path.
+
+    :param html_bytes: The html file's contents.
+    :returns: The linked static paths.
+    :rtype: list[str]
+    """
+    parser = _LinkedUrls()
+    parser.feed(html_bytes.decode("utf-8", errors="replace"))
+    parser.close()
+    names: set[str] = set()
+    for url in parser.urls:
+        stripped = url.strip()
+        match = _STATIC_PATH_PATTERN.match(stripped) or _ASSET_KEY_PATTERN.search(
+            stripped
+        )
+        if match:
+            names.add(unquote(next(group for group in match.groups() if group)))
+    return sorted(f"static/{name}" for name in names)
+
+
 # Statuses that mean the caller is not allowed to use Tika at all, rather than
 # that this particular document is unparseable. An empty access token -- what a
 # Vault read failure leaves behind -- produces exactly this.
@@ -281,6 +338,9 @@ def build_document_rows(
     read at all -- in a real export the skipped images and archives are the
     bulk of the archive.
 
+    An html row also carries ``static_references``, the static files its body
+    links to (see static_references); every other row carries null.
+
     A file Tika cannot parse is skipped silently -- images and archives are
     normal course content, not errors. A file Tika *should* parse but does not
     is counted as a failure, feeds the success-rate guard, and still gets a row
@@ -331,10 +391,14 @@ def build_document_rows(
                     "size_bytes": 0,
                     "content": None,
                     "extraction_status": "empty",
+                    "static_references": None,
                 }
             )
             continue
 
+        linked = (
+            static_references(file_bytes) if content_type == HTML_CONTENT_TYPE else None
+        )
         counters["candidates"] += 1
         try:
             text = extract(file_bytes, content_type)
@@ -359,6 +423,7 @@ def build_document_rows(
                     "size_bytes": len(file_bytes),
                     "content": None,
                     "extraction_status": "failed",
+                    "static_references": linked,
                 }
             )
             continue
@@ -381,6 +446,7 @@ def build_document_rows(
                 "size_bytes": len(file_bytes),
                 "content": text or None,
                 "extraction_status": "extracted" if text else "empty",
+                "static_references": linked,
             }
         )
 

@@ -335,6 +335,11 @@ models:
     OL platforms. No order data for edX.org course purchase.
   config:
     meta:
+      # Tier1 because it carries a data contract
+      # (contracts/marts__combined_course_enrollment_detail.yaml).
+      openmetadata:
+        owner: data-platform
+        tier: Tier.Tier1
       qa_branches:
       - micromasters/app_postgres
       - mitx/mysql
@@ -344,6 +349,7 @@ models:
       - xpro/mysql
   columns:
   - name: platform
+    data_type: varchar
     description: string, application where the data is from
     tests:
     - not_null
@@ -357,6 +363,7 @@ models:
     description: int, primary key for this table. At the grain of order id, line id,
       and platform.
   - name: course_readable_id
+    data_type: varchar
     description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
       Online, xPro or Residential courses, and {org}/{course} for edX.org courses.
       May be null for some Bootcamps courses. Examples include MITx/6.00.2x and course-v1:MITxT+14.740x.
@@ -365,28 +372,35 @@ models:
         arguments:
           row_condition: "platform != 'Bootcamps'"
   - name: course_title
+    data_type: varchar
     description: str, title of the course. May be null for some edX.org and Residential
       courses
   - name: courserun_end_on
+    data_type: varchar
     description: timestamp, date and time when the course run ends. May be Null.
   - name: courserun_id
     description: int, primary key representing a single course run on the corresponding
       platform. Null for course runs from edx.org
   - name: courserun_is_current
+    data_type: boolean
     description: boolean, indicating if the course run is currently running. True
       if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
       is in the past and courserun_end_on is in the future.
     tests:
     - not_null
   - name: courserun_readable_id
+    data_type: varchar
     description: str, Open edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
       for MITxOnline and xPro courses, {org}/{course}/{run_tag} for edX.org courses
   - name: courserun_start_on
+    data_type: varchar
     description: timestamp, date and time when the course run starts. May be Null.
   - name: courserun_title
+    data_type: varchar
     description: string, title of the course run on the corresponding platform. Maybe
       blank for a few edX.org runs missing in int__edxorg__mitx_courseruns.
   - name: courserun_upgrade_deadline
+    data_type: varchar
     description: timestamp, specifying the date time beyond which users can not enroll
       in paid course mode
   - name: courseruncertificate_created_on
@@ -405,6 +419,7 @@ models:
       system. For other platforms, this falls back to created_on as they don't track
       a separate issued date.
   - name: courseruncertificate_is_earned
+    data_type: boolean
     description: boolean, indicating if learner has earned the certificate on mitxonline.mit.edu,
       edX.org or xpro.mit.edu.
     tests:
@@ -423,10 +438,12 @@ models:
   - name: courserunenrollment_enrollment_mode
     description: string, enrollment mode for user on the corresponding platform
   - name: courserunenrollment_enrollment_status
+    data_type: varchar
     description: string, enrollment status for users whose enrollment changed on the
       corresponding platform. Records why an enrollment changed, not whether it is
       in force; use courserunenrollment_is_active for that
   - name: courserunenrollment_is_active
+    data_type: boolean
     description: boolean, indicating whether the enrollment is active. This is the
       canonical "currently enrolled" flag; use it rather than the enrollment status,
       which edX.org and Residential never populate and which MITx Online sets to 'deferred'
@@ -438,9 +455,11 @@ models:
       For edx.org course enrollment, it would always be true. Null for Bootcamps as
       it doesn't apply.
   - name: courserungrade_grade
+    data_type: double
     description: float, course grade on edX.org or MITxOnline or xPro range from 0
       to 1
   - name: courserungrade_is_passing
+    data_type: boolean
     description: boolean, indicating whether the user has passed the passing score
       set for this course on edX.org or MITxOnline or xPro
   - name: line_id
@@ -466,6 +485,7 @@ models:
   - name: user_country_code
     description: str, country code on the platform user enrolled. May be blank.
   - name: user_email
+    data_type: varchar
     description: string, user email that user registered on the corresponding platform.
       May be null for some xPRO Emeritus learners.
     tests:

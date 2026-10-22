@@ -6,6 +6,7 @@ source_text), so a claim's evidence can be located from SQL without this code.
 
 import re
 import unicodedata
+from collections import Counter, defaultdict
 from functools import lru_cache
 from typing import Literal, NamedTuple
 
@@ -15,6 +16,9 @@ VerificationStatus = Literal["exact", "fuzzy", "unverified", "unknown_source"]
 FUZZY_TRIGRAM_RATIO = 0.8
 # below this many words one wrong word decides the match, so no near match is tried
 FUZZY_MIN_WORDS = 6
+# how far, in words, a near match may drift from the passage's own word order; each
+# dropped, added or corrected word shifts what follows it by one
+FUZZY_MAX_DRIFT_WORDS = 3
 _WORD = re.compile(r"\w+")
 
 
@@ -72,21 +76,65 @@ def _span(passage_words: list[str], source: str) -> tuple[int, int] | None:
     return normalized.starts[match.start()], normalized.ends[match.end() - 1]
 
 
-def _trigrams(words: list[str]) -> set[tuple[str, ...]]:
-    return {tuple(words[index : index + 3]) for index in range(len(words) - 2)}
+def _near_span(passage_words: list[str], source: str) -> tuple[int, int] | None:
+    """Find one stretch of the source holding most of the passage's word trigrams.
+
+    Trigram i of the passage found at source word p lies on diagonal p - i. A near
+    quote keeps its trigrams within FUZZY_MAX_DRIFT_WORDS of one diagonal; a quote
+    stitched together from distant sentences spreads them over several, so no one
+    stretch of the source holds enough of them.
+    """
+    normalized = _normalize(source)
+    words = list(_WORD.finditer(normalized.text))
+    positions: defaultdict[tuple[str, ...], list[int]] = defaultdict(list)
+    for index in range(len(words) - 2):
+        positions[tuple(word.group() for word in words[index : index + 3])].append(
+            index
+        )
+    wanted = [
+        tuple(passage_words[index : index + 3])
+        for index in range(len(passage_words) - 2)
+    ]
+    hits = sorted(
+        (position - index, index, position)
+        for index, trigram in enumerate(wanted)
+        for position in positions.get(trigram, ())
+    )
+    found: Counter[int] = Counter()
+    best = (0, 0, 0)
+    first = 0
+    for last, (diagonal, index, _) in enumerate(hits):
+        found[index] += 1
+        while hits[first][0] < diagonal - 2 * FUZZY_MAX_DRIFT_WORDS:
+            found[hits[first][1]] -= 1
+            if not found[hits[first][1]]:
+                del found[hits[first][1]]
+            first += 1
+        if len(found) > best[0]:
+            window = [position for *_, position in hits[first : last + 1]]
+            best = (len(found), min(window), max(window))
+    count, start_word, end_word = best
+    if count / len(wanted) < FUZZY_TRIGRAM_RATIO:
+        return None
+    # the last trigram ends two words after the word it starts on
+    return (
+        normalized.starts[words[start_word].start()],
+        normalized.ends[words[end_word + 2].end() - 1],
+    )
 
 
 def verify_passage(passage: str, source: str | None) -> PassageMatch:
     """Classify how a passage matches its source.
 
     exact: every word of the passage occurs in order in the source, differing only in
-    case, punctuation or whitespace, and the span is returned. fuzzy: at least
-    FUZZY_TRIGRAM_RATIO of its word trigrams occur in the source, which tolerates a
-    dropped or corrected word. unverified: neither.
+    case, punctuation or whitespace. fuzzy: at least FUZZY_TRIGRAM_RATIO of its word
+    trigrams occur in one stretch of the source, in about the passage's order, which
+    tolerates a dropped or corrected word. unverified: neither. Both matches return
+    the span of the source they found.
 
     :param passage: the passage the model quoted
     :param source: the text of the source it named, None when the id was not sent
-    :returns: the match status and, for exact matches, character offsets
+    :returns: the match status and, for exact and fuzzy matches, character offsets
     :rtype: PassageMatch
     """
     if source is None:
@@ -99,8 +147,7 @@ def verify_passage(passage: str, source: str | None) -> PassageMatch:
         return PassageMatch("exact", *span)
     if len(passage_words) < FUZZY_MIN_WORDS:
         return PassageMatch("unverified")
-    wanted = _trigrams(passage_words)
-    found = wanted & _trigrams(_words(source))
-    if len(found) / len(wanted) >= FUZZY_TRIGRAM_RATIO:
-        return PassageMatch("fuzzy")
+    near = _near_span(passage_words, source)
+    if near:
+        return PassageMatch("fuzzy", *near)
     return PassageMatch("unverified")

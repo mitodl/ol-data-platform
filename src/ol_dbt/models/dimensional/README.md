@@ -133,3 +133,27 @@ where (max_ts is null or event_timestamp > max_ts)
 **Never** use a scalar subquery `(select max_ts from ... where platform = 'x')` as a
 direct `WHERE` filter — if the result is NULL (first run), `event_timestamp > NULL`
 evaluates to NULL (falsy) and silently drops all rows.
+
+---
+
+## OpenMetadata Glossary Terms
+
+The business terms these models decide (user, learner, course run, enrollment, the three
+meanings of "active", and the FERPA and NIST privacy categories) are defined in the
+OpenMetadata glossary `open-learning`. The glossary and its terms are created by
+ol-infrastructure's `om_server_config.py` and edited in OpenMetadata after that.
+
+A column that implements a term names it in its YAML, and the nightly om-ingest-dbt job
+attaches the term to the column:
+
+```yaml
+  - name: enrollment_is_active
+    config:
+      meta:
+        openmetadata:
+          glossary:
+          - open-learning.active-enrollment
+```
+
+Use the term's fully qualified name. OpenMetadata skips a name it does not know, with a
+warning in the ingestion log, so add the term to `om_server_config.py` first.
