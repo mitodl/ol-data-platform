@@ -68,9 +68,136 @@ unit_tests:
       is_current: true}
     - {courserun_pk: r3, course_fk: null, platform: residential, courserun_readable_id: "course-v1:MITx+6.2+2025_Spring",
       is_current: true}
+  - input: ref('dim_concept')
+    rows: []
+  - input: ref('dim_course')
+    rows: []
   expect:
     rows:
     - {courserun_fk: r1, concept_fk: x, course_support: 1, is_published: false}
     - {courserun_fk: r2, concept_fk: x, course_support: 1, is_published: false}
     - {courserun_fk: r1, concept_fk: y, course_support: 2, is_published: true}
     - {courserun_fk: r3, concept_fk: y, course_support: 2, is_published: true}
+
+- name: test_bridge_courserun_concept_treats_a_tool_no_course_teaches_as_introduced
+  description: >
+    Course A uses the tools sk, pd, nb, mp, jn and gt and the concept sd in two units
+    without teaching them. B teaches pd, and mp in its about page, so A requires
+    both. No course teaches sk, so A introduces it: the requires row stays
+    unpublished as introduced_by_run. Only A's edxorg copy teaches nb, which
+    coverage counts as the same course, so A introduces nb too. A's materials
+    assume jn and its about page recommends gt, so both stay requirements, as does
+    sd, which is not a tool. D assumes sk in one unit; A's introduced sk is not
+    support for D, so D's requirement has one course of support.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, teaching_status: used,
+      concept_id: sk}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, teaching_status: used,
+      concept_id: sk}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, teaching_status: used,
+      concept_id: pd}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, teaching_status: used,
+      concept_id: pd}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, teaching_status: used,
+      concept_id: nb}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, teaching_status: used,
+      concept_id: nb}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, teaching_status: used,
+      concept_id: mp}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, teaching_status: used,
+      concept_id: mp}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, teaching_status: used,
+      concept_id: jn}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, teaching_status: used,
+      concept_id: jn}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, teaching_status: used,
+      concept_id: gt}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, teaching_status: used,
+      concept_id: gt}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, teaching_status: used,
+      concept_id: sd}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, teaching_status: used,
+      concept_id: sd}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: m,
+      scope_kind: materials, scope_position: 9999, claim_kind: assumed_knowledge,
+      concept_id: jn}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: c,
+      scope_kind: context, scope_position: 0, claim_kind: declared_prerequisite, concept_id: gt,
+      prerequisite_kind: recommended}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+B+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, teaching_status: taught,
+      concept_id: pd}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+B+1T2026", scope_id: c,
+      scope_kind: context, scope_position: 0, claim_kind: concept, teaching_status: taught,
+      concept_id: mp}
+    - {platform: edxorg, courserun_readable_id: "course-v1:X+A+2T2025", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, teaching_status: taught,
+      concept_id: nb}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+D+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: sk}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: ra, course_fk: ca, platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026",
+      is_current: true}
+    - {courserun_pk: re, course_fk: null, platform: edxorg, courserun_readable_id: "course-v1:X+A+2T2025",
+      is_current: true}
+    - {courserun_pk: rb, course_fk: cb, platform: mitxonline, courserun_readable_id: "course-v1:X+B+1T2026",
+      is_current: true}
+    - {courserun_pk: rd, course_fk: cd, platform: mitxonline, courserun_readable_id: "course-v1:X+D+1T2026",
+      is_current: true}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: ca, course_readable_id: "course-v1:X+A", is_current: true}
+    - {course_pk: cb, course_readable_id: "course-v1:X+B", is_current: true}
+    - {course_pk: cd, course_readable_id: "course-v1:X+D", is_current: true}
+  - input: ref('dim_concept')
+    rows:
+    - {concept_pk: sk, concept_kind: tool}
+    - {concept_pk: pd, concept_kind: tool}
+    - {concept_pk: nb, concept_kind: tool}
+    - {concept_pk: mp, concept_kind: tool}
+    - {concept_pk: jn, concept_kind: tool}
+    - {concept_pk: gt, concept_kind: tool}
+    - {concept_pk: sd, concept_kind: concept}
+  expect:
+    rows:
+    - {courserun_fk: ra, concept_fk: sk, relation: uses, is_published: true, unpublished_reason: null}
+    - {courserun_fk: ra, concept_fk: pd, relation: uses, is_published: true, unpublished_reason: null}
+    - {courserun_fk: ra, concept_fk: nb, relation: uses, is_published: true, unpublished_reason: null}
+    - {courserun_fk: ra, concept_fk: mp, relation: uses, is_published: true, unpublished_reason: null}
+    - {courserun_fk: ra, concept_fk: jn, relation: uses, is_published: true, unpublished_reason: null}
+    - {courserun_fk: ra, concept_fk: gt, relation: uses, is_published: true, unpublished_reason: null}
+    - {courserun_fk: ra, concept_fk: sd, relation: uses, is_published: true, unpublished_reason: null}
+    - {courserun_fk: ra, concept_fk: gt, relation: recommends, is_published: true,
+      unpublished_reason: null}
+    - {courserun_fk: rb, concept_fk: pd, relation: teaches, is_published: true, unpublished_reason: null}
+    - {courserun_fk: rb, concept_fk: mp, relation: teaches, is_published: true, unpublished_reason: null}
+    - {courserun_fk: re, concept_fk: nb, relation: teaches, is_published: true, unpublished_reason: null}
+    - {courserun_fk: ra, concept_fk: sk, relation: requires, is_published: false,
+      unpublished_reason: introduced_by_run}
+    - {courserun_fk: ra, concept_fk: nb, relation: requires, is_published: false,
+      unpublished_reason: introduced_by_run}
+    - {courserun_fk: ra, concept_fk: pd, relation: requires, is_published: true, unpublished_reason: null}
+    - {courserun_fk: ra, concept_fk: mp, relation: requires, is_published: true, unpublished_reason: null}
+    - {courserun_fk: ra, concept_fk: jn, relation: requires, is_published: true, unpublished_reason: null}
+    - {courserun_fk: ra, concept_fk: gt, relation: requires, is_published: true, unpublished_reason: null}
+    - {courserun_fk: ra, concept_fk: sd, relation: requires, is_published: true, unpublished_reason: null}
+    - {courserun_fk: rd, concept_fk: sk, relation: requires, is_published: false,
+      unpublished_reason: insufficient_support}

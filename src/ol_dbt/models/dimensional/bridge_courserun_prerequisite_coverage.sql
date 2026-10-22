@@ -25,10 +25,12 @@
     on the pilot that pulled the mathematical "function" tree (logistic, softmax) under
     "Python function".
 
-    A tool no course teaches, such as scikit-learn or Seaborn on the pilot, stays
-    uncovered: it has no narrower concepts, because its taught neighbours (random
-    forest, grid search) are methods it implements, adjudicated related, not broader,
-    and every pilot course that uses it also requires it.
+    A tool no course teaches, such as scikit-learn or Seaborn on the pilot, has no
+    narrower concepts either, because its taught neighbours (random forest, grid
+    search) are methods it implements, adjudicated related, not broader. A run that
+    only uses such a tool introduces it, so bridge_courserun_concept leaves that
+    requirement unpublished (introduced_by_run); one that says learners should
+    already know it keeps an uncovered requirement.
 
     course_key decides which runs are the same course: dim_course.course_readable_id,
     or, when course_fk is null (edxorg runs until edxorg courses load, and courses
