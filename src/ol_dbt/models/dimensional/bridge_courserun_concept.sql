@@ -7,6 +7,22 @@
     explaining) before, or without, any scope of the run teaching or reviewing it.
     The course's documents (the materials scope) accompany its lectures, so a concept
     they teach counts as taught from the start; the context scope teaches nothing.
+
+    An inferred requirement is published (is_published) only with support beyond one
+    model call, because LLMs over-predict prerequisites and every spurious one then
+    matches some course that teaches it:
+      - prior_scope_count, the units relying on the concept before the run teaches it,
+        is at least courseware_prerequisite_min_scope_support, or course_support,
+        the courses with a run that declares the concept or infers it with a
+        direction_consistency over the threshold, is at least
+        courseware_prerequisite_min_course_support. Courses, not runs, because two
+        runs of one course have near-identical text and would corroborate themselves;
+        and
+      - direction_consistency, prior_scope_count over that plus taught_scope_count
+        (the scopes that teach it later, which says the run covers it itself), is at
+        least courseware_prerequisite_min_direction_consistency.
+    Unpublished candidates keep their rows, with unpublished_reason, for review.
+    Declared requirements and the other relations are always published.
 #}
 with mentions as (
     select
@@ -60,6 +76,7 @@ with mentions as (
         , courserun_readable_id
         , concept_id
         , min(case when scope_kind = 'materials' then 0 else scope_position end) as first_taught_position
+        , count(distinct case when teaching_status = 'taught' then scope_id end) as taught_scope_count
     from mentions
     where
         claim_kind = 'concept'
@@ -73,9 +90,9 @@ with mentions as (
         platform
         , courserun_readable_id
         , concept_id
-        , min(scope_position) as first_relied_position
+        , scope_id
+        , min(scope_position) as relied_position
         , count(*) as claim_count
-        , count(distinct scope_id) as scope_count
     from mentions
     where
         scope_kind = 'unit'
@@ -85,28 +102,97 @@ with mentions as (
             claim_kind = 'assumed_knowledge'
             or (claim_kind = 'concept' and teaching_status = 'used')
         )
-    group by platform, courserun_readable_id, concept_id
+    group by platform, courserun_readable_id, concept_id, scope_id
 )
 
-, inferred_requirements as (
+, inferred_candidates as (
     select
         relied_on.platform
         , relied_on.courserun_readable_id
         , relied_on.concept_id
-        , 'requires' as relation
-        , 'inferred' as requirement_source
-        , relied_on.first_relied_position as first_scope_position
-        , relied_on.claim_count
-        , relied_on.scope_count
+        , min(relied_on.relied_position) as first_scope_position
+        , sum(relied_on.claim_count) as claim_count
+        , count(*) as scope_count
+        , sum(
+            case
+                when
+                    first_taught.first_taught_position is null
+                    or relied_on.relied_position < first_taught.first_taught_position
+                    then 1
+                else 0
+            end
+        ) as prior_scope_count
+        , coalesce(max(first_taught.taught_scope_count), 0) as taught_scope_count
     from relied_on
     left join first_taught
         on
             relied_on.platform = first_taught.platform
             and relied_on.courserun_readable_id = first_taught.courserun_readable_id
             and relied_on.concept_id = first_taught.concept_id
-    where
-        first_taught.first_taught_position is null
-        or first_taught.first_taught_position > relied_on.first_relied_position
+    group by relied_on.platform, relied_on.courserun_readable_id, relied_on.concept_id
+    having
+        max(first_taught.first_taught_position) is null
+        or max(first_taught.first_taught_position) > min(relied_on.relied_position)
+)
+
+, inferred_directions as (
+    select
+        *
+        , cast(prior_scope_count as double) / (prior_scope_count + taught_scope_count) as direction_consistency
+    from inferred_candidates
+)
+
+-- courses that require each concept, for cross-course support: declared, or inferred
+-- by a run whose own evidence points the right way. A run with no course_fk (e.g.
+-- residential) is keyed by its course's readable id.
+, requiring_courses as (
+    select
+        requiring.concept_id
+        , count(
+            distinct coalesce(
+                course_runs.course_fk
+                , concat(requiring.platform, '|', {{ courserun_course_readable_id('requiring.courserun_readable_id') }})
+            )
+        ) as course_support
+    from (
+        select
+            platform
+            , courserun_readable_id
+            , concept_id
+        from inferred_directions
+        where direction_consistency >= {{ var('courseware_prerequisite_min_direction_consistency') }}
+        union all
+        select
+            platform
+            , courserun_readable_id
+            , concept_id
+        from direct_relations
+        where relation = 'requires'
+    ) as requiring
+    left join course_runs
+        on
+            requiring.platform = course_runs.platform
+            and requiring.courserun_readable_id = course_runs.courserun_readable_id
+    group by requiring.concept_id
+)
+
+, inferred_requirements as (
+    select
+        inferred_directions.platform
+        , inferred_directions.courserun_readable_id
+        , inferred_directions.concept_id
+        , 'requires' as relation
+        , 'inferred' as requirement_source
+        , inferred_directions.first_scope_position
+        , inferred_directions.claim_count
+        , inferred_directions.scope_count
+        , inferred_directions.prior_scope_count
+        , inferred_directions.taught_scope_count
+        , coalesce(requiring_courses.course_support, 0) as course_support
+        , inferred_directions.direction_consistency
+    from inferred_directions
+    left join requiring_courses
+        on inferred_directions.concept_id = requiring_courses.concept_id
 )
 
 , relations as (
@@ -119,6 +205,10 @@ with mentions as (
         , min(scope_position) as first_scope_position
         , count(*) as claim_count
         , count(distinct scope_id) as scope_count
+        , cast(null as bigint) as prior_scope_count
+        , cast(null as bigint) as taught_scope_count
+        , cast(null as bigint) as course_support
+        , cast(null as double) as direction_consistency
     from direct_relations
     group by platform, courserun_readable_id, concept_id, relation, requirement_source
 
@@ -127,22 +217,45 @@ with mentions as (
     select * from inferred_requirements
 )
 
+, judged as (
+    select
+        *
+        , case
+            when
+                requirement_source = 'inferred'
+                and prior_scope_count < {{ var('courseware_prerequisite_min_scope_support') }}
+                and course_support < {{ var('courseware_prerequisite_min_course_support') }}
+                then 'insufficient_support'
+            when
+                requirement_source = 'inferred'
+                and direction_consistency < {{ var('courseware_prerequisite_min_direction_consistency') }}
+                then 'contested_direction'
+        end as unpublished_reason
+    from relations
+)
+
 select
     {{ dbt_utils.generate_surrogate_key([
-        'relations.platform', 'relations.courserun_readable_id',
-        'relations.concept_id', 'relations.relation', 'relations.requirement_source'
+        'judged.platform', 'judged.courserun_readable_id',
+        'judged.concept_id', 'judged.relation', 'judged.requirement_source'
     ]) }} as courserun_concept_pk
-    , relations.platform
-    , relations.courserun_readable_id
+    , judged.platform
+    , judged.courserun_readable_id
     , course_runs.courserun_pk as courserun_fk
-    , relations.concept_id as concept_fk
-    , relations.relation
-    , relations.requirement_source
-    , relations.first_scope_position
-    , relations.claim_count
-    , relations.scope_count
-from relations
+    , judged.concept_id as concept_fk
+    , judged.relation
+    , judged.requirement_source
+    , judged.first_scope_position
+    , judged.claim_count
+    , judged.scope_count
+    , judged.prior_scope_count
+    , judged.taught_scope_count
+    , judged.course_support
+    , judged.direction_consistency
+    , judged.unpublished_reason is null as is_published
+    , judged.unpublished_reason
+from judged
 left join course_runs
     on
-        relations.platform = course_runs.platform
-        and relations.courserun_readable_id = course_runs.courserun_readable_id
+        judged.platform = course_runs.platform
+        and judged.courserun_readable_id = course_runs.courserun_readable_id
