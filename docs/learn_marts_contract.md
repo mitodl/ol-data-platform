@@ -51,16 +51,6 @@ These columns are optional but recommended for most marts:
 
 Each source may add additional columns following its needs. Common patterns include:
 
-### Course Sources (MIT edX)
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `platform` | string | Platform name (e.g., "ocw", "xpro") |
-| `topics` | string | Comma-separated topic labels (e.g., `"Engineering, Computer Science"`) |
-| `instructors` | string | Comma-separated instructor names |
-| `runs` | string | Semicolon-separated run records; each record is pipe-delimited: `readable_id\|start_on\|end_on\|is_live` |
-| `published` | boolean | Whether the resource is published/live |
-
 ### Program Sources (MIT edX)
 
 | Column | Type | Description |
@@ -398,7 +388,7 @@ columns are described in
 1. All required columns must be `NOT NULL` in catalog models
 2. Content file models are exempt from the resource-level required columns; their non-null columns are `etl_source`, `run_readable_id` and `key`, plus `source_path` and `extraction_status` in `integrations__learn__content_files` and `url` and `content_type` in `integrations__learn__ocw_content_files`
 3. Media models are exempt from the resource-level required columns; their keys and non-null columns are in the table under Media Sources
-4. String-aggregated columns (`topics`, `instructors`, `runs`, `courses`) may be `NULL` when no data exists; consumers should treat `NULL` as empty
+4. String-aggregated columns (`topics`, `instructors`, `courses`) may be `NULL` when no data exists; consumers should treat `NULL` as empty
 5. Text columns (`description`, `url`, `image_url`) may be `NULL` when no data exists
 
 ## ETL Source Values
@@ -408,7 +398,7 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 - `ocw` - OCW courses
 - `mitxonline` - MITx Online courses
 - `xpro` - xPRO courses
-- `mit_edx` - MIT edX courses
+- `mit_edx` - MIT edX programs
 - `oll` - Open Learning Library
 - `canvas` - Canvas courses
 - `youtube` - YouTube videos
@@ -431,3 +421,4 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-15 | Tobias Macey | `integrations__learn__oll_courses` rebuilt on what MIT Learn's OLL ETL writes. OCW-offered rows are included under Learn's `{course_number}+{semester}_{year}` id, with `offered_by` `ocw` (else `mitx`); only Learn's `SKIP_OCW_COURSES` run is left out. Added `run_id`, `course_number`, `offered_by`, `level`, `instructors`, `year`, `semester`, `duration`, `min_weeks`, `max_weeks`, `time_commitment`, `min_weekly_hours` and `max_weekly_hours`; `topics` is an array of the sheet's MITx Online topics; `published` follows the sheet; `runs` is gone. |
 | 2026-10-16 | Tobias Macey | `courses_programrequirement` and `courses_program_departments` load by full refresh, so deleted tree nodes and departments leave `integrations__learn__mitxonline_program_children`, the programs' `departments` and `start_date`, and the courses' `certification_type`. No column changes. |
 | 2026-10-20 | Tobias Macey | Added `has_catalog_page`, `about`, `what_you_learn`, `prerequisites` and `faqs` to `integrations__learn__mitxonline_courses` and `integrations__learn__mitxonline_programs` for MIT Learn's `full_description`. |
+| 2026-10-22 | Tobias Macey | Drop MIT edX courses. MIT Learn's `mit_edx` courses are retired rather than moved to a warehouse pull, so no Learn Sync task reads them and `integrations__learn__mit_edx_courses` is gone along with the Course Sources (MIT edX) columns. `mit_edx` stays as the source of `integrations__learn__mit_edx_programs`. |
