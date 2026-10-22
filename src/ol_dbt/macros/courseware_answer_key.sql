@@ -62,7 +62,8 @@
 
     Two readings of the name. As one lowercase string, the tokens a solution file
     carries even glued to other letters (pset3sol, 034pfsoln, hw5sampleans,
-    ses5_solis), and "key" at the end after a number or an assessment (exam2_key,
+    ans9, exam_smpsolqii2a; not solnhofenlimestone or ses5_solis_wets, a reading by Solis
+    and Wets), and "key" at the end after a number or an assessment (exam2_key,
     pract_final_key; not key_ideas or lec_mathle_key). As words, with every run of
     punctuation read as one space (PoSB_Midterm_Fall_2011_solutions is "posb midterm
     fall 2011 solutions"), so that the exceptions below can see the word's
@@ -89,10 +90,10 @@
     {%- set lowered = "lower(" ~ name ~ ")" -%}
     {%- set words = "trim(" ~ regexp_replace_all(lowered, "'[^a-z0-9]+'", "' '") ~ ")" -%}
     {%- set name_key = (
-        "'soln|(sols?|anskey)[0-9]*$|sol[0-9]|([0-9]|exam|xam|quiz|qz|pset|ps|hw|midterm|final|test|prob|assessment)[ _-]?keys?$"
+        "'soln([^h]|$)|(sols?|anskey)[0-9]*$|sol[0-9]|(^|[^a-z])ans[0-9]|s(a?mp|ample)sol|([0-9]|exam|xam|quiz|qz|pset|ps|hw|midterm|final|test|prob|assessment)[ _-]?keys?$"
         ~ "|sampleans|anssh|quizans|ans_?sheet|answer_?sheet|[0-9]ans([^a-z]|$)"
         ~ "|[0-9][_-]?solutions?([^a-z-]|$)|solutions?[_-]?[0-9]|^solutions?([0-9]|_[^o]|$)|^answers?|(^|[0-9_-])sol[a-z]?[0-9]|(exam|quiz|ps|pset|hw|rec|midterm|final|test)sols?([^a-z]|$)"
-        ~ "|(ses|lec|rec|ps|pset|hw|exam|quiz)[0-9]+[_-]?sol(is|ns?|s)?([^a-z]|$)'"
+        ~ "|(ses|lec|rec|ps|pset|hw|exam|quiz)[0-9]+[_-]?sol(ns?|s)?([^a-z]|$)'"
     ) -%}
     {%- set assessment_words = "'(^| )(problem|pset|homework|exam|quiz|midterm|final|assignment|assn|recitation|exercise|techex|activity|practice|review|tutorial|test|worksheet|drill|sample|assessment)|(^| )(ps|hw|lab)[0-9]*( |$)|(^| )rec[0-9]+|(^| )case( |$)|(^| )q[0-9]+( |$)'" -%}
     (
@@ -112,6 +113,8 @@
             {{ regexp_like(words, "'(^| )(solutions?|answers?)( |$)'") }}
             and not {{ regexp_like(words, "'(^| )(for|to) answers?( |$)'") }}
             and {{ regexp_like(words, assessment_words) }}
+            {#- "Self-Assessment: Aqueous Solutions" reviews a topic #}
+            and not {{ regexp_like(words, "'(^| )self assessment( |$)'") }}
         )
     )
 {%- endmacro %}
@@ -150,12 +153,13 @@
     {%- set graded = courseware_graded_words() -%}
     {#- a key that heads the text: at the end, before punctuation or a number, or before "question 1" -#}
     {%- set heading_end = "($|[^a-z ]| [^a-z]| question ?#?[0-9])" -%}
-    {#- what an answer key names after itself; not questions, which prose answers ("answer key questions") -#}
+    {#- what an answer key names after itself; any word but questions, which prose answers
+        ("answer key questions"), so "recitation section 22 answer key may 2-3" is one -#}
     {%- set key_target = "( (to|for)( the)?)? (problem sets?|psets?|p-?sets?|ps ?[0-9]|homework|hw ?[0-9]|exams?|quiz(zes)?|midterms?|finals?|assignments?|recitations?|tests?|worksheets?|labs?)([^a-z]|$)" -%}
     {%- set head_key = (
         "'solutions? (to|for) (the )?([0-9.]+ )?(selected |practice |sample |in-class |additional )?(" ~ graded ~ ")"
         ~ "|(" ~ graded ~ "|section)[ _]?#?[0-9]*[a-z]?:?[ _]((solutions?|answers)([^a-z]|$)|(answer )?key" ~ heading_end ~ ")"
-        ~ "|answer keys?(" ~ heading_end ~ "|" ~ key_target ~ ")|with (answers|solutions)|solution (outlines?|key|set|sheet)|sample (answers|solutions)"
+        ~ "|answer keys?(" ~ heading_end ~ "| [a-pr-z]|" ~ key_target ~ ")|with (answers|solutions)|solution (outlines?|key|set|sheet)|sample (answers|solutions)"
         ~ "|answers? to (the )?(exercises|questions|problems|problem sets?)|question [0-9]+:? answer|problems? [0-9][0-9.-]* solutions?|^solutions?( (to|for))?:? ?([^a-z ]|$)'"
     ) -%}
     {{ regexp_like(text_head, head_key) }}
@@ -179,9 +183,16 @@
     after them the first 50,000 characters hold: any character but a blank line or a
     fill-in line of underscores, on the label's line or the next, so "Answer: -3",
     "Solution: $x^2$" and a CRLF line break count. An exam leaves "Answer:" blank.
+    "Your answer:" and "Expected length of answer:" ask for an answer rather than give
+    one, so they are not counted.
 #}
 {% macro courseware_answer_markers(text) -%}
-    {{ array_length(regexp_extract_all("substr(" ~ text ~ ", 1, 50000)", "'(?i)(solution|answer)s?[ \\t]*:[ \\t]*(\\r?\\n)?[ \\t]*[^\\s_]'")) }}
+    {%- set head = "substr(" ~ text ~ ", 1, 50000)" -%}
+    {%- set answered = "[ \\t]*:[ \\t]*(\\r?\\n)?[ \\t]*[^\\s_]" -%}
+    (
+        {{ array_length(regexp_extract_all(head, "'(?i)(solution|answer)s?" ~ answered ~ "'")) }}
+        - {{ array_length(regexp_extract_all(head, "'(?i)(of|your)\\s+(solution|answer)s?" ~ answered ~ "'")) }}
+    )
 {%- endmacro %}
 
 
@@ -209,7 +220,10 @@
 ) -%}
     {%- set transcript_extensions = ['.srt', '.vtt', '.webvtt'] -%}
     (
-        coalesce({{ content_tags }}, '') like '%Solutions%'
+        {#- not "Multiple Assignment Types with Solutions", which also holds the assignments
+            (and a workshop facilitation guide); the name rules read those -#}
+        coalesce({{ content_tags }}, '') like '%"Problem Set Solutions"%'
+        or coalesce({{ content_tags }}, '') like '%"Exam Solutions"%'
         or (
             {{ content_type }} != 'video'
             and coalesce({{ file_extension }}, '') not in ('{{ transcript_extensions | join("', '") }}')

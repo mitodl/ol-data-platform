@@ -40,6 +40,12 @@ unit_tests:
     rows: []
   - input: ref('stg__openedx__s3__course_document_text')
     rows: []
+  - input: ref('int__ocw__live_courses')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows: []
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
   - input: ref('int__courseware__extraction_allowlist')
     rows:
     - {platform: mitxonline, courserun_readable_id: r1, allowlist_level: courserun}

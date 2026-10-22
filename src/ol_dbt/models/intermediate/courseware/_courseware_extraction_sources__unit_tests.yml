@@ -168,6 +168,12 @@ unit_tests:
       content_file_text: A short course., content_file_extraction_status: extracted}
   - input: ref('stg__openedx__s3__course_transcript_text')
     rows: []
+  - input: ref('int__ocw__live_courses')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows: []
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
   - input: ref('int__courseware__extraction_allowlist')
     rows: []
   expect:
