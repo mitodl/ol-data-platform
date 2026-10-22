@@ -1,11 +1,11 @@
 """Tests for ml.lib.summarize."""
 
-from typing import Any, Self
+from typing import Any
 
 import polars as pl
-import pyarrow as pa
 import pytest
 from ml.lib import summarize
+from ml.lib.iceberg_helpers import upsert_chunk
 from ol_llm import (
     BatchFailed,
     BatchKeys,
@@ -17,6 +17,7 @@ from ol_llm.testing import override_models
 from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, UserPromptPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
+from pyiceberg.catalog.sql import SqlCatalog
 
 MODEL = "anthropic:claude-haiku-4-5"
 TEXT = "turn one\n---\nturn two"
@@ -283,116 +284,23 @@ def test_skipped_frame_types_its_null_columns() -> None:
     assert record["embedding_input"] == "concatenated_turns"
 
 
-def _summary_row(**overrides: object) -> dict[str, object]:
-    conversation_ref = overrides.get("conversation_ref", "1")
-    row = {
-        "feedback_conversation_pk": f"pk-{conversation_ref}",
-        "source_slug": "zendesk",
-        "conversation_ref": conversation_ref,
-        "turn_count": 3,
-        "conversation_summary": "a summary",
-        "summary_model_version": "claude-haiku-4-5",
-        "embedding_input": "summary",
-    }
-    row.update(overrides)
-    return row
+TABLE = "some_db.feedback_summaries"
 
 
-class _FakeField:
-    def __init__(self, name: str) -> None:
-        self.name = name
+def _stored_rows(catalog: SqlCatalog) -> pl.DataFrame:
+    return catalog.load_table(TABLE).scan().to_polars().sort("conversation_ref")
 
 
-class _FakeSchema:
-    def __init__(self, column_names: list[str]) -> None:
-        self.column_names = column_names
-        self.fields = [_FakeField(name) for name in column_names]
+def test_summarize_and_checkpoint_upserts_skipped_rows_then_each_chunk(
+    iceberg_catalog: SqlCatalog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    written: list[pl.DataFrame] = []
 
+    def recording_upsert_chunk(*args: Any) -> pl.DataFrame:
+        written.append(args[2])
+        return upsert_chunk(*args)
 
-class _FakeSchemaUpdate:
-    def __init__(self, table: "_FakeTable") -> None:
-        self._table = table
-
-    def union_by_name(self, schema: Any) -> None:
-        # Mirrors real union_by_name: appends any not-yet-seen field at the end
-        # of the table's column order, never inserting it where the incoming
-        # schema happens to place it.
-        for name in schema.names:
-            if name not in self._table._column_names:
-                self._table._column_names.append(name)
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(self, *args: object) -> None:
-        pass
-
-
-class _FakeTable:
-    def __init__(self) -> None:
-        self.upserts: list[dict[str, object]] = []
-        self._column_names: list[str] = []
-
-    def update_schema(self) -> _FakeSchemaUpdate:
-        return _FakeSchemaUpdate(self)
-
-    def schema(self) -> _FakeSchema:
-        return _FakeSchema(self._column_names)
-
-    def upsert(self, **kwargs: object) -> None:
-        self.upserts.append(kwargs)
-
-
-class _FakeCatalog:
-    def __init__(self, table: _FakeTable) -> None:
-        self._table = table
-        self.create_calls: list[str] = []
-
-    def create_table_if_not_exists(
-        self,
-        identifier: str,
-        **kwargs: Any,
-    ) -> _FakeTable:
-        self.create_calls.append(identifier)
-        if not self._table._column_names:
-            schema = kwargs.get("schema")
-            if schema is not None:
-                self._table._column_names = list(schema.names)
-        return self._table
-
-
-def test_checkpoint_chunk_upserts_a_non_empty_chunk() -> None:
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    chunk_df = pl.DataFrame([_summary_row(), _summary_row(conversation_ref="2")])
-
-    summarize.checkpoint_chunk(catalog, "some_db.feedback_summaries", chunk_df)
-
-    assert catalog.create_calls == ["some_db.feedback_summaries"]
-    assert len(table.upserts) == 1
-    assert table.upserts[0]["join_cols"] == summarize.JOIN_COLS
-
-
-def test_checkpoint_chunk_skips_empty_chunks_without_touching_the_catalog() -> None:
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    empty_df = pl.DataFrame(
-        schema={
-            "feedback_conversation_pk": pl.String,
-            "source_slug": pl.String,
-            "conversation_ref": pl.String,
-        }
-    )
-
-    summarize.checkpoint_chunk(catalog, "some_db.feedback_summaries", empty_df)
-
-    assert catalog.create_calls == []
-    assert table.upserts == []
-
-
-def test_summarize_and_checkpoint_upserts_skipped_rows_then_each_chunk() -> None:
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
+    monkeypatch.setattr(summarize, "upsert_chunk", recording_upsert_chunk)
     df = pl.DataFrame(
         [
             *(_conversation_row(conversation_ref=str(i)) for i in range(5)),
@@ -404,7 +312,7 @@ def test_summarize_and_checkpoint_upserts_skipped_rows_then_each_chunk() -> None
         result, report = summarize.summarize_and_checkpoint(
             df,
             SUMMARIZER,
-            (catalog, "some_db.feedback_summaries"),
+            (iceberg_catalog, TABLE),
             batch_size=2,
             max_concurrency=1,
         )
@@ -412,17 +320,19 @@ def test_summarize_and_checkpoint_upserts_skipped_rows_then_each_chunk() -> None
     assert result.height == 6
     assert report.succeeded == 5
     # The skipped row, then chunks of 2, 2, and 1.
-    assert len(table.upserts) == 4
-    skipped = table.upserts[0]["df"]
-    assert isinstance(skipped, pa.Table)
-    assert skipped.num_rows == 1
-    assert table.upserts[0]["join_cols"] == summarize.JOIN_COLS
+    assert [chunk.height for chunk in written] == [1, 2, 2, 1]
+    assert written[0]["conversation_ref"].to_list() == ["5"]
+    stored = _stored_rows(iceberg_catalog)
+    assert stored["conversation_ref"].to_list() == [str(i) for i in range(6)]
+    assert stored["embedding_input"].to_list() == ["summary"] * 5 + [
+        "concatenated_turns"
+    ]
 
 
-def test_summarize_and_checkpoint_leaves_a_failed_conversation_out() -> None:
+def test_summarize_and_checkpoint_leaves_a_failed_conversation_out(
+    iceberg_catalog: SqlCatalog,
+) -> None:
     """A conversation that fails is not upserted, so the next run tries it again."""
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
     df = pl.DataFrame(
         [
             _conversation_row(conversation_ref="1", conversation_text="too long"),
@@ -434,19 +344,20 @@ def test_summarize_and_checkpoint_leaves_a_failed_conversation_out() -> None:
         result, report = summarize.summarize_and_checkpoint(
             df,
             SUMMARIZER,
-            (catalog, "some_db.feedback_summaries"),
+            (iceberg_catalog, TABLE),
             max_concurrency=1,
         )
 
     assert result["conversation_ref"].to_list() == ["2"]
+    assert _stored_rows(iceberg_catalog)["conversation_ref"].to_list() == ["2"]
     assert len(report.failures) == 1
     assert report.failures[0].row["conversation_ref"] == "1"
 
 
-def test_summarize_and_checkpoint_raises_when_every_call_fails() -> None:
+def test_summarize_and_checkpoint_raises_when_every_call_fails(
+    iceberg_catalog: SqlCatalog,
+) -> None:
     """100% failure must not look like "nothing new to summarize"."""
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
     df = pl.DataFrame(
         [
             _conversation_row(conversation_ref=str(i), conversation_text="too long")
@@ -461,7 +372,7 @@ def test_summarize_and_checkpoint_raises_when_every_call_fails() -> None:
         summarize.summarize_and_checkpoint(
             df,
             SUMMARIZER,
-            (catalog, "some_db.feedback_summaries"),
+            (iceberg_catalog, TABLE),
             max_concurrency=1,
         )
 
@@ -478,32 +389,52 @@ def test_fetch_summary_prompt_warns_when_opik_differs_from_the_embedded_copy(
     assert "differs from SUMMARY_PROMPT" in caplog.text
 
 
-def test_summarize_and_checkpoint_returns_the_existing_tables_column_order() -> None:
-    """The io_manager upserts the returned frame by position, so it must match a
-    table created before idempotency_key and prompt_template_hash existed, after
-    checkpoint_chunk's union_by_name has appended them.
+def test_summarize_and_checkpoint_updates_a_table_from_before_the_key_columns(
+    iceberg_catalog: SqlCatalog,
+) -> None:
+    """A table created before idempotency_key and prompt_template_hash existed gets
+    both appended, its stored conversations are replaced, and the returned frame
+    is in the table's column order, which the io_manager's upsert casts by.
     """
-    table = _FakeTable()
-    table._column_names = [
-        "feedback_conversation_pk",
-        "source_slug",
-        "conversation_ref",
-        "turn_count",
-        "conversation_summary",
-        "summary_model_version",
-        "prompt_version",
-        "embedding_input",
-        "summarized_at",
+    old_columns = [
+        name
+        for name in summarize.SUMMARIZE_CHECKPOINT_SCHEMA
+        if name not in {"prompt_template_hash", "idempotency_key"}
     ]
-    catalog = _FakeCatalog(table)
-    df = pl.DataFrame([_conversation_row(conversation_ref="1")])
+    existing = pl.DataFrame(
+        [
+            {
+                **summarize._identity(_conversation_row(conversation_ref=ref)),
+                "conversation_summary": "an old summary",
+                "embedding_input": "summary",
+            }
+            for ref in ("1", "2")
+        ],
+        schema={
+            name: summarize.SUMMARIZE_CHECKPOINT_SCHEMA[name] for name in old_columns
+        },
+    )
+    iceberg_catalog.create_table(TABLE, schema=existing.to_arrow().schema).append(
+        existing.to_arrow()
+    )
+    df = pl.DataFrame(
+        [
+            _conversation_row(conversation_ref="1"),
+            _conversation_row(conversation_ref="3"),
+        ]
+    )
 
     with override_models(FunctionModel(_summarize)):
         result, _ = summarize.summarize_and_checkpoint(
             df,
             SUMMARIZER,
-            (catalog, "some_db.feedback_summaries"),
+            (iceberg_catalog, TABLE),
             max_concurrency=1,
         )
 
-    assert result.columns == table._column_names
+    table_columns = iceberg_catalog.load_table(TABLE).schema().column_names
+    assert table_columns == [*old_columns, "prompt_template_hash", "idempotency_key"]
+    assert result.columns == table_columns
+    stored = _stored_rows(iceberg_catalog)
+    assert stored["conversation_ref"].to_list() == ["1", "2", "3"]
+    assert stored["idempotency_key"].is_null().to_list() == [False, True, False]

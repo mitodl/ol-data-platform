@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import polars as pl
+from ml.lib.iceberg_helpers import upsert_chunk
 from ml.resources.opik_auth import OPIK_PROJECT_NAME
 from ol_llm import (
     Attribution,
@@ -28,7 +29,7 @@ from pyiceberg.catalog import Catalog
 JOIN_COLS = ["feedback_conversation_pk"]
 
 # Columns added after the table first existed go last, in the order they were
-# added: checkpoint_chunk's union_by_name appends them to an existing table, and
+# added: upsert_chunk's union_by_name appends them to an existing table, and
 # the io_manager's upsert of the asset's return casts by position.
 SUMMARIZE_CHECKPOINT_SCHEMA = {
     **dict.fromkeys([*JOIN_COLS, "source_slug", "conversation_ref"], pl.String),
@@ -304,46 +305,6 @@ def _identity(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def checkpoint_chunk(
-    catalog: Catalog, table_identifier: str, chunk_df: pl.DataFrame
-) -> None:
-    """Upsert one chunk directly into the real feedback_summaries table.
-
-    A crash after this call keeps everything upserted so far -- the next run's
-    ordinary filter_unsummarized pass sees it as already summarized, no separate
-    recovery step needed. table_identifier is "database.table", e.g.
-    "ol_warehouse_production_intermediate.feedback_summaries". The table is
-    registered in non_dbt_singleton_tables() (ol_orchestrate.lib.iceberg_maintenance)
-    so nightly maintenance expires the resulting one-snapshot-per-chunk history.
-
-    create_table_if_not_exists rather than load_table: a brand-new deployment (or a
-    dropped dev table) has no feedback_summaries table yet, and this call -- not the
-    io_manager's write of the asset's final return -- is the first write of any run,
-    so it must be able to bootstrap the table itself.
-    """
-    if chunk_df.height == 0:
-        return
-    table = catalog.create_table_if_not_exists(
-        table_identifier, schema=chunk_df.to_arrow().schema
-    )
-    # A table from before a column existed has an older schema than chunk_df --
-    # union_by_name adds the new column(s) (nulled on existing rows) instead of
-    # failing the upsert; a no-op once the table already has them.
-    with table.update_schema() as update:
-        update.union_by_name(chunk_df.to_arrow().schema)
-    # union_by_name appends new columns at the table's end regardless of chunk_df's
-    # order, and upsert's pyarrow cast is positional -- so it must be reordered
-    # to match the table, not chunk_df. table.schema().fields (== .columns) gives
-    # the top-level field names only.
-    ordered_chunk_df = chunk_df.select([field.name for field in table.schema().fields])
-    table.upsert(
-        df=ordered_chunk_df.to_arrow(),
-        join_cols=JOIN_COLS,
-        when_matched_update_all=True,
-        when_not_matched_insert_all=True,
-    )
-
-
 def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
     unsummarized_df: pl.DataFrame,
     summarizer: Summarizer,
@@ -375,7 +336,10 @@ def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning 
     upserted: list[pl.DataFrame] = []
 
     def checkpoint(chunk_df: pl.DataFrame) -> None:
-        checkpoint_chunk(catalog, table_identifier, chunk_df)
+        # feedback_summaries is in non_dbt_singleton_tables()
+        # (ol_orchestrate.lib.iceberg_maintenance), so nightly maintenance expires
+        # the snapshots each chunk writes.
+        upsert_chunk(catalog, table_identifier, chunk_df, JOIN_COLS)
         upserted.append(chunk_df)
 
     rows = unsummarized_df.to_dicts()
