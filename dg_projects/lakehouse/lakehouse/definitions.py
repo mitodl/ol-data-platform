@@ -694,14 +694,16 @@ non_airbyte_staging_schedules = (
 # has no automation, so without this ol_warehouse_qa_integrations stays empty.
 #
 # Selects the models tagged qa_scheduled (the Learn views whose every QA raw
-# input exists, Glue 2026-09-30) with their upstream staging and intermediate
-# models. `ol-dbt validate`'s qa_branch_contract check fails any tagged model
-# that reads more than one ingestion unit, so a QA build is complete relative to
-# QA's apps rather than a silently partial union. The rest wait on raw tables QA
-# does not have: program_certificates on the edX program_learner_report and
-# email_opt_in mirrors, ocw_courses on the OCW live bucket (the ocw__s3 unit is
-# omitted in QA), and the dlt/API sources (mit_edx_programs on the edX catalog,
-# mitpe, mit_climate, oll, podcasts) whose loaders run in production only.
+# input exists) with their upstream staging and intermediate models. `ol-dbt
+# validate`'s qa_branch_contract check fails a tagged model that reads more than
+# one ingestion unit unless it declares every one of them in qa_branches and the
+# committed QA observation shows them held (program_certificates, which lists
+# the empty mitxonline/mysql unit in qa_partial_branches), so a QA build is
+# complete relative to QA's apps rather than a silently partial union. The rest
+# wait on raw tables QA does not have: ocw_courses on the OCW live bucket (the
+# ocw__s3 unit is omitted in QA), and the dlt/API sources (mit_edx_programs on
+# the edX catalog, mitpe, mit_climate, oll, podcasts) whose loaders run in
+# production only.
 learn_integrations_qa_schedule = ScheduleDefinition(
     name="learn_integrations_qa_daily",
     job=define_asset_job(

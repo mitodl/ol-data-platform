@@ -69,6 +69,7 @@ from ol_dbt_cli.lib.qa_contract import (
     QA_CONTRACT_CHECK,
     check_qa_contracts,
     check_qa_gaps,
+    check_qa_scheduled,
     qa_gaps,
     write_qa_baseline,
 )
@@ -633,7 +634,8 @@ def _check_qa_branch_contract(
     Without a manifest or without inventory units every model reads zero units,
     so no model counts as a union and a missing declaration would pass silently.
     Without an observation only the gap half is skipped: the inventory half
-    needs nothing but text.
+    needs nothing but text. A qa_scheduled union is the exception, and errors,
+    since nothing then shows its unattended QA build is complete.
     """
     if manifest is None:
         report.add(
@@ -658,6 +660,7 @@ def _check_qa_branch_contract(
     check_qa_contracts(manifest, units, report)
 
     observation = load_observation(inventory_dir / OBSERVATION_FILENAME)
+    check_qa_scheduled(manifest, units, observation, report)
     if observation is None:
         report.add(
             QA_CONTRACT_CHECK,
@@ -1178,7 +1181,9 @@ def validate(
                                qa_branches or qa_buildable: false, and each declared branch is
                                one QA ingests or mirrors (RFC 12711); declared tables the QA
                                observation shows empty or stale error unless baselined, and
-                               a baseline entry that is no longer a gap errors
+                               a baseline entry that is no longer a gap errors; a qa_scheduled
+                               union declares every unit it reads and the observation shows
+                               them held, baseline notwithstanding, bar its qa_partial_branches
     11. data_contract        — every column an OpenMetadata contract in <repo>/contracts/ lists
                                for a dbt model or source is still declared, selected, and of a
                                compatible data_type

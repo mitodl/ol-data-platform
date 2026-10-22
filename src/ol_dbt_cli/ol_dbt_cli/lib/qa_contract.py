@@ -20,6 +20,14 @@ A declared branch whose tables QA does not hold, or a mirror past its
 INFO when listed in ``qa_branch_baseline.txt``. A listed gap that has closed is
 an ERROR until the line is removed, so the lapse cannot recur unnoticed. That half reads a committed
 observation of the QA lake (``lib.qa_observation``), since CI has no AWS access.
+
+A model tagged ``qa_scheduled`` is built unattended in QA, so the baseline's
+tolerance does not extend to it. One that unions several units must declare
+every unit it reads, and the observation must show each table it reads from them
+holding rows and each mirror within its age. A branch whose lapse the model can
+be built without is listed, as a subset of ``qa_branches``, in
+``qa_partial_branches``; that key is a ratchet too, failing once QA holds the
+branch again.
 """
 
 from __future__ import annotations
@@ -55,11 +63,12 @@ _BRANCH = re.compile(r"^[a-z][a-z0-9_]*/[a-z][a-z0-9_]*$")
 QA_SCHEDULED_TAG = "qa_scheduled"
 """Tag on the models the lakehouse code location builds, with their upstream, on a QA schedule.
 
-QA runs no dbt automation, so this schedule is the one dbt build there. It is
-safe only for models reading a single ingestion unit: a union built from a
-lapsed QA branch comes out partial rather than failing. Checking the tagged
-models covers their upstream too, since a parent's units are a subset of its
-child's.
+QA runs no dbt automation, so this schedule is the one dbt build there. A union
+built from a lapsed QA branch comes out partial rather than failing, so a tagged
+model reading more than one ingestion unit must declare all of them and the QA
+observation must show them held (:func:`check_qa_scheduled`). Checking the
+tagged models covers their upstream too, since a parent's tables are a subset of
+its child's.
 """
 
 
@@ -67,6 +76,14 @@ child's.
 class Contract:
     branches: list[str] | None
     buildable: bool | None
+    partial: list[str] | None = None
+
+
+def _branch_list_problems(key: str, branches: list[str]) -> list[str]:
+    problems = [f"{key} entry {b!r} is not a `deployment/layer` unit key" for b in branches if not _BRANCH.match(b)]
+    if len(set(branches)) != len(branches):
+        problems.append(f"{key} lists a branch more than once")
+    return problems
 
 
 def upstream_tables(manifest: ManifestRegistry, units: list[Unit]) -> dict[str, set[str]]:
@@ -120,18 +137,20 @@ def _read_contract(meta: dict[str, Any]) -> tuple[Contract, list[str]]:
             problems.append("qa_branches is empty; a model with no QA branches declares `qa_buildable: false`")
             branches = None
         else:
-            problems.extend(
-                f"qa_branches entry {b!r} is not a `deployment/layer` unit key"
-                for b in branches
-                if not _BRANCH.match(b)
-            )
-            if len(set(branches)) != len(branches):
-                problems.append("qa_branches lists a branch more than once")
+            problems.extend(_branch_list_problems("qa_branches", branches))
+
+    partial = meta.get("qa_partial_branches")
+    if "qa_partial_branches" in meta:
+        if not isinstance(partial, list) or not partial or not all(isinstance(b, str) for b in partial):
+            problems.append("qa_partial_branches must be a non-empty list of `deployment/layer` strings")
+            partial = None
+        else:
+            problems.extend(_branch_list_problems("qa_partial_branches", partial))
 
     if "qa_buildable" in meta and buildable is not False:
         problems.append("qa_buildable only takes `false`; a buildable model says so by declaring qa_branches")
 
-    return Contract(branches=branches, buildable=buildable), problems
+    return Contract(branches=branches, buildable=buildable, partial=partial), problems
 
 
 def check_qa_contracts(manifest: ManifestRegistry, units: list[Unit], report: ValidationReport) -> None:
@@ -196,15 +215,23 @@ def check_qa_contracts(manifest: ManifestRegistry, units: list[Unit], report: Va
                     "baselineable: see docs/specs/QA_DATA_TOPOLOGY_SPEC.md §2.",
                 )
 
-        if QA_SCHEDULED_TAG in node.tags and len(reads) > 1:
+        if contract.partial is not None and QA_SCHEDULED_TAG not in node.tags:
             report.add(
                 QA_CONTRACT_CHECK,
                 Severity.ERROR,
                 node.name,
-                f"is tagged {QA_SCHEDULED_TAG} but unions {len(reads)} ingestion units",
-                f"Reads {', '.join(sorted(reads))}. The QA schedule builds this model and its "
-                "upstream unattended, where a union with a lapsed branch comes out partial. "
-                f"Drop the {QA_SCHEDULED_TAG} tag, or remove the extra unit from its lineage.",
+                f"declares qa_partial_branches but is not tagged {QA_SCHEDULED_TAG}",
+                "The key names the lapsed branches the QA schedule may build this model without, "
+                "and nothing else reads it. Drop it, or tag the model.",
+            )
+        for branch in sorted(set(contract.partial or []) - set(contract.branches or [])):
+            report.add(
+                QA_CONTRACT_CHECK,
+                Severity.ERROR,
+                node.name,
+                f"qa_partial_branches names {branch}, which qa_branches does not",
+                "A partial branch is a declared branch QA is known to lack. Add it to qa_branches "
+                "so the gap half keeps tracking it, or drop it here.",
             )
 
         is_union = len(reads) > 1 and classify_layer(node.original_file_path) not in UNCONTRACTED_LAYERS
@@ -303,6 +330,93 @@ def qa_gaps(manifest: ManifestRegistry, units: list[Unit], observation: Observat
         if found:
             gaps.append(Gap(branch, table, *found, models=tuple(sorted(models))))
     return gaps
+
+
+def check_qa_scheduled(
+    manifest: ManifestRegistry,
+    units: list[Unit],
+    observation: Observation | None,
+    report: ValidationReport,
+) -> None:
+    """Report qa_scheduled unions whose unattended QA build the observation does not show complete.
+
+    A model reading one unit cannot come out partial, so only unions are checked.
+    The baseline does not apply: it lets builds already running in QA continue
+    past a lapse, while the tag starts an unattended build on it. A lapsed branch
+    the model is acceptable without is listed in qa_partial_branches, and an
+    entry there that is no longer a gap fails, so a later lapse of that branch is
+    caught here again.
+    """
+    lineage = upstream_units(manifest, units)
+    tagged = sorted(
+        (
+            node
+            for node in manifest.nodes.values()
+            if node.is_model and QA_SCHEDULED_TAG in node.tags and len(lineage.get(node.name, set())) > 1
+        ),
+        key=lambda n: n.name,
+    )
+    if not tagged:
+        return
+
+    if observation is not None and observation.glue_database != QA_GLUE_DATABASE:
+        observation = None
+    gaps_by_model: dict[str, list[Gap]] = defaultdict(list)
+    if observation is not None:
+        for gap in qa_gaps(manifest, units, observation):
+            for model in gap.models:
+                gaps_by_model[model].append(gap)
+
+    for node in tagged:
+        reads = lineage[node.name]
+        contract, problems = _read_contract(node.meta)
+        if problems:
+            # check_qa_contracts reports these; a contract that does not parse
+            # cannot be compared with lineage.
+            continue
+        declared = set(contract.branches or [])
+        if undeclared := reads - declared:
+            report.add(
+                QA_CONTRACT_CHECK,
+                Severity.ERROR,
+                node.name,
+                f"is tagged {QA_SCHEDULED_TAG} but reads {', '.join(sorted(undeclared))} outside its qa_branches",
+                f"Reads {', '.join(sorted(reads))}. The QA schedule builds this model and its upstream "
+                "unattended, where a union with a lapsed branch comes out partial, and only a declared "
+                f"branch is checked against what QA holds. Declare every unit it reads, or drop the "
+                f"{QA_SCHEDULED_TAG} tag.",
+            )
+            continue
+        if observation is None:
+            report.add(
+                QA_CONTRACT_CHECK,
+                Severity.ERROR,
+                node.name,
+                f"is tagged {QA_SCHEDULED_TAG} and unions {len(reads)} units, but no QA observation shows them held",
+                "Commit an observation of ol_warehouse_qa_raw (`ol-dbt inventory observe`).",
+            )
+            continue
+
+        partial = set(contract.partial or []) & declared
+        gaps = gaps_by_model[node.name]
+        if lapsed := [gap for gap in gaps if gap.branch not in partial]:
+            report.add(
+                QA_CONTRACT_CHECK,
+                Severity.ERROR,
+                node.name,
+                f"is tagged {QA_SCHEDULED_TAG} but reads {len(lapsed)} table(s) QA does not hold",
+                f"{'; '.join(f'{gap.branch} {gap.table} ({gap.reason})' for gap in lapsed)}. "
+                f"{BASELINE_FILENAME} does not cover a scheduled model. Restore the branch in QA, list it "
+                f"in qa_partial_branches if this model's QA form may go without it, or drop the tag.",
+            )
+        for branch in sorted(partial - {gap.branch for gap in gaps}):
+            report.add(
+                QA_CONTRACT_CHECK,
+                Severity.ERROR,
+                node.name,
+                f"qa_partial_branches names {branch}, which QA now holds for this model",
+                "Remove it, so a later lapse of the branch fails here rather than building partial.",
+            )
 
 
 def check_qa_gaps(  # noqa: PLR0913
