@@ -442,20 +442,22 @@ models:
       full name, their name couldn't be populated from other sources if they don't
       have their accounts linked on MicroMasters.
   - name: address_country
-    description: str, country code provided by the user on the corresponding platform
+    description: str, country code provided by the user on the corresponding platform.
+      Backfilled using data from available platforms.
   - name: highest_education
-    description: str, user's level of education
+    description: str, user's level of education. Backfilled using data from available
+      platforms.
   - name: gender
     description: str, Gender selected by the user on their profile on the corresponding
-      platform
+      platform. Backfilled using data from available platforms.
   - name: birth_year
-    description: int, user's birth year
+    description: int, user's birth year. Backfilled using data from available platforms.
   - name: company
-    description: str, user's company
+    description: str, user's company. Backfilled using data from available platforms.
   - name: job_title
-    description: str, user's job title
+    description: str, user's job title. Backfilled using data from available platforms.
   - name: industry
-    description: str, user's job industry
+    description: str, user's job industry. Backfilled using data from available platforms.
   - name: topic_interests
     description: array, a list of topic interests selected by MIT Learn users on their
       profile. e.g. Art, Design & Architecture, Health & Medicine, Business & Management
@@ -1966,6 +1968,85 @@ unit_tests:
       mitlearn_user_id:
       mitxpro_application_user_id: 7
       bootcamps_application_user_id: 3
+- name: test_dim_user_demographics_fill_blanks_from_other_accounts
+  description: >
+    A blank demographic (null or '') on the base row, the most recently joined
+    account, is filled from the person's other accounts in the same order. A
+    value on the base row is never replaced, and a field no account has stays
+    blank.
+  model: dim_user
+  given:
+  - input: ref('int__bootcamps__users')
+    rows:
+    # Base row has blanks; the older account has the values.
+    - user_id: 1
+      user_email: fill@example.com
+      user_is_active: true
+      user_joined_on: '2025-01-01T00:00:00'
+      user_gender: ''
+    - user_id: 2
+      user_email: fill@example.com
+      user_is_active: true
+      user_joined_on: '2020-01-01T00:00:00'
+      user_gender: f
+      user_company: Acme
+      user_birth_year: 1990
+    # Base row has values; the older account's differing values must not win.
+    - user_id: 3
+      user_email: keep@example.com
+      user_is_active: true
+      user_joined_on: '2025-01-01T00:00:00'
+      user_gender: m
+      user_company: New Co
+    - user_id: 4
+      user_email: keep@example.com
+      user_is_active: true
+      user_joined_on: '2020-01-01T00:00:00'
+      user_gender: f
+      user_company: Old Co
+    # No account has a gender, so the blank stays as it was.
+    - user_id: 5
+      user_email: none@example.com
+      user_is_active: true
+      user_joined_on: '2025-01-01T00:00:00'
+      user_gender: ''
+  - input: ref('stg__mitlearn__app__postgres__users_user')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_user')
+    rows: []
+  - input: ref('int__mitx__users')
+    rows: []
+  - input: ref('int__mitxonline__flexiblepricing_flexiblepriceapplication')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopic')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile_topic_interests')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__openedx_openedxuser')
+    rows: []
+  - input: ref('stg__mitxonline__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_legaladdress')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_profile')
+    rows: []
+  - input: ref('stg__mitxpro__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__auth_user')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__auth_userprofile')
+    rows: []
+  expect:
+    rows:
+    - {email: fill@example.com, gender: f, company: Acme, birth_year: 1990}
+    - {email: keep@example.com, gender: m, company: New Co, birth_year: null}
+    - {email: none@example.com, gender: '', company: null, birth_year: null}
 - name: test_afact_learner_courserun_progress_status_and_needs_attention
   description: >
     Pins completion_status and needs_attention_since, one learner per case.

@@ -798,6 +798,8 @@ with mitx_users as (
     where rn = 1
 )
 
+{% set demographic_columns = ['address_country', 'highest_education', 'gender', 'company', 'job_title', 'industry'] %}
+
 , agg_view as (
     select
         user_pk
@@ -841,6 +843,13 @@ with mitx_users as (
         -- Fallback address_state for cross-platform users whose base row is from a platform
         -- that null-codes address_state (e.g. Emeritus, Global Alumni, Residential).
         , min_by(address_state, row_num) filter (where address_state is not null) as agg_address_state
+        -- Fill blank (null or '') demographics from the person's other accounts, in base-row
+        -- order, so a base row on a platform that doesn't collect the field doesn't hide a
+        -- value another account has. min_by on the unique row_num keeps the pick stable.
+        {%- for col in demographic_columns %}
+        , min_by({{ col }}, row_num) filter (where nullif(trim({{ col }}), '') is not null) as agg_{{ col }}
+        {%- endfor %}
+        , min_by(birth_year, row_num) filter (where birth_year is not null) as agg_birth_year
     from ranked_users
     group by user_pk
 )
@@ -873,13 +882,13 @@ select
     , agg.micromasters_user_id
     , base.email
     , coalesce(base.full_name, agg.agg_full_name) as full_name
-    , base.address_country
-    , base.highest_education
-    , base.gender
-    , base.birth_year
-    , base.company
-    , base.job_title
-    , base.industry
+    , coalesce(case when trim(base.address_country) <> '' then base.address_country end, agg.agg_address_country, base.address_country) as address_country
+    , coalesce(case when trim(base.highest_education) <> '' then base.highest_education end, agg.agg_highest_education, base.highest_education) as highest_education
+    , coalesce(case when trim(base.gender) <> '' then base.gender end, agg.agg_gender, base.gender) as gender
+    , coalesce(base.birth_year, agg.agg_birth_year) as birth_year
+    , coalesce(case when trim(base.company) <> '' then base.company end, agg.agg_company, base.company) as company
+    , coalesce(case when trim(base.job_title) <> '' then base.job_title end, agg.agg_job_title, base.job_title) as job_title
+    , coalesce(case when trim(base.industry) <> '' then base.industry end, agg.agg_industry, base.industry) as industry
     , coalesce(base.address_state, agg.agg_address_state) as address_state
     , latest_income.latest_income_usd
     , latest_income.latest_original_income
