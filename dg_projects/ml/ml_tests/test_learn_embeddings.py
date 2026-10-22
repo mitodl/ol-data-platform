@@ -21,14 +21,17 @@ from dagster import (
     build_sensor_context,
     materialize,
 )
+from dagster._core.definitions.data_version import DATA_VERSION_TAG
 from ml.assets.learn_embeddings import (
     CONTENT_FILE_CHUNKS_KEY,
     CONTENT_FILE_TEXT_KEY,
     CONTENT_FILE_VECTORS_KEY,
+    EMPTY_TEXT_VERSION,
     TOPIC_CHUNKS_KEY,
     TOPIC_VECTORS_KEY,
     content_file_embedding_chunks,
     content_file_embedding_vectors,
+    content_file_text_versions,
     embedding_strategies,
     learn_content_file_text,
     topic_embedding_chunks,
@@ -444,8 +447,7 @@ def test_candidate_vectors_survive_a_serving_run(tables):
 
 
 # ------------------------------------------------------------------------ sensor
-def test_sensor_registers_runs_then_observes_them(tables):
-    load_sources(tables, **{"block-v1:a": "Text."})
+def load_empty_xpro_and_ocw(tables: dict[str, pl.DataFrame]) -> None:
     tables["integrations__learn__xpro_runs"] = pl.DataFrame(
         schema={"readable_id": pl.String, "run_id": pl.String}
     )
@@ -453,6 +455,11 @@ def test_sensor_registers_runs_then_observes_them(tables):
     tables["integrations__learn__ocw_courses"] = pl.DataFrame(
         schema={"readable_id": pl.String, "run_id": pl.String}
     )
+
+
+def test_sensor_registers_runs_then_observes_them(tables):
+    load_sources(tables, **{"block-v1:a": "Text."})
+    load_empty_xpro_and_ocw(tables)
     dagster_instance = DagsterInstance.ephemeral()
 
     first: Any = learn_content_file_text_sensor(
@@ -468,6 +475,32 @@ def test_sensor_registers_runs_then_observes_them(tables):
     (observation,) = second.asset_events
     assert observation.asset_key == CONTENT_FILE_TEXT_KEY
     assert observation.partition == PARTITION
+
+
+def test_a_run_that_loses_its_last_file_is_emptied(tables):
+    load_sources(tables, **{"block-v1:a": "Text."})
+    load_empty_xpro_and_ocw(tables)
+    dagster_instance = instance()
+    assert build_content_files(tables, dagster_instance).success
+    assert not tables[CONTENT_FILE_VECTORS_KEY.path[-1]].is_empty()
+
+    load_sources(tables, **{"block-v1:a": "Text."})
+    tables["integrations__learn__content_files"] = content_files(none="").clear()
+    result: Any = learn_content_file_text_sensor(
+        build_sensor_context(instance=dagster_instance)
+    )
+
+    # other-run is in the runs model too, but was never registered.
+    (observation,) = result.asset_events
+    assert observation.partition == PARTITION
+    assert observation.tags[DATA_VERSION_TAG] == EMPTY_TEXT_VERSION
+    assert content_file_text_versions("mitxonline", RUN, registered=[RUN])[
+        "text_version"
+    ].to_list() == [EMPTY_TEXT_VERSION]
+
+    assert build_content_files(tables, dagster_instance).success
+    assert tables[CONTENT_FILE_CHUNKS_KEY.path[-1]].is_empty()
+    assert tables[CONTENT_FILE_VECTORS_KEY.path[-1]].is_empty()
 
 
 # ------------------------------------------------------------------- definitions

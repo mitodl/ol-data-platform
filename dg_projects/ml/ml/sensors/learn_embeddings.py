@@ -40,10 +40,18 @@ def learn_content_file_text_sensor(context: SensorEvaluationContext):
     The cursor is a digest of every run's version, so a tick where none changed
     reports nothing. Observations go out only for runs already registered: the
     daemon records asset events before it adds partitions, so a run registered on
-    this tick is observed on the next, and the cursor is held back until then.
+    this tick is observed on the next, and the cursor is held back until then. A
+    registered run that lost its last file is observed with the empty version, so
+    its partition is rebuilt with no rows.
     """
+    registered = set(
+        CONTENT_FILE_RUNS.get_partition_keys(dynamic_partitions_store=context.instance)
+    )
     versions = pl.concat(
-        [content_file_text_versions(source) for source in sorted(CONTENT_FILE_SOURCES)]
+        [
+            content_file_text_versions(source, registered=registered)
+            for source in sorted(CONTENT_FILE_SOURCES)
+        ]
     )
     digest = md5_hex("\n".join("|".join(row) for row in versions.iter_rows()))
     if digest == context.cursor:
@@ -59,9 +67,6 @@ def learn_content_file_text_sensor(context: SensorEvaluationContext):
             "Skipping %d course runs whose id is not a valid partition key",
             versions.height - valid.height,
         )
-    registered = set(
-        CONTENT_FILE_RUNS.get_partition_keys(dynamic_partitions_store=context.instance)
-    )
     new_runs = sorted(set(valid["run_readable_id"]) - registered)
     observations = [
         AssetObservation(

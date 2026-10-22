@@ -13,6 +13,7 @@ writes to Qdrant; projecting these tables into Learn's collections is a separate
 step.
 """
 
+from collections.abc import Collection
 from datetime import UTC, datetime
 
 import polars as pl
@@ -72,6 +73,8 @@ CONTENT_FILE_PARTITIONS = MultiPartitionsDefinition(
     }
 )
 CONTENT_FILE_PARTITION_EXPR = {"etl_source": "etl_source", "run": "run_readable_id"}
+# The version of a run with no files, which the digest of no rows would be.
+EMPTY_TEXT_VERSION = md5_hex("")
 
 CONTENT_FILE_TEXT_KEY = AssetKey([GROUP_NAME, "learn_content_file_text"])
 CONTENT_FILE_CHUNKS_KEY = AssetKey([LAYER, "embedding_chunks__content_file"])
@@ -104,16 +107,22 @@ def partition_run(key: MultiPartitionKey) -> tuple[str, str]:
 
 
 def content_file_text_versions(
-    etl_source: str, run_readable_id: str | None = None
+    etl_source: str,
+    run_readable_id: str | None = None,
+    *,
+    registered: Collection[str] = (),
 ) -> pl.DataFrame:
     """Return a digest of each run's files, for the runs with a known resource.
 
     The digest covers what a chunk or its point id depends on: the run's
     resource, each file's key and checksum, and the two fields that pick the
-    markdown splitter.
+    markdown splitter. A registered run that is still in the runs model but has
+    no files left gets ``EMPTY_TEXT_VERSION``, so its partition is rebuilt with
+    no rows rather than keeping the chunks of files that are gone.
 
     :param etl_source: the source
     :param run_readable_id: one run, or every run of the source when omitted
+    :param registered: the runs that have a partition
     :returns: ``etl_source``, ``run_readable_id`` and ``text_version`` rows
     :rtype: pl.DataFrame
     """
@@ -121,13 +130,14 @@ def content_file_text_versions(
     files = require_table(LAYER, source.files_relation).filter(
         pl.col("etl_source") == etl_source
     )
-    if run_readable_id is not None:
-        files = files.filter(pl.col("run_readable_id") == run_readable_id)
     runs = require_table(LAYER, source.runs_relation).select(
         pl.col("run_id").alias("run_readable_id"), "readable_id"
     )
+    if run_readable_id is not None:
+        files = files.filter(pl.col("run_readable_id") == run_readable_id)
+        runs = runs.filter(pl.col("run_readable_id") == run_readable_id)
     fields = ["readable_id", "key", "checksum", "file_type", "file_extension"]
-    return (
+    versions = (
         files.select("run_readable_id", *fields[1:])
         .join(runs, on="run_readable_id", how="inner")
         .group_by("run_readable_id")
@@ -141,11 +151,24 @@ def content_file_text_versions(
         )
         .collect()
         .select(
-            pl.lit(etl_source).alias("etl_source"),
             "run_readable_id",
             pl.col("rows")
             .map_elements(md5_hex, return_dtype=pl.String)
             .alias("text_version"),
+        )
+    )
+    emptied = (
+        runs.filter(pl.col("run_readable_id").is_in(list(registered)))
+        .select("run_readable_id")
+        .unique()
+        .collect()
+        .join(versions, on="run_readable_id", how="anti")
+        .with_columns(pl.lit(EMPTY_TEXT_VERSION).alias("text_version"))
+    )
+    return (
+        pl.concat([versions, emptied])
+        .select(
+            pl.lit(etl_source).alias("etl_source"), "run_readable_id", "text_version"
         )
         .sort("run_readable_id")
     )
@@ -173,9 +196,10 @@ def learn_content_file_text(context: AssetExecutionContext) -> ObserveResult:
     version comparison) and so a single run can be observed on demand.
     """
     etl_source, run = partition_run(context.partition_key)
-    versions = content_file_text_versions(etl_source, run)
+    versions = content_file_text_versions(etl_source, run, registered=[run])
     if versions.is_empty():
-        msg = f"{etl_source} {run} has no content files with a known resource"
+        runs_relation = CONTENT_FILE_SOURCES[etl_source].runs_relation
+        msg = f"{etl_source} {run} is not in {runs_relation}"
         raise Failure(msg)
     return ObserveResult(
         asset_key=CONTENT_FILE_TEXT_KEY,
