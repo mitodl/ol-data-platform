@@ -30,11 +30,60 @@ unit_tests:
       is_current: true}
     - {courserun_pk: r3, course_fk: null, platform: residential, courserun_readable_id: "course-v1:MITx+6.2+2025_Spring",
       is_current: true}
+  - input: ref('dim_course')
+    rows: []
   - input: ref('int__courseware__resolved_concept_mentions')
     rows: []
   expect:
     rows:
     - {from_concept_fk: a, to_concept_fk: b, scope_support: 2, course_scope_support: 1,
+      is_published: false, unpublished_reason: insufficient_support}
+    - {from_concept_fk: c, to_concept_fk: d, scope_support: 2, course_scope_support: 2,
+      is_published: true, unpublished_reason: null}
+
+- name: test_bridge_concept_relation_counts_a_courses_platform_copies_once
+  description: >
+    6.86x has a mitxonline run and an edxorg run, each linked to its own platform's
+    dim_course row, and a third run extracted as course-v1:MITx+6.86x+3T2024 that
+    is
+    not a current dim_course_run. a builds_on b in one unit of each, one course, so
+    the edge stays unpublished. c builds_on d in one unit of 6.86x's mitxonline run
+    and one of 6.36x, two courses, so it publishes.
+  model: bridge_concept_relation
+  given:
+  - input: ref('int__courseware__concept_relation_evidence')
+    rows:
+    - {from_concept_id: a, to_concept_id: b, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: "course-v1:MITx+6.86x+1T2026",
+      scope_count: 1}
+    - {from_concept_id: a, to_concept_id: b, relation: builds_on, evidence_source: course_sequence,
+      platform: edxorg, courserun_readable_id: "MITx/6.86x/2T2025", scope_count: 1}
+    - {from_concept_id: a, to_concept_id: b, relation: builds_on, evidence_source: course_sequence,
+      platform: edxorg, courserun_readable_id: "course-v1:MITx+6.86x+3T2024", scope_count: 1}
+    - {from_concept_id: c, to_concept_id: d, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: "course-v1:MITx+6.86x+1T2026",
+      scope_count: 1}
+    - {from_concept_id: c, to_concept_id: d, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: "course-v1:MITx+6.36x+1T2026",
+      scope_count: 1}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: rm, course_fk: cm, platform: mitxonline, courserun_readable_id: "course-v1:MITx+6.86x+1T2026",
+      is_current: true}
+    - {courserun_pk: re, course_fk: ce, platform: edxorg, courserun_readable_id: "MITx/6.86x/2T2025",
+      is_current: true}
+    - {courserun_pk: rs, course_fk: cs, platform: mitxonline, courserun_readable_id: "course-v1:MITx+6.36x+1T2026",
+      is_current: true}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: cm, course_readable_id: "course-v1:MITx+6.86x", is_current: true}
+    - {course_pk: ce, course_readable_id: "MITx/6.86x", is_current: true}
+    - {course_pk: cs, course_readable_id: "course-v1:MITx+6.36x", is_current: true}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows: []
+  expect:
+    rows:
+    - {from_concept_fk: a, to_concept_fk: b, scope_support: 3, course_scope_support: 1,
       is_published: false, unpublished_reason: insufficient_support}
     - {from_concept_fk: c, to_concept_fk: d, scope_support: 2, course_scope_support: 2,
       is_published: true, unpublished_reason: null}
@@ -79,13 +128,69 @@ unit_tests:
     - {courserun_fk: r1, concept_fk: y, course_support: 2, is_published: true}
     - {courserun_fk: r3, concept_fk: y, course_support: 2, is_published: true}
 
+- name: test_bridge_courserun_concept_counts_a_courses_platform_copies_once
+  description: >
+    6.86x has a mitxonline run and three edxorg runs. dim_course_run holds edxorg
+    runs as {org}/{course}/{run}: one is linked to an edxorg dim_course row
+    (MITx/6.86x) and one has no course_fk. The third, extracted as
+    course-v1:MITx+6.86x+3T2024, is not a current dim_course_run. x is assumed in
+    one unit of each, which coverage counts as one course, so no run publishes it.
+    y is assumed in one unit of 6.86x's mitxonline run and one of 6.36x, two
+    courses, so both publish it.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:MITx+6.86x+1T2026",
+      scope_id: u1, scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge,
+      concept_id: x}
+    - {platform: edxorg, courserun_readable_id: "MITx/6.86x/2T2025", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: x}
+    - {platform: edxorg, courserun_readable_id: "MITx/6.86x/1T2025", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: x}
+    - {platform: edxorg, courserun_readable_id: "course-v1:MITx+6.86x+3T2024", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: x}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:MITx+6.86x+1T2026",
+      scope_id: u2, scope_kind: unit, scope_position: 2, claim_kind: assumed_knowledge,
+      concept_id: y}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:MITx+6.36x+1T2026",
+      scope_id: u1, scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge,
+      concept_id: y}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: rm, course_fk: cm, platform: mitxonline, courserun_readable_id: "course-v1:MITx+6.86x+1T2026",
+      is_current: true}
+    - {courserun_pk: re, course_fk: ce, platform: edxorg, courserun_readable_id: "MITx/6.86x/2T2025",
+      is_current: true}
+    - {courserun_pk: rn, course_fk: null, platform: edxorg, courserun_readable_id: "MITx/6.86x/1T2025",
+      is_current: true}
+    - {courserun_pk: rs, course_fk: cs, platform: mitxonline, courserun_readable_id: "course-v1:MITx+6.36x+1T2026",
+      is_current: true}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: cm, course_readable_id: "course-v1:MITx+6.86x", is_current: true}
+    - {course_pk: ce, course_readable_id: "MITx/6.86x", is_current: true}
+    - {course_pk: cs, course_readable_id: "course-v1:MITx+6.36x", is_current: true}
+  - input: ref('dim_concept')
+    rows: []
+  expect:
+    rows:
+    - {courserun_fk: rm, concept_fk: x, course_support: 1, is_published: false}
+    - {courserun_fk: re, concept_fk: x, course_support: 1, is_published: false}
+    - {courserun_fk: rn, concept_fk: x, course_support: 1, is_published: false}
+    - {courserun_fk: null, concept_fk: x, course_support: 1, is_published: false}
+    - {courserun_fk: rm, concept_fk: y, course_support: 2, is_published: true}
+    - {courserun_fk: rs, concept_fk: y, course_support: 2, is_published: true}
+
 - name: test_bridge_courserun_concept_treats_a_tool_no_course_teaches_as_introduced
   description: >
     Course A uses the tools sk, pd, nb, mp, jn and gt and the concept sd in two units
     without teaching them. B teaches pd, and mp in its about page, so A requires
     both. No course teaches sk, so A introduces it: the requires row stays
     unpublished as introduced_by_run. Only A's edxorg copy teaches nb, which
-    coverage counts as the same course, so A introduces nb too. A's materials
+    coverage counts as the same course, so A introduces nb too. Only Z, which is
+    not a current dim_course_run and so is no provider in coverage, teaches ab, so
+    A introduces ab as well. A's materials
     assume jn and its about page recommends gt, so both stay requirements, as does
     sd, which is not a tool. D assumes sk in one unit; A's introduced sk is not
     support for D, so D's requirement has one course of support.
@@ -152,6 +257,15 @@ unit_tests:
       concept_id: nb}
     - {platform: mitxonline, courserun_readable_id: "course-v1:X+D+1T2026", scope_id: u1,
       scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: sk}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, teaching_status: used,
+      concept_id: ab}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, teaching_status: used,
+      concept_id: ab}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Z+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, teaching_status: taught,
+      concept_id: ab}
   - input: ref('dim_course_run')
     rows:
     - {courserun_pk: ra, course_fk: ca, platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T2026",
@@ -175,6 +289,7 @@ unit_tests:
     - {concept_pk: mp, concept_kind: tool}
     - {concept_pk: jn, concept_kind: tool}
     - {concept_pk: gt, concept_kind: tool}
+    - {concept_pk: ab, concept_kind: tool}
     - {concept_pk: sd, concept_kind: concept}
   expect:
     rows:
@@ -185,6 +300,9 @@ unit_tests:
     - {courserun_fk: ra, concept_fk: jn, relation: uses, is_published: true, unpublished_reason: null}
     - {courserun_fk: ra, concept_fk: gt, relation: uses, is_published: true, unpublished_reason: null}
     - {courserun_fk: ra, concept_fk: sd, relation: uses, is_published: true, unpublished_reason: null}
+    - {courserun_fk: ra, concept_fk: ab, relation: uses, is_published: true, unpublished_reason: null}
+    - {courserun_fk: null, concept_fk: ab, relation: teaches, is_published: true,
+      unpublished_reason: null}
     - {courserun_fk: ra, concept_fk: gt, relation: recommends, is_published: true,
       unpublished_reason: null}
     - {courserun_fk: rb, concept_fk: pd, relation: teaches, is_published: true, unpublished_reason: null}
@@ -193,6 +311,8 @@ unit_tests:
     - {courserun_fk: ra, concept_fk: sk, relation: requires, is_published: false,
       unpublished_reason: introduced_by_run}
     - {courserun_fk: ra, concept_fk: nb, relation: requires, is_published: false,
+      unpublished_reason: introduced_by_run}
+    - {courserun_fk: ra, concept_fk: ab, relation: requires, is_published: false,
       unpublished_reason: introduced_by_run}
     - {courserun_fk: ra, concept_fk: pd, relation: requires, is_published: true, unpublished_reason: null}
     - {courserun_fk: ra, concept_fk: mp, relation: requires, is_published: true, unpublished_reason: null}

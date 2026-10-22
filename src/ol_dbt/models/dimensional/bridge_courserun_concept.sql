@@ -16,8 +16,10 @@
         the courses with a run that declares the concept or infers it with a
         direction_consistency over the threshold, is at least
         courseware_prerequisite_min_course_support. Courses, not runs, because two
-        runs of one course have near-identical text and would corroborate themselves;
-        and
+        runs of one course have near-identical text and would corroborate themselves.
+        A course is keyed as bridge_courserun_prerequisite_coverage keys it
+        (course_key from courseware_current_course_runs, which leaves out the
+        platform), so an edxorg and a mitxonline copy of one course count once; and
       - direction_consistency, prior_scope_count over that plus taught_scope_count
         (the scopes that teach it later, which says the run covers it itself), is at
         least courseware_prerequisite_min_direction_consistency.
@@ -29,11 +31,11 @@
     reviews. Courses demonstrate libraries such as scikit-learn and Seaborn as they
     go, so requiring them would leave a prerequisite no course could ever satisfy.
     "Other course" and "teaches or reviews" are as bridge_courserun_prerequisite_coverage
-    reads them (its course_key, which leaves out the platform, and any teaches or
-    reviews row), so a tool is introduced only where coverage would find no direct
-    provider. Where the tool first appears does not separate these cases: on the
-    pilot, the introduced tools first appear between the 4th and 10th unit, like
-    pandas, which an earlier course teaches and which stays a requirement.
+    reads them (the same course_key, a current run, and any teaches or reviews row),
+    so a tool is introduced only where coverage would find no direct provider. Where
+    the tool first appears does not separate these cases: on the pilot, the
+    introduced tools first appear between the 4th and 10th unit, like pandas, which
+    an earlier course teaches and which stays a requirement.
 
     Unpublished candidates keep their rows, with unpublished_reason, for review.
     Declared requirements and the other relations are always published.
@@ -54,42 +56,29 @@ with mentions as (
 )
 
 , course_runs as (
-    select * from {{ ref('dim_course_run') }}
-    where is_current
+    {{ courseware_current_course_runs() }}
 )
 
 , concepts as (
     select * from {{ ref('dim_concept') }}
 )
 
-, courses as (
-    select * from {{ ref('dim_course') }}
-    where is_current
-)
-
--- the course each run belongs to, so a course's reruns count once. A run with no
--- course_fk (e.g. residential) is keyed by its course's readable id.
--- coverage_course_key is bridge_courserun_prerequisite_coverage's course_key, which
--- leaves out the platform.
+-- the course each run belongs to, so a course's reruns and its copies on other
+-- platforms count once. A run that is not a current dim_course_run is keyed by its
+-- run id, as courseware_current_course_runs keys a run without a course_fk.
 , run_courses as (
     select distinct
         mentions.platform
         , mentions.courserun_readable_id
         , coalesce(
-            course_runs.course_fk
-            , concat(mentions.platform, '|', {{ courserun_course_readable_id('mentions.courserun_readable_id') }})
+            course_runs.course_key
+            , {{ courseware_course_key('mentions.courserun_readable_id') }}
         ) as course_key
-        , coalesce(
-            courses.course_readable_id
-            , {{ courserun_course_readable_id('mentions.courserun_readable_id') }}
-        ) as coverage_course_key
     from mentions
     left join course_runs
         on
             mentions.platform = course_runs.platform
             and mentions.courserun_readable_id = course_runs.courserun_readable_id
-    left join courses
-        on course_runs.course_fk = courses.course_pk
 )
 
 , direct_relations as (
@@ -195,7 +184,8 @@ with mentions as (
         or (claim_kind = 'declared_prerequisite' and prerequisite_kind in ('prerequisite', 'recommended'))
 )
 
--- candidates some other course teaches or reviews, as coverage would find them
+-- candidates some other course teaches or reviews, as coverage would find them:
+-- coverage's providers are current runs only
 , taught_elsewhere as (
     select distinct
         inferred_candidates.platform
@@ -210,11 +200,11 @@ with mentions as (
         on
             inferred_candidates.concept_id = teaching.concept_id
             and teaching.relation in ('teaches', 'reviews')
-    inner join run_courses as teaching_courses
+    inner join course_runs as teaching_courses
         on
             teaching.platform = teaching_courses.platform
             and teaching.courserun_readable_id = teaching_courses.courserun_readable_id
-    where teaching_courses.coverage_course_key != run_courses.coverage_course_key
+    where teaching_courses.course_key != run_courses.course_key
 )
 
 , inferred_directions as (

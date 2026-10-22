@@ -1,5 +1,12 @@
+import networkit as nk
 import polars as pl
-from ml.lib.courseware.graph import compute_graph, previous_membership
+import pytest
+from ml.lib.courseware.graph import (
+    PrerequisiteCycleError,
+    compute_graph,
+    prerequisite_closure,
+    previous_membership,
+)
 
 
 def concepts(*names):
@@ -119,3 +126,72 @@ def test_a_concept_with_no_current_labels_is_not_a_node():
     dropped = concepts("bluebikes").with_columns(label_count=pl.lit(0, dtype=pl.Int64))
     result = compute_graph(pl.concat([kept, dropped]), relations())
     assert sorted(result.nodes["concept_id"]) == ["numpy", "pandas"]
+
+
+def directed(node_count, *edges):
+    graph = nk.Graph(node_count, directed=True)
+    for source, target in edges:
+        graph.addEdge(source, target)
+    return graph
+
+
+def test_prerequisite_closure_follows_chains_at_their_shortest_depth():
+    # 0 -> 1 -> 2 -> 3, and a diamond 0 -> 4 -> 3 that reaches 3 in two hops
+    closure = prerequisite_closure(directed(5, (0, 1), (1, 2), (2, 3), (0, 4), (4, 3)))
+    assert closure == {
+        (0, 1): 1,
+        (0, 2): 2,
+        (0, 3): 2,
+        (0, 4): 1,
+        (1, 2): 1,
+        (1, 3): 2,
+        (2, 3): 1,
+        (4, 3): 1,
+    }
+
+
+def test_prerequisite_closure_stops_at_the_depth_cap():
+    closure = prerequisite_closure(directed(4, (0, 1), (1, 2), (2, 3)), max_depth=2)
+    assert (0, 3) not in closure
+    assert closure[(0, 2)] == 2
+    assert closure[(1, 3)] == 2
+
+
+def test_prerequisite_closure_rejects_a_cycle():
+    with pytest.raises(PrerequisiteCycleError):
+        prerequisite_closure(directed(3, (0, 1), (1, 2), (2, 0)))
+
+
+def test_graph_run_publishes_the_closure_of_published_builds_on():
+    result = compute_graph(
+        concepts("mean", "variance", "regression", "plot"),
+        relations(
+            relation("variance", "mean", "builds_on"),
+            relation("regression", "variance", "builds_on"),
+            relation("plot", "mean", "builds_on", published=False),
+            relation("regression", "plot", "practiced_with"),
+        ),
+    )
+    closure = {
+        (row["from_concept_id"], row["to_concept_id"]): row["min_depth"]
+        for row in result.prerequisite_closure.iter_rows(named=True)
+    }
+    assert closure == {
+        ("variance", "mean"): 1,
+        ("regression", "variance"): 1,
+        ("regression", "mean"): 2,
+    }
+    assert set(result.prerequisite_closure["graph_run_id"]) == {
+        result.run["graph_run_id"][0]
+    }
+
+
+def test_a_published_builds_on_cycle_fails_the_graph_run():
+    with pytest.raises(PrerequisiteCycleError, match="mean"):
+        compute_graph(
+            concepts("mean", "variance"),
+            relations(
+                relation("variance", "mean", "builds_on"),
+                relation("mean", "variance", "builds_on"),
+            ),
+        )

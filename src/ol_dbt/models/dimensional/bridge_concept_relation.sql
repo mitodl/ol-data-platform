@@ -18,8 +18,9 @@
       reverse_courserun_support builds_on only: runs where the opposite direction
                                 was observed
       course_scope_support      builds_on only: scope_support with each course's
-                                reruns counted once (its run with the most units),
-                                since reruns of one course have near-identical text
+                                reruns and platform copies counted once (its run
+                                with the most units), since they have near-identical
+                                text; courses are keyed by courseware_current_course_runs
       reverse_scope_support     builds_on only: the same for the opposite direction;
                                 direction_consistency is course_scope_support /
                                 (course_scope_support + reverse_scope_support)
@@ -45,8 +46,7 @@ with evidence as (
 )
 
 , course_runs as (
-    select * from {{ ref('dim_course_run') }}
-    where is_current
+    {{ courseware_current_course_runs() }}
 )
 
 , mentions as (
@@ -102,15 +102,17 @@ with evidence as (
     group by from_concept_id, to_concept_id, relation
 )
 
--- a run with no course_fk (e.g. residential) is keyed by its course's readable id
+-- the course each run belongs to, keyed as bridge_courserun_concept keys it, so a
+-- course's reruns and its copies on other platforms count once. A run that is not a
+-- current dim_course_run is keyed by its run id.
 , builds_on_course_runs as (
     select
         evidence.from_concept_id
         , evidence.to_concept_id
         , evidence.scope_count
         , coalesce(
-            course_runs.course_fk
-            , concat(evidence.platform, '|', {{ courserun_course_readable_id('evidence.courserun_readable_id') }})
+            course_runs.course_key
+            , {{ courseware_course_key('evidence.courserun_readable_id') }}
         ) as course_key
     from evidence
     left join course_runs
