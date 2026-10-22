@@ -55,7 +55,7 @@ failures followed from it.
 1. The copy logic was never exercised. A mirror selects a fixed column allowlist from
    production, so a production column dropped or renamed out from under it breaks the CTAS, and
    an on-request mirror finds out only when someone needs fresh data. #3004's studentmodule
-   mirror merged on 2026-10-16 and had not run six days later.
+   mirror merged on 2026-10-16, and the 2026-10-21 observation shows no QA copy of it.
 2. The staleness backstop below never fired by itself. The contract check measures a copy's age
    at the committed observation's `observed_at`, that observation is refreshed by hand, and
    `qa_observation_drift` fails only when a table's emptiness changes. A copy that only gets
