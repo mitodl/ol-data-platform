@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from ol_dbt_cli.commands.validate import _check_qa_branch_contract, _update_qa_baseline
 from ol_dbt_cli.lib.dimensional_layering import load_baseline
@@ -352,6 +353,7 @@ def _inventory(tmp_path: Path, qa: str) -> Path:
 
 XPRO_ABSENT = {"raw__xpro__app__postgres__auth_user": TableState(present=False)}
 XPRO_GAP = "xpro/app_postgres raw__xpro__app__postgres__auth_user: empty"
+XPRO_TABLES = ("raw__xpro__app__postgres__auth_user", "raw__xpro__app__postgres__ecommerce_order")
 
 
 def _scheduled(
@@ -407,10 +409,7 @@ class TestQaScheduled:
             ),
         ],
     )
-    def test_gap_errors_whether_or_not_baselined(self, tables: dict[str, TableState], detail: str) -> None:
-        # check_qa_scheduled takes no baseline: a lapse the baseline tolerates
-        # for builds already running is still one an unattended build would
-        # turn into a partial union.
+    def test_gap_errors(self, tables: dict[str, TableState], detail: str) -> None:
         registry = _dag(DECLARED)
         registry.nodes["model.pkg.dim_user"].tags = [QA_SCHEDULED_TAG]
         report = ValidationReport()
@@ -420,26 +419,37 @@ class TestQaScheduled:
         ]
         assert report.issues[0].detail.startswith(detail)
 
-    def test_declared_partial_branch_passes(self) -> None:
-        meta = DECLARED | {"qa_partial_branches": ["xpro/app_postgres"]}
+    def test_declared_partial_table_passes(self) -> None:
+        meta = DECLARED | {"qa_partial_tables": ["raw__xpro__app__postgres__auth_user"]}
         assert _scheduled(meta, _observation(**XPRO_ABSENT)) == []
 
-    def test_partial_branch_does_not_excuse_another(self) -> None:
-        meta = DECLARED | {"qa_partial_branches": ["mitxonline/app_postgres"]}
-        findings = _scheduled(
-            meta,
-            _observation(
-                raw__mitxonline__app__postgres__users_user=TableState(present=False),
-                raw__xpro__app__postgres__auth_user=TableState(present=False),
-            ),
+    def test_partial_table_does_not_excuse_another_of_its_branch(self) -> None:
+        # The reason a lapse is harmless is specific to how the model reads that
+        # table, so an ancestor newly reading another empty table of the branch fails.
+        units = [*UNITS[:1], _unit("xpro", "app_postgres", "scoped", *XPRO_TABLES), *UNITS[2:]]
+        registry = _dag(DECLARED | {"qa_partial_tables": ["raw__xpro__app__postgres__auth_user"]})
+        registry.nodes["source.pkg.raw.raw__xpro__app__postgres__ecommerce_order"] = _source(
+            "raw__xpro__app__postgres__ecommerce_order"
         )
-        assert findings == [("dim_user", f"is tagged {QA_SCHEDULED_TAG} but reads 1 table(s) QA does not hold")]
+        registry.nodes["model.pkg.stg_xpro"].depends_on.append(
+            "source.pkg.raw.raw__xpro__app__postgres__ecommerce_order"
+        )
+        registry.nodes["model.pkg.dim_user"].tags = [QA_SCHEDULED_TAG]
+        report = ValidationReport()
+        observation = _observation(**{table: TableState(present=False) for table in XPRO_TABLES})
+        check_qa_scheduled(registry, units, observation, report)
+        assert [(i.message, i.detail.split(".")[0]) for i in report.issues] == [
+            (
+                f"is tagged {QA_SCHEDULED_TAG} but reads 1 table(s) QA does not hold",
+                "xpro/app_postgres raw__xpro__app__postgres__ecommerce_order (absent from QA raw)",
+            )
+        ]
 
-    def test_partial_branch_qa_holds_again_is_an_error(self) -> None:
-        # The ratchet: left in place, the entry would let the next lapse of the branch build partial.
-        meta = DECLARED | {"qa_partial_branches": ["xpro/app_postgres"]}
+    def test_partial_table_qa_holds_again_is_an_error(self) -> None:
+        # The ratchet: left in place, the entry would let the next lapse of the table build partial.
+        meta = DECLARED | {"qa_partial_tables": ["raw__xpro__app__postgres__auth_user"]}
         assert _scheduled(meta, _observation()) == [
-            ("dim_user", "qa_partial_branches names xpro/app_postgres, which QA now holds for this model")
+            ("dim_user", "qa_partial_tables names raw__xpro__app__postgres__auth_user, which QA now holds")
         ]
 
     @pytest.mark.parametrize(
@@ -475,28 +485,44 @@ class TestQaScheduled:
         check_qa_scheduled(registry, UNITS, None, report)
         assert report.issues == []
 
-    def test_partial_branches_on_an_untagged_model_is_an_error(self) -> None:
-        registry = _dag(DECLARED | {"qa_partial_branches": ["xpro/app_postgres"]})
-        assert ("dim_user", f"declares qa_partial_branches but is not tagged {QA_SCHEDULED_TAG}") in _findings(registry)
+    def test_partial_tables_on_an_untagged_model_is_an_error(self) -> None:
+        registry = _dag(DECLARED | {"qa_partial_tables": ["raw__xpro__app__postgres__auth_user"]})
+        assert ("dim_user", f"declares qa_partial_tables but is not tagged {QA_SCHEDULED_TAG}") in _findings(registry)
 
-    def test_partial_branch_must_be_declared(self) -> None:
-        registry = _dag({"qa_branches": ["mitxonline/app_postgres"], "qa_partial_branches": ["xpro/app_postgres"]})
+    @pytest.mark.parametrize(
+        ("meta", "message"),
+        [
+            (
+                {"qa_branches": ["mitxonline/app_postgres"]},
+                "qa_partial_tables names raw__xpro__app__postgres__auth_user, whose branch xpro/app_postgres "
+                "qa_branches does not",
+            ),
+            (
+                DECLARED,
+                "qa_partial_tables names raw__bootcamps__app__postgres__auth_user, which is not an inventory "
+                "table upstream of this model",
+            ),
+        ],
+    )
+    def test_partial_table_must_be_read_from_a_declared_branch(self, meta: dict[str, Any], message: str) -> None:
+        table = message.split()[2].rstrip(",")
+        registry = _dag(meta | {"qa_partial_tables": [table]})
         registry.nodes["model.pkg.dim_user"].tags = [QA_SCHEDULED_TAG]
-        assert ("dim_user", "qa_partial_branches names xpro/app_postgres, which qa_branches does not") in _findings(
-            registry
-        )
+        assert ("dim_user", message) in _findings(registry)
 
     @pytest.mark.parametrize(
         ("partial", "message"),
         [
-            ([], "qa_partial_branches must be a non-empty list of `deployment/layer` strings"),
-            ("xpro/app_postgres", "qa_partial_branches must be a non-empty list of `deployment/layer` strings"),
-            (["xpro"], "qa_partial_branches entry 'xpro' is not a `deployment/layer` unit key"),
-            (["xpro/app_postgres", "xpro/app_postgres"], "qa_partial_branches lists a branch more than once"),
+            ([], "qa_partial_tables must be a non-empty list of raw table names"),
+            ("raw__xpro__app__postgres__auth_user", "qa_partial_tables must be a non-empty list of raw table names"),
+            (
+                ["raw__xpro__app__postgres__auth_user", "raw__xpro__app__postgres__auth_user"],
+                "qa_partial_tables lists a table more than once",
+            ),
         ],
     )
-    def test_malformed_partial_branches(self, partial: Any, message: str) -> None:
-        registry = _dag(DECLARED | {"qa_partial_branches": partial})
+    def test_malformed_partial_tables(self, partial: Any, message: str) -> None:
+        registry = _dag(DECLARED | {"qa_partial_tables": partial})
         registry.nodes["model.pkg.dim_user"].tags = [QA_SCHEDULED_TAG]
         assert ("dim_user", message) in _findings(registry)
         # Reported once, by check_qa_contracts; the scheduled check skips a contract that does not parse.
@@ -674,6 +700,39 @@ class TestValidateGapWiring:
         assert not report.errors
         assert [i.message for i in report.issues if i.model == "(qa baseline)"] == [
             "1 known QA gap(s) tolerated by baseline"
+        ]
+
+    def _union_inventory(self, tmp_path: Path, observation: Observation) -> Path:
+        inventory = tmp_path / "inventory"
+        (inventory / "units").mkdir(parents=True)
+        for unit in UNITS:
+            (inventory / "units" / unit.path.name).write_text(yaml.safe_dump(unit.data))
+        (inventory / OBSERVATION_FILENAME).write_text(render_observation(observation))
+        (inventory / "qa_branch_baseline.txt").write_text(f"{XPRO_GAP}\n")
+        return inventory
+
+    def test_baselined_gap_still_fails_a_scheduled_union(self, tmp_path: Path) -> None:
+        # The baseline that lets the gap half pass is the one the scheduled check ignores.
+        registry = _dag(DECLARED)
+        registry.nodes["model.pkg.dim_user"].tags = [QA_SCHEDULED_TAG]
+        report = ValidationReport()
+        inventory = self._union_inventory(tmp_path, _observation(**XPRO_ABSENT))
+        _check_qa_branch_contract(registry, inventory, report, now=OBSERVED_AT)
+        assert [(i.severity, i.model, i.message) for i in report.issues if i.model != "marts_user"] == [
+            (Severity.ERROR, "dim_user", f"is tagged {QA_SCHEDULED_TAG} but reads 1 table(s) QA does not hold"),
+            (Severity.INFO, "(qa baseline)", "1 known QA gap(s) tolerated by baseline"),
+        ]
+
+    def test_missing_observation_fails_a_scheduled_union(self, tmp_path: Path) -> None:
+        registry = _dag(DECLARED)
+        registry.nodes["model.pkg.dim_user"].tags = [QA_SCHEDULED_TAG]
+        inventory = self._union_inventory(tmp_path, _observation())
+        (inventory / OBSERVATION_FILENAME).unlink()
+        report = ValidationReport()
+        _check_qa_branch_contract(registry, inventory, report, now=OBSERVED_AT)
+        assert [(i.severity, i.model) for i in report.issues if i.model != "marts_user"] == [
+            (Severity.ERROR, "dim_user"),
+            (Severity.WARNING, "(qa observation)"),
         ]
 
     def test_update_qa_baseline_rejects_a_non_qa_observation(self, tmp_path: Path) -> None:

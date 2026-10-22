@@ -697,8 +697,8 @@ non_airbyte_staging_schedules = (
 # input exists) with their upstream staging and intermediate models. `ol-dbt
 # validate`'s qa_branch_contract check fails a tagged model that reads more than
 # one ingestion unit unless it declares every one of them in qa_branches and the
-# committed QA observation shows them held (program_certificates, which lists
-# the empty mitxonline/mysql unit in qa_partial_branches), so a QA build is
+# committed QA observation shows them held (program_certificates lists the
+# empty mitxonline/mysql auth_user in qa_partial_tables), so a QA build is
 # complete relative to QA's apps rather than a silently partial union. The rest
 # wait on raw tables QA does not have: ocw_courses on the OCW live bucket (the
 # ocw__s3 unit is omitted in QA), and the dlt/API sources (mit_edx_programs on

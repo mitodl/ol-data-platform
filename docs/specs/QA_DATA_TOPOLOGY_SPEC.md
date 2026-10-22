@@ -232,9 +232,12 @@ which reads five units, so a tagged union is now accepted on three conditions:
   is compared with the observation, so a unit left out would be the silent one.
 - Every table the model reads from those branches holds rows in the committed observation, and
   every mirror is within `mirror_max_age_days`. The baseline does not count here.
-- A branch QA lacks may be listed in `qa_partial_branches`, a subset of `qa_branches`, when the
-  model's QA form can go without it. The key is only valid on a tagged model, and an entry QA
-  holds again is an ERROR, so the next lapse of that branch fails the check rather than building.
+- A table QA lacks may be listed in `qa_partial_tables` when the model's QA form can go without
+  it. Each entry must be a table the model reads from a declared branch. The key is only valid
+  on a tagged model, and an entry QA holds again is an ERROR, so the next lapse of that table
+  fails the check rather than building. It names tables rather than branches because the reason
+  a lapse is harmless is specific to how the model reads that table: an upstream edit that
+  starts reading another empty table of the same branch still fails.
 
 `ingest` units carry no age limit, so an ingested branch that stopped loading still passes; the
 union is then consistent as of that branch's last load rather than missing it. A table that
@@ -242,13 +245,16 @@ empties after the observation is caught by `qa_observation_drift_daily` (12:00 U
 03:00 build), not by the build itself.
 
 `integrations__learn__program_certificates` declares all five of its units and lists
-`mitxonline/mysql` as partial. QA's whole MITx Online Open edX unit is empty Iceberg shells from
+`raw__mitxonline__openedx__mysql__auth_user` as partial. QA's whole MITx Online Open edX unit is empty Iceberg shells from
 the 2026-09-08 conversion, with no snapshot (read from the table metadata on 2026-10-22). The
 view reads only `auth_user` from it, through a left join in `int__mitxonline__users` that
 falls back to the MITx Online app username, so the empty branch changes that column and not
 the row set. Its other inputs held rows on 2026-10-21: `mitxonline/app_postgres` loaded that
 day, `micromasters/app_postgres` last on 2026-09-14, and the `edxorg/s3` and `irx/bigquery`
-mirrors copied 2026-10-07, so they pass their 90-day limit until 2027-01-05.
+mirrors copied 2026-10-07, so they are inside their 90-day limit until 2027-01-05. Mirror age is
+measured at observation time (§2), so nothing fails on that date by itself: the first observation
+refreshed after it fails this model until the mirrors are refreshed. Without a refresh the
+observation-age WARNING (30 days) is the signal.
 
 QA's copy of this view is not production's in kind, not only in size. The edX.org and IRx
 inputs are masked mirrors of production (§8: usernames and emails hashed, names and addresses

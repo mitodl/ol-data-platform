@@ -1183,7 +1183,7 @@ def validate(
                                observation shows empty or stale error unless baselined, and
                                a baseline entry that is no longer a gap errors; a qa_scheduled
                                union declares every unit it reads and the observation shows
-                               them held, baseline notwithstanding, bar its qa_partial_branches
+                               them held, baseline notwithstanding, bar its qa_partial_tables
     11. data_contract        — every column an OpenMetadata contract in <repo>/contracts/ lists
                                for a dbt model or source is still declared, selected, and of a
                                compatible data_type

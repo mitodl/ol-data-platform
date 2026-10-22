@@ -73,7 +73,7 @@ def test_qa_runs_ingestion_and_the_learn_integrations_build():
     Ingestion has no such failure mode, so the sync_and_stage family runs in QA.
     The Learn integrations build is the one dbt exception, because ol-dbt
     validate admits a union to it only once the QA observation shows every
-    branch it reads held or the model declares that branch partial, and MIT
+    table it reads held or the model declares that table partial, and MIT
     Learn needs QA views to rehearse a
     warehouse-pull cutover against.
 

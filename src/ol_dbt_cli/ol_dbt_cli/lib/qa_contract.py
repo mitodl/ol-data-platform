@@ -24,10 +24,11 @@ observation of the QA lake (``lib.qa_observation``), since CI has no AWS access.
 A model tagged ``qa_scheduled`` is built unattended in QA, so the baseline's
 tolerance does not extend to it. One that unions several units must declare
 every unit it reads, and the observation must show each table it reads from them
-holding rows and each mirror within its age. A branch whose lapse the model can
-be built without is listed, as a subset of ``qa_branches``, in
-``qa_partial_branches``; that key is a ratchet too, failing once QA holds the
-branch again.
+holding rows and each mirror within its age. A lapsed table of a declared
+branch that the model can be built without is listed in ``qa_partial_tables``;
+that key is a ratchet too, failing once QA holds the table again. It names
+tables rather than branches so a model newly reading another lapsed table of
+the same branch still fails.
 """
 
 from __future__ import annotations
@@ -77,13 +78,6 @@ class Contract:
     branches: list[str] | None
     buildable: bool | None
     partial: list[str] | None = None
-
-
-def _branch_list_problems(key: str, branches: list[str]) -> list[str]:
-    problems = [f"{key} entry {b!r} is not a `deployment/layer` unit key" for b in branches if not _BRANCH.match(b)]
-    if len(set(branches)) != len(branches):
-        problems.append(f"{key} lists a branch more than once")
-    return problems
 
 
 def upstream_tables(manifest: ManifestRegistry, units: list[Unit]) -> dict[str, set[str]]:
@@ -137,15 +131,21 @@ def _read_contract(meta: dict[str, Any]) -> tuple[Contract, list[str]]:
             problems.append("qa_branches is empty; a model with no QA branches declares `qa_buildable: false`")
             branches = None
         else:
-            problems.extend(_branch_list_problems("qa_branches", branches))
+            problems.extend(
+                f"qa_branches entry {b!r} is not a `deployment/layer` unit key"
+                for b in branches
+                if not _BRANCH.match(b)
+            )
+            if len(set(branches)) != len(branches):
+                problems.append("qa_branches lists a branch more than once")
 
-    partial = meta.get("qa_partial_branches")
-    if "qa_partial_branches" in meta:
-        if not isinstance(partial, list) or not partial or not all(isinstance(b, str) for b in partial):
-            problems.append("qa_partial_branches must be a non-empty list of `deployment/layer` strings")
+    partial = meta.get("qa_partial_tables")
+    if "qa_partial_tables" in meta:
+        if not isinstance(partial, list) or not partial or not all(isinstance(t, str) for t in partial):
+            problems.append("qa_partial_tables must be a non-empty list of raw table names")
             partial = None
-        else:
-            problems.extend(_branch_list_problems("qa_partial_branches", partial))
+        elif len(set(partial)) != len(partial):
+            problems.append("qa_partial_tables lists a table more than once")
 
     if "qa_buildable" in meta and buildable is not False:
         problems.append("qa_buildable only takes `false`; a buildable model says so by declaring qa_branches")
@@ -159,6 +159,8 @@ def check_qa_contracts(manifest: ManifestRegistry, units: list[Unit], report: Va
     Every finding is an ERROR and none is baselineable: each is fixed by editing
     the model's YAML or the inventory, and none can be caused by an upstream outage.
     """
+    tables_read = upstream_tables(manifest, units)
+    owners = tables_by_raw_name(units)
     lineage = upstream_units(manifest, units)
     scope = {unit.key: unit.data.get("scope") for unit in units}
     strategies = {unit.key: qa_strategy(unit) for unit in units}
@@ -220,19 +222,27 @@ def check_qa_contracts(manifest: ManifestRegistry, units: list[Unit], report: Va
                 QA_CONTRACT_CHECK,
                 Severity.ERROR,
                 node.name,
-                f"declares qa_partial_branches but is not tagged {QA_SCHEDULED_TAG}",
-                "The key names the lapsed branches the QA schedule may build this model without, "
+                f"declares qa_partial_tables but is not tagged {QA_SCHEDULED_TAG}",
+                "The key names the lapsed tables the QA schedule may build this model without, "
                 "and nothing else reads it. Drop it, or tag the model.",
             )
-        for branch in sorted(set(contract.partial or []) - set(contract.branches or [])):
-            report.add(
-                QA_CONTRACT_CHECK,
-                Severity.ERROR,
-                node.name,
-                f"qa_partial_branches names {branch}, which qa_branches does not",
-                "A partial branch is a declared branch QA is known to lack. Add it to qa_branches "
-                "so the gap half keeps tracking it, or drop it here.",
-            )
+        for table in sorted(set(contract.partial or [])):
+            if table not in tables_read.get(node.name, set()):
+                report.add(
+                    QA_CONTRACT_CHECK,
+                    Severity.ERROR,
+                    node.name,
+                    f"qa_partial_tables names {table}, which is not an inventory table upstream of this model",
+                    "A partial table is one this model reads from a declared branch QA lacks.",
+                )
+            elif owners[table] not in set(contract.branches or []):
+                report.add(
+                    QA_CONTRACT_CHECK,
+                    Severity.ERROR,
+                    node.name,
+                    f"qa_partial_tables names {table}, whose branch {owners[table]} qa_branches does not",
+                    "Add the branch to qa_branches so the gap half keeps tracking the table, or drop the table here.",
+                )
 
         is_union = len(reads) > 1 and classify_layer(node.original_file_path) not in UNCONTRACTED_LAYERS
         # Presence again: a malformed value is already reported above, and _read_contract
@@ -343,11 +353,15 @@ def check_qa_scheduled(
     A model reading one unit cannot come out partial, so only unions are checked.
     The baseline does not apply: it lets builds already running in QA continue
     past a lapse, while the tag starts an unattended build on it. A lapsed branch
-    the model is acceptable without is listed in qa_partial_branches, and an
-    entry there that is no longer a gap fails, so a later lapse of that branch is
-    caught here again.
+    the model is acceptable without is listed in qa_partial_tables, and an
+    entry there that is no longer a gap fails, so a later lapse of that table is
+    caught here again. Partial entries are tables, not branches, so a model
+    newly reading another lapsed table of the same branch still fails.
     """
+    tables_read = upstream_tables(manifest, units)
+    owners = tables_by_raw_name(units)
     lineage = upstream_units(manifest, units)
+    by_key = {unit.key: unit for unit in units}
     tagged = sorted(
         (
             node
@@ -397,25 +411,31 @@ def check_qa_scheduled(
             )
             continue
 
-        partial = set(contract.partial or []) & declared
+        partial = set(contract.partial or [])
         gaps = gaps_by_model[node.name]
-        if lapsed := [gap for gap in gaps if gap.branch not in partial]:
+        if lapsed := [gap for gap in gaps if gap.table not in partial]:
             report.add(
                 QA_CONTRACT_CHECK,
                 Severity.ERROR,
                 node.name,
                 f"is tagged {QA_SCHEDULED_TAG} but reads {len(lapsed)} table(s) QA does not hold",
                 f"{'; '.join(f'{gap.branch} {gap.table} ({gap.reason})' for gap in lapsed)}. "
-                f"{BASELINE_FILENAME} does not cover a scheduled model. Restore the branch in QA, list it "
-                f"in qa_partial_branches if this model's QA form may go without it, or drop the tag.",
+                f"{BASELINE_FILENAME} does not cover a scheduled model. Restore the branch in QA, list "
+                f"the table in qa_partial_tables if this model's QA form may go without it, or drop the tag.",
             )
-        for branch in sorted(partial - {gap.branch for gap in gaps}):
+        # check_qa_contracts reports a partial table that is not upstream, undeclared or omitted.
+        held = {
+            table
+            for table in partial & tables_read[node.name]
+            if owners[table] in declared and qa_strategy(by_key[owners[table]]) in QA_STRATEGIES
+        } - {gap.table for gap in gaps}
+        for table in sorted(held):
             report.add(
                 QA_CONTRACT_CHECK,
                 Severity.ERROR,
                 node.name,
-                f"qa_partial_branches names {branch}, which QA now holds for this model",
-                "Remove it, so a later lapse of the branch fails here rather than building partial.",
+                f"qa_partial_tables names {table}, which QA now holds",
+                "Remove it, so a later lapse of the table fails here rather than building partial.",
             )
 
 
