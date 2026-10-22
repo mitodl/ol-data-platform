@@ -181,3 +181,8 @@ sources:
       description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
     - name: embedded_at
       description: timestamp, when this row's embedding was generated.
+    - name: idempotency_key
+      description: str, a hash of the text embedded (the summary or the concatenated
+        turns, per embedding_input), the ol-llm model id, and the dimension. The asset
+        re-embeds a conversation when its current key differs. Null for a row embedded
+        before the column existed.

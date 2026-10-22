@@ -9,6 +9,7 @@ from ml.assets.feedback_embeddings import (
     FeedbackEmbeddingsConfig,
     feedback_embeddings,
 )
+from ml.lib import embed
 from ol_llm.testing import override_embedding_models
 from pydantic_ai.embeddings import TestEmbeddingModel
 from pydantic_ai.exceptions import ModelHTTPError
@@ -113,14 +114,18 @@ def test_blank_and_null_text_count_as_no_text_not_failed() -> None:
     assert metadata["embedding_model"].value == MODEL
 
 
-def test_a_stored_vector_of_another_dim_does_not_count_as_embedded() -> None:
+def test_a_stored_vector_is_kept_for_the_same_text_and_redone_for_a_new_one() -> None:
+    model = embed.resolve_embedding_model(MODEL, 3)
     stored = pl.DataFrame(
         {
-            "feedback_conversation_pk": ["pk-1", "pk-5"],
-            "turn_count": [3, 3],
-            "embedding_input": ["summary", "summary"],
-            "embedding_model_version": ["text-embedding-3-large"] * 2,
-            "embedding_dim": [3, 1024],
+            "feedback_conversation_pk": ["pk-1", "pk-5", "pk-5"],
+            "embedding_model_version": ["text-embedding-3-large"] * 3,
+            "embedding_dim": [3, 3, 1024],
+            "idempotency_key": [
+                model.key("hello"),
+                model.key("an older summary"),
+                model.key("world"),
+            ],
         }
     )
     io_manager = _CapturingIOManager()
@@ -138,7 +143,29 @@ def test_a_stored_vector_of_another_dim_does_not_count_as_embedded() -> None:
     metadata = result.asset_materializations_for_node(
         "intermediate__feedback_embeddings"
     )[0].metadata
-    assert metadata["already_embedded_count"].value == 1
+    assert metadata["already_embedded_count"].value == 2
+
+
+def test_a_table_without_idempotency_key_reembeds_every_conversation() -> None:
+    stored = pl.DataFrame(
+        {
+            "feedback_conversation_pk": ["pk-1", "pk-5"],
+            "embedding_model_version": ["text-embedding-3-large"] * 2,
+            "embedding_dim": [3, 3],
+        }
+    )
+    io_manager = _CapturingIOManager()
+
+    _materialize(
+        io_manager,
+        FeedbackEmbeddingsConfig(
+            embedding_model=MODEL, embedding_dim=3, max_concurrency=1
+        ),
+        stored,
+    )
+
+    assert io_manager.written is not None
+    assert io_manager.written["conversation_ref"].to_list() == ["1", "5"]
 
 
 def test_a_run_that_stops_raises_failure() -> None:

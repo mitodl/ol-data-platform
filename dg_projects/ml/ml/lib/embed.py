@@ -8,6 +8,8 @@ model id, a stored embedding_model_version, and request limits; feedback_embeddi
 and every reader of its table call it.
 """
 
+import hashlib
+import json
 import logging
 import os
 import re
@@ -57,6 +59,7 @@ EMBEDDING_CHECKPOINT_SCHEMA = {
     "embedding_dim": pl.Int64,
     "embedding_model_version": pl.String,
     "embedded_at": pl.Datetime(time_zone="UTC"),
+    "idempotency_key": pl.String,
 }
 
 # A model id in ol-llm's provider:model form. Dev has no Bedrock IAM role, so it
@@ -170,6 +173,17 @@ class FeedbackEmbeddingModel:
         return (pl.col("embedding_model_version") == self.model_version) & (
             pl.col("embedding_dim") == self.dim
         )
+
+    def key(self, text: str) -> str:
+        """Return the idempotency key of a conversation's embedding.
+
+        :param text: the conversation's resolved_text.
+        :returns: a hex SHA-256 that changes when the text, the model, or the
+            vector length does.
+        :rtype: str
+        """
+        parts = [text, self.model, self.dim]
+        return hashlib.sha256(json.dumps(parts).encode()).hexdigest()
 
     def input_text(self, text: str) -> str:
         """Cut a text to what the model accepts.
@@ -337,31 +351,51 @@ def has_embeddable_text(text: str | None) -> bool:
 
 
 def filter_unembedded(
-    source_df: pl.DataFrame, already_embedded_df: pl.DataFrame
+    source_df: pl.DataFrame,
+    already_embedded_df: pl.DataFrame,
+    model: FeedbackEmbeddingModel,
 ) -> pl.DataFrame:
-    """Drop conversations already embedded with their current turn_count and arm.
+    """Drop conversations whose stored vector came from this text, model, and length.
 
-    Re-embeds on a turn_count change (embedding_input's arm usually stays the same
-    even though resolved_text changed, so that alone can't catch it) or an
-    embedding_input arm change.
+    The idempotency key covers the resolved text, so a new turn, a changed summary,
+    or a switch of embedding_input arm re-embeds a conversation, and a turn_count
+    change whose summary has not been redone yet does not.
+
+    A conversation not stored yet is always kept, with or without text, so the run
+    counts one without text. A stored one without text is dropped, which leaves
+    its vector in place. A stored row with no key (embedded before the key
+    existed) is re-embedded once.
 
     :param source_df: resolve_embedding_text's output.
-    :param already_embedded_df: feedback_embeddings' rows for the run's model and
-        length: feedback_conversation_pk, turn_count, embedding_input.
+    :param already_embedded_df: feedback_embeddings' rows for this model and
+        length: feedback_conversation_pk, and idempotency_key (null for a row
+        written before the column existed).
+    :param model: the run's model.
     :returns: the rows of source_df to embed or count as having no text.
     :rtype: pl.DataFrame
     """
     stored = already_embedded_df.select(
         *JOIN_COLS,
-        pl.col("turn_count").alias("_stored_turn_count"),
-        pl.col("embedding_input").alias("_stored_embedding_input"),
+        pl.col("idempotency_key").alias("_stored_key"),
+        pl.lit(True).alias("_stored"),  # noqa: FBT003
+    )
+    current_key = pl.Series(
+        "_current_key",
+        [
+            model.key(text) if has_embeddable_text(text) else None
+            for text in source_df["resolved_text"]
+        ],
+        dtype=pl.String,
     )
     return (
-        source_df.join(stored, on=JOIN_COLS, how="left")
+        source_df.with_columns(current_key)
+        .join(stored, on=JOIN_COLS, how="left")
         .filter(
-            pl.col("_stored_turn_count").is_null()
-            | (pl.col("turn_count") != pl.col("_stored_turn_count"))
-            | (pl.col("embedding_input") != pl.col("_stored_embedding_input"))
+            pl.col("_stored").is_null()
+            | (
+                pl.col("_current_key").is_not_null()
+                & pl.col("_current_key").ne_missing(pl.col("_stored_key"))
+            )
         )
         .select(source_df.columns)
     )
@@ -501,6 +535,7 @@ def _embedded_frame(
                 "embedding_dim": model.dim,
                 "embedding_model_version": model.model_version,
                 "embedded_at": embedded_at,
+                "idempotency_key": row["idempotency_key"],
             }
             for row, vector in embedded
         ],
@@ -531,8 +566,8 @@ def checkpoint_embedding_chunk(
     table = catalog.create_table_if_not_exists(
         table_identifier, schema=chunk_df.to_arrow().schema
     )
-    # A table from before a column existed (embedded_at) has an older schema than
-    # chunk_df -- union_by_name adds the new column (nulled on
+    # A table from before a column existed (embedded_at, idempotency_key) has an
+    # older schema than chunk_df -- union_by_name adds the new column (nulled on
     # existing rows) instead of failing the upsert; a no-op once the table already
     # has it.
     with table.update_schema() as update:
@@ -589,7 +624,11 @@ def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
     """
     catalog, table_identifier = checkpoint_target
     rows = [
-        {**row, "input_text": model.input_text(row["resolved_text"])}
+        {
+            **row,
+            "input_text": model.input_text(row["resolved_text"]),
+            "idempotency_key": model.key(row["resolved_text"]),
+        }
         for row in df.to_dicts()
         if has_embeddable_text(row["resolved_text"])
     ]

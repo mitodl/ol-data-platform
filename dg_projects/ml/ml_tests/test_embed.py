@@ -280,6 +280,18 @@ def test_matches_selects_the_model_version_and_dim() -> None:
     assert rows.filter(OPENAI.matches()).height == 1
 
 
+def test_key_changes_with_the_text_the_model_and_the_dim() -> None:
+    keys = {
+        OPENAI.key("a"),
+        OPENAI.key("b"),
+        embed.resolve_embedding_model("azure:text-embedding-3-large", 3).key("a"),
+        embed.resolve_embedding_model("openai:text-embedding-3-large", 4).key("a"),
+    }
+
+    assert len(keys) == 4
+    assert OPENAI.key("a") == OPENAI.key("a")
+
+
 def test_input_text_cuts_titan_by_characters() -> None:
     assert TITAN.input_text("x" * 60_000) == "x" * 50_000
 
@@ -294,37 +306,50 @@ def test_input_text_cuts_openai_to_its_token_limit() -> None:
     assert OPENAI.input_text("short") == "short"
 
 
-def _stored(turn_count: int, embedding_input: str = "summary") -> pl.DataFrame:
+def _stored(keys: dict[str, str | None]) -> pl.DataFrame:
     return pl.DataFrame(
         {
-            "feedback_conversation_pk": ["pk-0"],
-            "turn_count": [turn_count],
-            "embedding_input": [embedding_input],
-        }
+            "feedback_conversation_pk": list(keys),
+            "idempotency_key": list(keys.values()),
+        },
+        schema={"feedback_conversation_pk": pl.String, "idempotency_key": pl.String},
     )
 
 
-def test_filter_unembedded_drops_already_embedded_rows() -> None:
+def test_filter_unembedded_drops_a_conversation_embedded_from_the_same_text() -> None:
     source = _rows("same", "new")
 
-    result = embed.filter_unembedded(source, _stored(2))
+    result = embed.filter_unembedded(
+        source, _stored({"pk-0": OPENAI.key("same")}), OPENAI
+    )
 
     assert result["conversation_ref"].to_list() == ["1"]
     assert result.columns == source.columns
 
 
-def test_filter_unembedded_reembeds_on_turn_count_change() -> None:
-    result = embed.filter_unembedded(_rows("an updated summary"), _stored(1))
-
-    assert result["conversation_ref"].to_list() == ["0"]
-
-
-def test_filter_unembedded_reembeds_on_input_arm_change() -> None:
+def test_filter_unembedded_reembeds_a_changed_text() -> None:
+    """A re-summarized conversation keeps its turn_count and arm, so only the text
+    shows that its stored vector is stale.
+    """
     result = embed.filter_unembedded(
-        _rows("a short summary"), _stored(2, "concatenated_turns")
+        _rows("a new summary"), _stored({"pk-0": OPENAI.key("the old summary")}), OPENAI
     )
 
     assert result["conversation_ref"].to_list() == ["0"]
+
+
+def test_filter_unembedded_reembeds_a_row_stored_without_a_key_once() -> None:
+    result = embed.filter_unembedded(_rows("text"), _stored({"pk-0": None}), OPENAI)
+
+    assert result["conversation_ref"].to_list() == ["0"]
+
+
+def test_filter_unembedded_keeps_new_rows_without_text_and_drops_stored_ones() -> None:
+    result = embed.filter_unembedded(
+        _rows(None, " "), _stored({"pk-0": OPENAI.key("old")}), OPENAI
+    )
+
+    assert result["conversation_ref"].to_list() == ["1"]
 
 
 def test_embed_and_checkpoint_skips_null_and_blank_text() -> None:
@@ -342,7 +367,7 @@ def test_embed_and_checkpoint_skips_null_and_blank_text() -> None:
     assert report.failures == []
 
 
-def test_embed_and_checkpoint_writes_the_stored_model_and_float32_vectors() -> None:
+def test_embed_and_checkpoint_writes_the_stored_model_key_and_float32_vectors() -> None:
     result, report = embed.embed_and_checkpoint(
         _rows("hello"), OPENAI, _FakeEmbedder(OPENAI), _target()
     )
@@ -351,6 +376,7 @@ def test_embed_and_checkpoint_writes_the_stored_model_and_float32_vectors() -> N
     assert row["embedding_model_version"] == "text-embedding-3-large"
     assert row["embedding_dim"] == 3
     assert row["embedding_vector"] == [5.0, 5.0, 5.0]
+    assert row["idempotency_key"] == OPENAI.key("hello")
     assert row["turn_count"] == 2
     assert result["embedding_vector"].dtype == pl.List(pl.Float32)
     assert result.columns == list(embed.EMBEDDING_CHECKPOINT_SCHEMA)
@@ -358,8 +384,8 @@ def test_embed_and_checkpoint_writes_the_stored_model_and_float32_vectors() -> N
 
 
 def test_embed_and_checkpoint_returns_the_existing_tables_column_order() -> None:
-    """The io_manager upserts the returned frame by position, so it must match
-    the table's column order, not the frame's.
+    """The io_manager upserts the returned frame by position, so it must match a
+    table created before idempotency_key existed, after union_by_name appends it.
     """
     catalog, identifier = _target()
     table = catalog._table
@@ -379,7 +405,8 @@ def test_embed_and_checkpoint_returns_the_existing_tables_column_order() -> None
         _rows("hello"), OPENAI, _FakeEmbedder(OPENAI), (catalog, identifier)
     )
 
-    assert result.columns == table._column_names
+    assert result.columns == [*table._column_names[:9], "idempotency_key"]
+    assert table._column_names[-1] == "idempotency_key"
     assert table.upserts[0]["df"].schema.names == result.columns
 
 
@@ -608,7 +635,9 @@ def test_checkpoint_embedding_chunk_reorders_using_top_level_fields_only() -> No
     table = catalog._table
     table._column_names = list(embed.EMBEDDING_CHECKPOINT_SCHEMA)
     table._nested_extra_column_names = ["embedding_vector.element"]
-    chunk_df = embed._embedded_frame(OPENAI, [(_rows("a").to_dicts()[0], [0.1] * 3)])
+    chunk_df = embed._embedded_frame(
+        OPENAI, [({**_rows("a").to_dicts()[0], "idempotency_key": "k"}, [0.1] * 3)]
+    )
 
     embed.checkpoint_embedding_chunk(catalog, identifier, chunk_df)
 

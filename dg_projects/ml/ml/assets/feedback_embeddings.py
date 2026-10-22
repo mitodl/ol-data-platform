@@ -121,7 +121,8 @@ def feedback_embeddings(
     the LLM summary where feedback_summaries produced one, off the redacted
     concatenated turns otherwise. Runs after feedback_summaries so the arm decision
     is already made; a conversation feedback_summaries hasn't reached yet (upstream
-    still processing) is simply absent here and picked up next run.
+    still processing) is simply absent here and picked up next run. A conversation
+    whose text changed since it was embedded is embedded again.
     """
     summaries_lazy = get_dbt_model_as_dataframe(
         database_name=database_name,
@@ -151,27 +152,31 @@ def feedback_embeddings(
     model = resolve_embedding_model(config.embedding_model, config.embedding_dim)
 
     already_embedded_df = pl.DataFrame(
-        schema={
-            **dict.fromkeys(JOIN_COLS, pl.String),
-            "turn_count": pl.Int64,
-            "embedding_input": pl.String,
-        }
+        schema={**dict.fromkeys(JOIN_COLS, pl.String), "idempotency_key": pl.String}
     )
     if not config.full_refresh:
         with contextlib.suppress(NoSuchTableError):
+            embedded_lazy = get_dbt_model_as_dataframe(
+                database_name=database_name,
+                table_name="feedback_embeddings",
+            )
+            # idempotency_key is a newer column -- a table upserted before it
+            # existed won't have it until checkpoint_embedding_chunk's schema
+            # evolution next runs, and those rows are embedded again once.
+            stored_key = (
+                pl.col("idempotency_key")
+                if "idempotency_key" in embedded_lazy.collect_schema().names()
+                else pl.lit(None, dtype=pl.String).alias("idempotency_key")
+            )
             # Scoped to this model/dim, so a conversation with more than one
             # model's vector doesn't fan out the pk-only join in filter_unembedded.
             already_embedded_df = (
-                get_dbt_model_as_dataframe(
-                    database_name=database_name,
-                    table_name="feedback_embeddings",
-                )
-                .filter(model.matches())
-                .select(*JOIN_COLS, "turn_count", "embedding_input")
+                embedded_lazy.filter(model.matches())
+                .select(*JOIN_COLS, stored_key)
                 .collect()
             )
 
-    unembedded_df = filter_unembedded(resolved_df, already_embedded_df)
+    unembedded_df = filter_unembedded(resolved_df, already_embedded_df, model)
     no_text_count = sum(
         not has_embeddable_text(text) for text in unembedded_df["resolved_text"]
     )
