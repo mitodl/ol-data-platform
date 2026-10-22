@@ -249,7 +249,7 @@ def _old_style_outputs(output_dir) -> scopes.Scope:
     )
     claims = pl.DataFrame({"extraction_key": ["old-key"], "claim_ordinal": [1]})
     claims.write_parquet(output_dir / "courseware_claim.parquet")
-    claims.with_columns(evidence_ordinal=pl.lit(1)).write_parquet(
+    claims.with_columns(evidence_ordinal=pl.lit(1, pl.Int64)).write_parquet(
         output_dir / "courseware_claim_evidence.parquet"
     )
     return scope
@@ -298,6 +298,59 @@ def test_rekey_recovers_from_a_crash_after_the_first_write(tmp_path, monkeypatch
     assert _stored_keys(tmp_path) == [[extraction_key(scope, "model", "medium")]] * 3
 
 
+def test_rekey_adds_columns_an_older_table_lacks(tmp_path):
+    _old_style_outputs(tmp_path)
+    path = tmp_path / "courseware_claim_extraction.parquet"
+    pl.read_parquet(path).drop("cache_creation_input_tokens").write_parquet(path)
+    local.rekey(tmp_path)
+    for table, schema in local.OUTPUT_SCHEMAS.items():
+        stored = pl.read_parquet(tmp_path / f"{table}.parquet")
+        assert stored.schema == pl.Schema(schema)
+    stored = pl.read_parquet(path)
+    assert stored["cache_creation_input_tokens"].to_list() == [None]
+
+
+def test_rekey_refuses_a_column_the_schema_dropped(tmp_path):
+    _old_style_outputs(tmp_path)
+    path = tmp_path / "courseware_claim.parquet"
+    pl.read_parquet(path).with_columns(retired=pl.lit(1)).write_parquet(path)
+    with pytest.raises(ValueError, match="retired"):
+        local.rekey(tmp_path)
+
+
+def test_rekey_refuses_a_column_whose_type_changed(tmp_path):
+    _old_style_outputs(tmp_path)
+    path = tmp_path / "courseware_claim.parquet"
+    pl.read_parquet(path).with_columns(claim_ordinal=pl.lit(1.5)).write_parquet(path)
+    with pytest.raises(ValueError, match="claim_ordinal"):
+        local.rekey(tmp_path)
+    assert pl.read_parquet(path)["claim_ordinal"].to_list() == [1.5]
+
+
+def test_extract_refuses_an_older_claim_table_before_calling_the_model(
+    tmp_path, monkeypatch
+):
+    sources = tmp_path / "sources.parquet"
+    _course_rows("About it.", "Lecture 2", "some text").write_parquet(sources)
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    pl.DataFrame({"extraction_key": ["leftover"], "claim_ordinal": [1]}).write_parquet(
+        output_dir / "courseware_claim.parquet"
+    )
+    called: list[str] = []
+    monkeypatch.setattr(local, "AnthropicBedrock", object)
+    monkeypatch.setattr(
+        local, "LLMClientFactory", lambda **_: SimpleNamespace(get_client=object)
+    )
+    monkeypatch.setattr(
+        local, "extract_scopes", lambda *_, **__: called.append("model call")
+    )
+    # without the check the model is called and the append fails after it
+    with pytest.raises(ValueError, match="courseware_claim predates"):
+        local.extract(sources, output_dir, model_id="model", effort="medium")
+    assert called == []
+
+
 def test_extract_refuses_keys_that_need_rekey(tmp_path, capsys):
     sources = tmp_path / "sources.parquet"
     _course_rows("About it.", "Lecture 2", "some text").write_parquet(sources)
@@ -310,14 +363,13 @@ def test_extract_refuses_keys_that_need_rekey(tmp_path, capsys):
             sources, output_dir, model_id="model", effort="medium", dry_run=True
         )
 
-    with pytest.raises(ValueError, match="local rekey"):
+    with pytest.raises(ValueError, match="predates the current schema"):
         dry_run()  # no header_version column
-    extractions = pl.read_parquet(output_dir / "courseware_claim_extraction.parquet")
-    extractions.with_columns(header_version=pl.lit(None, pl.String)).write_parquet(
-        output_dir / "courseware_claim_extraction.parquet"
-    )
-    with pytest.raises(ValueError, match="local rekey"):
-        dry_run()  # the column, but a null-header row on an old key
+    for table in local.OUTPUT_SCHEMAS:
+        path = output_dir / f"{table}.parquet"
+        local._conform(pl.read_parquet(path), table).write_parquet(path)
+    with pytest.raises(ValueError, match="keys predate the current scheme"):
+        dry_run()  # the current schema, but a null-header row on an old key
     local.rekey(output_dir)
     dry_run()
     assert capsys.readouterr().out.count(" stored\n") == 1
@@ -345,7 +397,7 @@ def test_either_key_scheme_skips_what_the_other_extracted(
     key = extraction_key(scope, "model", "medium", key_on_header=stored_on_header)
     extraction, _, _ = _rows_for(scope, key, "model", "medium", _result())
     (tmp_path / "out").mkdir()
-    pl.DataFrame([extraction]).write_parquet(
+    pl.DataFrame([extraction], schema=EXTRACTION_SCHEMA).write_parquet(
         tmp_path / "out" / "courseware_claim_extraction.parquet"
     )
     assert _stored_marks(tmp_path, capsys, "About it.", key_on_header=False) == 1
