@@ -410,7 +410,9 @@ def embed_strategy(  # noqa: PLR0913
     The texts whose checksum has a stored vector for the strategy's model are not
     sent. The rest go one request per row through ol-llm's ``process_batch``, so a
     failed request costs only its own chunks and an outage stops the batch. The
-    chunks of a failed request get no row, and the next run sends them again.
+    chunks of a failed request get no row, and the next run of the partition
+    sends them again. Automation re-requests a failed partition once; after that
+    the partition waits for its text or chunker to change, or a run by hand.
 
     :param strategy: the strategy
     :param chunks: the partition's chunks of the strategy's chunker

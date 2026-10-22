@@ -137,10 +137,11 @@ courseware_automation_sensor = AutomationConditionSensorDefinition(
 )
 
 # Chunking and embedding of Learn's content files and topics. Every run it launches
-# carries LEARN_EMBEDDINGS_TAG, so ol-infrastructure's run_coordinator
-# tag_concurrency_limits can bound the model calls and the concurrent commits to
-# the vector tables, as for courseware. Stopped by default: the first build of each
-# table is a backfill launched by hand.
+# carries LEARN_EMBEDDINGS_TAG for ol-infrastructure's run_coordinator
+# tag_concurrency_limits to bound the model calls and the concurrent commits to the
+# vector tables, as for courseware. That limit does not exist yet, so add it before
+# turning this on: a chunker change requests every course run at once. Stopped by
+# default: the first build of each table is a backfill launched by hand.
 LEARN_EMBEDDINGS_TAG = "learn_embeddings/model_calls"
 learn_embeddings_automation_sensor = AutomationConditionSensorDefinition(
     name="learn_embeddings_automation_sensor",
@@ -222,10 +223,6 @@ defs = Definitions(
             base_url=os.environ.get("LLM_BASE_URL"),
             azure_endpoint=os.environ.get("LLM_AZURE_ENDPOINT"),
         ),
-        # Separate resource, not a reused "llm": Anthropic/Bedrock has no embeddings
-        # API, so this needs its own client_class/key. Which Bedrock embedding
-        # model to keep is still open (§B.1's bake-off); bedrock_embeddings is the
-        # default deployed envs need since no OPENAI_API_KEY is provisioned there.
         # The Learn embedding assets call models through ol-llm, which reads the
         # provider key from the environment; the resource copies it from Vault.
         "embeddings": EmbeddingsResource(
@@ -237,6 +234,10 @@ defs = Definitions(
                 )
             ],
         ),
+        # Separate resource, not a reused "llm": Anthropic/Bedrock has no embeddings
+        # API, so this needs its own client_class/key. Which Bedrock embedding
+        # model to keep is still open (§B.1's bake-off); bedrock_embeddings is the
+        # default deployed envs need since no OPENAI_API_KEY is provisioned there.
         "embedding_llm": LLMClientFactory(
             client_class=os.environ.get(
                 "EMBEDDING_PROVIDER",

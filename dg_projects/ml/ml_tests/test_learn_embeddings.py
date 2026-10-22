@@ -279,6 +279,34 @@ def test_files_without_a_resource_are_not_chunked(tables):
     assert CALLS == []
 
 
+def test_ocw_chunks_take_the_course_as_resource(tables):
+    run = "3a6b5c0f1e2d4c5b8a7f6e5d4c3b2a10"  # pragma: allowlist secret
+    course = "18.01+fall_2006"
+    key = "courses/18-01-single-variable-calculus-fall-2006/resources/notes/"
+    tables["integrations__learn__ocw_content_files"] = content_files(
+        **{key: "Lecture notes."}
+    ).with_columns(
+        pl.lit("ocw").alias("etl_source"), pl.lit(run).alias("run_readable_id")
+    )
+    tables["integrations__learn__ocw_courses"] = pl.DataFrame(
+        [{"readable_id": course, "run_id": run}]
+    )
+    dagster_instance = DagsterInstance.ephemeral()
+    dagster_instance.add_dynamic_partitions("learn_content_file_run", [run])
+
+    result = materialize(
+        [content_file_embedding_chunks],
+        partition_key=MultiPartitionKey({"etl_source": "ocw", "run": run}),
+        instance=dagster_instance,
+        resources={"learn_embeddings_io_manager": Warehouse(tables)},
+    )
+
+    assert result.success
+    row = tables[CONTENT_FILE_CHUNKS_KEY.path[-1]].row(0, named=True)
+    assert row["point_id"] == learn_point_id("ocw", course, run, key, "0")
+    assert row["source_relation"] == "integrations__learn__ocw_content_files"
+
+
 def test_topic_point_id_is_the_topic_uuid(tables):
     tables[TOPICS_RELATION] = pl.DataFrame(
         [
