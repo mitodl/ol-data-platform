@@ -455,11 +455,7 @@ with content as (
         , files.content
         , coalesce(files.content_tags, '') as content_tags
         , lower(coalesce(files.title, '')) as title_lower
-        -- the resource's directory name, without the -1 OCW adds to a copy or a _pdf suffix
-        , {{ regexp_replace_all(
-            regexp_replace_all(regexp_extract_or_null('files.content_file_key', "'([^/]+)/$'", 1), "'-[0-9]+$'", "''")
-            , "'[_-]pdf$'", "''"
-        ) }} as file_name
+        , {{ courseware_ocw_resource_name('files.content_file_key') }} as file_name
         , case
             when files.content_type = 'page'
                 then {{ courseware_text_head(regexp_replace_all('substr(files.content, 1, 3000)', "'<[^>]*>'", "' '")) }}
@@ -484,28 +480,18 @@ with content as (
         , {{ regexp_extract_or_null('content_file_key', "'/pages/([^/]+)/'", 1) }} as section
         , {{ regexp_replace_all('content_file_key', "'[^/]+/$'", "''") }} as parent_key
         , (
-            -- not "Multiple Assignment Types with Solutions", which also holds the
-            -- assignments (and a workshop facilitation guide); the name rules read those
-            content_tags like '%"Problem Set Solutions"%'
-            or content_tags like '%"Exam Solutions"%'
+            -- a section page's opening lists its problem sets and their solutions, so a
+            -- page is judged without its opening
+            {{ courseware_ocw_answer_resource(
+                'file_name', 'title_lower', 'content_type', 'file_extension', 'content_tags'
+                , "case when content_type != 'page' then text_head end", 'answer_markers'
+            ) }}
+            -- a page of "Answer:" entries on homework, e.g. virtual office hours
             or (
-                -- a lecture video titled "... Iterative Solutions" is not an answer key
-                content_type != 'video'
-                and coalesce(file_extension, '') not in ('{{ ocw_transcript_extensions | join("', '") }}')
+                content_type = 'page'
                 and content_tags not like '%Videos%'
-                and not {{ regexp_like('title_lower', "'(transcript|captions)$'") }}
-                and (
-                    -- a section page's opening lists its problem sets and their solutions
-                    {{ courseware_answer_key(
-                        'file_name', 'title_lower', "case when content_type != 'page' then text_head end", 'answer_markers'
-                    ) }}
-                    -- a page of "Answer:" entries on homework, e.g. virtual office hours
-                    or (
-                        content_type = 'page'
-                        and coalesce(answer_markers, 0) >= 3
-                        and {{ regexp_like('text_head', "'problem sets?|psets?|homework|exams?|quiz|midterm'") }}
-                    )
-                )
+                and coalesce(answer_markers, 0) >= 3
+                and {{ regexp_like('text_head', "'problem sets?|psets?|homework|exams?|quiz|midterm'") }}
             )
         )
         -- a page of problems and their solutions keeps its problems; its solution
