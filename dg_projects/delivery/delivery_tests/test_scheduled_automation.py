@@ -212,6 +212,27 @@ def test_instructor_onboarding_schedule_registers_running_in_production_only(
             assert "instructor_onboarding_daily_schedule" not in schedules
 
 
+@pytest.mark.parametrize("environment", VALID_DAGSTER_ENVS)
+def test_b2b_organization_export_registers_running_in_production_only(environment):
+    """Read off the built repository, so the sensor, its job and status are pinned.
+
+    It was RUNNING in b2b_organization, and instigator state is keyed on
+    location name, so dropping default_status would stop the partner exports on
+    the move. It reads the production warehouse schemas by name, so registering
+    it anywhere else would copy production partner data into that environment's
+    bucket.
+    """
+    with _repository_for(environment) as repo:
+        sensors = {sensor.name: sensor for sensor in repo.sensor_defs}
+
+        if environment == "production":
+            sensor = sensors["b2b_organization_list_sensor"]
+            assert sensor.default_status == DefaultSensorStatus.RUNNING
+            assert repo.has_job(sensor.job_name)
+        else:
+            assert "b2b_organization_list_sensor" not in sensors
+
+
 WEBHOOK_DELIVERY_SENSOR_NAMES = frozenset(
     {
         "mit_climate_delivery_sensor",

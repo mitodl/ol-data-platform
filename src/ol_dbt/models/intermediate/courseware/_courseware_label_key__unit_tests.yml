@@ -9,7 +9,7 @@ unit_tests:
     key, even one whose dot or + would be spelled out.
   model: int__courseware__claims
   given:
-  - input: source('courseware_intermediate', 'courseware_claim_extraction')
+  - input: ref('int__courseware__extractions')
     rows:
     - {extraction_key: k, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
       scope_id: s, scope_part: 1, extracted_at: "2026-10-17T00:00:00"}

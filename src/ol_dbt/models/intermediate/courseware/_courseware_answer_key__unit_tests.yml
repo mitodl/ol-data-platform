@@ -1,0 +1,273 @@
+---
+unit_tests:
+- name: test_int__courseware__answer_document_review_rule_cases
+  description: >
+    courseware_answer_key on both platforms. Answer keys named, titled or opened as
+    one are excluded; topics named with solution, answer, solving or key are not.
+  model: int__courseware__answer_document_review
+  given:
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows:
+    # answer keys
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/QCRx1_Assessment Answer Key.pdf, content_file_text: Q1.
+        B}
+    - {content_file_source_system: mitx, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/documents/2022_8_01L_Quiz_2_solution.pdf, content_file_text: 1.
+        v = 3 m/s}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/FMF I AO Sample Exam Solutions.pdf, content_file_text: 1.
+        A}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/PoSB_Midterm_Fall_2011_solutions.pdf, content_file_text: 1.
+        A}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/CalculusReviewSolutions.pdf, content_file_text: 1.
+        2x}
+    - {content_file_source_system: xpro, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/ps3sol.pdf, content_file_text: 1. 4}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/Unit1-Solutions.pdf, content_file_text: 1. 4}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/ps5.pdf, content_file_text: "Problem Set 5 Solutions\n\
+        1. The force is 3 N."}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/ps2.pdf, content_file_text: "1. Find x. Solution:\
+        \ 3. 2. Find y. Solution: 4. 3. Find z. Answer: 5."}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/C1_PreAssessment Key.pdf, content_file_text: "Pre-Assessment\
+        \ Answer Key\n\nQUESTION #1\nA crew digs."}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/Exam1.pdf, content_file_text: "1. Compute. Answer:\
+        \ -3\n2. Expand. Answer: $x^2$\n3. Solve. Answer:\r\n-1/2"}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/hw3.pdf, content_file_text: "Answer Key for Homework\
+        \ 3\n1. 4"}
+    # topics and teaching material
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/Types_of_Solutions.pdf, content_file_text: Saturated
+        and unsaturated solutions.}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/Climate_Solutions_for_Cities.pdf, content_file_text: Cities
+        emit carbon.}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/Sol-Gel_Processing.pdf, content_file_text: A sol is
+        a colloid.}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/Lecture 22 Solutions of Acids.pdf, content_file_text: Acids
+        donate protons.}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/Looking to Data For Answers.pdf, content_file_text: Data
+        can answer questions.}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/Solving_Linear_Systems.pdf, content_file_text: Solving
+        linear systems by elimination.}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/reading3.pdf, content_file_text: "Example 1. Solution:\
+        \ 3. Example 2. Solution: 4. Example 3. Solution: 5."}
+    # a version suffix, blank answer lines, and key or answer in prose
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/SC0x_W3L1_IP_FINAL_updated.pdf, content_file_text: "Integer\
+        \ programs. Solution: z = 2. Solution: z = 3. Solution: z = 4."}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/midterm.pdf, content_file_text: "6.832 Midterm\n1.\
+        \ Explain. Answer:\n\n2. Derive. Answer:\n\n3. Prove. Answer:\n\n"}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/W2_L6_scoping study1.pptx, content_file_text: Scoping
+        studies answer key questions about an evaluation.}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/Rec_2_printout.pdf, content_file_text: Financial accounting
+        recitation 2 key concepts for this recitation}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/General Mills Builds Up Big Data to Answer Big Questions.pdf,
+      content_file_text: General Mills uses analytics.}
+    # not a file: an html block's body, and a file Tika failed on
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: html/ps1_solutions.html, content_file_text: Solutions}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: failed,
+      content_file_path: static/exam_key.pdf, content_file_text: null}
+    # neither rule: only the model flags it, after an older verdict said no
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/ps_2003.pdf, content_file_text: 1. Show that x is
+        3.}
+  - input: ref('int__ocw__content_files')
+    rows:
+    # answer keys
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/034pfsoln/,
+      content_type: pdf, title: 034pfsoln.pdf, file_extension: .pdf, content_tags: null,
+      content: 1. 4}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/ps1_key/,
+      content_type: pdf, title: ps1_key, file_extension: .pdf, content_tags: null,
+      content: 1. The force is 3 N.}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mock_exam/,
+      content_type: pdf, title: Mock Exam Key, file_extension: .pdf, content_tags: null,
+      content: 1. Beowulf is an epic.}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit18_01scf10_ps5/,
+      content_type: pdf, title: Problem Set 5, file_extension: .pdf, content_tags: null,
+      content: Problem Set 5 Solutions. 1. 2x}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/ans9/, content_type: pdf,
+      title: ans9.pdf, file_extension: .pdf, content_tags: null, content: 1. Run k
+        times and take the median.}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/exam_smpsolqii2a/,
+      content_type: pdf, title: exam_smpsolqii2a.pdf, file_extension: .pdf, content_tags: null,
+      content: Ohio county election results.}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/section22_ak/,
+      content_type: pdf, title: section22_ak.pdf, file_extension: .pdf, content_tags: null,
+      content: "7.014 Introductory Biology. Recitation Section 22 Answer Key May 2-3,\
+        \ 2005"}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit6_041f10_rec02/,
+      content_type: pdf, title: Recitation 2, file_extension: .pdf, content_tags: '["Recitations",
+        "Problem Set Solutions"]', content: 1. 2x}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit8_01_final/,
+      content_type: pdf, title: Final, file_extension: .pdf, content_tags: null, content: "1.\
+        \ Solution: x = 3\n2. Solution: y = 4\n3. Solution: z = 5"}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/ps3_problem_2/,
+      content_type: video, title: Problem 2, file_extension: null, content_tags: '["Problem-solving
+        Videos", "Problem Set Solutions"]', content: null}
+    # topics and teaching material
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit5_111f08_lec3/,
+      content_type: pdf, title: Review of Aqueous Solutions, file_extension: .pdf,
+      content_tags: null, content: An aqueous solution is a solute in water.}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/mit2_092f09_lec15/,
+      content_type: pdf, title: mit2_092f09_lec15.pdf, file_extension: .pdf, content_tags: null,
+      content: Solution of dynamic equilibrium equations by direct integration.}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/ses5_solis_wets/,
+      content_type: pdf, title: ses5_solis_wets.pdf, file_extension: .pdf, content_tags: null,
+      content: Minimization by random search techniques by Solis and Wets.}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/solnhofenlimestone/,
+      content_type: file, title: SolnhofenLimestone.txt, file_extension: .txt, content_tags: null,
+      content: Peak stress of Solnhofen limestone.}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/catialab2solids/,
+      content_type: pdf, title: "CATIA Lab 2: Solids", file_extension: .pdf, content_tags: null,
+      content: Extrude a sketch into a solid.}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/solving-quadratics/,
+      content_type: pdf, title: Solving Quadratic Equations, file_extension: .pdf,
+      content_tags: null, content: Solving quadratic equations by factoring.}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/key_ideas/,
+      content_type: pdf, title: Key Ideas, file_extension: .pdf, content_tags: null,
+      content: The key ideas of the course.}
+    # not resources the rule judges: a page, a lecture video's transcript, and a
+    # resource of a lecture video
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/lec10_iterative_sol/,
+      content_type: file, title: "Lecture 10: Iterative Solutions", file_extension: .pdf,
+      content_tags: Lecture Videos, content: Iterative methods.}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/pages/exam-solutions/,
+      content_type: page, title: Exam Solutions, file_extension: null, content_tags: null,
+      content: <p>Solutions</p>}
+    - {courserun_readable_id: o1, content_file_key: courses/c1/resources/lec5_solutions_transcript/,
+      content_type: file, title: Lecture 5 transcript, file_extension: .srt, content_tags: null,
+      content: iterative solutions}
+  - input: source('courseware_intermediate', 'courseware_answer_check')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: r1, source_ref: static/ps_2003.pdf,
+      source_title: ps_2003.pdf, is_answer_document: false, reason: questions only,
+      check_version: v1, model_id: m, checked_at: "2026-10-01T00:00:00"}
+    - {platform: mitxonline, courserun_readable_id: r1, source_ref: static/ps_2003.pdf,
+      source_title: ps_2003.pdf, is_answer_document: true, reason: worked solutions
+        inline, check_version: v2, model_id: m, checked_at: "2026-10-02T00:00:00"}
+    - {platform: mitxonline, courserun_readable_id: r1, source_ref: static/reading3.pdf,
+      source_title: reading3.pdf, is_answer_document: true, reason: answers, check_version: v1,
+      model_id: m, checked_at: "2026-10-01T00:00:00"}
+    - {platform: mitxonline, courserun_readable_id: r1, source_ref: static/reading3.pdf,
+      source_title: reading3.pdf, is_answer_document: false, reason: worked examples,
+      check_version: v2, model_id: m, checked_at: "2026-10-02T00:00:00"}
+    - {platform: mitxonline, courserun_readable_id: r1, source_ref: static/ps5.pdf,
+      source_title: ps5.pdf, is_answer_document: true, reason: solutions, check_version: v2,
+      model_id: m, checked_at: "2026-10-02T00:00:00"}
+    # removed from the export since its verdict, so nothing is left to review
+    - {platform: mitxonline, courserun_readable_id: r1, source_ref: static/removed.pdf,
+      source_title: removed.pdf, is_answer_document: true, reason: answers, check_version: v2,
+      model_id: m, checked_at: "2026-10-02T00:00:00"}
+  - input: ref('int__courseware__extraction_sources')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: r1, source_ref: static/ps_2003.pdf}
+    - {platform: mitxonline, courserun_readable_id: r1, source_ref: static/reading3.pdf}
+  expect:
+    rows:
+    - {platform: mitxonline, source_ref: static/QCRx1_Assessment Answer Key.pdf, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: residential, source_ref: static/documents/2022_8_01L_Quiz_2_solution.pdf,
+      review_reason: excluded_by_rule, is_flagged_by_model: false}
+    - {platform: mitxonline, source_ref: static/FMF I AO Sample Exam Solutions.pdf,
+      review_reason: excluded_by_rule, is_flagged_by_model: false}
+    - {platform: mitxonline, source_ref: static/PoSB_Midterm_Fall_2011_solutions.pdf,
+      review_reason: excluded_by_rule, is_flagged_by_model: false}
+    - {platform: mitxonline, source_ref: static/CalculusReviewSolutions.pdf, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: mitxpro, source_ref: static/ps3sol.pdf, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: mitxonline, source_ref: static/Unit1-Solutions.pdf, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: mitxonline, source_ref: static/ps5.pdf, review_reason: excluded_by_rule,
+      is_flagged_by_model: true}
+    - {platform: mitxonline, source_ref: static/ps2.pdf, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: mitxonline, source_ref: static/C1_PreAssessment Key.pdf, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: mitxonline, source_ref: static/Exam1.pdf, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: mitxonline, source_ref: static/hw3.pdf, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: mitxonline, source_ref: static/ps_2003.pdf, review_reason: flagged_by_model,
+      is_flagged_by_model: true}
+    - {platform: ocw, source_ref: courses/c1/resources/034pfsoln/, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: ocw, source_ref: courses/c1/resources/ps1_key/, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: ocw, source_ref: courses/c1/resources/mock_exam/, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: ocw, source_ref: courses/c1/resources/mit18_01scf10_ps5/, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: ocw, source_ref: courses/c1/resources/ans9/, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: ocw, source_ref: courses/c1/resources/exam_smpsolqii2a/, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: ocw, source_ref: courses/c1/resources/section22_ak/, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: ocw, source_ref: courses/c1/resources/mit6_041f10_rec02/, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: ocw, source_ref: courses/c1/resources/mit8_01_final/, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+    - {platform: ocw, source_ref: courses/c1/resources/ps3_problem_2/, review_reason: excluded_by_rule,
+      is_flagged_by_model: false}
+
+- name: test_int__courseware__extraction_sources_leaves_out_answer_keys
+  description: >
+    An Open edX document whose name or opening says answer key is not read, and a
+    reading that works examples is.
+  model: int__courseware__extraction_sources
+  given:
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows: []
+  - input: ref('int__ocw__content_files')
+    rows: []
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
+  - input: ref('int__combined__course_xml_blocks')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows:
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/ps5.pdf, content_file_extension: .pdf, content_file_text: "Problem\
+        \ Set 5 Solutions\n1. The force is 3 N."}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/Exam2_Key.pdf, content_file_extension: .pdf, content_file_text: 1.
+        B}
+    - {content_file_source_system: mitxonline, courserun_readable_id: r1, content_file_extraction_status: extracted,
+      content_file_path: static/reading3.pdf, content_file_extension: .pdf, content_file_text: "Example\
+        \ 1. Solution: 3. Example 2. Solution: 4. Example 3. Solution: 5."}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
+  expect:
+    rows:
+    - {scope_id: materials, source_ref: static/reading3.pdf}
+  overrides:
+    vars:
+      courseware_courseruns:
+      - r1
