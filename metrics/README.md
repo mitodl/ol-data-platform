@@ -18,11 +18,11 @@ metric:                         # an OpenMetadata CreateMetric body
     Where a learner stands in a course run: certified, passed, in_progress or
     not_started.
   metricType: OTHER
-  owners: [{type: team, name: data-engineering}]   # optional; resolved to ids on sync
-  reviewers: [{type: team, name: data-engineering}]
+  owners: [{type: team, name: data-platform}]   # optional; resolved to ids on sync
+  reviewers: [{type: team, name: <business team>}]
   tags:
   - {tagFQN: <glossary>.<term>, source: Glossary, labelType: Manual, state: Confirmed}
-status: Approved                # entityStatus; applied by PATCH, not part of CreateMetric
+status: Draft                   # entityStatus; applied by PATCH, not part of CreateMetric
 implemented_by:
 - dbt_model: afact_learner_courserun_progress
   columns: [completion_status]
@@ -57,6 +57,14 @@ OpenMetadata's fully qualified name for a metric is the bare name, so names are
 global. Use `<subject>_<measure>` in snake case with no double underscore, e.g.
 `learner_completion_status`, `contract_seats_used`,
 `learner_needs_attention_since`. Name the file after the metric.
+
+## Owners, reviewers and status
+
+`data-platform` owns every metric. The business team that uses a metric
+reviews it and is listed in `reviewers`. A metric whose business team does not
+exist in OpenMetadata yet has no `reviewers` until it does. Approval happens on
+the pull request that changes the file. A new metric starts as `Draft` and
+moves to `Approved` in a later change, once a sync has written it.
 
 ## What CI checks
 

@@ -32,6 +32,8 @@ _TOKEN_REQUEST_TIMEOUT_SECONDS = 10
 _configured = False
 _opik_client: opik.Opik | None = None
 _client_init_attempted = False
+# template -> the Prompt Library version publish_prompt_version recorded for it
+_published_prompts: dict[str, opik.Prompt] = {}
 
 
 class KeycloakClientCredentialsAuth(httpx.Auth):
@@ -215,7 +217,10 @@ def infer_llm_provider(model_version: str, default: str) -> str:
 
 
 def attach_llm_usage(*, usage: dict[str, int], model: str, provider: str) -> None:
-    """Attach token usage (OpenAI-shaped keys) to the current @traced span for pricing.
+    """Attach token usage to the current @traced span for pricing.
+
+    usage takes OpenAI-shaped keys, or the provider's own keys for a provider
+    Opik parses (e.g. Anthropic's cache_read_input_tokens), which it converts.
 
     No-op if Opik isn't configured (traced() never opened a span to attach to).
     """
@@ -264,6 +269,46 @@ def get_prompt_version(name: str, default_template: str | None = None) -> str:
         except Exception:
             log.warning("Opik prompt version fetch failed for %s", name, exc_info=True)
     return LOCAL_PROMPT_VERSION
+
+
+def publish_prompt_version(name: str, template: str) -> str:
+    """Record template as name's newest Prompt Library version and return it.
+
+    For prompts that stay authoritative in code, where rendering an Opik edit
+    would change what is sent without changing what the caller records as the
+    prompt version (the courseware extractor keys every row on a hash of its code
+    prompt). Opik versions what ran instead: create_prompt adds a version only
+    when the template differs from the latest, so calling this every run is
+    idempotent. Returns LOCAL_PROMPT_VERSION when Opik is unavailable or the
+    publish fails in any way: this is provenance, never a reason to fail a run.
+    """
+    client = get_opik_client()
+    if client is None:
+        return LOCAL_PROMPT_VERSION
+    try:
+        prompt = client.create_prompt(name=name, prompt=template)
+        version = prompt.version or prompt.commit
+    except Exception:
+        log.warning("Opik prompt publish failed for %s", name, exc_info=True)
+        return LOCAL_PROMPT_VERSION
+    if not version:
+        return LOCAL_PROMPT_VERSION
+    _published_prompts[template] = prompt
+    return version
+
+
+def attach_span_prompt(template: str) -> None:
+    """Link the current @traced span to the version published for template.
+
+    Looks up what publish_prompt_version recorded for this exact text in this
+    process. No-op if Opik isn't configured or template was not published here
+    (the local runner, or a publish that failed): the span is still recorded,
+    without the link.
+    """
+    prompt = _published_prompts.get(template)
+    if prompt is None or not is_opik_configured():
+        return
+    opik_context.update_current_span(prompts=[prompt])
 
 
 def render_prompt(name: str, default_template: str, **variables: Any) -> str:

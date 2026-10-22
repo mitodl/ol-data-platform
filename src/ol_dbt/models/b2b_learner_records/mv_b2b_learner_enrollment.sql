@@ -58,7 +58,8 @@ select
     u.user_pk,
     u.user_global_id,
     u.email,
-    u.full_name,
+    -- dim_user falls back to first + ' ' + last, which reads ' ' when both are empty.
+    nullif(trim(u.full_name), '')                                                       as full_name,
     p.enrollment_created_on,
     p.enrollment_is_active,
     p.enrollment_mode,

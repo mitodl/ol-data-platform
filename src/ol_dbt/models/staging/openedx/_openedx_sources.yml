@@ -70,6 +70,9 @@ sources:
     - name: extracted_at
       description: str, ISO 8601 UTC time the asset extracted the file's text, one
         value per landed file; null in files written before the assets stamped it
+    - name: static_references
+      description: str, JSON array of the static/ paths an html file's body links
+        to; null for other files and in files written before the asset recorded them
     - name: _source_file
       description: str, the landing-zone file the row was read from
     - name: _file_modified_at

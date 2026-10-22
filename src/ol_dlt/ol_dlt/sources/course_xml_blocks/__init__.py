@@ -151,6 +151,10 @@ CONTENT_TEXT_FIELDS = (
     "extraction_status",
     "extracted_at",
 )
+# The document text asset also records, on each html row, the static files the
+# body links to, as a list that lands as JSON text. Absent from files written
+# before it did.
+DOCUMENT_TEXT_FIELDS = (*CONTENT_TEXT_FIELDS, "static_references")
 
 # The row the file exclusions asset writes
 # (dg_projects/openedx/openedx/assets/content_file_exclusions.py).
@@ -256,8 +260,8 @@ OPENEDX_DOCUMENT_TEXT = XmlBlocksTable(
         f"{deployment}/openedx/processed_data/course_document_text/**/*.jsonl"
         for deployment in _OPENEDX_DEPLOYMENTS
     ),
-    fields=CONTENT_TEXT_FIELDS,
-    optional_fields=frozenset({"file_extension", "extracted_at"}),
+    fields=DOCUMENT_TEXT_FIELDS,
+    optional_fields=frozenset({"file_extension", "extracted_at", "static_references"}),
     pipeline_name="course_document_text__openedx",
     marks_empty_files=True,
 )
