@@ -34,11 +34,14 @@ from ml.lib.courseware.extract import (
     DEFAULT_EFFORT,
     DEFAULT_MODEL,
     EXTRACTOR_ID,
+    KEY_COLUMNS,
     PROMPT_VERSION,
     SCHEMA_VERSION,
     Effort,
+    covered_keys,
     extract_scopes,
     extraction_key,
+    scope_inputs,
 )
 from ml.lib.courseware.prompts import SYSTEM_PROMPT
 from ml.lib.courseware.scopes import build_scopes
@@ -69,6 +72,7 @@ CHECKSUMS_KEY = AssetKey(
 EXTRACTION_KEY = AssetKey(["intermediate", "courseware_claim_extraction"])
 CLAIM_KEY = AssetKey(["intermediate", "courseware_claim"])
 EVIDENCE_KEY = AssetKey(["intermediate", "courseware_claim_evidence"])
+SCOPE_INPUT_KEY = AssetKey(["intermediate", "courseware_scope_input"])
 EXTRACTION_PROMPT_NAME = "courseware-claim-extraction"
 # The extractor version this code runs, as courseware_extraction_allowlist names it.
 EXTRACTOR_VERSION = {
@@ -274,7 +278,7 @@ def evidence_check(evidence: pl.DataFrame, min_exact_share: float) -> AssetCheck
             # once (see the module docstring).
             automation_condition=upstream_or_code_changes(),
         )
-        for key in (CLAIM_KEY, EVIDENCE_KEY, EXTRACTION_KEY)
+        for key in (CLAIM_KEY, EVIDENCE_KEY, EXTRACTION_KEY, SCOPE_INPUT_KEY)
     },
     check_specs=[
         AssetCheckSpec(
@@ -296,7 +300,8 @@ def courseware_extraction(
     """Extract claims for every scope of one course run that is not stored yet.
 
     Calls ml.lib.courseware.extract.extract_scopes over the run's scopes, skipping
-    every extraction_key already in courseware_claim_extraction. All three tables
+    every scope part a stored courseware_claim_extraction row already answers
+    (covered_keys). All three tables
     are append-only. Claims and evidence are written before the extraction rows,
     which mark a key as done. A run courseware_extraction_allowlist does not approve
     for this extractor version fails before anything is read or called, however it
@@ -315,14 +320,18 @@ def courseware_extraction(
     scopes = build_scopes(rows) if rows.height else []
 
     stored = read_table("intermediate", EXTRACTION_KEY.path[-1])
+    if stored is not None and "header_version" not in stored.collect_schema():
+        stored = stored.with_columns(header_version=pl.lit(None, dtype=pl.String))
+    # Every key a stored row answers, so rows keyed before keys left out the course
+    # header are not extracted again.
     existing_keys = (
-        set(
+        covered_keys(
             stored.filter(
                 (pl.col("platform") == platform)
                 & (pl.col("courserun_readable_id") == courserun)
             )
-            .select("extraction_key")
-            .collect()["extraction_key"]
+            .select("extraction_key", *KEY_COLUMNS, "header_version")
+            .collect()
         )
         if stored is not None
         else set()
@@ -403,6 +412,14 @@ def courseware_extraction(
                 tables.extractions["output_tokens"].sum() or 0
             ),
         },
+    )
+    # Every scope part as read now, extracted or skipped, so dbt can tell which
+    # stored reading is the current text's.
+    observed = scope_inputs(scopes)
+    yield Output(
+        observed,
+        output_name=SCOPE_INPUT_KEY.path[-1],
+        metadata={"row_count": MetadataValue.int(observed.height)},
     )
     yield evidence_check(tables.evidence, config.min_exact_evidence_share)
 

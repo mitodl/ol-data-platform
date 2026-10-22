@@ -22,6 +22,12 @@ unit_tests:
       scope_id: context, scope_part: 1, scope_part_count: 1, extractor_id: v1, prompt_version: p,
       schema_version: c, model_id: m, effort: medium, input_text_checksum: c2, scope_part_checksums: c2,
       extracted_at: "2026-10-17T00:00:00"}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__courseware__latest_scope_inputs')
+    rows: []
   - input: ref('int__courseware__extraction_sources')
     rows:
     - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: context}

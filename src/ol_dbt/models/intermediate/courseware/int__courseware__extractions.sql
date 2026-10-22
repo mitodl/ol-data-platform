@@ -8,8 +8,23 @@
     version and model, every part has an extraction whose input_text_checksum is
     that part's, whichever run wrote it: a part whose text did not change keeps its
     extraction key, so a later run skips it rather than writing it again. The
-    current reading is the newest complete one, and each of its parts reads from
-    its newest matching extraction.
+    current reading is the first complete one by:
+
+    1. the extractor version (extractor, prompt and schema) that
+       int__courseware__extraction_allowlist approves for the run, so a trial run or
+       a comparison under another version never becomes current by finishing last;
+    2. matching the scope's input at the extractor's latest read of the run
+       (int__courseware__latest_scope_inputs);
+    3. the newest.
+
+    Each of its parts reads from its newest matching extraction.
+
+    The approved version ranks first rather than filtering the rest out, so after a
+    run is promoted its previous reading stays current until the new version's is
+    complete. A run the allowlist does not cover (OCW, a run var('courseware_courseruns')
+    adds locally, or one taken off the allowlist) is ranked on the other two alone.
+    The allowlist does not approve a model or effort, so two models' readings of
+    the approved version are ranked on the other two as well.
 
     So a run that extracts only some parts of a new reading (the rest failed, and
     are retried on the next run) changes nothing until the reading is complete. The
@@ -18,13 +33,24 @@
     starts a new reading the same way, and a reading in fewer parts leaves no older
     part current.
 
-    A reading is dated by the newest extraction that records it. Text that changes
-    and then changes back writes nothing new (every key is stored), so the later
-    reading stays current until the scope is read again.
+    Text that changes and then changes back writes nothing new (every key is
+    stored), but the extractor records each read's input, so the earlier reading is
+    current again. With no reading matching the latest read (the new text's parts
+    are not all extracted yet, or the run has not been read since inputs were
+    recorded), the newest complete reading is current. A reading is dated by the
+    newest extraction that records it.
 
     A scope the run's sources no longer have (a sequential since read as context,
     say) has no current extraction, or its old claims would be counted beside the
-    new.
+    new. That needs the run's sources in this build: for a run with none (off the
+    allowlist, or left out by var('courseware_courseruns')), only a unit scope whose
+    sequential is gone from the run's latest course structure (dim_course_content)
+    is dropped, and runs with no Open edX structure (OCW) keep every scope.
+
+    scope_position is the scope's position in the course as it is now, from
+    int__courseware__extraction_sources, since the extraction key leaves position
+    out and reordering a course moves a scope without re-extracting it. The position
+    stored at extraction time is kept for a scope the sources do not list.
 #}
 with extractions as (
     select * from {{ source('courseware_intermediate', 'courseware_claim_extraction') }}
@@ -35,7 +61,55 @@ with extractions as (
         platform
         , courserun_readable_id
         , scope_id
+        , scope_position
     from {{ ref('int__courseware__extraction_sources') }}
+)
+
+, source_runs as (
+    select distinct
+        platform
+        , courserun_readable_id
+    from current_scopes
+)
+
+, approved_versions as (
+    select
+        platform
+        , courserun_readable_id
+        , extractor_id
+        , prompt_version
+        , schema_version
+    from {{ ref('int__courseware__extraction_allowlist') }}
+)
+
+, structure as (
+    select
+        platform
+        , courserun_readable_id
+        , block_id
+        , block_category
+    from {{ ref('dim_course_content') }}
+    where is_latest
+)
+
+, structure_runs as (
+    select distinct
+        platform
+        , courserun_readable_id
+    from structure
+)
+
+, structure_sequentials as (
+    select distinct
+        platform
+        , courserun_readable_id
+        , block_id as scope_id
+    from structure
+    where block_category = 'sequential'
+)
+
+, latest_scope_inputs as (
+    select * from {{ ref('int__courseware__latest_scope_inputs') }}
 )
 
 , readings as (
@@ -63,6 +137,40 @@ with extractions as (
         , effort
         , scope_part_count
         , scope_part_checksums
+)
+
+-- the splits whose every part has the input the latest read computed
+, latest_splits as (
+    select
+        splits.platform
+        , splits.courserun_readable_id
+        , splits.scope_id
+        , splits.scope_part_count
+        , splits.scope_part_checksums
+    from (
+        select distinct
+            platform
+            , courserun_readable_id
+            , scope_id
+            , scope_part_count
+            , scope_part_checksums
+        from readings
+    ) as splits
+    inner join latest_scope_inputs
+        on
+            splits.platform = latest_scope_inputs.platform
+            and splits.courserun_readable_id = latest_scope_inputs.courserun_readable_id
+            and splits.scope_id = latest_scope_inputs.scope_id
+            and splits.scope_part_count = latest_scope_inputs.scope_part_count
+            and split_part(splits.scope_part_checksums, ',', latest_scope_inputs.scope_part)
+            = latest_scope_inputs.input_text_checksum
+    group by
+        splits.platform
+        , splits.courserun_readable_id
+        , splits.scope_id
+        , splits.scope_part_count
+        , splits.scope_part_checksums
+    having count(*) = splits.scope_part_count
 )
 
 -- the extractions that hold each part of each reading
@@ -101,35 +209,61 @@ with extractions as (
 , current_readings as (
     select * from (
         select
-            platform
-            , courserun_readable_id
-            , scope_id
-            , extractor_id
-            , prompt_version
-            , schema_version
-            , model_id
-            , effort
-            , scope_part_count
-            , scope_part_checksums
+            complete_readings.*
             , row_number() over (
-                partition by platform, courserun_readable_id, scope_id
-                order by read_at desc, scope_part_checksums ASC
+                partition by
+                    complete_readings.platform
+                    , complete_readings.courserun_readable_id
+                    , complete_readings.scope_id
+                order by
+                    case when approved_versions.courserun_readable_id is not null then 0 else 1 end
+                    , case when latest_splits.scope_id is not null then 0 else 1 end
+                    , complete_readings.read_at desc
+                    , complete_readings.scope_part_checksums asc
             ) as reading_rank
-        from reading_parts
-        group by
-            platform
-            , courserun_readable_id
-            , scope_id
-            , extractor_id
-            , prompt_version
-            , schema_version
-            , model_id
-            , effort
-            , scope_part_count
-            , scope_part_checksums
-            , read_at
-        having count(distinct scope_part) = scope_part_count
-    ) as complete_readings
+        from (
+            select
+                platform
+                , courserun_readable_id
+                , scope_id
+                , extractor_id
+                , prompt_version
+                , schema_version
+                , model_id
+                , effort
+                , scope_part_count
+                , scope_part_checksums
+                , read_at
+            from reading_parts
+            group by
+                platform
+                , courserun_readable_id
+                , scope_id
+                , extractor_id
+                , prompt_version
+                , schema_version
+                , model_id
+                , effort
+                , scope_part_count
+                , scope_part_checksums
+                , read_at
+            having count(distinct scope_part) = scope_part_count
+        ) as complete_readings
+        left join latest_splits
+            on
+                complete_readings.platform = latest_splits.platform
+                and complete_readings.courserun_readable_id = latest_splits.courserun_readable_id
+                and complete_readings.scope_id = latest_splits.scope_id
+                and complete_readings.scope_part_count = latest_splits.scope_part_count
+                and complete_readings.scope_part_checksums = latest_splits.scope_part_checksums
+        left join approved_versions
+            on
+                complete_readings.platform = approved_versions.platform
+                and complete_readings.courserun_readable_id = approved_versions.courserun_readable_id
+                and complete_readings.extractor_id = approved_versions.extractor_id
+                and complete_readings.prompt_version = approved_versions.prompt_version
+                and complete_readings.schema_version = approved_versions.schema_version
+    ) as ranked_readings
     where reading_rank = 1
 )
 
@@ -171,11 +305,12 @@ select
     , extractions.scope_id
     , extractions.scope_kind
     , extractions.scope_title
-    , extractions.scope_position
+    , coalesce(current_scopes.scope_position, extractions.scope_position) as scope_position
     , extractions.scope_part
     , extractions.scope_part_count
     , extractions.input_text_checksum
     , extractions.scope_part_checksums
+    , extractions.header_version
     , extractions.source_count
     , extractions.truncated_source_count
     , extractions.sources_json
@@ -187,9 +322,32 @@ select
     , extractions.cache_read_input_tokens
     , extractions.cache_creation_input_tokens
     , extractions.extracted_at
+    -- null when the allowlist does not cover the run
+    , case
+        when run_approvals.courserun_readable_id is not null
+            then
+                extractions.extractor_id = run_approvals.extractor_id
+                and extractions.prompt_version = run_approvals.prompt_version
+                and extractions.schema_version = run_approvals.schema_version
+    end as is_approved_version
+    , coalesce(
+        extractions.scope_part_count = latest_scope_inputs.scope_part_count
+        and extractions.input_text_checksum = latest_scope_inputs.input_text_checksum
+        , false
+    ) as matches_current_input
     , (
         current_extractions.extraction_key is not null
-        and current_scopes.scope_id is not null
+        and (
+            current_scopes.scope_id is not null
+            or (
+                source_runs.courserun_readable_id is null
+                and not (
+                    extractions.scope_kind = 'unit'
+                    and structure_runs.courserun_readable_id is not null
+                    and structure_sequentials.scope_id is null
+                )
+            )
+        )
     ) as is_current
 from extractions
 left join current_extractions
@@ -199,3 +357,26 @@ left join current_scopes
         extractions.platform = current_scopes.platform
         and extractions.courserun_readable_id = current_scopes.courserun_readable_id
         and extractions.scope_id = current_scopes.scope_id
+left join latest_scope_inputs
+    on
+        extractions.platform = latest_scope_inputs.platform
+        and extractions.courserun_readable_id = latest_scope_inputs.courserun_readable_id
+        and extractions.scope_id = latest_scope_inputs.scope_id
+        and extractions.scope_part = latest_scope_inputs.scope_part
+left join source_runs
+    on
+        extractions.platform = source_runs.platform
+        and extractions.courserun_readable_id = source_runs.courserun_readable_id
+left join approved_versions as run_approvals
+    on
+        extractions.platform = run_approvals.platform
+        and extractions.courserun_readable_id = run_approvals.courserun_readable_id
+left join structure_runs
+    on
+        extractions.platform = structure_runs.platform
+        and extractions.courserun_readable_id = structure_runs.courserun_readable_id
+left join structure_sequentials
+    on
+        extractions.platform = structure_sequentials.platform
+        and extractions.courserun_readable_id = structure_sequentials.courserun_readable_id
+        and extractions.scope_id = structure_sequentials.scope_id

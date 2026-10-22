@@ -60,6 +60,12 @@ unit_tests:
       scope_part: 1, scope_part_count: 2, extractor_id: v1, prompt_version: p, schema_version: c,
       model_id: m, effort: medium, input_text_checksum: f1, scope_part_checksums: 'f1,f2',
       extracted_at: "2026-10-18T00:00:00"}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__courseware__latest_scope_inputs')
+    rows: []
   - input: ref('int__courseware__extraction_sources')
     rows:
     - {platform: mitxonline, courserun_readable_id: r, scope_id: s}
@@ -80,3 +86,52 @@ unit_tests:
     - {extraction_key: w1, is_current: true}
     - {extraction_key: w2, is_current: true}
     - {extraction_key: w3, is_current: false}
+
+- name: test_int__courseware__extractions_current_reading_matches_the_latest_read
+  description: >
+    Scope x's text went from a to b and back to a. The last read wrote nothing,
+    since a's extraction is stored, but it recorded a as the input, so a's older
+    reading is current again. Scope y's latest read split it into two parts whose
+    part 2 has no extraction, so its older one-part reading stays current.
+  model: int__courseware__extractions
+  given:
+  - input: source('courseware_intermediate', 'courseware_claim_extraction')
+    rows:
+    - {extraction_key: x1, platform: mitxonline, courserun_readable_id: r, scope_id: x,
+      scope_part: 1, scope_part_count: 1, extractor_id: v1, prompt_version: p, schema_version: c,
+      model_id: m, effort: medium, input_text_checksum: a, scope_part_checksums: 'a',
+      extracted_at: "2026-10-17T00:00:00"}
+    - {extraction_key: x2, platform: mitxonline, courserun_readable_id: r, scope_id: x,
+      scope_part: 1, scope_part_count: 1, extractor_id: v1, prompt_version: p, schema_version: c,
+      model_id: m, effort: medium, input_text_checksum: b, scope_part_checksums: 'b',
+      extracted_at: "2026-10-18T00:00:00"}
+    - {extraction_key: y1, platform: mitxonline, courserun_readable_id: r, scope_id: y,
+      scope_part: 1, scope_part_count: 1, extractor_id: v1, prompt_version: p, schema_version: c,
+      model_id: m, effort: medium, input_text_checksum: g, scope_part_checksums: 'g',
+      extracted_at: "2026-10-17T00:00:00"}
+    - {extraction_key: y2, platform: mitxonline, courserun_readable_id: r, scope_id: y,
+      scope_part: 1, scope_part_count: 2, extractor_id: v1, prompt_version: p, schema_version: c,
+      model_id: m, effort: medium, input_text_checksum: h1, scope_part_checksums: 'h1,h2',
+      extracted_at: "2026-10-19T00:00:00"}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__courseware__latest_scope_inputs')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: r, scope_id: x, scope_part: 1,
+      scope_part_count: 1, input_text_checksum: a}
+    - {platform: mitxonline, courserun_readable_id: r, scope_id: y, scope_part: 1,
+      scope_part_count: 2, input_text_checksum: h1}
+    - {platform: mitxonline, courserun_readable_id: r, scope_id: y, scope_part: 2,
+      scope_part_count: 2, input_text_checksum: h2}
+  - input: ref('int__courseware__extraction_sources')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: r, scope_id: x}
+    - {platform: mitxonline, courserun_readable_id: r, scope_id: y}
+  expect:
+    rows:
+    - {extraction_key: x1, matches_current_input: true, is_current: true}
+    - {extraction_key: x2, matches_current_input: false, is_current: false}
+    - {extraction_key: y1, matches_current_input: false, is_current: true}
+    - {extraction_key: y2, matches_current_input: true, is_current: false}

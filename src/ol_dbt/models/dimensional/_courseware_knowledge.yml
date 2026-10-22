@@ -57,6 +57,9 @@ models:
     description: str, the effort setting for the call
   - name: input_text_checksum
     description: str, sha256 of the source text the call read
+  - name: header_version
+    description: str, hash of the course header the call read; null for extractions
+      recorded before it was
   - name: source_count
     description: int, sources the call read
   - name: truncated_source_count
@@ -77,6 +80,9 @@ models:
     description: int, input tokens written to the prompt cache
   - name: extracted_at
     description: timestamp, when the call returned
+  - name: is_approved_version
+    description: boolean, whether the call ran the extractor version int__courseware__extraction_allowlist
+      approves for the run; null when the allowlist does not cover the run
   - name: is_current
     description: boolean, whether this is the extraction its scope part is read from
       now (int__courseware__extractions)

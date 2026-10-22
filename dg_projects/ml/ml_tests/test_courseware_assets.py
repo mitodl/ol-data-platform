@@ -278,6 +278,27 @@ def test_extraction_writes_each_scope_once(tables, calls, catalog):
     assert second.success
     assert calls == ["record_extraction", "record_extraction"]
     assert tables["courseware_claim_extraction"].height == 2
+    # every read records its scopes' inputs, the skipped ones too
+    observed = tables["courseware_scope_input"]
+    assert observed["observed_at"].n_unique() == 2
+    assert sorted(observed["scope_id"]) == ["seq-1", "seq-1", "seq-2", "seq-2"]
+    assert set(observed["courserun_readable_id"]) == {COURSERUN}
+
+
+@pytest.mark.usefixtures("catalog")
+def test_extraction_skips_a_scope_stored_under_the_old_key_scheme(tables, calls):
+    tables["int__courseware__extraction_sources"] = sources("Lecture 1")
+    assert extract(tables).success
+    # as stored before keys left out the course header: another key, no header
+    tables["courseware_claim_extraction"] = (
+        tables["courseware_claim_extraction"]
+        .with_columns(extraction_key=pl.lit("old-key"))
+        .drop("header_version")
+    )
+
+    assert extract(tables).success
+
+    assert calls == ["record_extraction"]
 
 
 def test_extraction_writes_partitioned_iceberg_tables(calls, tmp_path, monkeypatch):
