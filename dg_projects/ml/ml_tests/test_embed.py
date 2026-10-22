@@ -5,7 +5,7 @@ import json
 import threading
 import time
 from collections.abc import Sequence
-from typing import Any, Self
+from typing import Any
 
 import boto3
 import polars as pl
@@ -13,6 +13,7 @@ import pytest
 from botocore.response import StreamingBody
 from botocore.stub import Stubber
 from ml.lib import embed
+from ml.lib.iceberg_helpers import upsert_chunk
 from ol_llm import BatchFailed, LLMError, LLMRejected
 from ol_llm.testing import override_embedding_models
 from ol_orchestrate.lib.embeddings.models import EmbeddingBatch, EmbeddingModelSpec
@@ -21,6 +22,7 @@ from pydantic_ai.embeddings.bedrock import BedrockEmbeddingModel
 from pydantic_ai.embeddings.result import EmbedInputType
 from pydantic_ai.models import override_allow_model_requests
 from pydantic_ai.providers.bedrock import BedrockProvider
+from pyiceberg.catalog.sql import SqlCatalog
 
 OPENAI = embed.resolve_embedding_model("openai:text-embedding-3-large", 3)
 TITAN = embed.resolve_embedding_model("bedrock:amazon.titan-embed-text-v2:0", 3)
@@ -98,70 +100,17 @@ class _TitanLimitEmbedder(_FakeEmbedder):
         return EmbeddingBatch(vectors=[[0.1, 0.2, 0.3]], input_tokens=1)
 
 
-class _FakeField:
-    def __init__(self, name: str) -> None:
-        self.name = name
+TABLE = "some_db.feedback_embeddings"
+Target = tuple[SqlCatalog, str]
 
 
-class _FakeSchema:
-    def __init__(self, top_level_names: list[str], nested_extra: list[str]) -> None:
-        # Mirrors real pyiceberg: column_names flattens in nested field names
-        # (e.g. a List column's "element" child) that fields/columns does not.
-        self.column_names = top_level_names + nested_extra
-        self.fields = [_FakeField(name) for name in top_level_names]
+@pytest.fixture
+def target(iceberg_catalog: SqlCatalog) -> Target:
+    return iceberg_catalog, TABLE
 
 
-class _FakeSchemaUpdate:
-    def __init__(self, table: "_FakeTable") -> None:
-        self._table = table
-
-    def union_by_name(self, schema: Any) -> None:
-        # Mirrors real union_by_name: appends any not-yet-seen field at the end
-        # of the table's column order, never inserting it where the incoming
-        # schema happens to place it.
-        for name in schema.names:
-            if name not in self._table._column_names:
-                self._table._column_names.append(name)
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(self, *args: object) -> None:
-        pass
-
-
-class _FakeTable:
-    def __init__(self) -> None:
-        self.upserts: list[dict[str, Any]] = []
-        self._column_names: list[str] = []
-        self._nested_extra_column_names: list[str] = []
-
-    def update_schema(self) -> _FakeSchemaUpdate:
-        return _FakeSchemaUpdate(self)
-
-    def schema(self) -> _FakeSchema:
-        return _FakeSchema(self._column_names, self._nested_extra_column_names)
-
-    def upsert(self, **kwargs: Any) -> None:
-        self.upserts.append(kwargs)
-
-
-class _FakeCatalog:
-    def __init__(self, table: _FakeTable) -> None:
-        self._table = table
-        self.create_calls: list[str] = []
-
-    def create_table_if_not_exists(self, identifier: str, **kwargs: Any) -> _FakeTable:
-        self.create_calls.append(identifier)
-        if not self._table._column_names:
-            schema = kwargs.get("schema")
-            if schema is not None:
-                self._table._column_names = list(schema.names)
-        return self._table
-
-
-def _target() -> tuple[_FakeCatalog, str]:
-    return _FakeCatalog(_FakeTable()), "some_db.feedback_embeddings"
+def _stored_rows(catalog: SqlCatalog) -> pl.DataFrame:
+    return catalog.load_table(TABLE).scan().to_polars().sort("conversation_ref")
 
 
 def _rows(*texts: str | None) -> pl.DataFrame:
@@ -352,14 +301,14 @@ def test_filter_unembedded_keeps_new_rows_without_text_and_drops_stored_ones() -
     assert result["conversation_ref"].to_list() == ["1"]
 
 
-def test_embed_and_checkpoint_skips_null_and_blank_text() -> None:
+def test_embed_and_checkpoint_skips_null_and_blank_text(target: Target) -> None:
     """Vertex's :predict sends no instance for an empty text, which would fail
     every other row in the same request.
     """
     embedder = _FakeEmbedder(OPENAI)
 
     result, report = embed.embed_and_checkpoint(
-        _rows("hello", None, "", " \n "), OPENAI, embedder, _target()
+        _rows("hello", None, "", " \n "), OPENAI, embedder, target
     )
 
     assert result["conversation_ref"].to_list() == ["0"]
@@ -367,9 +316,11 @@ def test_embed_and_checkpoint_skips_null_and_blank_text() -> None:
     assert report.failures == []
 
 
-def test_embed_and_checkpoint_writes_the_stored_model_key_and_float32_vectors() -> None:
+def test_embed_and_checkpoint_writes_the_stored_model_key_and_float32_vectors(
+    target: Target,
+) -> None:
     result, report = embed.embed_and_checkpoint(
-        _rows("hello"), OPENAI, _FakeEmbedder(OPENAI), _target()
+        _rows("hello"), OPENAI, _FakeEmbedder(OPENAI), target
     )
 
     [row] = result.to_dicts()
@@ -383,13 +334,15 @@ def test_embed_and_checkpoint_writes_the_stored_model_key_and_float32_vectors() 
     assert report.input_tokens == 1
 
 
-def test_embed_and_checkpoint_returns_the_existing_tables_column_order() -> None:
-    """The io_manager upserts the returned frame by position, so it must match a
-    table created before idempotency_key existed, after union_by_name appends it.
+def test_embed_and_checkpoint_updates_a_table_from_before_idempotency_key(
+    target: Target,
+) -> None:
+    """A table created before idempotency_key existed gets it appended and its
+    stored vectors replaced, and the returned frame is in the table's column
+    order, which the io_manager's upsert casts by.
     """
-    catalog, identifier = _target()
-    table = catalog._table
-    table._column_names = [
+    catalog, identifier = target
+    old_columns = [
         "feedback_conversation_pk",
         "source_slug",
         "conversation_ref",
@@ -400,47 +353,75 @@ def test_embed_and_checkpoint_returns_the_existing_tables_column_order() -> None
         "embedding_model_version",
         "embedded_at",
     ]
-
-    result, _ = embed.embed_and_checkpoint(
-        _rows("hello"), OPENAI, _FakeEmbedder(OPENAI), (catalog, identifier)
+    existing = embed._embedded_frame(
+        OPENAI,
+        [
+            ({**row, "idempotency_key": None}, [0.0] * 3)
+            for row in _rows("old", "old").to_dicts()
+        ],
+    ).select(old_columns)
+    catalog.create_table(identifier, schema=existing.to_arrow().schema).append(
+        existing.to_arrow()
     )
 
-    assert result.columns == [*table._column_names[:9], "idempotency_key"]
-    assert table._column_names[-1] == "idempotency_key"
-    assert table.upserts[0]["df"].schema.names == result.columns
+    result, _ = embed.embed_and_checkpoint(
+        _rows("hello", "new", "added").filter(pl.col("conversation_ref") != "1"),
+        OPENAI,
+        _FakeEmbedder(OPENAI),
+        target,
+    )
+
+    table_columns = [
+        field.name for field in catalog.load_table(identifier).schema().fields
+    ]
+    assert table_columns == [*old_columns, "idempotency_key"]
+    assert result.columns == table_columns
+    stored = _stored_rows(catalog)
+    assert stored["conversation_ref"].to_list() == ["0", "1", "2"]
+    assert stored["embedding_vector"].to_list() == [[5.0] * 3, [0.0] * 3, [5.0] * 3]
+    assert stored["idempotency_key"].is_null().to_list() == [False, True, False]
 
 
-def test_embed_and_checkpoint_sends_requests_within_the_models_limits() -> None:
+def test_embed_and_checkpoint_sends_requests_within_the_models_limits(
+    target: Target,
+) -> None:
     """Vertex's text-embedding models take five texts per request."""
     embedder = _FakeEmbedder(VERTEX_TEXT)
     texts = [f"text {i}" for i in range(7)]
 
     result, _ = embed.embed_and_checkpoint(
-        _rows(*texts), VERTEX_TEXT, embedder, _target(), max_concurrency=1
+        _rows(*texts), VERTEX_TEXT, embedder, target, max_concurrency=1
     )
 
     assert result.height == 7
     assert embedder.calls == [texts[:5], texts[5:]]
 
 
-def test_embed_and_checkpoint_upserts_about_batch_size_conversations_at_once() -> None:
-    catalog, identifier = _target()
-    embedder = _FakeEmbedder(VERTEX_TEXT)
+def test_embed_and_checkpoint_upserts_about_batch_size_conversations_at_once(
+    target: Target, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    written: list[tuple[int, list[str]]] = []
+
+    def recording_upsert_chunk(*args: Any) -> pl.DataFrame:
+        written.append((args[2].height, args[3]))
+        return upsert_chunk(*args)
+
+    monkeypatch.setattr(embed, "upsert_chunk", recording_upsert_chunk)
 
     embed.embed_and_checkpoint(
         _rows(*(f"text {i}" for i in range(23))),
         VERTEX_TEXT,
-        embedder,
-        (catalog, identifier),
+        _FakeEmbedder(VERTEX_TEXT),
+        target,
         batch_size=8,
     )
 
     # Two requests of five per chunk: 23 texts are five requests in three chunks.
-    assert [upsert["df"].num_rows for upsert in catalog._table.upserts] == [10, 10, 3]
-    assert catalog._table.upserts[0]["join_cols"] == embed.UPSERT_JOIN_COLS
+    assert written == [(10, embed.UPSERT_JOIN_COLS)] * 2 + [(3, embed.UPSERT_JOIN_COLS)]
+    assert _stored_rows(target[0]).height == 23
 
 
-def test_embed_and_checkpoint_runs_requests_concurrently() -> None:
+def test_embed_and_checkpoint_runs_requests_concurrently(target: Target) -> None:
     """Titan takes one text per request, so concurrency is its wall-clock lever."""
     call_delay = 0.2
     row_count = 8
@@ -450,7 +431,7 @@ def test_embed_and_checkpoint_runs_requests_concurrently() -> None:
         _rows(*(f"text {i}" for i in range(row_count))),
         TITAN,
         _FakeEmbedder(TITAN, delay=call_delay),
-        _target(),
+        target,
         max_concurrency=row_count,
     )
     elapsed = time.monotonic() - start
@@ -460,11 +441,13 @@ def test_embed_and_checkpoint_runs_requests_concurrently() -> None:
     assert elapsed < row_count * call_delay / 2
 
 
-def test_embed_and_checkpoint_isolates_a_rejected_text_in_a_request() -> None:
+def test_embed_and_checkpoint_isolates_a_rejected_text_in_a_request(
+    target: Target,
+) -> None:
     embedder = _FakeEmbedder(OPENAI)
 
     result, report = embed.embed_and_checkpoint(
-        _rows("hello", "boom", "world"), OPENAI, embedder, _target()
+        _rows("hello", "boom", "world"), OPENAI, embedder, target
     )
 
     assert result["conversation_ref"].to_list() == ["0", "2"]
@@ -479,9 +462,9 @@ def test_embed_and_checkpoint_isolates_a_rejected_text_in_a_request() -> None:
     assert failure.retry_next_run is False
 
 
-def test_embed_and_checkpoint_stops_on_a_rejected_credential() -> None:
+def test_embed_and_checkpoint_stops_on_a_rejected_credential(target: Target) -> None:
     """A 401 opens the circuit at once rather than failing every later request."""
-    catalog, identifier = _target()
+    catalog, identifier = target
     embedder = _FakeEmbedder(TITAN)
 
     with pytest.raises(BatchFailed) as excinfo:
@@ -489,51 +472,49 @@ def test_embed_and_checkpoint_stops_on_a_rejected_credential() -> None:
             _rows("denied", "hello", "world"),
             TITAN,
             embedder,
-            (catalog, identifier),
+            target,
             batch_size=1,
             max_concurrency=1,
         )
 
     assert embedder.calls == [["denied"]]
     assert excinfo.value.report.circuit_opened_by is not None
-    # The failed chunk upserts nothing.
-    assert catalog._table.upserts == []
+    # The failed chunk writes nothing.
+    assert not catalog.table_exists(identifier)
 
 
-def test_embed_and_checkpoint_keeps_earlier_chunks_when_a_later_one_stops() -> None:
-    catalog, identifier = _target()
-
+def test_embed_and_checkpoint_keeps_earlier_chunks_when_a_later_one_stops(
+    target: Target,
+) -> None:
     with pytest.raises(BatchFailed):
         embed.embed_and_checkpoint(
             _rows("hello", "denied"),
             TITAN,
             _FakeEmbedder(TITAN),
-            (catalog, identifier),
+            target,
             batch_size=1,
             max_concurrency=1,
         )
 
-    assert [upsert["df"].num_rows for upsert in catalog._table.upserts] == [1]
+    assert _stored_rows(target[0])["conversation_ref"].to_list() == ["0"]
 
 
-def test_titan_shortens_a_text_over_the_token_limit_and_retries() -> None:
+def test_titan_shortens_a_text_over_the_token_limit_and_retries(target: Target) -> None:
     embedder = _TitanLimitEmbedder(max_chars=10_000)
 
-    result, _ = embed.embed_and_checkpoint(
-        _rows("x" * 40_000), TITAN, embedder, _target()
-    )
+    result, _ = embed.embed_and_checkpoint(_rows("x" * 40_000), TITAN, embedder, target)
 
     assert result.height == 1
     assert [len(text) for [text] in embedder.calls] == [40_000, 9_000]
 
 
-def test_titan_fails_a_rejection_that_is_not_about_length() -> None:
+def test_titan_fails_a_rejection_that_is_not_about_length(target: Target) -> None:
     embedder = _TitanLimitEmbedder(
         max_chars=0, message="The provided model identifier is invalid."
     )
 
     with pytest.raises(BatchFailed, match="model identifier is invalid"):
-        embed.embed_and_checkpoint(_rows("a"), TITAN, embedder, _target())
+        embed.embed_and_checkpoint(_rows("a"), TITAN, embedder, target)
 
     assert len(embedder.calls) == 1
 
@@ -546,7 +527,7 @@ def _titan_response(vector: list[float]) -> dict[str, Any]:
     }
 
 
-def test_titan_shortens_through_ol_llm_and_pydantic_ai_bedrock() -> None:
+def test_titan_shortens_through_ol_llm_and_pydantic_ai_bedrock(target: Target) -> None:
     """Titan's real over-limit error, through PydanticAI's Bedrock model and
     ol-llm's policy wrapper, arrives as LLMRejected with the token counts in its
     message, which is what the shorten-and-retry reads.
@@ -580,7 +561,7 @@ def test_titan_shortens_through_ol_llm_and_pydantic_ai_bedrock() -> None:
             _rows("x" * 20_000),
             TITAN,
             TITAN.embedder(run_id="run"),
-            _target(),
+            target,
             max_concurrency=1,
         )
         stubber.assert_no_pending_responses()
@@ -590,12 +571,14 @@ def test_titan_shortens_through_ol_llm_and_pydantic_ai_bedrock() -> None:
     ]
 
 
-def test_embedder_calls_ol_llm_with_the_feedback_embedding_use_case() -> None:
+def test_embedder_calls_ol_llm_with_the_feedback_embedding_use_case(
+    target: Target,
+) -> None:
     embedder = OPENAI.embedder(run_id="run")
 
     with override_embedding_models(TestEmbeddingModel()):
         result, report = embed.embed_and_checkpoint(
-            _rows("hello", "world"), OPENAI, embedder, _target(), max_concurrency=1
+            _rows("hello", "world"), OPENAI, embedder, target, max_concurrency=1
         )
 
     assert result["embedding_vector"].to_list() == [[1.0] * 3, [1.0] * 3]
@@ -624,34 +607,3 @@ def test_embedder_raises_ol_llm_errors_for_a_failed_request() -> None:
         pytest.raises(LLMError, match="returned 1 vectors for 2 texts"),
     ):
         OPENAI.embedder().embed(["a", "b"], input_type="document")
-
-
-def test_checkpoint_embedding_chunk_reorders_using_top_level_fields_only() -> None:
-    """Pyiceberg's Schema.column_names includes nested fields (e.g. a List
-    column's "element" child, surfaced as "embedding_vector.element") -- using
-    it to reorder columns would try to select a name Polars doesn't have.
-    """
-    catalog, identifier = _target()
-    table = catalog._table
-    table._column_names = list(embed.EMBEDDING_CHECKPOINT_SCHEMA)
-    table._nested_extra_column_names = ["embedding_vector.element"]
-    chunk_df = embed._embedded_frame(
-        OPENAI, [({**_rows("a").to_dicts()[0], "idempotency_key": "k"}, [0.1] * 3)]
-    )
-
-    embed.checkpoint_embedding_chunk(catalog, identifier, chunk_df)
-
-    assert len(table.upserts) == 1
-
-
-def test_checkpoint_embedding_chunk_skips_empty_chunks_without_touching_catalog() -> (
-    None
-):
-    catalog, identifier = _target()
-
-    embed.checkpoint_embedding_chunk(
-        catalog, identifier, pl.DataFrame(schema=embed.EMBEDDING_CHECKPOINT_SCHEMA)
-    )
-
-    assert catalog.create_calls == []
-    assert catalog._table.upserts == []

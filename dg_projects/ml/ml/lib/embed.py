@@ -20,6 +20,7 @@ from math import ceil
 from typing import Any
 
 import polars as pl
+from ml.lib.iceberg_helpers import upsert_chunk
 from ml.resources.opik_auth import OPIK_PROJECT_NAME
 from ol_llm import (
     Attribution,
@@ -49,8 +50,7 @@ JOIN_COLS = ["feedback_conversation_pk"]
 UPSERT_JOIN_COLS = [*JOIN_COLS, "embedding_model_version", "embedding_dim"]
 
 # Columns added after the table first existed go last, in the order they were
-# added: checkpoint_embedding_chunk's union_by_name appends them to an existing
-# table.
+# added: upsert_chunk's union_by_name appends them to an existing table.
 EMBEDDING_CHECKPOINT_SCHEMA = {
     **dict.fromkeys([*JOIN_COLS, "source_slug", "conversation_ref"], pl.String),
     "turn_count": pl.Int64,
@@ -75,8 +75,9 @@ EMBEDDING_MODEL = os.environ.get(
 
 # Matryoshka truncation via the API's own `dimensions` param (§B sweeps 256/512/1024).
 # 1024 keeps clustering quality while cutting the 3072-dim default's storage 3x. Set
-# on every request: ol-llm's catalog lists no Bedrock or Google embedding model, so
-# it has no default length to check the vectors against for them.
+# on every request: ol-llm 0.0.4's catalog lists the OpenAI and Azure models and
+# Bedrock's Titan Embed Text v2 but no Cohere or Google model, so for those it has
+# no default length to check the vectors against.
 EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "1024"))
 
 # About how many conversations are checkpointed together: each chunk is one Iceberg
@@ -543,49 +544,6 @@ def _embedded_frame(
     )
 
 
-def checkpoint_embedding_chunk(
-    catalog: Catalog, table_identifier: str, chunk_df: pl.DataFrame
-) -> pl.DataFrame:
-    """Upsert one chunk directly into the real feedback_embeddings table.
-
-    Mirrors summarize.checkpoint_chunk: a crash after this call keeps everything
-    upserted so far, so the next run's ordinary filter_unembedded pass sees it as
-    already embedded, no separate recovery step needed. table_identifier is
-    "database.table", e.g. "ol_warehouse_production_intermediate.feedback_embeddings".
-
-    create_table_if_not_exists rather than load_table: a brand-new deployment (or a
-    dropped dev table) has no feedback_embeddings table yet, and this call -- not
-    the io_manager's write of the asset's final return -- is the first write of any
-    run, so it must be able to bootstrap the table itself.
-
-    :returns: chunk_df in the table's column order, as it was upserted.
-    :rtype: pl.DataFrame
-    """
-    if chunk_df.height == 0:
-        return chunk_df
-    table = catalog.create_table_if_not_exists(
-        table_identifier, schema=chunk_df.to_arrow().schema
-    )
-    # A table from before a column existed (embedded_at, idempotency_key) has an
-    # older schema than chunk_df -- union_by_name adds the new column (nulled on
-    # existing rows) instead of failing the upsert; a no-op once the table already
-    # has it.
-    with table.update_schema() as update:
-        update.union_by_name(chunk_df.to_arrow().schema)
-    # union_by_name appends new columns at the table's end regardless of chunk_df's
-    # order, and upsert's pyarrow cast is positional -- so it must be reordered
-    # to match the table, not chunk_df. table.schema().fields (== .columns) gives
-    # the top-level field names only.
-    ordered_chunk_df = chunk_df.select([field.name for field in table.schema().fields])
-    table.upsert(
-        df=ordered_chunk_df.to_arrow(),
-        join_cols=UPSERT_JOIN_COLS,
-        when_matched_update_all=True,
-        when_not_matched_insert_all=True,
-    )
-    return ordered_chunk_df
-
-
 def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
     df: pl.DataFrame,
     model: FeedbackEmbeddingModel,
@@ -647,7 +605,10 @@ def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
         chunk_df = _embedded_frame(
             model, [pair for outcome in outcomes for pair in outcome.embedded]
         )
-        upserted.append(checkpoint_embedding_chunk(catalog, table_identifier, chunk_df))
+        if chunk_df.height:
+            upserted.append(
+                upsert_chunk(catalog, table_identifier, chunk_df, UPSERT_JOIN_COLS)
+            )
 
     report = process_batch(
         _requests(rows, model.spec),
