@@ -1,0 +1,28 @@
+---
+# OpenMetadata data contract for a raw table dim_user is built from. See README.md in this directory.
+entity:
+  type: table
+  dbt_source: ol_warehouse_raw_data.raw__mitxonline__app__postgres__openedx_openedxuser
+contract:
+  name: raw__mitxonline__app__postgres__openedx_openedxuser
+  displayName: raw__mitxonline__app__postgres__openedx_openedxuser
+  description: Maps MITx Online application users to their open edX usernames. dim_user
+    joins the two MITx Online user tables through these columns.
+  entityStatus: Approved
+  owners:
+  - type: team
+    name: data-platform
+  schema:
+  - name: user_id
+    dataType: BIGINT
+  - name: edx_username
+    dataType: VARCHAR
+  semantics:
+  - name: hasOwner
+    description: The table has at least one owner to route contract failures to.
+    rule: '{"!!": [{"var": "owners.0"}]}'
+    enabled: true
+  - name: hasDescription
+    description: The table has a description.
+    rule: '{"!!": [{"var": "description"}]}'
+    enabled: true

@@ -9,10 +9,16 @@ from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from botocore.client import BaseClient
 from dagster import ConfigurableResource
 from google import genai
+from google.genai import types as genai_types
 from openai import OpenAI
 from pydantic import Field, PrivateAttr
 
 COGNITIVE_SERVICES_SCOPE = "https://cognitiveservices.azure.com/.default"
+
+# google-genai makes one attempt unless retry_options is set. With it set, the SDK
+# retries 408, 429, 500, 502, 503 and 504 with exponential backoff from 1s. Three
+# attempts is the same two retries the OpenAI and Anthropic SDKs make by default.
+GENAI_RETRY_OPTIONS = genai_types.HttpRetryOptions(attempts=3)
 
 
 class LLMClientFactory(ConfigurableResource):
@@ -132,10 +138,17 @@ class LLMClientFactory(ConfigurableResource):
                     vertexai=True,
                     project=self._require_env("GOOGLE_CLOUD_PROJECT"),
                     location=self._require_env("GOOGLE_CLOUD_LOCATION"),
+                    http_options=genai_types.HttpOptions(
+                        retry_options=GENAI_RETRY_OPTIONS
+                    ),
                 )
             else:
                 self._client = genai.Client(
-                    vertexai=False, api_key=self._require_env("GEMINI_API_KEY")
+                    vertexai=False,
+                    api_key=self._require_env("GEMINI_API_KEY"),
+                    http_options=genai_types.HttpOptions(
+                        retry_options=GENAI_RETRY_OPTIONS
+                    ),
                 )
             return self._client
 

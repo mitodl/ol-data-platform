@@ -1,0 +1,44 @@
+---
+# OpenMetadata data contract for the Superset dataset over enrollment_activity_counts_dataset. See README.md in this directory.
+entity:
+  type: dashboardDataModel
+  fqn: Superset.model.169
+contract:
+  name: superset__enrollment_activity_counts_dataset
+  displayName: Superset dataset enrollment_activity_counts_dataset
+  description: Superset dataset over enrollment_activity_counts_dataset, on 8 dashboards.
+    The schema lists the columns the tracked dashboards' charts and native filters
+    use.
+  entityStatus: Approved
+  owners:
+  - type: team
+    name: data-platform
+  schema:
+  - name: user_email
+    dataType: VARCHAR
+  - name: user_gender
+    dataType: VARCHAR
+  - name: user_country_code
+    dataType: VARCHAR
+  - name: user_highest_education
+    dataType: VARCHAR
+  - name: courserun_is_current
+    dataType: BOOLEAN
+  - name: platform
+    dataType: VARCHAR
+  - name: course_readable_id
+    dataType: VARCHAR
+  - name: courserun_readable_id
+    dataType: VARCHAR
+  - name: activity_date
+    dataType: VARCHAR
+  - name: certificate_count
+    dataType: BIGINT
+  - name: enrollment_count
+    dataType: BIGINT
+  - name: unenrolled_count
+    dataType: BIGINT
+  - name: audit_count
+    dataType: BIGINT
+  - name: verified_count
+    dataType: BIGINT

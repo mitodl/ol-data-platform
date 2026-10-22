@@ -8,7 +8,6 @@ from typing import Any
 from dagster import (
     AssetCheckSeverity,
     AssetExecutionContext,
-    AssetSpec,
     AutomationCondition,
     FreshnessPolicy,
     OpExecutionContext,
@@ -404,23 +403,12 @@ DIMENSIONAL_GROUP = "dimensional"
 # Dimensional models rebuild on the nightly dbt cadence (automation sensor +
 # 02:00 UTC layer schedule). Warn if a table has not updated in 30h (a run
 # slipped) and fail at 48h (roughly two missed cycles). Evaluated automatically
-# by the Dagster daemon — no sensor required.
+# by the Dagster daemon — no sensor required. definitions.py attaches it to the
+# dimensional assets without a data contract SLA, since it needs the contracts.
 DIMENSIONAL_FRESHNESS_POLICY = FreshnessPolicy.time_window(
     fail_window=timedelta(hours=48),
     warn_window=timedelta(hours=30),
 )
-
-
-def _attach_dimensional_freshness(spec: AssetSpec) -> AssetSpec:
-    if spec.key.path[0] == DIMENSIONAL_GROUP:
-        return spec.replace_attributes(freshness_policy=DIMENSIONAL_FRESHNESS_POLICY)
-    return spec
-
-
-# Attach the freshness policy to the dimensional dbt assets. map_asset_specs
-# returns a new AssetsDefinition that preserves the dbt build op, the hoisted
-# dbt-test asset checks, and every key — it only augments the specs.
-full_dbt_project = full_dbt_project.map_asset_specs(_attach_dimensional_freshness)
 
 dimensional_asset_keys = [
     key for key in full_dbt_project.keys if key.path[0] == DIMENSIONAL_GROUP

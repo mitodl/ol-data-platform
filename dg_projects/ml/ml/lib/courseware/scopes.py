@@ -20,6 +20,9 @@ DESCRIPTION_PAGES = (
     "about/overview.html",
     "about/description.html",
 )
+# An OCW course's description is a context source of this kind, keyed by the course's
+# own path rather than a file name.
+DESCRIPTION_SOURCE_KIND = "course_description"
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,9 @@ class Scope:
     scope_position: int
     part: int
     part_count: int
+    # every part's input_text_checksum, in order and comma-separated, as this read of
+    # the scope split it; tells which stored extractions make up one whole reading
+    scope_part_checksums: str
     sources: tuple[Source, ...] = field(default=())
 
     @property
@@ -70,12 +76,12 @@ class Scope:
 
     @property
     def sources_block(self) -> str:
-        return "\n\n".join(source.block for source in self.sources)
+        return _sources_block(self.sources)
 
     @property
     def input_text_checksum(self) -> str:
         """SHA-256 of exactly the source text the model reads for this scope."""
-        return hashlib.sha256(self.sources_block.encode()).hexdigest()
+        return _checksum(self.sources)
 
     @property
     def part_note(self) -> str | None:
@@ -87,6 +93,14 @@ class Scope:
         )
 
 
+def _sources_block(sources: tuple[Source, ...]) -> str:
+    return "\n\n".join(source.block for source in sources)
+
+
+def _checksum(sources: tuple[Source, ...]) -> str:
+    return hashlib.sha256(_sources_block(sources).encode()).hexdigest()
+
+
 def _course(rows: pl.DataFrame) -> Course:
     units = (
         rows.filter(pl.col("scope_kind") == "unit")
@@ -96,10 +110,12 @@ def _course(rows: pl.DataFrame) -> Course:
     )
     context = rows.filter(pl.col("scope_kind") == "context")
     description = ""
-    for page in DESCRIPTION_PAGES:
-        texts = context.filter(pl.col("source_ref") == page)["source_text"]
+    for texts in (
+        *(context.filter(pl.col("source_ref") == page) for page in DESCRIPTION_PAGES),
+        context.filter(pl.col("source_kind") == DESCRIPTION_SOURCE_KIND),
+    ):
         if len(texts):
-            description = texts[0][:COURSE_DESCRIPTION_MAX_CHARS]
+            description = texts["source_text"][0][:COURSE_DESCRIPTION_MAX_CHARS]
             break
     first = rows.row(0, named=True)
     return Course(
@@ -132,7 +148,7 @@ def build_scopes(rows: pl.DataFrame) -> list[Scope]:
     :rtype: list[Scope]
     """
     course = _course(rows)
-    scopes = []
+    scopes: list[Scope] = []
     for (scope_id,), scope_rows in rows.sort(
         "scope_position", "source_position"
     ).group_by("scope_id", maintain_order=True):
@@ -148,23 +164,27 @@ def build_scopes(rows: pl.DataFrame) -> list[Scope]:
             )
             for row in scope_rows.iter_rows(named=True)
         ]
-        parts = _split(sources)
-        for part_number, part_sources in enumerate(parts, 1):
-            # ids restart in each part, so a part's prompt depends only on its sources
-            numbered = tuple(
+        # ids restart in each part, so a part's prompt depends only on its sources
+        parts = [
+            tuple(
                 Source(**{**vars(source), "source_id": f"S{index:02d}"})
                 for index, source in enumerate(part_sources, 1)
             )
-            scopes.append(
-                Scope(
-                    course=course,
-                    scope_id=str(scope_id),
-                    scope_kind=meta["scope_kind"],
-                    scope_title=meta["scope_title"],
-                    scope_position=meta["scope_position"],
-                    part=part_number,
-                    part_count=len(parts),
-                    sources=numbered,
-                )
+            for part_sources in _split(sources)
+        ]
+        part_checksums = ",".join(_checksum(part) for part in parts)
+        scopes.extend(
+            Scope(
+                course=course,
+                scope_id=str(scope_id),
+                scope_kind=meta["scope_kind"],
+                scope_title=meta["scope_title"],
+                scope_position=meta["scope_position"],
+                part=part_number,
+                part_count=len(parts),
+                scope_part_checksums=part_checksums,
+                sources=part,
             )
+            for part_number, part in enumerate(parts, 1)
+        )
     return scopes

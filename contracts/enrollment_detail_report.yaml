@@ -1,0 +1,119 @@
+---
+# OpenMetadata data contract for enrollment_detail_report. See README.md in this directory.
+entity:
+  type: table
+  dbt_model: enrollment_detail_report
+contract:
+  name: enrollment_detail_report
+  displayName: enrollment_detail_report
+  description: One row per enrollment with its course run, certificate, grade, order
+    and coupon. Superset dataset Superset.model.112 reads it for Enrollment Detail
+    by Learner, the most-viewed dashboard, and for Combined Learners Search. The schema
+    lists the columns those dashboards' charts and native filters use.
+  entityStatus: Approved
+  owners:
+  - type: team
+    name: data-platform
+  schema:
+  - name: platform
+    dataType: VARCHAR
+    constraint: NOT_NULL
+  - name: courserunenrollment_id
+    dataType: VARCHAR
+  - name: course_readable_id
+    dataType: VARCHAR
+  - name: courserun_is_current
+    dataType: BOOLEAN
+  - name: courserun_readable_id
+    dataType: VARCHAR
+  - name: courserun_start_on
+    dataType: VARCHAR
+  - name: courserun_end_on
+    dataType: VARCHAR
+  - name: courserun_title
+    dataType: VARCHAR
+  - name: courserunenrollment_created_on
+    dataType: VARCHAR
+  - name: courserunenrollment_enrollment_mode
+    dataType: VARCHAR
+  - name: courserunenrollment_enrollment_status
+    dataType: VARCHAR
+  - name: courserunenrollment_is_active
+    dataType: BOOLEAN
+  - name: courserunenrollment_upgraded_on
+    dataType: VARCHAR
+  - name: courseruncertificate_created_on
+    dataType: VARCHAR
+  - name: courseruncertificate_is_earned
+    dataType: BOOLEAN
+    constraint: NOT_NULL
+  - name: courseruncertificate_url
+    dataType: VARCHAR
+  - name: courserungrade_grade
+    dataType: DOUBLE
+  - name: courserungrade_is_passing
+    dataType: BOOLEAN
+  - name: organization_name
+    dataType: VARCHAR
+  - name: user_country_code
+    dataType: VARCHAR
+  - name: user_highest_education
+    dataType: VARCHAR
+  - name: user_full_name
+    dataType: VARCHAR
+  - name: user_username
+    dataType: VARCHAR
+  - name: user_email
+    dataType: VARCHAR
+  - name: num_of_course_passed
+    dataType: BIGINT
+  - name: coupon_code
+    dataType: VARCHAR
+  - name: coupon_name
+    dataType: VARCHAR
+  - name: discount
+    dataType: DOUBLE
+  - name: order_id
+    dataType: BIGINT
+  - name: order_reference_number
+    dataType: VARCHAR
+  - name: order_state
+    dataType: VARCHAR
+  - name: program_order_id
+    dataType: BIGINT
+  - name: program_coupon_code
+    dataType: VARCHAR
+  - name: receipt_payment_amount
+    dataType: DOUBLE
+  - name: receipt_payment_method
+    dataType: VARCHAR
+  - name: receipt_payment_timestamp
+    dataType: VARCHAR
+  - name: receipt_payer_email
+    dataType: VARCHAR
+  - name: unit_price
+    dataType: DECIMAL
+  - name: program_name
+    dataType: VARCHAR
+  - name: redeemed_email
+    dataType: VARCHAR
+  - name: receipt_url
+    dataType: VARCHAR
+  semantics:
+  - name: hasOwner
+    description: The table has at least one owner to route contract failures to.
+    rule: '{"!!": [{"var": "owners.0"}]}'
+    enabled: true
+  - name: hasDescription
+    description: The table has a description.
+    rule: '{"!!": [{"var": "description"}]}'
+    enabled: true
+  # Dagster's freshness check fails once the table is older than
+  # refreshFrequency + maxLatency (26 hours), so a late nightly build does not page.
+  sla:
+    refreshFrequency:
+      interval: 1
+      unit: day
+    maxLatency:
+      value: 2
+      unit: hour
