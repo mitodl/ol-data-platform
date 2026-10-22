@@ -209,6 +209,22 @@ def test_each_distinct_new_text_is_embedded_once() -> None:
     )
 
 
+def test_embed_chunks_makes_no_call_when_every_text_is_known() -> None:
+    strategy = _strategy()
+    chunks = chunk_documents([_document("a", "known")], strategy.chunker)
+    embedder = FakeEmbedder()
+
+    outcome = embed_chunks(
+        strategy,
+        chunks,
+        embedder,
+        known_vectors={md5_hex("known"): [9.0, 9.0, 9.0, 9.0]},
+    )
+
+    assert embedder.calls == []
+    assert (outcome.embedded_texts, outcome.input_tokens) == (0, 0)
+
+
 def test_known_vectors_must_have_the_model_length() -> None:
     strategy = _strategy()
     chunks = chunk_documents([_document("a", "text")], strategy.chunker)

@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ol_orchestrate.lib.embeddings.chunking import Chunk, Chunker
 from ol_orchestrate.lib.embeddings.documents import Document, md5_hex
-from ol_orchestrate.lib.embeddings.models import Embedder
+from ol_orchestrate.lib.embeddings.models import Embedder, EmbeddingBatch
 from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy
 
 
@@ -167,7 +167,13 @@ def embed_chunks(
         for checksum, text in zip(checksums, texts, strict=True)
         if checksum not in known
     }
-    batch = embedder.embed(list(new_texts.values()), input_type="document")
+    # No call at all when every text is known, so an embedder that counts or
+    # traces requests records none for a run that embeds nothing.
+    batch = (
+        embedder.embed(list(new_texts.values()), input_type="document")
+        if new_texts
+        else EmbeddingBatch(vectors=[], input_tokens=0)
+    )
     known.update(zip(new_texts, batch.vectors, strict=True))
 
     stamp = embedded_at or datetime.now(tz=UTC)
