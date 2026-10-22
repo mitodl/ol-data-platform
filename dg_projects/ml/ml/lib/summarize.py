@@ -339,7 +339,11 @@ def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning 
         # feedback_summaries is in non_dbt_singleton_tables()
         # (ol_orchestrate.lib.iceberg_maintenance), so nightly maintenance expires
         # the snapshots each chunk writes.
-        upserted.append(upsert_chunk(catalog, table_identifier, chunk_df, JOIN_COLS))
+        written = upsert_chunk(catalog, table_identifier, chunk_df, JOIN_COLS)
+        # An empty chunk comes back in SUMMARIZE_CHECKPOINT_SCHEMA order, not the
+        # table's, and concat matches columns by position.
+        if written.height:
+            upserted.append(written)
 
     rows = unsummarized_df.to_dicts()
     checkpoint(skipped_frame([row for row in rows if not needs_summary(row)]))
@@ -355,4 +359,6 @@ def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning 
         max_workers=max_concurrency,
         logger=log,
     )
+    if not upserted:
+        return pl.DataFrame(schema=SUMMARIZE_CHECKPOINT_SCHEMA), report
     return pl.concat(upserted), report

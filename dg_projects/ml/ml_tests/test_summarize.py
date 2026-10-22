@@ -438,3 +438,35 @@ def test_summarize_and_checkpoint_updates_a_table_from_before_the_key_columns(
     stored = _stored_rows(iceberg_catalog)
     assert stored["conversation_ref"].to_list() == ["1", "2", "3"]
     assert stored["idempotency_key"].is_null().to_list() == [False, True, False]
+
+
+def test_summarize_and_checkpoint_handles_a_table_in_another_column_order(
+    iceberg_catalog: SqlCatalog,
+) -> None:
+    """Every conversation needs a summary, so the skipped frame is empty and keeps
+    SUMMARIZE_CHECKPOINT_SCHEMA's order, while the written chunk comes back in the
+    table's order. The empty frame must not reach the concat.
+    """
+    columns = list(reversed(summarize.SUMMARIZE_CHECKPOINT_SCHEMA))
+    iceberg_catalog.create_table(
+        TABLE,
+        schema=pl.DataFrame(
+            schema={
+                name: summarize.SUMMARIZE_CHECKPOINT_SCHEMA[name] for name in columns
+            }
+        )
+        .to_arrow()
+        .schema,
+    )
+    df = pl.DataFrame([_conversation_row(conversation_ref="1")])
+
+    with override_models(FunctionModel(_summarize)):
+        result, _ = summarize.summarize_and_checkpoint(
+            df,
+            SUMMARIZER,
+            (iceberg_catalog, TABLE),
+            max_concurrency=1,
+        )
+
+    assert result.columns == columns
+    assert result["conversation_ref"].to_list() == ["1"]
