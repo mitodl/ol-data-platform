@@ -64,10 +64,11 @@ models:
 
 - name: int__courseware__extractions
   description: Every claim extraction, and whether it is current, the one its scope
-    part is read from now. A scope's complete reading that matches the extractor's
-    latest read of the run is current, else its newest complete reading, so a run
-    that extracts only some parts of a new reading changes nothing until the rest
-    succeed. A scope the run's extraction sources no longer have has no current extraction.
+    part is read from now. A scope's current reading is its first complete one by
+    the run's allowlist-approved extractor version, then matching the extractor's
+    latest read of the run, then newest, so a run that extracts only some parts of
+    a new reading changes nothing until the rest succeed. A scope the run's extraction
+    sources no longer have has no current extraction.
   config:
     meta:
       # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
@@ -100,7 +101,8 @@ models:
   - name: scope_title
     description: str, the sequential title or the scope name
   - name: scope_position
-    description: int, the scope's order in the course; 0 for context, 9999 for materials
+    description: int, the scope's order in the course as it is now (as extracted for
+      a scope the sources do not list); 0 for context, 9999 for materials
   - name: scope_part
     description: int, which part of a scope split to fit the input budget, from 1
   - name: scope_part_count
@@ -135,6 +137,10 @@ models:
     description: int, input tokens written to the prompt cache
   - name: extracted_at
     description: timestamp, when the call returned
+  - name: is_approved_version
+    description: boolean, whether the call ran the extractor version (extractor, prompt
+      and schema) int__courseware__extraction_allowlist approves for the run; null
+      when the allowlist does not cover the run
   - name: matches_current_input
     description: boolean, whether the part's split and input text are the ones the
       extractor's latest read of the run computed
@@ -145,6 +151,42 @@ models:
       now
     tests:
     - not_null
+
+- name: int__courseware__scope_part_coverage
+  description: One row per scope part the extractor's latest read of a run expects,
+    with whether an extraction covers it. A part with no extraction has no row in
+    int__courseware__extractions, so a scope that grew to two parts whose part 2 failed
+    shows up only here.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the sequential block id, or 'context' or 'materials'
+  - name: scope_part
+    description: int, which part of the scope, from 1
+  - name: scope_part_count
+    description: int, how many parts the latest read split the scope into
+  - name: observed_at
+    description: timestamp, when the extractor read the run
+  - name: extraction_count
+    description: int, extractions of this scope part under any version or input
+  - name: has_approved_extraction
+    description: boolean, whether an extraction of the run's allowlist-approved version
+      covers the part (under any version when the allowlist does not cover the run)
+  - name: has_current_input_extraction
+    description: boolean, whether one of those has the part's current split and input
+      text; false for a part whose new text failed to extract, whose older extraction
+      may still be current
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [platform, courserun_readable_id, scope_id, scope_part]
 
 - name: int__courseware__latest_scope_inputs
   description: Each course run's latest read by the courseware extractor, one row

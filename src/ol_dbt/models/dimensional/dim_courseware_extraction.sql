@@ -1,6 +1,8 @@
 -- One row per extractor call: which scope of which run it read, with which extractor
 -- version and model, and what it cost. Versions are rows, never overwrites, so two
--- extractors or models can be compared on the same scopes.
+-- extractors or models can be compared on the same scopes; is_current marks the ones
+-- the rollups read and is_approved_version the ones of the run's allowlisted version
+-- (int__courseware__extractions).
 with extractions as (
     select * from {{ ref('int__courseware__extractions') }}
 )
@@ -45,6 +47,7 @@ select
     , extractions.cache_read_input_tokens
     , extractions.cache_creation_input_tokens
     , extractions.extracted_at
+    , extractions.is_approved_version
     , extractions.is_current
 from extractions
 left join course_runs

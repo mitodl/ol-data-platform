@@ -60,6 +60,10 @@ unit_tests:
       scope_part: 1, scope_part_count: 2, extractor_id: v1, prompt_version: p, schema_version: c,
       model_id: m, effort: medium, input_text_checksum: f1, scope_part_checksums: 'f1,f2',
       extracted_at: "2026-10-18T00:00:00"}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
+  - input: ref('dim_course_content')
+    rows: []
   - input: ref('int__courseware__latest_scope_inputs')
     rows: []
   - input: ref('int__courseware__extraction_sources')
@@ -109,6 +113,10 @@ unit_tests:
       scope_part: 1, scope_part_count: 2, extractor_id: v1, prompt_version: p, schema_version: c,
       model_id: m, effort: medium, input_text_checksum: h1, scope_part_checksums: 'h1,h2',
       extracted_at: "2026-10-19T00:00:00"}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
+  - input: ref('dim_course_content')
+    rows: []
   - input: ref('int__courseware__latest_scope_inputs')
     rows:
     - {platform: mitxonline, courserun_readable_id: r, scope_id: x, scope_part: 1,
