@@ -17,7 +17,9 @@ So sync PUTs only to create the metric or change one of its own fields, sends
 the live reviewers and related metrics when the file does not set them and the
 live assets always, and then PATCHes
 description, owners, reviewers and status wherever they still differ, with
-the file's digest (below) when it changed. An unchanged file writes no Metric
+the file's digest (below) when it changed. A PATCH also removes the tags the
+bot applied that the file has dropped (``stale_tags``); tags applied by anyone
+else stay. An unchanged file writes no Metric
 field; it re-PUTs its lineage edges, which the server upserts.
 
 A file's status is Draft or Approved, and the bot is not a metric reviewer.
@@ -203,6 +205,7 @@ def create_body(
     owners: list[dict[str, str]] | None,
     reviewers: list[dict[str, str]] | None,
     live: dict[str, Any] | None,
+    bot: str,
 ) -> dict[str, Any]:
     """Build the CreateMetric body for PUT /v1/metrics.
 
@@ -214,8 +217,15 @@ def create_body(
     :param live: the metric as OpenMetadata has it, or ``None``. Its assets,
         and its related metrics when the file sets none, are sent so a PUT
         keeps them.
+    :param bot: the sync bot's user name, sent as each tag's ``appliedBy``.
+        Creating a metric stores the request's ``appliedBy``; a PUT or PATCH
+        to an existing one stamps the caller on the tags it adds
+        (``EntityUpdater.updateTags``). Either way the tags sync added carry
+        the bot's name, which is how ``stale_tags`` tells them apart.
     """
     body = copy.deepcopy(metric.body)
+    for tag in body.get("tags", []):
+        tag["appliedBy"] = bot
     if owners is not None:
         body["owners"] = owners
     if reviewers is not None:
@@ -232,6 +242,16 @@ def create_body(
 
 def _tag_key(tag: dict[str, Any]) -> tuple[str, str]:
     return (tag.get("source", "Classification"), tag["tagFQN"])
+
+
+def stale_tags(metric: MetricDefinition, current: dict[str, Any], bot: str) -> list[dict[str, Any]]:
+    """List the tags on *current* that the bot applied and the file no longer declares.
+
+    A tag someone applied in OpenMetadata is never stale, even when the file
+    once listed it too: the server keeps the first ``appliedBy`` of a tag.
+    """
+    declared = {_tag_key(t) for t in metric.body.get("tags", [])}
+    return [t for t in current.get("tags") or [] if t.get("appliedBy") == bot and _tag_key(t) not in declared]
 
 
 def _matches(want: Any, have: Any) -> bool:
@@ -271,7 +291,8 @@ def structural_changes(body: dict[str, Any], live: dict[str, Any]) -> list[str]:
             continue
         have = live.get(key)
         if key == "tags":
-            # A PUT merges tags and never removes one, so only a missing tag is a change.
+            # A PUT merges tags and never removes one, so only a missing tag is
+            # a change; patch_ops removes the stale ones.
             if not {_tag_key(t) for t in want} <= {_tag_key(t) for t in have or []}:
                 changed.add(key)
         elif key == "relatedMetrics":
@@ -287,10 +308,13 @@ def structural_changes(body: dict[str, Any], live: dict[str, Any]) -> list[str]:
 def after_put(body: dict[str, Any], live: dict[str, Any] | None) -> dict[str, Any]:
     """Predict the PATCHed fields and extension of the metric a bot PUT of *body* leaves (see the module docstring)."""
     live = live or {}
+    live_tags = live.get("tags") or []
+    live_keys = {_tag_key(t) for t in live_tags}
     return {
         "description": live.get("description") or body.get("description"),
         "owners": live.get("owners") or body.get("owners"),
         "reviewers": body.get("reviewers"),
+        "tags": live_tags + [t for t in body.get("tags", []) if _tag_key(t) not in live_keys],
         STATUS_FIELD: PUT_DEFAULT_STATUS,
         EXTENSION_FIELD: live.get(EXTENSION_FIELD),
     }
@@ -330,10 +354,16 @@ def drift(
     return found
 
 
-def patch_ops(metric: MetricDefinition, body: dict[str, Any], current: dict[str, Any]) -> list[dict[str, Any]]:
+def patch_ops(
+    metric: MetricDefinition, body: dict[str, Any], current: dict[str, Any], bot: str
+) -> list[dict[str, Any]]:
     """JSON Patch operations that make *current* match the file and record its digest.
 
+    A PATCH replaces the tag list, deleting each tag it leaves out
+    (``EntityUpdater.updateTags``), so stale tags go by sending the rest.
+
     :param current: the metric as it stands before the PATCH.
+    :param bot: the sync bot's user name (see ``stale_tags``).
     """
     ops: list[dict[str, Any]] = []
     if "description" in body and not same_description(current.get("description"), body["description"]):
@@ -341,6 +371,10 @@ def patch_ops(metric: MetricDefinition, body: dict[str, Any], current: dict[str,
     for field in ("owners", "reviewers"):
         if field in metric.body and _ref_set(current.get(field)) != _ref_set(body[field]):
             ops.append({"op": "add", "path": f"/{field}", "value": body[field]})
+    stale = {_tag_key(t) for t in stale_tags(metric, current, bot)}
+    if stale:
+        kept = [t for t in current["tags"] if _tag_key(t) not in stale]
+        ops.append({"op": "add", "path": "/tags", "value": kept})
     if current.get(STATUS_FIELD) != metric.status:
         ops.append({"op": "add", "path": f"/{STATUS_FIELD}", "value": metric.status})
     digest = file_digest(metric)

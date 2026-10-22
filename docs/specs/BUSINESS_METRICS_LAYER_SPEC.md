@@ -531,7 +531,8 @@ Nothing here blocks phase 1.
   live reviewers when the file sets none. A PUT also resets `entityStatus` to Unprocessed,
   because CreateMetric has no status and `setDefaultStatus` fills it, which is why sync
   PUTs only for a structural change and then PATCHes the status back. A PUT merges tags
-  and never removes one (`updateTags`).
+  and never removes one (`updateTags`), while a PATCH replaces them, so sync removes a tag
+  the file dropped by PATCH, and only one whose `appliedBy` is the bot.
 - Approval workflow: decided 2026-10-21 (§6, "Status and approval"). Approval is the pull
   request; files set only Draft or Approved, and the sync bot is not a reviewer. None of the
   workflow definitions 2.0.5 seeds triggers on `metric` (only glossaryTerm,

@@ -220,7 +220,7 @@ def _sync_one(
         label, message = hold
         console.print(f"[bold red]{label.ljust(_LABEL_WIDTH)}[/]{name}: {message}")
         return False
-    body = create_body(metric, owner_refs, reviewer_refs, live)
+    body = create_body(metric, owner_refs, reviewer_refs, live, bot)
     # Before any write: a PUT records the bot as updatedBy, after which a human
     # edit would no longer show as drift.
     found = drift(metric, body, live, synced)
@@ -237,7 +237,7 @@ def _sync_one(
     needs_put = live is None or bool(changes)
     action = "create" if live is None else f"update {', '.join(changes)}" if changes else "no field changes"
     if dry_run:
-        ops = patch_ops(metric, body, after_put(body, live) if needs_put else live or {})
+        ops = patch_ops(metric, body, after_put(body, live) if needs_put else live or {}, bot)
         console.print(f"[green]would[/]     {name}: {escape(action)}")
         if ops:
             console.print(f"  then PATCH {', '.join(op['path'].lstrip('/') for op in ops)}")
@@ -251,7 +251,7 @@ def _sync_one(
             current = client.request("GET", _metric_path(metric.name), query={"fields": METRIC_FIELDS})
         else:
             current = live
-        ops = patch_ops(metric, body, current)
+        ops = patch_ops(metric, body, current, bot)
         if ops:
             current = client.request("PATCH", f"/v1/metrics/{current['id']}", ops, content_type=JSON_PATCH_CONTENT_TYPE)
         for source, source_id in zip(sources, source_ids, strict=True):

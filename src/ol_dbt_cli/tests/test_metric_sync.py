@@ -61,6 +61,12 @@ _SANITIZER_ENTITIES = {
     "`": "&#96;",
 }
 TIER1 = {"tagFQN": "Tier.Tier1", "source": "Classification", "labelType": "Manual", "state": "Confirmed"}
+COMPLETION_TERM = {
+    "tagFQN": "Learning.Course completion",
+    "source": "Glossary",
+    "labelType": "Manual",
+    "state": "Confirmed",
+}
 TEAM = [{"type": "team", "name": "data-platform"}]
 TEAM_REF = [{"id": "team-1", "type": "team"}]
 
@@ -70,6 +76,12 @@ def _sanitize(description: str | None) -> str | None:
     if description is None:
         return None
     return "".join(_SANITIZER_ENTITIES.get(c, c) for c in html.unescape(description))
+
+
+def _stamp_tags(before: list[dict[str, Any]], after: list[dict[str, Any]], user: str) -> list[dict[str, Any]]:
+    """Store *after* the way EntityUpdater.updateTags does: a kept tag keeps its appliedBy, an added one gets *user*."""
+    stored = {(t["source"], t["tagFQN"]): t for t in before}
+    return [stored.get((t["source"], t["tagFQN"])) or {**t, "appliedBy": user} for t in after]
 
 
 def _manifest() -> ManifestRegistry:
@@ -124,6 +136,8 @@ class FakeOpenMetadata(OpenMetadataClient):
         updated = copy.deepcopy(self.metrics[name])
         if "description" in fields:
             fields["description"] = _sanitize(fields["description"])
+        if "tags" in fields:
+            fields["tags"] = _stamp_tags(updated.get("tags", []), fields["tags"], user)
         updated.update(fields)
         self._store_patch(updated, user)
 
@@ -212,6 +226,8 @@ class FakeOpenMetadata(OpenMetadataClient):
                 updated = copy.deepcopy(original)
                 for op in body:
                     self._patch(updated, op)
+                if "tags" in updated:
+                    updated["tags"] = _stamp_tags(original.get("tags", []), updated["tags"], BOT)
                 self._check_extension(path, original, updated)
                 return self._store_patch(updated, BOT)
             case ("PUT", "lineage"):
@@ -246,7 +262,11 @@ class FakeOpenMetadata(OpenMetadataClient):
         if live.get("owners"):
             updated["owners"] = live["owners"]
         updated["reviewers"] = body.get("reviewers") or []
-        updated["tags"] = live.get("tags", []) + [t for t in body.get("tags", []) if t not in live.get("tags", [])]
+        # A PUT merges tags and never removes one.
+        live_tags = live.get("tags", [])
+        live_keys = {(t["source"], t["tagFQN"]) for t in live_tags}
+        added = [t for t in body.get("tags", []) if (t["source"], t["tagFQN"]) not in live_keys]
+        updated["tags"] = _stamp_tags(live_tags, live_tags + added, BOT)
         # A bot's PUT keeps the stored extension (updateExtension).
         if "extension" in live:
             updated["extension"] = live["extension"]
@@ -623,7 +643,37 @@ def test_file_change_after_an_unrelated_ui_edit_syncs_without_force(
     metric = server.metrics["certified_learners"]
     assert metric["description"] == "Learners with a certificate."
     assert metric["owners"] == metric["reviewers"] == TEAM_REF
-    assert metric["tags"] == [TIER1]
+    assert metric["tags"] == [{**TIER1, "appliedBy": "jane"}]
+
+
+@pytest.mark.parametrize("structural", [False, True])
+def test_a_tag_sync_applied_is_removed_when_the_file_drops_it(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str], structural: bool
+) -> None:
+    _edit_file(metrics_dir, "certified_learners", tags=[COMPLETION_TERM])
+    _sync(metrics_dir, names=("certified_learners",))
+    assert server.metrics["certified_learners"]["tags"] == [{**COMPLETION_TERM, "appliedBy": BOT}]
+    server.edit_in_ui("certified_learners", "jane", tags=[*server.metrics["certified_learners"]["tags"], TIER1])
+    _edit_file(metrics_dir, "certified_learners", tags=[], **({"metricType": "SUM"} if structural else {}))
+    capsys.readouterr()
+    assert _sync(metrics_dir, names=("certified_learners",), dry_run=True) is False
+    # After a PUT the PATCH also restores the status the PUT reset.
+    patched = "tags, entityStatus, extension" if structural else "tags, extension"
+    assert f"then PATCH {patched}" in " ".join(capsys.readouterr().out.split())
+
+    assert _sync(metrics_dir, names=("certified_learners",)) is False
+    assert server.metrics["certified_learners"]["tags"] == [{**TIER1, "appliedBy": "jane"}]
+
+
+def test_a_tag_a_person_applied_stays_when_the_file_drops_it(server: FakeOpenMetadata, metrics_dir: Path) -> None:
+    _sync(metrics_dir, names=("certified_learners",))
+    server.edit_in_ui("certified_learners", "jane", tags=[COMPLETION_TERM])
+    # The file adopts the term, then drops it again.
+    _edit_file(metrics_dir, "certified_learners", tags=[COMPLETION_TERM])
+    assert _sync(metrics_dir, names=("certified_learners",)) is False
+    _edit_file(metrics_dir, "certified_learners", tags=[])
+    assert _sync(metrics_dir, names=("certified_learners",)) is False
+    assert server.metrics["certified_learners"]["tags"] == [{**COMPLETION_TERM, "appliedBy": "jane"}]
 
 
 def test_drift_is_the_file_against_live_when_the_bot_never_wrote_the_metric(
@@ -657,12 +707,11 @@ def test_an_empty_reviewers_list_clears_them(server: FakeOpenMetadata, metrics_d
 
 
 def test_owners_reviewers_and_glossary_terms_resolve_by_name(server: FakeOpenMetadata, metrics_dir: Path) -> None:
-    term = {"tagFQN": "Learning.Course completion", "source": "Glossary", "labelType": "Manual", "state": "Confirmed"}
-    _edit_file(metrics_dir, "certified_learners", owners=TEAM, reviewers=TEAM, tags=[term])
+    _edit_file(metrics_dir, "certified_learners", owners=TEAM, reviewers=TEAM, tags=[COMPLETION_TERM])
     assert _sync(metrics_dir, names=("certified_learners",)) is False
     metric = server.metrics["certified_learners"]
     assert metric["owners"] == metric["reviewers"] == TEAM_REF
-    assert metric["tags"] == [term]
+    assert metric["tags"] == [{**COMPLETION_TERM, "appliedBy": BOT}]
 
 
 @pytest.mark.parametrize(
