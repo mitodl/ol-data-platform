@@ -24,11 +24,13 @@ observation of the QA lake (``lib.qa_observation``), since CI has no AWS access.
 A model tagged ``qa_scheduled`` is built unattended in QA, so the baseline's
 tolerance does not extend to it. One that unions several units must declare
 every unit it reads, and the observation must show each table it reads from them
-holding rows and each mirror within its age. A lapsed table of a declared
-branch that the model can be built without is listed in ``qa_partial_tables``;
-that key is a ratchet too, failing once QA holds the table again. It names
-tables rather than branches so a model newly reading another lapsed table of
-the same branch still fails.
+holding rows and each mirror within its age. An empty Iceberg table of a
+declared branch that the model can be built without is listed in
+``qa_partial_tables``; that key is a ratchet too, failing once QA holds the
+table again. It names tables rather than branches so a model newly reading
+another lapsed table of the same branch still fails, and it waives only the
+missing rows: the model still selects from the table, so an absent relation
+fails the build.
 """
 
 from __future__ import annotations
@@ -350,13 +352,15 @@ def check_qa_scheduled(
 ) -> None:
     """Report qa_scheduled unions whose unattended QA build the observation does not show complete.
 
-    A model reading one unit cannot come out partial, so only unions are checked.
-    The baseline does not apply: it lets builds already running in QA continue
-    past a lapse, while the tag starts an unattended build on it. A lapsed branch
-    the model is acceptable without is listed in qa_partial_tables, and an
-    entry there that is no longer a gap fails, so a later lapse of that table is
-    caught here again. Partial entries are tables, not branches, so a model
-    newly reading another lapsed table of the same branch still fails.
+    A model reading one unit cannot come out partial, so only unions and models
+    declaring qa_partial_tables are checked. The baseline does not apply: it lets
+    builds already running in QA continue past a lapse, while the tag starts an
+    unattended build on it. An empty Iceberg table the model is acceptable
+    without is listed in qa_partial_tables, and an entry there that is no longer
+    a gap fails, so a later lapse of that table is caught here again. Partial
+    entries are tables, not branches, so a model newly reading another lapsed
+    table of the same branch still fails. They waive only the missing rows: an
+    absent, unobserved, non-Iceberg or stale table fails as any other.
     """
     tables_read = upstream_tables(manifest, units)
     owners = tables_by_raw_name(units)
@@ -366,7 +370,9 @@ def check_qa_scheduled(
         (
             node
             for node in manifest.nodes.values()
-            if node.is_model and QA_SCHEDULED_TAG in node.tags and len(lineage.get(node.name, set())) > 1
+            if node.is_model
+            and QA_SCHEDULED_TAG in node.tags
+            and (len(lineage.get(node.name, set())) > 1 or "qa_partial_tables" in node.meta)
         ),
         key=lambda n: n.name,
     )
@@ -406,14 +412,22 @@ def check_qa_scheduled(
                 QA_CONTRACT_CHECK,
                 Severity.ERROR,
                 node.name,
-                f"is tagged {QA_SCHEDULED_TAG} and unions {len(reads)} units, but no QA observation shows them held",
+                f"is tagged {QA_SCHEDULED_TAG} and reads {len(reads)} unit(s), but no QA observation shows them held",
                 "Commit an observation of ol_warehouse_qa_raw (`ol-dbt inventory observe`).",
             )
             continue
 
         partial = set(contract.partial or [])
         gaps = gaps_by_model[node.name]
-        if lapsed := [gap for gap in gaps if gap.table not in partial]:
+        waived = {
+            gap.table
+            for gap in gaps
+            if gap.table in partial
+            and gap.condition == "empty"
+            and (state := observation.tables[gap.table]).present
+            and state.iceberg
+        }
+        if lapsed := [gap for gap in gaps if gap.table not in waived]:
             report.add(
                 QA_CONTRACT_CHECK,
                 Severity.ERROR,
@@ -421,7 +435,8 @@ def check_qa_scheduled(
                 f"is tagged {QA_SCHEDULED_TAG} but reads {len(lapsed)} table(s) QA does not hold",
                 f"{'; '.join(f'{gap.branch} {gap.table} ({gap.reason})' for gap in lapsed)}. "
                 f"{BASELINE_FILENAME} does not cover a scheduled model. Restore the branch in QA, list "
-                f"the table in qa_partial_tables if this model's QA form may go without it, or drop the tag.",
+                f"an empty Iceberg table in qa_partial_tables if this model's QA form may go without it, "
+                f"or drop the tag.",
             )
         # check_qa_contracts reports a partial table that is not upstream, undeclared or omitted.
         held = {

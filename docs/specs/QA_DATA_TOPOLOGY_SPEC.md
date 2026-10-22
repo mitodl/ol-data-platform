@@ -232,12 +232,16 @@ which reads five units, so a tagged union is now accepted on three conditions:
   is compared with the observation, so a unit left out would be the silent one.
 - Every table the model reads from those branches holds rows in the committed observation, and
   every mirror is within `mirror_max_age_days`. The baseline does not count here.
-- A table QA lacks may be listed in `qa_partial_tables` when the model's QA form can go without
-  it. Each entry must be a table the model reads from a declared branch. The key is only valid
-  on a tagged model, and an entry QA holds again is an ERROR, so the next lapse of that table
-  fails the check rather than building. It names tables rather than branches because the reason
-  a lapse is harmless is specific to how the model reads that table: an upstream edit that
-  starts reading another empty table of the same branch still fails.
+- An empty table may be listed in `qa_partial_tables` when the model's QA form can go without
+  its rows. Each entry must be a table the model reads from a declared branch. The key is only
+  valid on a tagged model (one reading a single unit is checked once it declares the key), and
+  an entry QA holds again is an ERROR, so the next lapse of that table fails the check rather
+  than building. It names tables rather than branches because the reason a lapse is harmless is
+  specific to how the model reads that table: an upstream edit that starts reading another
+  empty table of the same branch still fails.
+- An entry waives only the missing rows. The table must still be observed as a present Iceberg
+  table (no snapshot, or zero rows), because the model's staging parent selects from it and an
+  absent relation fails the build. A mirror past `mirror_max_age_days` still fails too.
 
 `ingest` units carry no age limit, so an ingested branch that stopped loading still passes; the
 union is then consistent as of that branch's last load rather than missing it. A table that
