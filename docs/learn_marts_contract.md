@@ -70,7 +70,11 @@ the course's published `data.json`, which is what MIT Learn's OCW ETL reads. A c
 one run, so the run's fields are columns of the course. A course that leaves the bucket
 leaves the model. A directory left in the bucket by a site that ocw-studio now publishes
 under another path is not a course, and its files are not in
-`integrations__learn__ocw_content_files`.
+`integrations__learn__ocw_content_files`. Neither is a course whose site ocw-studio has
+unpublished: it leaves the model on the first build after ocw-studio's database syncs,
+which can be before the bucket load's next daily sweep sees the directory gone, and also
+covers a removal that is pending or errored. It returns once a live publish is requested
+and the bucket load has read its data.json again.
 
 MIT Learn matches an OCW course on `url`, not `readable_id`; both are unique here.
 
