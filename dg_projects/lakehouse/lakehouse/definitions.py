@@ -847,11 +847,17 @@ defs = Definitions(
             refresh_starrocks_analytics_mvs,
             *airbyte_drift_assets,
             *qa_mirror_assets,
-            *qa_mirror_checks,
             *qa_observation_drift_assets,
         ]
     ),
-    asset_checks=[*dbt_layer_freshness_checks, *dimensional_schema_change_checks],
+    asset_checks=[
+        *dbt_layer_freshness_checks,
+        *dimensional_schema_change_checks,
+        # A plan check reports a broken declaration by raising, so it needs
+        # the Sentry hook the assets get. AssetChecksDefinition subclasses
+        # AssetsDefinition, so with_failure_hooks attaches it.
+        *with_failure_hooks(qa_mirror_checks),
+    ],
     resources=resources_dict,
     executor=executor_for_environment(
         DAGSTER_ENV, in_kubernetes="KUBERNETES_SERVICE_HOST" in os.environ

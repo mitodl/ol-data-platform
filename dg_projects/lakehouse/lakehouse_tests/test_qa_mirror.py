@@ -17,6 +17,7 @@ from lakehouse.assets.qa_mirror import (
     build_qa_mirror_checks,
 )
 from ol_dbt_cli.lib.qa_mirror import MirrorDeclarationError, MirrorTable
+from ol_orchestrate.lib.failures import with_failure_hooks
 from pymysql.err import OperationalError
 
 TABLE = MirrorTable(
@@ -220,6 +221,17 @@ def test_a_declaration_production_no_longer_fits_fails_the_plan_check() -> None:
         _plan_check(TABLE.unit, [renamed])(
             build_asset_check_context(), FakeStarRocks(PRODUCTION)
         )
+
+
+def test_the_failure_hooks_attach_to_the_plan_checks() -> None:
+    # The check reports a broken declaration by raising, which reaches Sentry
+    # only through this hook. with_failure_hooks wraps AssetsDefinition, and
+    # AssetChecksDefinition is one.
+    for check in with_failure_hooks(build_qa_mirror_checks()):
+        assert {hook.name for hook in check.hook_defs} == {
+            "capture_exception_to_sentry",
+            "stop_run_retries",
+        }
 
 
 def test_every_mirror_asset_has_a_plan_check() -> None:
