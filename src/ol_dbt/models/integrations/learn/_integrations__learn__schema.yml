@@ -815,7 +815,8 @@ unit_tests:
       course_id: 13}
     - {program_id: 1, programrequirement_node_type: program, programrequirement_path: "000100010005",
       required_program_id: 4}
-    - {program_id: 1, programrequirement_node_type: program, programrequirement_path: "000100010006",
+    - {program_id: 1, programrequirement_node_type: operator, programrequirement_path: "000100010006"}
+    - {program_id: 1, programrequirement_node_type: program, programrequirement_path: "0001000100060001",
       required_program_id: 5}
     - {program_id: 1, programrequirement_node_type: program, programrequirement_path: "000100010007",
       required_program_id: 2}
