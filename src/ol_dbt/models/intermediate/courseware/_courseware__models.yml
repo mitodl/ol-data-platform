@@ -310,6 +310,10 @@ models:
 - name: int__courseware__concept_mentions
   description: One row per (current verified claim, concept label) it names, including
     the concept labels assessments and learning outcomes list.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: platform
     description: str, mitxonline, mitxpro or residential
@@ -350,6 +354,10 @@ models:
 - name: int__courseware__concept_labels
   description: One row per normalized concept label key across every course, with
     its most used surface form, kind and description. The input to concept resolution.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: concept_label_key
     description: str, the normalized label key
@@ -399,6 +407,10 @@ models:
 - name: int__courseware__concept_assignments
   description: Which concept each normalized label belongs to, from the newest resolution
     run. Labels extracted since that run have a null concept_id until the next run.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: concept_label_key
     description: str, the normalized label key
@@ -447,6 +459,10 @@ models:
 
 - name: int__courseware__resolved_concept_mentions
   description: Concept mentions with the concept id their label is assigned to.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: platform
     description: str, mitxonline, mitxpro or residential
@@ -505,6 +521,10 @@ models:
 - name: int__courseware__concept_relation_evidence
   description: Every observation that two concepts are related, per relation, evidence
     source (adjudication, course_sequence, co_taught, co_assessed) and course run.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
   columns:
   - name: from_concept_id
     description: str, the narrower, dependent or lower-id concept, as in bridge_concept_relation
