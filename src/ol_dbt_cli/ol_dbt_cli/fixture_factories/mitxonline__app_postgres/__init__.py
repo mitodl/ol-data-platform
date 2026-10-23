@@ -10,7 +10,7 @@ variant that shares a course's object id).
 What the generated rows add is volume on the main path: live programs, each
 with a requirement tree over a few courses, each course with an open run and
 an ended one, enrollment modes, a live page per course and program with
-topics, instructors and a price, and the departments Learn knows. A share of
+topics, instructors, a price and FAQs, and the departments Learn knows. A share of
 rows, one in six to one in thirteen depending on the branch, is left off that
 path so the models' filters have rows to drop: a course with no page, a draft
 page, a page left out of the Learn catalog, a proctored exam, a run that is
@@ -19,7 +19,8 @@ non-default variant for, and a program that is not live. Each cycle's first
 off-path row falls within the default counts, so every branch has a row at
 scale 1. Every fifth course also has a run that starts in 2099, which a
 program's next start reads, and every other one of those is a source run,
-which it does not.
+which it does not. One in four pages has no FAQs, and some FAQs have no sort
+order, which the pages API lists last.
 
 Content types and enrollment modes are not generated: the hand-written rows
 are the two content types a variant points through and the audit and
@@ -58,6 +59,7 @@ from ._generated import (
     InstructorPageBase,
     InstructorPageLinkBase,
     PageBase,
+    ProductPageFAQBase,
     ProgramBase,
     ProgramDepartmentsBase,
     ProgramEnrollmentModesBase,
@@ -399,6 +401,11 @@ class InstructorPage(InstructorPageBase):
     instructor_bio_long = None
 
 
+class ProductPageFAQ(ProductPageFAQBase):
+    question = factory.LazyFunction(lambda: f"{fg.draw('text.sentence').removesuffix('.')}?")
+    answer = factory.LazyFunction(lambda: f"<p>{fg.draw('text.sentence')}</p>")
+
+
 class SupportedVariant(SupportedVariantBase):
     class Params:
         # The course the variant set belongs to.
@@ -565,6 +572,22 @@ def _product_pages(
     return wagtail, pages
 
 
+def _faqs(pages: list[Row]) -> list[Row]:
+    """Give three in four of ``pages`` one to three FAQs.
+
+    The sort order runs against the id, so the models order by it and not by
+    the id. Every eighth page leaves its first FAQ unordered, which then comes
+    last.
+    """
+    faqs = []
+    for number, page in enumerate(pages):
+        count = number % 4
+        for position in range(count):
+            unordered = number % 8 == 3 and position == 0
+            faqs.append(ProductPageFAQ.build(page=page, sort_order=None if unordered else count - 1 - position))
+    return faqs
+
+
 def generate(hand_written: Mapping[str, list[Row]], scale: float) -> dict[str, list[Row]]:
     """Build programs, courses, runs, requirement trees and pages around the hand-written rows."""
     audit = _by(hand_written, EnrollmentModeBase.raw_table, "mode_slug", "audit")
@@ -671,6 +694,7 @@ def generate(hand_written: Mapping[str, list[Row]], scale: float) -> dict[str, l
         ProgramPageBase.raw_table: program_pages,
         InstructorPageBase.raw_table: instructors,
         InstructorPageLinkBase.raw_table: links,
+        ProductPageFAQBase.raw_table: _faqs(course_wagtail + program_wagtail),
         CoursePageTopicsBase.raw_table: [
             CoursePageTopicsBase.build(coursepage=page, coursestopic=topic)
             for page in course_pages

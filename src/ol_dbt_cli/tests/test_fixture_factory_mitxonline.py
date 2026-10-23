@@ -207,6 +207,9 @@ def test_every_off_path_branch_has_a_generated_row_at_the_default_count() -> Non
     requirements = _generated(rows, "courses_programrequirement")
     required = {row["required_program_id"] for row in requirements if row["node_type"] == "program"}
     modes = Counter(row["program_id"] for row in _generated(rows, "courses_program_enrollment_modes"))
+    faqs: dict[int, list[dict[str, Any]]] = {}
+    for faq in _generated(rows, "cms_productpagefaq"):
+        faqs.setdefault(faq["page_id"], []).append(faq)
     branches = {
         "a proctored exam": any("PROCTORED EXAM" in course["title"].upper() for course in courses),
         "a course with no page": {course["id"] for course in courses} - {page["course_id"] for page in course_pages},
@@ -228,6 +231,13 @@ def test_every_off_path_branch_has_a_generated_row_at_the_default_count() -> Non
         ),
         "an elective": any(row["operator"] == "min_number_of" for row in requirements),
         "a program offering the audit mode": max(modes.values()) == 2,  # noqa: PLR2004
+        "a page with no FAQs": {page["page_ptr_id"] for page in pages} - set(faqs),
+        "an FAQ with no sort order": any(faq["sort_order"] is None for page in faqs.values() for faq in page),
+        "FAQs whose sort order runs against their id": any(
+            [faq["id"] for faq in sorted(page, key=lambda faq: faq["sort_order"])] != sorted(faq["id"] for faq in page)
+            for page in faqs.values()
+            if all(faq["sort_order"] is not None for faq in page)
+        ),
     }
 
     assert [branch for branch, present in branches.items() if not present] == []
