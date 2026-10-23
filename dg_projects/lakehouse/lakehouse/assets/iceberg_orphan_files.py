@@ -52,8 +52,10 @@ ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS: frozenset[str] = frozenset(
 # The floor has to exceed the longest time a writer holds a file before the
 # commit that references it. The longest production Dagster run in the 30 days
 # to 2026-10-21 lasted 26.7 hours, and ol-infrastructure caps Dagster runs and
-# Airbyte syncs at 2 days, so no writer outlives the floor. Seven days is the
-# floor the sweep uses.
+# Airbyte syncs at 2 days. Not covered by those caps: a run tagged with a longer
+# dagster/max_runtime, and writes from outside Dagster and Airbyte (a laptop
+# `dev` run resolves to the production warehouse). Seven days is the floor the
+# sweep uses.
 ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS = 7
 
 # Each worker holds one table's reachable-file set and its eligible orphans in
