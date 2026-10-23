@@ -392,7 +392,7 @@ columns are described in
 1. All required columns must be `NOT NULL` in catalog models
 2. Content file models are exempt from the resource-level required columns; their non-null columns are `etl_source`, `run_readable_id` and `key`, plus `source_path` and `extraction_status` in `integrations__learn__content_files` and `url` and `content_type` in `integrations__learn__ocw_content_files`
 3. Media models are exempt from the resource-level required columns; their keys and non-null columns are in the table under Media Sources
-4. Aggregated columns (the `topics` and `instructors` arrays, and the xPRO programs `courses` string) may be `NULL` when no data exists; consumers should treat `NULL` as empty
+4. Aggregated columns (`topics`, `instructors`, and `courses` in `integrations__learn__xpro_programs`) may be `NULL` when no data exists; consumers should treat `NULL` as empty. `topics` is an array except in `integrations__learn__podcasts`, `integrations__learn__podcast_episodes` and `integrations__learn__mit_climate_articles`, where it is a comma-separated string, as is `courses`
 5. Text columns (`description`, `url`, `image_url`) may be `NULL` when no data exists
 
 ## ETL Source Values
