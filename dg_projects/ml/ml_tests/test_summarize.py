@@ -237,6 +237,21 @@ def test_summarizer_sends_the_rendered_prompt_and_returns_the_summary() -> None:
     assert result.prompt_version == "v4"
 
 
+def test_summarizer_caps_the_summary_length() -> None:
+    sent: list[AgentInfo] = []
+
+    def record(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        sent.append(info)
+        return _summarize(messages, info)
+
+    with override_models(FunctionModel(record)):
+        SUMMARIZER.summarize(_conversation_row())
+
+    [info] = sent
+    assert info.model_settings is not None
+    assert info.model_settings["max_tokens"] == summarize.SUMMARY_MAX_TOKENS
+
+
 def test_summarizer_fails_a_summary_that_stays_empty() -> None:
     """A thinking model can return no text at all; that row fails, not succeeds."""
     calls: list[int] = []
