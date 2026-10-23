@@ -11,6 +11,7 @@ strategies that embed the same text in the same space share the cost.
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
+from typing import NamedTuple
 
 from pydantic import BaseModel, ConfigDict
 
@@ -56,8 +57,9 @@ class ChunkRow(BaseModel):
 class VectorRow(BaseModel):
     """The vector of one chunk under one strategy.
 
-    :param model_id: the model the strategy calls, which produced the vector
-        unless it was reused from another model of its vector space
+    :param model_id: the model that produced the vector: the strategy's for a
+        vector it embedded, the stored row's for one it reused, which may be
+        another model of the same vector space
     :param vector_space: the space the vector is reused in, the model's
         ``vector_space_id``
     :param input_checksum: MD5 of the text the model was sent, which is the
@@ -73,6 +75,13 @@ class VectorRow(BaseModel):
     input_checksum: str
     vector: list[float]
     embedded_at: datetime
+
+
+class StoredVector(NamedTuple):
+    """A vector already computed, and the model that computed it."""
+
+    vector: list[float]
+    model_id: str
 
 
 class EmbedOutcome(BaseModel):
@@ -126,7 +135,7 @@ def embed_chunks(
     chunks: Sequence[tuple[Document, ChunkRow]],
     embedder: Embedder,
     *,
-    known_vectors: Mapping[str, list[float]] | None = None,
+    known_vectors: Mapping[str, StoredVector] | None = None,
     embedded_at: datetime | None = None,
 ) -> EmbedOutcome:
     """Embed chunks under a strategy, sending each distinct new text once.
@@ -161,7 +170,7 @@ def embed_chunks(
     checksums = [md5_hex(text) for text in texts]
     known = dict(known_vectors or {})
     vector_length = strategy.model.vector_length
-    if any(len(vector) != vector_length for vector in known.values()):
+    if any(len(stored.vector) != vector_length for stored in known.values()):
         msg = (
             f"known_vectors must be {vector_length} long, as "
             f"{strategy.model.vector_space_id}"
@@ -180,17 +189,20 @@ def embed_chunks(
         if new_texts
         else EmbeddingBatch(vectors=[], input_tokens=0)
     )
-    known.update(zip(new_texts, batch.vectors, strict=True))
+    known.update(
+        (checksum, StoredVector(vector, strategy.model.model_id))
+        for checksum, vector in zip(new_texts, batch.vectors, strict=True)
+    )
 
     stamp = embedded_at or datetime.now(tz=UTC)
     rows = [
         VectorRow(
             chunk_key=row.chunk_key,
             strategy_id=strategy.strategy_id,
-            model_id=strategy.model.model_id,
+            model_id=known[checksum].model_id,
             vector_space=strategy.model.vector_space_id,
             input_checksum=checksum,
-            vector=known[checksum],
+            vector=known[checksum].vector,
             embedded_at=stamp,
         )
         for (_, row), checksum in zip(chunks, checksums, strict=True)

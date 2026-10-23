@@ -484,7 +484,9 @@ def test_another_models_vector_is_reused_only_in_a_declared_space(tables, calls)
         pl.col("run_readable_id") == RUN
     )
     assert row["vector"][0][0] == 9.0
-    assert row["model_id"][0] == strategies()["learn_v1_content_files"].model.model_id
+    # The row records the model that produced the vector, not the one it calls.
+    assert strategies()["learn_v1_content_files"].model.model.startswith("azure:")
+    assert row["model_id"][0] == "openai:text-embedding-3-large@3072"
 
     tables[CONTENT_FILE_VECTORS_KEY.path[-1]] = stored_vector(
         "Shared syllabus.", learn_model, learn_model

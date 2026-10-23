@@ -57,6 +57,7 @@ from ml.lib.warehouse import read_table, require_table, warehouse_database
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.embeddings.documents import md5_hex
 from ol_orchestrate.lib.embeddings.learn import CONTENT_FILE_DOC_KIND
+from ol_orchestrate.lib.embeddings.pipeline import StoredVector
 from ol_orchestrate.resources.embeddings import EmbeddingsResource
 from pydantic import Field
 
@@ -333,13 +334,13 @@ def embed_vectors(  # noqa: PLR0913
     failures = []
     # This run's vectors by vector space and input checksum, so a later strategy
     # in the same space reuses what an earlier one embedded.
-    this_run: dict[str, dict[str, list[float]]] = {}
+    this_run: dict[str, dict[str, StoredVector]] = {}
 
-    def lookup(vector_space: str, checksums: Iterable[str]) -> dict[str, list[float]]:
+    def lookup(vector_space: str, checksums: Iterable[str]) -> dict[str, StoredVector]:
         wanted = set(checksums)
         found = {
-            checksum: vector
-            for checksum, vector in this_run.get(vector_space, {}).items()
+            checksum: stored
+            for checksum, stored in this_run.get(vector_space, {}).items()
             if checksum in wanted
         }
         return found | known_vectors(vectors, vector_space, wanted - found.keys())
@@ -358,7 +359,10 @@ def embed_vectors(  # noqa: PLR0913
             logger=context.log,
         )
         this_run.setdefault(strategy.model.vector_space_id, {}).update(
-            zip(frame["input_checksum"], frame["vector"].to_list(), strict=True)
+            (checksum, StoredVector(vector, model_id))
+            for checksum, vector, model_id in frame.select(
+                "input_checksum", "vector", "model_id"
+            ).iter_rows()
         )
         frames.append(frame)
         context.log.info(

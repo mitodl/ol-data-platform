@@ -119,7 +119,7 @@ Chunking is cheap and deterministic, so it is recomputed when `text_checksum` ch
 |---|---|
 | `chunk_key` | |
 | `strategy_id` | |
-| `model_id` | ol-llm model id and vector length, e.g. `openai:text-embedding-3-large@3072`, `openai:text-embedding-3-large@1024`, `google:gemini-embedding-001@768`, `bedrock:amazon.titan-embed-text-v2:0@1024` |
+| `model_id` | the model that produced the vector (for a reused vector, the stored row's), as ol-llm model id and vector length, e.g. `openai:text-embedding-3-large@3072`, `openai:text-embedding-3-large@1024`, `google:gemini-embedding-001@768`, `bedrock:amazon.titan-embed-text-v2:0@1024` |
 | `vector_space` | which vectors are interchangeable: the strategy model's declared `vector_space` (e.g. `text-embedding-3-large@3072` for OpenAI's model and an Azure OpenAI deployment of it), else its `model_id` |
 | `vector` | `ARRAY<FLOAT>` (float32) |
 | `input_checksum` | MD5 of the exact text sent to the model: the chunk after the strategy's context template. A mismatch with the current text means re-embed |

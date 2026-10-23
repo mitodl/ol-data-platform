@@ -29,6 +29,7 @@ from ol_orchestrate.lib.embeddings.learn import (
 from ol_orchestrate.lib.embeddings.models import Embedder, EmbeddingBatch
 from ol_orchestrate.lib.embeddings.pipeline import (
     ChunkRow,
+    StoredVector,
     chunk_documents,
     embed_chunks,
 )
@@ -328,15 +329,15 @@ def stored_chunks(chunks: pl.DataFrame) -> list[tuple[Document, ChunkRow]]:
 
 def known_vectors(
     vectors: pl.LazyFrame | None, vector_space: str, checksums: Iterable[str]
-) -> dict[str, list[float]]:
+) -> dict[str, StoredVector]:
     """Look up stored vectors of a vector space by the checksum of the text embedded.
 
     :param vectors: a vector table, ``None`` before it exists
     :param vector_space: a model's ``vector_space_id``, e.g.
         ``text-embedding-3-large@3072``
     :param checksums: the input checksums wanted
-    :returns: a stored vector per checksum found
-    :rtype: dict[str, list[float]]
+    :returns: a stored vector and the model that produced it, per checksum found
+    :rtype: dict[str, StoredVector]
     """
     wanted = sorted(set(checksums))
     if vectors is None or not wanted:
@@ -346,13 +347,13 @@ def known_vectors(
             (pl.col("vector_space") == vector_space)
             & pl.col("input_checksum").is_in(wanted)
         )
-        .select("input_checksum", "vector")
+        .select("input_checksum", "vector", "model_id")
         .unique("input_checksum")
         .collect()
     )
     return {
-        checksum: [float(value) for value in vector]
-        for checksum, vector in found.iter_rows()
+        checksum: StoredVector([float(value) for value in vector], model_id)
+        for checksum, vector, model_id in found.iter_rows()
     }
 
 
@@ -402,7 +403,7 @@ def embed_strategy(  # noqa: PLR0913
     strategy: EmbeddingStrategy,
     chunks: Sequence[tuple[Document, ChunkRow]],
     embedder: Embedder,
-    lookup: Callable[[str, Iterable[str]], dict[str, list[float]]],
+    lookup: Callable[[str, Iterable[str]], dict[str, StoredVector]],
     *,
     embedded_at: datetime,
     max_workers: int = 1,
@@ -424,7 +425,8 @@ def embed_strategy(  # noqa: PLR0913
     :param strategy: the strategy
     :param chunks: the partition's chunks of the strategy's chunker
     :param embedder: an embedder for the strategy's model
-    :param lookup: stored vectors by input checksum, for a vector space
+    :param lookup: stored vectors and their models by input checksum, for a
+        vector space
     :param embedded_at: the time put on new rows
     :param max_workers: requests in flight at once
     :param logger: where ``process_batch`` logs, e.g. ``context.log``
@@ -479,7 +481,10 @@ def embed_strategy(  # noqa: PLR0913
             if singles:
                 reports.append(send(singles))
 
-    known.update(embedded)
+    known.update(
+        (checksum, StoredVector(vector, strategy.model.model_id))
+        for checksum, vector in embedded.items()
+    )
     vectored = [
         pair
         for pair, checksum in zip(chunks, checksums, strict=True)

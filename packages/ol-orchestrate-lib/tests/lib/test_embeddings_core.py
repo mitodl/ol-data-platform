@@ -22,6 +22,7 @@ from ol_orchestrate.lib.embeddings.models import (
     OlLlmEmbedder,
 )
 from ol_orchestrate.lib.embeddings.pipeline import (
+    StoredVector,
     chunk_documents,
     chunk_key,
     embed_chunks,
@@ -189,7 +190,11 @@ def test_each_distinct_new_text_is_embedded_once() -> None:
         strategy,
         chunks,
         embedder,
-        known_vectors={md5_hex("known"): [9.0, 9.0, 9.0, 9.0]},
+        known_vectors={
+            md5_hex("known"): StoredVector(
+                [9.0, 9.0, 9.0, 9.0], "azure:text-embedding-3-large@4"
+            )
+        },
         embedded_at=stamp,
     )
 
@@ -200,9 +205,12 @@ def test_each_distinct_new_text_is_embedded_once() -> None:
         [4.0, 1.0, 0.0, 0.0],
         [9.0, 9.0, 9.0, 9.0],
     ]
-    assert {(row.model_id, row.vector_space) for row in outcome.rows} == {
-        ("openai:text-embedding-3-large@4", "openai:text-embedding-3-large@4")
-    }
+    # A reused vector keeps the model that produced it.
+    assert [(row.model_id, row.vector_space) for row in outcome.rows] == [
+        ("openai:text-embedding-3-large@4", "openai:text-embedding-3-large@4"),
+        ("openai:text-embedding-3-large@4", "openai:text-embedding-3-large@4"),
+        ("azure:text-embedding-3-large@4", "openai:text-embedding-3-large@4"),
+    ]
     assert {row.embedded_at for row in outcome.rows} == {stamp}
     assert (outcome.embedded_texts, outcome.reused_texts, outcome.input_tokens) == (
         1,
@@ -220,7 +228,9 @@ def test_embed_chunks_makes_no_call_when_every_text_is_known() -> None:
         strategy,
         chunks,
         embedder,
-        known_vectors={md5_hex("known"): [9.0, 9.0, 9.0, 9.0]},
+        known_vectors={
+            md5_hex("known"): StoredVector([9.0, 9.0, 9.0, 9.0], MODEL.model_id)
+        },
     )
 
     assert embedder.calls == []
@@ -235,7 +245,7 @@ def test_known_vectors_must_have_the_model_length() -> None:
             strategy,
             chunks,
             FakeEmbedder(),
-            known_vectors={md5_hex("other"): [1.0, 2.0]},
+            known_vectors={md5_hex("other"): StoredVector([1.0, 2.0], MODEL.model_id)},
         )
 
 
