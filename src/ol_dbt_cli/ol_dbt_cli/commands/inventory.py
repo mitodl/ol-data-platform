@@ -387,7 +387,8 @@ def reconcile(
             console.print(
                 f"[bold]Warehouse:[/] {len(warehouse_result.both)} in both, "
                 f"{len(warehouse_result.declared_not_observed)} declared but absent, "
-                f"{len(warehouse_result.observed_not_declared)} present but undeclared."
+                f"{len(warehouse_result.observed_not_declared)} present but undeclared, "
+                f"{len(warehouse & frozen)} frozen."
             )
         console.print(f"[bold]Summary:[/] {len(report.errors)} error(s), {len(report.warnings)} warning(s).")
 

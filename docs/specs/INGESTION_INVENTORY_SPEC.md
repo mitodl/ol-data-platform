@@ -781,7 +781,7 @@ retired:
 Retiring a source does not always mean its data goes. `frozen: true` records the other case:
 the source is gone, so nothing will load the tables again, but they stay in the raw layer,
 read-only, because dbt still models their history. Bootcamps is the worked example. The app
-was decommissioned, its last data landed on 2026-02-12 (the newest Iceberg snapshot across its
+was decommissioned, its last data landed on 2026-02-12 (the newest Airbyte commit across its
 19 modeled tables, measured 2026-10-23), and its learners reach `dim_user`, `tfact_enrollment`
 and `tfact_order` through those models, so on 2026-10-23 we kept the tables instead of
 retiring the models with them. A reader of the raw layer finds the record twice: in this
@@ -794,9 +794,10 @@ gone, the second that history nothing can reload has. `drift` needs no exception
 graveyard entry declares no connection.
 
 Iceberg maintenance needs none either. Snapshot expiry keeps the current snapshot and every
-ref head whatever their age, the orphan-file pass deletes only files that no retained snapshot
-reaches, and the lake sweep deletes only dbt-suffixed directories that no Glue table
-references. None of them drops a table or a file a frozen table reads.
+ref head whatever their age, except stale `airbyte_staging*` branches, which it removes. The
+orphan-file pass deletes only files that no retained snapshot reaches, and the lake sweep
+deletes only dbt-suffixed directories that no Glue table references. None of them drops a
+table or a file a frozen table reads.
 
 Three details the mechanism above does not spell out, each of which is a rule in the checker:
 
