@@ -27,10 +27,12 @@ from ol_orchestrate.lib.embeddings.documents import md5_hex
 #
 # The sample is the first SAMPLE_RUNS_PER_SOURCE runs of each etl_source in md5
 # order of their run_readable_id, which is stable and spread over the courses,
-# plus runs picked for the smokecheck. The md5 pick skips the runs of B2B orgs
-# whose courses Learn does not list (none of their courses is in Learn's courses
-# API), so Learn has no points to compare them with. MITx and MITxt, one unlisted
-# run each, are not here: as prefixes they would also match MITxT.
+# plus runs picked for the smokecheck. The md5 pick skips the runs of B2B orgs,
+# which Learn's courses API does not list, so Learn has no points to compare them
+# with. The exception is nine UAI_SOURCE courses that Learn lists with their
+# UAI_B2C run alone; UAI_ leaves those out too, which only narrows the pick. MITx
+# (one run, of a course Learn does not list) is not here, since the prefix would
+# also match MITxT.
 SAMPLE_RUNS_PER_SOURCE = 5
 SAMPLE_SKIPPED_ORG_PREFIXES = (
     "B2C",
