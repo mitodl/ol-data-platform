@@ -47,7 +47,7 @@ from ol_orchestrate.lib.utils import (
     s3_uploads_bucket,
     unauthenticated_vault,
 )
-from ol_orchestrate.resources.embeddings import EmbeddingsResource, ProviderKeySecret
+from ol_orchestrate.resources.embeddings import EmbeddingsResource
 
 init_sentry("ml")
 
@@ -223,16 +223,13 @@ defs = Definitions(
             base_url=os.environ.get("LLM_BASE_URL"),
             azure_endpoint=os.environ.get("LLM_AZURE_ENDPOINT"),
         ),
-        # The Learn embedding assets call models through ol-llm, which reads the
-        # provider key from the environment; the resource copies it from Vault.
+        # The Learn embedding assets call Azure OpenAI through ol-llm. Deployed
+        # envs authenticate with the pod's workload identity; dev has no Azure
+        # identity, so ol-llm's client falls back to AZURE_OPENAI_API_KEY there.
         "embeddings": EmbeddingsResource(
             vault=vault,
             environment=DAGSTER_ENV,
-            provider_keys=[
-                ProviderKeySecret(
-                    env_var="OPENAI_API_KEY", vault_path="pipelines/openai"
-                )
-            ],
+            azure_ad_auth=DAGSTER_ENV != "dev",
         ),
         # Separate resource, not a reused "llm": Anthropic/Bedrock has no embeddings
         # API, so this needs its own client_class/key. Which Bedrock embedding

@@ -9,10 +9,12 @@
 # strategies on their own; a `candidate` is embedded when a run names it in its
 # config, and a `retired` one keeps its stored vectors.
 #
-# learn_v1 is MIT Learn's deployed configuration verbatim (see
-# docs/learn_embedding_config.md). Its chunks and point ids are what the
-# platform's copy is compared with, so do not change these rows; add a new
-# strategy instead.
+# learn_v1 is MIT Learn's deployed configuration (see
+# docs/learn_embedding_config.md), except that it calls text-embedding-3-large
+# through Azure OpenAI where Learn calls OpenAI. Both serve the same model, so
+# the rows declare one vector space with Learn's vectors. Its chunks and point
+# ids are what the platform's copy is compared with, so do not change these rows;
+# add a new strategy instead.
 #
 # vector_space names the models whose vectors are interchangeable, and stored
 # vectors are reused across a space. A model with none is a space of its own, so
@@ -27,7 +29,7 @@ strategies:
     chunk_overlap: 51
     markdown_header_levels: 4
   model:
-    model: openai:text-embedding-3-large
+    model: azure:text-embedding-3-large
     vector_space: text-embedding-3-large@3072
   role: serving
   qdrant:
@@ -49,7 +51,7 @@ strategies:
     encoding: cl100k_base
     max_tokens: 8191
   model:
-    model: openai:text-embedding-3-large
+    model: azure:text-embedding-3-large
     vector_space: text-embedding-3-large@3072
   role: serving
   qdrant:

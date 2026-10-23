@@ -2288,6 +2288,7 @@ dependencies = [
 
 [package.optional-dependencies]
 embeddings = [
+    { name = "azure-identity" },
     { name = "langchain-text-splitters" },
     { name = "ol-llm", extra = ["bedrock", "google", "openai"] },
     { name = "qdrant-client" },
@@ -2296,6 +2297,7 @@ embeddings = [
 
 [package.metadata]
 requires-dist = [
+    { name = "azure-identity", marker = "extra == 'embeddings'", specifier = "~=1.26" },
     { name = "boto3", specifier = "~=1.43.0" },
     { name = "dagster", specifier = "~=1.11" },
     { name = "dagster-aws", specifier = "~=0.29.0" },

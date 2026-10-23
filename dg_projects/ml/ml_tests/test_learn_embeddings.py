@@ -224,7 +224,27 @@ def learn_point_id(*parts: str) -> str:
 
 # ---------------------------------------------------------------------- strategies
 def test_learn_v1_content_files_is_the_library_strategy():
-    assert strategies()["learn_v1_content_files"] == LEARN_V1_CONTENT_FILES
+    content_files = strategies()["learn_v1_content_files"]
+
+    # Learn calls OpenAI; the platform calls Azure OpenAI's deployment of the
+    # same model, in the same vector space.
+    assert content_files.model.model == "azure:text-embedding-3-large"
+    assert LEARN_V1_CONTENT_FILES.model.model == "openai:text-embedding-3-large"
+    assert content_files.model.vector_space_id == "text-embedding-3-large@3072"
+    assert (
+        content_files.model.vector_space_id
+        == LEARN_V1_CONTENT_FILES.model.vector_space_id
+    )
+    assert (
+        content_files.model_copy(
+            update={
+                "model": content_files.model.model_copy(
+                    update={"model": LEARN_V1_CONTENT_FILES.model.model}
+                )
+            }
+        )
+        == LEARN_V1_CONTENT_FILES
+    )
 
 
 def test_learn_v1_topics_is_learns_topic_configuration():
@@ -232,7 +252,8 @@ def test_learn_v1_topics_is_learns_topic_configuration():
 
     assert topics.doc_kind == "topic"
     assert topics.role == "serving"
-    assert topics.model.model_id == "openai:text-embedding-3-large@3072"
+    assert topics.model.model_id == "azure:text-embedding-3-large@3072"
+    assert topics.model.vector_space_id == "text-embedding-3-large@3072"
     assert topics.context_template is None
     assert topics.qdrant is not None
     assert (topics.qdrant.dense_vector_name, topics.qdrant.sparse_vector_name) == (

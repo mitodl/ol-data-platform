@@ -144,7 +144,7 @@ Embedding cost is bounded by the input checksum instead of a separate cache tabl
 | `qdrant` | collection (the name after Learn's `<base>.`), dense vector name, sparse model and vector name; null for platform-only strategies |
 | `notes` | |
 
-`learn_v1` is Learn's current configuration verbatim, one strategy per document kind (`learn_v1_content_files` is built): `text-embedding-3-large` at 3072 (to be confirmed with one `get_collection`), `RecursiveCharacterTextSplitter.from_tiktoken_encoder(cl100k_base, 512, 51)` for content files, header-aware splitting for markdown and marketing pages, `RecursiveJsonSplitter(2048)` for metadata, whole-document for resources and topics. Its purpose is parity: its chunk checksums and point ids must match Qdrant before anything else is trusted.
+`learn_v1` is Learn's current configuration verbatim, one strategy per document kind (`learn_v1_content_files` is built): `text-embedding-3-large` at 3072 (to be confirmed with one `get_collection`), `RecursiveCharacterTextSplitter.from_tiktoken_encoder(cl100k_base, 512, 51)` for content files, header-aware splitting for markdown and marketing pages, `RecursiveJsonSplitter(2048)` for metadata, whole-document for resources and topics. Its purpose is parity: its chunk checksums and point ids must match Qdrant before anything else is trusted. The platform's rows call the model through Azure OpenAI (`azure:text-embedding-3-large`, authenticated with the pod's workload identity) where Learn calls OpenAI, and declare the vector space `text-embedding-3-large@3072` that Learn's vectors are in; `LEARN_V1_CONTENT_FILES` in the library keeps Learn's OpenAI route.
 
 ### The library
 
