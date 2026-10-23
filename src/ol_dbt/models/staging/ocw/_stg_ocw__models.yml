@@ -15,11 +15,18 @@ models:
   - name: drivefile_mime_type
     description: str, MIME type of the Google Drive file
   - name: websitecontent_id
-    description: int, linked OCW Studio resource ID; null for unlinked files
+    description: int, linked OCW Studio resource ID; null for unlinked files. A resource
+      links every Drive file uploaded for it (DriveFile.resource is a foreign key),
+      so a re-uploaded video under a new Drive path links two.
     tests:
+    # Warn only: duplicates are valid source data, and int__ocw__resources keeps the
+    # newest file per resource.
     - unique:
         config:
           where: "lower(drivefile_mime_type) like 'video/%'"
+          severity: warn
+  - name: drivefile_created_on
+    description: timestamp, date and time when OCW Studio first synced the Drive file
 
 - name: stg__ocw__studio__postgres__websites_website
   description: OCW websites metadata on production environment. A website can refers
