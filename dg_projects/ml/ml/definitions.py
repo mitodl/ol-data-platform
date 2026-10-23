@@ -24,7 +24,7 @@ from ml.assets.feedback_sentiment_eval import feedback_sentiment_eval
 from ml.assets.feedback_summaries import feedback_summaries
 from ml.assets.risk_probability import student_risk_probability
 from ml.resources.llm import LLMClientFactory
-from ml.resources.opik_auth import configure_opik_keycloak_auth
+from ml.resources.opik_auth import configure_ol_llm
 from ml.sensors.courseware import courseware_extraction_text_sensor
 from ml.sensors.feedback_clusters import feedback_clusters_growth_sensor
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
@@ -55,10 +55,10 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
     vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
 
-# Must run before any Opik client/tracer/@opik.track call in this process --
-# see ml/resources/opik_auth.py. A no-op (returns False) wherever
+# Must run before any Opik client/tracer/@opik.track call or ol-llm model in this
+# process -- see ml/resources/opik_auth.py. Tracing stays off wherever
 # OPIK_URL_OVERRIDE isn't set for this deployment.
-configure_opik_keycloak_auth(vault)
+configure_ol_llm(vault)
 
 data_export_job = define_asset_job(
     name="student_risk_probability_data_export_job",
@@ -175,8 +175,10 @@ defs = Definitions(
         ),
         "vault": vault,
         "s3": S3Resource(),
-        # Bedrock in every deployed env (IAM metadata auth, no API key needed) --
-        # only "dev" lacks the Bedrock IAM role, so it needs an API key there.
+        # Category proposals and sentiment eval; feedback_summaries calls models
+        # through ol-llm (SUMMARY_MODEL in ml.lib.summarize). Bedrock in every
+        # deployed env (IAM metadata auth, no API key needed) -- only "dev" lacks
+        # the Bedrock IAM role, so it needs an API key there.
         # SUMMARY_PROVIDER/EMBEDDING_PROVIDER override the client_class picked here.
         # LLM_BASE_URL/LLM_AZURE_ENDPOINT are only required for
         # 'openai_compatible'/'azure_openai' -- shared with embedding_llm below on

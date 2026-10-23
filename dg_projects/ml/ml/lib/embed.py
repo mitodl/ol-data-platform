@@ -38,17 +38,15 @@ EMBEDDING_CHECKPOINT_SCHEMA = {
 }
 
 # Abort after this many whole chunks in a row come back with zero successful
-# embeddings, same rationale as summarize.py's MAX_CONSECUTIVE_FAILED_CHUNKS: a
-# systemic error (bad credential) isn't going to start succeeding on the next
-# chunk either.
+# embeddings: a systemic error (bad credential) isn't going to start succeeding
+# on the next chunk either.
 EMBEDDING_MAX_CONSECUTIVE_FAILED_CHUNKS = int(
     os.environ.get("EMBEDDING_MAX_CONSECUTIVE_FAILED_CHUNKS", "1")
 )
 
 # Safe baseline from feedback_ml_approach.md §B, pending the model bake-off. A model
 # id is only valid for one vendor's API, so client_class='gemini'/'bedrock_embeddings'
-# needs a matching override -- there is no one id valid everywhere (same reasoning as
-# SUMMARY_MODEL_VERSION/BEDROCK_SUMMARY_MODEL_VERSION in ml.lib.summarize).
+# needs a matching override -- there is no one id valid everywhere.
 # FeedbackEmbeddingsConfig.embedding_model_version overrides this; the env var/default
 # here is only the fallback when a run doesn't set it.
 EMBEDDING_MODEL_VERSION = os.environ.get(
@@ -344,8 +342,7 @@ def build_embedding_client(
     own per-run Config fields (FeedbackEmbeddingsConfig) -- None means the run
     didn't override them, so EMBEDDING_MODEL_VERSION/EMBEDDING_DIM/
     BEDROCK_EMBEDDING_MODEL_VERSION apply. bedrock_model_version is ignored
-    unless the resolved client is BedrockEmbeddingClient -- same split as
-    ml.lib.summarize.build_summary_client's model_version/bedrock_model_version.
+    unless the resolved client is BedrockEmbeddingClient.
     """
     client = llm.get_client()
     resolved_dim = dim or EMBEDDING_DIM
@@ -736,8 +733,6 @@ def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
             one-row-per-conversation view afact_feedback_conversation reads.
             turn_count is carried through so a later run's filter_unembedded can
             detect a conversation that gained a turn.
-
-    Mirrors summarize.summarize_and_checkpoint.
 
     Stops the whole loop (not just the current chunk) after
     EMBEDDING_MAX_CONSECUTIVE_FAILED_CHUNKS chunks in a row come back with zero

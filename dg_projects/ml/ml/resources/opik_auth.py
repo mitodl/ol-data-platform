@@ -1,21 +1,32 @@
-"""Keycloak-fronted Opik auth, LLM tracing, and Prompt Library access."""
+"""ol-llm's process configuration, LLM tracing, and Prompt Library access.
+
+configure_ol_llm hands Opik's Keycloak authentication to ol-llm, which registers
+it on the Opik SDK. The @opik.track spans below then share its token cache with
+the root traces of ol-llm's runs.
+"""
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
-import threading
-import time
 from typing import TYPE_CHECKING, Any, TypeVar
 
-import httpx
 import opik
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+from ml.resources.llm import COGNITIVE_SERVICES_SCOPE
+from ol_llm import (
+    KeycloakClient,
+    Settings,
+    TracingConfig,
+    configure,
+    configure_tracing,
+)
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from opik import opik_context
-from opik.hooks import HttpxClientHook, add_httpx_client_hook
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
+    from collections.abc import Callable
 
     from ol_orchestrate.resources.secrets.vault import Vault
 
@@ -26,74 +37,11 @@ log = logging.getLogger(__name__)
 OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "dagster-ml")
 LOCAL_PROMPT_VERSION = "local"
 
-_REFRESH_SKEW_SECONDS = 30
-_TOKEN_REQUEST_TIMEOUT_SECONDS = 10
-
 _configured = False
 _opik_client: opik.Opik | None = None
 _client_init_attempted = False
 # template -> the Prompt Library version publish_prompt_version recorded for it
 _published_prompts: dict[str, opik.Prompt] = {}
-
-
-class KeycloakClientCredentialsAuth(httpx.Auth):
-    """httpx auth flow that injects a Keycloak access token via client-credentials.
-
-    A single instance is shared across every request the SDK makes. The cached
-    token is refreshed proactively before expiry and reactively on a 401.
-    """
-
-    def __init__(self, token_url: str, client_id: str, client_secret: str) -> None:
-        self._token_url = token_url
-        self._client_id = client_id
-        self._client_secret = client_secret
-        # Dedicated client for the token endpoint so we never recurse through
-        # the SDK's own (authed) client.
-        self._token_client = httpx.Client(timeout=_TOKEN_REQUEST_TIMEOUT_SECONDS)
-
-        self._lock = threading.Lock()
-        self._access_token: str | None = None
-        self._expires_at: float = 0.0  # monotonic-clock deadline
-
-    def auth_flow(
-        self, request: httpx.Request
-    ) -> Generator[httpx.Request, httpx.Response, None]:
-        """Attach a bearer token; on a 401 refresh it and retry exactly once."""
-        request.headers["Authorization"] = f"Bearer {self._get_token()}"
-        response = yield request
-
-        if response.status_code == httpx.codes.UNAUTHORIZED:
-            response.close()
-            request.headers["Authorization"] = (
-                f"Bearer {self._get_token(force_refresh=True)}"
-            )
-            yield request
-
-    def _get_token(self, *, force_refresh: bool = False) -> str:
-        with self._lock:
-            now = time.monotonic()
-            if force_refresh or self._access_token is None or now >= self._expires_at:
-                self._refresh_locked()
-            assert self._access_token is not None  # noqa: S101 -- set by _refresh_locked above
-            return self._access_token
-
-    def _refresh_locked(self) -> None:
-        resp = self._token_client.post(
-            self._token_url,
-            data={
-                "grant_type": "client_credentials",
-                "client_id": self._client_id,
-                "client_secret": self._client_secret,
-            },
-        )
-        resp.raise_for_status()
-        payload = resp.json()
-
-        self._access_token = payload["access_token"]
-        expires_in = float(payload.get("expires_in", 60))
-        self._expires_at = time.monotonic() + max(
-            0.0, expires_in - _REFRESH_SKEW_SECONDS
-        )
 
 
 def is_opik_configured() -> bool:
@@ -106,30 +54,60 @@ def is_opik_configured() -> bool:
     return bool(os.environ.get("OPIK_URL_OVERRIDE"))
 
 
-def configure_opik_keycloak_auth(vault: Vault) -> bool:
-    """Register the Keycloak auth flow on the Opik SDK's httpx client.
+def configure_ol_llm(vault: Vault) -> bool:
+    """Configure ol-llm's settings and Opik tracing for this process.
 
-    Reads the client_id/client_secret/realm url from Vault (secret-operations/
-    sso/opik, KV v1 -- same mount/version convention as LLMClientFactory and
-    tika.py's secret-operations reads). A Vault read failure is logged and
-    treated as "not configured" rather than raised -- this is an optional
-    observability integration, not a pipeline dependency.
+    Must run before anything builds an Opik client or an ol-llm model: the SDK
+    reads its client hooks when it builds its HTTP client.
 
-    Returns True if the hook was registered (or already was), False otherwise.
+    The environment is DAGSTER_ENV, which is also the Opik label prompts are
+    fetched by. Gateway routes come from OL_LLM_GATEWAY_* as ol-llm reads them.
+    Azure OpenAI, when LLM_AZURE_ENDPOINT is set, authenticates with an Entra
+    token from DefaultAzureCredential, as LLMClientFactory does.
+
+    Tracing is on only with OPIK_URL_OVERRIDE set and OPIK_TRACK_DISABLE unset.
+    The Keycloak client is read from Vault (secret-operations/sso/opik, KV v1).
+    A read failure is logged and leaves tracing off rather than failing the code
+    location: tracing is observability, not a pipeline dependency.
+
+    :param vault: the authenticated Vault resource.
+    :returns: whether tracing is on.
+    :rtype: bool
     """
     global _configured  # noqa: PLW0603
 
-    if not is_opik_configured():
-        log.debug("OPIK_URL_OVERRIDE not set, skipping Keycloak auth hook")
-        return False
-    if _configured:
-        return True
+    settings = Settings.from_env({**os.environ, "OL_LLM_ENVIRONMENT": DAGSTER_ENV})
+    if azure_endpoint := os.environ.get("LLM_AZURE_ENDPOINT"):
+        # The Azure provider reads its endpoint from the SDK's own variable.
+        os.environ.setdefault("AZURE_OPENAI_ENDPOINT", azure_endpoint)
+        settings = dataclasses.replace(
+            settings,
+            azure_ad_token_provider=get_bearer_token_provider(
+                DefaultAzureCredential(), COGNITIVE_SERVICES_SCOPE
+            ),
+        )
+    configure(settings)
 
+    # from_env keeps OPIK_TRACK_DISABLE and OL_LLM_TRACE_CONTENT in effect.
+    tracing = TracingConfig.from_env()
+    keycloak = (
+        _opik_keycloak_client(vault)
+        if tracing.enabled and is_opik_configured()
+        else None
+    )
+    configure_tracing(
+        dataclasses.replace(tracing, enabled=keycloak is not None, keycloak=keycloak)
+    )
+    _configured = keycloak is not None
+    return _configured
+
+
+def _opik_keycloak_client(vault: Vault) -> KeycloakClient | None:
     try:
         secret = vault.client.secrets.kv.v1.read_secret(
             mount_point="secret-operations", path="sso/opik"
         )["data"]
-        auth = KeycloakClientCredentialsAuth(
+        return KeycloakClient(
             token_url=f"{secret['url']}/protocol/openid-connect/token",
             client_id=secret["client_id"],
             client_secret=secret["client_secret"],
@@ -140,21 +118,14 @@ def configure_opik_keycloak_auth(vault: Vault) -> bool:
             "Opik tracing/prompt-library stays disabled",
             exc_info=True,
         )
-        return False
-
-    add_httpx_client_hook(
-        HttpxClientHook(client_modifier=None, client_init_arguments={"auth": auth})
-    )
-    _configured = True
-    log.info("Opik Keycloak auth hook registered")
-    return True
+        return None
 
 
 def get_opik_client() -> opik.Opik | None:
     """Return a shared Opik client for Prompt Library reads, or None if unavailable.
 
     None whenever OPIK_URL_OVERRIDE is unset, the Keycloak auth hook never
-    registered (see configure_opik_keycloak_auth), or building the client
+    registered (see configure_ol_llm), or building the client
     itself fails -- every caller must treat this as "fall back to the local
     hardcoded prompt", never as a hard dependency.
     """
@@ -242,33 +213,6 @@ def attach_span_metadata(metadata: dict[str, Any]) -> None:
     if not is_opik_configured():
         return
     opik_context.update_current_span(metadata=metadata)
-
-
-def get_prompt_version(name: str, default_template: str | None = None) -> str:
-    """Return name's currently-active Prompt Library version, or "local" if unavailable.
-
-    Lets a caller fold this into whatever it records as a call's model/prompt
-    provenance (e.g. summary_model_version) -- otherwise editing a prompt in
-    Opik changes behavior for new calls without that edit being visible in
-    what checkpointing already persisted as "the version that produced this".
-
-    Pass default_template when the caller also render_prompt(name, ...)s in the
-    same run, so this create-if-missing's the same as render_prompt's own
-    get-or-create -- otherwise a prompt's first run reads "local" here, then a
-    later run sees the version render_prompt created and wrongly treats it as
-    a prompt change.
-    """
-    client = get_opik_client()
-    if client is not None:
-        try:
-            prompt = client.get_prompt(name=name)
-            if prompt is None and default_template is not None:
-                prompt = client.create_prompt(name=name, prompt=default_template)
-            if prompt is not None:
-                return prompt.version or prompt.commit or LOCAL_PROMPT_VERSION
-        except Exception:
-            log.warning("Opik prompt version fetch failed for %s", name, exc_info=True)
-    return LOCAL_PROMPT_VERSION
 
 
 def publish_prompt_version(name: str, template: str) -> str:
