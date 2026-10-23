@@ -75,8 +75,8 @@ def test_qa_runs_ingestion_and_the_learn_integrations_build():
     models unions across sources and MIT Learn needs QA views to rehearse a
     warehouse-pull cutover against.
 
-    The orphan sweep builds nothing. It runs in QA first because its deletion
-    list is reviewed there before production gets the schedule.
+    The orphan sweep builds nothing. It deletes in QA and only reports in
+    production.
 
     Raw snapshot expiry builds nothing either. It trims the snapshots QA's own
     raw loads leave behind. The dbt-layer maintenance stays out of QA.
