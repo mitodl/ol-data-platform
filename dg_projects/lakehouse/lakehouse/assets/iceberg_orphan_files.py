@@ -26,7 +26,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 import boto3
-from dagster import AssetExecutionContext, Config, MetadataValue, Output, asset
+from dagster import (
+    AssetExecutionContext,
+    Config,
+    DagsterInstance,
+    MetadataValue,
+    Output,
+    asset,
+)
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.iceberg_maintenance import (
     get_glue_catalog,
@@ -50,13 +57,13 @@ ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS: frozenset[str] = frozenset(
 )
 
 # The floor has to exceed the longest time a writer holds a file before the
-# commit that references it. The longest production Dagster run in the 30 days
-# to 2026-10-21 lasted 26.7 hours, and ol-infrastructure caps Dagster runs and
-# Airbyte syncs at 2 days. Not covered by those caps: a run tagged with a longer
-# dagster/max_runtime, and writes from outside Dagster and Airbyte (a laptop
-# `dev` run resolves to the production warehouse). Seven days is the floor the
-# sweep uses.
+# commit that references it. A delete run refuses to start unless the Dagster
+# instance's run_monitoring cap is on and below it. Airbyte's cap (airbyte-cron's
+# SYNC_WORKLOAD_TIMEOUT, in ol-infrastructure) can't be read from here. Neither
+# bounds a run tagged with a longer dagster/max_runtime or a writer outside
+# Dagster and Airbyte. Seven days is the floor the sweep uses.
 ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS = 7
+ICEBERG_ORPHAN_FILES_MIN_AGE_SECONDS = ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS * 24 * 60 * 60
 
 # Each worker holds one table's reachable-file set and its eligible orphans in
 # memory, so this bounds memory as much as it bounds S3 and Glue request rates.
@@ -84,6 +91,17 @@ class IcebergOrphanFilesConfig(Config):
 def _aws_clients() -> tuple[Any, Any]:
     """Return the Glue and S3 clients the pass runs with."""
     return boto3.client("glue"), boto3.client("s3")
+
+
+def _run_cap_seconds(instance: DagsterInstance) -> int:
+    """Return the instance's default run time limit, or 0 when nothing enforces one.
+
+    The limit only applies while run monitoring is enabled: the daemon's
+    monitoring loop is what terminates a run that exceeds it.
+    """
+    if not instance.run_monitoring_enabled:
+        return 0
+    return instance.run_monitoring_max_runtime_seconds
 
 
 def _detail_rows(result: DatabaseOrphanFiles) -> list[dict[str, Any]]:
@@ -130,6 +148,15 @@ def iceberg_raw_orphan_files(
             f"A delete run needs min_age_days of at least "
             f"{ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS}, got {config.min_age_days}. A "
             "report can use less."
+        )
+        raise ValueError(msg)
+    run_cap = _run_cap_seconds(context.instance)
+    if config.delete and not 0 < run_cap < ICEBERG_ORPHAN_FILES_MIN_AGE_SECONDS:
+        msg = (
+            "A delete run needs the Dagster instance to cap runs below the "
+            f"{ICEBERG_ORPHAN_FILES_MIN_AGE_SECONDS}s floor (run_monitoring enabled "
+            f"with max_runtime_seconds set), got {run_cap}. A report can run "
+            "without one."
         )
         raise ValueError(msg)
 
