@@ -224,6 +224,7 @@ the program's requirement tree:
 | `child_readable_id` | string | The child course or program |
 | `child_display_mode` | string | A child program's display mode; null for a course |
 | `child_position` | int | Zero-based place in the tree, in the order MIT Learn gives a program's courses. Null for a child program not shown as a course, whose courses are listed under the parent with positions of their own |
+| `child_program_order` | int | Zero-based place of a child program among the program's child programs, by its first node in the tree. MIT Learn's ETL lists child programs in this order and numbers the ones without a `child_position` after the program's other children in it. Null for a course |
 
 A course is listed only when its page is live, so positions have gaps. A required program is
 followed one level down: no required program requires another today.
@@ -426,3 +427,4 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-16 | Tobias Macey | `courses_programrequirement` and `courses_program_departments` load by full refresh, so deleted tree nodes and departments leave `integrations__learn__mitxonline_program_children`, the programs' `departments` and `start_date`, and the courses' `certification_type`. No column changes. |
 | 2026-10-20 | Tobias Macey | Added `has_catalog_page`, `about`, `what_you_learn`, `prerequisites` and `faqs` to `integrations__learn__mitxonline_courses` and `integrations__learn__mitxonline_programs` for MIT Learn's `full_description`. |
 | 2026-10-22 | Tobias Macey | Drop MIT edX courses. MIT Learn's `mit_edx` courses are retired rather than moved to a warehouse pull, so no Learn Sync task reads them and `integrations__learn__mit_edx_courses` is gone along with the Course Sources (MIT edX) columns. `mit_edx` stays as the source of `integrations__learn__mit_edx_programs`. The MIT edX programs columns now name what the model has (`course_readable_ids` and `topics` arrays) rather than `courses` and `departments` strings, which it never had. |
+| 2026-10-22 | Tobias Macey | Added `child_program_order` to `integrations__learn__mitxonline_program_children`, so a Sync task can number child programs not shown as courses in requirement tree order, as MIT Learn's ETL does, and not by readable id. |
