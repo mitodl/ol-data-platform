@@ -179,7 +179,8 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # every raw input for), plus their upstream. QA only: production builds
     # them through the automation sensor. The one dbt schedule QA runs, and an
     # exception to "QA does not build" that holds only because none of its
-    # models is a cross-source union, which ol-dbt validate enforces on the tag.
+    # models is a cross-source union QA is not shown to hold, which ol-dbt
+    # validate enforces on the tag against the committed QA observation.
     "learn_integrations_qa_daily": frozenset({"qa"}),
     # A sensor, not a schedule, gated here for the same reason. It writes check
     # results to OpenMetadata on tables named from the image's manifest, which

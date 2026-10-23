@@ -640,6 +640,32 @@ models:
     resources feeding MIT Learn's LearningResource model, whereas this feeds
     a distinct fact model (profiles.ProgramCertificate) keyed by
     record_hash.
+
+    QA builds this view on learn_integrations_qa_daily so MIT Learn's
+    SyncProgramCertificatesTask can be rehearsed there, and QA's rows are
+    not production's. The edX.org and IRx inputs (edxorg/s3, irx/bigquery)
+    are masked mirrors of production: usernames and emails are SHA-256
+    digests, names and addresses read 'redacted' and year of birth is NULL.
+    MITx Online and MicroMasters are QA's own apps, with their own users.
+    So learners do not join across platforms the way they do in production,
+    and the edX.org-side recipient fields carry digests or 'redacted'. QA's
+    MITx Online Open edX database (mitxonline/mysql) is empty, which
+    qa_partial_tables records for auth_user: user_mitxonline_username
+    falls back to the MITx Online app username there. A QA rehearsal
+    checks that the task reads, maps and writes these rows, not
+    certificate counts. See
+    docs/specs/QA_DATA_TOPOLOGY_SPEC.md §2.
+  config:
+    tags: [qa_scheduled]
+    meta:
+      qa_branches:
+      - edxorg/s3
+      - irx/bigquery
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      qa_partial_tables:
+      - raw__mitxonline__openedx__mysql__auth_user
   columns:
   - name: record_hash
     description: >

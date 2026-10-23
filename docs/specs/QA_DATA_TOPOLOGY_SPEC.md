@@ -220,6 +220,52 @@ a mirror branch. That changes once step 6 lands mirrors and models start declari
 The observation is refreshed by hand for now. A refresh that shows a table has emptied fails the
 refresh PR, which is where the lapse should surface.
 
+### Scheduled unions (2026-10-22)
+
+`learn_integrations_qa_daily` builds `+tag:qa_scheduled` in QA unattended. Until now the check
+refused the tag on any model reading more than one unit, because the baseline that lets a QA
+build run past a lapsed branch is exactly what makes an unattended union come out partial.
+MIT Learn's `SyncProgramCertificatesTask` needs `integrations__learn__program_certificates`,
+which reads five units, so a tagged union is now accepted on three conditions:
+
+- `qa_branches` names every unit the model reads, singletons included. Only a declared branch
+  is compared with the observation, so a unit left out would be the silent one.
+- Every table the model reads from those branches holds rows in the committed observation, and
+  every mirror is within `mirror_max_age_days`. The baseline does not count here.
+- An empty table may be listed in `qa_partial_tables` when the model's QA form can go without
+  its rows. Each entry must be a table the model reads from a declared branch. The key is only
+  valid on a tagged model (one reading a single unit is checked once it declares the key), and
+  an entry QA holds again is an ERROR, so the next lapse of that table fails the check rather
+  than building. It names tables rather than branches because the reason a lapse is harmless is
+  specific to how the model reads that table: an upstream edit that starts reading another
+  empty table of the same branch still fails.
+- An entry waives only the missing rows. The table must still be observed as a present Iceberg
+  table (no snapshot, or zero rows), because the model's staging parent selects from it and an
+  absent relation fails the build. A mirror past `mirror_max_age_days` still fails too.
+
+`ingest` units carry no age limit, so an ingested branch that stopped loading still passes; the
+union is then consistent as of that branch's last load rather than missing it. A table that
+empties after the observation is caught by `qa_observation_drift_daily` (12:00 UTC, after the
+03:00 build), not by the build itself.
+
+`integrations__learn__program_certificates` declares all five of its units and lists
+`raw__mitxonline__openedx__mysql__auth_user` as partial. QA's whole MITx Online Open edX unit is empty Iceberg shells from
+the 2026-09-08 conversion, with no snapshot (read from the table metadata on 2026-10-22). The
+view reads only `auth_user` from it, through a left join in `int__mitxonline__users` that
+falls back to the MITx Online app username, so the empty branch changes that column and not
+the row set. Its other inputs held rows on 2026-10-21: `mitxonline/app_postgres` loaded that
+day, `micromasters/app_postgres` last on 2026-09-14, and the `edxorg/s3` and `irx/bigquery`
+mirrors copied 2026-10-07, so they are inside their 90-day limit until 2027-01-05. Mirror age is
+measured at observation time (§2), so nothing fails on that date by itself: the first observation
+refreshed after it fails this model until the mirrors are refreshed. Without a refresh the
+observation-age WARNING (30 days) is the signal.
+
+QA's copy of this view is not production's in kind, not only in size. The edX.org and IRx
+inputs are masked mirrors of production (§8: usernames and emails hashed, names and addresses
+redacted, year of birth nulled), while MITx Online and MicroMasters are QA's own apps. Learners
+do not join across platforms the way they do in production. A QA rehearsal of the Learn task
+checks that it reads, maps and writes rows, not certificate counts.
+
 ---
 
 ## 3. Specified: per-environment strategy map (task Local-1)

@@ -41,8 +41,6 @@
   marts__micromasters_program_certificates exposes the result.
 #}
 
-{{ config(meta={'qa_branches': ['micromasters/app_postgres', 'mitxonline/app_postgres', 'mitxonline/mysql']}) }}
-
 with certificates as (
     select * from {{ ref('int__micromasters__program_certificates') }}
 )
