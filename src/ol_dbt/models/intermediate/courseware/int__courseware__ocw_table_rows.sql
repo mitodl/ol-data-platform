@@ -1,6 +1,6 @@
 {#
     Every table row on the pages of the OCW courses var('courseware_ocw_courses')
-    selects, after its table's header row. int__courseware__ocw_resources reads the
+    selects, its table's header row included. int__courseware__ocw_resources reads the
     header's answer-key columns from it, and int__courseware__extraction_sources the
     rows that are sessions. A table of its own for the reason int__courseware__ocw_files
     is.

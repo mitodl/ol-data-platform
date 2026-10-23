@@ -111,7 +111,8 @@ models:
   - name: page_role
     description: str, unit, context (the syllabus), skipped (calendar, related resources
       and the like), reference (a textbook section in a course taught by three or
-      more page groups) or solution; null for a resource
+      more page groups) or solution; null for a resource and for the course's root
+      page
   - name: unit_key
     description: str, the key of the unit page a unit-role page is read in
   - name: is_flat_section
@@ -119,7 +120,7 @@ models:
       pages, whose tables can hold sessions
 
 - name: int__courseware__ocw_table_rows
-  description: One row per table row, after the header row, on the pages in int__courseware__ocw_files.
+  description: One row per table row, the header row included, on the pages in int__courseware__ocw_files.
     int__courseware__ocw_resources reads its answer-key columns from the header row,
     and int__courseware__extraction_sources its session rows.
   config:
@@ -1096,3 +1097,88 @@ unit_tests:
     vars:
       courseware_ocw_courses:
       - c1
+- name: test_int__courseware__ocw_table_rows_splits_tables_and_marks_session_pages
+  description: >
+    Each table row on a page is one row, the header row (row_index 2) included, and
+    header_html is the header row's first cell. A flat top-level section page and
+    the
+    calendar can hold sessions; a page under a unit cannot. A page with no table,
+    and
+    a resource, have no rows.
+  model: int__courseware__ocw_table_rows
+  given:
+  - input: ref('int__courseware__ocw_files')
+    rows:
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/lecture-notes/,
+      page_path: lecture-notes/, section: lecture-notes, is_flat_section: true, body: '<p>Notes.</p><table><tr><th>SES
+        #</th><th>TOPICS</th></tr><tr><td>1</td><td>Intro</td></tr></table>'}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/calendar/,
+      page_path: calendar/, section: calendar, body: '<table><tr><th>WEEK</th></tr><tr><td>1</td></tr></table>'}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/week-1/lesson-1/,
+      page_path: week-1/lesson-1/, section: week-1, is_flat_section: false, body: '<table><tr><th>Problem</th></tr><tr><td>2</td></tr></table>'}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/syllabus/,
+      page_path: syllabus/, section: syllabus, body: <p>No tables.</p>}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/notes/,
+      content_type: pdf, body: '<table> in extracted text'}
+  expect:
+    rows:
+    - {page_key: courses/c1/pages/lecture-notes/, reads_sessions: true, table_index: 2,
+      row_index: 2, row_html: '><th>SES #</th><th>TOPICS</th></tr>', header_html: 'SES
+        #'}
+    - {page_key: courses/c1/pages/lecture-notes/, reads_sessions: true, table_index: 2,
+      row_index: 3, row_html: '><td>1</td><td>Intro</td></tr>', header_html: 'SES
+        #'}
+    - {page_key: courses/c1/pages/calendar/, reads_sessions: true, table_index: 2,
+      row_index: 2, row_html: '><th>WEEK</th></tr>', header_html: WEEK}
+    - {page_key: courses/c1/pages/calendar/, reads_sessions: true, table_index: 2,
+      row_index: 3, row_html: '><td>1</td></tr>', header_html: WEEK}
+    - {page_key: courses/c1/pages/week-1/lesson-1/, reads_sessions: false, table_index: 2,
+      row_index: 2, row_html: '><th>Problem</th></tr>', header_html: Problem}
+    - {page_key: courses/c1/pages/week-1/lesson-1/, reads_sessions: false, table_index: 2,
+      row_index: 3, row_html: '><td>2</td></tr>', header_html: Problem}
+- name: test_int__courseware__ocw_resources_leaves_out_answer_keys
+  description: >
+    ps2_key is a file int__courseware__ocw_files marks as an answer key. ps1_sol is
+    linked in a table column headed Solutions, and ps1_sol_copy has the same text,
+    so
+    both are answer keys too. A page, and a file with no text, are not resources.
+    ps1
+    is read as a document and the lecture video as a transcript.
+  model: int__courseware__ocw_resources
+  given:
+  - input: ref('int__courseware__ocw_files')
+    rows:
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/assignments/,
+      content_type: page, page_path: assignments/, is_solution: false, body: <p>Assignments.</p>}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/ps1/, content_type: pdf,
+      file_extension: .pdf, title: Problem Set 1, is_solution: false, body: 1. Find
+        x.}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/ps1_sol/,
+      content_type: pdf, file_extension: .pdf, title: Problem Set 1 Notes, is_solution: false,
+      body: '1. x is 3 because 2x plus 1 is 7 and so 2x is 6. Every step of the derivation
+        is written out here in full with the reasoning that leads from the equation
+        to its unique solution so that a reader can check each line.'}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/ps1_sol_copy/,
+      content_type: pdf, file_extension: .pdf, title: Copy, is_solution: false, body: '1.
+        x is 3 because 2x plus 1 is 7 and so 2x is 6. Every step of the derivation
+        is written out here in full with the reasoning that leads from the equation
+        to its unique solution so that a reader can check each line.'}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/ps2_key/,
+      content_type: pdf, file_extension: .pdf, title: ps2_key, is_solution: true,
+      body: 1. 4}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/lec1/,
+      content_type: video, title: Lecture 1, is_solution: false, body: Welcome to
+        the course.}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/empty/,
+      content_type: pdf, file_extension: .pdf, title: Scan, is_solution: false}
+  - input: ref('int__courseware__ocw_table_rows')
+    rows:
+    - {courserun_readable_id: run1, page_key: courses/c1/pages/assignments/, table_index: 2,
+      row_index: 2, row_html: '><th>PROBLEM SETS</th><th>SOLUTIONS</th></tr>'}
+    - {courserun_readable_id: run1, page_key: courses/c1/pages/assignments/, table_index: 2,
+      row_index: 3, row_html: '><td><a href="/courses/c1/resources/ps1/">PS 1</a></td><td><a
+        href="/courses/c1/resources/ps1_sol/">Solutions 1</a></td></tr>'}
+  expect:
+    rows:
+    - {content_file_key: courses/c1/resources/ps1/, source_kind: document}
+    - {content_file_key: courses/c1/resources/lec1/, source_kind: video_transcript}
