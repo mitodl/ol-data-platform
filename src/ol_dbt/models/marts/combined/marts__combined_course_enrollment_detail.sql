@@ -1,4 +1,49 @@
-with combined_enrollments as (
+with tfact_enrollment as (
+    select * from {{ ref('tfact_enrollment') }}
+)
+
+, tfact_enrollment_order as (
+    select * from {{ ref('tfact_enrollment_order') }}
+)
+
+, discount as (
+    select * from {{ ref('dim_discount') }}
+)
+
+, program_order_coupons as (
+    select
+        program_orders.order_id
+        , program_orders.platform_fk
+        , max(discount.discount_code) as program_coupon_code
+    from {{ ref('tfact_order') }} as program_orders
+    inner join discount on program_orders.discount_fk = discount.discount_pk
+    group by program_orders.order_id, program_orders.platform_fk
+)
+
+, program_orders as (
+    select
+        case tfact_enrollment.platform
+            when 'mitxonline' then '{{ var("mitxonline") }}'
+            when 'mitxpro' then '{{ var("mitxpro") }}'
+        end as program_order_platform
+        , tfact_enrollment.enrollment_id as program_order_enrollment_id
+        , tfact_enrollment_order.program_order_id
+        , program_order_coupons.program_coupon_code
+    from tfact_enrollment
+    inner join tfact_enrollment_order
+        on tfact_enrollment.enrollment_key = tfact_enrollment_order.enrollment_key
+    left join program_order_coupons
+        on
+            tfact_enrollment_order.program_order_id = program_order_coupons.order_id
+            and tfact_enrollment.platform_fk = program_order_coupons.platform_fk
+    where
+        -- program enrollment ids can collide with courserunenrollment_id
+        tfact_enrollment.enrollment_type = 'course'
+        and tfact_enrollment.platform in ('mitxonline', 'mitxpro')
+        and tfact_enrollment_order.program_order_id is not null
+)
+
+, combined_enrollments as (
     select * from {{ ref('int__combined__courserun_enrollments') }}
 )
 
@@ -447,6 +492,19 @@ with combined_enrollments as (
     where combined_enrollments.platform = '{{ var("residential") }}'
 )
 
+, combined_enrollment_detail_with_program_orders as (
+    select
+        combined_enrollment_detail.*
+        , program_orders.program_order_id
+        , program_orders.program_coupon_code
+    from combined_enrollment_detail
+    left join program_orders
+        on
+            combined_enrollment_detail.platform = program_orders.program_order_platform
+            and cast(combined_enrollment_detail.courserunenrollment_id as varchar)
+            = program_orders.program_order_enrollment_id
+)
+
 select
     platform
     , courserunenrollment_id
@@ -477,6 +535,8 @@ select
     , order_id
     , order_reference_number
     , coupon_code
+    , program_order_id
+    , program_coupon_code
     , user_company
     , user_country_code
     , user_email
@@ -494,4 +554,4 @@ select
         end', 'platform'])) }} as user_hashed_id
     , user_id
     , user_username
-from combined_enrollment_detail
+from combined_enrollment_detail_with_program_orders
