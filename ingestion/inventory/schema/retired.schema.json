@@ -44,6 +44,11 @@
             "type": "string",
             "minLength": 20,
             "description": "Why it stopped. `no longer needed` is not a reason; name the thing that went away."
+          },
+          "frozen": {
+            "type": "boolean",
+            "default": false,
+            "description": "The source is gone but its tables stay in the raw layer, read-only, because dbt still models their history. `ol-dbt inventory reconcile` then expects dbt to declare them and the warehouse to hold them, and reports either going missing. See INGESTION_INVENTORY_SPEC.md §7.2."
           }
         }
       }

@@ -27,10 +27,13 @@ from ol_dbt_cli.lib.git_utils import get_repo_root, resolve_merge_base
 from ol_dbt_cli.lib.glue_schema import DEFAULT_GLUE_DATABASE, columns_by_table
 from ol_dbt_cli.lib.inventory import (
     DEFAULT_INVENTORY_DIR,
+    RETIRED_FILENAME,
     RenderError,
     Unit,
     check_drift,
     check_removals,
+    frozen_tables,
+    load_retired,
     load_snapshot,
     load_snapshot_at_ref,
     load_units,
@@ -333,6 +336,7 @@ def reconcile(
 
     dbt_tables = collect_source_tables(dbt_dir / "models", RAW_SOURCE_NAME)
     dbt_result = reconcile_dbt(units, dbt_tables, inventory_dir, report)
+    frozen = frozen_tables(load_retired(inventory_dir))
 
     if warehouse_tables_path and duckdb_path:
         err_console.print("[bold red]Pass either --warehouse-tables or --duckdb-path, not both.")
@@ -364,14 +368,15 @@ def reconcile(
                 "table list is not empty."
             )
             sys.exit(1)
-        warehouse_result = reconcile_warehouse(units, warehouse, report)
+        warehouse_result = reconcile_warehouse(units, warehouse, report, frozen=frozen)
 
     if output_format == "json":
         _emit_json(report.issues)
     else:
         _emit_text(report.issues)
         console.print(
-            f"\n[bold]dbt sources:[/] {len(dbt_result.both)} of {len(dbt_tables)} declared raw table(s) map to a unit."
+            f"\n[bold]dbt sources:[/] {len(dbt_result.both)} of {len(dbt_tables)} declared raw table(s) map to a unit, "
+            f"{len(dbt_tables & frozen)} to frozen history in {RETIRED_FILENAME}."
         )
         if warehouse_result is None:
             console.print(
@@ -382,7 +387,8 @@ def reconcile(
             console.print(
                 f"[bold]Warehouse:[/] {len(warehouse_result.both)} in both, "
                 f"{len(warehouse_result.declared_not_observed)} declared but absent, "
-                f"{len(warehouse_result.observed_not_declared)} present but undeclared."
+                f"{len(warehouse_result.observed_not_declared)} present but undeclared, "
+                f"{len(warehouse & frozen)} frozen."
             )
         console.print(f"[bold]Summary:[/] {len(report.errors)} error(s), {len(report.warnings)} warning(s).")
 
