@@ -99,11 +99,11 @@ def learn_content_file_text_sensor(context: SensorEvaluationContext):
     """Report every run's text version, once per change.
 
     The cursor is a digest of every run's version, so a tick where none changed
-    reports nothing. Observations go out only for runs already registered: the
-    daemon records asset events before it adds partitions, so a run registered on
-    this tick is observed on the next, and the cursor is held back until then. A
-    registered run that lost its last file is observed with the empty version, so
-    its partition is rebuilt with no rows.
+    and no run joined the sample reports nothing. Observations go out only for
+    runs already registered: the daemon records asset events before it adds
+    partitions, so a run registered on this tick is observed on the next, and the
+    cursor is cleared until then. A registered run that lost its last file is
+    observed with the empty version, so its partition is rebuilt with no rows.
     """
     registered = set(
         CONTENT_FILE_RUNS.get_partition_keys(dynamic_partitions_store=context.instance)
@@ -115,20 +115,22 @@ def learn_content_file_text_sensor(context: SensorEvaluationContext):
         ]
     )
     digest = md5_hex("\n".join("|".join(row) for row in versions.iter_rows()))
-    if digest == context.cursor:
-        return SensorResult()
-
     valid = versions.filter(
         ~pl.col("run_readable_id").map_elements(
             contains_invalid_partition_strings, return_dtype=pl.Boolean
         )
     )
+    # Before the digest comparison, so a sample widened in code registers its
+    # runs although no file changed.
+    new_runs = sorted(set(in_sample(valid)["run_readable_id"]) - registered)
+    if digest == context.cursor and not new_runs:
+        return SensorResult()
+
     if valid.height < versions.height:
         context.log.warning(
             "Skipping %d course runs whose id is not a valid partition key",
             versions.height - valid.height,
         )
-    new_runs = sorted(set(in_sample(valid)["run_readable_id"]) - registered)
     observations = [
         AssetObservation(
             asset_key=CONTENT_FILE_TEXT_KEY,
@@ -150,5 +152,7 @@ def learn_content_file_text_sensor(context: SensorEvaluationContext):
         dynamic_partitions_requests=(
             [CONTENT_FILE_RUNS.build_add_request(new_runs)] if new_runs else []
         ),
-        cursor=context.cursor if new_runs else digest,
+        # An empty cursor matches no digest, so the next tick observes the runs
+        # registered on this one.
+        cursor="" if new_runs else digest,
     )

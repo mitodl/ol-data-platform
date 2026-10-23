@@ -45,6 +45,7 @@ from ml.assets.learn_embeddings import (
 )
 from ml.lib import warehouse
 from ml.lib.learn_embeddings import STRATEGIES_PATH, TOPICS_RELATION, strategies
+from ml.sensors import learn_embeddings as sensors
 from ml.sensors.learn_embeddings import (
     SAMPLE_RUNS_PER_SOURCE,
     in_sample,
@@ -608,9 +609,10 @@ def test_sensor_registers_runs_then_observes_them(tables):
     assert observation.partition == PARTITION
 
 
-def test_the_sensor_registers_only_the_sample(tables):
+def load_mitxonline_runs(tables: dict[str, pl.DataFrame], count: int) -> list[str]:
+    """Load one file for each of ``count`` mitxonline runs; return them by hash."""
     runs_by_hash = sorted(
-        (f"course-v1:MITxT+{number}x+1T2026" for number in range(8)), key=md5_hex
+        (f"course-v1:MITxT+{number}x+1T2026" for number in range(count)), key=md5_hex
     )
     tables["integrations__learn__content_files"] = pl.concat(
         [
@@ -624,6 +626,11 @@ def test_the_sensor_registers_only_the_sample(tables):
         [{"readable_id": f"resource-{run}", "run_id": run} for run in runs_by_hash]
     )
     load_empty_xpro_and_ocw(tables)
+    return runs_by_hash
+
+
+def test_the_sensor_registers_only_the_sample(tables):
+    runs_by_hash = load_mitxonline_runs(tables, 8)
 
     result: Any = learn_content_file_text_sensor(
         build_sensor_context(instance=DagsterInstance.ephemeral())
@@ -632,6 +639,36 @@ def test_the_sensor_registers_only_the_sample(tables):
     assert result.dynamic_partitions_requests[0].partition_keys == sorted(
         runs_by_hash[:SAMPLE_RUNS_PER_SOURCE]
     )
+
+
+def test_widening_the_sample_registers_the_rest_without_a_change(tables, monkeypatch):
+    runs_by_hash = load_mitxonline_runs(tables, 8)
+    dagster_instance = DagsterInstance.ephemeral()
+
+    def tick(cursor: str | None) -> Any:
+        return learn_content_file_text_sensor(
+            build_sensor_context(instance=dagster_instance, cursor=cursor)
+        )
+
+    first: Any = tick(None)
+    sampled = runs_by_hash[:SAMPLE_RUNS_PER_SOURCE]
+    assert first.dynamic_partitions_requests[0].partition_keys == sorted(sampled)
+    dagster_instance.add_dynamic_partitions("learn_content_file_run", sampled)
+    second: Any = tick(first.cursor)
+    assert len(second.asset_events) == SAMPLE_RUNS_PER_SOURCE
+    unchanged: Any = tick(second.cursor)
+    assert unchanged.asset_events == []
+    assert unchanged.dynamic_partitions_requests == []
+
+    monkeypatch.setattr(sensors, "SAMPLE_RUNS_PER_SOURCE", len(runs_by_hash))
+    widened: Any = tick(second.cursor)
+    rest = runs_by_hash[SAMPLE_RUNS_PER_SOURCE:]
+    assert widened.dynamic_partitions_requests[0].partition_keys == sorted(rest)
+    dagster_instance.add_dynamic_partitions("learn_content_file_run", rest)
+    observed: Any = tick(widened.cursor)
+    assert {
+        event.partition.keys_by_dimension["run"] for event in observed.asset_events
+    } == set(runs_by_hash)
 
 
 def test_the_sample_takes_the_first_runs_by_hash_and_the_named_ones():
