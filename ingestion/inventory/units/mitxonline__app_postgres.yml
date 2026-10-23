@@ -256,9 +256,15 @@ tables:
   primary_key:
   - - id
   modeled: true
+# xmin incremental, so a run taken out of a contract keeps its row in production
+# raw until the dlt cutover, and bridge_organization_courserun and
+# int__mitxonline__b2b_contract_to_courseruns still list the run under that
+# contract. On 2026-10-23 no row pointed at a run or contract gone from the
+# full-refresh courses_courserun or b2b_contractpage. A removal that leaves both
+# in place cannot be seen from raw.
 - name: courses_courserun_b2b_contracts
   raw_table: raw__mitxonline__app__postgres__courses_courserun_b2b_contracts
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_deduped_history
   namespace: public
   primary_key:
   - - id
