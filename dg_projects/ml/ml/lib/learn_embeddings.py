@@ -336,7 +336,8 @@ def known_vectors(
     :param vector_space: a model's ``vector_space_id``, e.g.
         ``text-embedding-3-large@3072``
     :param checksums: the input checksums wanted
-    :returns: a stored vector and the model that produced it, per checksum found
+    :returns: per checksum found, the vector of its earliest stored row and the
+        model that produced it
     :rtype: dict[str, StoredVector]
     """
     wanted = sorted(set(checksums))
@@ -347,8 +348,11 @@ def known_vectors(
             (pl.col("vector_space") == vector_space)
             & pl.col("input_checksum").is_in(wanted)
         )
+        # The earliest row of a checksum, so the pick does not vary between runs
+        # when two models of the space stored one.
+        .sort("input_checksum", "embedded_at", "model_id", "chunk_key")
+        .unique("input_checksum", keep="first", maintain_order=True)
         .select("input_checksum", "vector", "model_id")
-        .unique("input_checksum")
         .collect()
     )
     return {
@@ -520,9 +524,9 @@ def merge_vectors(
     """Combine a run's vector rows with the partition's stored ones.
 
     Stored rows of strategies the run did not embed are kept as they are. A new
-    row whose chunk, strategy and input checksum are already stored keeps the
-    stored ``embedded_at`` and ``run_id``, so a run that embedded nothing changes
-    nothing but the write.
+    row whose chunk, strategy, vector space and input checksum are already stored
+    is replaced by the stored row whole, so a run that embedded nothing changes
+    nothing but the write, whichever stored vector of the space the run picked.
 
     :param new: the run's rows, without ``run_id``
     :param stored: the partition's stored rows, ``None`` when there are none
@@ -531,24 +535,12 @@ def merge_vectors(
     :returns: the partition's rows to write, in ``VECTOR_SCHEMA``
     :rtype: pl.DataFrame
     """
-    new = new.with_columns(pl.lit(run_id).alias("run_id"))
+    new = new.with_columns(pl.lit(run_id).alias("run_id")).select(VECTOR_SCHEMA.names())
     if stored is None or stored.is_empty():
-        return new.select(VECTOR_SCHEMA.names())
+        return new
     stored = stored.select(VECTOR_SCHEMA.names())
     untouched = stored.filter(~pl.col("strategy_id").is_in(list(strategy_ids)))
-    key = ["chunk_key", "strategy_id", "input_checksum"]
-    kept = new.join(
-        stored.select(*key, "embedded_at", "run_id"),
-        on=key,
-        how="left",
-        suffix="_stored",
-    ).select(
-        *key[:2],
-        "model_id",
-        "vector_space",
-        "input_checksum",
-        "vector",
-        pl.coalesce("embedded_at_stored", "embedded_at").alias("embedded_at"),
-        pl.coalesce("run_id_stored", "run_id").alias("run_id"),
-    )
-    return pl.concat([untouched, kept.select(VECTOR_SCHEMA.names())])
+    key = ["chunk_key", "strategy_id", "vector_space", "input_checksum"]
+    kept = stored.join(new.select(key), on=key, how="semi")
+    added = new.join(stored.select(key), on=key, how="anti")
+    return pl.concat([untouched, kept, added])

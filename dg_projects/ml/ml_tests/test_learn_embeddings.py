@@ -9,6 +9,7 @@ returns a vector made from the text, so a test can tell which texts were sent.
 
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import Any
 
 import polars as pl
@@ -44,7 +45,12 @@ from ml.assets.learn_embeddings import (
     topic_embedding_vectors,
 )
 from ml.lib import warehouse
-from ml.lib.learn_embeddings import STRATEGIES_PATH, TOPICS_RELATION, strategies
+from ml.lib.learn_embeddings import (
+    STRATEGIES_PATH,
+    TOPICS_RELATION,
+    known_vectors,
+    strategies,
+)
 from ml.sensors import learn_embeddings as sensors
 from ml.sensors.learn_embeddings import (
     SAMPLE_RUNS_PER_SOURCE,
@@ -495,6 +501,54 @@ def test_another_models_vector_is_reused_only_in_a_declared_space(tables, calls)
     )
     assert build_content_files(tables).success
     assert calls == [["Shared syllabus."]]
+
+
+def test_a_rerun_keeps_its_rows_when_another_model_stored_the_text(tables, calls):
+    load_sources(tables, **{"block-v1:a": "Shared syllabus."})
+    dagster_instance = instance()
+    assert build_content_files(tables, dagster_instance).success
+    first = tables[CONTENT_FILE_VECTORS_KEY.path[-1]]
+    # An earlier row of the same text and space from Learn's model, which the
+    # space-wide lookup prefers.
+    learn_row = stored_vector(
+        "Shared syllabus.",
+        LEARN_V1_CONTENT_FILES.model.model_id,
+        "text-embedding-3-large@3072",
+    ).with_columns(pl.lit(datetime(2026, 1, 1, tzinfo=UTC)).alias("embedded_at"))
+    tables[CONTENT_FILE_VECTORS_KEY.path[-1]] = pl.concat([first, learn_row])
+    calls.clear()
+
+    for _ in range(2):
+        assert build_content_files(tables, dagster_instance).success
+        rows = tables[CONTENT_FILE_VECTORS_KEY.path[-1]]
+        assert rows.filter(pl.col("run_readable_id") == RUN).equals(first)
+    assert calls == []
+
+
+def test_the_space_wide_lookup_takes_the_earliest_row():
+    def row(model_id: str, value: float, day: int) -> pl.DataFrame:
+        return stored_vector(
+            "Text.", model_id, "text-embedding-3-large@3072"
+        ).with_columns(
+            pl.lit([value] * VECTOR_LENGTH, dtype=pl.List(pl.Float32)).alias("vector"),
+            pl.lit(datetime(2026, 1, day, tzinfo=UTC)).alias("embedded_at"),
+        )
+
+    rows = pl.concat(
+        [
+            row("azure:text-embedding-3-large@3072", 2.0, 2),
+            row("openai:text-embedding-3-large@3072", 1.0, 1),
+        ]
+    )
+
+    for frame in (rows, rows.reverse()):
+        (found,) = known_vectors(
+            frame.lazy(), "text-embedding-3-large@3072", [md5_hex("Text.")]
+        ).values()
+        assert (found.model_id, found.vector[0]) == (
+            "openai:text-embedding-3-large@3072",
+            1.0,
+        )
 
 
 def test_failed_requests_store_the_rest_and_fail_the_run(tables, monkeypatch):
