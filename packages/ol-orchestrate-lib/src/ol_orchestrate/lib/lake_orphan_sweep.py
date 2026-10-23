@@ -102,7 +102,7 @@ def normalize(uri: str) -> str:
 def references(tables: list[dict[str, str]]) -> set[str]:
     """Return every ``bucket/key`` path the given Glue tables point at.
 
-    A TABLE located at a bucket root is kept and does protect the whole bucket.
+    A table located at a bucket root protects the whole bucket.
     """
     out: set[str] = set()
     for table in tables:
@@ -123,11 +123,14 @@ class GlueReferences:
 
     A table protects its own directory, everything inside it and every
     directory above it (:func:`is_referenced`). A database location protects its
-    own directory and every directory above it, for tables not yet registered
-    there, but nothing inside it. A developer schema is located at
-    ``processed/<database>``, so protecting what's inside would make every
-    orphan in one undeletable. A table whose files are written before it is
-    registered is what the age floor is for.
+    own directory and every directory above it, but nothing inside it. A
+    developer schema is located at ``processed/<database>``, so protecting what's
+    inside would make every orphan in one undeletable. A table whose files are
+    written before it is registered is what the age floor is for.
+
+    In practice the database half only matters for a database located at a
+    uuid-suffixed directory: :data:`DBT_DIR` already refuses any directory
+    without the suffix, which covers every ``processed/<database>``.
     """
 
     tables: set[str]

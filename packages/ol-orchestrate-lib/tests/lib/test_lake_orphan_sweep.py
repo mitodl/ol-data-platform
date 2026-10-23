@@ -263,6 +263,7 @@ def test_a_database_location_claims_itself_and_its_parents_not_its_contents():
     assert references.claims(dev)
     assert references.claims("lake-staging-qa/processed")
     assert not references.claims(f"{dev}/mine-{UUID_B}")
+    assert not references.claims("lake-staging-qa/processed/ol_warehouse_qa_dev")
 
 
 def test_a_developer_schema_orphan_can_be_deleted():
@@ -455,6 +456,21 @@ def test_sweep_leaves_a_directory_a_database_claims_for_future_tables():
         "now referenced by Glue"
     )
     assert f"{claimed}/data/1.parquet" in s3.objects["lake-mart-qa"]
+
+
+def test_sweep_deletes_an_orphan_inside_a_database_located_at_a_target():
+    """A database location protects its own directory, not what is inside it."""
+    glue, s3 = _lake()
+    mart = "processed/ol_warehouse_qa_mart"
+    glue.databases["scratch"] = f"s3://lake-staging-qa/{mart}"
+
+    result = _sweep(glue, s3, delete=True)
+
+    assert result.outcomes is not None
+    assert {o.prefix: o.action for o in result.outcomes}[
+        f"{mart}/dropped-{UUID_B}"
+    ] == "deleted"
+    assert f"{mart}/nested-{UUID_A}/data/1.parquet" in s3.objects["lake-staging-qa"]
 
 
 @pytest.mark.parametrize("min_age_days", [0, -5])
