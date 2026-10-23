@@ -32,6 +32,7 @@ from ol_dbt_cli.lib.manifest import ManifestModel, ManifestRegistry
 from ol_dbt_cli.lib.metric_registry import SCHEMA_SNAPSHOT, SCHEMA_VERSION_KEY, load_metrics
 from ol_dbt_cli.lib.metric_sync import (
     FILE_DIGEST_PROPERTY,
+    display_name_conflict,
     file_digest,
     lineage_sources,
     same_description,
@@ -259,6 +260,9 @@ class FakeOpenMetadata(OpenMetadataClient):
         updated["assets"] = body.get("assets", [])
         # keepsStoredDescription for a bot PUT; otherwise updateDescription sanitizes.
         updated["description"] = live.get("description") or _sanitize(body.get("description"))
+        # DefaultBotPolicy denies a bot EditDisplayName, so updateDisplayName keeps a stored one.
+        if live.get("displayName"):
+            updated["displayName"] = live["displayName"]
         if live.get("owners"):
             updated["owners"] = live["owners"]
         updated["reviewers"] = body.get("reviewers") or []
@@ -362,6 +366,96 @@ def test_structural_change_puts_then_patches_what_the_put_kept(server: FakeOpenM
     # The bot PUT kept the stored description and reset the status; the PATCH restores both from the file.
     assert metric["description"] == "Learners with a certificate."
     assert metric["entityStatus"] == "Approved"
+
+
+STALE_NAME = "stale certified_learners: OpenMetadata has displayName 'Certified learners' and the file has"
+
+
+def test_a_display_name_change_in_the_file_is_reported_and_fails_the_metric(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir)
+    _edit_file(
+        metrics_dir, "certified_learners", displayName="Learners certified", description="Learners with a certificate."
+    )
+    server.calls.clear()
+    capsys.readouterr()
+    assert _sync(metrics_dir, names=("certified_learners",)) is True
+    # No PUT for a name the server would keep; the rest of the file still lands.
+    assert ("PUT", "/v1/metrics") not in server.calls
+    metric = server.metrics["certified_learners"]
+    assert metric["displayName"] == "Certified learners"
+    assert metric["description"] == "Learners with a certificate."
+    assert f"{STALE_NAME} 'Learners certified'" in " ".join(capsys.readouterr().out.split())
+    # The next run neither PUTs again nor passes.
+    server.calls.clear()
+    assert _sync(metrics_dir, names=("certified_learners",)) is True
+    assert server.writes() == [("PUT", "/v1/lineage")]
+
+
+def test_a_display_name_renamed_in_openmetadata_is_reported_not_put_back(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir)
+    server.edit_in_ui("certified_learners", "jane", displayName="Certified")
+    server.calls.clear()
+    capsys.readouterr()
+    assert _sync(metrics_dir, names=("certified_learners",)) is True
+    assert server.writes() == [("PUT", "/v1/lineage")]
+    out = " ".join(capsys.readouterr().out.split())
+    assert "OpenMetadata has displayName 'Certified' and the file has 'Certified learners'" in out
+
+
+def test_a_display_name_the_file_dropped_is_reported(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir)
+    path = metrics_dir / "certified_learners.yaml"
+    raw = yaml.safe_load(path.read_text())
+    del raw["metric"]["displayName"]
+    path.write_text(yaml.safe_dump(raw))
+    server.calls.clear()
+    capsys.readouterr()
+    assert _sync(metrics_dir, names=("certified_learners",)) is True
+    assert ("PUT", "/v1/metrics") not in server.calls
+    assert server.metrics["certified_learners"]["displayName"] == "Certified learners"
+    assert f"{STALE_NAME} none" in " ".join(capsys.readouterr().out.split())
+
+
+def test_a_structural_change_puts_once_and_keeps_the_stored_display_name(
+    server: FakeOpenMetadata, metrics_dir: Path
+) -> None:
+    _sync(metrics_dir)
+    _edit_file(metrics_dir, "certified_learners", metricType="SUM", displayName="Learners certified")
+    server.calls.clear()
+    assert _sync(metrics_dir, names=("certified_learners",)) is True
+    assert server.calls.count(("PUT", "/v1/metrics")) == 1
+    metric = server.metrics["certified_learners"]
+    assert (metric["metricType"], metric["displayName"]) == ("SUM", "Certified learners")
+    server.calls.clear()
+    assert _sync(metrics_dir, names=("certified_learners",)) is True
+    assert ("PUT", "/v1/metrics") not in server.calls
+
+
+def test_dry_run_reports_a_stale_display_name(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir)
+    _edit_file(metrics_dir, "certified_learners", displayName="Learners certified")
+    server.calls.clear()
+    capsys.readouterr()
+    assert _sync(metrics_dir, names=("certified_learners",), dry_run=True) is True
+    assert server.writes() == []
+    assert STALE_NAME in " ".join(capsys.readouterr().out.split())
+
+
+def test_a_metric_without_a_display_name_gets_the_files(server: FakeOpenMetadata, metrics_dir: Path) -> None:
+    _sync(metrics_dir)
+    server.edit_in_ui("certified_learners", "jane", displayName=None)
+    server.calls.clear()
+    assert _sync(metrics_dir, names=("certified_learners",)) is False
+    assert ("PUT", "/v1/metrics") in server.calls
+    assert server.metrics["certified_learners"]["displayName"] == "Certified learners"
 
 
 QUOTED_DESCRIPTION = 'A learner\'s "active" enrollments, counted once per run.'
@@ -854,6 +948,18 @@ def test_structural_changes_ignore_server_keys_and_extra_tags() -> None:
     assert structural_changes({**body, "metricType": "SUM"}, live) == ["metricType"]
     # A property the file dropped from a measure stays on the server unless the PUT replaces it.
     assert structural_changes({**body, "measures": [{"name": "a"}]}, live) == ["measures"]
+    # A bot PUT cannot change a stored displayName, so only a missing one counts.
+    assert structural_changes({**body, "displayName": "M"}, {**live, "displayName": "N"}) == []
+    assert structural_changes(body, {**live, "displayName": "N"}) == []
+    assert structural_changes({**body, "displayName": "M"}, live) == ["displayName"]
+
+
+def test_display_name_conflicts_only_with_a_stored_name_that_differs() -> None:
+    assert display_name_conflict({"displayName": "M"}, None) is None
+    assert display_name_conflict({"displayName": "M"}, {"displayName": ""}) is None
+    assert display_name_conflict({"displayName": "M"}, {"displayName": "M"}) is None
+    assert display_name_conflict({"displayName": "M"}, {"displayName": "N"}) == "N"
+    assert display_name_conflict({}, {"displayName": "N"}) == "N"
 
 
 def test_descriptions_compare_after_the_server_encoding_is_undone() -> None:

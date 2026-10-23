@@ -41,6 +41,7 @@ from ol_dbt_cli.lib.metric_sync import (
     TAG_COLLECTIONS,
     after_put,
     create_body,
+    display_name_conflict,
     drift,
     last_synced_version,
     lineage_edge,
@@ -161,6 +162,15 @@ def _write_failure(exc: RuntimeError) -> str:
     return str(exc)
 
 
+def _report_display_name(name: str, file_value: str | None, stored: str) -> None:
+    wanted = repr(file_value) if file_value else "none"
+    console.print(
+        f"[bold red]{'stale'.ljust(_LABEL_WIDTH)}[/]{name}: OpenMetadata has displayName {escape(repr(stored))} and "
+        f"the file has {escape(wanted)}. OpenMetadata does not let a bot change a stored displayName "
+        "(DefaultBotPolicy denies EditDisplayName), so set it in OpenMetadata to match the file."
+    )
+
+
 def _sync_one(
     client: OpenMetadataClient,
     metric: MetricDefinition,
@@ -233,6 +243,7 @@ def _sync_one(
         if not force:
             return False
 
+    stored_name = display_name_conflict(body, live)
     changes = structural_changes(body, live) if live is not None else []
     needs_put = live is None or bool(changes)
     action = "create" if live is None else f"update {', '.join(changes)}" if changes else "no field changes"
@@ -243,7 +254,9 @@ def _sync_one(
             console.print(f"  then PATCH {', '.join(op['path'].lstrip('/') for op in ops)}")
         for source in sources:
             console.print(f"  lineage {escape(source.fqn)} -> {name}")
-        return True
+        if stored_name is not None:
+            _report_display_name(name, body.get("displayName"), stored_name)
+        return stored_name is None
 
     try:
         if needs_put:
@@ -266,7 +279,9 @@ def _sync_one(
             f"[yellow]rewritten[/] {name}: OpenMetadata's sanitizer changed the description (it drops markup "
             "and control characters it does not allow), so every sync will PATCH it again. Fix the file."
         )
-    return True
+    if stored_name is not None:
+        _report_display_name(name, body.get("displayName"), stored_name)
+    return stored_name is None
 
 
 @metrics_app.command
@@ -317,8 +332,10 @@ def sync(
     can become a pull request. A metric that is In Review or Rejected in
     OpenMetadata is reported and left alone even with --force. Each file's
     digest is recorded in the metric's metricFileSha256 custom property, which
-    ol-infrastructure defines on the metric type. Exits non-zero when any
-    metric did not sync.
+    ol-infrastructure defines on the metric type. A stored displayName that
+    differs from the file is reported as stale, because OpenMetadata keeps it
+    against a bot's change; the rest of that metric still syncs. Exits non-zero
+    when any metric did not sync or has a stale displayName.
     """
     metrics, manifest = _load(dbt_dir_path, metrics_dir_path, manifest_path, names)
     client = OpenMetadataClient.from_env()

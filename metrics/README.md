@@ -50,6 +50,12 @@ schema:
   not change them on an existing metric, so a file change would never land.
 - `lifeCycle` is not allowed: OpenMetadata keeps it current, and a PUT keeps
   any live timestamp newer than the file's, so the file would never match.
+- `displayName` lands only when sync creates the metric or OpenMetadata has
+  none. Every bot is denied EditDisplayName (DefaultBotPolicy), and
+  OpenMetadata keeps a stored display name against a bot's change
+  (`EntityUpdater.updateDisplayName`). So when the file and OpenMetadata
+  differ, sync prints a `stale` line, syncs the rest of the metric and counts
+  it as failed. Change the display name in OpenMetadata to match the file.
 - `status` is required and takes only `Draft` or `Approved` of the server's
   statuses (see "Status and approval"). A PUT resets the status in
   OpenMetadata, so sync always restores it from the file.
@@ -210,7 +216,9 @@ An unchanged file writes only the lineage edges, which OpenMetadata upserts.
 OpenMetadata stores descriptions HTML-encoded (`learner's` as `learner&#39;s`),
 so sync compares them with the encoding undone. Markup the server's sanitizer
 removes cannot compare equal, and sync warns that the file needs fixing.
-Fields the file does not set are left as OpenMetadata has them. Deleting a tag
+Fields the file does not set are left as OpenMetadata has them, except
+`displayName`: a file without one, for a metric that has one in OpenMetadata,
+is reported as `stale` like any other difference (see above). Deleting a tag
 from a file removes it from the metric only if sync applied it (the tag's
 `appliedBy` is the bot); a tag someone added in OpenMetadata stays, even if the
 file listed it too. Lineage from a StarRocks view is skipped with a warning until
