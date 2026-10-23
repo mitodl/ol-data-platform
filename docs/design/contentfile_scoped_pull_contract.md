@@ -350,10 +350,13 @@ How the sensor and the sweep share the state:
 - The cursor moves when a run is requested, so the courses of a scoped run that fails wait for the
   next sweep.
 
-It ends at the raw load. `integrations__learn__ocw_content_files` still rebuilds with the daily
-lakehouse run, and telling Learn a course changed is the sender this section is about, which is
-still not built. Publish-to-row latency (target: one poll plus the settle time plus the run) is
-only measurable once the sensor runs in production.
+The load does not reach the Learn views by itself. `stg__ocw__s3__course_content` was built only by
+the 06:00 `non_airbyte_staging_daily` job, so a scoped load measured on 2026-10-23 sat in raw until
+the next day's build. `ocw_learn_automation_sensor` (lakehouse, 1-minute tick) now owns the staging
+model, both OCW intermediates and both Learn views (`integrations__learn__ocw_courses`,
+`integrations__learn__ocw_content_files`), and requests all five in one dbt run on the tick after
+any `ocw_content` load. Telling Learn a course changed is the sender this section is about, which is
+still not built; Learn picks up the rebuilt views on its own sync schedule.
 
 Unpublish is unchanged: the platform learns of it from the sweep, up to a day late. Learn's own
 webhook still unpublishes immediately.
