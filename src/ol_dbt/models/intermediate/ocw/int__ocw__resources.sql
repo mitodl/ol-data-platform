@@ -16,7 +16,7 @@ with websites as (
         *
         -- Each sync points the resource's file at that Drive file, so the newest one is current.
         , row_number() over (
-            partition by websitecontent_id order by drivefile_created_on desc, drivefile_id asc
+            partition by websitecontent_id order by drivefile_created_on desc nulls last, drivefile_id asc
         ) as drivefile_rank
     from {{ ref('stg__ocw__studio__postgres__gdrive_sync_drivefile') }}
 )
