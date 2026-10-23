@@ -200,8 +200,8 @@ posthog_events_ingest_schedule = dg.ScheduleDefinition(
     # Schedule tags are strings; dagster-k8s parses this one as JSON.
     #
     # max_runtime bounds a run that hangs with its pod still alive, which would
-    # otherwise hold should_execute's skip forever: the instance sets no global
-    # limit (run_monitoring max_runtime_seconds: 0). Every load commits its own
+    # otherwise hold should_execute's skip until the instance's 2-day limit
+    # (run_monitoring max_runtime_seconds). Every load commits its own
     # cursor, so a run cut off mid-backlog loses at most one load.
     tags={
         "dagster/max_runtime": str(6 * 60 * 60),
