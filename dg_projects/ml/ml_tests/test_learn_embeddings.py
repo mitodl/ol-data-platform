@@ -14,6 +14,7 @@ from typing import Any
 import polars as pl
 import pytest
 from dagster import (
+    AssetCheckSeverity,
     DagsterInstance,
     Definitions,
     IOManager,
@@ -22,6 +23,10 @@ from dagster import (
     materialize,
 )
 from dagster._core.definitions.data_version import DATA_VERSION_TAG
+from ml.assets.learn_embedding_checks import (
+    content_file_vectors_match_learn,
+    topic_vectors_match_learn,
+)
 from ml.assets.learn_embeddings import (
     CONTENT_FILE_CHUNKS_KEY,
     CONTENT_FILE_TEXT_KEY,
@@ -50,10 +55,11 @@ from ol_orchestrate.lib.embeddings.learn import LEARN_V1_CONTENT_FILES
 from ol_orchestrate.lib.embeddings.models import EmbeddingBatch, EmbeddingModelSpec
 from ol_orchestrate.lib.embeddings.pipeline import chunk_key
 from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy
-from ol_orchestrate.resources.embeddings import EmbeddingsResource
+from ol_orchestrate.resources.embeddings import EmbeddingsResource, QdrantResource
 from ol_orchestrate.resources.secrets.vault import Vault
 from pydantic_ai.embeddings.result import EmbedInputType
 from pyiceberg.exceptions import NoSuchTableError
+from qdrant_client import QdrantClient, models
 
 RUN = "course-v1:MITxT+18.01x+1T2026"
 RESOURCE = "course-v1:MITxT+18.01x"
@@ -672,6 +678,206 @@ def test_a_run_that_loses_its_last_file_is_emptied(tables):
     assert tables[CONTENT_FILE_VECTORS_KEY.path[-1]].is_empty()
 
 
+# ------------------------------------------------------------------- smokecheck
+LEARN_BASE = "mitlearn-test"
+DENSE = "text-embedding-3-large"
+LEARN_CLIENTS: list[QdrantClient] = []
+
+
+class FakeQdrant(QdrantResource):
+    def get_client(self) -> QdrantClient:
+        return LEARN_CLIENTS[0]
+
+
+@pytest.fixture
+def learn_qdrant() -> QdrantClient:
+    client = QdrantClient(":memory:")
+    for collection in ("content_files", "topics"):
+        client.create_collection(
+            f"{LEARN_BASE}.{collection}",
+            vectors_config={
+                DENSE: models.VectorParams(
+                    size=VECTOR_LENGTH, distance=models.Distance.COSINE
+                )
+            },
+        )
+    LEARN_CLIENTS[:] = [client]
+    return client
+
+
+def fake_qdrant() -> FakeQdrant:
+    return FakeQdrant(
+        vault=Vault(vault_addr="https://vault.example.com", vault_auth_type="token"),
+        vault_path="pipelines/qdrant",
+        base_collection_name=LEARN_BASE,
+    )
+
+
+def fake_vector(text: str, *, skew: float = 0.0) -> list[float]:
+    """Return FakeEmbedder's vector for a text, turned away from it by ``skew``."""
+    return [float(len(text)), 1.0, skew] + [0.0] * (VECTOR_LENGTH - 3)
+
+
+def learn_chunk(
+    key: str, text: str, *, skew: float = 0.0, **payload: Any
+) -> models.PointStruct:
+    return models.PointStruct(
+        id=learn_point_id("mitxonline", RESOURCE, RUN, key, "0"),
+        vector={DENSE: fake_vector(text, skew=skew)},
+        payload={
+            "chunk_content": text,
+            "chunk_number": 0,
+            "checksum": md5_hex(text),
+            "run_readable_id": RUN,
+            "resource_readable_id": RESOURCE,
+            "platform": {"code": "mitxonline"},
+            "key": key,
+            "file_type": None,
+        }
+        | payload,
+    )
+
+
+def check_content_files(tables) -> Any:
+    result = materialize(
+        [
+            content_file_embedding_chunks,
+            content_file_embedding_vectors,
+            content_file_vectors_match_learn,
+        ],
+        partition_key=PARTITION,
+        instance=instance(),
+        resources={
+            "learn_embeddings_io_manager": Warehouse(tables),
+            "embeddings": fake_embeddings(),
+            "learn_qdrant": fake_qdrant(),
+        },
+    )
+    (evaluation,) = result.get_asset_check_evaluations()
+    return evaluation
+
+
+def test_vectors_that_match_learns_pass(tables, learn_qdrant):
+    load_sources(tables, **{"block-v1:a": "First file.", "block-v1:b": "Second."})
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.content_files",
+        [
+            learn_chunk("block-v1:a", "First file."),
+            learn_chunk("block-v1:b", "Second."),
+            # Learn's metadata chunk for the course is not the platform's to build.
+            models.PointStruct(
+                id=str(uuid.uuid4()),
+                vector={DENSE: fake_vector("metadata")},
+                payload={"run_readable_id": RUN, "file_type": "course_metadata"},
+            ),
+        ],
+    )
+
+    evaluation = check_content_files(tables)
+
+    assert evaluation.passed
+    metadata = {key: value.value for key, value in evaluation.metadata.items()}
+    assert metadata["platform_chunks"] == 2
+    assert metadata["learn_points"] == 2
+    assert metadata["matched_ids"] == 2
+    assert metadata["text_matches"] == 2
+    assert metadata["checksum_matches"] == 2
+    assert metadata["compared_vectors"] == 2
+    assert metadata["cosine_min"] == pytest.approx(1.0)
+
+
+def test_a_vector_unlike_learns_for_the_same_text_is_an_error(tables, learn_qdrant):
+    load_sources(tables, **{"block-v1:a": "First file.", "block-v1:b": "Second."})
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.content_files",
+        [
+            learn_chunk("block-v1:a", "First file."),
+            learn_chunk("block-v1:b", "Second.", skew=5.0),
+        ],
+    )
+
+    evaluation = check_content_files(tables)
+
+    assert not evaluation.passed
+    assert evaluation.severity == AssetCheckSeverity.ERROR
+    assert evaluation.metadata["below_min_cosine"].value == 1
+
+
+def test_differing_points_and_texts_only_warn(tables, learn_qdrant):
+    load_sources(tables, **{"block-v1:a": "Platform text.", "block-v1:b": "Second."})
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.content_files",
+        [
+            # Tika's text for the block, not the platform's, with its own vector.
+            learn_chunk("block-v1:a", "Tika's text.", skew=5.0),
+            learn_chunk("block-v1:gone", "A file the platform does not have."),
+        ],
+    )
+
+    evaluation = check_content_files(tables)
+
+    assert not evaluation.passed
+    assert evaluation.severity == AssetCheckSeverity.WARN
+    metadata = {key: value.value for key, value in evaluation.metadata.items()}
+    assert (
+        metadata["matched_ids"],
+        metadata["missing_in_learn"],
+        metadata["missing_on_platform"],
+        metadata["text_matches"],
+        metadata["checksum_matches"],
+        metadata["compared_vectors"],
+    ) == (1, 1, 1, 0, 0, 0)
+
+
+def test_topics_are_compared_by_topic_uuid(tables, learn_qdrant):
+    other_topic = "0f6c1a52-55f4-4b1e-9d2e-6a5b4c3d2e1f"
+    tables[TOPICS_RELATION] = pl.DataFrame(
+        [
+            {
+                "learningresourcetopic_id": number,
+                "learningresourcetopic_name": name,
+                "learningresourcetopic_parent_id": None,
+                "learningresourcetopic_uuid": topic_uuid,
+            }
+            for number, (name, topic_uuid) in enumerate(
+                [("Calculus", TOPIC_UUID), ("Algebra", other_topic)]
+            )
+        ]
+    )
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.topics",
+        [
+            models.PointStruct(
+                id=TOPIC_UUID,
+                vector={DENSE: fake_vector("Calculus")},
+                payload={"name": "Calculus"},
+            ),
+            # A topic whose name embedded to zeros is written with no vectors.
+            models.PointStruct(id=other_topic, vector={}, payload={"name": "Algebra"}),
+        ],
+    )
+
+    result = materialize(
+        [topic_embedding_chunks, topic_embedding_vectors, topic_vectors_match_learn],
+        resources={
+            "io_manager": Warehouse(tables),
+            "embeddings": fake_embeddings(),
+            "learn_qdrant": fake_qdrant(),
+        },
+    )
+
+    (evaluation,) = result.get_asset_check_evaluations()
+    assert evaluation.passed
+    metadata = {key: value.value for key, value in evaluation.metadata.items()}
+    assert (
+        metadata["matched_ids"],
+        metadata["text_matches"],
+        metadata["learn_points_without_vector"],
+        metadata["compared_vectors"],
+    ) == (2, 2, 1, 1)
+    assert "checksum_matches" not in metadata
+
+
 # ------------------------------------------------------------------- definitions
 def test_learn_embedding_definitions_load():
     Definitions(
@@ -683,11 +889,13 @@ def test_learn_embedding_definitions_load():
             topic_embedding_vectors,
             embedding_strategies,
         ],
+        asset_checks=[content_file_vectors_match_learn, topic_vectors_match_learn],
         sensors=[learn_content_file_text_sensor],
         resources={
             "io_manager": Warehouse({}),
             "learn_embeddings_io_manager": Warehouse({}),
             "embeddings": fake_embeddings(),
+            "learn_qdrant": fake_qdrant(),
         },
     ).resolve_all_job_defs()
 

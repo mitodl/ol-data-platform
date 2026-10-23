@@ -79,6 +79,18 @@ def vector_name(model_name: str) -> str:
     return segments[1] if len(segments) > 1 else model_name
 
 
+# Learn's live collections, ``{base}.content_files`` and ``{base}.topics``, which
+# the platform's learn_v1 vectors are compared with.
+LEARN_CONTENT_FILES_COLLECTION = QdrantTarget(
+    collection="content_files",
+    dense_vector_name=vector_name(DENSE_MODEL_NAME),
+    sparse_model=SPARSE_MODEL_NAME,
+    sparse_vector_name=vector_name(SPARSE_MODEL_NAME),
+)
+LEARN_TOPICS_COLLECTION = LEARN_CONTENT_FILES_COLLECTION.model_copy(
+    update={"collection": "topics"}
+)
+
 LEARN_V1_CONTENT_FILES = EmbeddingStrategy(
     strategy_id="learn_v1_content_files",
     doc_kind=CONTENT_FILE_DOC_KIND,

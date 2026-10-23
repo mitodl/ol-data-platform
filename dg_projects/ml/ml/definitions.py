@@ -5,6 +5,7 @@ from dagster import (
     AutomationConditionSensorDefinition,
     DefaultSensorStatus,
     Definitions,
+    EnvVar,
     define_asset_job,
 )
 from dagster_aws.s3 import S3Resource
@@ -22,6 +23,10 @@ from ml.assets.feedback_embeddings import feedback_embeddings
 from ml.assets.feedback_redacted import feedback_redacted
 from ml.assets.feedback_sentiment_eval import feedback_sentiment_eval
 from ml.assets.feedback_summaries import feedback_summaries
+from ml.assets.learn_embedding_checks import (
+    content_file_vectors_match_learn,
+    topic_vectors_match_learn,
+)
 from ml.assets.learn_embeddings import (
     content_file_embedding_chunks,
     content_file_embedding_vectors,
@@ -47,7 +52,7 @@ from ol_orchestrate.lib.utils import (
     s3_uploads_bucket,
     unauthenticated_vault,
 )
-from ol_orchestrate.resources.embeddings import EmbeddingsResource
+from ol_orchestrate.resources.embeddings import EmbeddingsResource, QdrantResource
 
 init_sentry("ml")
 
@@ -231,6 +236,14 @@ defs = Definitions(
             environment=DAGSTER_ENV,
             azure_ad_auth=DAGSTER_ENV != "dev",
         ),
+        # Learn's cluster, read-only, for the learn_v1 smokechecks. The base is
+        # e.g. mitlearn-production; it is read when a check runs, so dev loads
+        # without it.
+        "learn_qdrant": QdrantResource(
+            vault=vault,
+            vault_path="pipelines/qdrant",
+            base_collection_name=EnvVar("LEARN_QDRANT_COLLECTION_BASE"),
+        ),
         # Separate resource, not a reused "llm": Anthropic/Bedrock has no embeddings
         # API, so this needs its own client_class/key. Which Bedrock embedding
         # model to keep is still open (§B.1's bake-off); bedrock_embeddings is the
@@ -267,6 +280,7 @@ defs = Definitions(
             embedding_strategies,
         ]
     ),
+    asset_checks=[content_file_vectors_match_learn, topic_vectors_match_learn],
     jobs=[
         data_export_job,
         feedback_redacted_job,
