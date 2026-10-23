@@ -23,12 +23,14 @@ from ol_orchestrate.lib.embeddings.documents import md5_hex
 
 # Until the smokecheck against Learn's collections passes, only a sample of runs is
 # registered, so automation and backfills embed only these. To lift it, delete the
-# two constants and in_sample, and register every run in new_runs below.
+# SAMPLE_ constants and in_sample, and register every run in new_runs below.
 #
 # The sample is the first SAMPLE_RUNS_PER_SOURCE runs of each etl_source in md5
 # order of their run_readable_id, which is stable and spread over the courses,
-# plus runs picked for the smokecheck.
+# plus runs picked for the smokecheck. The md5 pick skips the Universal AI orgs:
+# Learn does not list their courses, so it has no points to compare them with.
 SAMPLE_RUNS_PER_SOURCE = 5
+SAMPLE_SKIPPED_ORG_PREFIX = "UAI_"
 SAMPLE_NAMED_RUNS = frozenset(
     {
         # Learn's text for an OCW file is the platform's, so these should match
@@ -54,9 +56,12 @@ def in_sample(versions: pl.DataFrame) -> pl.DataFrame:
     named = pl.concat_str("etl_source", "run_readable_id", separator="|").is_in(
         [f"{etl_source}|{run}" for etl_source, run in SAMPLE_NAMED_RUNS]
     )
+    org = pl.col("run_readable_id").str.extract(r"^course-v1:([^+]+)\+")
+    skipped = org.str.starts_with(SAMPLE_SKIPPED_ORG_PREFIX).fill_null(value=False)
+    # A skipped run has no hash, so no rank, and is never among the first.
     first = (
-        pl.col("run_readable_id")
-        .map_elements(md5_hex, return_dtype=pl.String)
+        pl.when(~skipped)
+        .then(pl.col("run_readable_id").map_elements(md5_hex, return_dtype=pl.String))
         .rank("ordinal")
         .over("etl_source")
         <= SAMPLE_RUNS_PER_SOURCE
