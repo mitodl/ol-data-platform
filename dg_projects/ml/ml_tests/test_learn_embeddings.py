@@ -39,7 +39,11 @@ from ml.assets.learn_embeddings import (
 )
 from ml.lib import warehouse
 from ml.lib.learn_embeddings import STRATEGIES_PATH, TOPICS_RELATION, strategies
-from ml.sensors.learn_embeddings import learn_content_file_text_sensor
+from ml.sensors.learn_embeddings import (
+    SAMPLE_RUNS_PER_SOURCE,
+    in_sample,
+    learn_content_file_text_sensor,
+)
 from ol_llm import LLMRejected, LLMUnavailable
 from ol_orchestrate.lib.embeddings.documents import md5_hex
 from ol_orchestrate.lib.embeddings.learn import LEARN_V1_CONTENT_FILES
@@ -593,6 +597,53 @@ def test_sensor_registers_runs_then_observes_them(tables):
     (observation,) = second.asset_events
     assert observation.asset_key == CONTENT_FILE_TEXT_KEY
     assert observation.partition == PARTITION
+
+
+def test_the_sensor_registers_only_the_sample(tables):
+    runs_by_hash = sorted(
+        (f"course-v1:MITxT+{number}x+1T2026" for number in range(8)), key=md5_hex
+    )
+    tables["integrations__learn__content_files"] = pl.concat(
+        [
+            content_files(**{"block-v1:a": "Text."}).with_columns(
+                pl.lit(run).alias("run_readable_id")
+            )
+            for run in runs_by_hash
+        ]
+    )
+    tables["integrations__learn__mitxonline_runs"] = pl.DataFrame(
+        [{"readable_id": f"resource-{run}", "run_id": run} for run in runs_by_hash]
+    )
+    load_empty_xpro_and_ocw(tables)
+
+    result: Any = learn_content_file_text_sensor(
+        build_sensor_context(instance=DagsterInstance.ephemeral())
+    )
+
+    assert result.dynamic_partitions_requests[0].partition_keys == sorted(
+        runs_by_hash[:SAMPLE_RUNS_PER_SOURCE]
+    )
+
+
+def test_the_sample_takes_the_first_runs_by_hash_and_the_named_ones():
+    named = "course-v1:MITxT+7.05x+2T2026"
+    others = [f"course-v1:MITxT+{number}x+1T2026" for number in range(8)]
+    versions = pl.DataFrame(
+        {
+            "etl_source": ["mitxonline"] * 9 + ["xpro"],
+            "run_readable_id": [*others, named, "course-v1:xPRO+one+R1"],
+            "text_version": ["v"] * 10,
+        }
+    )
+
+    sampled = in_sample(versions)
+
+    first = sorted([*others, named], key=md5_hex)[:SAMPLE_RUNS_PER_SOURCE]
+    assert set(sampled["run_readable_id"]) == {
+        *first,
+        named,
+        "course-v1:xPRO+one+R1",
+    }
 
 
 def test_a_run_that_loses_its_last_file_is_emptied(tables):
