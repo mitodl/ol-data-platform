@@ -84,15 +84,18 @@ class ParityReport:
 
     @property
     def points_differ(self) -> bool:
-        """Whether the two sides have different points or texts.
+        """Whether the two sides have different points or texts, or a chunk lacks
+        a vector.
 
-        Expected for mitxonline and xpro OLX files, whose text the platform
-        approximates.
+        Different points and texts are expected for mitxonline and xpro OLX
+        files, whose text the platform approximates. A chunk without a vector is
+        one whose embedding request failed.
 
         :rtype: bool
         """
         return bool(
-            self.missing_in_learn
+            self.platform_chunks_without_vector
+            or self.missing_in_learn
             or self.missing_on_platform
             or self.text_matches < self.matched_ids
             or (self.platform_chunks and not self.compared_vectors)

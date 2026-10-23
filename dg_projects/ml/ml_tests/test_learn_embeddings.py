@@ -16,6 +16,7 @@ import polars as pl
 import pytest
 from dagster import (
     AssetCheckSeverity,
+    AssetSelection,
     DagsterInstance,
     Definitions,
     IOManager,
@@ -844,7 +845,7 @@ def learn_chunk(
     )
 
 
-def check_content_files(tables) -> Any:
+def check_content_files(tables, selection: AssetSelection | None = None) -> Any:
     result = materialize(
         [
             content_file_embedding_chunks,
@@ -858,6 +859,7 @@ def check_content_files(tables) -> Any:
             "embeddings": fake_embeddings(),
             "learn_qdrant": fake_qdrant(),
         },
+        selection=selection,
     )
     (evaluation,) = result.get_asset_check_evaluations()
     return evaluation
@@ -911,6 +913,31 @@ def test_a_vector_unlike_learns_for_the_same_text_is_an_error(tables, learn_qdra
     assert not evaluation.passed
     assert evaluation.severity == AssetCheckSeverity.ERROR
     assert evaluation.metadata["below_min_cosine"].value == 1
+
+
+def test_a_chunk_without_a_vector_warns(tables, learn_qdrant):
+    load_sources(tables, **{"block-v1:a": "First file.", "block-v1:b": "Second."})
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.content_files",
+        [
+            learn_chunk("block-v1:a", "First file."),
+            learn_chunk("block-v1:b", "Second."),
+        ],
+    )
+    REJECTED.add("Second.")
+    # The check is skipped when the vector step fails, so it sees a missing
+    # vector when it is run without the vectors afterwards.
+    assert not build_content_files(tables).success
+
+    evaluation = check_content_files(
+        tables,
+        AssetSelection.assets(CONTENT_FILE_CHUNKS_KEY)
+        | AssetSelection.checks(content_file_vectors_match_learn),
+    )
+
+    assert not evaluation.passed
+    assert evaluation.severity == AssetCheckSeverity.WARN
+    assert evaluation.metadata["platform_chunks_without_vector"].value == 1
 
 
 def test_differing_points_and_texts_only_warn(tables, learn_qdrant):
