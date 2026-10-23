@@ -15,6 +15,10 @@ The Airbyte source-s3 connection "S3 edX.org Program Credentials → S3 Data
 Lake" appends every report into raw__edxorg__program_learner_report. This
 source appends them into raw__edxorg__s3__program_learner_report, stamped with
 the file they came from, and staging keeps each key's row from its newest file.
+The newest file is not always the newest mtime: the backlog was copied into the
+landing zone in bulk (1,580 files on 2024-02-19), so older reports' mtimes do
+not follow the date in their names. Each program's latest report does carry
+its newest mtime.
 The cohort reports are a different row that nothing reads, and are not loaded.
 
 On 2026-10-23 the prefix held 23,205 learner reports (4.93 TB) for 24
