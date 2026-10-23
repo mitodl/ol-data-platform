@@ -6,18 +6,8 @@ with tfact_enrollment as (
     select * from {{ ref('tfact_enrollment_order') }}
 )
 
-, discount as (
+, dim_discount as (
     select * from {{ ref('dim_discount') }}
-)
-
-, program_order_coupons as (
-    select
-        program_orders.order_id
-        , program_orders.platform_fk
-        , max(discount.discount_code) as program_coupon_code
-    from {{ ref('tfact_order') }} as program_orders
-    inner join discount on program_orders.discount_fk = discount.discount_pk
-    group by program_orders.order_id, program_orders.platform_fk
 )
 
 , program_orders as (
@@ -28,14 +18,12 @@ with tfact_enrollment as (
         end as program_order_platform
         , tfact_enrollment.enrollment_id as program_order_enrollment_id
         , tfact_enrollment_order.program_order_id
-        , program_order_coupons.program_coupon_code
+        , dim_discount.discount_code as program_coupon_code
     from tfact_enrollment
     inner join tfact_enrollment_order
         on tfact_enrollment.enrollment_key = tfact_enrollment_order.enrollment_key
-    left join program_order_coupons
-        on
-            tfact_enrollment_order.program_order_id = program_order_coupons.order_id
-            and tfact_enrollment.platform_fk = program_order_coupons.platform_fk
+    left join dim_discount
+        on tfact_enrollment_order.program_discount_fk = dim_discount.discount_pk
     where
         -- program enrollment ids can collide with courserunenrollment_id
         tfact_enrollment.enrollment_type = 'course'
