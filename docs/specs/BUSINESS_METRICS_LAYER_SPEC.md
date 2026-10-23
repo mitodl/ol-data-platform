@@ -326,7 +326,7 @@ metric:                         # OpenMetadata CreateMetric body
   reviewers: [{type: team, name: <team>}]
   tags:
     - {tagFQN: <glossary>.<term>, source: Glossary, labelType: Manual, state: Confirmed}
-status: Approved                # entityStatus; applied by PATCH, not part of CreateMetric
+status: Approved                # Draft or Approved; applied by PATCH, not part of CreateMetric
 implemented_by:
   - dbt_model: afact_learner_courserun_progress
     columns: [completion_status]
@@ -344,6 +344,8 @@ implemented_by:
   not build) and the columns that carry the metric. The first entry is the defining
   implementation; later entries are places it is served from.
 - `metricExpression` is optional and is documentation only. The column is the definition.
+- `status` is `Draft` or `Approved`. Approval is the pull request that changes the file
+  (§6, "Status and approval").
 
 ### 5.2 Naming
 
@@ -365,8 +367,9 @@ workflow's path filter. It needs no credentials and no network. Errors:
   named after its metric;
 - `metric` sets a field CreateMetric does not have, or one sync owns (`id`,
   `fullyQualifiedName`);
-- a value in `metric`, or `status`, does not fit the server's schema (a wrong type, a value
-  outside an enum, a nested object missing a required key).
+- a value in `metric` does not fit the server's schema (a wrong type, a value outside an
+  enum, a nested object missing a required key);
+- `status` is anything other than `Draft` or `Approved`.
 
 The schema is not hand-written. `lib/openmetadata_metric_schema.json` is a committed
 snapshot of CreateMetric cut from the server's published OpenAPI document, stamped with the
@@ -403,21 +406,55 @@ against a schema the server no longer publishes, and `refresh-schema` comes firs
 
 1. Resolve owner and reviewer names to ids, and check each glossary `tagFQN` exists.
 2. `GET /v1/metrics/name/{name}` and run the drift check below on what comes back. Nothing
-   has been written at this point.
-3. `PUT /v1/metrics` with the `metric` body. This creates the entity or updates its
-   structural fields.
-4. `PATCH /v1/metrics/{id}` for description, owners, reviewers and status. A bot PUT does
-   not overwrite an existing description, so git wins only through PATCH.
+   has been written at this point. A metric that is In Review or Rejected stops here (see
+   "Status and approval" below).
+3. `PUT /v1/metrics` with the `metric` body, only when the metric does not exist or one of
+   its own fields differs. This creates the entity or updates its structural fields.
+4. `PATCH /v1/metrics/{id}` for description, owners, reviewers and status where they still
+   differ. A bot PUT does not overwrite an existing description or existing owners, so git
+   wins only through PATCH.
 5. For each `implemented_by` entry, resolve the table from a production manifest and
    `PUT /v1/lineage` with a table-to-metric edge, with no column lineage.
 
-Drift: step 2 reads the live entity's `updatedBy`. If the last change was not made by the
-sync's bot and description, reviewers or status differ from the file, report the
-difference and exit non-zero without writing, unless `--force`. The edit then becomes a
-pull request. This needs no stored state. The check has to precede the PUT: a PUT that
-changes a structural field (e.g. `metricType`) records the bot as `updatedBy` while the
-server keeps the human-edited description, and a check made afterwards would see the bot
-and let the PATCH overwrite it.
+Drift: step 2 reads the live entity's `updatedBy`. When the last change was not made by
+the sync's bot, it reads `GET /v1/metrics/{id}/versions` and takes the newest version whose
+`updatedBy` is the bot. Each version is a full snapshot of the entity, owners and
+reviewers included (`EntityRepository.storeEntityHistory` stores the original loaded with
+the PUT/PATCH fields). A description, owners, reviewers or status that differs both from
+that version and from the file was edited by someone else, so sync reports it and exits non-zero without
+writing, unless `--force`. The edit then becomes a pull request. A file change to a field
+nobody edited syncs even when someone edited another field (e.g. a tag), and a metric the
+bot never wrote is compared with the file. This needs no stored state of our own. The
+check has to precede the PUT: a PUT that changes a structural field (e.g. `metricType`)
+records the bot as `updatedBy` while the server keeps the human-edited description, and a
+check made afterwards would see the bot and let the PATCH overwrite it.
+
+Status and approval: decided 2026-10-21. A file's `status` is `Draft` or `Approved`, and
+approving the pull request that changes the file approves the metric. The sync bot is not a
+metric reviewer and is not made one. In 2.0.5 only a move from In Review to Approved or
+Rejected checks that the updater is a reviewer, and only when the metric has reviewers
+(`EntityUpdater.updateEntityStatus`, `checkUpdatedByReviewer`). Draft to Approved and any
+move out of Unprocessed, where a sync PUT leaves the status (`setDefaultStatus`), are
+unchecked, so the bot applies a file's
+status without being a reviewer. Reviewers are either all users or exactly one team
+(`validateReviewers`), so the bot could not sit beside a reviewing team. Sync does not
+override a review in progress or a rejection: when the live status is In Review or Rejected
+it writes nothing for that metric (no PUT, no PATCH, no lineage edge), with or without
+`--force`, prints one line for it, counts it as failed, continues with the rest and exits
+non-zero; `--dry-run` reports the same. Skipping only the status PATCH would not do, because
+a structural PUT alone resets the status to Unprocessed, ending a review without a reviewer
+or undoing a rejection. In Review clears when a reviewer approves or rejects the metric, or
+anyone moves it out of In Review. Rejected (decided 2026-10-21) clears when someone moves the
+metric out of Rejected; the guard reads only the live status. The expected process also
+changes the metric file (e.g. back to Draft with the definition fixed), which sync does not
+check. Moved out with no file change, a file that says Approved is status drift, so sync
+writes nothing unless `--force`, which would approve it again; a file that says Draft, with
+the metric moved to Draft, syncs.
+
+Descriptions: the server stores `DescriptionSanitizer.sanitize(description)` on create, PUT
+and PATCH, which HTML-encodes text (`'` as `&#39;`, `"` as `&#34;`), so sync compares
+descriptions with the encoding undone. Otherwise a description with a quote would be
+PATCHed on every run and read as drift after any human edit.
 
 Column lineage: OpenMetadata 2.0.3 stores none for a Metric. `LineageRepository`
 returns no child names for one ("Metric column level lineage is not supported") and
@@ -488,7 +525,19 @@ Nothing here blocks phase 1.
   requests.
 - Materialization: table vs. incremental for the progress model. Start as a table and
   measure the build.
-- Reviewers on re-sync: whether a bot PUT clears reviewers set in the OpenMetadata UI is
-  not verified. Test on QA before writing the drift check.
-- Creating a Metric with reviewers may start OpenMetadata's approval workflow and set the
-  status itself. Not verified; affects step 3 of sync.
+- Reviewers and status on re-sync, read from the 2.0.5 source (production runs 2.0.5) and
+  not yet observed on a server. A PUT replaces reviewers with the body's
+  (`EntityUpdater.updateReviewers`), so a body without them clears them; sync sends the
+  live reviewers when the file sets none. A PUT also resets `entityStatus` to Unprocessed,
+  because CreateMetric has no status and `setDefaultStatus` fills it, which is why sync
+  PUTs only for a structural change and then PATCHes the status back. A PUT merges tags
+  and never removes one (`updateTags`), while a PATCH replaces them, so sync removes a tag
+  the file dropped by PATCH, and only one whose `appliedBy` is the bot.
+- Approval workflow: decided 2026-10-21 (§6, "Status and approval"). Approval is the pull
+  request; files set only Draft or Approved, and the sync bot is not a reviewer. None of the
+  workflow definitions 2.0.5 seeds triggers on `metric` (only glossaryTerm,
+  recognizerFeedback and AI assets), so creating a Metric with reviewers does not set its
+  status. A metric In Review or Rejected is never written by sync, `--force` included. Still
+  unchecked: whether a custom workflow on our server targets metrics, and whether Deprecated
+  (or Archived) should become settable from a file when a metric is retired. The PUT's reset
+  to Unprocessed has not been observed on a server.

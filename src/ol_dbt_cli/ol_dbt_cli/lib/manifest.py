@@ -104,6 +104,11 @@ class ManifestRegistry:
     """macro unique_id -> ManifestMacro for every macro in the project graph."""
     foreign_keys: dict[str, list[ForeignKeyRef]] = field(default_factory=dict)
     """child unique_id -> the FK edges its ``relationships`` tests declare."""
+    disabled: dict[str, ManifestModel] = field(default_factory=dict)
+    """model name -> ManifestModel for models the manifest's target disabled.
+
+    A production (Trino) manifest lists the StarRocks-only models here, with
+    their ``starrocks`` tag, and not under ``nodes``."""
 
     def get_model(self, name: str) -> ManifestModel | None:
         return self.by_name.get(name)
@@ -321,6 +326,11 @@ def registry_from_manifest(raw: dict[str, Any]) -> ManifestRegistry:
         fk = _parse_relationship_test(node_data)
         if fk is not None:
             registry.foreign_keys.setdefault(fk.child_unique_id, []).append(fk)
+
+    for versions in raw.get("disabled", {}).values():
+        for node_data in versions:
+            if node_data.get("resource_type") == "model":
+                registry.disabled[node_data["name"]] = _parse_node(node_data)
 
     for uid, macro_data in raw.get("macros", {}).items():
         registry.macros[uid] = _parse_macro(macro_data)

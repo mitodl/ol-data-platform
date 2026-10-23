@@ -1,5 +1,5 @@
 {
-  "x-openmetadata-version": "2.0.3",
+  "x-openmetadata-version": "2.0.5",
   "type": "object",
   "properties": {
     "metric": {
