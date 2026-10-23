@@ -63,6 +63,14 @@ SUMMARY_MODEL = os.environ.get(
     else "bedrock:global.anthropic.claude-haiku-4-5-20251001-v1:0",
 )
 
+# 200 was enough for claude-haiku-4-5 (no thinking), but a model with adaptive
+# thinking on by default (e.g. claude-sonnet-5/claude-opus-5) can spend the whole
+# budget on hidden thinking before any visible output, so this leaves headroom for
+# thinking plus the summary. Without a cap, pydantic-ai-slim 2.60 sends a Bedrock
+# Claude model its maximum output (64,000 for Haiku 4.5), and Bedrock reserves that
+# much of the tokens-per-minute quota for every concurrent request.
+SUMMARY_MAX_TOKENS = int(os.environ.get("SUMMARY_MAX_TOKENS", "1024"))
+
 SUMMARY_PROMPT_NAME = "feedback-summary"
 
 # The embedded default: what a run uses with tracing off (local development) or
@@ -249,6 +257,7 @@ class Summarizer:
             self.use_case,
             self.prompt.format(conversation_text=row["conversation_text"]),
             output_type=TextOutput(_non_empty),
+            model_settings={"max_tokens": SUMMARY_MAX_TOKENS},
             attribution=Attribution(
                 thread_id=row["feedback_conversation_pk"], run_id=self.run_id
             ),
