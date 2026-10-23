@@ -20,7 +20,7 @@ from dagster._core.events import (
     DagsterEventType,
 )
 from dagster._core.events.log import EventLogEntry
-from dagster._core.storage.dagster_run import DagsterRunStatus
+from dagster._core.storage.dagster_run import DagsterRun, DagsterRunStatus
 from dagster._core.storage.tags import PARTITION_NAME_TAG
 from dagster._core.test_utils import create_run_for_test
 from ol_orchestrate.lib.automation_policies import (
@@ -33,6 +33,71 @@ UPSTREAM_KEY = AssetKey(["test", "upstream"])
 DOWNSTREAM_KEY = AssetKey(["test", "downstream"])
 PARTITION = "run-a"
 IN_FLIGHT_JOB = "__ASSET_JOB"
+
+
+def _log_run_event(
+    instance: dg.DagsterInstance, run_id: str, dagster_event: DagsterEvent
+) -> None:
+    instance.handle_new_event(
+        EventLogEntry(
+            error_info=None,
+            level="debug",
+            user_message="",
+            run_id=run_id,
+            timestamp=time.time(),
+            dagster_event=dagster_event,
+        )
+    )
+
+
+def _start_run(
+    instance: dg.DagsterInstance, key: AssetKey, partition: str | None = None
+) -> DagsterRun:
+    """Put a run of ``key`` in flight without finishing it.
+
+    materialize() is synchronous, so an in-progress run has to be staged by
+    hand. The MATERIALIZATION_PLANNED event is the part that matters: that is
+    what in_progress() reads, not the run record.
+    """
+    run = create_run_for_test(
+        instance,
+        job_name=IN_FLIGHT_JOB,
+        status=DagsterRunStatus.STARTED,
+        asset_selection={key},
+        tags={PARTITION_NAME_TAG: partition} if partition else None,
+    )
+    _log_run_event(
+        instance,
+        run.run_id,
+        DagsterEvent(
+            event_type_value=DagsterEventType.ASSET_MATERIALIZATION_PLANNED.value,
+            job_name=IN_FLIGHT_JOB,
+            event_specific_data=AssetMaterializationPlannedData(
+                asset_key=key, partition=partition
+            ),
+        ),
+    )
+    return run
+
+
+def _finish_run(
+    instance: dg.DagsterInstance,
+    run: DagsterRun,
+    key: AssetKey,
+    partition: str | None = None,
+) -> None:
+    """Complete a staged run successfully, materialization and all."""
+    instance.report_runless_asset_event(
+        dg.AssetMaterialization(asset_key=key, partition=partition)
+    )
+    _log_run_event(
+        instance,
+        run.run_id,
+        DagsterEvent(
+            event_type_value=DagsterEventType.RUN_SUCCESS.value,
+            job_name=IN_FLIGHT_JOB,
+        ),
+    )
 
 
 class DownstreamBehaviour:
@@ -117,56 +182,13 @@ class Harness:
             raise_on_error=False,
         )
 
-    def _log(self, run_id: str, dagster_event: DagsterEvent) -> None:
-        self.instance.handle_new_event(
-            EventLogEntry(
-                error_info=None,
-                level="debug",
-                user_message="",
-                run_id=run_id,
-                timestamp=time.time(),
-                dagster_event=dagster_event,
-            )
-        )
-
     def start_downstream_run(self):
-        """Put a downstream run in flight without finishing it.
-
-        materialize() is synchronous, so an in-progress run has to be staged by
-        hand. The MATERIALIZATION_PLANNED event is the part that matters: that
-        is what in_progress() reads for a partitioned asset, not the run record.
-        """
-        run = create_run_for_test(
-            self.instance,
-            job_name=IN_FLIGHT_JOB,
-            status=DagsterRunStatus.STARTED,
-            asset_selection={DOWNSTREAM_KEY},
-            tags={PARTITION_NAME_TAG: PARTITION},
-        )
-        self._log(
-            run.run_id,
-            DagsterEvent(
-                event_type_value=DagsterEventType.ASSET_MATERIALIZATION_PLANNED.value,
-                job_name=IN_FLIGHT_JOB,
-                event_specific_data=AssetMaterializationPlannedData(
-                    asset_key=DOWNSTREAM_KEY, partition=PARTITION
-                ),
-            ),
-        )
-        return run
+        """Put a downstream run in flight without finishing it."""
+        return _start_run(self.instance, DOWNSTREAM_KEY, PARTITION)
 
     def finish_downstream_run(self, run) -> None:
         """Complete the staged run successfully, materialization and all."""
-        self.instance.report_runless_asset_event(
-            dg.AssetMaterialization(asset_key=DOWNSTREAM_KEY, partition=PARTITION)
-        )
-        self._log(
-            run.run_id,
-            DagsterEvent(
-                event_type_value=DagsterEventType.RUN_SUCCESS.value,
-                job_name=IN_FLIGHT_JOB,
-            ),
-        )
+        _finish_run(self.instance, run, DOWNSTREAM_KEY, PARTITION)
 
     def reach_steady_state(self, behaviour: DownstreamBehaviour) -> None:
         """Observe v1 and export it successfully, so nothing is outstanding."""
@@ -406,6 +428,12 @@ class DbtSensor:
                 dg.AssetMaterialization(asset_key=name)
             )
 
+    def start_run(self, name: str) -> DagsterRun:
+        return _start_run(self.instance, AssetKey(name))
+
+    def finish_run(self, run: DagsterRun, name: str) -> None:
+        _finish_run(self.instance, run, AssetKey(name))
+
     def tick(self, at: datetime | None = None) -> set[str]:
         self.now = at or self.now + SENSOR_INTERVAL
         result = dg.evaluate_automation_conditions(
@@ -623,3 +651,74 @@ def test_the_expiry_restarts_with_each_change(dbt_instance) -> None:
     assert sensor.tick(DEPLOY_MORNING + timedelta(days=2, minutes=30)) == set(), (
         "the first midnight for v3"
     )
+
+
+def test_a_change_during_a_requested_run_is_requested_after_it(dbt_instance) -> None:
+    """A request made before a code change must not consume that change.
+
+    The model is requested on one tick and its run is still going when the
+    next tick sees new SQL. newly_requested is true on that tick too, and a
+    since() tie goes to the reset, so a bare newly_requested reset would clear
+    the latch on the same tick it is set. in_progress blocks the edge-triggered
+    code_version_changed as well, so the new SQL would wait for an upstream
+    change.
+    """
+    sensor = DbtSensor(dbt_instance, dbt_upstream_or_code_changes(), DEPLOY_MORNING)
+    sensor.settle(DOCUMENTS_V1)
+    sensor.deploy(
+        {
+            "stg_document_text": ("v1", []),
+            "int_extraction_sources": ("v2", ["stg_document_text"]),
+        }
+    )
+    assert sensor.tick() == {"int_extraction_sources"}
+    in_flight = sensor.start_run("int_extraction_sources")
+
+    sensor.deploy(
+        {
+            "stg_document_text": ("v1", []),
+            "int_extraction_sources": ("v3", ["stg_document_text"]),
+        }
+    )
+    assert sensor.tick() == set(), "the v2 run is still going"
+    assert sensor.tick() == set()
+
+    sensor.finish_run(in_flight, "int_extraction_sources")
+
+    assert sensor.tick() == {"int_extraction_sources"}, "v3 must still be built"
+
+
+def test_an_expired_hold_stays_released_while_the_child_is_blocked(
+    dbt_instance,
+) -> None:
+    """Once expired, the hold does not re-arm on a later tick.
+
+    since() only turns true again on its trigger, a new code change, so a
+    child blocked by something unrelated on the expiry tick is requested on
+    the first tick after that blocker clears, not another day later.
+    """
+    v1: Models = {
+        "stg_document_text": ("v1", []),
+        "stg_other": ("v1", []),
+        "int_extraction_sources": ("v1", ["stg_document_text", "stg_other"]),
+    }
+    v2: Models = {
+        "stg_document_text": ("v2", []),
+        "stg_other": ("v1", []),
+        "int_extraction_sources": ("v2", ["stg_document_text", "stg_other"]),
+    }
+    sensor = DbtSensor(dbt_instance, dbt_upstream_or_code_changes(), DEPLOY_MORNING)
+    sensor.settle(v1)
+    sensor.deploy(v2)
+    second_midnight = DEPLOY_MORNING.replace(hour=0, minute=0) + timedelta(days=2)
+    assert sensor.tick() == set(), "deploy tick"
+    while sensor.now + SENSOR_INTERVAL < second_midnight:
+        assert sensor.tick() == set(), sensor.now
+
+    unrelated = sensor.start_run("stg_other")
+    assert sensor.tick(second_midnight + timedelta(minutes=30)) == set(), (
+        "expired, but another parent is in progress"
+    )
+    sensor.finish_run(unrelated, "stg_other")
+
+    assert sensor.tick() == {"int_extraction_sources"}

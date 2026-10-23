@@ -109,8 +109,13 @@ def dbt_upstream_or_code_changes() -> AutomationCondition:
     moves nothing. The latch and the per-parent state start with empty cursors,
     though, so that model is neither latched nor held on that first tick.
     """
+    # The reset excludes a tick that also sees a change. newly_requested is true
+    # on the tick after a request, and since() resolves a tie to the reset, so a
+    # change landing while that earlier run is still going would be consumed by
+    # a request made before it, and in_progress blocks the bare trigger too.
     own_code_change = AutomationCondition.code_version_changed().since(
         AutomationCondition.newly_requested()
+        & ~AutomationCondition.code_version_changed()
     )
     return _upstream_or_code_changes(own_code_change) & ~_any_deps_code_change_pending()
 
