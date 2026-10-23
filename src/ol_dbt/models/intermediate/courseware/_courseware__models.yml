@@ -148,7 +148,8 @@ models:
   - name: row_html
     description: str, the row's HTML
   - name: header_html
-    description: str, the HTML of the table's first header cell
+    description: str, the HTML inside the header row's first cell (without its <th>
+      or <td> tag)
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [page_key, table_index, row_index]

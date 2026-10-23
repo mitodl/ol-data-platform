@@ -33,10 +33,11 @@
     development against production text.
 
     OCW courses (platform ocw, keyed by Learn's run id) are read from the published
-    site, int__ocw__content_files, through int__courseware__ocw_files, _ocw_table_rows
-    and _ocw_resources. Those are tables because this model reads each from many places,
-    and Trino plans every reference to a CTE again; as CTEs they made 2,705 stages,
-    past Trino's limit of 600 (QUERY_HAS_TOO_MANY_STAGES):
+    site, int__ocw__content_files, through int__courseware__ocw_files,
+    int__courseware__ocw_table_rows and int__courseware__ocw_resources. Those are tables
+    because this model reads each from many places, and Trino plans every reference to
+    a CTE again; as CTEs they made 2,705 stages, past Trino's limit of 600
+    (QUERY_HAS_TOO_MANY_STAGES):
 
       unit       a page that has child pages, with its children (a week of an OCW Scholar
                  course, a part of a unit); a top-level section page (Lecture Notes,

@@ -20,7 +20,7 @@
 {%- endmacro %}
 
 
-{# courseware_ocw_table_cell: one cell of a table row, its HTML as group 1 #}
+{# courseware_ocw_table_cell: one cell of a table row, the HTML inside its <td> or <th> tag as group 1 #}
 {% macro courseware_ocw_table_cell() -%}
     {{ return("'(?s)<t[dh](?:\\s[^>]*)?>(.*?)</t[dh]>'") }}
 {%- endmacro %}
