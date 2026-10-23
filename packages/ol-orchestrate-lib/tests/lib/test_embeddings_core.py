@@ -200,7 +200,9 @@ def test_each_distinct_new_text_is_embedded_once() -> None:
         [4.0, 1.0, 0.0, 0.0],
         [9.0, 9.0, 9.0, 9.0],
     ]
-    assert {row.model_id for row in outcome.rows} == {"openai:text-embedding-3-large@4"}
+    assert {(row.model_id, row.vector_space) for row in outcome.rows} == {
+        ("openai:text-embedding-3-large@4", "openai:text-embedding-3-large@4")
+    }
     assert {row.embedded_at for row in outcome.rows} == {stamp}
     assert (outcome.embedded_texts, outcome.reused_texts, outcome.input_tokens) == (
         1,
@@ -320,6 +322,25 @@ def test_model_id_takes_the_catalog_length_by_default() -> None:
     )
     with pytest.raises(ValueError, match="set dimensions"):
         _ = EmbeddingModelSpec(model="google:gemini-embedding-001").model_id
+
+
+def test_vector_space_is_the_model_unless_declared() -> None:
+    openai = EmbeddingModelSpec(model="openai:text-embedding-3-large")
+    azure = EmbeddingModelSpec(model="azure:text-embedding-3-large")
+    assert openai.vector_space_id == "openai:text-embedding-3-large@3072"
+    assert azure.vector_space_id != openai.vector_space_id
+
+    shared = "text-embedding-3-large@3072"
+    declared = [
+        spec.model_copy(update={"vector_space": shared}) for spec in (openai, azure)
+    ]
+    assert {spec.vector_space_id for spec in declared} == {shared}
+    assert {spec.model_id for spec in declared} == {
+        "openai:text-embedding-3-large@3072",
+        "azure:text-embedding-3-large@3072",
+    }
+    with pytest.raises(ValidationError):
+        EmbeddingModelSpec(model="openai:text-embedding-3-large", vector_space="")
 
 
 @pytest.fixture

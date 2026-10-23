@@ -120,13 +120,14 @@ Chunking is cheap and deterministic, so it is recomputed when `text_checksum` ch
 | `chunk_key` | |
 | `strategy_id` | |
 | `model_id` | ol-llm model id and vector length, e.g. `openai:text-embedding-3-large@3072`, `openai:text-embedding-3-large@1024`, `google:gemini-embedding-001@768`, `bedrock:amazon.titan-embed-text-v2:0@1024` |
+| `vector_space` | which vectors are interchangeable: the strategy model's declared `vector_space` (e.g. `text-embedding-3-large@3072` for OpenAI's model and an Azure OpenAI deployment of it), else its `model_id` |
 | `vector` | `ARRAY<FLOAT>` (float32) |
 | `input_checksum` | MD5 of the exact text sent to the model: the chunk after the strategy's context template. A mismatch with the current text means re-embed |
 | `embedded_at`, `run_id` | `run_id` is the Dagster run, added by the asset |
 
 Upsert key `(chunk_key, strategy_id)`. The key is the strategy and not the model because a context template changes the vector without changing the model or the chunk. A new strategy adds rows; it never overwrites (the mistake recorded in `tk-feedback-embeddings-the-per-run-model-dim-overri-1b99d9`).
 
-Embedding cost is bounded by the input checksum instead of a separate cache table. Before calling the model, the asset looks up the vectors already stored for `(input_checksum, model_id)` and sends only the texts with none. The same OLX file appears in every run of a course and Learn embeds it once per run; the platform pays once per distinct text, and two strategies that send the same text to the same model share the vector.
+Embedding cost is bounded by the input checksum instead of a separate cache table. Before calling the model, the asset looks up the vectors already stored for `(input_checksum, vector_space)` and sends only the texts with none. The same OLX file appears in every run of a course and Learn embeds it once per run; the platform pays once per distinct text, and two strategies that send the same text into the same space share the vector. A model is a space of its own unless its spec declares one, so vectors of two providers are mixed only where a strategy says they are the same.
 
 `embedding_sparse_vectors`: same shape with `model_id = fastembed/Qdrant-bm25` and `indices ARRAY<INT>`, `values ARRAY<FLOAT>`. Only needed once Learn computes sparse client-side; until then the Qdrant projection sends `Document(text=...)` and lets the vendor compute it.
 
@@ -137,7 +138,7 @@ Embedding cost is bounded by the input checksum instead of a separate cache tabl
 | `strategy_id` | e.g. `learn_v1_content_files`, `exp_2026_10_matryoshka_1024`, `exp_2026_10_gemini` |
 | `doc_kind` | |
 | `chunker` | the chunker's parameters; `chunker_id` is derived from them, e.g. `token:cl100k_base:512:51:md4` |
-| `model` | ol-llm model id, requested vector length, batch size; `model_id` is derived |
+| `model` | ol-llm model id, requested vector length, batch size, optional `vector_space`; `model_id` is derived |
 | `context_template` | optional `str.format` template, e.g. `"{title}\n\n{chunk}"`, rendered with the document's metadata, for contextual-chunk experiments. The stored and searched chunk text stays the chunk |
 | `role` | `serving`, `candidate`, `retired` |
 | `qdrant` | collection (the name after Learn's `<base>.`), dense vector name, sparse model and vector name; null for platform-only strategies |

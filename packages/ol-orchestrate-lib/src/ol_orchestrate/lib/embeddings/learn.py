@@ -27,6 +27,9 @@ from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy, QdrantTarg
 
 CONTENT_FILE_DOC_KIND = "content_file"
 DENSE_MODEL_NAME = "text-embedding-3-large"
+# Learn's vectors are the model's at its default length. Another provider's
+# deployment of the same model, e.g. Azure OpenAI's, declares this space too.
+DENSE_VECTOR_SPACE = f"{DENSE_MODEL_NAME}@3072"
 SPARSE_MODEL_NAME = "qdrant/bm25"
 MARKDOWN_FILE_TYPE = "marketing_page"
 MARKDOWN_FILE_EXTENSION = ".md"
@@ -85,7 +88,9 @@ LEARN_V1_CONTENT_FILES = EmbeddingStrategy(
         chunk_overlap=51,
         markdown_header_levels=4,
     ),
-    model=EmbeddingModelSpec(model=f"openai:{DENSE_MODEL_NAME}"),
+    model=EmbeddingModelSpec(
+        model=f"openai:{DENSE_MODEL_NAME}", vector_space=DENSE_VECTOR_SPACE
+    ),
     role="serving",
     qdrant=QdrantTarget(
         collection=PLATFORM_CONTENT_FILES_COLLECTION,

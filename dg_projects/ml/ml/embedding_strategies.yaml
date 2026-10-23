@@ -13,6 +13,10 @@
 # docs/learn_embedding_config.md). Its chunks and point ids are what the
 # platform's copy is compared with, so do not change these rows; add a new
 # strategy instead.
+#
+# vector_space names the models whose vectors are interchangeable, and stored
+# vectors are reused across a space. A model with none is a space of its own, so
+# declare one only for models known to return the same vectors.
 strategies:
 - strategy_id: learn_v1_content_files
   doc_kind: content_file
@@ -24,6 +28,7 @@ strategies:
     markdown_header_levels: 4
   model:
     model: openai:text-embedding-3-large
+    vector_space: text-embedding-3-large@3072
   role: serving
   qdrant:
     collection: platform_content_files
@@ -45,6 +50,7 @@ strategies:
     max_tokens: 8191
   model:
     model: openai:text-embedding-3-large
+    vector_space: text-embedding-3-large@3072
   role: serving
   qdrant:
     collection: platform_topics

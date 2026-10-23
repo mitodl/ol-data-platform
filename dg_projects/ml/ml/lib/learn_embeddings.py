@@ -5,7 +5,7 @@ The platform's own copy of what Learn writes to its ``content_files`` and
 ``ml/embedding_strategies.yaml``. Chunks and vectors are built with
 :mod:`ol_orchestrate.lib.embeddings`; this module turns the warehouse rows into
 its documents and its rows into frames, and carries the stored vectors of a
-partition into the next run so only changed texts are sent to a model.
+vector space into the next run so only changed texts are sent to a model.
 ``docs/design/embedding_substrate_and_search_engine.md`` (section 2) is the design.
 """
 
@@ -106,6 +106,7 @@ EMBEDDED_SCHEMA = pl.Schema(
         "chunk_key": pl.String(),
         "strategy_id": pl.String(),
         "model_id": pl.String(),
+        "vector_space": pl.String(),
         "input_checksum": pl.String(),
         "vector": pl.List(pl.Float32()),
         "embedded_at": pl.Datetime("us", "UTC"),
@@ -326,13 +327,13 @@ def stored_chunks(chunks: pl.DataFrame) -> list[tuple[Document, ChunkRow]]:
 
 
 def known_vectors(
-    vectors: pl.LazyFrame | None, model_id: str, checksums: Iterable[str]
+    vectors: pl.LazyFrame | None, vector_space: str, checksums: Iterable[str]
 ) -> dict[str, list[float]]:
-    """Look up stored vectors of a model by the checksum of the text embedded.
+    """Look up stored vectors of a vector space by the checksum of the text embedded.
 
     :param vectors: a vector table, ``None`` before it exists
-    :param model_id: the model and vector length, e.g.
-        ``openai:text-embedding-3-large@3072``
+    :param vector_space: a model's ``vector_space_id``, e.g.
+        ``text-embedding-3-large@3072``
     :param checksums: the input checksums wanted
     :returns: a stored vector per checksum found
     :rtype: dict[str, list[float]]
@@ -342,7 +343,8 @@ def known_vectors(
         return {}
     found = (
         vectors.filter(
-            (pl.col("model_id") == model_id) & pl.col("input_checksum").is_in(wanted)
+            (pl.col("vector_space") == vector_space)
+            & pl.col("input_checksum").is_in(wanted)
         )
         .select("input_checksum", "vector")
         .unique("input_checksum")
@@ -408,8 +410,8 @@ def embed_strategy(  # noqa: PLR0913
 ) -> tuple[pl.DataFrame, StrategyOutcome]:
     """Embed a partition's chunks under a strategy, paying only for new texts.
 
-    The texts whose checksum has a stored vector for the strategy's model are not
-    sent. The rest go through ol-llm's ``process_batch`` with each row one
+    The texts whose checksum has a stored vector in the strategy model's vector
+    space are not sent. The rest go through ol-llm's ``process_batch`` with each row one
     request of up to the model's ``batch_size`` texts, and an outage stops the
     batch. A request that fails for its input (a rejection or invalid output,
     which the same texts would repeat) is sent again one text per request, so a
@@ -422,7 +424,7 @@ def embed_strategy(  # noqa: PLR0913
     :param strategy: the strategy
     :param chunks: the partition's chunks of the strategy's chunker
     :param embedder: an embedder for the strategy's model
-    :param lookup: stored vectors by input checksum, for a model id
+    :param lookup: stored vectors by input checksum, for a vector space
     :param embedded_at: the time put on new rows
     :param max_workers: requests in flight at once
     :param logger: where ``process_batch`` logs, e.g. ``context.log``
@@ -431,7 +433,7 @@ def embed_strategy(  # noqa: PLR0913
     """
     texts = [strategy.embedding_text(document, row.chunk) for document, row in chunks]
     checksums = [md5_hex(text) for text in texts]
-    known = lookup(strategy.model.model_id, checksums)
+    known = lookup(strategy.model.vector_space_id, checksums)
     reused = len(set(checksums) & set(known))
     new_texts = {
         checksum: text
@@ -538,6 +540,7 @@ def merge_vectors(
     ).select(
         *key[:2],
         "model_id",
+        "vector_space",
         "input_checksum",
         "vector",
         pl.coalesce("embedded_at_stored", "embedded_at").alias("embedded_at"),

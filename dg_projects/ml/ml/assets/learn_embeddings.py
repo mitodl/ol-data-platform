@@ -7,10 +7,10 @@ each run and reports a digest of its files' keys and checksums as the data
 version, and the chunk and vector assets run for the partitions whose version
 moved. Topics are one small table, rebuilt when the topic model is.
 
-The vector assets send a model only the texts with no stored vector for the
-strategy's model, so a re-run over unchanged chunks embeds nothing. Nothing here
-writes to Qdrant; projecting these tables into Learn's collections is a separate
-step.
+The vector assets send a model only the texts with no stored vector in the
+strategy model's vector space, so a re-run over unchanged chunks embeds nothing.
+Nothing here writes to Qdrant; projecting these tables into Learn's collections is
+a separate step.
 """
 
 from collections.abc import Collection, Iterable
@@ -320,7 +320,7 @@ def embed_vectors(  # noqa: PLR0913
     :param embeddings: the embedder resource
     :param doc_kind: the kind of document the asset embeds
     :param chunks: the partition's chunk rows
-    :param vectors: the whole vector table, for stored vectors of a model
+    :param vectors: the whole vector table, for stored vectors of a vector space
     :param stored: the partition's stored vector rows
     :returns: the rows to write, their metadata, and one message per strategy
         with failed requests
@@ -331,18 +331,18 @@ def embed_vectors(  # noqa: PLR0913
     frames = []
     metadata: dict[str, MetadataValue] = {}
     failures = []
-    # This run's vectors by model and input checksum, so a later strategy of the
-    # same model reuses what an earlier one embedded.
+    # This run's vectors by vector space and input checksum, so a later strategy
+    # in the same space reuses what an earlier one embedded.
     this_run: dict[str, dict[str, list[float]]] = {}
 
-    def lookup(model_id: str, checksums: Iterable[str]) -> dict[str, list[float]]:
+    def lookup(vector_space: str, checksums: Iterable[str]) -> dict[str, list[float]]:
         wanted = set(checksums)
         found = {
             checksum: vector
-            for checksum, vector in this_run.get(model_id, {}).items()
+            for checksum, vector in this_run.get(vector_space, {}).items()
             if checksum in wanted
         }
-        return found | known_vectors(vectors, model_id, wanted - found.keys())
+        return found | known_vectors(vectors, vector_space, wanted - found.keys())
 
     for strategy in chosen:
         pairs = stored_chunks(
@@ -357,7 +357,7 @@ def embed_vectors(  # noqa: PLR0913
             max_workers=config.max_workers,
             logger=context.log,
         )
-        this_run.setdefault(strategy.model.model_id, {}).update(
+        this_run.setdefault(strategy.model.vector_space_id, {}).update(
             zip(frame["input_checksum"], frame["vector"].to_list(), strict=True)
         )
         frames.append(frame)
@@ -410,7 +410,8 @@ def _fail_on_request_failures(failures: list[str]) -> None:
     automation_condition=upstream_or_code_changes(),
     description=(
         "One row per content-file chunk per strategy, keyed (chunk_key, "
-        "strategy_id), with the vector and the checksum of the text embedded."
+        "strategy_id), with the vector, its vector space and the checksum of the "
+        "text embedded."
     ),
 )
 def content_file_embedding_vectors(
@@ -418,7 +419,7 @@ def content_file_embedding_vectors(
     config: EmbeddingVectorsConfig,
     embeddings: EmbeddingsResource,
 ):
-    """Embed one course run's chunks, reusing every stored vector of the model."""
+    """Embed one course run's chunks, reusing every stored vector of the space."""
     etl_source, run = partition_run(context.partition_key)
     in_partition = (pl.col("etl_source") == etl_source) & (
         pl.col("run_readable_id") == run
@@ -457,7 +458,7 @@ def content_file_embedding_vectors(
     automation_condition=upstream_or_code_changes(),
     description=(
         "One row per topic chunk per strategy, keyed (chunk_key, strategy_id), "
-        "with the vector and the checksum of the text embedded."
+        "with the vector, its vector space and the checksum of the text embedded."
     ),
 )
 def topic_embedding_vectors(
@@ -465,7 +466,7 @@ def topic_embedding_vectors(
     config: EmbeddingVectorsConfig,
     embeddings: EmbeddingsResource,
 ):
-    """Embed the topic chunks, reusing every stored vector of the model."""
+    """Embed the topic chunks, reusing every stored vector of the space."""
     chunks = require_table(LAYER, TOPIC_CHUNKS_KEY.path[-1]).collect()
     vectors = read_table(LAYER, TOPIC_VECTORS_KEY.path[-1])
     # The table is one row per topic and strategy, so it is read once and the
@@ -506,6 +507,7 @@ def embedding_strategies() -> Output[pl.DataFrame]:
                 "chunker_id": strategy.chunker.chunker_id,
                 "chunker": strategy.chunker.model_dump_json(),
                 "model_id": strategy.model.model_id,
+                "vector_space": strategy.model.vector_space_id,
                 "model": strategy.model.model_dump_json(),
                 "context_template": strategy.context_template,
                 "qdrant": strategy.qdrant.model_dump_json()
@@ -522,6 +524,7 @@ def embedding_strategies() -> Output[pl.DataFrame]:
             "chunker_id": pl.String,
             "chunker": pl.String,
             "model_id": pl.String,
+            "vector_space": pl.String,
             "model": pl.String,
             "context_template": pl.String,
             "qdrant": pl.String,

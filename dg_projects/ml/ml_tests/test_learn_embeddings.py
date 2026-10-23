@@ -402,14 +402,15 @@ def test_a_changed_chunk_alone_is_embedded(tables, calls):
     )
 
 
-def test_a_text_stored_under_another_run_is_reused(tables, calls):
-    load_sources(tables, **{"block-v1:a": "Shared syllabus."})
-    tables[CONTENT_FILE_VECTORS_KEY.path[-1]] = pl.DataFrame(
+def stored_vector(text: str, model_id: str, vector_space: str) -> pl.DataFrame:
+    """Return a vector row of another run, as the vector table stores it."""
+    return pl.DataFrame(
         {
             "chunk_key": ["elsewhere"],
             "strategy_id": ["learn_v1_content_files"],
-            "model_id": ["openai:text-embedding-3-large@3072"],
-            "input_checksum": [md5_hex("Shared syllabus.")],
+            "model_id": [model_id],
+            "vector_space": [vector_space],
+            "input_checksum": [md5_hex(text)],
             "vector": [[9.0] * VECTOR_LENGTH],
             "embedded_at": [None],
             "run_id": ["earlier"],
@@ -422,12 +423,43 @@ def test_a_text_stored_under_another_run_is_reused(tables, calls):
         },
     )
 
+
+def test_a_text_stored_under_another_run_is_reused(tables, calls):
+    load_sources(tables, **{"block-v1:a": "Shared syllabus."})
+    strategy = strategies()["learn_v1_content_files"]
+    tables[CONTENT_FILE_VECTORS_KEY.path[-1]] = stored_vector(
+        "Shared syllabus.", strategy.model.model_id, strategy.model.vector_space_id
+    )
+
     assert build_content_files(tables).success
 
     assert calls == []
     vectors = tables[CONTENT_FILE_VECTORS_KEY.path[-1]]
     assert vectors.height == 2
     assert vectors.filter(pl.col("run_readable_id") == RUN)["vector"][0][0] == 9.0
+
+
+def test_another_models_vector_is_reused_only_in_a_declared_space(tables, calls):
+    load_sources(tables, **{"block-v1:a": "Shared syllabus."})
+    # Learn's own model, as a vector imported from its collection would carry.
+    learn_model = LEARN_V1_CONTENT_FILES.model.model_id
+    tables[CONTENT_FILE_VECTORS_KEY.path[-1]] = stored_vector(
+        "Shared syllabus.", learn_model, "text-embedding-3-large@3072"
+    )
+
+    assert build_content_files(tables).success
+    assert calls == []
+    row = tables[CONTENT_FILE_VECTORS_KEY.path[-1]].filter(
+        pl.col("run_readable_id") == RUN
+    )
+    assert row["vector"][0][0] == 9.0
+    assert row["model_id"][0] == strategies()["learn_v1_content_files"].model.model_id
+
+    tables[CONTENT_FILE_VECTORS_KEY.path[-1]] = stored_vector(
+        "Shared syllabus.", learn_model, learn_model
+    )
+    assert build_content_files(tables).success
+    assert calls == [["Shared syllabus."]]
 
 
 def test_failed_requests_store_the_rest_and_fail_the_run(tables, monkeypatch):

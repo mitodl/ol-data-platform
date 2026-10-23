@@ -3,9 +3,9 @@
 The rows are what the platform stores: chunks keyed by ``(doc_key, chunker_id,
 chunk_number)`` and vectors keyed by ``(chunk_key, strategy_id)``, each vector
 with the checksum of the exact text that was embedded. A text whose checksum
-already has a vector under the same model is not sent again, so re-running a
-strategy after a few documents changed pays only for the changed chunks, and two
-strategies that embed the same text with the same model share the cost.
+already has a vector in the model's vector space is not sent again, so re-running
+a strategy after a few documents changed pays only for the changed chunks, and two
+strategies that embed the same text in the same space share the cost.
 """
 
 import uuid
@@ -56,6 +56,10 @@ class ChunkRow(BaseModel):
 class VectorRow(BaseModel):
     """The vector of one chunk under one strategy.
 
+    :param model_id: the model the strategy calls, which produced the vector
+        unless it was reused from another model of its vector space
+    :param vector_space: the space the vector is reused in, the model's
+        ``vector_space_id``
     :param input_checksum: MD5 of the text the model was sent, which is the
         chunk text after the strategy's context template
     """
@@ -65,6 +69,7 @@ class VectorRow(BaseModel):
     chunk_key: str
     strategy_id: str
     model_id: str
+    vector_space: str
     input_checksum: str
     vector: list[float]
     embedded_at: datetime
@@ -130,8 +135,8 @@ def embed_chunks(
     :param chunks: chunk rows with their documents, from :func:`chunk_documents`
         with the strategy's chunker
     :param embedder: an embedder for the strategy's model
-    :param known_vectors: vectors already computed with the strategy's model at
-        its vector length, by the MD5 of the text they were computed from
+    :param known_vectors: vectors already computed in the strategy model's
+        vector space, by the MD5 of the text they were computed from
     :param embedded_at: the time to stamp on new rows; now when omitted
     :returns: one vector row per chunk, in order
     :rtype: EmbedOutcome
@@ -158,7 +163,8 @@ def embed_chunks(
     vector_length = strategy.model.vector_length
     if any(len(vector) != vector_length for vector in known.values()):
         msg = (
-            f"known_vectors must be {vector_length} long, as {strategy.model.model_id}"
+            f"known_vectors must be {vector_length} long, as "
+            f"{strategy.model.vector_space_id}"
         )
         raise ValueError(msg)
     reused = len(set(checksums) & set(known))
@@ -182,6 +188,7 @@ def embed_chunks(
             chunk_key=row.chunk_key,
             strategy_id=strategy.strategy_id,
             model_id=strategy.model.model_id,
+            vector_space=strategy.model.vector_space_id,
             input_checksum=checksum,
             vector=known[checksum],
             embedded_at=stamp,
