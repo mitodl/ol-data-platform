@@ -11,7 +11,12 @@ and MetricRepository), a PUT to an existing Metric:
 - replaces reviewers with the body's, so a body without them clears them;
 - merges tags and never removes one (``updateTags``);
 - replaces the metric's own fields and its related metrics and assets
-  (``MetricUpdater.entitySpecificUpdate``), so a body without them clears them.
+  (``MetricUpdater.entitySpecificUpdate``), so a body without them clears them;
+- keeps a stored non-empty ``displayName`` that differs from the body's,
+  because every bot's DefaultBotPolicy denies EditDisplayName
+  (``EntityUpdater.updateDisplayName``). A PATCH of it is refused outright.
+  So sync sets a display name only where the metric has none, and reports a
+  stored one that differs from the file (``display_name_conflict``).
 
 So sync PUTs only to create the metric or change one of its own fields, sends
 the live reviewers and related metrics when the file does not set them and the
@@ -113,7 +118,6 @@ _PATCHED_FIELDS = ("description", "owners", "reviewers")
 # A PUT sets these to whatever the body holds, so one the file dropped is
 # cleared on the server and counts as a change.
 _REPLACED_FIELDS = (
-    "displayName",
     "metricExpression",
     "metricType",
     "unitOfMeasurement",
@@ -126,6 +130,7 @@ _REPLACED_FIELDS = (
 # Keys the server derives from others, e.g. a measure's fullyQualifiedName
 # (MetricRepository.setFullyQualifiedName).
 _GENERATED_KEYS = frozenset({"fullyQualifiedName"})
+DISPLAY_NAME_FIELD = "displayName"
 
 
 @dataclass(frozen=True)
@@ -290,6 +295,9 @@ def structural_changes(body: dict[str, Any], live: dict[str, Any]) -> list[str]:
         if key in ("name", "assets") or key in _PATCHED_FIELDS:
             continue
         have = live.get(key)
+        if key == DISPLAY_NAME_FIELD and have:
+            # A bot PUT cannot replace a stored one (display_name_conflict).
+            continue
         if key == "tags":
             # A PUT merges tags and never removes one, so only a missing tag is
             # a change; patch_ops removes the stale ones.
@@ -303,6 +311,20 @@ def structural_changes(body: dict[str, Any], live: dict[str, Any]) -> list[str]:
             changed.add(key)
     changed.update(key for key in _REPLACED_FIELDS if key not in body and live.get(key) not in (None, "", []))
     return sorted(changed)
+
+
+def display_name_conflict(body: dict[str, Any], live: dict[str, Any] | None) -> str | None:
+    """Return the stored display name a bot cannot replace with the file's, or ``None`` when they agree.
+
+    The server keeps a stored non-empty ``displayName`` against any bot's
+    update, and against a body without one (see the module docstring), so a
+    file that differs can only be matched by a person editing it in
+    OpenMetadata.
+    """
+    stored = (live or {}).get(DISPLAY_NAME_FIELD)
+    if not stored or stored == body.get(DISPLAY_NAME_FIELD):
+        return None
+    return stored
 
 
 def after_put(body: dict[str, Any], live: dict[str, Any] | None) -> dict[str, Any]:
