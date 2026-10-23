@@ -257,11 +257,14 @@ tables:
   - - id
   modeled: true
 # xmin incremental, so a run taken out of a contract keeps its row in production
-# raw until the dlt cutover, and bridge_organization_courserun and
-# int__mitxonline__b2b_contract_to_courseruns still list the run under that
-# contract. On 2026-10-23 no row pointed at a run or contract gone from the
-# full-refresh courses_courserun or b2b_contractpage. A removal that leaves both
-# in place cannot be seen from raw.
+# raw until the dlt cutover. It stays under that contract in
+# int__mitxonline__b2b_contract_to_courseruns, bridge_organization_courserun and
+# the bridge's readers (mv_b2b_contract_courserun, mv_b2b_program_funnel,
+# organization_administration_report). On 2026-10-23 no row pointed at a run or
+# contract gone from the full-refresh courses_courserun or b2b_contractpage. A
+# removal that leaves both in place cannot be seen from raw, unless the run is
+# added back: the new row fails the staging (courserun_id, b2b_contract_id)
+# uniqueness test.
 - name: courses_courserun_b2b_contracts
   raw_table: raw__mitxonline__app__postgres__courses_courserun_b2b_contracts
   sync_mode: incremental_deduped_history
