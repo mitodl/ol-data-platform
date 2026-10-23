@@ -10,8 +10,8 @@ directory and compares it with what the table's metadata can still reach (see
 
 It reports everywhere and deletes only where
 :data:`ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS` says so. An environment is
-added after a person has read a report for it. QA is on the list; production
-is not yet.
+added after a person has read a report for it. QA and production are on the
+list.
 
 The raw buckets are versioned with a 90-day noncurrent expiry, so a delete
 leaves the bytes billed for another 90 days and recoverable for as long.
@@ -45,12 +45,15 @@ RAW_GLUE_DATABASE = f"ol_warehouse_{WAREHOUSE_ENV}_raw"
 
 # Keyed on the Dagster environment, not the warehouse one: `dev` resolves to the
 # production warehouse, and a laptop must never be able to delete from it.
-ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS: frozenset[str] = frozenset({"qa"})
+ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS: frozenset[str] = frozenset(
+    {"qa", "production"}
+)
 
 # The floor has to exceed the longest time a writer holds a file before the
-# commit that references it. Not measured for the raw writers (an Airbyte sync
-# writes data files for as long as it runs and commits at the end, dlt
-# likewise). Seven days is the floor the sweep uses.
+# commit that references it. The longest production Dagster run in the 30 days
+# to 2026-10-21 lasted 26.7 hours, and ol-infrastructure caps Dagster runs and
+# Airbyte syncs at 2 days, so no writer outlives the floor. Seven days is the
+# floor the sweep uses.
 ICEBERG_ORPHAN_FILES_MIN_AGE_DAYS = 7
 
 # Each worker holds one table's reachable-file set and its eligible orphans in

@@ -91,8 +91,11 @@ def _enable_delete(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DAGSTER_BUCKET_NAME", DAGSTER_BUCKET)
 
 
-def test_only_qa_deletes():
-    assert frozenset({"qa"}) == module.ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS
+def test_deletes_in_qa_and_production_only():
+    assert (
+        frozenset({"qa", "production"})
+        == module.ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS
+    )
 
 
 def test_config_has_no_default_minimum_age():
