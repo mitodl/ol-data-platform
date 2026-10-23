@@ -3,7 +3,7 @@
 # user/entrypoint setup (jovyan, NB_UID, start.sh hooks) without the conda
 # data-science stack. All notebook-level packages (pandas, trino, pyiceberg,
 # etc.) are declared per-notebook via PEP 723 `/// script` inline metadata.
-FROM quay.io/jupyter/minimal-notebook:latest@sha256:5db1deaf4236d9f4356a210046c6c4dc370a620a4b1843567a8c70e1b212449b
+FROM quay.io/jupyter/minimal-notebook:latest@sha256:9e94dfc5e4e794791b923bea89084530020f6bcb1c1236066d847e477ba21503
 
 # marimo-jupyter-extension must be importable by JupyterLab — it registers
 # the proxy server that forwards requests to per-notebook marimo processes.
