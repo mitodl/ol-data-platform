@@ -999,8 +999,8 @@ sources:
     - name: product_name
       description: str, name of product associated with the certificate
     - name: CEUs
-      description: str, number continuing education units that are earned with the
-        certificate. Text input that is generally a number
+      description: decimal, number of continuing education units earned with the certificate.
+        Airbyte writes it as ceus, dlt as ce_us.
     - name: signatories
       description: str, Array of json stored as a string list of signatories for the
         certificate format

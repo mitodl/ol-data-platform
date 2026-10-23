@@ -727,8 +727,8 @@ models:
   - name: delivery
     description: str, 'Online' or 'Other' for xPro. 'Online' for MITx.
   - name: continuing_education_credits
-    description: str, number of continuing education units or credits offered. e.g.
-      4.5. NULL for MITx courses.
+    description: double, number of continuing education units or credits offered.
+      e.g. 4.5. NULL for MITx courses.
   - name: pace
     description: str, 'Self-paced' or 'Instructor-paced'
   - name: topics

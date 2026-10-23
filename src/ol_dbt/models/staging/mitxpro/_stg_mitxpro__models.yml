@@ -1675,8 +1675,7 @@ models:
     tests:
     - not_null
   - name: cms_certificate_ceus
-    description: str, number continuing education units that are earned with the certificate.
-      Text input that is generally a number
+    description: double, number of continuing education units earned with the certificate.
   - name: cms_certificate_signitory_ids
     description: Array, Array of int of wagtail_page_ids associated with cms_signatory
       records
