@@ -76,7 +76,10 @@
 
     var('courseware_ocw_courses') selects OCW courses by slug. Without it a build reads
     no OCW course, since the allowlist does not cover OCW yet. Setting either selector
-    alone builds only what it selects.
+    alone builds only what it selects. The three int__courseware__ocw_* tables apply
+    the var when they build, so build them with this model whenever it changes:
+    --select "int__courseware__ocw_files+,+int__courseware__extraction_sources" selects
+    the four. Built alone, this model reads the courses they were last built for.
 #}
 {% set courseruns = var('courseware_courseruns', []) %}
 {% set ocw_courses = var('courseware_ocw_courses', []) %}
