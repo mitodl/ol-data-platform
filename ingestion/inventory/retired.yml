@@ -619,18 +619,24 @@ retired:
   - raw__bootcamps__app__postgres__klasses_personalprice
   - raw__bootcamps__app__postgres__profiles_legaladdress
   - raw__bootcamps__app__postgres__profiles_profile
-  retired_on: '2026-08-25'
-  reason: The bootcamps application is no longer deployed (confirmed 2026-08-14, §8.1).
-    Its Airbyte source still exists but carries zero connections, and its Dagster
-    interval-map entry `bootcamps_production_app_db__s3_data_lake` matches nothing.
-    Nothing was lost when ingestion stopped, but nothing was written down either,
-    so these 19 tables read as current to anyone who does not already know — which
-    is exactly what this file exists to prevent. dbt still models all 19; retiring
-    them here does not remove those models, it makes them findable (tk-bootcamps-ingestion-has-disappeared-while-dbt-st-25d016).
-    Note that profiles_profile stopped earlier than the rest, on 2025-02-24, having
-    never been migrated to Iceberg (tk-bootcamps-profiles-profile-froze-2025-02-24-neve-7fbf5a)
-    — so this date is when the retirement was recorded, not one date on which all
-    19 stopped arriving.
+  retired_on: '2026-02-12'
+  reason: >-
+    The bootcamps application is decommissioned (confirmed 2026-08-14, §8.1) and
+    its Airbyte sources carry no connections. The date is when the last data
+    landed: auth_user's current Iceberg snapshot, 2026-02-12T00:07Z, is the
+    newest across these tables. Most stopped changing earlier as the app wound
+    down. Nine hold only the initial load of 2025-02-25 (the five ecommerce
+    tables, django_content_type, klasses_bootcampruncertificate,
+    klasses_bootcamprunenrollment and klasses_personalprice), five last changed
+    on 2025-06-10, and profiles_profile holds the JSONL load of 2025-02-25,
+    converted to Iceberg on 2026-09-11
+    (tk-bootcamps-profiles-profile-froze-2025-02-24-neve-7fbf5a). Measured in
+    production raw on 2026-10-23. Frozen rather than dropped, decided
+    2026-10-23: dbt models all 19, and through them historical bootcamps
+    learners reach dim_user, dim_course, dim_course_run, tfact_enrollment,
+    tfact_certificate, tfact_order and the combined marts
+    (tk-bootcamps-ingestion-has-disappeared-while-dbt-st-25d016).
+  frozen: true
 - deployment: github
   layer: api
   raw_tables:

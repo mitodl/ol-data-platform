@@ -773,9 +773,30 @@ retired:
   layer: app_postgres
   raw_tables:                       # a list, so retiring a whole unit is one
   - raw__bootcamps__app__postgres__applications_bootcampapplication   # dated, reasoned entry
-  retired_on: "2026-08-14"          # when loading stopped, not when this was written
-  reason: The Bootcamps application is no longer deployed.            # ≥20 chars; "not needed" is not a reason
+  retired_on: "2026-02-12"          # when loading stopped, not when this was written
+  reason: The bootcamps application is decommissioned.                # ≥20 chars; "not needed" is not a reason
+  frozen: true                      # optional: the tables stay, and dbt still models them
 ```
+
+Retiring a source does not always mean its data goes. `frozen: true` records the other case:
+the source is gone, so nothing will load the tables again, but they stay in the raw layer,
+read-only, because dbt still models their history. Bootcamps is the worked example. The app
+was decommissioned, its last data landed on 2026-02-12 (the newest Iceberg snapshot across its
+19 modeled tables, measured 2026-10-23), and its learners reach `dim_user`, `tfact_enrollment`
+and `tfact_order` through those models, so on 2026-10-23 we kept the tables instead of
+retiring the models with them. A reader of the raw layer finds the record twice: in this
+entry, and in the description of the dbt sources block that declares the tables.
+
+`reconcile` reads the flag in both directions. A frozen table that dbt declares is expected,
+not a model going stale, so it is not reported. A frozen table dbt no longer declares, or the
+warehouse no longer holds, is a `WARNING`: the first means the reason to keep the data has
+gone, the second that history nothing can reload has. `drift` needs no exception, because a
+graveyard entry declares no connection.
+
+Iceberg maintenance needs none either. Snapshot expiry keeps the current snapshot and every
+ref head whatever their age, the orphan-file pass deletes only files that no retained snapshot
+reaches, and the lake sweep deletes only dbt-suffixed directories that no Glue table
+references. None of them drops a table or a file a frozen table reads.
 
 Three details the mechanism above does not spell out, each of which is a rule in the checker:
 
