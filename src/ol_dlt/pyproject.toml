@@ -65,3 +65,6 @@ testpaths = ["tests"]
 markers = [
     "integration: marks tests that run a real dlt pipeline against the ephemeral test profile",
 ]
+
+[tool.uv]
+constraint-dependencies = ["certifi>=2026.10.19"]  # eMudhra CA compromise: never resolve a certifi that trusts the compromised CAs
