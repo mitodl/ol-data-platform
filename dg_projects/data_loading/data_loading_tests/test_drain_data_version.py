@@ -88,6 +88,35 @@ def test_a_load_with_rows_moves_the_data_version() -> None:
     assert _load(instance, [3, 0]) not in {first, empty}
 
 
+def test_an_empty_load_after_a_failed_run_moves_the_data_version() -> None:
+    """The failed run committed a batch before it raised, so the table changed
+    even though no materialization says so.
+    """
+    instance = DagsterInstance.ephemeral()
+    loaded = _load(instance, [5, 0])
+    pipeline = _FakePipeline([7])
+
+    class _FailsOnSecondBatch(_FakeDlt):
+        def run(self, **kwargs: Any) -> Any:
+            if pipeline.last_trace is not None:
+                msg = "Tika outage after batch 1 committed"
+                raise RuntimeError(msg)
+            return super().run(**kwargs)
+
+    @asset(key=_KEY)
+    def raw(context: AssetExecutionContext) -> Any:
+        yield from assets.drain(
+            context=context,
+            dlt=_FailsOnSecondBatch(pipeline),
+            build_source=_FakeSource,
+            pipeline=pipeline,
+        )
+
+    assert not materialize([raw], instance=instance, raise_on_error=False).success
+
+    assert _load(instance, [0]) != loaded
+
+
 def test_the_first_load_records_a_data_version_even_when_empty() -> None:
     """With nothing to carry over, Dagster derives one as it did before."""
     instance = DagsterInstance.ephemeral()
