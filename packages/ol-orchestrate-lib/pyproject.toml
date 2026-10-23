@@ -45,7 +45,7 @@ embeddings = [
     "langchain-text-splitters==1.1.2",
     "ol-llm[bedrock,google,openai]==0.0.3",
     "qdrant-client~=1.18.0",
-    "tiktoken~=0.13.0",
+    "tiktoken~=0.14.0",
 ]
 
 [tool.uv]
