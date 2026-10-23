@@ -3056,7 +3056,7 @@ unit_tests:
     The raw table holds b2 twice at r3, and only one copy is kept.
   model: stg__mitxonline__openedx__api__course_structure
   given:
-  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__api__course_blocks')
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__api__course_structure_blocks')
     rows:
     - {course_id: course-v1:MITx+1.00x+1T2026, block_id: course, course_content_hash: A,
       retrieved_at: '2026-10-01 00:00:00'}
@@ -3100,7 +3100,7 @@ unit_tests:
     the course, so all of its blocks are.
   model: stg__mitxonline__openedx__api__course_structure
   given:
-  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__api__course_blocks')
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__api__course_structure_blocks')
     rows:
     - {course_id: course-v1:MITx+1.00x+1T2026, block_id: course, course_content_hash: A,
       retrieved_at: '2026-10-01 00:00:00'}

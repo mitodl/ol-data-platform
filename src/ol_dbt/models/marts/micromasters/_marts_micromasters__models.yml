@@ -8,8 +8,8 @@ models:
     meta:
       qa_branches:
       - micromasters/app_postgres
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
   columns:
   - name: course_title

@@ -2010,8 +2010,8 @@ models:
     meta:
       qa_branches:
       - micromasters/app_postgres
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
       - mitxonline/tracking_logs
   columns:
@@ -2158,7 +2158,7 @@ models:
   config:
     meta:
       qa_branches:
-      - mitxonline/api
+      - mitxonline/course_structure
       - mitxonline/mysql
   columns:
   - name: courserun_readable_id
@@ -2259,8 +2259,8 @@ models:
     meta:
       qa_branches:
       - micromasters/app_postgres
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
   columns:
   - name: course_number
