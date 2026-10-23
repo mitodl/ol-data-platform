@@ -52,6 +52,7 @@ from ml.lib.learn_embeddings import (
     known_vectors,
     strategies,
 )
+from ml.lib.learn_parity import LearnPoint, compare_with_learn
 from ml.sensors import learn_embeddings as sensors
 from ml.sensors.learn_embeddings import (
     SAMPLE_RUNS_PER_SOURCE,
@@ -787,6 +788,7 @@ def test_a_run_that_loses_its_last_file_is_emptied(tables):
 
 # ------------------------------------------------------------------- smokecheck
 LEARN_BASE = "mitlearn-test"
+AZURE_MODEL = "azure:text-embedding-3-large@3072"
 DENSE = "text-embedding-3-large"
 LEARN_CLIENTS: list[QdrantClient] = []
 
@@ -895,7 +897,7 @@ def test_vectors_that_match_learns_pass(tables, learn_qdrant):
     assert metadata["text_matches"] == 2
     assert metadata["checksum_matches"] == 2
     assert metadata["compared_vectors"] == 2
-    assert metadata["cosine_min"] == pytest.approx(1.0)
+    assert metadata[f"{AZURE_MODEL}/cosine_min"] == pytest.approx(1.0)
 
 
 def test_a_vector_unlike_learns_for_the_same_text_is_an_error(tables, learn_qdrant):
@@ -940,6 +942,36 @@ def test_a_chunk_without_a_vector_warns(tables, learn_qdrant):
     assert evaluation.metadata["platform_chunks_without_vector"].value == 1
 
 
+def test_vectors_imported_from_learn_are_reported_apart(tables, learn_qdrant):
+    load_sources(tables, **{"block-v1:a": "First file.", "block-v1:b": "Second."})
+    # Learn's own vector of "Second.", imported before Learn re-embedded it.
+    tables[CONTENT_FILE_VECTORS_KEY.path[-1]] = stored_vector(
+        "Second.",
+        LEARN_V1_CONTENT_FILES.model.model_id,
+        "text-embedding-3-large@3072",
+    ).with_columns(
+        pl.lit(fake_vector("Second.", skew=5.0), dtype=pl.List(pl.Float32)).alias(
+            "vector"
+        )
+    )
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.content_files",
+        [
+            learn_chunk("block-v1:a", "First file."),
+            learn_chunk("block-v1:b", "Second."),
+        ],
+    )
+
+    evaluation = check_content_files(tables)
+
+    assert evaluation.passed
+    metadata = {key: value.value for key, value in evaluation.metadata.items()}
+    learn_model = LEARN_V1_CONTENT_FILES.model.model_id
+    assert metadata[f"{learn_model}/below_min_cosine"] == 1
+    assert metadata[f"{AZURE_MODEL}/cosine_min"] == pytest.approx(1.0)
+    assert metadata["below_min_cosine"] == 0
+
+
 def test_differing_points_and_texts_only_warn(tables, learn_qdrant):
     load_sources(tables, **{"block-v1:a": "Platform text.", "block-v1:b": "Second."})
     learn_qdrant.upsert(
@@ -968,6 +1000,42 @@ def test_differing_points_and_texts_only_warn(tables, learn_qdrant):
         metadata["checksum_matches"],
         metadata["compared_vectors"],
     ) == (1, 1, 1, 0, 0, 0)
+
+
+def test_learn_points_are_read_a_batch_at_a_time():
+    platform = pl.DataFrame(
+        {
+            "point_id": ["a", "b", "c"],
+            "chunk_text": ["A.", "B.", "C."],
+            "text_checksum": [md5_hex("A."), md5_hex("B."), md5_hex("C.")],
+            "vector": [[1.0, 0.0], [0.0, 1.0], None],
+            "model_id": [AZURE_MODEL, AZURE_MODEL, None],
+        }
+    )
+    requests: list[list[str]] = []
+
+    def fetch(ids):
+        requests.append(list(ids))
+        return {
+            point_id: LearnPoint(
+                text=f"{point_id.upper()}.", checksum=None, vector=[1.0, 0.0]
+            )
+            for point_id in ids
+        }
+
+    report = compare_with_learn(
+        platform,
+        fetch,
+        ["a", "b", "c"],
+        compare_checksums=False,
+        reference_model_id=LEARN_V1_CONTENT_FILES.model.model_id,
+        batch_size=2,
+    )
+
+    assert requests == [["a", "b"], ["c"]]
+    stats = report.cosine_by_model[AZURE_MODEL]
+    assert (stats.compared, stats.minimum, stats.below_threshold) == (2, 0.0, 1)
+    assert (report.platform_chunks_without_vector, report.vectors_differ) == (1, True)
 
 
 def test_topics_are_compared_by_topic_uuid(tables, learn_qdrant):

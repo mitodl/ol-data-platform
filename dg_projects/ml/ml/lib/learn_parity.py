@@ -9,7 +9,8 @@ sides call text-embedding-3-large, so its two vectors should be the same up to
 the providers' numerical noise.
 """
 
-from collections.abc import Collection, Iterator, Mapping, Sequence
+from collections import defaultdict
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -41,6 +42,38 @@ class LearnPoint:
 
 
 @dataclass(frozen=True)
+class CosineStats:
+    """Cosine similarities of the compared vectors of one model.
+
+    :param compared: vectors compared
+    :param minimum: the least similarity, ``None`` with none compared
+    :param p50: the median similarity, ``None`` with none compared
+    :param below_threshold: similarities under ``MIN_COSINE_SIMILARITY``
+    """
+
+    compared: int
+    minimum: float | None
+    p50: float | None
+    below_threshold: int
+
+    @classmethod
+    def of(cls, similarities: Sequence[float]) -> "CosineStats":
+        """Summarize similarities.
+
+        :param similarities: the similarities
+        :rtype: CosineStats
+        """
+        return cls(
+            compared=len(similarities),
+            minimum=min(similarities) if similarities else None,
+            p50=float(np.median(similarities)) if similarities else None,
+            below_threshold=sum(
+                similarity < MIN_COSINE_SIMILARITY for similarity in similarities
+            ),
+        )
+
+
+@dataclass(frozen=True)
 class ParityReport:
     """How a set of platform chunks compares with Learn's points.
 
@@ -54,10 +87,11 @@ class ParityReport:
     :param checksum_matches: matched chunks whose ``text_checksum`` is Learn's
         payload checksum, ``None`` for a collection without checksums
     :param learn_points_without_vector: matched points with no dense vector
-    :param compared_vectors: text-matching chunks whose vectors were compared
-    :param cosine_min: least cosine similarity of the compared vectors
-    :param cosine_p50: median cosine similarity of the compared vectors
-    :param below_threshold: compared vectors under ``MIN_COSINE_SIMILARITY``
+    :param cosine_by_model: the similarities of text-matching chunks' vectors,
+        by the ``model_id`` of the platform's vector row
+    :param reference_model_id: Learn's own model. A platform row of it holds a
+        vector imported from Learn, so its similarity is reported but does not
+        make the vectors differ.
     """
 
     platform_chunks: int
@@ -69,10 +103,28 @@ class ParityReport:
     text_matches: int
     checksum_matches: int | None
     learn_points_without_vector: int
-    compared_vectors: int
-    cosine_min: float | None
-    cosine_p50: float | None
-    below_threshold: int
+    cosine_by_model: Mapping[str, CosineStats]
+    reference_model_id: str
+
+    @property
+    def compared_vectors(self) -> int:
+        """Vectors compared, over every model.
+
+        :rtype: int
+        """
+        return sum(stats.compared for stats in self.cosine_by_model.values())
+
+    @property
+    def below_threshold(self) -> int:
+        """Vectors under the threshold from models other than Learn's own.
+
+        :rtype: int
+        """
+        return sum(
+            stats.below_threshold
+            for model_id, stats in self.cosine_by_model.items()
+            if model_id != self.reference_model_id
+        )
 
     @property
     def vectors_differ(self) -> bool:
@@ -102,9 +154,15 @@ class ParityReport:
         )
 
 
-def _batches(ids: Sequence[str], size: int) -> Iterator[Sequence[str]]:
-    for start in range(0, len(ids), size):
-        yield ids[start : start + size]
+def _dense(vector: object) -> list[float] | None:
+    # A named vector comes back as one dense vector, a list of them (multivector)
+    # or a sparse one; Learn's dense vector is a single one.
+    if vector is None:
+        return None
+    if not isinstance(vector, list) or (vector and not isinstance(vector[0], float)):
+        msg = f"expected one dense vector, got {type(vector).__name__}"
+        raise TypeError(msg)
+    return vector
 
 
 def retrieve_points(  # noqa: PLR0913
@@ -115,35 +173,31 @@ def retrieve_points(  # noqa: PLR0913
     text_field: str,
     checksum_field: str | None,
     vector_name: str,
-    batch_size: int = QDRANT_BATCH_SIZE,
 ) -> dict[str, LearnPoint]:
-    """Read Learn's points by id, ``batch_size`` ids per request.
+    """Read Learn's points by id, in one request.
 
     :param client: a client for Learn's cluster
     :param collection: the collection
-    :param ids: the point ids
+    :param ids: the point ids, at most ``QDRANT_BATCH_SIZE``
     :param text_field: the payload key of the embedded text
     :param checksum_field: the payload key of the checksum, ``None`` for none
     :param vector_name: the dense vector's name
-    :param batch_size: ids per request
     :returns: the points found, by id
     :rtype: dict[str, LearnPoint]
     """
     fields = [text_field] if checksum_field is None else [text_field, checksum_field]
     points = {}
-    for batch in _batches(ids, batch_size):
-        for record in client.retrieve(
-            collection, ids=batch, with_payload=fields, with_vectors=[vector_name]
-        ):
-            payload = record.payload or {}
-            vectors = record.vector if isinstance(record.vector, dict) else {}
+    for record in client.retrieve(
+        collection, ids=ids, with_payload=fields, with_vectors=[vector_name]
+    ):
+        payload = record.payload or {}
+        vectors = record.vector if isinstance(record.vector, dict) else {}
+        points[str(record.id)] = LearnPoint(
+            text=payload.get(text_field),
+            checksum=payload.get(checksum_field) if checksum_field else None,
             # Learn writes a point with a zero dense vector without vectors.
-            vector = vectors.get(vector_name)
-            points[str(record.id)] = LearnPoint(
-                text=payload.get(text_field),
-                checksum=payload.get(checksum_field) if checksum_field else None,
-                vector=list(vector) if isinstance(vector, list) else None,
-            )
+            vector=_dense(vectors.get(vector_name)),
+        )
     return points
 
 
@@ -213,58 +267,65 @@ def _cosine(left: Sequence[float], right: Sequence[float]) -> float | None:
     return float(a @ b) / norm if norm else None
 
 
-def compare_with_learn(
+def compare_with_learn(  # noqa: PLR0913
     platform: pl.DataFrame,
-    learn: Mapping[str, LearnPoint],
+    fetch: Callable[[Sequence[str]], Mapping[str, LearnPoint]],
     learn_ids: Collection[str],
     *,
     compare_checksums: bool,
+    reference_model_id: str,
+    batch_size: int = QDRANT_BATCH_SIZE,
 ) -> ParityReport:
-    """Compare the platform's chunks with Learn's points, id by id.
+    """Compare the platform's chunks with Learn's points, a batch of ids at a time.
 
-    :param platform: ``point_id``, ``chunk_text``, ``text_checksum`` and
-        ``vector`` (null without a vector row) per chunk
-    :param learn: Learn's points for the platform's ids, from
-        :func:`retrieve_points`
+    Only the counts and similarities of a batch are kept, so a run's vectors are
+    never all held as Python lists.
+
+    :param platform: ``point_id``, ``chunk_text``, ``text_checksum``, ``vector``
+        and ``model_id`` (both null without a vector row) per chunk
+    :param fetch: Learn's points for some ids, e.g. :func:`retrieve_points`
     :param learn_ids: Learn's point ids in the same scope, from
         :func:`scroll_point_ids`
     :param compare_checksums: whether Learn's points carry the file checksum
+    :param reference_model_id: Learn's own model, see ``ParityReport``
+    :param batch_size: ids per ``fetch``
     :rtype: ParityReport
     """
+    found: set[str] = set()
+    matched = text_matches = checksum_matches = without_vector = 0
+    similarities: dict[str, list[float]] = defaultdict(list)
+    for offset in range(0, platform.height, batch_size):
+        rows = platform.slice(offset, batch_size)
+        learn = fetch(rows["point_id"].to_list())
+        found.update(learn)
+        for row in rows.iter_rows(named=True):
+            point = learn.get(row["point_id"])
+            if point is None:
+                continue
+            matched += 1
+            checksum_matches += point.checksum == row["text_checksum"]
+            without_vector += point.vector is None
+            if point.text != row["chunk_text"]:
+                continue
+            text_matches += 1
+            if row["vector"] is None or point.vector is None:
+                continue
+            if (cosine := _cosine(row["vector"], point.vector)) is not None:
+                similarities[row["model_id"]].append(cosine)
     platform_ids = set(platform["point_id"])
-    matched = [
-        row for row in platform.iter_rows(named=True) if row["point_id"] in learn
-    ]
-    text_matched = [
-        row for row in matched if learn[row["point_id"]].text == row["chunk_text"]
-    ]
-    cosines = [
-        _cosine(row["vector"], vector)
-        for row in text_matched
-        if row["vector"] is not None
-        and (vector := learn[row["point_id"]].vector) is not None
-    ]
-    similarities = [cosine for cosine in cosines if cosine is not None]
     return ParityReport(
         platform_chunks=platform.height,
         platform_chunks_without_vector=platform["vector"].null_count(),
-        learn_points=len(set(learn_ids) | set(learn)),
-        matched_ids=len(matched),
-        missing_in_learn=len(platform_ids - set(learn)),
+        learn_points=len(set(learn_ids) | found),
+        matched_ids=matched,
+        missing_in_learn=len(platform_ids - found),
         missing_on_platform=len(set(learn_ids) - platform_ids),
-        text_matches=len(text_matched),
-        checksum_matches=sum(
-            learn[row["point_id"]].checksum == row["text_checksum"] for row in matched
-        )
-        if compare_checksums
-        else None,
-        learn_points_without_vector=sum(
-            learn[row["point_id"]].vector is None for row in matched
-        ),
-        compared_vectors=len(similarities),
-        cosine_min=min(similarities) if similarities else None,
-        cosine_p50=float(np.median(similarities)) if similarities else None,
-        below_threshold=sum(
-            similarity < MIN_COSINE_SIMILARITY for similarity in similarities
-        ),
+        text_matches=text_matches,
+        checksum_matches=checksum_matches if compare_checksums else None,
+        learn_points_without_vector=without_vector,
+        cosine_by_model={
+            model_id: CosineStats.of(values)
+            for model_id, values in sorted(similarities.items())
+        },
+        reference_model_id=reference_model_id,
     )

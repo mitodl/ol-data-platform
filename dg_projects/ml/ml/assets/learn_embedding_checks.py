@@ -16,6 +16,7 @@ through the ``learn_qdrant`` resource, which dev has no access to, so
 """
 
 import os
+from functools import partial
 
 import polars as pl
 from dagster import (
@@ -48,6 +49,7 @@ from ml.lib.warehouse import require_table
 from ol_orchestrate.lib.embeddings.learn import (
     LEARN_CONTENT_FILES_COLLECTION,
     LEARN_TOPICS_COLLECTION,
+    LEARN_V1_CONTENT_FILES,
 )
 from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy
 from ol_orchestrate.resources.embeddings import QdrantResource
@@ -55,6 +57,8 @@ from ol_orchestrate.resources.secrets.vault import Vault
 
 LEARN_V1_CONTENT_FILES_ID = "learn_v1_content_files"
 LEARN_V1_TOPICS_ID = "learn_v1_topics"
+# The model Learn's own vectors come from; a platform row of it was imported.
+LEARN_MODEL_ID = LEARN_V1_CONTENT_FILES.model.model_id
 
 
 def platform_chunks(
@@ -65,7 +69,8 @@ def platform_chunks(
     :param chunks: chunk rows
     :param vectors: vector rows of the same chunks
     :param strategy: the strategy
-    :returns: ``point_id``, ``chunk_text``, ``text_checksum`` and ``vector`` rows
+    :returns: ``point_id``, ``chunk_text``, ``text_checksum``, ``vector`` and
+        ``model_id`` rows
     :rtype: pl.DataFrame
     """
     return (
@@ -73,7 +78,7 @@ def platform_chunks(
         .select("chunk_key", "point_id", "chunk_text", "text_checksum")
         .join(
             vectors.filter(pl.col("strategy_id") == strategy.strategy_id).select(
-                "chunk_key", "vector"
+                "chunk_key", "vector", "model_id"
             ),
             on="chunk_key",
             how="left",
@@ -106,16 +111,24 @@ def check_result(report: ParityReport) -> AssetCheckResult:
     }
     if report.checksum_matches is not None:
         metadata["checksum_matches"] = MetadataValue.int(report.checksum_matches)
-    if report.cosine_min is not None and report.cosine_p50 is not None:
-        metadata["cosine_min"] = MetadataValue.float(report.cosine_min)
-        metadata["cosine_p50"] = MetadataValue.float(report.cosine_p50)
+    # By the model that produced the platform's vector, so vectors imported from
+    # Learn, which match Learn's by construction, do not hide the others.
+    for model_id, stats in report.cosine_by_model.items():
+        metadata[f"{model_id}/compared_vectors"] = MetadataValue.int(stats.compared)
+        metadata[f"{model_id}/below_min_cosine"] = MetadataValue.int(
+            stats.below_threshold
+        )
+        if stats.minimum is not None and stats.p50 is not None:
+            metadata[f"{model_id}/cosine_min"] = MetadataValue.float(stats.minimum)
+            metadata[f"{model_id}/cosine_p50"] = MetadataValue.float(stats.p50)
     if report.vectors_differ:
         return AssetCheckResult(
             passed=False,
             severity=AssetCheckSeverity.ERROR,
             description=(
-                f"{report.below_threshold} chunks with Learn's text have a vector "
-                f"under {MIN_COSINE_SIMILARITY} cosine similarity to Learn's"
+                f"{report.below_threshold} chunks with Learn's text have a vector, "
+                f"not from {report.reference_model_id}, under "
+                f"{MIN_COSINE_SIMILARITY} cosine similarity to Learn's"
             ),
             metadata=metadata,
         )
@@ -159,10 +172,10 @@ def content_file_vectors_match_learn(
     )
     client = learn_qdrant.get_client()
     collection = learn_qdrant.collection_name(LEARN_CONTENT_FILES_COLLECTION)
-    learn = retrieve_points(
+    fetch = partial(
+        retrieve_points,
         client,
         collection,
-        platform["point_id"].to_list(),
         text_field="chunk_content",
         checksum_field="checksum",
         vector_name=LEARN_CONTENT_FILES_COLLECTION.dense_vector_name,
@@ -173,7 +186,13 @@ def content_file_vectors_match_learn(
         content_file_run_filter(CONTENT_FILE_SOURCES[etl_source].platform_code, run),
     )
     return check_result(
-        compare_with_learn(platform, learn, learn_ids, compare_checksums=True)
+        compare_with_learn(
+            platform,
+            fetch,
+            learn_ids,
+            compare_checksums=True,
+            reference_model_id=LEARN_MODEL_ID,
+        )
     )
 
 
@@ -196,17 +215,23 @@ def topic_vectors_match_learn(learn_qdrant: QdrantResource) -> AssetCheckResult:
     )
     client = learn_qdrant.get_client()
     collection = learn_qdrant.collection_name(LEARN_TOPICS_COLLECTION)
-    learn = retrieve_points(
+    fetch = partial(
+        retrieve_points,
         client,
         collection,
-        platform["point_id"].to_list(),
         text_field="name",
         checksum_field=None,
         vector_name=LEARN_TOPICS_COLLECTION.dense_vector_name,
     )
     learn_ids = scroll_point_ids(client, collection, None)
     return check_result(
-        compare_with_learn(platform, learn, learn_ids, compare_checksums=False)
+        compare_with_learn(
+            platform,
+            fetch,
+            learn_ids,
+            compare_checksums=False,
+            reference_model_id=LEARN_MODEL_ID,
+        )
     )
 
 
