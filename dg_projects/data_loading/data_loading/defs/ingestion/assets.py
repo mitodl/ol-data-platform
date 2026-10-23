@@ -13,11 +13,14 @@ from typing import Any
 
 from dagster import (
     AssetExecutionContext,
+    AssetKey,
     AssetsDefinition,
     Config,
+    DataVersion,
     Definitions,
     MaterializeResult,
 )
+from dagster._core.definitions.data_version import DATA_VERSION_TAG
 from dagster_dlt import DagsterDltResource, dlt_assets
 from ol_dlt.sources import (
     course_xml_blocks,
@@ -261,6 +264,17 @@ def load_in_batches(
     return results, batches, rows_loaded
 
 
+def _previous_data_version(
+    context: AssetExecutionContext, asset_key: AssetKey
+) -> DataVersion | None:
+    """Return the data version the asset's latest materialization recorded."""
+    event = context.instance.get_latest_materialization_event(asset_key)
+    if event is None or event.asset_materialization is None:
+        return None
+    value = event.asset_materialization.tags.get(DATA_VERSION_TAG)
+    return None if value is None else DataVersion(value)
+
+
 def drain(
     *,
     context: AssetExecutionContext,
@@ -273,6 +287,13 @@ def drain(
     One, not one per batch: Dagster rejects a step that materializes the same
     asset twice. The last batch's metadata describes an empty catch-up load, so
     the counts that describe the whole run are added here.
+
+    A run that loaded no rows keeps the previous data version. Every source
+    drained here appends, so the table is unchanged, but these assets have no
+    code version and Dagster would otherwise derive a new data version from the
+    run id. The lakehouse dbt models rebuild on a parent's data version change,
+    so each empty load (e.g. an OCW course republished with identical bytes)
+    would rebuild everything below the raw table.
     """
     (resource_name,) = build_source().resources
     results, batches, rows_loaded = load_in_batches(
@@ -290,6 +311,11 @@ def drain(
                 "batches": batches,
                 "rows_loaded": rows_loaded,
             },
+            data_version=(
+                None
+                if rows_loaded
+                else _previous_data_version(context, result.asset_key)
+            ),
         )
 
 
