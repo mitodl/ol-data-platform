@@ -54,7 +54,7 @@ from dagster import (
     Output,
     asset,
 )
-from defusedxml import ElementTree
+from defusedxml import DefusedXmlException, ElementTree
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from upath import UPath
 
@@ -602,7 +602,7 @@ class OlxArchive:
         # parse the file, not the lenient text, so bad bytes still fail
         try:
             root = _without_dated_blocks(ElementTree.parse(path).getroot())
-        except ElementTree.ParseError:
+        except (ElementTree.ParseError, DefusedXmlException):
             log.warning("Malformed XML in %s, keeping all legacy transcripts", path)
             return text, None
         return _reference_text(root), self._video_ids_of(root)

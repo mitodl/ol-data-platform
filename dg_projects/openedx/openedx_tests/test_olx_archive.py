@@ -1131,8 +1131,12 @@ def test_olx_archive_keeps_inline_video_transcripts(tmp_path):
     assert "static/subs_Inline.srt.sjson" in _ingested(olx)
 
 
-# non-UTF-8 bytes are malformed too, though the text is read leniently
-@pytest.mark.parametrize("broken", [b"<tab", b"<tab>\xff</tab>"])
+# non-UTF-8 bytes are malformed too, though the text is read leniently, and so is
+# an entity declaration, which defusedxml refuses
+@pytest.mark.parametrize(
+    "broken",
+    [b"<tab", b"<tab>\xff</tab>", b'<!DOCTYPE tab [<!ENTITY e "x">]><tab>&e;</tab>'],
+)
 def test_olx_archive_malformed_xml_keeps_legacy_transcripts(tmp_path, broken):
     """Unknown video ids must not be read as "no video uses this transcript\""""
     olx = _reference_olx(tmp_path, **{"subs_AbC123.srt.sjson": "{}"})
