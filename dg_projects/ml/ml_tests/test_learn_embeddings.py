@@ -636,23 +636,28 @@ def test_the_sensor_registers_only_the_sample(tables):
 def test_the_sample_takes_the_first_runs_by_hash_and_the_named_ones():
     named = "course-v1:MITxT+7.05x+2T2026"
     others = [f"course-v1:MITxT+{number}x+1T2026" for number in range(8)]
-    # Ahead of every other run by hash, but Learn does not list UAI courses.
-    uai = [
+    # Ahead of every other run by hash, but in orgs whose courses Learn does not
+    # list.
+    unlisted = [
         run
-        for run in (f"course-v1:UAI_{number}+UAI.1+1T2026" for number in range(200))
+        for run in (
+            f"course-v1:{org}{number}+UAI.1+1T2026"
+            for number in range(300)
+            for org in ("UAI_", "HZN_", "UCE")
+        )
         if md5_hex(run) < min(map(md5_hex, others))
-    ][:3]
+    ][:6]
     versions = pl.DataFrame(
         {
-            "etl_source": ["mitxonline"] * (9 + len(uai)) + ["xpro"],
-            "run_readable_id": [*others, named, *uai, "course-v1:xPRO+one+R1"],
-            "text_version": ["v"] * (10 + len(uai)),
+            "etl_source": ["mitxonline"] * (9 + len(unlisted)) + ["xpro"],
+            "run_readable_id": [*others, named, *unlisted, "course-v1:xPRO+one+R1"],
+            "text_version": ["v"] * (10 + len(unlisted)),
         }
     )
 
     sampled = in_sample(versions)
 
-    assert uai
+    assert len({run.split("+")[0].rstrip("0123456789") for run in unlisted}) > 1
     first = sorted([*others, named], key=md5_hex)[:SAMPLE_RUNS_PER_SOURCE]
     assert set(sampled["run_readable_id"]) == {
         *first,

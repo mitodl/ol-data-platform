@@ -27,10 +27,22 @@ from ol_orchestrate.lib.embeddings.documents import md5_hex
 #
 # The sample is the first SAMPLE_RUNS_PER_SOURCE runs of each etl_source in md5
 # order of their run_readable_id, which is stable and spread over the courses,
-# plus runs picked for the smokecheck. The md5 pick skips the Universal AI orgs:
-# Learn does not list their courses, so it has no points to compare them with.
+# plus runs picked for the smokecheck. The md5 pick skips the runs of B2B orgs
+# whose courses Learn does not list (none of their courses is in Learn's courses
+# API), so Learn has no points to compare them with. MITx and MITxt, one unlisted
+# run each, are not here: as prefixes they would also match MITxT.
 SAMPLE_RUNS_PER_SOURCE = 5
-SAMPLE_SKIPPED_ORG_PREFIX = "UAI_"
+SAMPLE_SKIPPED_ORG_PREFIXES = (
+    "B2C",
+    "COORMFG",
+    "HZN",
+    "ISFT",
+    "NTUA_DEV",
+    "SK",
+    "TestX",
+    "UAI_",
+    "UCE",
+)
 SAMPLE_NAMED_RUNS = frozenset(
     {
         # Learn's text for an OCW file is the platform's, so these should match
@@ -57,7 +69,9 @@ def in_sample(versions: pl.DataFrame) -> pl.DataFrame:
         [f"{etl_source}|{run}" for etl_source, run in SAMPLE_NAMED_RUNS]
     )
     org = pl.col("run_readable_id").str.extract(r"^course-v1:([^+]+)\+")
-    skipped = org.str.starts_with(SAMPLE_SKIPPED_ORG_PREFIX).fill_null(value=False)
+    skipped = pl.any_horizontal(
+        org.str.starts_with(prefix) for prefix in SAMPLE_SKIPPED_ORG_PREFIXES
+    ).fill_null(value=False)
     # A skipped run has no hash, so no rank, and is never among the first.
     first = (
         pl.when(~skipped)
