@@ -332,8 +332,10 @@ def sync(
     can become a pull request. A metric that is In Review or Rejected in
     OpenMetadata is reported and left alone even with --force. Each file's
     digest is recorded in the metric's metricFileSha256 custom property, which
-    ol-infrastructure defines on the metric type. Exits non-zero when any
-    metric did not sync.
+    ol-infrastructure defines on the metric type. A stored displayName that
+    differs from the file is reported as stale, because OpenMetadata keeps it
+    against a bot's change; the rest of that metric still syncs. Exits non-zero
+    when any metric did not sync or has a stale displayName.
     """
     metrics, manifest = _load(dbt_dir_path, metrics_dir_path, manifest_path, names)
     client = OpenMetadataClient.from_env()

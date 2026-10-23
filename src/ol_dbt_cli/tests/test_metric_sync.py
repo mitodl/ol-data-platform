@@ -406,6 +406,37 @@ def test_a_display_name_renamed_in_openmetadata_is_reported_not_put_back(
     assert "OpenMetadata has displayName 'Certified' and the file has 'Certified learners'" in out
 
 
+def test_a_display_name_the_file_dropped_is_reported(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir)
+    path = metrics_dir / "certified_learners.yaml"
+    raw = yaml.safe_load(path.read_text())
+    del raw["metric"]["displayName"]
+    path.write_text(yaml.safe_dump(raw))
+    server.calls.clear()
+    capsys.readouterr()
+    assert _sync(metrics_dir, names=("certified_learners",)) is True
+    assert ("PUT", "/v1/metrics") not in server.calls
+    assert server.metrics["certified_learners"]["displayName"] == "Certified learners"
+    assert f"{STALE_NAME} none" in " ".join(capsys.readouterr().out.split())
+
+
+def test_a_structural_change_puts_once_and_keeps_the_stored_display_name(
+    server: FakeOpenMetadata, metrics_dir: Path
+) -> None:
+    _sync(metrics_dir)
+    _edit_file(metrics_dir, "certified_learners", metricType="SUM", displayName="Learners certified")
+    server.calls.clear()
+    assert _sync(metrics_dir, names=("certified_learners",)) is True
+    assert server.calls.count(("PUT", "/v1/metrics")) == 1
+    metric = server.metrics["certified_learners"]
+    assert (metric["metricType"], metric["displayName"]) == ("SUM", "Certified learners")
+    server.calls.clear()
+    assert _sync(metrics_dir, names=("certified_learners",)) is True
+    assert ("PUT", "/v1/metrics") not in server.calls
+
+
 def test_dry_run_reports_a_stale_display_name(
     server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
