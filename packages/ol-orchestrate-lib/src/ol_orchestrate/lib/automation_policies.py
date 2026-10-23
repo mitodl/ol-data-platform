@@ -60,7 +60,7 @@ def upstream_or_code_changes() -> AutomationCondition:
     failures that is a stampede -- so clear the failed set, or roll this out a
     code location at a time, before deploying it.
     """
-    return _upstream_or_code_changes(AutomationCondition.code_version_changed())
+    return _upstream_or_code_changes()
 
 
 def dbt_upstream_or_code_changes() -> AutomationCondition:
@@ -88,17 +88,26 @@ def dbt_upstream_or_code_changes() -> AutomationCondition:
     ever true inside the sensor's target, so a staging parent holds its children
     until a staging job rebuilds it.
 
+    The hold covers direct parents only. With A (changed) -> B (unchanged) -> C
+    (changed), C is not held by A, so if B passes A's new column through, C can
+    still run before A and fail the same way.
+
     A parent that never succeeds, or that nothing builds, would hold its direct
     children forever, so the wait expires at the second daily cron tick after
-    the change: 24 to 48 hours, longer than the daily cadence of every staging
-    job. Expiring at the first tick would release a change seen just before
-    midnight a few hours later, before the 06:00 UTC staging build.
+    the change: 24 to 48 hours. The ``sync_and_stage_*`` schedules start at
+    00:00 UTC and repeat every 6 to 24 hours, and ``non_airbyte_staging_daily``
+    runs at 06:00, so every staging schedule fires at least once inside that
+    window. Expiring at the first midnight would release a change seen late in
+    the evening one sensor tick later, before the 06:00 build and possibly
+    while the 00:00 sync is still running.
 
-    Cursor note: the latch and the per-parent state are new nodes with empty
-    cursors on the first tick after this deploys, so a model change shipped in
-    the same release is not held. Existing nodes keep their cursors: node ids
-    hash the path from the root, and ``since`` / ``newly_true`` hash only their
-    own subtree and target key, so appending an operand moves nothing.
+    Cursor note: the latch is appended as the last trigger, so the bare
+    ``code_version_changed`` keeps its index and its cursor, and a model whose
+    SQL changes in the same release as this condition is still requested on the
+    deploy tick. Node ids hash the path from the root, and ``since`` /
+    ``newly_true`` hash only their own subtree and target key, so appending
+    moves nothing. The latch and the per-parent state start with empty cursors,
+    though, so that model is neither latched nor held on that first tick.
     """
     own_code_change = AutomationCondition.code_version_changed().since(
         AutomationCondition.newly_requested()
@@ -109,11 +118,19 @@ def dbt_upstream_or_code_changes() -> AutomationCondition:
 def _any_deps_code_change_pending() -> AutomationCondition:
     """Hold an asset while a parent has new code it has not materialized yet.
 
-    Known gap: a parent run that started on the old code and finished between
-    the deploy and the next tick puts ``newly_updated`` on the same tick as the
-    code change. ``since`` resolves that tie to the reset (``code_version_changed``
-    carries no timestamp to order them by), so that parent is not held. That is
-    the behavior from before this condition existed, not a new failure.
+    Known gaps: ``newly_updated`` counts any materialization, not one built
+    from the new SQL, so a parent run that started on the old image before the
+    deploy releases the hold when it finishes.
+
+    - If it finishes before the first tick that sees the change, the
+      materialization and the code change land on the same tick. ``since``
+      resolves that tie to the reset (``code_version_changed`` carries no
+      timestamp to order them by), so the parent is never held.
+    - If it finishes after that tick (e.g. a staging run already going when
+      the deploy lands), its materialization clears the hold on the next tick,
+      though the table was built with the old SQL.
+
+    Either way the child runs as it did before this condition existed.
     """
     code_changed = AutomationCondition.code_version_changed()
     daily = AutomationCondition.cron_tick_passed(PENDING_PARENT_EXPIRY_CRON)
@@ -128,8 +145,13 @@ def _any_deps_code_change_pending() -> AutomationCondition:
 
 
 def _upstream_or_code_changes(
-    has_code_changes: AutomationCondition,
+    extra_trigger: AutomationCondition | None = None,
 ) -> AutomationCondition:
+    """Build the shared tree, with ``extra_trigger`` appended to the trigger ``|``.
+
+    Appended last so every existing operand keeps its index, and with it the
+    node id its cursor is stored under.
+    """
     not_in_progress = ~AutomationCondition.in_progress()
     no_upstream_dependencies_in_process = ~AutomationCondition.any_deps_in_progress()
     has_upstream_changes = (
@@ -140,17 +162,18 @@ def _upstream_or_code_changes(
             | AutomationCondition.initial_evaluation()
         )
     )
+    has_code_changes = AutomationCondition.code_version_changed()
     newly_missing = AutomationCondition.newly_missing()
     execution_newly_failed = AutomationCondition.execution_failed().newly_true()
     all_upstream_dependencies_present = ~AutomationCondition.any_deps_missing()
+    triggers = (
+        has_upstream_changes | has_code_changes | newly_missing | execution_newly_failed
+    )
+    if extra_trigger is not None:
+        triggers = triggers | extra_trigger
     return (
         not_in_progress
         & no_upstream_dependencies_in_process
-        & (
-            has_upstream_changes
-            | has_code_changes
-            | newly_missing
-            | execution_newly_failed
-        )
+        & triggers
         & all_upstream_dependencies_present
     )

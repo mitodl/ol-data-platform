@@ -506,6 +506,30 @@ def test_shared_condition_tree_is_unchanged() -> None:
     assert upstream_or_code_changes().get_unique_id() == tree_id
 
 
+def test_a_change_shipped_with_the_dbt_condition_is_still_requested(
+    dbt_instance,
+) -> None:
+    """Switching an existing cursor to the dbt tree keeps the deploy-tick request.
+
+    The cursor comes from the tree dbt ran on before (the shared one). A model
+    whose SQL changes in the same release must still be requested on the
+    deploy tick, which only holds if the bare code_version_changed keeps the
+    node id its previous code version is stored under.
+    """
+    sensor = DbtSensor(dbt_instance, upstream_or_code_changes(), DEPLOY_MORNING)
+    sensor.settle(DOCUMENTS_V1)
+
+    sensor.condition = dbt_upstream_or_code_changes()
+    sensor.deploy(
+        {
+            "stg_document_text": ("v1", []),
+            "int_extraction_sources": ("v2", ["stg_document_text"]),
+        }
+    )
+
+    assert sensor.tick() == {"int_extraction_sources"}
+
+
 def test_children_wait_for_a_parent_blocked_by_a_new_staging_model(
     dbt_instance,
 ) -> None:
