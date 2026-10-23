@@ -9,15 +9,19 @@ Learn's but whose vector is not is an error: both sides embed the same text with
 text-embedding-3-large, so the Azure OpenAI and OpenAI deployments would be
 returning different vectors, or the two sides embed differently.
 
-The checks have no automation condition, so automation never runs them; launch
-them by hand for the partitions to compare. They read Learn's cluster through
-the ``learn_qdrant`` resource.
+The checks have no automation condition, so they run with every materialization
+of their asset: automation's, backfills' and the UI's. They read Learn's cluster
+through the ``learn_qdrant`` resource, which dev has no access to, so
+:func:`learn_parity_definitions` defines both only outside dev.
 """
+
+import os
 
 import polars as pl
 from dagster import (
     AssetCheckExecutionContext,
     AssetCheckResult,
+    AssetChecksDefinition,
     AssetCheckSeverity,
     MetadataValue,
     asset_check,
@@ -47,6 +51,7 @@ from ol_orchestrate.lib.embeddings.learn import (
 )
 from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy
 from ol_orchestrate.resources.embeddings import QdrantResource
+from ol_orchestrate.resources.secrets.vault import Vault
 
 LEARN_V1_CONTENT_FILES_ID = "learn_v1_content_files"
 LEARN_V1_TOPICS_ID = "learn_v1_topics"
@@ -199,3 +204,33 @@ def topic_vectors_match_learn(learn_qdrant: QdrantResource) -> AssetCheckResult:
     return check_result(
         compare_with_learn(platform, learn, learn_ids, compare_checksums=False)
     )
+
+
+def learn_parity_definitions(
+    vault: Vault, dagster_env: str
+) -> tuple[dict[str, QdrantResource], list[AssetChecksDefinition]]:
+    """Return the ``learn_qdrant`` resource and the checks, for deployed envs.
+
+    The checks run with every build of the vector assets, so where they are
+    defined their resource must resolve. Dev has no Learn cluster, so it gets
+    neither, and its builds run without the checks. A deployed env without
+    ``LEARN_QDRANT_COLLECTION_BASE`` fails here, when the code location loads.
+
+    :param vault: the Vault resource the Qdrant credentials are read with
+    :param dagster_env: ``dev``, ``qa`` or ``production``
+    :returns: the resources by key, and the checks
+    :rtype: tuple[dict[str, QdrantResource], list[AssetChecksDefinition]]
+    :raises KeyError: outside dev, when LEARN_QDRANT_COLLECTION_BASE is unset
+    """
+    if dagster_env == "dev":
+        return {}, []
+    learn_qdrant = QdrantResource(
+        vault=vault,
+        vault_path="pipelines/qdrant",
+        # e.g. mitlearn-production
+        base_collection_name=os.environ["LEARN_QDRANT_COLLECTION_BASE"],
+    )
+    return {"learn_qdrant": learn_qdrant}, [
+        content_file_vectors_match_learn,
+        topic_vectors_match_learn,
+    ]

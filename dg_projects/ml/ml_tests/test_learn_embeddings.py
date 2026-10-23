@@ -25,6 +25,7 @@ from dagster import (
 from dagster._core.definitions.data_version import DATA_VERSION_TAG
 from ml.assets.learn_embedding_checks import (
     content_file_vectors_match_learn,
+    learn_parity_definitions,
     topic_vectors_match_learn,
 )
 from ml.assets.learn_embeddings import (
@@ -893,8 +894,16 @@ def test_topics_are_compared_by_topic_uuid(tables, learn_qdrant):
 
 
 # ------------------------------------------------------------------- definitions
-def test_learn_embedding_definitions_load():
-    Definitions(
+@pytest.mark.parametrize("dagster_env", ["dev", "qa"])
+def test_learn_embedding_definitions_load(dagster_env, monkeypatch):
+    monkeypatch.setenv("LEARN_QDRANT_COLLECTION_BASE", "mitlearn-qa")
+    vault = Vault(vault_addr="https://vault.example.com", vault_auth_type="token")
+    resources, checks = learn_parity_definitions(vault, dagster_env)
+
+    # Dev has no Learn cluster, so its vector builds run without the checks.
+    assert len(checks) == (0 if dagster_env == "dev" else 2)
+    assert set(resources) == (set() if dagster_env == "dev" else {"learn_qdrant"})
+    definitions = Definitions(
         assets=[
             learn_content_file_text,
             content_file_embedding_chunks,
@@ -903,15 +912,25 @@ def test_learn_embedding_definitions_load():
             topic_embedding_vectors,
             embedding_strategies,
         ],
-        asset_checks=[content_file_vectors_match_learn, topic_vectors_match_learn],
+        asset_checks=checks,
         sensors=[learn_content_file_text_sensor],
         resources={
             "io_manager": Warehouse({}),
             "learn_embeddings_io_manager": Warehouse({}),
             "embeddings": fake_embeddings(),
-            "learn_qdrant": fake_qdrant(),
+            **resources,
         },
-    ).resolve_all_job_defs()
+    )
+    definitions.resolve_all_job_defs()
+    assert len(definitions.resolve_asset_graph().asset_check_keys) == len(checks)
+
+
+def test_a_deployed_env_without_learns_collection_base_fails_to_load(monkeypatch):
+    monkeypatch.delenv("LEARN_QDRANT_COLLECTION_BASE", raising=False)
+    vault = Vault(vault_addr="https://vault.example.com", vault_auth_type="token")
+
+    with pytest.raises(KeyError, match="LEARN_QDRANT_COLLECTION_BASE"):
+        learn_parity_definitions(vault, "production")
 
 
 def test_strategy_table_has_a_row_per_strategy(tables):
