@@ -43,7 +43,7 @@ repository = "https://github.com/mitodl/ol-data-platform"
 [project.optional-dependencies]
 embeddings = [
     "langchain-text-splitters==1.1.2",
-    "ol-llm[bedrock,google,openai]==0.0.4",
+    "ol-llm[bedrock,google,openai]==0.0.5",
     "qdrant-client~=1.18.0",
     "tiktoken~=0.13.0",
 ]
