@@ -117,12 +117,12 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # Never dev: it resolves to the production warehouse.
     "lake_orphan_sweep_weekly": frozenset({"qa", "production"}),
     # Lists every raw Iceberg table's directory and compares it with what the
-    # table's metadata still reaches. It only reports unless the asset's
-    # ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS names the environment, which
-    # today is QA. Production from the start, unlike the sweep: raw
-    # snapshot expiry ran there first, so that is where most of the files it
-    # strands are, and a report reads Glue and S3 and writes nothing. Never dev: it
-    # resolves to the production warehouse.
+    # table's metadata still reaches. This entry only decides where the
+    # schedule runs. Whether a run deletes is decided separately, by
+    # ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS in iceberg_orphan_files.py
+    # (today QA and production). Production from the start, unlike the sweep:
+    # raw snapshot expiry ran there first, so that is where most of the files
+    # it strands are. Never dev: it resolves to the production warehouse.
     "iceberg_raw_orphan_files_weekly": frozenset({"qa", "production"}),
     # `dbt docs generate` for OpenMetadata. Its JOB is the one that demonstrably
     # ran from QA against production -- by hand, not on this cron (see above).
