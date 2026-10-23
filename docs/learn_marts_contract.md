@@ -313,6 +313,7 @@ pull filters and prunes on; see
 | `extraction_status` | string | `extracted`, or `failed` for a file whose text could not be read |
 | `published` | boolean | Always true |
 | `last_modified` | string | ISO 8601 time the file's text was extracted |
+| `release_date` | string | `ContentFile.release_date`, ISO 8601 UTC (`YYYY-MM-DDTHH:MM:SS.ffffffZ`): the latest OLX `start` on the path from the course down to the file, as Learn's `OlxArchive.release_dates` computes it. Null when undated. Learn hides a file until this date passes, so a future-dated row is present but not yet visible |
 
 `description`, `file_type`, `content_author`, `content_language`, `image_src` and
 `uid` are present and null, as Learn's Open edX ETL leaves them unset.
@@ -432,3 +433,4 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-20 | Tobias Macey | Added `has_catalog_page`, `about`, `what_you_learn`, `prerequisites` and `faqs` to `integrations__learn__mitxonline_courses` and `integrations__learn__mitxonline_programs` for MIT Learn's `full_description`. |
 | 2026-10-22 | Tobias Macey | Drop MIT edX courses. MIT Learn's `mit_edx` courses are retired rather than moved to a warehouse pull, so no Learn Sync task reads them and `integrations__learn__mit_edx_courses` is gone along with the Course Sources (MIT edX) columns. `mit_edx` stays as the source of `integrations__learn__mit_edx_programs`. The MIT edX programs columns now name what the model has (`course_readable_ids` and `topics` arrays) rather than `courses` and `departments` strings, which it never had. |
 | 2026-10-22 | Tobias Macey | Added `child_program_order` to `integrations__learn__mitxonline_program_children`, so a Sync task can number child programs not shown as courses in requirement tree order, as MIT Learn's ETL does, and not by readable id. |
+| 2026-10-22 | Tobias Macey | Added `release_date` to `integrations__learn__content_files` for MIT Learn's `ContentFile.release_date` (mit-learn#4093). The file exclusions also follow mit-learn#4106: an asset name no longer matches a link that drops one of its separators. |
