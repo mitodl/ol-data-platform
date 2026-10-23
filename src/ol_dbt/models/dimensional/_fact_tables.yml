@@ -254,6 +254,17 @@ models:
       when no program purchase covered it. For xPRO, this is order_id when the resolved
       order is a program purchase. For MITx Online, order_id is the $0 course run
       order, so the program order is matched in int__mitxonline__program_course_run_orders.
+  - name: program_discount_fk
+    description: Foreign key to dim_discount for the coupon redeemed on the program
+      order in program_order_id, for example a B2B code. Null when there is no program
+      order or it used no coupon.
+    tests:
+    - relationships:
+        to: ref('dim_discount')
+        field: discount_pk
+        where: "program_discount_fk is not null"
+        config:
+          severity: warn
 
 - name: tfact_order
   description: >
@@ -2277,7 +2288,7 @@ unit_tests:
   - input: ref('tfact_order')
     rows:
     - {order_key: "OK1", order_id: 7001, line_id: "1", user_fk: "U1", product_fk: "PROD_XPRO_PROGRAM",
-      platform_fk: "P_XPRO", platform: "mitxpro", order_state: "fulfilled"}
+      platform_fk: "P_XPRO", platform: "mitxpro", order_state: "fulfilled", discount_fk: "D_B2B"}
     - {order_key: "OK2", order_id: 7002, line_id: "2", user_fk: "U2", product_fk: "PROD_XPRO_CR2",
       platform_fk: "P_XPRO", platform: "mitxpro", order_state: "fulfilled"}
     - {order_key: "OK3", order_id: 8001, line_id: "201", user_fk: "U3", product_fk: "PROD_MITXONLINE_CR3",
@@ -2289,7 +2300,7 @@ unit_tests:
     - {line_id: 201, program_order_id: 8500}
   expect:
     rows:
-    - {enrollment_key: "XPRO_PROGRAM", program_order_id: 7001}
-    - {enrollment_key: "XPRO_COURSERUN", program_order_id: null}
-    - {enrollment_key: "MITXONLINE_MATCHED", program_order_id: 8500}
-    - {enrollment_key: "MITXONLINE_UNMATCHED", program_order_id: null}
+    - {enrollment_key: "XPRO_PROGRAM", program_order_id: 7001, program_discount_fk: "D_B2B"}
+    - {enrollment_key: "XPRO_COURSERUN", program_order_id: null, program_discount_fk: null}
+    - {enrollment_key: "MITXONLINE_MATCHED", program_order_id: 8500, program_discount_fk: null}
+    - {enrollment_key: "MITXONLINE_UNMATCHED", program_order_id: null, program_discount_fk: null}
