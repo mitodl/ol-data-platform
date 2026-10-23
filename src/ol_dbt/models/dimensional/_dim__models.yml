@@ -10,15 +10,15 @@ models:
       qa_branches:
       - micromasters/app_postgres
       - mitlearn/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
       - mitxonline/tracking_logs
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
       - xpro/tracking_logs
   columns:
@@ -105,11 +105,11 @@ models:
   config:
     meta:
       qa_branches:
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
-      - mitxonline/api
+      - mitxonline/course_structure
       - mitxonline/mysql
-      - xpro/api
+      - xpro/course_structure
       - xpro/mysql
   columns:
   - name: video_block_pk
@@ -157,11 +157,11 @@ models:
   config:
     meta:
       qa_branches:
-      - mitx/api
+      - mitx/course_structure
       - mitx/tracking_logs
-      - mitxonline/api
+      - mitxonline/course_structure
       - mitxonline/tracking_logs
-      - xpro/api
+      - xpro/course_structure
       - xpro/tracking_logs
   columns:
   - name: problem_block_pk
@@ -209,9 +209,9 @@ models:
   config:
     meta:
       qa_branches:
-      - mitx/api
-      - mitxonline/api
-      - xpro/api
+      - mitx/course_structure
+      - mitxonline/course_structure
+      - xpro/course_structure
   columns:
   - name: discussion_topic_pk
     description: string, primary key for this table
@@ -253,9 +253,9 @@ models:
   config:
     meta:
       qa_branches:
-      - mitx/api
-      - mitxonline/api
-      - xpro/api
+      - mitx/course_structure
+      - mitxonline/course_structure
+      - xpro/course_structure
   columns:
   - name: content_block_pk
     description: string, primary key for this table
@@ -1247,15 +1247,15 @@ models:
       qa_branches:
       - micromasters/app_postgres
       - mitlearn/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
       - mitxonline/tracking_logs
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
       - xpro/tracking_logs
   columns:
@@ -1309,15 +1309,15 @@ models:
       qa_branches:
       - micromasters/app_postgres
       - mitlearn/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
       - mitxonline/tracking_logs
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
       - xpro/tracking_logs
   columns:
@@ -1371,15 +1371,15 @@ models:
       qa_branches:
       - micromasters/app_postgres
       - mitlearn/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
       - mitxonline/tracking_logs
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
       - xpro/tracking_logs
   columns:
@@ -2047,12 +2047,12 @@ models:
     meta:
       qa_branches:
       - micromasters/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
-      - mitxonline/api
       - mitxonline/app_postgres
-      - xpro/api
+      - mitxonline/course_structure
       - xpro/app_postgres
+      - xpro/course_structure
   columns:
   - name: courserun_fk
     description: string, foreign key to dim_course_run. Null when the course structure's
@@ -2141,13 +2141,13 @@ models:
       qa_branches:
       - micromasters/app_postgres
       - mitlearn/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
   columns:
   - name: user_fk

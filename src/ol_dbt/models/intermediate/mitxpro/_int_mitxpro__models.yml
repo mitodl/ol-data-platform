@@ -1744,8 +1744,8 @@ models:
   config:
     meta:
       qa_branches:
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
       - xpro/tracking_logs
   columns:
