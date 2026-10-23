@@ -133,6 +133,53 @@ def test_provider_keys_are_copied_from_vault(
     assert os.environ["OPENAI_API_KEY"] == OPENAI_KEY
 
 
+def test_azure_ad_auth_gives_ol_llm_a_token_provider(
+    ol_llm_setup: tuple[MagicMock, MagicMock],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPIK_URL_OVERRIDE", raising=False)
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com")
+    monkeypatch.setenv("OPENAI_API_VERSION", "2024-10-21")
+    configure, _ = ol_llm_setup
+    embeddings._azure_ad_token_provider.cache_clear()
+
+    with (
+        patch.object(embeddings, "DefaultAzureCredential") as credential,
+        patch.object(
+            embeddings, "get_bearer_token_provider", return_value=lambda: "token"
+        ) as token_provider,
+    ):
+        _set_up(
+            EmbeddingsResource(vault=_vault(), environment="ci", azure_ad_auth=True)
+        )
+        _set_up(
+            EmbeddingsResource(vault=_vault(), environment="ci", azure_ad_auth=True)
+        )
+    embeddings._azure_ad_token_provider.cache_clear()
+
+    credential.assert_called_once_with()
+    token_provider.assert_called_once_with(
+        credential.return_value, "https://cognitiveservices.azure.com/.default"
+    )
+    settings = configure.call_args.args[0]
+    assert settings.environment == "ci"
+    assert settings.azure_ad_token_provider() == "token"
+
+
+@pytest.mark.usefixtures("ol_llm_setup")
+def test_azure_ad_auth_needs_the_endpoint_and_api_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPIK_URL_OVERRIDE", raising=False)
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com")
+    monkeypatch.delenv("OPENAI_API_VERSION", raising=False)
+
+    with pytest.raises(ValueError, match="OPENAI_API_VERSION"):
+        _set_up(
+            EmbeddingsResource(vault=_vault(), environment="ci", azure_ad_auth=True)
+        )
+
+
 def test_tracing_authenticates_with_the_vault_keycloak_client(
     ol_llm_setup: tuple[MagicMock, MagicMock],
     vault_client: MagicMock,  # noqa: ARG001

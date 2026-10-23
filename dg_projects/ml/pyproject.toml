@@ -11,7 +11,7 @@ dependencies = [
     "httpx>=0.28",
     "httpx2 >= 2.2.0",
     "scikit-learn>=1.3",  # sklearn.cluster.HDBSCAN was added in 1.3
-    "ol-orchestrate-lib",
+    "ol-orchestrate-lib[embeddings]",
     "polars<2.1",
     "umap-learn",
     "anthropic",
@@ -55,6 +55,11 @@ root_module = "ml"
 
 [tool.setuptools.packages.find]
 exclude=["ml_tests"]
+
+# The embedding strategies are read from the installed package, and the image
+# installs the project as a wheel.
+[tool.setuptools.package-data]
+ml = ["embedding_strategies.yaml"]
 
 [tool.uv.sources]
 ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }
