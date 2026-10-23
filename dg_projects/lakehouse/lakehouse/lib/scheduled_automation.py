@@ -111,10 +111,11 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     "iceberg_raw_maintenance_nightly": frozenset({"qa", "production"}),
     # Deletes table directories no Glue table references, or only reports them
     # where the asset's LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS leaves the
-    # environment out. It deletes in QA. QA only until QA deletes have run
-    # clean; production follows.
+    # environment out. It deletes in QA, where its first delete (2026-10-18)
+    # verified clean, and reports in production until someone has read a
+    # production deletion list.
     # Never dev: it resolves to the production warehouse.
-    "lake_orphan_sweep_weekly": frozenset({"qa"}),
+    "lake_orphan_sweep_weekly": frozenset({"qa", "production"}),
     # Lists every raw Iceberg table's directory and compares it with what the
     # table's metadata still reaches. It only reports unless the asset's
     # ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS names the environment, which

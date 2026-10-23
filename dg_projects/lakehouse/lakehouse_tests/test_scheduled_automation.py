@@ -75,8 +75,8 @@ def test_qa_runs_ingestion_and_the_learn_integrations_build():
     models unions across sources and MIT Learn needs QA views to rehearse a
     warehouse-pull cutover against.
 
-    The orphan sweep builds nothing. It runs in QA first because its deletion
-    list is reviewed there before production gets the schedule.
+    The orphan sweep builds nothing. It deletes in QA and only reports in
+    production.
 
     Raw snapshot expiry builds nothing either. It trims the snapshots QA's own
     raw loads leave behind. The dbt-layer maintenance stays out of QA.
@@ -112,10 +112,9 @@ def test_qa_cannot_run_dbt_docs_generate_on_a_timer():
 def test_production_registers_every_schedule_but_the_qa_only_ones():
     """Production's set is what it registered before the map existed.
 
-    Three entries are QA-only. Production builds the Learn integrations models
+    Two entries are QA-only. Production builds the Learn integrations models
     through dbt_automation_sensor, so a schedule there would run them twice.
-    The orphan sweep reaches production once it has run clean in QA. The
-    observation drift check describes QA raw, so it runs in QA.
+    The observation drift check describes QA raw, so it runs in QA.
     """
     kept = schedules_for_environment(ALL_CANDIDATES, environment="production")
     assert kept == [
@@ -124,7 +123,6 @@ def test_production_registers_every_schedule_but_the_qa_only_ones():
         if schedule_id
         not in {
             "learn_integrations_qa_daily",
-            "lake_orphan_sweep_weekly",
             "qa_observation_drift_daily",
         }
     ]
