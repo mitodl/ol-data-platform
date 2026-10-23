@@ -3,7 +3,7 @@
 import json
 
 import dagster as dg
-from ol_dlt.sources import course_xml_blocks, ocw_content
+from ol_dlt.sources import course_xml_blocks, edxorg_program_reports, ocw_content
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from data_loading.defs.ingestion.assets import (
@@ -249,6 +249,27 @@ course_xml_blocks_ingest_schedule = dg.ScheduleDefinition(
     ),
 )
 
+# edX.org's learner reports reach the landing zone at about 15:00 UTC (S3
+# modification times 14:51 to 15:02 on 2026-10-14 to 2026-10-23), so the day's
+# reports are loaded well ahead of the next non_airbyte_staging_daily at 06:00.
+# The first runs walk the 4.93 TB backlog, about 430 GB per run at the
+# 200-batch cap; later runs read one day of reports. RUNNING by default in
+# production only, as for the course XML blocks: the source always reads the
+# production landing zone.
+edxorg_program_reports_ingest_schedule = dg.ScheduleDefinition(
+    name="edxorg_program_reports_ingest_daily_schedule",
+    target=dg.AssetSelection.keys(
+        ["ol_warehouse_raw_data", edxorg_program_reports.RAW_TABLE]
+    ),
+    cron_schedule="30 16 * * *",
+    execution_timezone="Etc/UTC",
+    default_status=(
+        dg.DefaultScheduleStatus.RUNNING
+        if DAGSTER_ENV == "production"
+        else dg.DefaultScheduleStatus.STOPPED
+    ),
+)
+
 OCW_CONTENT_SCHEDULE_NAME = "ocw_content_ingest_daily_schedule"
 # Defined in ocw_content_sensor, named here so the schedule can wait for its runs.
 OCW_CONTENT_SENSOR_NAME = "ocw_content_publish_sensor"
@@ -344,6 +365,7 @@ defs = dg.Definitions(
         *([xpro_app_ingest_schedule] if xpro_app_ingest_schedule else []),
         posthog_events_ingest_schedule,
         course_xml_blocks_ingest_schedule,
+        edxorg_program_reports_ingest_schedule,
         ocw_content_ingest_schedule,
     ],
 )

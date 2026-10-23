@@ -24,6 +24,7 @@
         'raw__edxorg__s3__course_structure__course_video': '_airbyte_extracted_at',
         'raw__edxorg__s3__course_structure_blocks': '_file_modified_at',
         'raw__edxorg__s3__course_xml_blocks': '_file_modified_at',
+        'raw__edxorg__s3__program_learner_report': '_file_modified_at',
         'raw__edxorg__s3__tables__auth_user': '_file_modified_at',
         'raw__edxorg__s3__tables__auth_userprofile': '_file_modified_at',
         'raw__edxorg__s3__tables__certificates_generatedcertificate': '_file_modified_at',

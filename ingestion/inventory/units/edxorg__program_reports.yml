@@ -1,0 +1,73 @@
+---
+# Hand-written: a dlt source has no Airbyte connection, so
+# bin/airbyte-inventory.py cannot produce this unit. See
+# docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+#
+# edX.org's daily learner report for each MITx program, which the edxorg code
+# location copies into the landing zone
+# (edxorg-program-credentials/reports_v2/MITx/<program uuid>/) and
+# ol_dlt.sources.edxorg_program_reports loads. The table loads beside edxorg/s3's
+# Airbyte-loaded raw__edxorg__program_learner_report, to replace it, and is
+# unmodeled until staging is repointed at it.
+schema_version: 1
+deployment: edxorg
+layer: program_reports
+scope: singleton
+strategies:
+  qa: mirror
+  local: fixture
+mirror_max_age_days: 90
+loader: dlt
+# The load appends every report, each a full snapshot of its program, so
+# staging picks each learner's row from the newest file. Same reasoning as
+# edxorg/course_xml.
+raw_metadata_column: _file_modified_at
+table_prefix: raw__edxorg__s3__program_learner_report
+dlt:
+  source_module: ol_dlt.sources.edxorg_program_reports
+  write_disposition: append
+tables:
+- name: raw__edxorg__s3__program_learner_report
+  raw_table: raw__edxorg__s3__program_learner_report
+  sync_mode: incremental_append
+  cursor_field:
+  - _file_modified_at
+  modeled: false
+  mirror:
+    # The same masking as edxorg/s3's Airbyte table, under the report's columns
+    # as this table names them.
+    columns:
+      _file_modified_at: copy
+      _source_file: copy
+      authoring_institution: copy
+      program_title: copy
+      program_uuid: copy
+      program_type: copy
+      user_id: copy
+      name: redact
+      username: hash
+      user_key: copy
+      course_title: copy
+      course_run_key: copy
+      course_run_start_date: copy
+      external_course_key: copy
+      user_roles: copy
+      track: copy
+      purchased_as_bundle: copy
+      grade: copy
+      letter_grade: copy
+      date_first_enrolled: copy
+      date_last_unenrolled: copy
+      currently_enrolled: copy
+      date_first_upgraded_to_verified: copy
+      completed_program: copy
+      date_program_certificate_awarded: copy
+      completed: copy
+      date_completed: copy
+      last_activity_date: copy
+    # One day of reports, which is a full report of every program. A day's
+    # reports land within about 11 minutes of each other, a day apart, so 12
+    # hours keeps the newest day and none of the one before.
+    where: >-
+      _file_modified_at >=
+      (SELECT max(_file_modified_at) FROM {source}) - INTERVAL 12 HOUR
