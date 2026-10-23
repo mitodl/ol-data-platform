@@ -153,9 +153,14 @@ def scroll_point_ids(
 ) -> set[str]:
     """Return the ids of the points a filter selects, ``batch_size`` per page.
 
+    Metadata chunks are left out by their ``file_type``, read from the payload:
+    Learn's collections refuse a filter on a key without a payload index, and
+    ``file_type`` has none (docs/learn_embedding_config.md).
+
     :param client: a client for Learn's cluster
     :param collection: the collection
-    :param scroll_filter: the points wanted, ``None`` for all of them
+    :param scroll_filter: the points wanted, ``None`` for all of them; it may
+        only use Learn's indexed payload keys
     :param batch_size: points per page
     :rtype: set[str]
     """
@@ -167,31 +172,33 @@ def scroll_point_ids(
             scroll_filter=scroll_filter,
             limit=batch_size,
             offset=offset,
-            with_payload=False,
+            with_payload=["file_type"],
             with_vectors=False,
         )
-        ids.update(str(record.id) for record in records)
+        ids.update(
+            str(record.id)
+            for record in records
+            if (record.payload or {}).get("file_type") != COURSE_METADATA_FILE_TYPE
+        )
         if offset is None:
             return ids
 
 
-def content_file_run_filter(run_readable_id: str) -> models.Filter:
-    """Select a course run's content-file chunks, without metadata chunks.
+def content_file_run_filter(platform_code: str, run_readable_id: str) -> models.Filter:
+    """Select a course run's points, on keys Learn indexes.
 
+    :param platform_code: the run's platform, the payload's ``platform.code``
     :param run_readable_id: the run, as the payload's ``run_readable_id``
     :rtype: models.Filter
     """
     return models.Filter(
         must=[
             models.FieldCondition(
-                key="run_readable_id", match=models.MatchValue(value=run_readable_id)
-            )
-        ],
-        must_not=[
+                key="platform.code", match=models.MatchValue(value=platform_code)
+            ),
             models.FieldCondition(
-                key="file_type",
-                match=models.MatchValue(value=COURSE_METADATA_FILE_TYPE),
-            )
+                key="run_readable_id", match=models.MatchValue(value=run_readable_id)
+            ),
         ],
     )
 

@@ -35,7 +35,7 @@ from ml.assets.learn_embeddings import (
     TOPIC_VECTORS_KEY,
     partition_run,
 )
-from ml.lib.learn_embeddings import strategies
+from ml.lib.learn_embeddings import CONTENT_FILE_SOURCES, strategies
 from ml.lib.learn_parity import (
     MIN_COSINE_SIMILARITY,
     ParityReport,
@@ -167,7 +167,11 @@ def content_file_vectors_match_learn(
         checksum_field="checksum",
         vector_name=LEARN_CONTENT_FILES_COLLECTION.dense_vector_name,
     )
-    learn_ids = scroll_point_ids(client, collection, content_file_run_filter(run))
+    learn_ids = scroll_point_ids(
+        client,
+        collection,
+        content_file_run_filter(CONTENT_FILE_SOURCES[etl_source].platform_code, run),
+    )
     return check_result(
         compare_with_learn(platform, learn, learn_ids, compare_checksums=True)
     )

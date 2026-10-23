@@ -874,7 +874,11 @@ def test_vectors_that_match_learns_pass(tables, learn_qdrant):
             models.PointStruct(
                 id=str(uuid.uuid4()),
                 vector={DENSE: fake_vector("metadata")},
-                payload={"run_readable_id": RUN, "file_type": "course_metadata"},
+                payload={
+                    "run_readable_id": RUN,
+                    "platform": {"code": "mitxonline"},
+                    "file_type": "course_metadata",
+                },
             ),
         ],
     )
@@ -917,6 +921,10 @@ def test_differing_points_and_texts_only_warn(tables, learn_qdrant):
             # Tika's text for the block, not the platform's, with its own vector.
             learn_chunk("block-v1:a", "Tika's text.", skew=5.0),
             learn_chunk("block-v1:gone", "A file the platform does not have."),
+            # Another platform's run of the same id is not this run's.
+            learn_chunk(
+                "block-v1:elsewhere", "xPRO's file.", platform={"code": "xpro"}
+            ).model_copy(update={"id": str(uuid.uuid4())}),
         ],
     )
 
