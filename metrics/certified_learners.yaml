@@ -19,6 +19,7 @@ metric:
   metricType: COUNT
   unitOfMeasurement: COUNT
   owners: [{type: team, name: data-platform}]
+  reviewers: [{type: team, name: b2b}]
   metricExpression:
     language: SQL
     code: count(distinct case when is_certified then user_fk end)
