@@ -42,6 +42,7 @@ from ml.lib.learn_parity import (
     ParityReport,
     compare_with_learn,
     content_file_run_filter,
+    dense_vector_size,
     retrieve_points,
     scroll_point_ids,
 )
@@ -108,7 +109,11 @@ def check_result(report: ParityReport) -> AssetCheckResult:
         "compared_vectors": MetadataValue.int(report.compared_vectors),
         "below_min_cosine": MetadataValue.int(report.below_threshold),
         "min_cosine_threshold": MetadataValue.float(MIN_COSINE_SIMILARITY),
+        "platform_vector_size": MetadataValue.int(report.platform_vector_size),
+        "vector_length_mismatches": MetadataValue.int(report.vector_length_mismatches),
     }
+    if report.learn_vector_size is not None:
+        metadata["learn_vector_size"] = MetadataValue.int(report.learn_vector_size)
     if report.checksum_matches is not None:
         metadata["checksum_matches"] = MetadataValue.int(report.checksum_matches)
     # By the model that produced the platform's vector, so vectors imported from
@@ -122,14 +127,25 @@ def check_result(report: ParityReport) -> AssetCheckResult:
             metadata[f"{model_id}/cosine_min"] = MetadataValue.float(stats.minimum)
             metadata[f"{model_id}/cosine_p50"] = MetadataValue.float(stats.p50)
     if report.vectors_differ:
+        description = (
+            f"{report.below_threshold} chunks with Learn's text have a vector, "
+            f"not from {report.reference_model_id}, under "
+            f"{MIN_COSINE_SIMILARITY} cosine similarity to Learn's"
+        )
+        if report.vector_length_mismatches:
+            description += (
+                f"; {report.vector_length_mismatches} have a vector of another "
+                "length than Learn's"
+            )
+        if report.size_differs:
+            description = (
+                f"Learn's dense vectors are {report.learn_vector_size} long and "
+                f"the platform's {report.platform_vector_size}. {description}"
+            )
         return AssetCheckResult(
             passed=False,
             severity=AssetCheckSeverity.ERROR,
-            description=(
-                f"{report.below_threshold} chunks with Learn's text have a vector, "
-                f"not from {report.reference_model_id}, under "
-                f"{MIN_COSINE_SIMILARITY} cosine similarity to Learn's"
-            ),
+            description=description,
             metadata=metadata,
         )
     if report.points_differ:
@@ -161,6 +177,7 @@ def content_file_vectors_match_learn(
     in_partition = (pl.col("etl_source") == etl_source) & (
         pl.col("run_readable_id") == run
     )
+    strategy = strategies()[LEARN_V1_CONTENT_FILES_ID]
     platform = platform_chunks(
         require_table(LAYER, CONTENT_FILE_CHUNKS_KEY.path[-1])
         .filter(in_partition)
@@ -168,17 +185,18 @@ def content_file_vectors_match_learn(
         require_table(LAYER, CONTENT_FILE_VECTORS_KEY.path[-1])
         .filter(in_partition)
         .collect(),
-        strategies()[LEARN_V1_CONTENT_FILES_ID],
+        strategy,
     )
     client = learn_qdrant.get_client()
     collection = learn_qdrant.collection_name(LEARN_CONTENT_FILES_COLLECTION)
+    vector_name = LEARN_CONTENT_FILES_COLLECTION.dense_vector_name
     fetch = partial(
         retrieve_points,
         client,
         collection,
         text_field="chunk_content",
         checksum_field="checksum",
-        vector_name=LEARN_CONTENT_FILES_COLLECTION.dense_vector_name,
+        vector_name=vector_name,
     )
     learn_ids = scroll_point_ids(
         client,
@@ -192,6 +210,8 @@ def content_file_vectors_match_learn(
             learn_ids,
             compare_checksums=True,
             reference_model_id=LEARN_MODEL_ID,
+            platform_vector_size=strategy.model.vector_length,
+            learn_vector_size=dense_vector_size(client, collection, vector_name),
         )
     )
 
@@ -208,20 +228,22 @@ def content_file_vectors_match_learn(
 )
 def topic_vectors_match_learn(learn_qdrant: QdrantResource) -> AssetCheckResult:
     """Compare every topic with Learn's topic points."""
+    strategy = strategies()[LEARN_V1_TOPICS_ID]
     platform = platform_chunks(
         require_table(LAYER, TOPIC_CHUNKS_KEY.path[-1]).collect(),
         require_table(LAYER, TOPIC_VECTORS_KEY.path[-1]).collect(),
-        strategies()[LEARN_V1_TOPICS_ID],
+        strategy,
     )
     client = learn_qdrant.get_client()
     collection = learn_qdrant.collection_name(LEARN_TOPICS_COLLECTION)
+    vector_name = LEARN_TOPICS_COLLECTION.dense_vector_name
     fetch = partial(
         retrieve_points,
         client,
         collection,
         text_field="name",
         checksum_field=None,
-        vector_name=LEARN_TOPICS_COLLECTION.dense_vector_name,
+        vector_name=vector_name,
     )
     learn_ids = scroll_point_ids(client, collection, None)
     return check_result(
@@ -231,6 +253,8 @@ def topic_vectors_match_learn(learn_qdrant: QdrantResource) -> AssetCheckResult:
             learn_ids,
             compare_checksums=False,
             reference_model_id=LEARN_MODEL_ID,
+            platform_vector_size=strategy.model.vector_length,
+            learn_vector_size=dense_vector_size(client, collection, vector_name),
         )
     )
 

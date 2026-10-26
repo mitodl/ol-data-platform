@@ -1053,6 +1053,7 @@ def test_learn_points_are_read_a_batch_at_a_time():
         ["a", "b", "c"],
         compare_checksums=False,
         reference_model_id=LEARN_V1_CONTENT_FILES.model.model_id,
+        platform_vector_size=2,
         batch_size=2,
     )
 
@@ -1060,6 +1061,37 @@ def test_learn_points_are_read_a_batch_at_a_time():
     stats = report.cosine_by_model[AZURE_MODEL]
     assert (stats.compared, stats.minimum, stats.below_threshold) == (2, 0.0, 1)
     assert (report.platform_chunks_without_vector, report.vectors_differ) == (1, True)
+
+
+def test_a_learn_collection_of_another_size_is_an_error(tables, learn_qdrant):
+    load_sources(tables, **{"block-v1:a": "First file."})
+    collection = f"{LEARN_BASE}.content_files"
+    learn_size = 8
+    learn_qdrant.delete_collection(collection)
+    learn_qdrant.create_collection(
+        collection,
+        vectors_config={
+            DENSE: models.VectorParams(size=learn_size, distance=models.Distance.COSINE)
+        },
+    )
+    point = learn_chunk("block-v1:a", "First file.")
+    learn_qdrant.upsert(
+        collection, [point.model_copy(update={"vector": {DENSE: [1.0] * learn_size}})]
+    )
+
+    evaluation = check_content_files(tables)
+
+    assert not evaluation.passed
+    assert evaluation.severity == AssetCheckSeverity.ERROR
+    assert f"{learn_size} long" in evaluation.description
+    metadata = {key: value.value for key, value in evaluation.metadata.items()}
+    assert (
+        metadata["learn_vector_size"],
+        metadata["platform_vector_size"],
+        metadata["text_matches"],
+        metadata["vector_length_mismatches"],
+        metadata["compared_vectors"],
+    ) == (learn_size, VECTOR_LENGTH, 1, 1, 0)
 
 
 def test_topics_are_compared_by_topic_uuid(tables, learn_qdrant):

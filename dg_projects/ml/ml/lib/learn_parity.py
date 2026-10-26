@@ -92,6 +92,12 @@ class ParityReport:
     :param reference_model_id: Learn's own model. A platform row of it holds a
         vector imported from Learn, so its similarity is reported but does not
         make the vectors differ.
+    :param platform_vector_size: the length of the platform's vectors, the
+        strategy model's ``vector_length``
+    :param learn_vector_size: the dense size Learn's collection declares,
+        ``None`` when it was not read
+    :param vector_length_mismatches: text-matching chunks whose two vectors are
+        not the same length, so have no similarity
     """
 
     platform_chunks: int
@@ -105,6 +111,9 @@ class ParityReport:
     learn_points_without_vector: int
     cosine_by_model: Mapping[str, CosineStats]
     reference_model_id: str
+    platform_vector_size: int
+    learn_vector_size: int | None = None
+    vector_length_mismatches: int = 0
 
     @property
     def compared_vectors(self) -> int:
@@ -127,12 +136,29 @@ class ParityReport:
         )
 
     @property
-    def vectors_differ(self) -> bool:
-        """Whether a chunk with Learn's text has a vector unlike Learn's.
+    def size_differs(self) -> bool:
+        """Whether Learn's collection declares another vector length than the
+        platform's strategy embeds at.
 
         :rtype: bool
         """
-        return self.below_threshold > 0
+        return (
+            self.learn_vector_size is not None
+            and self.learn_vector_size != self.platform_vector_size
+        )
+
+    @property
+    def vectors_differ(self) -> bool:
+        """Whether a chunk with Learn's text has a vector unlike Learn's, or the
+        two sides embed at different lengths.
+
+        :rtype: bool
+        """
+        return (
+            self.below_threshold > 0
+            or self.vector_length_mismatches > 0
+            or self.size_differs
+        )
 
     @property
     def points_differ(self) -> bool:
@@ -167,6 +193,25 @@ def _dense(vector: object) -> list[float] | None:
         msg = f"expected one dense vector, got {type(vector).__name__}"
         raise TypeError(msg)
     return vector
+
+
+def dense_vector_size(client: QdrantClient, collection: str, vector_name: str) -> int:
+    """Return the length a collection declares for its named dense vectors.
+
+    One ``get_collection`` call: the lookup docs/learn_embedding_config.md leaves
+    open to confirm that Learn's dense size is the strategy's.
+
+    :param client: a client for Learn's cluster
+    :param collection: the collection
+    :param vector_name: the dense vector's name
+    :rtype: int
+    :raises ValueError: when the collection has no dense vector of that name
+    """
+    vectors = client.get_collection(collection).config.params.vectors
+    if not isinstance(vectors, dict) or vector_name not in vectors:
+        msg = f"{collection} has no dense vector named {vector_name!r}"
+        raise ValueError(msg)
+    return vectors[vector_name].size
 
 
 def retrieve_points(  # noqa: PLR0913
@@ -278,6 +323,8 @@ def compare_with_learn(  # noqa: PLR0913
     *,
     compare_checksums: bool,
     reference_model_id: str,
+    platform_vector_size: int,
+    learn_vector_size: int | None = None,
     batch_size: int = QDRANT_BATCH_SIZE,
 ) -> ParityReport:
     """Compare the platform's chunks with Learn's points, a batch of ids at a time.
@@ -292,11 +339,15 @@ def compare_with_learn(  # noqa: PLR0913
         :func:`scroll_point_ids`
     :param compare_checksums: whether Learn's points carry the file checksum
     :param reference_model_id: Learn's own model, see ``ParityReport``
+    :param platform_vector_size: the length of the platform's vectors
+    :param learn_vector_size: the dense size Learn's collection declares, from
+        :func:`dense_vector_size`
     :param batch_size: ids per ``fetch``
     :rtype: ParityReport
     """
     found: set[str] = set()
     matched = text_matches = checksum_matches = without_vector = 0
+    length_mismatches = 0
     similarities: dict[str, list[float]] = defaultdict(list)
     for offset in range(0, platform.height, batch_size):
         rows = platform.slice(offset, batch_size)
@@ -313,6 +364,10 @@ def compare_with_learn(  # noqa: PLR0913
                 continue
             text_matches += 1
             if row["vector"] is None or point.vector is None:
+                continue
+            # Two lengths have no cosine; the count says the sides embed apart.
+            if len(row["vector"]) != len(point.vector):
+                length_mismatches += 1
                 continue
             if (cosine := _cosine(row["vector"], point.vector)) is not None:
                 similarities[row["model_id"]].append(cosine)
@@ -332,4 +387,7 @@ def compare_with_learn(  # noqa: PLR0913
             for model_id, values in sorted(similarities.items())
         },
         reference_model_id=reference_model_id,
+        platform_vector_size=platform_vector_size,
+        learn_vector_size=learn_vector_size,
+        vector_length_mismatches=length_mismatches,
     )
