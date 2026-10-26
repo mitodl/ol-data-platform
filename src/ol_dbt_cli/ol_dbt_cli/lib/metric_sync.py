@@ -474,3 +474,36 @@ def lineage_edge(source_id: str, source: LineageSource, metric_id: str, file_nam
             "lineageDetails": {"description": f"implemented_by in metrics/{file_name}"},
         }
     }
+
+
+def stale_edges(
+    lineage: dict[str, Any], metric_id: str, keep_ids: set[str], keep_fqns: set[tuple[str, str]], bot: str
+) -> list[dict[str, Any]]:
+    """List the upstream entities whose edge to the metric the bot created and the file no longer declares.
+
+    OpenMetadata 2.0.6 stamps each edge's ``lineageDetails.createdBy`` when the
+    edge is first stored and keeps it on every later PUT or PATCH of that
+    edge (``LineageRepository.applyTemporalFields``, ``resolveCreatedBy``). So
+    an edge a person added in OpenMetadata is never stale, even when the file
+    lists the same table too, and one sync created stays sync's after someone
+    edits its details.
+
+    :param lineage: the body of ``GET /v1/lineage/metric/{id}`` with
+        ``upstreamDepth=1``.
+    :param keep_ids: ids of the entities the file declares that OpenMetadata has.
+    :param keep_fqns: ``(type, fqn)`` of every entity the file declares,
+        including the StarRocks views sync skipped because OpenMetadata does not
+        have them, so an edge to one is never removed on that account.
+    :returns: the upstream node references (``id``, ``type``,
+        ``fullyQualifiedName``), in the order OpenMetadata lists their edges.
+    """
+    nodes = {n["id"]: n for n in lineage.get("nodes") or []}
+    stale = []
+    for edge in lineage.get("upstreamEdges") or []:
+        if edge["toEntity"] != metric_id or (edge.get("lineageDetails") or {}).get("createdBy") != bot:
+            continue
+        node = nodes[edge["fromEntity"]]
+        if node["id"] in keep_ids or (node["type"], node["fullyQualifiedName"]) in keep_fqns:
+            continue
+        stale.append(node)
+    return stale

@@ -35,6 +35,7 @@ from ol_dbt_cli.lib.metric_registry import (
 )
 from ol_dbt_cli.lib.metric_sync import (
     FILE_DIGEST_PROPERTY,
+    METRIC_ENTITY_TYPE,
     METRIC_FIELDS,
     REVIEW_HOLD_STATUSES,
     STATUS_FIELD,
@@ -49,6 +50,7 @@ from ol_dbt_cli.lib.metric_sync import (
     lineage_sources,
     patch_ops,
     same_description,
+    stale_edges,
     structural_changes,
 )
 from ol_dbt_cli.lib.openmetadata import (
@@ -176,6 +178,19 @@ def _report_display_name(name: str, file_value: str | None, stored: str) -> None
     )
 
 
+def _stale_edges(
+    client: OpenMetadataClient,
+    metric_id: str,
+    declared: list[LineageSource],
+    declared_ids: list[str],
+    bot: str,
+) -> list[dict[str, Any]]:
+    lineage = client.request(
+        "GET", f"/v1/lineage/{METRIC_ENTITY_TYPE}/{metric_id}", query={"upstreamDepth": "1", "downstreamDepth": "0"}
+    )
+    return stale_edges(lineage, metric_id, set(declared_ids), {(s.entity_type, s.fqn) for s in declared}, bot)
+
+
 def _sync_one(
     client: OpenMetadataClient,
     metric: MetricDefinition,
@@ -266,12 +281,19 @@ def _sync_one(
     needs_put = live is None or bool(changes)
     action = "create" if live is None else f"update {', '.join(changes)}" if changes else "no field changes"
     if dry_run:
+        try:
+            stale = _stale_edges(client, live["id"], sources + skipped, source_ids, bot) if live is not None else []
+        except RuntimeError as exc:
+            console.print(f"[bold red]failed[/]    {name}: {escape(str(exc))}")
+            return False
         ops = patch_ops(metric, body, after_put(body, live) if needs_put else live or {}, bot)
         console.print(f"[green]would[/]     {name}: {escape(action)}")
         if ops:
             console.print(f"  then PATCH {', '.join(op['path'].lstrip('/') for op in ops)}")
         for source in sources:
             console.print(f"  lineage {escape(source.fqn)} -> {name}")
+        for node in stale:
+            console.print(f"  remove lineage {escape(node['fullyQualifiedName'])} -> {name}")
         if stored_name is not None:
             _report_display_name(name, body.get("displayName"), stored_name)
         return stored_name is None
@@ -287,11 +309,17 @@ def _sync_one(
             current = client.request("PATCH", f"/v1/metrics/{current['id']}", ops, content_type=JSON_PATCH_CONTENT_TYPE)
         for source, source_id in zip(sources, source_ids, strict=True):
             client.request("PUT", "/v1/lineage", lineage_edge(source_id, source, current["id"], metric.path.name))
+        # A metric this run created has no edge sync did not just write.
+        stale = _stale_edges(client, current["id"], sources + skipped, source_ids, bot) if live is not None else []
+        for node in stale:
+            client.request("DELETE", f"/v1/lineage/{node['type']}/{node['id']}/{METRIC_ENTITY_TYPE}/{current['id']}")
     except RuntimeError as exc:
         console.print(f"[bold red]failed[/]    {name}: {escape(_write_failure(exc))}")
         return False
     patched = f"; patched {', '.join(op['path'].lstrip('/') for op in ops)}" if ops else ""
     console.print(f"[green]synced[/]    {name} (v{current['version']}): {escape(action + patched)}")
+    for node in stale:
+        console.print(f"  removed lineage {escape(node['fullyQualifiedName'])} -> {name}")
     if "description" in body and not same_description(current.get("description"), body["description"]):
         console.print(
             f"[yellow]rewritten[/] {name}: OpenMetadata stored the description as "
@@ -357,7 +385,9 @@ def sync(
     digest is recorded in the metric's metricFileSha256 custom property, which
     ol-infrastructure defines on the metric type. A stored displayName that
     differs from the file is reported as stale, because OpenMetadata keeps it
-    against a bot's change; the rest of that metric still syncs. Exits non-zero
+    against a bot's change; the rest of that metric still syncs. A lineage edge
+    sync created from a table the file no longer lists is deleted; one a person
+    added stays. Exits non-zero
     when any metric did not sync or has a stale displayName.
     """
     metrics, manifest = _load(dbt_dir_path, metrics_dir_path, manifest_path, names)
