@@ -11,8 +11,14 @@ night and loses nothing by it, so its stream passes. Reading the table as of the
 sync's start rather than now also catches an overwrite stream whose empty sync
 emptied its table. Incremental streams are not evaluated: reading nothing new is
 what most of their syncs do.
+
+When what the stream read or what its table held cannot be established, the
+check reports a WARN result with ``outcome: unknown``. The sync has already
+succeeded by then, so neither lookup may fail the step, and a guess either way
+would be a false alarm or a false pass.
 """
 
+import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterator, Sequence
 from datetime import datetime
@@ -45,38 +51,101 @@ FULL_REFRESH_SYNC_MODE = "full_refresh"
 DestinationRecordCount = Callable[[AssetKey, datetime], int]
 
 
+class RecordCountUnknownError(Exception):
+    """The rows a raw table held cannot be read from its Iceberg metadata."""
+
+    def __init__(self, table: str, reason: str) -> None:
+        super().__init__(f"{table}: {reason}")
+        self.table = table
+
+
 def raw_table_record_count(database: str, asset_key: AssetKey, as_of: datetime) -> int:
     """Count the rows a stream's raw Iceberg table held at a point in time.
 
     The asset key's last part is the table name the destination writes (the
-    connection's prefix plus the stream name). A table that did not exist, or
-    had no snapshot, held no rows.
+    connection's prefix plus the stream name). A table with no snapshot at or
+    before *as_of* held no rows then.
 
     :param database: The Glue database the Airbyte destination writes to.
     :param asset_key: The stream's asset key.
     :param as_of: When to count the rows, e.g. when the sync started.
     :returns: The ``total-records`` of the snapshot current at *as_of*.
+    :raises RecordCountUnknownError: When the table is not in Glue (a wrong
+        database or table name would otherwise pass every empty sync), or its
+        snapshot carries no ``total-records``.
     """
+    identifier = f"{database}.{asset_key.path[-1]}"
     try:
-        table = get_glue_catalog().load_table(f"{database}.{asset_key.path[-1]}")
-    except NoSuchTableError:
-        return 0
+        table = get_glue_catalog().load_table(identifier)
+    except NoSuchTableError as error:
+        raise RecordCountUnknownError(identifier, "not found in Glue") from error
     snapshot = table.snapshot_as_of_timestamp(int(as_of.timestamp() * 1000))
-    return int(snapshot.summary["total-records"]) if snapshot else 0
+    if snapshot is None:
+        return 0
+    total = snapshot.summary["total-records"] if snapshot.summary else None
+    if total is None:
+        raise RecordCountUnknownError(
+            identifier, f"snapshot {snapshot.snapshot_id} has no total-records"
+        )
+    return int(total)
+
+
+def _unknown(
+    stream: StreamSync, reason: str, metadata: dict[str, Any] | None = None
+) -> AssetCheckResult:
+    return AssetCheckResult(
+        asset_key=stream.asset_key,
+        check_name=EMPTY_FULL_REFRESH_CHECK,
+        passed=False,
+        severity=AssetCheckSeverity.WARN,
+        metadata={"outcome": "unknown", "reason": reason, **(metadata or {})},
+        description=(
+            f"Could not tell whether Airbyte job {stream.job_id} refreshed this "
+            f"full refresh stream: {reason}"
+        ),
+    )
+
+
+def _rows_held(
+    stream: StreamSync,
+    destination_record_count: DestinationRecordCount,
+    log: logging.Logger,
+) -> int | AssetCheckResult:
+    """Count the rows the stream's table held at the job's start, or say why not."""
+    if stream.job_started_at is None:
+        return _unknown(stream, "the job has no start time to read the table at")
+    try:
+        return destination_record_count(stream.asset_key, stream.job_started_at)
+    except RecordCountUnknownError as error:
+        log.warning("Row count of %s unknown: %s", stream.asset_key, error)
+        return _unknown(stream, str(error), {"table": error.table})
+    # Broad on purpose and scoped to the one lookup: it crosses Glue, S3 and
+    # pyiceberg, whose failures share no base class, and the sync it follows
+    # has already succeeded.
+    except Exception as error:  # noqa: BLE001
+        log.warning("Could not count the rows of %s: %r", stream.asset_key, error)
+        return _unknown(stream, f"the table lookup failed: {error!r}")
 
 
 def empty_full_refresh_check(
-    stream: StreamSync, destination_record_count: DestinationRecordCount
+    stream: StreamSync,
+    destination_record_count: DestinationRecordCount,
+    log: logging.Logger,
 ) -> AssetCheckResult | None:
     """Fail a full refresh stream that read no rows into a table that held some.
 
     :param stream: What the stream read in the sync.
     :param destination_record_count: Counts the rows the stream's table held
         when the sync started. Only called when the stream read nothing.
+    :param log: Where to log a lookup that failed.
     :returns: The check result, or None for a stream that is not a full refresh.
+        A WARN result with ``outcome: unknown`` when the stream's record count,
+        the job's start time or the table's row count cannot be read.
     """
     if stream.sync_mode != FULL_REFRESH_SYNC_MODE:
         return None
+    if stream.records_emitted is None:
+        return _unknown(stream, "the job's stats do not say what it read")
     if stream.records_emitted:
         return AssetCheckResult(
             asset_key=stream.asset_key,
@@ -84,7 +153,9 @@ def empty_full_refresh_check(
             passed=True,
             metadata={"records_emitted": stream.records_emitted},
         )
-    held = destination_record_count(stream.asset_key, stream.job_started_at)
+    held = _rows_held(stream, destination_record_count, log)
+    if isinstance(held, AssetCheckResult):
+        return held
     return AssetCheckResult(
         asset_key=stream.asset_key,
         check_name=EMPTY_FULL_REFRESH_CHECK,
@@ -128,7 +199,12 @@ def _connection_assets(
     ) -> Iterator[MaterializeResult[Any] | AssetMaterialization | AssetCheckResult]:
         materialized = set()
         for stream in airbyte.sync_streams(context=context):
-            if stream.asset_key not in context.selected_asset_keys:
+            if stream.asset_key in context.selected_asset_keys:
+                yield MaterializeResult(
+                    asset_key=stream.asset_key, metadata=stream.metadata
+                )
+                materialized.add(stream.asset_key)
+            else:
                 context.log.warning(
                     "An unexpected asset was materialized: %s. Yielding a "
                     "materialization event.",
@@ -139,14 +215,13 @@ def _connection_assets(
                     description=stream.description,
                     metadata=stream.metadata,
                 )
-                continue
-            yield MaterializeResult(
-                asset_key=stream.asset_key, metadata=stream.metadata
-            )
-            materialized.add(stream.asset_key)
+            # Evaluated whether or not the asset is selected: a run of the
+            # checks alone still has to sync to have anything to check.
             check_key = AssetCheckKey(stream.asset_key, EMPTY_FULL_REFRESH_CHECK)
             if check_key in context.selected_asset_check_keys and (
-                check := empty_full_refresh_check(stream, destination_record_count)
+                check := empty_full_refresh_check(
+                    stream, destination_record_count, context.log
+                )
             ):
                 yield check
         if unmaterialized := context.selected_asset_keys - materialized:

@@ -59,29 +59,68 @@ REFUSAL_BODY_MAX_CHARS = 500
 class StreamSync:
     """What one stream of a finished Airbyte sync read.
 
-    A stream that read nothing may have no entry in the job's stream stats, so
-    its counts default to zero.
+    A count is None when the job's stats do not say (see ``records_read``).
     """
 
     asset_key: AssetKey
     spec_metadata: Mapping[str, Any]
     description: str
     job_id: int
-    job_started_at: datetime
+    job_started_at: datetime | None
     sync_mode: str
-    records_emitted: int
-    records_committed: int
+    records_emitted: int | None
+    records_committed: int | None
 
     @property
     def metadata(self) -> dict[str, Any]:
         """The stream's asset metadata, plus the job and what it read."""
+        counts = {
+            "airbyte_records_emitted": self.records_emitted,
+            "airbyte_records_committed": self.records_committed,
+        }
         return {
             **self.spec_metadata,
             "airbyte_job_id": self.job_id,
             "airbyte_sync_mode": self.sync_mode,
-            "airbyte_records_emitted": self.records_emitted,
-            "airbyte_records_committed": self.records_committed,
+            **{key: count for key, count in counts.items() if count is not None},
         }
+
+
+def records_read(
+    stream_stats: Sequence[Mapping[str, Any]] | None,
+    stream_name: str,
+    rows_synced: object,
+) -> tuple[int | None, int | None]:
+    """Return a stream's records emitted and committed, or None where unknown.
+
+    A job whose job-wide ``rowsSynced`` is 0 read nothing from any stream, so
+    every count is 0 whatever the per-stream stats hold. Otherwise a count is
+    known only from a numeric value on the one entry for the stream. Whether
+    Airbyte lists a stream that read nothing is not established, and a stats
+    list that is missing, reshaped or (with rows synced) empty cannot be told
+    apart from a stream that read nothing, so those are unknown rather than 0.
+    A name listed twice (one name in two namespaces) is unknown too.
+
+    :param stream_stats: The job's ``streamAggregatedStats``, or None.
+    :param stream_name: The stream to count.
+    :param rows_synced: The job-wide ``rowsSynced`` from the REST job read.
+    :returns: ``(records_emitted, records_committed)``.
+    """
+    if isinstance(rows_synced, int) and rows_synced == 0:
+        return 0, 0
+    entries = [
+        stats for stats in stream_stats or [] if stats.get("streamName") == stream_name
+    ]
+    if len(entries) != 1:
+        return None, None
+    emitted, committed = (
+        entries[0].get("recordsEmitted"),
+        entries[0].get("recordsCommitted"),
+    )
+    return (
+        emitted if isinstance(emitted, int) else None,
+        committed if isinstance(committed, int) else None,
+    )
 
 
 @beta
@@ -223,28 +262,30 @@ class AirbyteOSSClient(AirbyteClient):
         )
         raise Failure(description=msg)
 
-    def get_stream_stats(self, job_id: int) -> dict[str, Mapping[str, Any]]:
-        """Return the job's record and byte counts, keyed by stream name.
+    def get_stream_stats(self, job_id: int) -> list[Mapping[str, Any]] | None:
+        """Return the job's per-stream record and byte counts.
 
         The REST API's job read carries only the job-wide ``rowsSynced``, which
         cannot say which stream of a connection read nothing. The configuration
         API's ``jobs/get_without_logs`` hydrates ``streamAggregatedStats``;
-        ``jobs/get_light`` does not. Keyed by name alone because dagster-airbyte
-        already assumes a stream name is unique within a connection.
+        ``jobs/get_light`` does not. The shape is checked rather than assumed
+        because it comes from airbyte-platform 2.0.0's API spec, the last
+        public one, and a missing list must read as "unknown", not as every
+        stream having read nothing.
 
         :param job_id: The Airbyte job to read.
-        :returns: Each stream's ``StreamStats`` (``recordsEmitted``,
-            ``recordsCommitted`` and so on). A stream with no stats is absent.
+        :returns: The job's ``StreamStats`` entries (``streamName``,
+            ``recordsEmitted``, ``recordsCommitted`` and so on), or None when the
+            response holds no such list.
+        :raises Failure: When the request is refused or its retries run out.
         """
         job = self._single_request(
             method="POST",
             url=f"{self.configuration_api_base_url}/jobs/get_without_logs",
             data={"id": job_id},
-        )["job"]
-        return {
-            stats["streamName"]: stats
-            for stats in job.get("streamAggregatedStats") or []
-        }
+        ).get("job")
+        stats = job.get("streamAggregatedStats") if isinstance(job, Mapping) else None
+        return stats if isinstance(stats, list) else None
 
     def get_connections(self) -> Sequence[Mapping[str, Any]]:
         """List the workspace's connections, each exactly once.
@@ -417,6 +458,10 @@ class AirbyteOSSWorkspace(AirbyteWorkspace):
         the same sync and pairs each stream with its sync mode, record counts
         and the job's start time.
 
+        Once the sync has succeeded nothing here raises on what the stats
+        lookup returns: a failed or unreadable lookup leaves the counts unknown,
+        so the streams are still reported as materialized.
+
         :param context: The execution context of the connection's multi-asset.
         :returns: One entry per stream the connection syncs, in catalog order,
             whether or not its asset is selected (Airbyte syncs them all).
@@ -430,12 +475,32 @@ class AirbyteOSSWorkspace(AirbyteWorkspace):
         client = self.get_client()
         output = client.sync_and_poll(connection_id=connection_id)
         job_id = output.job_details["jobId"]
-        job_started_at = datetime.fromisoformat(output.job_details["startTime"])
-        stream_stats = client.get_stream_stats(job_id)
+        started = output.job_details.get("startTime")
+        job_started_at = (
+            datetime.fromisoformat(started) if isinstance(started, str) else None
+        )
+        try:
+            stream_stats = client.get_stream_stats(job_id)
+        except Failure as error:
+            context.log.warning(
+                "Could not read the stream stats of Airbyte job %s, so what each "
+                "stream read is unknown: %s",
+                job_id,
+                error.description,
+            )
+            stream_stats = None
+        rows_synced = output.job_details.get("rowsSynced")
         connection = output.connection_details
         prefix = connection.get("prefix")
 
-        for stream in connection["syncCatalog"]["streams"]:
+        # Keyed by name, last one winning, as AirbyteConnection.from_connection_details
+        # does: the asset specs were built that way, so one name in two
+        # namespaces is one asset.
+        streams = {
+            stream["stream"]["name"]: stream
+            for stream in connection["syncCatalog"]["streams"]
+        }
+        for stream in streams.values():
             if not stream["config"].get("selected", False):
                 continue
             name = stream["stream"]["name"]
@@ -455,7 +520,9 @@ class AirbyteOSSWorkspace(AirbyteWorkspace):
                     schema=None,
                 )
             )
-            stats = stream_stats.get(name, {})
+            records_emitted, records_committed = records_read(
+                stream_stats, name, rows_synced
+            )
             yield StreamSync(
                 asset_key=spec.key,
                 spec_metadata=spec.metadata,
@@ -466,6 +533,6 @@ class AirbyteOSSWorkspace(AirbyteWorkspace):
                 job_id=job_id,
                 job_started_at=job_started_at,
                 sync_mode=stream["config"]["syncMode"],
-                records_emitted=stats.get("recordsEmitted", 0),
-                records_committed=stats.get("recordsCommitted", 0),
+                records_emitted=records_emitted,
+                records_committed=records_committed,
             )

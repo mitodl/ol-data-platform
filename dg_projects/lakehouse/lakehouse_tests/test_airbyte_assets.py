@@ -4,14 +4,22 @@ Global Alumni's api_enrollments is a full refresh stream that read no rows every
 night from 2026-05-04. Airbyte reported each sync as a success, Dagster recorded
 a materialization, and the raw table stayed frozen. The check fails the first
 such sync; these tests hold it to that without failing the syncs that read
-nothing legitimately.
+nothing legitimately, and without failing a sync that succeeded because a lookup
+after it did not.
 """
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from dagster import AssetCheckSeverity, AssetKey, materialize
+from dagster import (
+    AssetCheckSeverity,
+    AssetKey,
+    AssetSelection,
+    Failure,
+    materialize,
+)
 from dagster_airbyte import DagsterAirbyteTranslator, build_airbyte_assets_definitions
 from dagster_airbyte.translator import AirbyteConnectionTableProps
 from dagster_airbyte.types import AirbyteOutput
@@ -19,6 +27,7 @@ from dagster_airbyte.utils import DAGSTER_AIRBYTE_TRANSLATOR_METADATA_KEY
 from lakehouse.lib import airbyte_assets
 from lakehouse.lib.airbyte_assets import (
     EMPTY_FULL_REFRESH_CHECK,
+    RecordCountUnknownError,
     build_airbyte_assets,
     empty_full_refresh_check,
     raw_table_record_count,
@@ -34,17 +43,20 @@ ENROLLMENTS = AssetKey("raw__global_alumni__bigquery__api_enrollments")
 CONNECTION_NAME = "Global Alumni BigQuery → S3 Data Lake"
 PREFIX = "raw__global_alumni__bigquery__"
 JOB_STARTED_AT = datetime(2026, 10, 19, 0, 0, 12, tzinfo=UTC)
+LOG = logging.getLogger(__name__)
 
 
 def _stream(
-    sync_mode: str, records_emitted: int, key: AssetKey = ENROLLMENTS
+    sync_mode: str,
+    records_emitted: int | None,
+    job_started_at: datetime | None = JOB_STARTED_AT,
 ) -> StreamSync:
     return StreamSync(
-        asset_key=key,
+        asset_key=ENROLLMENTS,
         spec_metadata={},
         description="",
         job_id=60322,
-        job_started_at=JOB_STARTED_AT,
+        job_started_at=job_started_at,
         sync_mode=sync_mode,
         records_emitted=records_emitted,
         records_committed=records_emitted,
@@ -52,14 +64,19 @@ def _stream(
 
 
 class _Counter:
-    """A destination where every table held *rows*, recording each lookup."""
+    """A destination where every table held *rows*, recording each lookup.
 
-    def __init__(self, rows: int) -> None:
+    Given an exception instead, every lookup raises it.
+    """
+
+    def __init__(self, rows: int | Exception) -> None:
         self.rows = rows
         self.looked_up: list[tuple[AssetKey, datetime]] = []
 
     def __call__(self, asset_key: AssetKey, as_of: datetime) -> int:
         self.looked_up.append((asset_key, as_of))
+        if isinstance(self.rows, Exception):
+            raise self.rows
         return self.rows
 
 
@@ -73,12 +90,15 @@ class TestRawTableRecordCount:
     @pytest.fixture
     def catalog(self, monkeypatch):
         class Snapshot:
-            summary = {"total-records": "143740"}  # noqa: RUF012
+            snapshot_id = 42
+
+            def __init__(_self, summary):  # noqa: N805
+                _self.summary = summary
 
         class Table:
             def snapshot_as_of_timestamp(_self, timestamp_ms: int):  # noqa: N805
                 self.asked_for = timestamp_ms
-                return Snapshot() if self.snapshot else None
+                return Snapshot(self.summary) if self.snapshot else None
 
         class Catalog:
             def load_table(_self, identifier: str):  # noqa: N805
@@ -89,6 +109,7 @@ class TestRawTableRecordCount:
 
         self.exists = True
         self.snapshot = True
+        self.summary: dict[str, Any] | None = {"total-records": "143740"}
         self.loaded = ""
         self.asked_for = 0
         monkeypatch.setattr(airbyte_assets, "get_glue_catalog", Catalog)
@@ -106,14 +127,33 @@ class TestRawTableRecordCount:
         assert raw_table_record_count("raw_db", ENROLLMENTS, JOB_STARTED_AT) == 0
 
     @pytest.mark.usefixtures("catalog")
-    def test_a_table_that_does_not_exist_holds_nothing(self) -> None:
+    def test_a_table_that_does_not_exist_is_unknown(self) -> None:
+        """Counted as empty, a wrong database or table name passed every sync."""
         self.exists = False
-        assert raw_table_record_count("raw_db", ENROLLMENTS, JOB_STARTED_AT) == 0
+        with pytest.raises(RecordCountUnknownError) as raised:
+            raw_table_record_count("raw_db", ENROLLMENTS, JOB_STARTED_AT)
+        assert raised.value.table == f"raw_db.{ENROLLMENTS.path[-1]}"
+
+    @pytest.mark.usefixtures("catalog")
+    @pytest.mark.parametrize("summary", [None, {}, {"total-records": None}])
+    def test_a_snapshot_without_a_total_is_unknown(self, summary) -> None:
+        self.summary = summary
+        with pytest.raises(RecordCountUnknownError, match="no total-records"):
+            raw_table_record_count("raw_db", ENROLLMENTS, JOB_STARTED_AT)
+
+
+def _assert_unknown(result) -> None:
+    assert result is not None
+    assert not result.passed
+    assert result.severity == AssetCheckSeverity.WARN
+    assert result.metadata["outcome"].value == "unknown"
 
 
 class TestEmptyFullRefreshCheck:
     def test_an_empty_sync_into_a_table_with_rows_fails(self) -> None:
-        result = empty_full_refresh_check(_stream("full_refresh", 0), _Counter(143740))
+        result = empty_full_refresh_check(
+            _stream("full_refresh", 0), _Counter(143740), LOG
+        )
         assert result is not None
         assert not result.passed
         assert result.severity == AssetCheckSeverity.ERROR
@@ -121,13 +161,13 @@ class TestEmptyFullRefreshCheck:
 
     def test_an_empty_sync_into_an_empty_table_passes(self) -> None:
         """A source with nothing in it, e.g. MITx's assessment_aiclassifier."""
-        result = empty_full_refresh_check(_stream("full_refresh", 0), _Counter(0))
+        result = empty_full_refresh_check(_stream("full_refresh", 0), _Counter(0), LOG)
         assert result is not None
         assert result.passed
 
     def test_a_sync_that_read_rows_passes_without_reading_the_table(self) -> None:
         counter = _Counter(143740)
-        result = empty_full_refresh_check(_stream("full_refresh", 71870), counter)
+        result = empty_full_refresh_check(_stream("full_refresh", 71870), counter, LOG)
         assert result is not None
         assert result.passed
         assert counter.looked_up == []
@@ -135,13 +175,49 @@ class TestEmptyFullRefreshCheck:
     def test_an_incremental_stream_is_not_evaluated(self) -> None:
         """No new rows since the last cursor is the ordinary incremental sync."""
         counter = _Counter(143740)
-        assert empty_full_refresh_check(_stream("incremental", 0), counter) is None
+        assert empty_full_refresh_check(_stream("incremental", 0), counter, LOG) is None
         assert counter.looked_up == []
 
+    def test_an_unknown_record_count_is_a_warning(self) -> None:
+        """Missing stats must not read as an empty sync of every stream."""
+        counter = _Counter(143740)
+        _assert_unknown(
+            empty_full_refresh_check(_stream("full_refresh", None), counter, LOG)
+        )
+        assert counter.looked_up == []
 
-def _catalog_stream(name: str, sync_mode: str) -> dict[str, Any]:
+    def test_a_job_without_a_start_time_is_a_warning(self) -> None:
+        _assert_unknown(
+            empty_full_refresh_check(
+                _stream("full_refresh", 0, job_started_at=None), _Counter(143740), LOG
+            )
+        )
+
+    def test_a_missing_table_is_a_warning_naming_it(self) -> None:
+        error = RecordCountUnknownError("raw_db.raw__x", "not found in Glue")
+        result = empty_full_refresh_check(
+            _stream("full_refresh", 0), _Counter(error), LOG
+        )
+        _assert_unknown(result)
+        assert result is not None
+        assert result.metadata["table"].value == "raw_db.raw__x"
+
+    def test_a_failed_table_lookup_is_a_warning(self) -> None:
+        result = empty_full_refresh_check(
+            _stream("full_refresh", 0), _Counter(OSError("S3 timed out")), LOG
+        )
+        _assert_unknown(result)
+
+
+def _catalog_stream(
+    name: str, sync_mode: str, namespace: str = "mit_xpro_api"
+) -> dict[str, Any]:
     return {
-        "stream": {"name": name, "jsonSchema": {"properties": {}}},
+        "stream": {
+            "name": name,
+            "namespace": namespace,
+            "jsonSchema": {"properties": {}},
+        },
         "config": {"selected": True, "syncMode": sync_mode},
     }
 
@@ -155,25 +231,33 @@ CATALOG_STREAMS = [
         "config": {"selected": False, "syncMode": "full_refresh"},
     },
 ]
-CONNECTION_DETAILS = {
-    "connectionId": "conn-1",
-    "name": CONNECTION_NAME,
-    "prefix": PREFIX,
-    "destinationId": "dest-1",
-    "syncCatalog": {"streams": CATALOG_STREAMS},
-}
 
 BATCHES = AssetKey(f"{PREFIX}api_batches")
 EVENTS = AssetKey(f"{PREFIX}api_events")
+ALL_KEYS = {ENROLLMENTS, BATCHES, EVENTS}
 
 
 @pytest.fixture
-def workspace(monkeypatch) -> AirbyteOSSWorkspace:
-    """Build a workspace whose one connection syncs without HTTP.
+def airbyte() -> dict[str, Any]:
+    """Set what the stubbed Airbyte answers; a test changes it before syncing.
 
-    The sync reads 5 rows from api_batches and nothing from the other two
-    streams, the way job 60322 read nothing from api_enrollments.
+    By default the sync reads 5 rows from api_batches and nothing from the
+    other two streams, the way job 60322 read nothing from api_enrollments.
     """
+    return {
+        "streams": list(CATALOG_STREAMS),
+        "rows_synced": 5,
+        "stats": [
+            {"streamName": "api_enrollments", "recordsEmitted": 0},
+            {"streamName": "api_batches", "recordsEmitted": 5},
+            {"streamName": "api_events", "recordsEmitted": 0},
+        ],
+    }
+
+
+@pytest.fixture
+def workspace(monkeypatch, airbyte) -> AirbyteOSSWorkspace:
+    """Build a workspace whose one connection syncs without HTTP."""
     translator = DagsterAirbyteTranslator()
     specs = [
         translator.get_asset_spec(
@@ -194,30 +278,32 @@ def workspace(monkeypatch) -> AirbyteOSSWorkspace:
         for stream in CATALOG_STREAMS
         if stream["config"]["selected"]
     ]
-    monkeypatch.setattr(AirbyteOSSWorkspace, "load_asset_specs", lambda *_, **__: specs)
-    monkeypatch.setattr(
-        AirbyteOSSClient,
-        "sync_and_poll",
-        lambda *_, **__: AirbyteOutput(
+
+    def sync_and_poll(*_, **__) -> AirbyteOutput:
+        return AirbyteOutput(
             job_details={
                 "jobId": 60322,
                 "status": "succeeded",
                 "startTime": "2026-10-19T00:00:12Z",
+                "rowsSynced": airbyte["rows_synced"],
             },
-            connection_details=CONNECTION_DETAILS,
-        ),
-    )
-    monkeypatch.setattr(
-        AirbyteOSSClient,
-        "get_stream_stats",
-        lambda *_, **__: {
-            "api_batches": {
-                "streamName": "api_batches",
-                "recordsEmitted": 5,
-                "recordsCommitted": 5,
-            }
-        },
-    )
+            connection_details={
+                "connectionId": "conn-1",
+                "name": CONNECTION_NAME,
+                "prefix": PREFIX,
+                "destinationId": "dest-1",
+                "syncCatalog": {"streams": airbyte["streams"]},
+            },
+        )
+
+    def get_stream_stats(*_, **__):
+        if isinstance(airbyte["stats"], Exception):
+            raise airbyte["stats"]
+        return airbyte["stats"]
+
+    monkeypatch.setattr(AirbyteOSSWorkspace, "load_asset_specs", lambda *_, **__: specs)
+    monkeypatch.setattr(AirbyteOSSClient, "sync_and_poll", sync_and_poll)
+    monkeypatch.setattr(AirbyteOSSClient, "get_stream_stats", get_stream_stats)
     return AirbyteOSSWorkspace(
         api_server="https://airbyte.example.invalid",
         username="dagster",
@@ -235,6 +321,20 @@ def _build(workspace: AirbyteOSSWorkspace, counter: _Counter):
     )
 
 
+def _sync(workspace: AirbyteOSSWorkspace, counter: _Counter, **kwargs):
+    result = materialize(
+        _build(workspace, counter), resources={"airbyte": workspace}, **kwargs
+    )
+    evaluations = {
+        evaluation.asset_key: evaluation
+        for evaluation in result.get_asset_check_evaluations()
+    }
+    materialized = {
+        event.asset_key for event in result.get_asset_materialization_events()
+    }
+    return result, evaluations, materialized
+
+
 class TestConnectionAssets:
     def test_one_multi_asset_per_connection_named_as_the_library_names_it(
         self, workspace
@@ -246,29 +346,19 @@ class TestConnectionAssets:
             dagster_airbyte_translator=DagsterAirbyteTranslator(),
         )
         assert assets_def.op.name == library_def.op.name
-        assert assets_def.keys == library_def.keys == {ENROLLMENTS, BATCHES, EVENTS}
+        assert assets_def.keys == library_def.keys == ALL_KEYS
 
     def test_every_stream_carries_the_check(self, workspace) -> None:
         """The sync mode is only known once the sync has run."""
         (assets_def,) = _build(workspace, _Counter(0))
-        assert {key.asset_key for key in assets_def.check_keys} == {
-            ENROLLMENTS,
-            BATCHES,
-            EVENTS,
-        }
+        assert {key.asset_key for key in assets_def.check_keys} == ALL_KEYS
         assert {key.name for key in assets_def.check_keys} == {EMPTY_FULL_REFRESH_CHECK}
 
     def test_the_sync_fails_the_empty_full_refresh_stream_only(self, workspace) -> None:
         counter = _Counter(143740)
-        result = materialize(
-            _build(workspace, counter), resources={"airbyte": workspace}
-        )
+        result, evaluations, _ = _sync(workspace, counter)
 
         assert result.success
-        evaluations = {
-            evaluation.asset_key: evaluation
-            for evaluation in result.get_asset_check_evaluations()
-        }
         assert set(evaluations) == {ENROLLMENTS, BATCHES}
         assert not evaluations[ENROLLMENTS].passed
         assert evaluations[ENROLLMENTS].severity == AssetCheckSeverity.ERROR
@@ -284,8 +374,84 @@ class TestConnectionAssets:
             event.asset_key: event.step_materialization_data.materialization.metadata
             for event in result.get_asset_materialization_events()
         }
-        assert set(metadata) == {ENROLLMENTS, BATCHES, EVENTS}
+        assert set(metadata) == ALL_KEYS
         assert metadata[BATCHES]["airbyte_records_emitted"].value == 5
         assert metadata[ENROLLMENTS]["airbyte_records_emitted"].value == 0
         assert metadata[EVENTS]["airbyte_sync_mode"].value == "incremental"
         assert metadata[ENROLLMENTS]["airbyte_job_id"].value == 60322
+
+    def test_a_failed_stats_lookup_still_materializes_every_stream(
+        self, workspace, airbyte
+    ) -> None:
+        """The sync succeeded, so staging must still run after it."""
+        airbyte["stats"] = Failure("Max retries (4) exceeded")
+        result, evaluations, materialized = _sync(workspace, _Counter(143740))
+
+        assert result.success
+        assert materialized == ALL_KEYS
+        assert {key: e.severity for key, e in evaluations.items()} == {
+            ENROLLMENTS: AssetCheckSeverity.WARN,
+            BATCHES: AssetCheckSeverity.WARN,
+        }
+
+    def test_a_failed_table_lookup_still_materializes_every_stream(
+        self, workspace
+    ) -> None:
+        result, evaluations, materialized = _sync(
+            workspace, _Counter(OSError("Glue throttled"))
+        )
+
+        assert result.success
+        assert materialized == ALL_KEYS
+        assert evaluations[ENROLLMENTS].severity == AssetCheckSeverity.WARN
+        assert evaluations[BATCHES].passed
+
+    @pytest.mark.parametrize("stats", [None, []])
+    def test_stats_missing_with_rows_synced_raise_no_error(
+        self, workspace, airbyte, stats
+    ) -> None:
+        """Read as zeros, a reshaped response failed every stream with rows."""
+        airbyte["stats"] = stats
+        result, evaluations, _ = _sync(workspace, _Counter(143740))
+
+        assert result.success
+        assert all(
+            e.severity == AssetCheckSeverity.WARN and not e.passed
+            for e in evaluations.values()
+        )
+
+    def test_a_null_record_count_is_unknown(self, workspace, airbyte) -> None:
+        airbyte["stats"][0]["recordsEmitted"] = None
+        _, evaluations, _ = _sync(workspace, _Counter(143740))
+        assert evaluations[ENROLLMENTS].severity == AssetCheckSeverity.WARN
+
+    def test_a_job_that_synced_no_rows_fails_without_stats(
+        self, workspace, airbyte
+    ) -> None:
+        """Job 60322 synced 0 rows in all, which needs no per-stream stats."""
+        airbyte["rows_synced"] = 0
+        airbyte["stats"] = None
+        _, evaluations, _ = _sync(workspace, _Counter(143740))
+        assert not evaluations[ENROLLMENTS].passed
+        assert evaluations[ENROLLMENTS].severity == AssetCheckSeverity.ERROR
+
+    def test_one_name_in_two_namespaces_is_one_asset(self, workspace, airbyte) -> None:
+        """Yielding the name twice raised "output returned multiple times"."""
+        airbyte["streams"] = [
+            *CATALOG_STREAMS,
+            _catalog_stream("api_enrollments", "full_refresh", namespace="other"),
+        ]
+        result, _, materialized = _sync(workspace, _Counter(0))
+        assert result.success
+        assert materialized == ALL_KEYS
+
+    def test_selecting_only_the_checks_evaluates_them(self, workspace) -> None:
+        (assets_def,) = _build(workspace, _Counter(143740))
+        result = materialize(
+            [assets_def],
+            resources={"airbyte": workspace},
+            selection=AssetSelection.checks(*assets_def.check_keys),
+        )
+        evaluations = {e.asset_key for e in result.get_asset_check_evaluations()}
+        assert result.success
+        assert evaluations == {ENROLLMENTS, BATCHES}
