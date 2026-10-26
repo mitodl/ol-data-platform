@@ -100,10 +100,20 @@ def test_explicit_base_urls_win_over_the_derived_ones() -> None:
     assert client.configuration_api_base_url == "https://proxy.example.invalid/config"
 
 
-def _attempt(attempt_id: int, status: str = "succeeded", **total) -> dict[str, Any]:
+def _attempt(
+    attempt_id: int,
+    status: str = "succeeded",
+    total: object = None,
+    streams: dict[str, object] | None = None,
+) -> dict[str, Any]:
     attempt: dict[str, Any] = {"id": attempt_id, "status": status}
-    if total:
-        attempt["totalStats"] = total
+    if total is not None:
+        attempt["totalStats"] = {"recordsEmitted": total}
+    if streams is not None:
+        attempt["streamStats"] = [
+            {"streamName": name, "stats": {"recordsEmitted": emitted}}
+            for name, emitted in streams.items()
+        ]
     return {"attempt": attempt}
 
 
@@ -128,9 +138,10 @@ class TestJobStats:
             {"streamName": "api_enrollments", "recordsEmitted": 0},
             {"streamName": "users", "recordsEmitted": 12},
         ]
+        attempts = [_attempt(0, "failed"), _attempt(1, total=12)]
         self.answer = {
             "job": {"id": 60322, "streamAggregatedStats": streams},
-            "attempts": [_attempt(0, "failed"), _attempt(1, recordsEmitted=12)],
+            "attempts": attempts,
         }
         stats = client.get_job_stats(60322)
         assert requests_made == [
@@ -140,7 +151,9 @@ class TestJobStats:
                 {"id": 60322},
             )
         ]
-        assert stats == JobStats(streams=streams, final_attempt_emitted=12)
+        assert stats == JobStats(
+            streams=streams, attempts=[info["attempt"] for info in attempts]
+        )
 
     @pytest.mark.usefixtures("requests_made")
     @pytest.mark.parametrize(
@@ -155,6 +168,9 @@ class TestJobStats:
             {"job": {"id": 1, "streamAggregatedStats": None}},
             {"job": {"id": 1, "streamAggregatedStats": {"users": {}}}},
             {"job": {"id": 1, "streamAggregatedStats": [{"streamName": "a"}, "b"]}},
+            {"attempts": [_attempt(0, total=0), "x"]},
+            {"attempts": [{"attempt": None}]},
+            {"attempts": {"0": _attempt(0, total=0)}},
         ],
     )
     def test_a_response_of_another_shape_is_unknown(self, client, answer) -> None:
@@ -163,84 +179,100 @@ class TestJobStats:
         assert client.get_job_stats(1) == JobStats()
 
 
-class TestFinalAttempt:
-    """Only a succeeded final attempt's totalStats can say the job read nothing.
-
-    Missing attempt stats hydrate streamAggregatedStats as [] and rowsSynced as
-    0, so neither of those can.
-    """
-
-    @pytest.mark.parametrize(
-        ("attempts", "expected"),
-        [
-            ([_attempt(0, recordsEmitted=0)], 0),
-            ([_attempt(1, recordsEmitted=0), _attempt(0, recordsEmitted=9)], 0),
-            ([_attempt(0, recordsEmitted=0), _attempt(1, recordsEmitted=9)], 9),
-            ([_attempt(0)], None),
-            ([_attempt(0, recordsEmitted=None)], None),
-            ([_attempt(0, recordsEmitted=False)], None),
-            ([_attempt(0, "failed", recordsEmitted=0)], None),
-            ([_attempt(0, recordsEmitted=0), "x"], None),
-            ([{"attempt": {"status": "succeeded"}}], None),
-            ([], None),
-            (None, None),
-        ],
+def _stats(streams: Any = None, attempts: Any = None) -> JobStats:
+    return JobStats.from_job_info(
+        {
+            "job": {"streamAggregatedStats": streams},
+            "attempts": attempts,
+        }
     )
-    def test_final_attempt_emitted(self, attempts, expected) -> None:
-        stats = JobStats.from_job_info({"job": {}, "attempts": attempts})
-        assert stats.final_attempt_emitted == expected
 
 
 class TestRecordsRead:
-    """Only a numeric count on the stream's one entry is a count."""
+    """A positive aggregate is a count; a 0 needs every attempt to show it.
 
-    STATS = JobStats(
-        streams=[
-            {"streamName": "enrollments", "recordsEmitted": 0, "recordsCommitted": 0},
-            {"streamName": "users", "recordsEmitted": 12, "recordsCommitted": 11},
-            {"streamName": "nulls", "recordsEmitted": None, "recordsCommitted": None},
-            {"streamName": "twice", "streamNamespace": "a", "recordsEmitted": 1},
-            {"streamName": "twice", "streamNamespace": "b", "recordsEmitted": 0},
-        ],
-        final_attempt_emitted=13,
-    )
+    Airbyte builds streamAggregatedStats by adding attempt stats with a null
+    recordsEmitted taken as 0, so an aggregate 0 proves nothing on its own.
+    """
+
+    AGGREGATES = [  # noqa: RUF012
+        {"streamName": "enrollments", "recordsEmitted": 0, "recordsCommitted": 0},
+        {"streamName": "users", "recordsEmitted": 12, "recordsCommitted": 11},
+        {"streamName": "nulls", "recordsEmitted": None, "recordsCommitted": None},
+        {"streamName": "twice", "streamNamespace": "a", "recordsEmitted": 1},
+        {"streamName": "twice", "streamNamespace": "b", "recordsEmitted": 0},
+    ]
+
+    def test_a_positive_aggregate_is_read_as_it_is(self) -> None:
+        """Even when every attempt's total is 0, as a resumed attempt can be."""
+        stats = _stats(self.AGGREGATES, [_attempt(0, total=0)])
+        assert records_read(stats, "users") == (12, 11)
+
+    @pytest.mark.parametrize("name", ["enrollments", "nulls", "absent", "twice"])
+    def test_without_attempt_evidence_it_is_unknown(self, name) -> None:
+        stats = _stats(self.AGGREGATES, [_attempt(0, total=13)])
+        assert records_read(stats, name) == (None, None)
+
+    @pytest.mark.parametrize("name", ["enrollments", "nulls", "absent", "twice"])
+    @pytest.mark.parametrize("aggregates", [None, [], AGGREGATES])
+    def test_every_attempt_totalling_zero_proves_zero(self, name, aggregates) -> None:
+        """Duplicates and malformed aggregates included: nothing was read."""
+        stats = _stats(
+            aggregates, [_attempt(0, "failed", total=0), _attempt(1, total=0)]
+        )
+        assert records_read(stats, name) == (0, 0)
+
+    def test_the_streams_own_entry_in_every_attempt_proves_zero(self) -> None:
+        stats = _stats(
+            self.AGGREGATES,
+            [
+                _attempt(0, "failed", total=3, streams={"enrollments": 0, "users": 3}),
+                _attempt(1, total=12, streams={"enrollments": 0, "users": 12}),
+            ],
+        )
+        assert records_read(stats, "enrollments") == (0, 0)
 
     @pytest.mark.parametrize(
-        ("name", "expected"),
+        "attempts",
         [
-            ("enrollments", (0, 0)),
-            ("users", (12, 11)),
-            ("nulls", (None, None)),
-            ("absent", (None, None)),
-            ("twice", (None, None)),
+            # An earlier attempt read rows: a resumed refresh's last can read 0.
+            [_attempt(0, "failed", total=7), _attempt(1, total=0)],
+            # One attempt with no sync summary at all.
+            [_attempt(0, total=0), _attempt(1)],
+            [_attempt(0, total=None, streams={"enrollments": None})],
+            [_attempt(0, total=False)],
+            [_attempt(0, streams={"enrollments": False})],
+            [{"attempt": {"id": 0, "streamStats": [{"streamName": "enrollments"}]}}],
+            [{"attempt": {"id": 0, "streamStats": "enrollments"}}],
+            # The stream listed twice in one attempt.
+            [
+                {
+                    "attempt": {
+                        "id": 0,
+                        "streamStats": [
+                            {
+                                "streamName": "enrollments",
+                                "stats": {"recordsEmitted": 0},
+                            },
+                            {
+                                "streamName": "enrollments",
+                                "stats": {"recordsEmitted": 4},
+                            },
+                        ],
+                    }
+                }
+            ],
+            [],
+            None,
         ],
     )
-    def test_counts_from_stats(self, name, expected) -> None:
-        assert records_read(self.STATS, name) == expected
-
-    @pytest.mark.parametrize("streams", [None, []])
-    def test_no_stream_stats_is_unknown(self, streams) -> None:
-        stats = JobStats(streams=streams, final_attempt_emitted=None)
+    def test_anything_short_of_every_attempt_is_unknown(self, attempts) -> None:
+        stats = _stats(self.AGGREGATES, attempts)
         assert records_read(stats, "enrollments") == (None, None)
-
-    @pytest.mark.parametrize("streams", [None, [], STATS.streams])
-    def test_a_final_attempt_that_emitted_nothing_read_nothing_anywhere(
-        self, streams
-    ) -> None:
-        stats = JobStats(streams=streams, final_attempt_emitted=0)
-        assert records_read(stats, "absent") == (0, 0)
-
-    def test_a_stream_count_wins_over_the_final_attempt(self) -> None:
-        """A resumed final attempt can emit 0 after an earlier one read the rows."""
-        stats = JobStats(streams=self.STATS.streams, final_attempt_emitted=0)
-        assert records_read(stats, "users") == (12, 11)
 
     @pytest.mark.parametrize("value", [True, False])
     def test_a_boolean_count_is_unknown(self, value) -> None:
-        stats = JobStats(
-            streams=[{"streamName": "users", "recordsEmitted": value}],
-            final_attempt_emitted=None,
-        )
+        stats = _stats([{"streamName": "users", "recordsEmitted": value}])
         assert records_read(stats, "users") == (None, None)
 
 

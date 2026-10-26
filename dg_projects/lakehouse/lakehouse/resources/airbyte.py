@@ -56,7 +56,6 @@ REFUSAL_BODY_MAX_CHARS = 500
 
 
 SYNC_JOB_TYPE = "sync"
-SUCCEEDED_ATTEMPT_STATUS = "succeeded"
 
 
 @dataclass(frozen=True)
@@ -64,12 +63,11 @@ class JobStats:
     """What a finished Airbyte job's stats say it read, None where they do not.
 
     :ivar streams: The job's ``streamAggregatedStats`` entries.
-    :ivar final_attempt_emitted: ``totalStats.recordsEmitted`` of the job's
-        final attempt, when that attempt succeeded.
+    :ivar attempts: The job's attempt reads (``attempts[].attempt``).
     """
 
     streams: Sequence[Mapping[str, Any]] | None = None
-    final_attempt_emitted: int | None = None
+    attempts: Sequence[Mapping[str, Any]] | None = None
 
     @classmethod
     def from_job_info(cls, job_info: object) -> Self:
@@ -78,12 +76,6 @@ class JobStats:
         The shape comes from airbyte-platform 2.0.0's API, the last public one,
         and the sync this follows has already succeeded, so anything not shaped
         as expected is left unknown rather than raised on.
-
-        ``streamAggregatedStats`` is not enough on its own to say a stream read
-        nothing: when an attempt's stats are missing, Airbyte hydrates it as an
-        empty list and the REST ``rowsSynced`` (its ``recordsCommitted`` sum) as
-        0. The final attempt's ``totalStats`` comes from that attempt's sync
-        summary instead, and is null when there is none.
         """
         if not isinstance(job_info, Mapping):
             return cls()
@@ -93,10 +85,18 @@ class JobStats:
             isinstance(entry, Mapping) for entry in streams
         ):
             streams = None
-        return cls(
-            streams=streams,
-            final_attempt_emitted=_final_attempt_emitted(job_info.get("attempts")),
+        infos = job_info.get("attempts")
+        attempts = (
+            [info.get("attempt") for info in infos]
+            if isinstance(infos, list)
+            and all(isinstance(info, Mapping) for info in infos)
+            else None
         )
+        if attempts is not None and not all(
+            isinstance(attempt, Mapping) for attempt in attempts
+        ):
+            attempts = None
+        return cls(streams=streams, attempts=attempts)
 
 
 def _count(value: object) -> int | None:
@@ -104,23 +104,28 @@ def _count(value: object) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
-def _final_attempt_emitted(attempts: object) -> int | None:
-    if not isinstance(attempts, list) or not all(
-        isinstance(info, Mapping) for info in attempts
+def _attempt_read_nothing(attempt: Mapping[str, Any], stream_name: str) -> bool:
+    """Say whether one attempt's own sync summary shows the stream read nothing.
+
+    ``totalStats`` and ``streamStats`` come from the attempt's sync summary and
+    are null when it has none (``JobConverter.getAttemptRead``). Either a total
+    of 0 for the attempt, or the stream's one entry with 0, is evidence.
+    """
+    total = attempt.get("totalStats")
+    if isinstance(total, Mapping) and _count(total.get("recordsEmitted")) == 0:
+        return True
+    stream_stats = attempt.get("streamStats")
+    if not isinstance(stream_stats, list) or not all(
+        isinstance(entry, Mapping) for entry in stream_stats
     ):
-        return None
-    reads = [info.get("attempt") for info in attempts]
-    if not reads or not all(
-        isinstance(read, Mapping) and isinstance(read.get("id"), int) for read in reads
-    ):
-        return None
-    final = max(reads, key=lambda read: read["id"])
-    total = final.get("totalStats")
-    if final.get("status") != SUCCEEDED_ATTEMPT_STATUS or not isinstance(
-        total, Mapping
-    ):
-        return None
-    return _count(total.get("recordsEmitted"))
+        return False
+    entries = [
+        entry for entry in stream_stats if entry.get("streamName") == stream_name
+    ]
+    if len(entries) != 1:
+        return False
+    counts = entries[0].get("stats")
+    return isinstance(counts, Mapping) and _count(counts.get("recordsEmitted")) == 0
 
 
 @dataclass(frozen=True)
@@ -159,11 +164,14 @@ class StreamSync:
 def records_read(stats: JobStats, stream_name: str) -> tuple[int | None, int | None]:
     """Return a stream's records emitted and committed, or None where unknown.
 
-    A numeric value on the one stats entry for the stream wins. Without one, a
-    job whose final attempt emitted no records read nothing from any stream.
-    Otherwise the count is unknown: whether Airbyte lists a stream that read
-    nothing is not established, so an absent entry is not 0, and neither is a
-    name listed twice (one name in two namespaces).
+    A positive count on the stream's one ``streamAggregatedStats`` entry is
+    read as it is. A 0 there is not proof: Airbyte builds that entry by adding
+    up attempt stats with a null count taken as 0 (``StatsAggregationHelper``),
+    and an attempt whose stats are missing adds nothing. So 0 needs every
+    attempt of the job to show it, through a ``totalStats.recordsEmitted`` of 0
+    or the stream's one ``streamStats`` entry with 0. That also keeps a
+    resumed refresh, whose last attempt read nothing after an earlier one read
+    the rows, from reading as empty. Anything else is unknown.
 
     :param stats: The job's stats.
     :param stream_name: The stream to count.
@@ -174,9 +182,11 @@ def records_read(stats: JobStats, stream_name: str) -> tuple[int | None, int | N
     ]
     if len(entries) == 1:
         emitted = _count(entries[0].get("recordsEmitted"))
-        if emitted is not None:
+        if emitted is not None and emitted > 0:
             return emitted, _count(entries[0].get("recordsCommitted"))
-    if stats.final_attempt_emitted == 0:
+    if stats.attempts and all(
+        _attempt_read_nothing(attempt, stream_name) for attempt in stats.attempts
+    ):
         return 0, 0
     return None, None
 
@@ -326,7 +336,8 @@ class AirbyteOSSClient(AirbyteClient):
         The REST API's job read carries only the job-wide ``rowsSynced``, which
         cannot say which stream of a connection read nothing. The configuration
         API's ``jobs/get_without_logs`` hydrates ``streamAggregatedStats`` and
-        each attempt's ``totalStats``; ``jobs/get_light`` does neither.
+        returns each attempt's own ``totalStats`` and ``streamStats``;
+        ``jobs/get_light`` does neither.
 
         :param job_id: The Airbyte job to read.
         :returns: The stats, with whatever the response does not hold as None.
