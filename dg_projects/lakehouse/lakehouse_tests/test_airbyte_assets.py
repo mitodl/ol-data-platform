@@ -35,6 +35,7 @@ from lakehouse.lib.airbyte_assets import (
 from lakehouse.resources.airbyte import (
     AirbyteOSSClient,
     AirbyteOSSWorkspace,
+    JobStats,
     StreamSync,
 )
 from pyiceberg.exceptions import NoSuchTableError
@@ -56,6 +57,7 @@ def _stream(
         spec_metadata={},
         description="",
         job_id=60322,
+        job_type="sync",
         job_started_at=job_started_at,
         sync_mode=sync_mode,
         records_emitted=records_emitted,
@@ -246,7 +248,17 @@ def airbyte() -> dict[str, Any]:
     """
     return {
         "streams": list(CATALOG_STREAMS),
+        "job_type": "sync",
         "rows_synced": 5,
+        "attempts": [
+            {
+                "attempt": {
+                    "id": 0,
+                    "status": "succeeded",
+                    "totalStats": {"recordsEmitted": 5},
+                }
+            }
+        ],
         "stats": [
             {"streamName": "api_enrollments", "recordsEmitted": 0},
             {"streamName": "api_batches", "recordsEmitted": 5},
@@ -285,6 +297,7 @@ def workspace(monkeypatch, airbyte) -> AirbyteOSSWorkspace:
                 "jobId": 60322,
                 "status": "succeeded",
                 "startTime": "2026-10-19T00:00:12Z",
+                "jobType": airbyte["job_type"],
                 "rowsSynced": airbyte["rows_synced"],
             },
             connection_details={
@@ -296,14 +309,19 @@ def workspace(monkeypatch, airbyte) -> AirbyteOSSWorkspace:
             },
         )
 
-    def get_stream_stats(*_, **__):
+    def get_job_stats(*_, **__) -> JobStats:
         if isinstance(airbyte["stats"], Exception):
             raise airbyte["stats"]
-        return airbyte["stats"]
+        return JobStats.from_job_info(
+            {
+                "job": {"id": 60322, "streamAggregatedStats": airbyte["stats"]},
+                "attempts": airbyte["attempts"],
+            }
+        )
 
     monkeypatch.setattr(AirbyteOSSWorkspace, "load_asset_specs", lambda *_, **__: specs)
     monkeypatch.setattr(AirbyteOSSClient, "sync_and_poll", sync_and_poll)
-    monkeypatch.setattr(AirbyteOSSClient, "get_stream_stats", get_stream_stats)
+    monkeypatch.setattr(AirbyteOSSClient, "get_job_stats", get_job_stats)
     return AirbyteOSSWorkspace(
         api_server="https://airbyte.example.invalid",
         username="dagster",
@@ -425,15 +443,61 @@ class TestConnectionAssets:
         _, evaluations, _ = _sync(workspace, _Counter(143740))
         assert evaluations[ENROLLMENTS].severity == AssetCheckSeverity.WARN
 
-    def test_a_job_that_synced_no_rows_fails_without_stats(
+    def test_rows_synced_zero_with_no_stats_is_not_an_empty_sync(
         self, workspace, airbyte
     ) -> None:
-        """Job 60322 synced 0 rows in all, which needs no per-stream stats."""
+        """Missing attempt stats hydrate as [] and rowsSynced 0, not as null."""
         airbyte["rows_synced"] = 0
-        airbyte["stats"] = None
+        airbyte["stats"] = []
+        airbyte["attempts"] = [{"attempt": {"id": 0, "status": "succeeded"}}]
+        _, evaluations, _ = _sync(workspace, _Counter(143740))
+        assert {e.severity for e in evaluations.values()} == {AssetCheckSeverity.WARN}
+
+    def test_a_final_attempt_that_emitted_nothing_fails_without_stream_stats(
+        self, workspace, airbyte
+    ) -> None:
+        """The attempt's own sync summary says the whole job read nothing."""
+        airbyte["rows_synced"] = 0
+        airbyte["stats"] = []
+        airbyte["attempts"] = [
+            {
+                "attempt": {
+                    "id": 0,
+                    "status": "failed",
+                    "totalStats": {"recordsEmitted": 7},
+                }
+            },
+            {
+                "attempt": {
+                    "id": 1,
+                    "status": "succeeded",
+                    "totalStats": {"recordsEmitted": 0},
+                }
+            },
+        ]
         _, evaluations, _ = _sync(workspace, _Counter(143740))
         assert not evaluations[ENROLLMENTS].passed
         assert evaluations[ENROLLMENTS].severity == AssetCheckSeverity.ERROR
+
+    @pytest.mark.parametrize("job_type", ["reset", "clear", "refresh", None])
+    def test_a_job_that_is_not_a_sync_is_never_an_error(
+        self, workspace, airbyte, job_type
+    ) -> None:
+        """poll_previous_running_sync attaches to resets and clears too."""
+        airbyte["job_type"] = job_type
+        airbyte["attempts"] = [
+            {
+                "attempt": {
+                    "id": 0,
+                    "status": "succeeded",
+                    "totalStats": {"recordsEmitted": 0},
+                }
+            }
+        ]
+        result, evaluations, materialized = _sync(workspace, _Counter(143740))
+        assert result.success
+        assert materialized == ALL_KEYS
+        assert {e.severity for e in evaluations.values()} == {AssetCheckSeverity.WARN}
 
     def test_one_name_in_two_namespaces_is_one_asset(self, workspace, airbyte) -> None:
         """Yielding the name twice raised "output returned multiple times"."""
