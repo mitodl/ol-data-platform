@@ -34,6 +34,12 @@ _opik_client: opik.Opik | None = None
 _client_init_attempted = False
 # template -> the Prompt Library version publish_prompt_version recorded for it
 _published_prompts: dict[str, opik.Prompt] = {}
+# Every deployment shares the Production Opik, so each one reads and publishes
+# prompts through its own Opik environment: a version takes effect only in the
+# environments that point at it, and editing a prompt for QA leaves Production
+# on its version until Production is pointed at the new one.
+PROMPT_ENVIRONMENT: str = DAGSTER_ENV
+_prompt_environment_registered = False
 
 
 class KeycloakClientCredentialsAuth(httpx.Auth):
@@ -244,6 +250,90 @@ def attach_span_metadata(metadata: dict[str, Any]) -> None:
     opik_context.update_current_span(metadata=metadata)
 
 
+def _register_prompt_environment(client: opik.Opik) -> None:
+    """Register PROMPT_ENVIRONMENT in the Opik workspace if it isn't yet.
+
+    Opik only knows development/staging/production out of the box, and
+    set_prompt_environments rejects an unregistered environment.
+    """
+    global _prompt_environment_registered  # noqa: PLW0603
+
+    if _prompt_environment_registered:
+        return
+    if not any(env.name == PROMPT_ENVIRONMENT for env in client.get_environments()):
+        client.create_environment(PROMPT_ENVIRONMENT)
+    _prompt_environment_registered = True
+
+
+def _point_environment_at(
+    client: opik.Opik, prompt: opik.Prompt, environment: str | None = None
+) -> opik.Prompt:
+    """Point environment (default PROMPT_ENVIRONMENT) at prompt's version.
+
+    set_prompt_environments replaces a version's whole environment set, so the
+    environments that already point at it are passed back in. They are re-read
+    past the SDK's prompt cache, whose copy can be minutes old, so another
+    environment that just moved here isn't dropped.
+    """
+    environment = environment or PROMPT_ENVIRONMENT
+    current = client.get_prompt(name=prompt.name, version=prompt.version, no_cache=True)
+    owners = (current.environments if current is not None else None) or []
+    client.set_prompt_environments(
+        prompt.name, sorted({*owners, environment}), version=prompt.version
+    )
+    return prompt
+
+
+def _claim_unscoped_prompt_for_production(
+    client: opik.Opik, name: str, latest: opik.Prompt
+) -> bool:
+    """Point production at latest if no version of name has an environment yet.
+
+    Such a prompt predates environment-scoped reads, when only Production's ml
+    wrote to the Production Opik (CI and QA had their own), so its latest version
+    is the one Production has been rendering. Claiming it keeps Production there
+    whichever environment reads the prompt first.
+
+    Returns True if production was pointed at latest.
+    """
+    if any(version.environments for version in client.get_prompt_history(name=name)):
+        return False
+    _point_environment_at(client, latest, environment="production")
+    return True
+
+
+def _environment_prompt(
+    client: opik.Opik, name: str, default_template: str | None
+) -> opik.Prompt | None:
+    """Return the version of name that PROMPT_ENVIRONMENT points at.
+
+    An environment without a version yet is pointed at the version whose text is
+    default_template, creating it if needed, never at whatever version is latest:
+    the latest one may be another environment's edit. The exception is Production
+    reading a prompt that predates environment scoping, which keeps rendering the
+    latest version as it did before (see _claim_unscoped_prompt_for_production).
+    Returns None when the environment has no version and no default_template is
+    given.
+    """
+    _register_prompt_environment(client)
+    prompt = client.get_prompt(name=name, environment=PROMPT_ENVIRONMENT)
+    if prompt is not None:
+        return prompt
+    latest = client.get_prompt(name=name)
+    # claimed for production whichever environment reads it first
+    if (
+        latest is not None
+        and _claim_unscoped_prompt_for_production(client, name, latest)
+        and PROMPT_ENVIRONMENT == "production"
+    ):
+        return latest
+    if default_template is None:
+        return None
+    return _point_environment_at(
+        client, _find_or_create_version(client, name, default_template)
+    )
+
+
 def get_prompt_version(name: str, default_template: str | None = None) -> str:
     """Return name's currently-active Prompt Library version, or "local" if unavailable.
 
@@ -261,9 +351,7 @@ def get_prompt_version(name: str, default_template: str | None = None) -> str:
     client = get_opik_client()
     if client is not None:
         try:
-            prompt = client.get_prompt(name=name)
-            if prompt is None and default_template is not None:
-                prompt = client.create_prompt(name=name, prompt=default_template)
+            prompt = _environment_prompt(client, name, default_template)
             if prompt is not None:
                 return prompt.version or prompt.commit or LOCAL_PROMPT_VERSION
         except Exception:
@@ -277,16 +365,25 @@ def publish_prompt_version(name: str, template: str) -> str:
     For prompts that stay authoritative in code, where rendering an Opik edit
     would change what is sent without changing what the caller records as the
     prompt version (the courseware extractor keys every row on a hash of its code
-    prompt). Opik versions what ran instead: create_prompt adds a version only
-    when the template differs from the latest, so calling this every run is
-    idempotent. Returns LOCAL_PROMPT_VERSION when Opik is unavailable or the
-    publish fails in any way: this is provenance, never a reason to fail a run.
+    prompt). Opik versions what ran instead, and PROMPT_ENVIRONMENT is pointed at
+    that version. An earlier version with the same text is reused rather than
+    added again, so environments running different code don't add a version
+    each time they take turns publishing. Returns LOCAL_PROMPT_VERSION when Opik
+    is unavailable or the publish fails in any way: this is provenance, never a
+    reason to fail a run.
     """
     client = get_opik_client()
     if client is None:
         return LOCAL_PROMPT_VERSION
     try:
-        prompt = client.create_prompt(name=name, prompt=template)
+        _register_prompt_environment(client)
+        prompt = client.get_prompt(name=name, environment=PROMPT_ENVIRONMENT)
+        if prompt is None and (latest := client.get_prompt(name=name)) is not None:
+            _claim_unscoped_prompt_for_production(client, name, latest)
+        if prompt is None or prompt.prompt != template:
+            prompt = _point_environment_at(
+                client, _find_or_create_version(client, name, template)
+            )
         version = prompt.version or prompt.commit
     except Exception:
         log.warning("Opik prompt publish failed for %s", name, exc_info=True)
@@ -295,6 +392,15 @@ def publish_prompt_version(name: str, template: str) -> str:
         return LOCAL_PROMPT_VERSION
     _published_prompts[template] = prompt
     return version
+
+
+def _find_or_create_version(client: opik.Opik, name: str, template: str) -> opik.Prompt:
+    """Return the version of name whose text is template, adding one if none is."""
+    if client.get_prompt(name=name) is not None:
+        for prompt in client.get_prompt_history(name=name):
+            if prompt.prompt == template:
+                return prompt
+    return client.create_prompt(name=name, prompt=template)
 
 
 def attach_span_prompt(template: str) -> None:
@@ -315,19 +421,19 @@ def render_prompt(name: str, default_template: str, **variables: Any) -> str:
     """Render a Prompt Library entry (mustache {{var}} placeholders).
 
     Seeds Opik with default_template on first use (via create_prompt) so the
-    prompt shows up in the Prompt Library ready to edit -- editing it there
-    then takes effect on the next call with no redeploy. Falls back to
-    rendering default_template locally whenever Opik is unreachable or not
-    configured for this environment.
+    prompt shows up in the Prompt Library ready to edit. Renders the version
+    PROMPT_ENVIRONMENT points at, so an edit takes effect, with no redeploy, in
+    the environments pointed at the new version. Falls back to rendering
+    default_template locally whenever Opik is unreachable or not configured for
+    this environment.
     """
     template = default_template
     client = get_opik_client()
     if client is not None:
         try:
-            prompt = client.get_prompt(name=name) or client.create_prompt(
-                name=name, prompt=default_template
-            )
-            template = prompt.prompt
+            prompt = _environment_prompt(client, name, default_template)
+            if prompt is not None:
+                template = prompt.prompt
         except Exception:
             log.warning(
                 "Opik prompt fetch/create failed for %s; using local default",
