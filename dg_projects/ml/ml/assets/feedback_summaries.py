@@ -175,7 +175,13 @@ def feedback_summaries(
         source_lazy = source_lazy.limit(config.sample_limit)
     source_df = source_lazy.collect()
 
-    already_summarized_df = pl.DataFrame(schema=dict.fromkeys(JOIN_COLS, pl.String))
+    already_summarized_df = pl.DataFrame(
+        schema={
+            **dict.fromkeys(JOIN_COLS, pl.String),
+            "turn_count": pl.Int64,
+            "summary_model_version": pl.String,
+        }
+    )
     if not config.full_refresh:
         with contextlib.suppress(NoSuchTableError):
             already_summarized_lazy = get_dbt_model_as_dataframe(
@@ -187,7 +193,12 @@ def feedback_summaries(
             # next runs; select only what's actually there.
             select_cols = [
                 col
-                for col in [*JOIN_COLS, "idempotency_key"]
+                for col in [
+                    *JOIN_COLS,
+                    "turn_count",
+                    "summary_model_version",
+                    "idempotency_key",
+                ]
                 if col in already_summarized_lazy.collect_schema().names()
             ]
             already_summarized_df = already_summarized_lazy.select(

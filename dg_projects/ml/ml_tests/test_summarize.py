@@ -94,7 +94,20 @@ def test_fetch_summary_prompt_uses_the_embedded_default_with_tracing_off() -> No
 
 
 def _stored(**columns: list[object]) -> pl.DataFrame:
-    return pl.DataFrame(columns, schema_overrides={"idempotency_key": pl.String})
+    """feedback_summaries rows, by default written by this run's model at turn 2."""
+    rows = len(columns["feedback_conversation_pk"])
+    columns = {
+        "turn_count": [2] * rows,
+        "summary_model_version": [MODEL] * rows,
+        **columns,
+    }
+    return pl.DataFrame(
+        columns,
+        schema_overrides={
+            "idempotency_key": pl.String,
+            "summary_model_version": pl.String,
+        },
+    )
 
 
 def _key(text: str, keys: Any = None) -> str:
@@ -108,7 +121,13 @@ def test_filter_unsummarized_keeps_new_conversations_with_or_without_text() -> N
             _conversation_row(conversation_ref="2", conversation_text=None),
         ]
     )
-    already_summarized_df = pl.DataFrame(schema={"feedback_conversation_pk": pl.String})
+    already_summarized_df = pl.DataFrame(
+        schema={
+            "feedback_conversation_pk": pl.String,
+            "turn_count": pl.Int64,
+            "summary_model_version": pl.String,
+        }
+    )
 
     result = summarize.filter_unsummarized(
         source_df, already_summarized_df, SUMMARIZER.keys
@@ -183,8 +202,7 @@ def test_filter_unsummarized_ignores_whether_the_prompt_came_from_opik() -> None
     assert result.height == 0
 
 
-def test_filter_unsummarized_resubmits_keyless_rows_once_they_have_text() -> None:
-    """A skipped row and a row summarized before the key existed both have none."""
+def test_filter_unsummarized_resubmits_skipped_rows_once_they_have_text() -> None:
     source_df = pl.DataFrame(
         [
             _conversation_row(conversation_ref="1"),
@@ -192,7 +210,9 @@ def test_filter_unsummarized_resubmits_keyless_rows_once_they_have_text() -> Non
         ]
     )
     already_summarized_df = _stored(
-        feedback_conversation_pk=["pk-1", "pk-2"], idempotency_key=[None, None]
+        feedback_conversation_pk=["pk-1", "pk-2"],
+        summary_model_version=[None, None],
+        idempotency_key=[None, None],
     )
 
     result = summarize.filter_unsummarized(
@@ -203,14 +223,56 @@ def test_filter_unsummarized_resubmits_keyless_rows_once_they_have_text() -> Non
 
 
 def test_filter_unsummarized_reads_a_table_from_before_the_key() -> None:
-    source_df = pl.DataFrame([_conversation_row(conversation_ref="1")])
-    already_summarized_df = pl.DataFrame({"feedback_conversation_pk": ["pk-1"]})
+    source_df = pl.DataFrame(
+        [
+            _conversation_row(conversation_ref="1"),
+            _conversation_row(conversation_ref="2", turn_count=3),
+        ]
+    )
+    already_summarized_df = pl.DataFrame(
+        {
+            "feedback_conversation_pk": ["pk-1", "pk-2"],
+            "turn_count": [2, 2],
+            "summary_model_version": ["claude-haiku-4-5", "claude-haiku-4-5"],
+        }
+    )
 
     result = summarize.filter_unsummarized(
         source_df, already_summarized_df, SUMMARIZER.keys
     )
 
-    assert result["conversation_ref"].to_list() == ["1"]
+    assert result["conversation_ref"].to_list() == ["2"]
+
+
+def test_filter_unsummarized_keeps_keyless_rows_with_the_same_turns_and_model() -> None:
+    """Rows summarized before the key existed are not all redone on deploy.
+
+    Their stored model id has no provider, and their prompt_version is not
+    compared.
+    """
+    source_df = pl.DataFrame(
+        [
+            _conversation_row(conversation_ref="1"),
+            _conversation_row(conversation_ref="2", turn_count=3),
+            _conversation_row(conversation_ref="3"),
+        ]
+    )
+    already_summarized_df = _stored(
+        feedback_conversation_pk=["pk-1", "pk-2", "pk-3"],
+        summary_model_version=[
+            "claude-haiku-4-5",
+            "claude-haiku-4-5",
+            "claude-sonnet-4-5",
+        ],
+        prompt_version=["v2", "v2", "v2"],
+        idempotency_key=[None, None, None],
+    )
+
+    result = summarize.filter_unsummarized(
+        source_df, already_summarized_df, SUMMARIZER.keys
+    )
+
+    assert result["conversation_ref"].to_list() == ["2", "3"]
 
 
 def test_filter_unsummarized_keeps_a_summary_whose_text_went_missing() -> None:

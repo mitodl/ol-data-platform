@@ -173,13 +173,20 @@ def filter_unsummarized(
 
     A conversation not stored yet is always kept, with or without text, so a
     skipped one gets its row. A stored one without text is dropped, which leaves
-    a summary in place if its text later goes missing. A stored row with no key
-    (a skipped row, or one summarized before the key existed) is re-submitted
-    once it has text.
+    a summary in place if its text later goes missing. A skipped row has no key
+    and is re-submitted once it has text.
+
+    A row summarized before the key existed keeps the rule it was written under:
+    it is re-submitted when its turn_count or its model changed. Re-submitting
+    every one of them would rewrite every summary and, through the embeddings,
+    move every conversation's cluster assignment. Its prompt_version is not
+    compared, because it names an Opik version from before the key and the
+    deploy creates a new version of the same text. The row gets a key the next
+    time it is summarized.
 
     :param source_df: the in-scope conversations.
-    :param already_summarized_df: feedback_summaries' join columns, with
-        idempotency_key when the table has it.
+    :param already_summarized_df: feedback_summaries' join columns, turn_count,
+        and summary_model_version, with idempotency_key when the table has it.
     :param keys: the run's prompt and model.
     :returns: the rows of source_df to summarize or record as skipped.
     :rtype: pl.DataFrame
@@ -192,10 +199,18 @@ def filter_unsummarized(
     stored = already_summarized_df.select(
         *JOIN_COLS,
         stored_key.alias("_stored_key"),
+        pl.col("turn_count").alias("_stored_turn_count"),
+        pl.col("summary_model_version").alias("_stored_model"),
         pl.lit(True).alias("_stored"),  # noqa: FBT003
     )
     current_key = pl.col("conversation_text").map_elements(
         keys.key, return_dtype=pl.String
+    )
+    # Rows written before the key stored the model id without its provider.
+    keyless_changed = (
+        pl.col("_stored_model").is_null()
+        | pl.col("_stored_model").ne_missing(pl.lit(keys.model.partition(":")[2]))
+        | pl.col("turn_count").ne_missing(pl.col("_stored_turn_count"))
     )
     return (
         source_df.with_columns(current_key.alias("_current_key"))
@@ -204,7 +219,9 @@ def filter_unsummarized(
             pl.col("_stored").is_null()
             | (
                 pl.col("_current_key").is_not_null()
-                & pl.col("_current_key").ne_missing(pl.col("_stored_key"))
+                & pl.when(pl.col("_stored_key").is_null())
+                .then(keyless_changed)
+                .otherwise(pl.col("_current_key") != pl.col("_stored_key"))
             )
         )
         .select(source_df.columns)
