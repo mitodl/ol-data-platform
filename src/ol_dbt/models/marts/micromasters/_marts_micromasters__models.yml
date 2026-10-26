@@ -161,6 +161,8 @@ models:
     - not_null
   - name: verified_enrollments
     description: int, count of verified (paid) enrollments in the program's courses.
+      On the total row an enrollment counts once, however many programs its course
+      is in, the same as total_enrollments.
   - name: unique_verified_users
     description: int, count of unique verified users enrolled in the program's courses.
       Email is used to dedupe users accross mitxonline and edxorg so this number might
