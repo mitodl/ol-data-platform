@@ -172,34 +172,51 @@ def test_get_opik_client_caches_after_first_call(
 
 
 class _FakePrompt:
-    def __init__(self, name: str, template: str, version: str) -> None:
+    def __init__(
+        self,
+        name: str,
+        template: str,
+        version: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
         self.name = name
         self.prompt = template
         self.version: str | None = version
         self.commit = None
+        self.metadata = metadata
         self.environments: list[str] | None = None
+
+
+def _created_for(environment: str) -> dict[str, str]:
+    return {opik_auth.CREATED_FOR_METADATA_KEY: environment}
 
 
 class _FakeOpikClient:
     """A Prompt Library with versions and environment pointers, as Opik keeps them.
 
-    existing maps a prompt name to its templates, oldest first, and pointers maps
-    an environment to the version it points at.
+    existing maps a prompt name to its versions, oldest first, each a template or
+    a (template, environment it was created for) pair; pointers maps an
+    environment to the version it points at.
     """
 
     def __init__(
         self,
-        existing: dict[str, list[str]] | None = None,
+        existing: dict[str, list[str | tuple[str, str]]] | None = None,
         pointers: dict[str, str] | None = None,
     ) -> None:
-        self.versions: dict[str, list[_FakePrompt]] = {
-            name: [
-                _FakePrompt(name, template, f"v{number}")
-                for number, template in enumerate(templates, start=1)
-            ]
-            for name, templates in (existing or {}).items()
-        }
+        self.versions: dict[str, list[_FakePrompt]] = {}
+        for name, entries in (existing or {}).items():
+            self.versions[name] = []
+            for number, entry in enumerate(entries, start=1):
+                template, created_for = (
+                    entry if isinstance(entry, tuple) else (entry, None)
+                )
+                metadata = _created_for(created_for) if created_for else None
+                self.versions[name].append(
+                    _FakePrompt(name, template, f"v{number}", metadata)
+                )
         self.registered = {"development", "staging", "production"}
+        self.writes: list[tuple[str, list[str]]] = []
         for environment, version in (pointers or {}).items():
             self.registered.add(environment)
             for prompts in self.versions.values():
@@ -235,19 +252,23 @@ class _FakeOpikClient:
     def get_prompt_history(self, name: str) -> list[_FakePrompt]:
         return list(reversed(self.versions[name]))
 
-    def create_prompt(self, name: str, prompt: str) -> _FakePrompt:
+    def create_prompt(
+        self, name: str, prompt: str, metadata: dict[str, Any] | None = None
+    ) -> _FakePrompt:
         prompts = self.versions.setdefault(name, [])
-        # Opik adds a version only when the text differs from the latest
-        if prompts and prompts[-1].prompt == prompt:
+        # Opik adds a version only when the text or metadata differs from the latest
+        if prompts and (prompts[-1].prompt, prompts[-1].metadata) == (prompt, metadata):
             return prompts[-1]
-        created = _FakePrompt(name, prompt, f"v{len(prompts) + 1}")
+        created = _FakePrompt(name, prompt, f"v{len(prompts) + 1}", metadata)
         prompts.append(created)
         return created
 
     def set_prompt_environments(
         self, prompt_name: str, environments: list[str], *, version: str | None
     ) -> None:
+        """Replace the version's environments, moving each one off its old version"""
         assert set(environments) <= self.registered
+        self.writes.append((prompt_name, list(environments)))
         for prompt in self.versions[prompt_name]:
             if prompt.version == version:
                 prompt.environments = list(environments)
@@ -280,7 +301,7 @@ def test_render_prompt_uses_the_version_its_environment_points_at(
         existing={
             "feedback-summary": [
                 "Prod: {{conversation_text}}",
-                "QA: {{conversation_text}}",
+                ("QA: {{conversation_text}}", "qa"),
             ]
         },
         pointers={"production": "v1", "qa": "v2"},
@@ -298,7 +319,7 @@ def test_render_prompt_uses_the_version_its_environment_points_at(
 def test_render_prompt_new_environment_uses_its_own_default_not_latest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An environment's first read takes its own default, not another's edit"""
+    """An environment's first read adds its own version of its default"""
     fake_client = _FakeOpikClient(
         existing={
             "feedback-summary": [
@@ -317,54 +338,43 @@ def test_render_prompt_new_environment_uses_its_own_default_not_latest(
     assert result == "Summarize: hi"
     assert "qa" in fake_client.registered
     assert fake_client.pointers("feedback-summary") == {"production": "v2", "qa": "v3"}
+    assert fake_client.versions["feedback-summary"][2].metadata == _created_for("qa")
 
 
-def test_render_prompt_claims_an_unscoped_prompt_for_production(
+def test_render_prompt_production_keeps_its_unscoped_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """
-    A prompt from before environment scoping is Production's, so QA reading it
-    first points production at its latest version and takes its own default
+    Production's first read takes the newest version from before environment
+    scoping, even after QA added its own versions
     """
     fake_client = _FakeOpikClient(
         existing={
-            "feedback-summary": [
-                "Old: {{conversation_text}}",
-                "Custom: {{conversation_text}}",
-            ]
-        }
+            "feedback-summary": ["Old: {{x}}", "Custom: {{x}}", ("QA: {{x}}", "qa")]
+        },
+        pointers={"qa": "v3"},
     )
     monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
-
-    qa = opik_auth.render_prompt(
-        "feedback-summary", "Summarize: {{conversation_text}}", conversation_text="hi"
-    )
     monkeypatch.setattr(opik_auth, "PROMPT_ENVIRONMENT", "production")
-    monkeypatch.setattr(opik_auth, "_prompt_environment_registered", False)
-    production = opik_auth.render_prompt(
-        "feedback-summary", "Summarize: {{conversation_text}}", conversation_text="hi"
-    )
 
-    assert (qa, production) == ("Summarize: hi", "Custom: hi")
+    result = opik_auth.render_prompt("feedback-summary", "Default: {{x}}", x="hi")
+
+    assert result == "Custom: hi"
     assert fake_client.pointers("feedback-summary") == {"production": "v2", "qa": "v3"}
 
 
-def test_render_prompt_production_keeps_its_default_over_a_ci_edit(
+def test_render_prompt_production_ignores_a_version_qa_failed_to_claim(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """CI seeding a new prompt and editing it for CI doesn't reach Production"""
-    fake_client = _FakeOpikClient()
+    """A new prompt QA created but never pointed at doesn't reach Production"""
+    fake_client = _FakeOpikClient(existing={"new-prompt": [("QA: {{x}}", "qa")]})
     monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
-    monkeypatch.setattr(opik_auth, "PROMPT_ENVIRONMENT", "ci")
-    opik_auth.render_prompt("new-prompt", "Default: {{x}}", x="hi")
-    edit = fake_client.create_prompt(name="new-prompt", prompt="CI edit: {{x}}")
-    fake_client.set_prompt_environments("new-prompt", ["ci"], version=edit.version)
-
     monkeypatch.setattr(opik_auth, "PROMPT_ENVIRONMENT", "production")
+
     result = opik_auth.render_prompt("new-prompt", "Default: {{x}}", x="hi")
 
     assert result == "Default: hi"
-    assert fake_client.pointers("new-prompt") == {"production": "v1", "ci": "v2"}
+    assert fake_client.pointers("new-prompt") == {"production": "v2"}
 
 
 def test_render_prompt_seeds_opik_when_prompt_missing(
@@ -388,60 +398,80 @@ def test_get_prompt_version_reads_its_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_client = _FakeOpikClient(
-        existing={"feedback-summary": ["a", "b"]}, pointers={"qa": "v1"}
+        existing={"feedback-summary": [("a", "qa"), "b"]}, pointers={"qa": "v1"}
     )
     monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
 
     assert opik_auth.get_prompt_version("feedback-summary") == "v1"
 
 
-def test_publish_prompt_version_adds_a_version_for_new_text(
+def test_publish_prompt_version_adds_its_own_version_for_new_text(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_client = _FakeOpikClient(
-        existing={"extract": ["old"]}, pointers={"production": "v1", "qa": "v1"}
-    )
-    monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
-
-    assert opik_auth.publish_prompt_version("extract", "new") == "v2"
-    assert fake_client.pointers("extract") == {"production": "v1", "qa": "v2"}
-
-
-def test_publish_prompt_version_reuses_an_earlier_identical_version(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """QA going back to Production's text points at v1 rather than adding v3"""
-    fake_client = _FakeOpikClient(
-        existing={"extract": ["prod", "qa branch"]},
+        existing={"extract": ["prod", ("old", "qa")]},
         pointers={"production": "v1", "qa": "v2"},
     )
     monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
 
-    assert opik_auth.publish_prompt_version("extract", "prod") == "v1"
-    assert len(fake_client.versions["extract"]) == 2
-    assert fake_client.pointers("extract") == {"production": "v1", "qa": "v1"}
+    assert opik_auth.publish_prompt_version("extract", "new") == "v3"
+    assert fake_client.pointers("extract") == {"production": "v1", "qa": "v3"}
 
 
-def test_publish_prompt_version_claims_an_unscoped_prompt_for_production(
+def test_publish_prompt_version_reuses_its_own_earlier_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fake_client = _FakeOpikClient(existing={"extract": ["prod"]})
+    """QA going back to text it published before reuses that version"""
+    fake_client = _FakeOpikClient(
+        existing={"extract": [("first", "qa"), ("second", "qa")]}, pointers={"qa": "v2"}
+    )
     monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
 
-    assert opik_auth.publish_prompt_version("extract", "qa branch") == "v2"
-    assert fake_client.pointers("extract") == {"production": "v1", "qa": "v2"}
+    assert opik_auth.publish_prompt_version("extract", "first") == "v1"
+    assert len(fake_client.versions["extract"]) == 2
+    assert fake_client.pointers("extract") == {"qa": "v1"}
+
+
+def test_publish_prompt_version_does_not_share_another_environments_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    QA publishing Production's text gets its own copy, so no write ever names
+    production and a later move of Production's pointer can't be undone by it
+    """
+    fake_client = _FakeOpikClient(
+        existing={"extract": ["prod", ("qa branch", "qa")]},
+        pointers={"production": "v1", "qa": "v2"},
+    )
+    monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
+
+    assert opik_auth.publish_prompt_version("extract", "prod") == "v3"
+    assert fake_client.pointers("extract") == {"production": "v1", "qa": "v3"}
+    assert all(environments == ["qa"] for _, environments in fake_client.writes)
+
+
+def test_point_environment_at_leaves_a_version_another_environment_owns() -> None:
+    fake_client = _FakeOpikClient(
+        existing={"extract": [("prod", "qa")]}, pointers={"production": "v1"}
+    )
+
+    assert not opik_auth._point_environment_at(
+        fake_client, fake_client.versions["extract"][0]
+    )
+    assert fake_client.writes == []
 
 
 def test_publish_prompt_version_keeps_an_unchanged_pointer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_client = _FakeOpikClient(
-        existing={"extract": ["same", "other"]}, pointers={"qa": "v1"}
+        existing={"extract": [("same", "qa"), "other"]}, pointers={"qa": "v1"}
     )
     monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
 
     assert opik_auth.publish_prompt_version("extract", "same") == "v1"
     assert fake_client.pointers("extract") == {"qa": "v1"}
+    assert fake_client.writes == []
 
 
 def test_render_prompt_falls_back_when_opik_call_raises(
