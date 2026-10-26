@@ -1038,11 +1038,12 @@ def test_minor_version_mismatch_stops_before_the_first_file(server: FakeOpenMeta
     assert server.calls == [("GET", "/v1/system/version")]
 
 
+@pytest.mark.parametrize("bump", ["patch", "suffix"])
 def test_patch_version_mismatch_warns_and_syncs(
-    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str], bump: str
 ) -> None:
     major, minor, patch = SNAPSHOT_VERSION.split(".")
-    server.version = f"{major}.{minor}.{int(patch) + 1}"
+    server.version = f"{major}.{minor}.{int(patch) + 1}" if bump == "patch" else f"{SNAPSHOT_VERSION}-SNAPSHOT"
     assert _sync(metrics_dir) is False
     out = " ".join(capsys.readouterr().out.split())
     assert f"OpenMetadata is {server.version} but the CreateMetric snapshot is from {SNAPSHOT_VERSION}" in out

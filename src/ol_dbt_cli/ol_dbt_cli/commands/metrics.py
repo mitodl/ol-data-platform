@@ -154,7 +154,7 @@ def _check_server_version(client: OpenMetadataClient) -> None:
         sys.exit(1)
     console.print(
         f"[yellow]{'version'.ljust(_LABEL_WIDTH)}[/]OpenMetadata is {escape(server)} but the CreateMetric snapshot "
-        f"is from {escape(snapshot)}, a patch release apart, so sync goes on. {refresh}."
+        f"is from {escape(snapshot)}, the same major and minor version, so sync goes on. {refresh}."
     )
 
 
