@@ -653,6 +653,25 @@ posthog_staging_schedule = ScheduleDefinition(
 # program (checked 2026-09-22: 23 retired, 2 unpublished) and dlt creates no
 # table from an empty load. Building it would fail the whole job every day.
 AWAITING_RAW_TABLE = {"stg__edxorg__discovery__api__programs"}
+
+# The OCW content files, from staging to the two Learn views that read them.
+# ocw_content_publish_sensor (data_loading) loads a course a few minutes after
+# it is published, but staging was built only by non_airbyte_staging_daily, so
+# the publish reached Learn after the next day's 06:00 build and the automation
+# tick after it. ocw_learn_automation_sensor builds these on the tick after any
+# ocw_content load, sweep or scoped. Every model here is unpartitioned, so a
+# tick evaluates five conditions, not one per course.
+OCW_LEARN_MODELS = (
+    "stg__ocw__s3__course_content",
+    "int__ocw__live_courses",
+    "int__ocw__content_files",
+    "integrations__learn__ocw_courses",
+    "integrations__learn__ocw_content_files",
+)
+ocw_learn_selection = build_dbt_asset_selection(
+    [full_dbt_project], dbt_select=" ".join(OCW_LEARN_MODELS)
+)
+
 non_airbyte_staging_models = sorted(
     staging_models_reading(
         json.loads(dbt_project.manifest_path.read_text()),
@@ -660,6 +679,9 @@ non_airbyte_staging_models = sorted(
     )
     - {POSTHOG_STAGING_MODEL}
     - AWAITING_RAW_TABLE
+    # Where ocw_learn_automation_sensor builds it, a daily build here would
+    # rebuild staging and the Learn views a second time for the same load.
+    - (set(OCW_LEARN_MODELS) if DBT_AUTOMATION_ENABLED else set())
 )
 non_airbyte_staging_schedules = (
     [
@@ -690,7 +712,8 @@ non_airbyte_staging_schedules = (
 
 # MIT Learn's warehouse-pull tasks read these views, and pointing them at QA
 # (WAREHOUSE_CATALOG/WAREHOUSE_SCHEMA) is how a Cohort 1 source gets rehearsed
-# before its cutover. Production builds them through dbt_automation_sensor; QA
+# before its cutover. Production builds them through dbt_automation_sensor (the
+# OCW ones through ocw_learn_automation_sensor); QA
 # has no automation, so without this ol_warehouse_qa_integrations stays empty.
 #
 # Selects the models tagged qa_scheduled (the Learn views whose every QA raw
@@ -872,12 +895,31 @@ defs = Definitions(
             #
             # Where automation is off the question does not arise: no asset
             # carries a condition, so there is nothing to synthesize over.
+            #
+            # The OCW Learn models are ocw_learn_automation_sensor's. An asset
+            # belongs to one automation sensor, so they are taken out here.
             target=(
                 AssetSelection.assets(full_dbt_project)
                 - AssetSelection.groups("staging")
+                - ocw_learn_selection
             )
             | AssetSelection.groups("superset_dataset")
             | AssetSelection.groups("superset_starrocks_dataset"),
+        ),
+        AutomationConditionSensorDefinition(
+            "ocw_learn_automation_sensor",
+            # Raw moves its data version on every ocw_content run, so staging is
+            # requested on the next tick, and the models below it on the same
+            # tick through any_deps_updated's will_be_requested: one dbt run per
+            # load. A scoped load lands within a 5-minute poll plus 2-minute
+            # settle of the publish, so a 1-minute tick adds little to that.
+            minimum_interval_seconds=60,
+            default_status=(
+                DefaultSensorStatus.RUNNING
+                if DBT_AUTOMATION_ENABLED
+                else DefaultSensorStatus.STOPPED
+            ),
+            target=ocw_learn_selection,
         ),
     ],
     jobs=[
