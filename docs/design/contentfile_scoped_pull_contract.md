@@ -358,6 +358,14 @@ model, both OCW intermediates and both Learn views (`integrations__learn__ocw_co
 any `ocw_content` load. Telling Learn a course changed is the sender this section is about, which is
 still not built; Learn picks up the rebuilt views on its own sync schedule.
 
+`int__ocw__live_courses` keeps a course only when ocw-studio's database has a site at its path with no
+`unpublish_status`, and that database reaches staging through the Airbyte sync. ocw-studio sets
+`url_path` on a site's first publish request (draft or live) and clears `unpublish_status` on a live
+publish request. So a course whose first publish is a live one, or a course republished after an
+unpublish, stays out of the views until the next ocw-studio staging build, and the sensor rebuilds
+the views on the tick after it. That build ran at 00:08, 06:06 and 18:06 UTC on 2026-10-25, so the
+wait can be up to 12 hours. Updates to a course that is already published are not affected.
+
 Unpublish is unchanged: the platform learns of it from the sweep, up to a day late. Learn's own
 webhook still unpublishes immediately.
 
