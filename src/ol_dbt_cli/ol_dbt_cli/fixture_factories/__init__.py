@@ -50,6 +50,16 @@ class body: factory_boy would read them as columns. Default counts are tens of
 rows per table, enough for the dbt tests to have something to fail on. Volume
 comes from ``scale`` and nowhere else.
 
+A table has one factory and its subclasses: ``@table`` refuses a second
+factory of a table that does not subclass the first, whose keys would count
+from the same start. Values come from ``value`` and ``draw``, which refuse a
+mimesis provider that can make up a real hostname, IP address or phone number
+or whose rows change with the date, and ``@table`` refuses a ``factory.Faker``
+column, which neither sees. A column that needs an address takes one from a
+reserved range by hand (e.g. ``192.0.2.0/24``, ``555-0100``). Not checked: a
+subclass not passed through ``@table``, the factory a ``factory.SubFactory``
+builds, and what a ``LazyFunction`` calls.
+
 :mod:`ol_dbt_cli.lib.fixture_generation` holds what the packages share (seeded
 values, parent columns, per-table sequences, the draws ``generate`` wires
 tables with) and :func:`~ol_dbt_cli.lib.fixture_generation.generate_rows`,
