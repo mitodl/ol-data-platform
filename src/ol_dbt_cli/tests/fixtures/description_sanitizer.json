@@ -113,6 +113,14 @@
     {
       "description": "<!-- comment --> text",
       "stored": " text"
+    },
+    {
+      "description": "A learner's <#E::table::x.y>",
+      "stored": "A learner's <#E::table::x.y>"
+    },
+    {
+      "description": "A learner's <#E::table::x.y> and <b>b</b>",
+      "stored": "A learner&#39;s <#E::table::x.y> and <b>b</b>"
     }
   ]
 }

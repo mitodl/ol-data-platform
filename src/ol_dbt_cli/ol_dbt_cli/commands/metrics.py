@@ -278,10 +278,10 @@ def _sync_one(
         console.print(
             f"[yellow]rewritten[/] {name}: OpenMetadata stored the description as "
             f"{escape(repr(current.get('description')))}, which differs from the file's, so every sync will PATCH "
-            "it again. Its sanitizer runs on any description with a `<`: it drops markup it does not allow and "
-            "rewrites some markup it keeps, e.g. `<br>` becomes `<br />`, an `<https://...>` autolink is dropped, "
-            "and `x<y` loses everything from `<y`. Change the file to what OpenMetadata stored, or write a "
-            "literal `<` as `&lt;`."
+            "it again. Its sanitizer runs on any description with a `<` outside its `<#E::...>` entity links: it "
+            "drops markup it does not allow and control characters, and rewrites some markup it keeps, e.g. `<br>` "
+            "becomes `<br />`, an `<https://...>` autolink is dropped, and `x<y` loses everything from `<y`. Change "
+            "the file to what OpenMetadata stored, or write a literal `<` as `&lt;`."
         )
     if stored_name is not None:
         _report_display_name(name, body.get("displayName"), stored_name)

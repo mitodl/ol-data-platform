@@ -42,11 +42,13 @@ definition fixed). Moved out with no file change, a file that says Approved
 shows status drift, and ``--force`` would approve it again.
 
 The server stores ``DescriptionSanitizer.sanitize(description)`` on create,
-PUT and PATCH. In 2.0.6 a description with no ``<`` is stored as written. Any
-other goes through the OWASP HTML sanitizer, which drops markup it does not
-allow, rewrites some it keeps (``<br>`` as ``<br />``), reads a bare ``<`` as
-the start of a tag (``x<y`` loses everything from ``<y``) and re-encodes
-``& < > " ' + = @ ` `` in text as entities (``learner's`` as
+PUT and PATCH. In 2.0.6 a description with no ``<`` outside its ``<#E::...>``
+entity links is stored as written (``sanitizeWith`` sets the links aside
+before it looks for a ``<``). Any other goes through the OWASP HTML sanitizer,
+which keeps the entity links, drops markup it does not allow and control
+characters, rewrites some markup it keeps (``<br>`` as ``<br />``), reads a
+bare ``<`` as the start of a tag (``x<y`` loses everything from ``<y``) and
+re-encodes ``& < > " ' + = @ ` `` in text as entities (``learner's`` as
 ``learner&#39;s``). 2.0.5 sanitized every description, so a metric written
 before the upgrade can hold entities without markup. Descriptions are
 therefore compared after unescaping both sides; dropped or rewritten markup

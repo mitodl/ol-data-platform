@@ -2,16 +2,17 @@
 
 The stand-in replaces only ``OpenMetadataClient.request``, so name lookups,
 404 handling and the command's ordering run as they would against a server.
-Its PUT and PATCH follow what the OpenMetadata 2.0.5 source does for a bot
-(see ``ol_dbt_cli.lib.metric_sync``); that behaviour is not checked against a
-live server here. A PATCH that changes nothing records no version, and a PATCH
+Its PUT and PATCH follow what the OpenMetadata source does for a bot, which
+2.0.6 leaves as 2.0.5 had it (see ``ol_dbt_cli.lib.metric_sync``); that
+behaviour is not checked against a live server here. A PATCH that changes nothing records no version, and a PATCH
 by whoever wrote the current version folds into it, as the server does for one
 user within its session timeout (``EntityUpdater.consolidateChanges``, every
 call here being within it).
 
 The stand-in stores a description the way OpenMetadata 2.0.6's
-``DescriptionSanitizer.sanitize`` does: text with no ``<`` as written, anything
-else as ``fixtures/description_sanitizer.json`` says the sanitizer stores it.
+``DescriptionSanitizer.sanitize`` does: text with no ``<`` outside its
+``<#E::...>`` entity links as written, anything else as
+``fixtures/description_sanitizer.json`` says the sanitizer stores it.
 That file is real sanitizer output, not a model of it, so the tests do not
 check ``same_description`` against its own ``html.unescape``. It was produced
 on 2026-10-26 by compiling ``DescriptionSanitizer.java`` from the
@@ -22,7 +23,7 @@ input. The same inputs were then written to a throwaway metric on QA
 OpenMetadata (2.0.6, revision a695261b, the same build as production) by
 create and PATCH, and every stored description matched the compiled output.
 After an OpenMetadata upgrade, regenerate it the same way and add any
-description a test sends that holds a ``<``.
+description a test sends that holds a ``<`` outside an entity link.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ import copy
 import dataclasses
 import io
 import json
+import re
 import shutil
 import urllib.error
 from pathlib import Path
@@ -64,6 +66,9 @@ STARROCKS_VIEWS = sorted({i.binding.target for m in load_metrics(FIXTURES) for i
 SNAPSHOT_VERSION = json.loads(SCHEMA_SNAPSHOT.read_text())[SCHEMA_VERSION_KEY]
 # DescriptionSanitizer.sanitize of each description with markup the tests send
 # (see the module docstring).
+# DescriptionSanitizer.ENTITY_LINK_PATTERN: sanitizeWith swaps each entity link
+# for a placeholder before it checks for a "<".
+ENTITY_LINK = re.compile(r"<#E::[^<>]+>")
 SANITIZER_CASES = json.loads((Path(__file__).parent / "fixtures" / "description_sanitizer.json").read_text())["cases"]
 SANITIZED = {case["description"]: case["stored"] for case in SANITIZER_CASES}
 TIER1 = {"tagFQN": "Tier.Tier1", "source": "Classification", "labelType": "Manual", "state": "Confirmed"}
@@ -79,7 +84,7 @@ TEAM_REF = [{"id": "team-1", "type": "team"}]
 
 def _sanitize(description: str | None) -> str | None:
     """Store a description the way OpenMetadata 2.0.6 does (DescriptionSanitizer.sanitize)."""
-    if description is None or "<" not in description:
+    if description is None or "<" not in ENTITY_LINK.sub("", description):
         return description
     return SANITIZED[description]
 
@@ -115,7 +120,7 @@ def _manifest() -> ManifestRegistry:
 
 
 class FakeOpenMetadata(OpenMetadataClient):
-    """Holds metrics in memory and applies a bot's PUT and PATCH the way OpenMetadata 2.0.5 does."""
+    """Holds metrics in memory and applies a bot's PUT and PATCH the way OpenMetadata does (unchanged in 2.0.6)."""
 
     def __init__(self) -> None:
         """Start with no metrics, one team, one glossary term and the progress model's table."""
@@ -466,6 +471,8 @@ def test_a_metric_without_a_display_name_gets_the_files(server: FakeOpenMetadata
 QUOTED_DESCRIPTION = 'A learner\'s "active" enrollments, counted once per run.'
 # With a "<", the sanitizer runs and entity-encodes the apostrophe.
 MARKUP_QUOTED_DESCRIPTION = "A learner's <em>active</em> enrollments, counted once per run."
+# An entity link's "<" does not count, so the sanitizer does not run and the apostrophe stays.
+ENTITY_LINK_DESCRIPTION = "A learner's <#E::table::x.y>"
 
 
 @pytest.mark.parametrize(
@@ -473,6 +480,7 @@ MARKUP_QUOTED_DESCRIPTION = "A learner's <em>active</em> enrollments, counted on
     [
         (QUOTED_DESCRIPTION, QUOTED_DESCRIPTION),
         (MARKUP_QUOTED_DESCRIPTION, "A learner&#39;s <em>active</em> enrollments, counted once per run."),
+        (ENTITY_LINK_DESCRIPTION, ENTITY_LINK_DESCRIPTION),
     ],
 )
 def test_a_description_stored_as_written_or_only_encoded_is_not_patched_again(
@@ -1015,7 +1023,7 @@ REWRITTEN = {
 @pytest.mark.parametrize("case", SANITIZER_CASES, ids=lambda case: repr(case["description"])[:40])
 def test_descriptions_compare_equal_exactly_when_the_sanitizer_only_encoded_them(case: dict[str, str]) -> None:
     description, stored = case["description"], case["stored"]
-    if "<" not in description:
+    if "<" not in ENTITY_LINK.sub("", description):
         # OpenMetadata 2.0.6 skips the sanitizer for these, which _sanitize relies on.
         assert stored == description
     assert same_description(stored, description) is (description not in REWRITTEN)

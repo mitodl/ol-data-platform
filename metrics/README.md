@@ -213,11 +213,12 @@ it would PATCH. It is not part of the drift check, and a file cannot set it
 (`extension` is not allowed).
 
 An unchanged file writes only the lineage edges, which OpenMetadata upserts.
-OpenMetadata 2.0.6 stores a description with no `<` as written. One with a `<`
-goes through its HTML sanitizer, which encodes the text (`learner's` as
-`learner&#39;s`), drops markup it does not allow and rewrites some it keeps
-(`<br>` as `<br />`; an `<https://...>` autolink is dropped; `x<y` loses
-everything from `<y`). Sync compares descriptions with the encoding undone, so
+OpenMetadata 2.0.6 stores a description with no `<` as written, not counting
+the `<` of an entity link (`<#E::...>`), which it sets aside first. Any other
+description goes through its HTML sanitizer, which encodes the text
+(`learner's` as `learner&#39;s`), drops markup it does not allow and control
+characters, and rewrites some markup it keeps (`<br>` as `<br />`; an
+`<https://...>` autolink is dropped; `x<y` loses everything from `<y`). Sync compares descriptions with the encoding undone, so
 encoding alone is not a difference. Dropped or rewritten markup is: sync prints
 a `rewritten` line with what OpenMetadata stored, and PATCHes the description
 again on every run until the file matches it (or writes a literal `<` as
