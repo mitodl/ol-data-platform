@@ -926,3 +926,49 @@ retired:
     keeps only the newest copy of a re-materialized structure, so earlier
     copies of 946 files exist only in this table. They were not backfilled.
     The table stays in place, read-only.
+- deployment: mitx
+  layer: api
+  raw_tables:
+  - raw__mitx__openedx__api__course_structure
+  retired_on: '2026-10-26'
+  reason: >-
+    Nothing reads it. No dbt source declared it, and
+    stg__mitxresidential__openedx__api__course_structure reads
+    raw__mitx__openedx__api__course_structure_blocks, which the same Dagster asset
+    run writes from the same structure document, one row per block. Galaxy query
+    history from 2026-09-26 to 2026-10-26 shows only OpenMetadata's metadata bot
+    reading it. Airbyte loaded it until 2026-10-26 as the last stream of "S3 MITx
+    Open edX Extracts → S3 Data Lake", and that connection is deleted with this
+    retirement. The landing files under mitx/openedx/processed_data/course_structure/
+    stay in S3, and the table stays in place, read-only.
+- deployment: mitxonline
+  layer: api
+  raw_tables:
+  - raw__mitxonline__openedx__api__course_structure
+  retired_on: '2026-10-26'
+  reason: >-
+    Nothing reads it. Its dbt source declaration had no source() caller, and
+    stg__mitxonline__openedx__api__course_structure reads
+    raw__mitxonline__openedx__api__course_structure_blocks, which the same Dagster
+    asset run writes from the same structure document, one row per block. Galaxy
+    query history from 2026-09-26 to 2026-10-26 shows only OpenMetadata's metadata
+    bot reading it. Airbyte loaded it until 2026-10-26 as the last stream of "S3
+    MITx Online Open edX Extracts → S3 Data Lake", and that connection is deleted
+    with this retirement. The landing files under
+    mitxonline/openedx/processed_data/course_structure/ stay in S3, and the table
+    stays in place, read-only.
+- deployment: xpro
+  layer: api
+  raw_tables:
+  - raw__xpro__openedx__api__course_structure
+  retired_on: '2026-10-26'
+  reason: >-
+    Nothing reads it. Its dbt source declaration had no source() caller, and
+    stg__mitxpro__openedx__api__course_structure reads
+    raw__xpro__openedx__api__course_structure_blocks, which the same Dagster asset
+    run writes from the same structure document, one row per block. Galaxy query
+    history from 2026-09-26 to 2026-10-26 shows only OpenMetadata's metadata bot
+    reading it. Airbyte loaded it until 2026-10-26 as the last stream of "S3 xPRO
+    Open edX Extracts → S3 Data Lake", and that connection is deleted with this
+    retirement. The landing files under xpro/openedx/processed_data/course_structure/
+    stay in S3, and the table stays in place, read-only.
