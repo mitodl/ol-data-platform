@@ -1,13 +1,23 @@
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
 from typing import Any, Self
 
-from dagster import Failure
+from dagster import AssetExecutionContext, AssetKey, Failure
 from dagster._annotations import beta
 from dagster_airbyte.resources import AirbyteClient, AirbyteWorkspace
-from dagster_airbyte.translator import AirbyteJob, AirbyteJobStatusType
+from dagster_airbyte.translator import (
+    AirbyteConnectionTableProps,
+    AirbyteJob,
+    AirbyteJobStatusType,
+    AirbyteMetadataSet,
+)
+from dagster_airbyte.utils import (
+    get_airbyte_connection_table_name,
+    get_translator_from_airbyte_assets,
+)
 from dagster_shared.utils.cached_method import cached_method
 from ol_orchestrate.lib.http_errors import RETRYABLE_CLIENT_ERRORS
 from pydantic.fields import Field, PrivateAttr
@@ -43,6 +53,142 @@ LISTING_ATTEMPTS = 4
 # How much of a 4xx response body is carried into the Failure. Airbyte's problem
 # responses are a few hundred characters; an ingress error page is not.
 REFUSAL_BODY_MAX_CHARS = 500
+
+
+SYNC_JOB_TYPE = "sync"
+
+
+@dataclass(frozen=True)
+class JobStats:
+    """What a finished Airbyte job's stats say it read, None where they do not.
+
+    :ivar streams: The job's ``streamAggregatedStats`` entries.
+    :ivar attempts: The job's attempt reads (``attempts[].attempt``).
+    """
+
+    streams: Sequence[Mapping[str, Any]] | None = None
+    attempts: Sequence[Mapping[str, Any]] | None = None
+
+    @classmethod
+    def from_job_info(cls, job_info: object) -> Self:
+        """Read a ``jobs/get_without_logs`` response, taking nothing on trust.
+
+        The shape comes from airbyte-platform 2.0.0's API, the last public one,
+        and the sync this follows has already succeeded, so anything not shaped
+        as expected is left unknown rather than raised on.
+        """
+        if not isinstance(job_info, Mapping):
+            return cls()
+        job = job_info.get("job")
+        streams = job.get("streamAggregatedStats") if isinstance(job, Mapping) else None
+        if not isinstance(streams, list) or not all(
+            isinstance(entry, Mapping) for entry in streams
+        ):
+            streams = None
+        infos = job_info.get("attempts")
+        attempts = (
+            [info.get("attempt") for info in infos]
+            if isinstance(infos, list)
+            and all(isinstance(info, Mapping) for info in infos)
+            else None
+        )
+        if attempts is not None and not all(
+            isinstance(attempt, Mapping) for attempt in attempts
+        ):
+            attempts = None
+        return cls(streams=streams, attempts=attempts)
+
+
+def _count(value: object) -> int | None:
+    # JSON true/false decode to bool, which isinstance treats as int.
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _attempt_read_nothing(attempt: Mapping[str, Any], stream_name: str) -> bool:
+    """Say whether one attempt's own sync summary shows the stream read nothing.
+
+    ``totalStats`` and ``streamStats`` come from the attempt's sync summary and
+    are null when it has none (``JobConverter.getAttemptRead``). Either a total
+    of 0 for the attempt, or the stream's one entry with 0, is evidence.
+    """
+    total = attempt.get("totalStats")
+    if isinstance(total, Mapping) and _count(total.get("recordsEmitted")) == 0:
+        return True
+    stream_stats = attempt.get("streamStats")
+    if not isinstance(stream_stats, list) or not all(
+        isinstance(entry, Mapping) for entry in stream_stats
+    ):
+        return False
+    entries = [
+        entry for entry in stream_stats if entry.get("streamName") == stream_name
+    ]
+    if len(entries) != 1:
+        return False
+    counts = entries[0].get("stats")
+    return isinstance(counts, Mapping) and _count(counts.get("recordsEmitted")) == 0
+
+
+@dataclass(frozen=True)
+class StreamSync:
+    """What one stream of a finished Airbyte job read.
+
+    A count is None when the job's stats do not say (see ``records_read``).
+    """
+
+    asset_key: AssetKey
+    spec_metadata: Mapping[str, Any]
+    description: str
+    job_id: int
+    job_type: object
+    job_started_at: datetime | None
+    sync_mode: str
+    records_emitted: int | None
+    records_committed: int | None
+
+    @property
+    def metadata(self) -> dict[str, Any]:
+        """The stream's asset metadata, plus the job and what it read."""
+        counts = {
+            "airbyte_records_emitted": self.records_emitted,
+            "airbyte_records_committed": self.records_committed,
+        }
+        return {
+            **self.spec_metadata,
+            "airbyte_job_id": self.job_id,
+            "airbyte_job_type": str(self.job_type),
+            "airbyte_sync_mode": self.sync_mode,
+            **{key: count for key, count in counts.items() if count is not None},
+        }
+
+
+def records_read(stats: JobStats, stream_name: str) -> tuple[int | None, int | None]:
+    """Return a stream's records emitted and committed, or None where unknown.
+
+    A positive count on the stream's one ``streamAggregatedStats`` entry is
+    read as it is. A 0 there is not proof: Airbyte builds that entry by adding
+    up attempt stats with a null count taken as 0 (``StatsAggregationHelper``),
+    and an attempt whose stats are missing adds nothing. So 0 needs every
+    attempt of the job to show it, through a ``totalStats.recordsEmitted`` of 0
+    or the stream's one ``streamStats`` entry with 0. That also keeps a
+    resumed refresh, whose last attempt read nothing after an earlier one read
+    the rows, from reading as empty. Anything else is unknown.
+
+    :param stats: The job's stats.
+    :param stream_name: The stream to count.
+    :returns: ``(records_emitted, records_committed)``.
+    """
+    entries = [
+        entry for entry in stats.streams or [] if entry.get("streamName") == stream_name
+    ]
+    if len(entries) == 1:
+        emitted = _count(entries[0].get("recordsEmitted"))
+        if emitted is not None and emitted > 0:
+            return emitted, _count(entries[0].get("recordsCommitted"))
+    if stats.attempts and all(
+        _attempt_read_nothing(attempt, stream_name) for attempt in stats.attempts
+    ):
+        return 0, 0
+    return None, None
 
 
 @beta
@@ -183,6 +329,27 @@ class AirbyteOSSClient(AirbyteClient):
             "page boundary would be missing from the result."
         )
         raise Failure(description=msg)
+
+    def get_job_stats(self, job_id: int) -> JobStats:
+        """Return what the job's stats say each stream, and the job, read.
+
+        The REST API's job read carries only the job-wide ``rowsSynced``, which
+        cannot say which stream of a connection read nothing. The configuration
+        API's ``jobs/get_without_logs`` hydrates ``streamAggregatedStats`` and
+        returns each attempt's own ``totalStats`` and ``streamStats``;
+        ``jobs/get_light`` does neither.
+
+        :param job_id: The Airbyte job to read.
+        :returns: The stats, with whatever the response does not hold as None.
+        :raises Failure: When the request is refused or its retries run out.
+        """
+        return JobStats.from_job_info(
+            self._single_request(
+                method="POST",
+                url=f"{self.configuration_api_base_url}/jobs/get_without_logs",
+                data={"id": job_id},
+            )
+        )
 
     def get_connections(self) -> Sequence[Mapping[str, Any]]:
         """List the workspace's connections, each exactly once.
@@ -343,3 +510,91 @@ class AirbyteOSSWorkspace(AirbyteWorkspace):
             configuration_api_base_url=self.configuration_api_base_url
             or f"{self.api_server}/api/{AIRBYTE_CONFIGURATION_API_VERSION}",
         )
+
+    def sync_streams(self, context: AssetExecutionContext) -> Iterator[StreamSync]:
+        """Sync the asset's connection and describe what each stream read.
+
+        The library's ``sync_and_poll`` reports every selected stream as
+        materialized whether it read a million rows or none, and keeps the job
+        id to itself. A full refresh stream whose source stopped returning rows
+        therefore succeeded nightly while its table stayed frozen (Global
+        Alumni's api_enrollments, an append stream, from 2026-05-04). This runs
+        the same sync and pairs each stream with its sync mode, record counts
+        and the job's start time.
+
+        Once the sync has succeeded nothing here raises on what the stats
+        lookup returns: a failed or unreadable lookup leaves the counts unknown,
+        so the streams are still reported as materialized.
+
+        :param context: The execution context of the connection's multi-asset.
+        :returns: One entry per stream the connection syncs, in catalog order,
+            whether or not its asset is selected (Airbyte syncs them all).
+        """
+        assets_def = context.assets_def
+        translator = get_translator_from_airbyte_assets(assets_def)
+        connection_id = next(
+            AirbyteMetadataSet.extract(spec.metadata).connection_id
+            for spec in assets_def.specs
+        )
+        client = self.get_client()
+        output = client.sync_and_poll(connection_id=connection_id)
+        job_id = output.job_details["jobId"]
+        started = output.job_details.get("startTime")
+        job_started_at = (
+            datetime.fromisoformat(started) if isinstance(started, str) else None
+        )
+        try:
+            job_stats = client.get_job_stats(job_id)
+        except Failure as error:
+            context.log.warning(
+                "Could not read the stats of Airbyte job %s, so what each stream "
+                "read is unknown: %s",
+                job_id,
+                error.description,
+            )
+            job_stats = JobStats()
+        connection = output.connection_details
+        prefix = connection.get("prefix")
+
+        # Keyed by name, last one winning, as AirbyteConnection.from_connection_details
+        # does: the asset specs were built that way, so one name in two
+        # namespaces is one asset.
+        streams = {
+            stream["stream"]["name"]: stream
+            for stream in connection["syncCatalog"]["streams"]
+        }
+        for stream in streams.values():
+            if not stream["config"].get("selected", False):
+                continue
+            name = stream["stream"]["name"]
+            table_name = get_airbyte_connection_table_name(
+                stream_prefix=prefix, stream_name=name
+            )
+            spec = translator.get_asset_spec(
+                AirbyteConnectionTableProps(
+                    table_name=table_name,
+                    stream_prefix=prefix,
+                    stream_name=name,
+                    json_schema=stream["stream"].get("jsonSchema", {}),
+                    connection_id=connection_id,
+                    connection_name=connection["name"],
+                    destination_type=None,
+                    database=None,
+                    schema=None,
+                )
+            )
+            records_emitted, records_committed = records_read(job_stats, name)
+            yield StreamSync(
+                asset_key=spec.key,
+                spec_metadata=spec.metadata,
+                description=(
+                    f"Table generated via Airbyte sync for connection "
+                    f"{connection['name']}: {table_name}"
+                ),
+                job_id=job_id,
+                job_type=output.job_details.get("jobType"),
+                job_started_at=job_started_at,
+                sync_mode=stream["config"]["syncMode"],
+                records_emitted=records_emitted,
+                records_committed=records_committed,
+            )

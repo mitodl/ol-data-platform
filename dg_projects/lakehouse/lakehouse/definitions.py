@@ -4,6 +4,7 @@ import json
 import os
 import re
 from datetime import timedelta
+from functools import partial
 
 from dagster import (
     AssetSelection,
@@ -21,7 +22,6 @@ from dagster import (
 from dagster_airbyte import (
     AirbyteConnectionTableProps,
     DagsterAirbyteTranslator,
-    build_airbyte_assets_definitions,
 )
 from dagster_dbt import (
     DbtCliResource,
@@ -84,6 +84,7 @@ from lakehouse.assets.superset import (
     build_superset_dataset_assets,
     superset_dataset_keys,
 )
+from lakehouse.lib.airbyte_assets import build_airbyte_assets, raw_table_record_count
 from lakehouse.lib.contract_freshness import (
     build_freshness_checks,
     contract_freshness_bounds,
@@ -156,6 +157,14 @@ airbyte_host_map = {
 }
 
 airbyte_host = os.environ.get("DAGSTER_AIRBYTE_HOST", airbyte_host_map[DAGSTER_ENV])
+
+# The Glue database each Airbyte deployment above writes its raw tables to.
+airbyte_raw_database_map = {
+    "dev": "ol_warehouse_qa_raw",
+    "ci": "ol_warehouse_qa_raw",
+    "qa": "ol_warehouse_qa_raw",
+    "production": "ol_warehouse_production_raw",
+}
 
 # Allow skipping Airbyte loading for local development
 # Set SKIP_AIRBYTE=1 to disable Airbyte connection and asset loading
@@ -270,11 +279,14 @@ try:
         )
         airbyte_assets = []
     else:
-        airbyte_assets = build_airbyte_assets_definitions(
+        airbyte_assets = build_airbyte_assets(
             workspace=airbyte_workspace,
             dagster_airbyte_translator=OLAirbyteTranslator(),
             connection_selector_fn=(
                 lambda conn: conn.name.lower().endswith("s3 data lake")
+            ),
+            destination_record_count=partial(
+                raw_table_record_count, airbyte_raw_database_map[DAGSTER_ENV]
             ),
         )
 except Exception as e:  # noqa: BLE001

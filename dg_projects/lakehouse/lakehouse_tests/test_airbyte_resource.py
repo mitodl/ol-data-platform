@@ -20,6 +20,8 @@ from lakehouse.resources.airbyte import (
     LISTING_ATTEMPTS,
     AirbyteOSSClient,
     AirbyteOSSWorkspace,
+    JobStats,
+    records_read,
 )
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import HTTPError
@@ -96,6 +98,182 @@ def test_explicit_base_urls_win_over_the_derived_ones() -> None:
 
     assert client.rest_api_base_url == "https://proxy.example.invalid/public"
     assert client.configuration_api_base_url == "https://proxy.example.invalid/config"
+
+
+def _attempt(
+    attempt_id: int,
+    status: str = "succeeded",
+    total: object = None,
+    streams: dict[str, object] | None = None,
+) -> dict[str, Any]:
+    attempt: dict[str, Any] = {"id": attempt_id, "status": status}
+    if total is not None:
+        attempt["totalStats"] = {"recordsEmitted": total}
+    if streams is not None:
+        attempt["streamStats"] = [
+            {"streamName": name, "stats": {"recordsEmitted": emitted}}
+            for name, emitted in streams.items()
+        ]
+    return {"attempt": attempt}
+
+
+class TestJobStats:
+    @pytest.fixture
+    def requests_made(self, monkeypatch) -> list[tuple[str, str, Any]]:
+        made: list[tuple[str, str, Any]] = []
+        self.answer: Any = {}
+
+        def single_request(_self, method, url, data=None, **_):
+            made.append((method, url, data))
+            return self.answer
+
+        monkeypatch.setattr(AirbyteOSSClient, "_single_request", single_request)
+        return made
+
+    def test_stats_come_from_the_configuration_api(self, client, requests_made) -> None:
+        """The REST job read has only the job-wide rowsSynced, and get_light
+        leaves streamAggregatedStats unhydrated.
+        """
+        streams = [
+            {"streamName": "api_enrollments", "recordsEmitted": 0},
+            {"streamName": "users", "recordsEmitted": 12},
+        ]
+        attempts = [_attempt(0, "failed"), _attempt(1, total=12)]
+        self.answer = {
+            "job": {"id": 60322, "streamAggregatedStats": streams},
+            "attempts": attempts,
+        }
+        stats = client.get_job_stats(60322)
+        assert requests_made == [
+            (
+                "POST",
+                "https://airbyte.example.invalid/api/v1/jobs/get_without_logs",
+                {"id": 60322},
+            )
+        ]
+        assert stats == JobStats(
+            streams=streams, attempts=[info["attempt"] for info in attempts]
+        )
+
+    @pytest.mark.usefixtures("requests_made")
+    @pytest.mark.parametrize(
+        "answer",
+        [
+            None,
+            [],
+            "ok",
+            {"id": 1},
+            {"job": None},
+            {"job": {"id": 1}},
+            {"job": {"id": 1, "streamAggregatedStats": None}},
+            {"job": {"id": 1, "streamAggregatedStats": {"users": {}}}},
+            {"job": {"id": 1, "streamAggregatedStats": [{"streamName": "a"}, "b"]}},
+            {"attempts": [_attempt(0, total=0), "x"]},
+            {"attempts": [{"attempt": None}]},
+            {"attempts": {"0": _attempt(0, total=0)}},
+        ],
+    )
+    def test_a_response_of_another_shape_is_unknown(self, client, answer) -> None:
+        """The sync has succeeded by now, so an odd body must not raise."""
+        self.answer = answer
+        assert client.get_job_stats(1) == JobStats()
+
+
+def _stats(streams: Any = None, attempts: Any = None) -> JobStats:
+    return JobStats.from_job_info(
+        {
+            "job": {"streamAggregatedStats": streams},
+            "attempts": attempts,
+        }
+    )
+
+
+class TestRecordsRead:
+    """A positive aggregate is a count; a 0 needs every attempt to show it.
+
+    Airbyte builds streamAggregatedStats by adding attempt stats with a null
+    recordsEmitted taken as 0, so an aggregate 0 proves nothing on its own.
+    """
+
+    AGGREGATES = [  # noqa: RUF012
+        {"streamName": "enrollments", "recordsEmitted": 0, "recordsCommitted": 0},
+        {"streamName": "users", "recordsEmitted": 12, "recordsCommitted": 11},
+        {"streamName": "nulls", "recordsEmitted": None, "recordsCommitted": None},
+        {"streamName": "twice", "streamNamespace": "a", "recordsEmitted": 1},
+        {"streamName": "twice", "streamNamespace": "b", "recordsEmitted": 0},
+    ]
+
+    def test_a_positive_aggregate_is_read_as_it_is(self) -> None:
+        """Even when every attempt's total is 0, as a resumed attempt can be."""
+        stats = _stats(self.AGGREGATES, [_attempt(0, total=0)])
+        assert records_read(stats, "users") == (12, 11)
+
+    @pytest.mark.parametrize("name", ["enrollments", "nulls", "absent", "twice"])
+    def test_without_attempt_evidence_it_is_unknown(self, name) -> None:
+        stats = _stats(self.AGGREGATES, [_attempt(0, total=13)])
+        assert records_read(stats, name) == (None, None)
+
+    @pytest.mark.parametrize("name", ["enrollments", "nulls", "absent", "twice"])
+    @pytest.mark.parametrize("aggregates", [None, [], AGGREGATES])
+    def test_every_attempt_totalling_zero_proves_zero(self, name, aggregates) -> None:
+        """Duplicates and malformed aggregates included: nothing was read."""
+        stats = _stats(
+            aggregates, [_attempt(0, "failed", total=0), _attempt(1, total=0)]
+        )
+        assert records_read(stats, name) == (0, 0)
+
+    def test_the_streams_own_entry_in_every_attempt_proves_zero(self) -> None:
+        stats = _stats(
+            self.AGGREGATES,
+            [
+                _attempt(0, "failed", total=3, streams={"enrollments": 0, "users": 3}),
+                _attempt(1, total=12, streams={"enrollments": 0, "users": 12}),
+            ],
+        )
+        assert records_read(stats, "enrollments") == (0, 0)
+
+    @pytest.mark.parametrize(
+        "attempts",
+        [
+            # An earlier attempt read rows: a resumed refresh's last can read 0.
+            [_attempt(0, "failed", total=7), _attempt(1, total=0)],
+            # One attempt with no sync summary at all.
+            [_attempt(0, total=0), _attempt(1)],
+            [_attempt(0, total=None, streams={"enrollments": None})],
+            [_attempt(0, total=False)],
+            [_attempt(0, streams={"enrollments": False})],
+            [{"attempt": {"id": 0, "streamStats": [{"streamName": "enrollments"}]}}],
+            [{"attempt": {"id": 0, "streamStats": "enrollments"}}],
+            # The stream listed twice in one attempt.
+            [
+                {
+                    "attempt": {
+                        "id": 0,
+                        "streamStats": [
+                            {
+                                "streamName": "enrollments",
+                                "stats": {"recordsEmitted": 0},
+                            },
+                            {
+                                "streamName": "enrollments",
+                                "stats": {"recordsEmitted": 4},
+                            },
+                        ],
+                    }
+                }
+            ],
+            [],
+            None,
+        ],
+    )
+    def test_anything_short_of_every_attempt_is_unknown(self, attempts) -> None:
+        stats = _stats(self.AGGREGATES, attempts)
+        assert records_read(stats, "enrollments") == (None, None)
+
+    @pytest.mark.parametrize("value", [True, False])
+    def test_a_boolean_count_is_unknown(self, value) -> None:
+        stats = _stats([{"streamName": "users", "recordsEmitted": value}])
+        assert records_read(stats, "users") == (None, None)
 
 
 def _job(job_id: int, status: AirbyteJobStatusType | str) -> AirbyteJob:
@@ -389,7 +567,7 @@ class TestOverlappingPages:
     def test_the_asset_load_lists_connections_the_same_way(
         self, client, listings
     ) -> None:
-        # build_airbyte_assets_definitions reads the workspace through
+        # build_airbyte_assets reads the workspace through
         # get_connections, so a connection skipped here has no assets.
         listings.extend([self.OVERLAPPED, self.CLEAN])
         rows = client.get_connections()
