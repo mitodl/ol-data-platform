@@ -98,6 +98,49 @@ def test_explicit_base_urls_win_over_the_derived_ones() -> None:
     assert client.configuration_api_base_url == "https://proxy.example.invalid/config"
 
 
+class TestStreamStats:
+    @pytest.fixture
+    def requests_made(self, monkeypatch) -> list[tuple[str, str, Any]]:
+        made: list[tuple[str, str, Any]] = []
+        self.answer: dict[str, Any] = {}
+
+        def single_request(_self, method, url, data=None, **_):
+            made.append((method, url, data))
+            return self.answer
+
+        monkeypatch.setattr(AirbyteOSSClient, "_single_request", single_request)
+        return made
+
+    def test_stats_come_from_the_configuration_api(self, client, requests_made) -> None:
+        """The REST job read has only the job-wide rowsSynced, and get_light
+        leaves streamAggregatedStats unhydrated.
+        """
+        self.answer = {
+            "job": {
+                "id": 60322,
+                "streamAggregatedStats": [
+                    {"streamName": "api_enrollments", "recordsEmitted": 0},
+                    {"streamName": "users", "recordsEmitted": 12},
+                ],
+            }
+        }
+        stats = client.get_stream_stats(60322)
+        assert requests_made == [
+            (
+                "POST",
+                "https://airbyte.example.invalid/api/v1/jobs/get_without_logs",
+                {"id": 60322},
+            )
+        ]
+        assert stats["users"]["recordsEmitted"] == 12
+        assert set(stats) == {"api_enrollments", "users"}
+
+    @pytest.mark.usefixtures("requests_made")
+    def test_a_job_with_no_stats_has_no_streams(self, client) -> None:
+        self.answer = {"job": {"id": 1}}
+        assert client.get_stream_stats(1) == {}
+
+
 def _job(job_id: int, status: AirbyteJobStatusType | str) -> AirbyteJob:
     status_value = status.value if isinstance(status, AirbyteJobStatusType) else status
     return AirbyteJob(id=job_id, status=status_value, type="sync")
@@ -389,7 +432,7 @@ class TestOverlappingPages:
     def test_the_asset_load_lists_connections_the_same_way(
         self, client, listings
     ) -> None:
-        # build_airbyte_assets_definitions reads the workspace through
+        # build_airbyte_assets reads the workspace through
         # get_connections, so a connection skipped here has no assets.
         listings.extend([self.OVERLAPPED, self.CLEAN])
         rows = client.get_connections()
