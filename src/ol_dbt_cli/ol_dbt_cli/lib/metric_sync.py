@@ -57,7 +57,10 @@ Drift is a field sync owns that someone else changed since the bot last wrote
 the metric: the live value is compared with the newest version in
 ``GET /v1/metrics/{id}/versions`` whose ``updatedBy`` is the bot. Each version
 there is a full snapshot of the entity, owners and reviewers included
-(``EntityRepository.listVersions``, ``storeEntityHistory``).
+(``EntityRepository.listVersions``, ``storeEntityHistory``). An edit made in
+the UI or API with the bot's own token is recorded with the bot as
+``updatedBy``, so it is the bot's last write: drift cannot see it, and the next
+sync PATCHes a field the file sets back to the file without reporting it.
 
 A file that adopts an edit made in OpenMetadata changes no field, so without
 a write the bot's newest version would keep the old value, and the next file

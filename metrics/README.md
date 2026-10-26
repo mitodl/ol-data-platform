@@ -231,3 +231,9 @@ from a file removes it from the metric only if sync applied it (the tag's
 file listed it too. Lineage from a StarRocks view is skipped with a warning until
 OpenMetadata has a StarRocks service, and an edge whose `implemented_by` entry
 was removed is not deleted.
+
+Drift is read from who wrote each version, so an edit made in the UI or the
+API with the sync bot's own token counts as the bot's last write. Sync cannot
+see it as drift: the next run PATCHes a field the file sets back to it without
+reporting anything. Edit metrics in OpenMetadata as yourself, never with the
+bot's token.
