@@ -12,8 +12,9 @@ reads its scan targets from Glue (see
 
 It reports everywhere and deletes only where
 :data:`LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS` says so. An environment is added
-after a person has read a deletion list for it. QA is on the list; production
-is not yet.
+after a person has read a deletion list for it. QA and production are on the
+list: production's first report (2026-10-25) was 67 eligible prefixes, all
+``__dbt_tmp-<uuid>`` directories.
 
 The data lake buckets are versioned, so a deleted prefix stays recoverable,
 and billed, until its noncurrent versions expire: 30 days in the dbt layer
@@ -33,7 +34,7 @@ WAREHOUSE_ENV = warehouse_env_for(DAGSTER_ENV)
 
 # Keyed on the Dagster environment, not the warehouse one: `dev` resolves to the
 # production warehouse, and a laptop must never be able to delete from it.
-LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS: frozenset[str] = frozenset({"qa"})
+LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS: frozenset[str] = frozenset({"qa", "production"})
 
 # The floor has to exceed the longest time a writer leaves files unregistered.
 # Measured 2026-10-06 over the 1,084 production tables Glue registered in the
