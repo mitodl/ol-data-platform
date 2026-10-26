@@ -1,13 +1,23 @@
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
 from typing import Any, Self
 
-from dagster import Failure
+from dagster import AssetExecutionContext, AssetKey, Failure
 from dagster._annotations import beta
 from dagster_airbyte.resources import AirbyteClient, AirbyteWorkspace
-from dagster_airbyte.translator import AirbyteJob, AirbyteJobStatusType
+from dagster_airbyte.translator import (
+    AirbyteConnectionTableProps,
+    AirbyteJob,
+    AirbyteJobStatusType,
+    AirbyteMetadataSet,
+)
+from dagster_airbyte.utils import (
+    get_airbyte_connection_table_name,
+    get_translator_from_airbyte_assets,
+)
 from dagster_shared.utils.cached_method import cached_method
 from ol_orchestrate.lib.http_errors import RETRYABLE_CLIENT_ERRORS
 from pydantic.fields import Field, PrivateAttr
@@ -43,6 +53,35 @@ LISTING_ATTEMPTS = 4
 # How much of a 4xx response body is carried into the Failure. Airbyte's problem
 # responses are a few hundred characters; an ingress error page is not.
 REFUSAL_BODY_MAX_CHARS = 500
+
+
+@dataclass(frozen=True)
+class StreamSync:
+    """What one stream of a finished Airbyte sync read.
+
+    A stream that read nothing may have no entry in the job's stream stats, so
+    its counts default to zero.
+    """
+
+    asset_key: AssetKey
+    spec_metadata: Mapping[str, Any]
+    description: str
+    job_id: int
+    job_started_at: datetime
+    sync_mode: str
+    records_emitted: int
+    records_committed: int
+
+    @property
+    def metadata(self) -> dict[str, Any]:
+        """The stream's asset metadata, plus the job and what it read."""
+        return {
+            **self.spec_metadata,
+            "airbyte_job_id": self.job_id,
+            "airbyte_sync_mode": self.sync_mode,
+            "airbyte_records_emitted": self.records_emitted,
+            "airbyte_records_committed": self.records_committed,
+        }
 
 
 @beta
@@ -183,6 +222,29 @@ class AirbyteOSSClient(AirbyteClient):
             "page boundary would be missing from the result."
         )
         raise Failure(description=msg)
+
+    def get_stream_stats(self, job_id: int) -> dict[str, Mapping[str, Any]]:
+        """Return the job's record and byte counts, keyed by stream name.
+
+        The REST API's job read carries only the job-wide ``rowsSynced``, which
+        cannot say which stream of a connection read nothing. The configuration
+        API's ``jobs/get_without_logs`` hydrates ``streamAggregatedStats``;
+        ``jobs/get_light`` does not. Keyed by name alone because dagster-airbyte
+        already assumes a stream name is unique within a connection.
+
+        :param job_id: The Airbyte job to read.
+        :returns: Each stream's ``StreamStats`` (``recordsEmitted``,
+            ``recordsCommitted`` and so on). A stream with no stats is absent.
+        """
+        job = self._single_request(
+            method="POST",
+            url=f"{self.configuration_api_base_url}/jobs/get_without_logs",
+            data={"id": job_id},
+        )["job"]
+        return {
+            stats["streamName"]: stats
+            for stats in job.get("streamAggregatedStats") or []
+        }
 
     def get_connections(self) -> Sequence[Mapping[str, Any]]:
         """List the workspace's connections, each exactly once.
@@ -343,3 +405,67 @@ class AirbyteOSSWorkspace(AirbyteWorkspace):
             configuration_api_base_url=self.configuration_api_base_url
             or f"{self.api_server}/api/{AIRBYTE_CONFIGURATION_API_VERSION}",
         )
+
+    def sync_streams(self, context: AssetExecutionContext) -> Iterator[StreamSync]:
+        """Sync the asset's connection and describe what each stream read.
+
+        The library's ``sync_and_poll`` reports every selected stream as
+        materialized whether it read a million rows or none, and keeps the job
+        id to itself. A full refresh stream whose source stopped returning rows
+        therefore succeeded nightly while its table stayed frozen (Global
+        Alumni's api_enrollments, an append stream, from 2026-05-04). This runs
+        the same sync and pairs each stream with its sync mode, record counts
+        and the job's start time.
+
+        :param context: The execution context of the connection's multi-asset.
+        :returns: One entry per stream the connection syncs, in catalog order,
+            whether or not its asset is selected (Airbyte syncs them all).
+        """
+        assets_def = context.assets_def
+        translator = get_translator_from_airbyte_assets(assets_def)
+        connection_id = next(
+            AirbyteMetadataSet.extract(spec.metadata).connection_id
+            for spec in assets_def.specs
+        )
+        client = self.get_client()
+        output = client.sync_and_poll(connection_id=connection_id)
+        job_id = output.job_details["jobId"]
+        job_started_at = datetime.fromisoformat(output.job_details["startTime"])
+        stream_stats = client.get_stream_stats(job_id)
+        connection = output.connection_details
+        prefix = connection.get("prefix")
+
+        for stream in connection["syncCatalog"]["streams"]:
+            if not stream["config"].get("selected", False):
+                continue
+            name = stream["stream"]["name"]
+            table_name = get_airbyte_connection_table_name(
+                stream_prefix=prefix, stream_name=name
+            )
+            spec = translator.get_asset_spec(
+                AirbyteConnectionTableProps(
+                    table_name=table_name,
+                    stream_prefix=prefix,
+                    stream_name=name,
+                    json_schema=stream["stream"].get("jsonSchema", {}),
+                    connection_id=connection_id,
+                    connection_name=connection["name"],
+                    destination_type=None,
+                    database=None,
+                    schema=None,
+                )
+            )
+            stats = stream_stats.get(name, {})
+            yield StreamSync(
+                asset_key=spec.key,
+                spec_metadata=spec.metadata,
+                description=(
+                    f"Table generated via Airbyte sync for connection "
+                    f"{connection['name']}: {table_name}"
+                ),
+                job_id=job_id,
+                job_started_at=job_started_at,
+                sync_mode=stream["config"]["syncMode"],
+                records_emitted=stats.get("recordsEmitted", 0),
+                records_committed=stats.get("recordsCommitted", 0),
+            )
