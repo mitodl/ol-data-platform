@@ -311,9 +311,9 @@ models:
 - name: int__bootcamps__users
   description: >-
     denormalized bootcamps users. Full name and the profile fields come from
-    profiles_profile, which stopped loading on 2025-02-24. They are null for the
-    1,166 users with no profile row (1,165 joined after that date) and as of that
-    date for everyone else.
+    profiles_profile, which stopped loading on 2025-02-25. They are null for the
+    1,166 users with no profile row (1,165 joined after that date) and as of
+    2025-02-24 for everyone else.
   columns:
   - name: user_id
     description: int, primary key

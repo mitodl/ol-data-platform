@@ -629,24 +629,26 @@ retired:
     klasses_bootcamprunenrollment and klasses_personalprice) and five last
     changed on 2025-06-10. profiles_profile stopped a year before the rest and
     has its own entry below. Measured in production raw on 2026-10-23. Frozen
-    rather than dropped, decided 2026-10-23: dbt models all 19, and through them
-    historical bootcamps learners reach dim_user, dim_course, dim_course_run,
-    tfact_enrollment, tfact_certificate, tfact_order and the combined marts
+    rather than dropped, decided 2026-10-23: dbt models all of these and
+    profiles_profile, and through them historical bootcamps learners reach
+    dim_user, dim_course, dim_course_run, tfact_enrollment, tfact_certificate,
+    tfact_order and the combined marts
     (tk-bootcamps-ingestion-has-disappeared-while-dbt-st-25d016).
   frozen: true
 - deployment: bootcamps
   layer: app_postgres
   raw_tables:
   - raw__bootcamps__app__postgres__profiles_profile
-  retired_on: '2025-02-24'
+  retired_on: '2025-02-25'
   reason: >-
-    This table stopped loading a year before the rest of bootcamps. Its only
-    Airbyte load is the JSONL file of 2025-02-25 (max updated_on
-    2025-02-24T22:17Z, 66,447 rows), converted to Iceberg on 2026-09-11, while
-    auth_user kept syncing until 2026-02-12. 1,166 users have no profile row
-    (1,165 joined after 2025-02-25, one in 2019 never had one), so
-    int__bootcamps__users and dim_user carry null profile fields for them, and
-    everyone else's profile is as of 2025-02-24. Served as is, decided
+    This table stopped loading a year before the rest of bootcamps. The date is
+    when its only Airbyte load landed, the JSONL file of 2025-02-25T02:01Z (max
+    updated_on 2025-02-24T22:17Z, 66,447 rows), which was converted to Iceberg
+    on 2026-09-11. auth_user kept syncing until 2026-02-12. 1,166 users have no
+    profile row (1,165 joined after 2025-02-25, one in 2019 never had one), so
+    int__bootcamps__users carries null profile fields for them. dim_user does
+    too, unless the same person's account on another platform supplies the
+    field. Everyone else's profile is as of 2025-02-24. Served as is, decided
     2026-10-26: the app is decommissioned, so the missing profiles cannot be
     loaded, and the older ones are still the best record we have
     (tk-bootcamps-profiles-profile-froze-2025-02-24-neve-7fbf5a).

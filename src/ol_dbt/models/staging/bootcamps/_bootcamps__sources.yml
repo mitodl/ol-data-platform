@@ -5,10 +5,10 @@ sources:
 - name: ol_warehouse_raw_data
   description: >-
     Frozen history. The bootcamps application is decommissioned, nothing loads
-    these tables any more, and the last data landed on 2026-02-12. They are kept
-    read-only because the bootcamps staging models feed the dimensional layer.
-    The record is the bootcamps/app_postgres entry in
-    ingestion/inventory/retired.yml.
+    these tables any more, and the last data landed on 2026-02-12
+    (profiles_profile stopped on 2025-02-25). They are kept read-only because
+    the bootcamps staging models feed the dimensional layer. The record is the
+    two bootcamps/app_postgres entries in ingestion/inventory/retired.yml.
   loader: airbyte
   database: '{{ target.database | default(none) }}'
   schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
@@ -235,9 +235,9 @@ sources:
 
   - name: raw__bootcamps__app__postgres__profiles_profile
     description: >-
-      User profiles as of 2025-02-24. This table stopped loading a year before the
-      rest of bootcamps, so the 1,165 users who joined after 2025-02-25 have no
-      row here (nor does one user from 2019). See its entry in
+      User profiles as of 2025-02-24. This table stopped loading on 2025-02-25,
+      a year before the rest of bootcamps, so the 1,165 users who joined after
+      that have no row here (nor does one user from 2019). See its entry in
       ingestion/inventory/retired.yml.
     columns:
     - name: id
