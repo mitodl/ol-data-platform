@@ -113,7 +113,14 @@ def tables(monkeypatch) -> dict[str, pl.DataFrame]:
             raise NoSuchTableError(table_name)
         return store[table_name].lazy()
 
+    def read_matching(database_name, table_name, columns, equals) -> pl.DataFrame:
+        rows = read(database_name, table_name).filter(
+            *(pl.col(column) == value for column, value in equals.items())
+        )
+        return rows.select(columns).collect()
+
     monkeypatch.setattr(warehouse, "get_dbt_model_as_dataframe", read)
+    monkeypatch.setattr(warehouse, "load_matching_rows", read_matching)
     return store
 
 
