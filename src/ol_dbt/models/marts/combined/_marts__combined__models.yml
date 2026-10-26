@@ -625,7 +625,9 @@ models:
       flags the learner as having completed the program. A row has a programcertificate_uuid
       (a hash of user and program) only when that flag is true, and the report has
       no revocation, so programcertificate_is_revoked is null.
-      DEDP: completion comes from MITx Online certificates, on MITx Online rows.
+      DEDP: on MITx Online rows, completion comes from MITx Online certificates.
+      A DEDP learner without a MITx Online account is an edX.org row and follows
+      the edX.org rule above.
       DEDP certificates issued by MicroMasters before 2022-10-01 (int__micromasters__program_certificates)
       are not read here.
     tests:
