@@ -20,6 +20,7 @@ from lakehouse.resources.airbyte import (
     LISTING_ATTEMPTS,
     AirbyteOSSClient,
     AirbyteOSSWorkspace,
+    JobStats,
     records_read,
 )
 from requests.exceptions import ConnectionError as RequestsConnectionError
@@ -99,11 +100,18 @@ def test_explicit_base_urls_win_over_the_derived_ones() -> None:
     assert client.configuration_api_base_url == "https://proxy.example.invalid/config"
 
 
-class TestStreamStats:
+def _attempt(attempt_id: int, status: str = "succeeded", **total) -> dict[str, Any]:
+    attempt: dict[str, Any] = {"id": attempt_id, "status": status}
+    if total:
+        attempt["totalStats"] = total
+    return {"attempt": attempt}
+
+
+class TestJobStats:
     @pytest.fixture
     def requests_made(self, monkeypatch) -> list[tuple[str, str, Any]]:
         made: list[tuple[str, str, Any]] = []
-        self.answer: dict[str, Any] = {}
+        self.answer: Any = {}
 
         def single_request(_self, method, url, data=None, **_):
             made.append((method, url, data))
@@ -116,16 +124,15 @@ class TestStreamStats:
         """The REST job read has only the job-wide rowsSynced, and get_light
         leaves streamAggregatedStats unhydrated.
         """
+        streams = [
+            {"streamName": "api_enrollments", "recordsEmitted": 0},
+            {"streamName": "users", "recordsEmitted": 12},
+        ]
         self.answer = {
-            "job": {
-                "id": 60322,
-                "streamAggregatedStats": [
-                    {"streamName": "api_enrollments", "recordsEmitted": 0},
-                    {"streamName": "users", "recordsEmitted": 12},
-                ],
-            }
+            "job": {"id": 60322, "streamAggregatedStats": streams},
+            "attempts": [_attempt(0, "failed"), _attempt(1, recordsEmitted=12)],
         }
-        stats = client.get_stream_stats(60322)
+        stats = client.get_job_stats(60322)
         assert requests_made == [
             (
                 "POST",
@@ -133,34 +140,69 @@ class TestStreamStats:
                 {"id": 60322},
             )
         ]
-        assert stats == self.answer["job"]["streamAggregatedStats"]
+        assert stats == JobStats(streams=streams, final_attempt_emitted=12)
 
     @pytest.mark.usefixtures("requests_made")
     @pytest.mark.parametrize(
         "answer",
         [
+            None,
+            [],
+            "ok",
+            {"id": 1},
+            {"job": None},
             {"job": {"id": 1}},
             {"job": {"id": 1, "streamAggregatedStats": None}},
             {"job": {"id": 1, "streamAggregatedStats": {"users": {}}}},
-            {"id": 1},
+            {"job": {"id": 1, "streamAggregatedStats": [{"streamName": "a"}, "b"]}},
         ],
     )
-    def test_a_response_without_a_stats_list_is_unknown(self, client, answer) -> None:
-        """Read as no streams, it made every stream look empty."""
+    def test_a_response_of_another_shape_is_unknown(self, client, answer) -> None:
+        """The sync has succeeded by now, so an odd body must not raise."""
         self.answer = answer
-        assert client.get_stream_stats(1) is None
+        assert client.get_job_stats(1) == JobStats()
+
+
+class TestFinalAttempt:
+    """Only a succeeded final attempt's totalStats can say the job read nothing.
+
+    Missing attempt stats hydrate streamAggregatedStats as [] and rowsSynced as
+    0, so neither of those can.
+    """
+
+    @pytest.mark.parametrize(
+        ("attempts", "expected"),
+        [
+            ([_attempt(0, recordsEmitted=0)], 0),
+            ([_attempt(1, recordsEmitted=0), _attempt(0, recordsEmitted=9)], 0),
+            ([_attempt(0, recordsEmitted=0), _attempt(1, recordsEmitted=9)], 9),
+            ([_attempt(0)], None),
+            ([_attempt(0, recordsEmitted=None)], None),
+            ([_attempt(0, "failed", recordsEmitted=0)], None),
+            ([_attempt(0, recordsEmitted=0), "x"], None),
+            ([{"attempt": {"status": "succeeded"}}], None),
+            ([], None),
+            (None, None),
+        ],
+    )
+    def test_final_attempt_emitted(self, attempts, expected) -> None:
+        stats = JobStats.from_job_info({"job": {}, "attempts": attempts})
+        assert stats.final_attempt_emitted == expected
 
 
 class TestRecordsRead:
     """Only a numeric count on the stream's one entry is a count."""
 
-    STATS = [  # noqa: RUF012
-        {"streamName": "enrollments", "recordsEmitted": 0, "recordsCommitted": 0},
-        {"streamName": "users", "recordsEmitted": 12, "recordsCommitted": 11},
-        {"streamName": "nulls", "recordsEmitted": None, "recordsCommitted": None},
-        {"streamName": "twice", "streamNamespace": "a", "recordsEmitted": 1},
-        {"streamName": "twice", "streamNamespace": "b", "recordsEmitted": 0},
-    ]
+    STATS = JobStats(
+        streams=[
+            {"streamName": "enrollments", "recordsEmitted": 0, "recordsCommitted": 0},
+            {"streamName": "users", "recordsEmitted": 12, "recordsCommitted": 11},
+            {"streamName": "nulls", "recordsEmitted": None, "recordsCommitted": None},
+            {"streamName": "twice", "streamNamespace": "a", "recordsEmitted": 1},
+            {"streamName": "twice", "streamNamespace": "b", "recordsEmitted": 0},
+        ],
+        final_attempt_emitted=13,
+    )
 
     @pytest.mark.parametrize(
         ("name", "expected"),
@@ -173,22 +215,19 @@ class TestRecordsRead:
         ],
     )
     def test_counts_from_stats(self, name, expected) -> None:
-        assert records_read(self.STATS, name, rows_synced=13) == expected
+        assert records_read(self.STATS, name) == expected
 
-    @pytest.mark.parametrize("stats", [None, []])
-    def test_no_stats_with_rows_synced_is_unknown(self, stats) -> None:
-        """Rows went somewhere, so an empty or missing list cannot be trusted."""
-        assert records_read(stats, "enrollments", rows_synced=13) == (None, None)
+    @pytest.mark.parametrize("streams", [None, []])
+    def test_no_stream_stats_is_unknown(self, streams) -> None:
+        stats = JobStats(streams=streams, final_attempt_emitted=None)
+        assert records_read(stats, "enrollments") == (None, None)
 
-    @pytest.mark.parametrize("stats", [None, [], STATS])
-    def test_a_job_that_synced_no_rows_read_nothing_from_any_stream(
-        self, stats
+    @pytest.mark.parametrize("streams", [None, [], STATS.streams])
+    def test_a_final_attempt_that_emitted_nothing_read_nothing_anywhere(
+        self, streams
     ) -> None:
-        """Job 60322's shape: rowsSynced 0, whatever the stats endpoint says."""
-        assert records_read(stats, "absent", rows_synced=0) == (0, 0)
-
-    def test_a_missing_rows_synced_does_not_mean_zero(self) -> None:
-        assert records_read(None, "enrollments", rows_synced=None) == (None, None)
+        stats = JobStats(streams=streams, final_attempt_emitted=0)
+        assert records_read(stats, "absent") == (0, 0)
 
 
 def _job(job_id: int, status: AirbyteJobStatusType | str) -> AirbyteJob:

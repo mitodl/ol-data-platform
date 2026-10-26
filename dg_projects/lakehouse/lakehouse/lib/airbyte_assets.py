@@ -43,7 +43,11 @@ from dagster_airbyte.utils import clean_name
 from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
 from pyiceberg.exceptions import NoSuchTableError
 
-from lakehouse.resources.airbyte import AirbyteOSSWorkspace, StreamSync
+from lakehouse.resources.airbyte import (
+    SYNC_JOB_TYPE,
+    AirbyteOSSWorkspace,
+    StreamSync,
+)
 
 EMPTY_FULL_REFRESH_CHECK = "full_refresh_read_rows"
 FULL_REFRESH_SYNC_MODE = "full_refresh"
@@ -139,11 +143,16 @@ def empty_full_refresh_check(
         when the sync started. Only called when the stream read nothing.
     :param log: Where to log a lookup that failed.
     :returns: The check result, or None for a stream that is not a full refresh.
-        A WARN result with ``outcome: unknown`` when the stream's record count,
-        the job's start time or the table's row count cannot be read.
+        A WARN result with ``outcome: unknown`` when the job was not a sync, or
+        the stream's record count, the job's start time or the table's row
+        count cannot be read.
     """
     if stream.sync_mode != FULL_REFRESH_SYNC_MODE:
         return None
+    # poll_previous_running_sync attaches to whatever job is in flight, and a
+    # reset, clear or refresh reading nothing says nothing about the source.
+    if stream.job_type != SYNC_JOB_TYPE:
+        return _unknown(stream, f"it was a {stream.job_type} job, not a sync")
     if stream.records_emitted is None:
         return _unknown(stream, "the job's stats do not say what it read")
     if stream.records_emitted:
