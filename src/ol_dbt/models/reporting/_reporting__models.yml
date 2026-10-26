@@ -61,10 +61,10 @@ models:
     tests:
     - not_null
   - name: program_certificates
-    description: int, count of program certificates earned for each program, aggregated
-      by user_email. If a user gets the Statistics and Data Science program certificate
-      in both the General and Social Sciences tracks, it would be counted as one program
-      certificate.
+    description: int, count of distinct user_email per program whose marts__combined_program_enrollment_detail
+      row has user_has_completed_program, so revoked certificates are not counted.
+      If a user gets the Statistics and Data Science program certificate in both the
+      General and Social Sciences tracks, it would be counted as one program certificate.
 
 - name: learner_engagement_report
   description: Engagement report by learner, course, courserun, section and subsection.
@@ -816,7 +816,11 @@ models:
     description: int, count of the number of times the user has recieved a DEDP course
       credential
   - name: any_dedp_program_cert_ind
-    description: str, indictor showing if the user has recieved any DEDP program credentials
+    description: str, indictor showing if the user has recieved any DEDP program credentials.
+      The DEDP indicators read programcertificate_uuid is not null and programcertificate_is_revoked
+      false or null, which on DEDP rows is the same as user_has_completed_program.
+      marts__combined__users.has_dedp_program_certificate counts revoked certificates
+      too.
   - name: dedp_international_program_cert_ind
     description: str, indictor showing if the user has recieved any DEDP Inernational
       program credentials
@@ -1151,7 +1155,9 @@ models:
   - name: user_full_name
     description: string, user full name on the corresponding platform
   - name: user_has_completed_program
-    description: boolean, whether the learner has completed program to earn the certificate
+    description: boolean, whether the learner has completed the program, carried from
+      marts__combined_program_enrollment_detail, whose YAML states the rule for each
+      platform
     tests:
     - not_null
   - name: programenrollment_is_active
@@ -1201,7 +1207,8 @@ models:
     description: int, count of distinct courses for which the user has earned a certificate
       within the program
   - name: courses_taken_in_program
-    description: int, compatibility alias for verified_courses_taken_in_program
+    description: int, compatibility alias for verified_courses_taken_in_program. marts__combined_program_enrollment_detail.unique_courses_taken_in_program
+      counts enrollments in any mode, so the two differ.
   - name: verified_courses_passed_in_program
     description: int, count of distinct verified courses the user has passed within
       the program
@@ -1220,11 +1227,14 @@ models:
     description: string, postal code of the user. Coalesced from edX.org and hashed
       ID user matches.
   - name: capstone_ind
-    description: str, indicator of whether the user has completed a capstone course.
-      'Y' if capstone completed, 'N' otherwise.
+    description: str, 'Y' if the user has a verified enrollment in a program course
+      with the word capstone in the title, 'N' otherwise. It does not check completion.
+      marts__combined_program_enrollment_detail.capstone_indicator counts enrollments
+      in any mode.
   - name: program_complete_days
-    description: int, number of days from the first course run start date to the program
-      certificate creation date
+    description: int, marts__combined_program_enrollment_detail.program_completion_days
+      under another name, the number of days from the start date of the first verified
+      course run to the program certificate creation date
   tests:
   # NOTE: These conditional uniqueness tests match the upstream marts__combined_program_enrollment_detail
   # model's grain definition. This reporting model is a passthrough/enrichment layer that inherits
