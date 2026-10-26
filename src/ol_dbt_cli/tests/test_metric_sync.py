@@ -47,6 +47,16 @@ PROGRESS = "afact_learner_courserun_progress"
 PROGRESS_FQN = f"{SERVICE}.ol_data_lake_production.ol_warehouse_production_dimensional.{PROGRESS}"
 # Every other model the fixtures bind is a b2b StarRocks view.
 STARROCKS_VIEWS = sorted({i.binding.target for m in load_metrics(FIXTURES) for i in m.implemented_by} - {PROGRESS})
+LEARNER_ENROLLMENT = "mv_b2b_learner_enrollment"
+# Each view's +schema (dbt_project.yml), which is its StarRocks database.
+STARROCKS_SCHEMAS = {view: "b2b_analytics" for view in STARROCKS_VIEWS} | {LEARNER_ENROLLMENT: "b2b_learner_records"}
+STARROCKS_SERVICE = "StarRocks"
+
+
+def _starrocks_fqn(view: str, service: str = STARROCKS_SERVICE) -> str:
+    return f"{service}.default_catalog.{STARROCKS_SCHEMAS[view]}.{view}"
+
+
 SNAPSHOT_VERSION = json.loads(SCHEMA_SNAPSHOT.read_text())[SCHEMA_VERSION_KEY]
 # What the OWASP sanitizer behind DescriptionSanitizer encodes in text
 # (Encoding.REPLACEMENTS in owasp-java-html-sanitizer 20260101.1).
@@ -97,14 +107,18 @@ def _manifest() -> ManifestRegistry:
         database="ol_data_lake_production",
     )
     for view in STARROCKS_VIEWS:
+        # As a Trino manifest has it: schema is what Trino's generate_schema_name
+        # would resolve, not the StarRocks database.
         registry.disabled[view] = ManifestModel(
             unique_id=f"model.open_learning.{view}",
             name=view,
             resource_type="model",
             original_file_path="",
-            schema="ol_warehouse_production_b2b_analytics",
+            schema=f"ol_warehouse_production_{STARROCKS_SCHEMAS[view]}",
             database="ol_data_lake_production",
             tags=["starrocks"],
+            alias=view,
+            custom_schema=STARROCKS_SCHEMAS[view],
         )
     return registry
 
@@ -113,7 +127,10 @@ class FakeOpenMetadata(OpenMetadataClient):
     """Holds metrics in memory and applies a bot's PUT and PATCH the way OpenMetadata 2.0.5 does."""
 
     def __init__(self) -> None:
-        """Start with no metrics, one team, one glossary term and the progress model's table."""
+        """Start with no metrics, one team, one glossary term and the progress model's table.
+
+        No StarRocks view is catalogued until a test adds it to ``tables``.
+        """
         super().__init__("https://om.example/api", "token")
         self.version = SNAPSHOT_VERSION
         self.teams = {"data-platform": "team-1"}
@@ -971,7 +988,60 @@ def test_descriptions_compare_after_the_server_encoding_is_undone() -> None:
 def test_binding_missing_from_the_manifest_is_unresolved(metrics_dir: Path) -> None:
     [certified, _] = load_metrics(metrics_dir)
     with pytest.raises(ValueError, match="not in the manifest"):
-        lineage_sources(certified, ManifestRegistry(), SERVICE)
+        lineage_sources(certified, ManifestRegistry(), SERVICE, STARROCKS_SERVICE)
+
+
+def test_a_starrocks_view_resolves_to_its_plus_schema_not_the_trino_schema(metrics_dir: Path) -> None:
+    [certified, _] = load_metrics(metrics_dir)
+    sources = lineage_sources(certified, _manifest(), SERVICE, STARROCKS_SERVICE)
+    assert [(s.fqn, s.starrocks) for s in sources] == [(PROGRESS_FQN, False)] + [
+        (_starrocks_fqn(i.binding.target), True) for i in certified.implemented_by[1:]
+    ]
+    assert sources[1].fqn == "StarRocks.default_catalog.b2b_learner_records.mv_b2b_learner_enrollment"
+
+
+def test_a_starrocks_model_without_plus_schema_is_unresolved(server: FakeOpenMetadata, metrics_dir: Path) -> None:
+    manifest = _manifest()
+    manifest.disabled[LEARNER_ENROLLMENT] = dataclasses.replace(manifest.disabled[LEARNER_ENROLLMENT], custom_schema="")
+    [certified, _] = load_metrics(metrics_dir)
+    with pytest.raises(ValueError, match="sets no \\+schema"):
+        lineage_sources(certified, manifest, SERVICE, STARROCKS_SERVICE)
+
+
+def test_lineage_from_each_starrocks_view_openmetadata_has(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    catalogued = [v for v in STARROCKS_VIEWS if v != "mv_b2b_contract_utilization"]
+    for n, view in enumerate(catalogued):
+        server.tables[_starrocks_fqn(view)] = f"view-{n}"
+    # A stale copy under the doubled name the default generate_schema_name made
+    # is never the view sync links.
+    server.tables["StarRocks.default_catalog.b2b_analytics_b2b_analytics.mv_b2b_contract_utilization"] = "stale"
+    assert _sync(metrics_dir) is False
+    certified = server.metrics["certified_learners"]["id"]
+    assert sorted(
+        e["edge"]["fromEntity"]["id"] for e in server.lineage if e["edge"]["toEntity"]["id"] == certified
+    ) == (sorted(["table-1", *(f"view-{n}" for n in range(len(catalogued)))]))
+    # Rich wraps long lines at the terminal width.
+    out = " ".join(capsys.readouterr().out.split())
+    assert out.count("skipped") == 1
+    assert (
+        "skipped certified_learners: lineage from StarRocks.default_catalog.b2b_analytics.mv_b2b_contract_utilization,"
+        " a StarRocks view OpenMetadata does not have (404)"
+    ) in out
+
+
+def test_starrocks_service_names_the_views_service(server: FakeOpenMetadata, metrics_dir: Path) -> None:
+    server.tables[_starrocks_fqn(LEARNER_ENROLLMENT)] = "default-service-view"
+    server.tables[_starrocks_fqn(LEARNER_ENROLLMENT, "StarRocks Production")] = "renamed-service-view"
+    assert _sync(metrics_dir, names=("learner_completion_status",), starrocks_service="StarRocks Production") is False
+    assert sorted(e["edge"]["fromEntity"]["id"] for e in server.lineage) == ["renamed-service-view", "table-1"]
+
+
+def test_a_trino_table_openmetadata_lacks_is_still_unresolved(server: FakeOpenMetadata, metrics_dir: Path) -> None:
+    del server.tables[PROGRESS_FQN]
+    assert _sync(metrics_dir) is True
+    assert server.writes() == []
 
 
 class _Response(io.BytesIO):

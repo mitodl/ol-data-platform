@@ -112,6 +112,11 @@ class OpenMetadataClient:
         collection = ENTITY_COLLECTIONS[entity_type]
         return self.request("GET", f"/v1/{collection}/name/{quote_fqn(fqn)}")["id"]
 
+    def entity_id_or_none(self, entity_type: str, fqn: str) -> str | None:
+        """Return the id of the entity named *fqn*, or ``None`` when OpenMetadata answers 404."""
+        found = self.get_or_none(f"/v1/{ENTITY_COLLECTIONS[entity_type]}/name/{quote_fqn(fqn)}")
+        return found["id"] if found is not None else None
+
     def named_refs(self, principals: list[dict[str, str]]) -> list[dict[str, str]]:
         """Resolve ``{type: team | user, name}`` owners or reviewers to the ``{id, type}`` references the API takes."""
         refs = []

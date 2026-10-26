@@ -39,6 +39,7 @@ from ol_dbt_cli.lib.metric_sync import (
     REVIEW_HOLD_STATUSES,
     STATUS_FIELD,
     TAG_COLLECTIONS,
+    LineageSource,
     after_put,
     create_body,
     display_name_conflict,
@@ -100,6 +101,10 @@ def refresh_schema(
 _SERVICE = Parameter(
     name=["--service"],
     help='OpenMetadata database service that dbt relations live under, e.g. "Starburst Galaxy".',
+)
+_STARROCKS_SERVICE = Parameter(
+    name=["--starrocks-service"],
+    help="OpenMetadata database service that the StarRocks views (dbt models tagged starrocks) live under.",
 )
 
 
@@ -176,6 +181,7 @@ def _sync_one(
     metric: MetricDefinition,
     manifest: ManifestRegistry,
     service: str,
+    starrocks_service: str,
     bot: str,
     *,
     dry_run: bool,
@@ -204,15 +210,27 @@ def _sync_one(
                 msg = f"tag {tag['tagFQN']} has source {tag['source']!r}, not {' or '.join(TAG_COLLECTIONS)}"
                 raise ValueError(msg)
             client.request("GET", f"/v1/{collection}/name/{quote_fqn(tag['tagFQN'])}")
-        sources, skipped = lineage_sources(metric, manifest, service)
-        source_ids = [client.entity_id(s.entity_type, s.fqn) for s in sources]
+        sources: list[LineageSource] = []
+        source_ids: list[str] = []
+        skipped: list[LineageSource] = []
+        for source in lineage_sources(metric, manifest, service, starrocks_service):
+            if source.starrocks:
+                source_id = client.entity_id_or_none(source.entity_type, source.fqn)
+                if source_id is None:
+                    skipped.append(source)
+                    continue
+            else:
+                source_id = client.entity_id(source.entity_type, source.fqn)
+            sources.append(source)
+            source_ids.append(source_id)
     except (ValueError, RuntimeError) as exc:
         console.print(f"[bold red]unresolved[/] {name}: {escape(str(exc))}")
         return False
-    for model in skipped:
+    for source in skipped:
         console.print(
-            f"[yellow]skipped[/]   {name}: lineage from {escape(model)}, a StarRocks view "
-            "OpenMetadata has no service for"
+            f"[yellow]skipped[/]   {name}: lineage from {escape(source.fqn)}, a StarRocks view OpenMetadata "
+            "does not have (404). The edge lands on the first sync after OpenMetadata's StarRocks ingestion "
+            "catalogs it."
         )
 
     try:
@@ -288,6 +306,7 @@ def _sync_one(
 def sync(
     *,
     service: Annotated[str, _SERVICE],
+    starrocks_service: Annotated[str, _STARROCKS_SERVICE] = "StarRocks",
     dry_run: Annotated[
         bool,
         Parameter(name=["--dry-run"], help="Resolve every file and report what would change; write nothing."),
@@ -342,7 +361,8 @@ def sync(
     _check_server_version(client)
     bot = client.request("GET", "/v1/users/loggedInUser")["name"]
     failures = sum(
-        not _sync_one(client, metric, manifest, service, bot, dry_run=dry_run, force=force) for metric in metrics
+        not _sync_one(client, metric, manifest, service, starrocks_service, bot, dry_run=dry_run, force=force)
+        for metric in metrics
     )
     if failures:
         sys.exit(1)

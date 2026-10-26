@@ -180,7 +180,7 @@ snapshot. For each file it:
 
 1. resolves `owners`, `reviewers`, glossary and classification `tags` and the
    `implemented_by` tables by name, and writes nothing for that metric when one
-   is missing;
+   is missing (except a StarRocks view, which is skipped; see "StarRocks views");
 2. reads the live metric and checks for drift: when someone other than the sync
    bot changed the description, owners, reviewers or status since the bot last
    wrote the metric (the newest version in its history whose `updatedBy` is the
@@ -221,6 +221,24 @@ Fields the file does not set are left as OpenMetadata has them, except
 is reported as `stale` like any other difference (see above). Deleting a tag
 from a file removes it from the metric only if sync applied it (the tag's
 `appliedBy` is the bot); a tag someone added in OpenMetadata stays, even if the
-file listed it too. Lineage from a StarRocks view is skipped with a warning until
-OpenMetadata has a StarRocks service, and an edge whose `implemented_by` entry
-was removed is not deleted.
+file listed it too. An edge whose `implemented_by` entry was removed is not
+deleted.
+
+### StarRocks views
+
+An `implemented_by` model tagged `starrocks` (the `b2b_analytics` and
+`b2b_learner_records` views) is a table in OpenMetadata's StarRocks service,
+named `StarRocks.default_catalog.<+schema>.<model>`, e.g.
+`StarRocks.default_catalog.b2b_learner_records.mv_b2b_learner_enrollment`.
+The production manifest lists these models under `disabled`, and the `schema`
+it gives them is what Trino would build (`ol_warehouse_production_b2b_analytics`),
+so sync reads the model's `+schema` instead. On StarRocks that is the database
+name as written (`macros/generate_schema_name.sql`). OpenMetadata also holds
+copies under doubled names such as `b2b_analytics_b2b_analytics`, from builds
+before that macro, and sync never links those. `--starrocks-service` names the
+service (default `StarRocks`).
+
+A view OpenMetadata does not have yet (a 404, e.g. a new view before the
+StarRocks ingestion has catalogued it) is skipped with a warning and does not
+fail the metric. Its edge lands on the first sync after it is catalogued. A
+Trino table OpenMetadata lacks still leaves the metric unresolved.
