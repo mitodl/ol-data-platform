@@ -96,8 +96,9 @@ _REAL_HOSTNAME = "makes up a hostname under a real top-level domain; use url()"
 _REAL_IP = "makes up IP addresses outside the ranges reserved for documentation, so one can be a real host's"
 _REAL_PHONE = "makes up phone numbers outside 555-0100 to 555-0199, so one can be a real subscriber's"
 _REAL_ADDRESS_METHODS: dict[str, str] = {
-    # http_request_headers holds a Host and a Referer.
-    **dict.fromkeys(("url", "uri", "hostname", "dsn", "http_request_headers"), _REAL_HOSTNAME),
+    # http_request_headers holds a Host and a Referer, and http_response_headers
+    # can set a cookie's Domain.
+    **dict.fromkeys(("url", "uri", "hostname", "dsn", "http_request_headers", "http_response_headers"), _REAL_HOSTNAME),
     **dict.fromkeys(
         (
             "ip_v4",
@@ -113,6 +114,7 @@ _REAL_ADDRESS_METHODS: dict[str, str] = {
         _REAL_IP,
     ),
     "public_dns": "is the address of a real public DNS resolver",
+    "user_agent": "includes crawlers' user agents, which name their real pages",
     **dict.fromkeys(("phone_number", "telephone"), _REAL_PHONE),
 }
 # mimesis methods whose default range ends at the current year, and the

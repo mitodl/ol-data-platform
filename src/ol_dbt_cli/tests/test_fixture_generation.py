@@ -410,6 +410,8 @@ def test_generated_addresses_are_on_the_reserved_domain(tmp_path: Path, demo: Un
         ("internet.special_ip_v4", {}, "internet.special_ip_v4 makes up IP addresses"),
         ("internet.public_dns", {}, "internet.public_dns is the address of a real public DNS resolver"),
         ("internet.http_request_headers", {}, "internet.http_request_headers makes up a hostname"),
+        ("internet.http_response_headers", {}, "internet.http_response_headers makes up a hostname"),
+        ("internet.user_agent", {}, "internet.user_agent includes crawlers' user agents"),
         ("person.telephone", {}, "person.telephone makes up phone numbers outside 555-0100 to 555-0199"),
         ("person.phone_number", {"mask": "+1-###-###-####"}, "person.phone_number makes up phone numbers"),
     ],
