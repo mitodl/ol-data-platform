@@ -98,6 +98,9 @@ class TestRawTableRecordCount:
                 _self.summary = summary
 
         class Table:
+            def current_snapshot(_self):  # noqa: N805
+                return Snapshot({}) if self.any_snapshot else None
+
             def snapshot_as_of_timestamp(_self, timestamp_ms: int):  # noqa: N805
                 self.asked_for = timestamp_ms
                 return Snapshot(self.summary) if self.snapshot else None
@@ -111,6 +114,7 @@ class TestRawTableRecordCount:
 
         self.exists = True
         self.snapshot = True
+        self.any_snapshot = True
         self.summary: dict[str, Any] | None = {"total-records": "143740"}
         self.loaded = ""
         self.asked_for = 0
@@ -124,9 +128,17 @@ class TestRawTableRecordCount:
         assert self.asked_for == int(JOB_STARTED_AT.timestamp() * 1000)
 
     @pytest.mark.usefixtures("catalog")
-    def test_a_table_with_no_snapshot_then_held_nothing(self) -> None:
+    def test_a_table_with_no_snapshot_at_all_held_nothing(self) -> None:
         self.snapshot = False
+        self.any_snapshot = False
         assert raw_table_record_count("raw_db", ENROLLMENTS, JOB_STARTED_AT) == 0
+
+    @pytest.mark.usefixtures("catalog")
+    def test_a_table_whose_snapshot_at_the_start_is_gone_is_unknown(self) -> None:
+        """Maintenance can expire it once an overwrite replaces it."""
+        self.snapshot = False
+        with pytest.raises(RecordCountUnknownError, match="is retained"):
+            raw_table_record_count("raw_db", ENROLLMENTS, JOB_STARTED_AT)
 
     @pytest.mark.usefixtures("catalog")
     def test_a_table_that_does_not_exist_is_unknown(self) -> None:
@@ -239,6 +251,24 @@ EVENTS = AssetKey(f"{PREFIX}api_events")
 ALL_KEYS = {ENROLLMENTS, BATCHES, EVENTS}
 
 
+def _attempt(
+    attempt_id: int,
+    status: str = "succeeded",
+    total: int | None = None,
+    streams: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build one ``attempts[]`` entry of a ``jobs/get_without_logs`` response."""
+    attempt: dict[str, Any] = {"id": attempt_id, "status": status}
+    if total is not None:
+        attempt["totalStats"] = {"recordsEmitted": total}
+    if streams is not None:
+        attempt["streamStats"] = [
+            {"streamName": name, "stats": {"recordsEmitted": emitted}}
+            for name, emitted in streams.items()
+        ]
+    return {"attempt": attempt}
+
+
 @pytest.fixture
 def airbyte() -> dict[str, Any]:
     """Set what the stubbed Airbyte answers; a test changes it before syncing.
@@ -251,13 +281,11 @@ def airbyte() -> dict[str, Any]:
         "job_type": "sync",
         "rows_synced": 5,
         "attempts": [
-            {
-                "attempt": {
-                    "id": 0,
-                    "status": "succeeded",
-                    "totalStats": {"recordsEmitted": 5},
-                }
-            }
+            _attempt(
+                0,
+                total=5,
+                streams={"api_enrollments": 0, "api_batches": 5, "api_events": 0},
+            )
         ],
         "stats": [
             {"streamName": "api_enrollments", "recordsEmitted": 0},
@@ -430,6 +458,7 @@ class TestConnectionAssets:
     ) -> None:
         """Read as zeros, a reshaped response failed every stream with rows."""
         airbyte["stats"] = stats
+        airbyte["attempts"] = [_attempt(0, total=5)]
         result, evaluations, _ = _sync(workspace, _Counter(143740))
 
         assert result.success
@@ -440,6 +469,9 @@ class TestConnectionAssets:
 
     def test_a_null_record_count_is_unknown(self, workspace, airbyte) -> None:
         airbyte["stats"][0]["recordsEmitted"] = None
+        airbyte["attempts"] = [
+            _attempt(0, total=5, streams={"api_enrollments": None, "api_batches": 5})
+        ]
         _, evaluations, _ = _sync(workspace, _Counter(143740))
         assert evaluations[ENROLLMENTS].severity == AssetCheckSeverity.WARN
 
@@ -453,31 +485,35 @@ class TestConnectionAssets:
         _, evaluations, _ = _sync(workspace, _Counter(143740))
         assert {e.severity for e in evaluations.values()} == {AssetCheckSeverity.WARN}
 
-    def test_a_final_attempt_that_emitted_nothing_fails_without_stream_stats(
+    def test_a_single_attempt_that_emitted_nothing_fails_without_stream_stats(
         self, workspace, airbyte
     ) -> None:
-        """The attempt's own sync summary says the whole job read nothing."""
+        """Global Alumni's shape: one attempt whose own summary totals 0."""
         airbyte["rows_synced"] = 0
         airbyte["stats"] = []
-        airbyte["attempts"] = [
-            {
-                "attempt": {
-                    "id": 0,
-                    "status": "failed",
-                    "totalStats": {"recordsEmitted": 7},
-                }
-            },
-            {
-                "attempt": {
-                    "id": 1,
-                    "status": "succeeded",
-                    "totalStats": {"recordsEmitted": 0},
-                }
-            },
-        ]
+        airbyte["attempts"] = [_attempt(0, total=0)]
         _, evaluations, _ = _sync(workspace, _Counter(143740))
         assert not evaluations[ENROLLMENTS].passed
         assert evaluations[ENROLLMENTS].severity == AssetCheckSeverity.ERROR
+
+    def test_an_earlier_attempt_that_read_rows_leaves_it_unknown(
+        self, workspace, airbyte
+    ) -> None:
+        """A resumed refresh's last attempt can read 0 after another read rows."""
+        airbyte["rows_synced"] = 0
+        airbyte["stats"] = []
+        airbyte["attempts"] = [_attempt(0, "failed", total=7), _attempt(1, total=0)]
+        _, evaluations, _ = _sync(workspace, _Counter(143740))
+        assert evaluations[ENROLLMENTS].severity == AssetCheckSeverity.WARN
+
+    def test_an_aggregate_zero_without_attempt_evidence_is_unknown(
+        self, workspace, airbyte
+    ) -> None:
+        """Airbyte adds a null attempt count into the aggregate as 0."""
+        airbyte["attempts"] = [_attempt(0, total=5)]
+        _, evaluations, _ = _sync(workspace, _Counter(143740))
+        assert evaluations[ENROLLMENTS].severity == AssetCheckSeverity.WARN
+        assert evaluations[BATCHES].passed
 
     @pytest.mark.parametrize("job_type", ["reset", "clear", "refresh", None])
     def test_a_job_that_is_not_a_sync_is_never_an_error(

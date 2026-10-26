@@ -67,25 +67,32 @@ def raw_table_record_count(database: str, asset_key: AssetKey, as_of: datetime) 
     """Count the rows a stream's raw Iceberg table held at a point in time.
 
     The asset key's last part is the table name the destination writes (the
-    connection's prefix plus the stream name). A table with no snapshot at or
-    before *as_of* held no rows then.
+    connection's prefix plus the stream name). A table with no snapshot at all
+    has never held a row.
 
     :param database: The Glue database the Airbyte destination writes to.
     :param asset_key: The stream's asset key.
     :param as_of: When to count the rows, e.g. when the sync started.
     :returns: The ``total-records`` of the snapshot current at *as_of*.
     :raises RecordCountUnknownError: When the table is not in Glue (a wrong
-        database or table name would otherwise pass every empty sync), or its
-        snapshot carries no ``total-records``.
+        database or table name would otherwise pass every empty sync), it has
+        snapshots but none current at *as_of*, or that snapshot carries no
+        ``total-records``.
     """
     identifier = f"{database}.{asset_key.path[-1]}"
     try:
         table = get_glue_catalog().load_table(identifier)
     except NoSuchTableError as error:
         raise RecordCountUnknownError(identifier, "not found in Glue") from error
+    if table.current_snapshot() is None:
+        return 0
     snapshot = table.snapshot_as_of_timestamp(int(as_of.timestamp() * 1000))
     if snapshot is None:
-        return 0
+        # Raw maintenance expires a snapshot once a later one replaces it, so
+        # the one current at the job's start may be gone; that is not "empty".
+        raise RecordCountUnknownError(
+            identifier, f"no snapshot as of {as_of.isoformat()} is retained"
+        )
     total = snapshot.summary["total-records"] if snapshot.summary else None
     if total is None:
         raise RecordCountUnknownError(
