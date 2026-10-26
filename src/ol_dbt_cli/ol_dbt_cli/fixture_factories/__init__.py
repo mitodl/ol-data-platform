@@ -10,8 +10,9 @@ A unit package has two modules:
 ``_generated.py``
     Base factories scaffolded from the source application's Django models by
     ``ol-dbt fixtures scaffold`` (:mod:`ol_dbt_cli.lib.fixture_scaffold`),
-    from the ``models.json`` beside it. Regenerated wholesale, so never edited
-    by hand.
+    from the ``models.json`` beside it, or for a unit with no Django app
+    drafted from its staging models' tests. Regenerated wholesale, so never
+    edited by hand.
 
 ``__init__.py``
     Written by hand. Subclasses the base factories for what the models cannot
