@@ -660,24 +660,31 @@ models:
   - name: unique_courses_taken_in_program
     description: int, count of unique course readable ids the learner enrolled in
       within that program, in any enrollment mode. Program courses are matched on
-      program_readable_id, which only MITx Online-hosted courses of MITx Online programs
-      and xPRO program courses carry, so edX.org program rows are always 0. program_enrollment_with_user_report.courses_taken_in_program
+      program_readable_id. Only MITx Online-hosted courses of MITx Online programs
+      and xPRO program courses carry one, so a row counts nothing unless its program_readable_id
+      is a MITx Online or xPRO program's. Most edX.org rows carry a generated id and
+      count 0. The exception is MicroMasters enrollments missing from the edX.org
+      program report, which take the linked MITx Online program's program_readable_id
+      and are matched to enrollments by user_id with no platform condition, so they
+      can count courses. program_enrollment_with_user_report.courses_taken_in_program
       counts verified enrollments only, matched through bridge_program_course, so
       the two differ.
   - name: capstone_indicator
     description: str, Y if the learner has an enrollment, in any mode, in a program
       course with the word capstone in the title, otherwise N. Program courses are
-      matched as for unique_courses_taken_in_program, so edX.org program rows are
-      always N. program_enrollment_with_user_report.capstone_ind counts verified enrollments
+      matched as for unique_courses_taken_in_program, so most edX.org rows are N.
+      program_enrollment_with_user_report.capstone_ind counts verified enrollments
       only.
   - name: program_completion_days
     description: int, number of days from the start date of the earliest course run
       the learner holds a verified enrollment in to the program certificate's creation
       date. Ignores unverified/audit enrollments when determining the start date.
-      Program courses are matched as for unique_courses_taken_in_program, so it is
-      null on edX.org program rows. A revoked certificate keeps its creation date,
-      so this is set on revoked MITx Online and xPRO rows where user_has_completed_program
-      is false. program_enrollment_with_user_report carries the same value as program_complete_days.
+      It is null unless both dates exist, a certificate creation date and a matched
+      verified enrollment in a course run with a start date. Program courses are matched
+      as for unique_courses_taken_in_program, so it is null on most edX.org rows.
+      A revoked certificate keeps its creation date, so it can be set on a revoked
+      MITx Online or xPRO row where user_has_completed_program is false. program_enrollment_with_user_report
+      carries the same value as program_complete_days.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
