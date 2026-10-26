@@ -175,8 +175,10 @@ metric file may contain in a reviewed commit.
 
 `ol-dbt metrics sync` makes each Metric entity in OpenMetadata match its file
 and adds a lineage edge from each `implemented_by` table to it. It stops before
-the first file when the server's version is not the one stamped in the schema
-snapshot. For each file it:
+the first file when the server's major or minor version differs from the one
+stamped in the schema snapshot. A patch-level difference (e.g. 2.0.5 against
+2.0.6) prints a `version` warning and the sync goes on; refresh the snapshot
+when you see it. For each file it:
 
 1. resolves `owners`, `reviewers`, glossary and classification `tags` and the
    `implemented_by` tables by name, and writes nothing for that metric when one

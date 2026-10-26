@@ -134,16 +134,28 @@ def _load(
 
 
 def _check_server_version(client: OpenMetadataClient) -> None:
-    """Stop when the server is not the version the metric files were validated against."""
+    """Stop when the server's major or minor version is not the snapshot's.
+
+    A patch release only warns. Stopping on one cost three failed nightly syncs
+    when the server moved from 2.0.5 to 2.0.6 with an identical CreateMetric.
+    """
     server = client.request("GET", "/v1/system/version")["version"]
     snapshot = json.loads(SCHEMA_SNAPSHOT.read_text())[SCHEMA_VERSION_KEY]
-    if server != snapshot:
+    if server == snapshot:
+        return
+    refresh = (
+        "Run `ol-dbt metrics refresh-schema`, check `ol-dbt validate --only metric_registry` and commit the snapshot"
+    )
+    if server.split(".")[:2] != snapshot.split(".")[:2]:
         err_console.print(
             f"[red]Error:[/] OpenMetadata is {escape(server)} but the CreateMetric snapshot is from "
-            f"{escape(snapshot)}. Run `ol-dbt metrics refresh-schema`, check `ol-dbt validate --only "
-            "metric_registry` and commit the snapshot first."
+            f"{escape(snapshot)}. {refresh} first."
         )
         sys.exit(1)
+    console.print(
+        f"[yellow]{'version'.ljust(_LABEL_WIDTH)}[/]OpenMetadata is {escape(server)} but the CreateMetric snapshot "
+        f"is from {escape(snapshot)}, a patch release apart, so sync goes on. {refresh}."
+    )
 
 
 # Sync output labels are padded to this many columns.
