@@ -286,11 +286,16 @@ def _page(path: str, **values: Any) -> Row:
             [*XPRO_STAND_INS, {"path": "0001000100010001"}],
             "stand-in '0001000100010001' is the row with id=10, which the fixture holds",
         ),
-        # The courses index's url_path mistyped: its hand-written pages are not under it.
-        (
-            [],
-            [*XPRO_STAND_INS[:2], {"path": "000100010001", "url_path": "/home/course/"}, XPRO_STAND_INS[3]],
-            "has url_path '/home/courses/local-fixtures-i/', not under its stand-in parent's '/home/course/'",
+        # The courses index's url_path mistyped: its hand-written pages are not directly under it.
+        *(
+            (
+                [],
+                [*XPRO_STAND_INS[:2], {"path": "000100010001", "url_path": mistyped}, XPRO_STAND_INS[3]],
+                "has url_path '/home/courses/local-fixtures-i/', "
+                f"not directly under its stand-in parent's '{mistyped}'",
+            )
+            # The last two are prefixes of the real one's pages: an ancestor, and the slash left off.
+            for mistyped in ["/home/course/", "/home/", "/home/courses"]
         ),
         ([_page("0001000100010005", depth=3)], XPRO_STAND_INS, "the row with id=100 has depth 3 at path"),
         (

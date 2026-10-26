@@ -192,12 +192,17 @@ def check_tree(
             msg = f"{raw_table}: {what} at path {path!r} is under {parent_path!r}, which no row or stand-in has"
             raise ValueError(msg)
         # A page under a stand-in takes its url_path from it, so a mistyped one shows here.
+        # Compared whole, since an ancestor's url_path or one missing its slash is a prefix too.
         parent_url_path = left_out[parent_path].get("url_path") if parent_path in left_out else None
         url_path = held[path].get("url_path") if path in held else None
-        if parent_url_path is not None and url_path is not None and not url_path.startswith(parent_url_path):
+        if (
+            parent_url_path is not None
+            and url_path is not None
+            and url_path[: url_path.rstrip("/").rfind("/") + 1] != parent_url_path
+        ):
             msg = (
                 f"{raw_table}: {_named(held[path], key_columns)} has url_path {url_path!r}, "
-                f"not under its stand-in parent's {parent_url_path!r}"
+                f"not directly under its stand-in parent's {parent_url_path!r}"
             )
             raise ValueError(msg)
     children = Counter(path[:-TREEBEARD_STEPLEN] for path in held)
