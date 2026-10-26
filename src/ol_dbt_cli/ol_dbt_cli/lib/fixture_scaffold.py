@@ -73,7 +73,8 @@ _INTEGER_TYPES = frozenset(
 _TEXT_TYPES = frozenset({"CharField", "TextField", "SlugField", "EmailField", "URLField", "FilePathField"})
 # Column-name rules, tried in order on a text column: a regex on the name and
 # the provider it gets. `None` means url(). Whole words of the name, so
-# `capacity` is not a city.
+# `capacity` is not a city. A phone number or an IP address has no rule:
+# mimesis's can be real, so value() refuses them.
 _NAME_PROVIDERS: tuple[tuple[str, str | None], ...] = (
     (r"(^|_)email($|_)", "person.email"),
     (r"^first_name$", "person.first_name"),
@@ -81,8 +82,6 @@ _NAME_PROVIDERS: tuple[tuple[str, str | None], ...] = (
     (r"^(full|display|legal)_name$|(^|_)(person|instructor|author|contact|owner|user)_name$", "person.full_name"),
     (r"(^|_)name$", "text.title"),
     (r"(^|_)username$", "person.username"),
-    (r"(^|_)phone($|_)", "person.telephone"),
-    (r"(^|_)ip(_address)?$", "internet.ip_v4"),
     (r"(^|_)(url|link)$", None),
     (r"(^|_)title$", "text.title"),
     (r"(^|_)slug$", "internet.slug"),
@@ -505,8 +504,6 @@ def _provider(column: str, facts: Mapping[str, Any], fixture_type: str) -> str: 
         return 'fg.value("datetime.time")'
     if internal_type == "UUIDField":
         return 'fg.value("cryptographic.uuid")'
-    if internal_type == "GenericIPAddressField":
-        return 'fg.value("internet.ip_v4")'
     if internal_type in {"FileField", "ImageField"}:
         return 'fg.value("file.file_name")'
     # A field class with no rule here (a DurationField): what its column holds.

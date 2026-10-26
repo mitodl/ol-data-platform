@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import importlib
 import json
+import sys
+import textwrap
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -235,6 +238,79 @@ def test_a_factory_cannot_take_a_second_table() -> None:
     assert (Thing.default_count, ManyThings.default_count) == (5, 50)
 
 
+def test_two_factories_neither_subclassing_the_other_cannot_fill_one_table() -> None:
+    @table("raw__demo__app__postgres__things", default_count=5)
+    class Thing(RowFactory):
+        id = factory.Sequence(lambda n: n)
+
+    # Each would count from the same start, so their keys would repeat.
+    with pytest.raises(
+        ValueError,
+        match=r"\.OtherThing and .*\.Thing both fill raw__demo__app__postgres__things .* subclass it",
+    ):
+
+        @table("raw__demo__app__postgres__things", default_count=5)
+        class OtherThing(RowFactory):
+            id = factory.Sequence(lambda n: n)
+
+    # Two overrides of the same base count on its sequence.
+    @table("raw__demo__app__postgres__things", default_count=5)
+    class NamedThing(Thing):
+        name = factory.Sequence(lambda n: f"thing {n}")
+
+    @table("raw__demo__app__postgres__things", default_count=5)
+    class SizedThing(Thing):
+        size = factory.Sequence(lambda n: n)
+
+    seed_generation(1)
+
+    assert [NamedThing.build()["id"], SizedThing.build()["id"]] == [1, 2]
+
+
+def test_a_module_imported_again_declares_its_factories_again(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "reimported_factories.py").write_text(
+        textwrap.dedent(
+            """
+            import factory
+
+            from ol_dbt_cli.lib.fixture_generation import RowFactory, table
+
+
+            @table("raw__demo__app__postgres__things", default_count=5)
+            class Thing(RowFactory):
+                id = factory.Sequence(lambda n: n)
+            """
+        )
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    module = importlib.import_module("reimported_factories")
+
+    try:
+        reloaded = importlib.reload(module)
+    finally:
+        del sys.modules["reimported_factories"]
+
+    assert reloaded.Thing.raw_table == "raw__demo__app__postgres__things"
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        factory.Faker("ipv4"),
+        or_null(factory.Faker("ipv4")),
+        factory.Dict({"host": factory.Faker("ipv4")}),
+        factory.List([factory.Faker("ipv4")]),
+    ],
+)
+def test_table_refuses_a_faker_column(declaration: Any) -> None:
+    # faker is installed with factory_boy, and its values skip value()'s checks.
+    with pytest.raises(ValueError, match=r"\.Host\.address is a factory\.Faker.*use value\(\)"):
+
+        @table("raw__demo__app__postgres__hosts", default_count=1)
+        class Host(RowFactory):
+            address = declaration
+
+
 def test_seeding_restarts_what_factory_boy_keeps_between_builds() -> None:
     """Nested iterators, a JSON column's own factory, and factory_boy's random source."""
 
@@ -328,6 +404,14 @@ def test_generated_addresses_are_on_the_reserved_domain(tmp_path: Path, demo: Un
         ("datetime.formatted_date", {}, "datetime.formatted_date defaults start and end to the current year"),
         ("datetime.past_date", {}, "datetime.past_date counts from today"),
         ("development.calver", {}, "development.calver counts from today"),
+        ("internet.ip_v4", {}, "internet.ip_v4 makes up IP addresses outside the ranges reserved for documentation"),
+        ("internet.ip_v4_with_port", {}, "internet.ip_v4_with_port makes up IP addresses"),
+        ("internet.ip_v6_object", {}, "internet.ip_v6_object makes up IP addresses"),
+        ("internet.special_ip_v4", {}, "internet.special_ip_v4 makes up IP addresses"),
+        ("internet.public_dns", {}, "internet.public_dns is the address of a real public DNS resolver"),
+        ("internet.http_request_headers", {}, "internet.http_request_headers makes up a hostname"),
+        ("person.telephone", {}, "person.telephone makes up phone numbers outside 555-0100 to 555-0199"),
+        ("person.phone_number", {"mask": "+1-###-###-####"}, "person.phone_number makes up phone numbers"),
     ],
 )
 def test_value_refuses_what_would_not_be_reserved_or_repeatable(

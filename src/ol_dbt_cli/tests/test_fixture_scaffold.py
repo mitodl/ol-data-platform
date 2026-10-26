@@ -15,8 +15,14 @@ import pytest
 import yaml
 
 from ol_dbt_cli.commands import fixtures as fixtures_command
-from ol_dbt_cli.lib.fixture_generation import generate_rows
-from ol_dbt_cli.lib.fixture_scaffold import scaffold, starter_package, trimmed_models
+from ol_dbt_cli.lib.fixture_generation import generate_rows, value
+from ol_dbt_cli.lib.fixture_scaffold import (
+    _FIELD_PROVIDERS,
+    _NAME_PROVIDERS,
+    scaffold,
+    starter_package,
+    trimmed_models,
+)
 from ol_dbt_cli.lib.fixture_trees import Tree
 from ol_dbt_cli.lib.inventory import load_units
 from ol_dbt_cli.lib.raw_fixtures import load_fixtures
@@ -339,6 +345,15 @@ def test_nullable_unique_and_case_rules(scaffolded: str) -> None:
     assert 'amount = fg.value("numeric.decimal_number", start=0, end=999999)' in _class_body(
         scaffolded, "ThingsUnmodeledBase"
     )
+
+
+@pytest.mark.parametrize(
+    "provider",
+    sorted(({provider for _, provider in _NAME_PROVIDERS} | set(_FIELD_PROVIDERS.values())) - {None}),
+)
+def test_every_rule_names_a_provider_value_takes(provider: str) -> None:
+    # A refused provider would make the scaffolded module fail to import.
+    value(provider)
 
 
 def test_field_classes_and_short_unique_text(scaffolded: str) -> None:

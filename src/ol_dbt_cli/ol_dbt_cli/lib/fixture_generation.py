@@ -39,10 +39,11 @@ pair shape this module:
   counter. :func:`table` gives each raw table its own.
 
 :func:`generate_rows` seeds all of it from the package's ``SEED``, so one
-commit generates the same rows in every process. Two things would break that
+commit generates the same rows in every process. Three things would break that
 and are refused: a mimesis provider whose default range ends at the current
-year, and a key taken from a provider instead of the sequence (``email(unique=
-True)`` raises under a seed).
+year, a key taken from a provider instead of the sequence (``email(unique=
+True)`` raises under a seed), and a ``factory.Faker`` column, whose values come
+from faker, a second source none of :func:`value`'s checks see.
 """
 
 from __future__ import annotations
@@ -88,8 +89,32 @@ _DLT_ID_ALPHABET = string.ascii_letters + string.digits
 _DLT_ID_LENGTH = 14
 _INTEGER_TYPES = frozenset({"int", "long"})
 
-# mimesis methods that make up a hostname with a real top-level domain.
-_REAL_ADDRESS_METHODS = frozenset({"url", "uri", "hostname", "dsn"})
+# mimesis methods whose values can be a real host's or subscriber's, and why.
+# RFC 5737 and RFC 3849 reserve IP ranges for documentation, and the NANP
+# reserves 555-0100 to 555-0199 for fiction. mimesis keeps to neither.
+_REAL_HOSTNAME = "makes up a hostname under a real top-level domain; use url()"
+_REAL_IP = "makes up IP addresses outside the ranges reserved for documentation, so one can be a real host's"
+_REAL_PHONE = "makes up phone numbers outside 555-0100 to 555-0199, so one can be a real subscriber's"
+_REAL_ADDRESS_METHODS: dict[str, str] = {
+    # http_request_headers holds a Host and a Referer.
+    **dict.fromkeys(("url", "uri", "hostname", "dsn", "http_request_headers"), _REAL_HOSTNAME),
+    **dict.fromkeys(
+        (
+            "ip_v4",
+            "ip_v4_object",
+            "ip_v4_with_port",
+            "ip_v4_cidr",
+            "ip_v6",
+            "ip_v6_object",
+            "ip_v6_cidr",
+            "special_ip_v4",
+            "special_ip_v4_object",
+        ),
+        _REAL_IP,
+    ),
+    "public_dns": "is the address of a real public DNS resolver",
+    **dict.fromkeys(("phone_number", "telephone"), _REAL_PHONE),
+}
 # mimesis methods whose default range ends at the current year, and the
 # arguments that pin it.
 _CLOCK_BOUNDS: dict[str, tuple[str, str]] = {
@@ -103,6 +128,9 @@ _CLOCK_BOUNDS: dict[str, tuple[str, str]] = {
 }
 # mimesis methods that count from today, with no argument that pins them.
 _CLOCK_METHODS = frozenset({"past_date", "past_datetime", "future_date", "future_datetime", "calver"})
+# The factory each raw table was first declared with. A unit's tables are
+# declared as its package is imported.
+_TABLE_FACTORIES: dict[str, type[RowFactory]] = {}
 
 
 @dataclass
@@ -126,7 +154,7 @@ class RowFactory(factory.BaseDictFactory):
 
     Declare the table with :func:`table`. A subclass of a declared factory (a
     unit's ``__init__.py`` overriding a scaffolded one) fills the same table
-    and counts on the same sequence.
+    and counts on the same sequence. A factory that is not one cannot fill it.
     """
 
     raw_table: str
@@ -144,7 +172,9 @@ def table[FactoryT: type[RowFactory]](raw_table: str, default_count: int) -> Cal
     :returns: A class decorator.
     :rtype: Callable[[FactoryT], FactoryT]
     :raises ValueError: If ``raw_table`` is empty or ``default_count`` is not a
-        positive integer.
+        positive integer; or, from the decorator, if the factory fills another
+        table, another factory it does not subclass fills this one, or a
+        column is a ``factory.Faker``.
     """
     if not raw_table:
         msg = "a factory's raw_table is the name of the table it fills, not an empty string"
@@ -160,6 +190,24 @@ def table[FactoryT: type[RowFactory]](raw_table: str, default_count: int) -> Cal
                 f"a factory of {raw_table} subclasses RowFactory"
             )
             raise ValueError(msg)
+        # Two factories of a table, neither a subclass of the other, would each
+        # count its keys from the same start, so the second's repeat the
+        # first's. A module imported again declares its factories again.
+        first = _TABLE_FACTORIES.get(raw_table)
+        redeclared = first is not None and (first.__module__, first.__qualname__) == (cls.__module__, cls.__qualname__)
+        if first is not None and not redeclared and not issubclass(cls, first):
+            msg = (
+                f"{_name(cls)} and {_name(first)} both fill {raw_table} and would count its keys from the same "
+                f"start; to override {first.__name__}, subclass it"
+            )
+            raise ValueError(msg)
+        for column, declaration in cls._meta.declarations.items():  # noqa: SLF001
+            if any(isinstance(part, factory.Faker) for part in _parts(declaration)):
+                msg = (
+                    f"{_name(cls)}.{column} is a factory.Faker, whose values come from faker, not the seeded "
+                    f"mimesis Field, and pass none of value()'s checks; use value()"
+                )
+                raise ValueError(msg)
         # factory_boy shares a sequence counter between a factory and its base
         # when both have a model, and reads every public class attribute as a
         # column. So the model is set on a subclass made here, one per table,
@@ -176,9 +224,15 @@ def table[FactoryT: type[RowFactory]](raw_table: str, default_count: int) -> Cal
         )
         declared.raw_table = raw_table  # type: ignore[attr-defined]
         declared.default_count = default_count  # type: ignore[attr-defined]
+        if first is None or redeclared:
+            _TABLE_FACTORIES[raw_table] = declared
         return cast("FactoryT", declared)
 
     return declare
+
+
+def _name(cls: type[Any]) -> str:
+    return f"{cls.__module__}.{cls.__qualname__}"
 
 
 def scaled_count(row_factory: type[RowFactory], scale: float) -> int:
@@ -210,9 +264,10 @@ def value(provider: str, **kwargs: Any) -> Any:
     :param provider: A mimesis field name, e.g. ``"text.title"``.
     :param kwargs: The provider's arguments.
     :returns: A factory_boy declaration.
-    :raises ValueError: For a provider that makes up a real hostname (use
-        :func:`url`), or one whose default range ends at the current year and
-        is not given its bounds.
+    :raises ValueError: For a provider that makes up a hostname (use
+        :func:`url`), an IP address or a phone number that can be real, or one
+        whose default range ends at the current year and is not given its
+        bounds.
     """
     kwargs = _checked(provider, kwargs)
     return factory.LazyFunction(lambda: _current().field(provider, **kwargs))
@@ -222,7 +277,7 @@ def _checked(provider: str, kwargs: dict[str, Any]) -> dict[str, Any]:
     # mimesis takes other separators than a dot between provider and method.
     method = re.split(r"\W", provider)[-1]
     if method in _REAL_ADDRESS_METHODS:
-        msg = f"{provider} makes up a hostname under a real top-level domain; use url()"
+        msg = f"{provider} {_REAL_ADDRESS_METHODS[method]}"
         raise ValueError(msg)
     if method in _CLOCK_METHODS:
         msg = f"{provider} counts from today, so its rows change with the date"
@@ -308,7 +363,10 @@ def seed_generation(seed: int, sequence_starts: Mapping[str, int] | None = None)
     # counts and iterates too.
     for row_factory in _subclasses(factory.Factory):
         for declaration in row_factory._meta.declarations.values():  # noqa: SLF001
-            _reset_iterators(declaration)
+            for part in _parts(declaration):
+                # An iterator carries its position from one build to the next.
+                if isinstance(part, factory.Iterator):
+                    part.reset()
         raw_table = getattr(row_factory, "raw_table", None)
         row_factory.reset_sequence(starts.get(raw_table, 1) if raw_table else 0, force=True)
 
@@ -319,20 +377,18 @@ def _subclasses(base: type[Any]) -> Iterator[Any]:
         yield from _subclasses(subclass)
 
 
-def _reset_iterators(declaration: Any) -> None:
-    """Restart ``declaration`` and every ``factory.Iterator`` it holds.
+def _parts(declaration: Any) -> Iterator[Any]:
+    """Yield ``declaration`` and every declaration it holds.
 
-    An iterator carries its position from one build to the next. It can sit
-    inside a ``factory.Dict``, ``List`` or ``Maybe``, which hold their parts in
-    attributes of their own.
+    A ``factory.Dict``, ``List`` or ``Maybe`` holds its parts in attributes of
+    its own. A ``factory.SubFactory`` holds its factory, which is not walked.
     """
-    if isinstance(declaration, factory.Iterator):
-        declaration.reset()
+    yield declaration
     if not isinstance(declaration, BaseDeclaration):
         return
     for held in vars(declaration).values():
         for part in held.values() if isinstance(held, dict) else [held]:
-            _reset_iterators(part)
+            yield from _parts(part)
 
 
 @dataclass(frozen=True)
