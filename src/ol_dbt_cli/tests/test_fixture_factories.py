@@ -214,6 +214,21 @@ def test_trees_have_one_row_per_path_and_count_their_children(generation: _Gener
             assert added == generated_children[after["path"]], after["path"]
 
 
+@pytest.mark.parametrize("unit", UNITS, ids=lambda unit: unit.key)
+def test_generate_rows_checks_every_tree_the_models_have(unit: Unit) -> None:
+    """It checks the trees the package's TREE_ALPHABETS names, so a package that does not import it is not checked."""
+    (fixture,) = load_fixtures(INVENTORY_DIR, [unit], selected=True)
+    prefix = str(unit.data["table_prefix"])
+    models = json.loads((FACTORIES_DIR / unit.path.stem / MODELS_FILE).read_text())["tables"]
+    trees = {
+        table.raw_table
+        for table in fixture.tables
+        if "treebeard" in models.get(table.raw_table.removeprefix(prefix), {})
+    }
+
+    assert set(getattr(unit_factories(unit), "TREE_ALPHABETS", {})) == trees
+
+
 def _strings(value: Any) -> Iterator[str]:
     if isinstance(value, str):
         yield value

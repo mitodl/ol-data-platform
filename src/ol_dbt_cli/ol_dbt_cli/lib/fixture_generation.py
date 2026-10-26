@@ -427,7 +427,8 @@ def generate_rows(
     :rtype: GeneratedRows
     :raises ValueError: If ``scale`` is not positive, a value cannot be held by
         its column, ``generate`` added, removed or re-keyed a hand-written row,
-        or the generated rows fail :func:`validate_generated`.
+        the generated rows fail :func:`validate_generated`, or a treebeard
+        table's rows fail :func:`~ol_dbt_cli.lib.fixture_trees.check_tree`.
     """
     if not (math.isfinite(scale) and scale > 0):
         msg = f"scale is {scale!r}, expected a positive number"
@@ -453,6 +454,22 @@ def generate_rows(
         for raw_table, rows in generated.items()
     }
     validate_generated(fixture, unit, finished)
+    # fixture_trees imports this module for its draws.
+    from ol_dbt_cli.lib.fixture_trees import check_tree  # noqa: PLC0415
+
+    # A package with no treebeard table has neither: the scaffold writes
+    # TREE_ALPHABETS only for one with a tree, and a tree with no parent left
+    # out needs no stand-ins.
+    stand_ins = getattr(factories, "TREE_STAND_INS", {})
+    for raw_table, alphabet in getattr(factories, "TREE_ALPHABETS", {}).items():
+        check_tree(
+            raw_table,
+            hand_written[raw_table],
+            finished.get(raw_table, []),
+            key_columns=key_columns[raw_table],
+            alphabet=alphabet,
+            stand_ins=stand_ins.get(raw_table, []),
+        )
     return GeneratedRows(hand_written=hand_written, generated=finished)
 
 

@@ -15,10 +15,15 @@ A unit's ``generate`` builds the rows with its factories and passes them here::
     pages = Tree(hand_written[Page.raw_table])
     courses_index = {"path": "000100010001", "url_path": "/home/courses/"}
     course_pages = pages.add(Page.build_batch(scaled_count(Page, scale)), under=courses_index)
+
+A :class:`Tree` sees only the rows it was built from and placed, so
+:func:`~ol_dbt_cli.lib.fixture_generation.generate_rows` checks each tree whole
+with :func:`check_tree`, against the stand-ins the package declares.
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import TYPE_CHECKING
 
 from ol_dbt_cli.lib.fixture_generation import pick
@@ -46,7 +51,8 @@ class Tree:
     A parent the fixture does not hold (wagtail's root and index pages are
     left out of the committed fixtures) is given as a stand-in mapping with its
     ``path`` and, for pages, its ``url_path``. A stand-in for a path the tree
-    holds is that row.
+    holds is that row. The package declares its stand-ins in
+    ``TREE_STAND_INS``, which :func:`check_tree` holds the placed rows to.
 
     :param rows: Every row the table holds so far, hand-written and generated.
     :param alphabet: The model's ``MP_Node.alphabet``.
@@ -109,9 +115,7 @@ class Tree:
 
     def _hold(self, row: Row) -> None:
         path = row["path"]
-        if not path or len(path) % TREEBEARD_STEPLEN or set(path) - set(self._alphabet):
-            msg = f"path {path!r} is not whole steps of {TREEBEARD_STEPLEN} characters from {self._alphabet!r}"
-            raise ValueError(msg)
+        _check_path(path, self._alphabet)
         if path in self._rows:
             msg = f"two rows have path {path!r}"
             raise ValueError(msg)
@@ -127,6 +131,98 @@ class Tree:
         for character in step:
             number = number * len(self._alphabet) + self._alphabet.index(character)
         self._last_step[parent_path] = max(self._last_step.get(parent_path, 0), number)
+
+
+def check_tree(
+    raw_table: str,
+    hand_written: Sequence[Row],
+    generated: Sequence[Row],
+    *,
+    key_columns: Sequence[str],
+    alphabet: str = TREEBEARD_ALPHABET,
+    stand_ins: Sequence[Row] = (),
+) -> None:
+    """Check that every row a treebeard table loads, with the parents it leaves out, makes one tree.
+
+    Two trees built over one table, or rows placed without one, can give two
+    rows one path, and a mistyped stand-in places rows under a parent nothing
+    has. ``validate_generated`` checks only primary keys, so it sees neither.
+    A hand-written parent's ``numchild`` counts children the fixture leaves
+    out, so only a generated row's is checked.
+
+    :param raw_table: The table, for the messages.
+    :param hand_written: The fixture's rows, as ``generate`` left them.
+    :param generated: The rows the package generated.
+    :param key_columns: The table's primary key, which names a row in the messages.
+    :param alphabet: The model's ``MP_Node.alphabet``.
+    :param stand_ins: The parents the fixture leaves out, the package's
+        ``TREE_STAND_INS`` for the table.
+    :raises ValueError: If a path is not whole steps of ``alphabet``, two rows
+        have one path, a stand-in has a row's path, a row's or stand-in's
+        parent is neither a row nor a stand-in, a row's ``url_path`` is not
+        under its stand-in parent's, a row's ``depth`` is not its path's, or a
+        generated row's ``numchild`` is not its children's count.
+    """
+    held: dict[str, Row] = {}
+    for row in [*hand_written, *generated]:
+        path = row["path"]
+        _check_path(path, alphabet)
+        if path in held:
+            msg = (
+                f"{raw_table}: {_named(held[path], key_columns)} and {_named(row, key_columns)} both have path {path!r}"
+            )
+            raise ValueError(msg)
+        held[path] = row
+        # A long column accepts a quoted depth, and the fixture keeps it as written.
+        if int(row["depth"]) != len(path) // TREEBEARD_STEPLEN:
+            msg = f"{raw_table}: {_named(row, key_columns)} has depth {row['depth']!r} at path {path!r}"
+            raise ValueError(msg)
+    left_out: dict[str, Row] = {}
+    for stand_in in stand_ins:
+        path = stand_in["path"]
+        _check_path(path, alphabet)
+        if path in held:
+            msg = f"{raw_table}: stand-in {path!r} is {_named(held[path], key_columns)}, which the fixture holds"
+            raise ValueError(msg)
+        left_out[path] = stand_in
+    for path in [*held, *sorted(left_out)]:
+        parent_path = path[:-TREEBEARD_STEPLEN]
+        if parent_path and parent_path not in held and parent_path not in left_out:
+            what = _named(held[path], key_columns) if path in held else "stand-in"
+            msg = f"{raw_table}: {what} at path {path!r} is under {parent_path!r}, which no row or stand-in has"
+            raise ValueError(msg)
+        # A page under a stand-in takes its url_path from it, so a mistyped one shows here.
+        # Compared whole, since an ancestor's url_path or one missing its slash is a prefix too.
+        parent_url_path = left_out[parent_path].get("url_path") if parent_path in left_out else None
+        url_path = held[path].get("url_path") if path in held else None
+        if (
+            parent_url_path is not None
+            and url_path is not None
+            and url_path[: url_path.rstrip("/").rfind("/") + 1] != parent_url_path
+        ):
+            msg = (
+                f"{raw_table}: {_named(held[path], key_columns)} has url_path {url_path!r}, "
+                f"not directly under its stand-in parent's {parent_url_path!r}"
+            )
+            raise ValueError(msg)
+    children = Counter(path[:-TREEBEARD_STEPLEN] for path in held)
+    for row in generated:
+        if row["numchild"] != children[row["path"]]:
+            msg = (
+                f"{raw_table}: {_named(row, key_columns)} has numchild {row['numchild']!r} "
+                f"and {children[row['path']]} children"
+            )
+            raise ValueError(msg)
+
+
+def _check_path(path: str, alphabet: str) -> None:
+    if not path or len(path) % TREEBEARD_STEPLEN or set(path) - set(alphabet):
+        msg = f"path {path!r} is not whole steps of {TREEBEARD_STEPLEN} characters from {alphabet!r}"
+        raise ValueError(msg)
+
+
+def _named(row: Row, key_columns: Sequence[str]) -> str:
+    return "the row with " + ", ".join(f"{column}={row[column]!r}" for column in key_columns)
 
 
 def attach(children: Sequence[Row], parents: Sequence[Row], *, column: str = "parent_id", key: str = "id") -> list[Row]:
