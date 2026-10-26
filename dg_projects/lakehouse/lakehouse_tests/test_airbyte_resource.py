@@ -20,6 +20,7 @@ from lakehouse.resources.airbyte import (
     LISTING_ATTEMPTS,
     AirbyteOSSClient,
     AirbyteOSSWorkspace,
+    records_read,
 )
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import HTTPError
@@ -132,13 +133,62 @@ class TestStreamStats:
                 {"id": 60322},
             )
         ]
-        assert stats["users"]["recordsEmitted"] == 12
-        assert set(stats) == {"api_enrollments", "users"}
+        assert stats == self.answer["job"]["streamAggregatedStats"]
 
     @pytest.mark.usefixtures("requests_made")
-    def test_a_job_with_no_stats_has_no_streams(self, client) -> None:
-        self.answer = {"job": {"id": 1}}
-        assert client.get_stream_stats(1) == {}
+    @pytest.mark.parametrize(
+        "answer",
+        [
+            {"job": {"id": 1}},
+            {"job": {"id": 1, "streamAggregatedStats": None}},
+            {"job": {"id": 1, "streamAggregatedStats": {"users": {}}}},
+            {"id": 1},
+        ],
+    )
+    def test_a_response_without_a_stats_list_is_unknown(self, client, answer) -> None:
+        """Read as no streams, it made every stream look empty."""
+        self.answer = answer
+        assert client.get_stream_stats(1) is None
+
+
+class TestRecordsRead:
+    """Only a numeric count on the stream's one entry is a count."""
+
+    STATS = [  # noqa: RUF012
+        {"streamName": "enrollments", "recordsEmitted": 0, "recordsCommitted": 0},
+        {"streamName": "users", "recordsEmitted": 12, "recordsCommitted": 11},
+        {"streamName": "nulls", "recordsEmitted": None, "recordsCommitted": None},
+        {"streamName": "twice", "streamNamespace": "a", "recordsEmitted": 1},
+        {"streamName": "twice", "streamNamespace": "b", "recordsEmitted": 0},
+    ]
+
+    @pytest.mark.parametrize(
+        ("name", "expected"),
+        [
+            ("enrollments", (0, 0)),
+            ("users", (12, 11)),
+            ("nulls", (None, None)),
+            ("absent", (None, None)),
+            ("twice", (None, None)),
+        ],
+    )
+    def test_counts_from_stats(self, name, expected) -> None:
+        assert records_read(self.STATS, name, rows_synced=13) == expected
+
+    @pytest.mark.parametrize("stats", [None, []])
+    def test_no_stats_with_rows_synced_is_unknown(self, stats) -> None:
+        """Rows went somewhere, so an empty or missing list cannot be trusted."""
+        assert records_read(stats, "enrollments", rows_synced=13) == (None, None)
+
+    @pytest.mark.parametrize("stats", [None, [], STATS])
+    def test_a_job_that_synced_no_rows_read_nothing_from_any_stream(
+        self, stats
+    ) -> None:
+        """Job 60322's shape: rowsSynced 0, whatever the stats endpoint says."""
+        assert records_read(stats, "absent", rows_synced=0) == (0, 0)
+
+    def test_a_missing_rows_synced_does_not_mean_zero(self) -> None:
+        assert records_read(None, "enrollments", rows_synced=None) == (None, None)
 
 
 def _job(job_id: int, status: AirbyteJobStatusType | str) -> AirbyteJob:
