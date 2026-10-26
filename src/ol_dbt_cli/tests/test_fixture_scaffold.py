@@ -240,7 +240,7 @@ FIXTURE_TABLES: dict[str, tuple[str, dict[str, str]]] = {
 
 def _unit(
     tmp_path: Path,
-    keys: Mapping[str, str] | None = None,
+    keys: Mapping[str, str | tuple[str, ...]] | None = None,
     tables: Mapping[str, tuple[str, dict[str, str]]] = FIXTURE_TABLES,
     rows: Mapping[str, list[dict[str, Any]]] | None = None,
 ) -> tuple[UnitFixture, Unit]:
@@ -259,7 +259,7 @@ def _unit(
                 "raw_table": PREFIX + name,
                 "sync_mode": "full_refresh_overwrite",
                 "modeled": True,
-                "primary_key": [[keys[name]]],
+                "primary_key": [[column] for column in _key_columns(keys[name])],
             }
             for name in tables
         ],
@@ -278,6 +278,10 @@ def _unit(
     (loaded_unit,) = load_units(tmp_path)
     (loaded_fixture,) = load_fixtures(tmp_path, [loaded_unit])
     return loaded_fixture, loaded_unit
+
+
+def _key_columns(key: str | tuple[str, ...]) -> tuple[str, ...]:
+    return (key,) if isinstance(key, str) else key
 
 
 def _class_body(source: str, name: str) -> str:
@@ -848,6 +852,72 @@ def test_the_drafted_factories_generate_rows_that_pass_validation(
     runs = rows.generated[f"{PREFIX}courses_courserun"]
     assert {row["course_id"] for row in runs} <= {row["id"] for row in rows.generated[f"{PREFIX}courses_course"]}
     assert {row["year"] for row in runs} <= {"2025", "2026", None}
+
+
+def test_a_composite_key_is_unique_together_not_by_column(tmp_path: Path) -> None:
+    _staging_project(tmp_path / "dbt")
+    fixture, unit = _unit(
+        tmp_path,
+        keys={"courses_courserun": ("course_id", "run_tag")},
+        tables=TESTED_TABLES,
+        # Two runs of one course, as two videos of one playlist.
+        rows={
+            **TESTED_ROWS,
+            "courses_courserun": [{"course_id": 1, "run_tag": "R1"}, {"course_id": 1, "run_tag": "R2"}],
+        },
+    )
+
+    run = scaffold_from_tests(fixture, unit, tmp_path / "dbt").models["tables"]["courses_courserun"]
+
+    assert {column: run["columns"][column]["unique"] for column in ["course_id", "run_tag"]} == {
+        "course_id": False,
+        "run_tag": False,
+    }
+    assert all(run["columns"][column]["primary_key"] for column in ["course_id", "run_tag"])
+    # The key and the staging test name one pair, kept once.
+    assert run["unique_together"] == [["course_id", "run_tag"]]
+
+
+ACCEPTED_VALUES_YAML = """
+version: 2
+models:
+- name: stg__demo__courses
+  columns:
+  - name: course_kind
+    tests:
+    - accepted_values:
+        arguments:
+          values: [online, hybrid]
+    - accepted_values:
+        arguments:
+          values: [classroom]
+  - name: course_code
+    tests:
+    - accepted_values:
+        arguments:
+          values: '{{ course_codes() }}'
+"""
+
+
+def test_accepted_values_that_are_disjoint_or_templated_are_noted(tmp_path: Path) -> None:
+    _staging_project(tmp_path / "dbt")
+    (tmp_path / "dbt" / "models" / "staging" / "demo" / "_stg_demo__models.yml").write_text(ACCEPTED_VALUES_YAML)
+    fixture, unit = _unit(tmp_path, tables=TESTED_TABLES, rows=TESTED_ROWS)
+
+    drafted = scaffold_from_tests(fixture, unit, tmp_path / "dbt")
+    course = _class_body(drafted.source, "CoursesCourseBase")
+
+    # The first test's choices pass it, where none would pass either.
+    assert 'kind = fg.or_null(factory.Iterator(["online", "hybrid"]))' in course
+    # Not one choice per character of the expression.
+    assert 'code = fg.or_null(fg.value("text.word"))' in course
+    assert (
+        f"stg__demo__courses.course_kind: accepted_values not mapped; another test on {PREFIX}courses_course.kind "
+        "accepts none of its values"
+    ) in drafted.notes
+    assert (
+        "stg__demo__courses.course_code: accepted_values not mapped; its values are '{{ course_codes() }}', not a list"
+    ) in drafted.notes
 
 
 def test_scaffold_drafts_from_tests_when_the_unit_has_no_dump(tmp_path: Path) -> None:

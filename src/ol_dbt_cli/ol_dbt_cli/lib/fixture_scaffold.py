@@ -294,8 +294,9 @@ def _models_from_tests(fixture: UnitFixture, unit: Unit, dbt_dir: Path) -> tuple
 
     Every column is the field its fixture type would be, NULL in a share of
     rows unless the inventory makes it part of the primary key or a staging
-    test says it is not null. A string column that a hand-written row holds a
-    mapping or list in is JSON. No table has a model.
+    test says it is not null. A composite key is unique together, and a
+    column of it only if a test says so. A string column that a hand-written
+    row holds a mapping or list in is JSON. No table has a model.
 
     :param fixture: The unit's parsed fixture file.
     :param unit: The inventory unit, for its table prefix and primary keys.
@@ -309,14 +310,21 @@ def _models_from_tests(fixture: UnitFixture, unit: Unit, dbt_dir: Path) -> tuple
     if not staged:
         msg = f"no staging model under {dbt_dir / STAGING_DIR} reads a table of {fixture.path}"
         raise ValueError(msg)
-    keys = {entry["raw_table"]: {path[0].lower() for path in entry.get("primary_key") or []} for entry in unit.tables}
+    keys = {entry["raw_table"]: [path[0].lower() for path in entry.get("primary_key") or []] for entry in unit.tables}
     columns = {
         raw_table: {
-            column.lower(): _column_facts(table, column, key=column.lower() in keys.get(raw_table, set()))
+            column.lower(): _column_facts(table, column, key=column.lower() in keys.get(raw_table, []))
             for column in table.columns
         }
         for raw_table, table in tables.items()
     }
+    unique_together: dict[str, list[list[str]]] = {raw_table: [] for raw_table in tables}
+    for raw_table in tables:
+        if len(key := keys.get(raw_table, [])) > 1:
+            # A composite key is unique as a whole: rows share a playlist, not a (playlist, video).
+            for column in key:
+                columns[raw_table][column]["unique"] = False
+            unique_together[raw_table].append(key)
     # A staging model that keeps one row of many (the newest load of a history
     # table) can test unique what the raw table repeats.
     repeated = {
@@ -331,7 +339,6 @@ def _models_from_tests(fixture: UnitFixture, unit: Unit, dbt_dir: Path) -> tuple
         for raw_table in tables
         if raw_table not in read
     ]
-    unique_together: dict[str, list[list[str]]] = {raw_table: [] for raw_table in tables}
     registry = build_yaml_registry(dbt_dir / STAGING_DIR)
     for model_name, model in staged.items():
         if not model.passed:
@@ -352,7 +359,9 @@ def _models_from_tests(fixture: UnitFixture, unit: Unit, dbt_dir: Path) -> tuple
             listed = [name.lower() for name in test.arguments[_UNIQUE_TOGETHER_TESTS[test.name]]]
             raw_columns = [model.passed.get(name, []) for name in listed]
             if all(len(raw) == 1 for raw in raw_columns) and len({raw[0][0] for raw in raw_columns}) == 1:
-                unique_together[raw_columns[0][0][0]].append([raw[0][1] for raw in raw_columns])
+                together = [raw[0][1] for raw in raw_columns]
+                if together not in unique_together[raw_columns[0][0][0]]:
+                    unique_together[raw_columns[0][0][0]].append(together)
             else:
                 notes.append(
                     f"{model_name}: {test.name} on {', '.join(listed)} not mapped; "
@@ -448,13 +457,24 @@ def _map_test(
             return [f"{where}: unique not mapped; the writer draws no distinct {targets[0]['internal_type']}"]
         targets[0]["unique"] = True
     elif test.name == "accepted_values":
-        for facts in targets:
+        listed = test.arguments["values"]
+        # A Jinja expression (e.g. '{{ highest_education_values() }}') stays the string it was written as.
+        if not isinstance(listed, list):
+            return [f"{where}: accepted_values not mapped; its values are {listed!r}, not a list"]
+        notes = []
+        for (raw_table, raw_column), facts in zip(raw, targets, strict=True):
             # YAML reads an unquoted 2025 as a number; a string column holds its text.
-            values = [str(value) if facts["field"] == "CharField" else value for value in test.arguments["values"]]
-            facts["choices"] = [value for value in facts.get("choices", values) if value in values]
-            if not facts["choices"]:
-                del facts["choices"]
-                return [f"{where}: accepted_values not mapped; another staging model accepts none of its values"]
+            values = [str(value) if facts["field"] == "CharField" else value for value in listed]
+            choices = [value for value in facts.get("choices", values) if value in values]
+            if not choices:
+                # The earlier test's choices still pass that test.
+                notes.append(
+                    f"{where}: accepted_values not mapped; another test on {raw_table}.{raw_column} "
+                    "accepts none of its values"
+                )
+                continue
+            facts["choices"] = choices
+        return notes
     else:
         parent = _parent(str(test.arguments["to"]), str(test.arguments["field"]).lower(), columns, staged)
         if parent is None:
