@@ -189,27 +189,8 @@ with mitxonline_enrollments as (
 -- same code (courserun_external_readable_id, as in int__combined__courserun_enrollments),
 -- this lookup resolves it to that run's courserun_readable_id. Codes with no xPro run keep
 -- the external code, which matches the platform's own dim_course_run row.
--- xPro can give two runs one code (e.g. MCPO and MO_MCPO both carry MO-MCPO-26-12#1 since
--- 2026-10-14). The earliest-created run takes the code, so an enrollment resolves to one
--- run, and to the xPro course wrike_course_codes_of_mitxpro_courses gives the code in
--- dim_course.
 , mitxpro_external_readable_id_lookup as (
-    select courserun_external_readable_id, courserun_readable_id
-    from (
-        select
-            courserun_external_readable_id
-            , courserun_readable_id
-            , row_number() over (
-                partition by courserun_external_readable_id
-                order by courserun_created_on, courserun_id
-            ) as _row_num
-        from {{ ref('int__mitxpro__course_runs') }}
-        -- xPro runs with no external id carry '' rather than null; without this, a source row
-        -- with an empty run code would fan out across all of them
-        where courserun_external_readable_id is not null
-            and courserun_external_readable_id != ''
-    ) as ranked
-    where _row_num = 1
+    {{ mitxpro_course_runs_by_external_readable_id() }}
 )
 
 , emeritus_enrollments as (
