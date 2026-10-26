@@ -349,9 +349,9 @@ models:
   config:
     meta:
       qa_branches:
-      - mitx/api
-      - mitxonline/api
-      - xpro/api
+      - mitx/course_structure
+      - mitxonline/course_structure
+      - xpro/course_structure
   columns:
   - name: platform
     description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
@@ -424,12 +424,12 @@ models:
   config:
     meta:
       qa_branches:
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
-      - mitxonline/api
+      - mitxonline/course_structure
       - mitxonline/mysql
       - ovs/app_postgres
-      - xpro/api
+      - xpro/course_structure
       - xpro/mysql
   columns:
   - name: platform

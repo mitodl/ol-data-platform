@@ -753,16 +753,16 @@ models:
     meta:
       qa_branches:
       - micromasters/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
       - mitxonline/tracking_logs
       - ovs/app_postgres
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
       - xpro/tracking_logs
   columns:
@@ -861,15 +861,15 @@ models:
     meta:
       qa_branches:
       - micromasters/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
       - mitxonline/tracking_logs
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
       - xpro/tracking_logs
   columns:

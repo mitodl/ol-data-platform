@@ -870,3 +870,43 @@ retired:
     The landing zone keeps only the newest copy of a re-materialized structure,
     so earlier copies of 1,918 files exist only in this table. They were not
     backfilled. The table stays in place, read-only.
+- deployment: mitx
+  layer: api
+  raw_tables:
+  - raw__mitx__openedx__api__course_blocks
+  retired_on: '2026-10-23'
+  reason: >-
+    Replaced by mitx/course_structure's
+    raw__mitx__openedx__api__course_structure_blocks, which the
+    course_xml_blocks dlt source loads from the same landing files (#2845).
+    This table was first loaded on 2025-03-03 and never held the 717 files
+    that landed before then (2024-09 to 2025-03), so 190 course runs exist
+    only in the dlt table. The landing zone keeps only the newest copy of a
+    re-materialized structure, so earlier copies of 393 files exist only in
+    this table. They were not backfilled. The table stays in place, read-only.
+- deployment: mitxonline
+  layer: api
+  raw_tables:
+  - raw__mitxonline__openedx__api__course_blocks
+  retired_on: '2026-10-23'
+  reason: >-
+    Replaced by mitxonline/course_structure's
+    raw__mitxonline__openedx__api__course_structure_blocks, which the
+    course_xml_blocks dlt source loads from the same landing files (#2845).
+    Both tables held the same 30,858 files on 2026-10-23. The landing zone
+    keeps only the newest copy of a re-materialized structure, so earlier
+    copies of 6,210 files exist only in this table. They were not backfilled.
+    The table stays in place, read-only.
+- deployment: xpro
+  layer: api
+  raw_tables:
+  - raw__xpro__openedx__api__course_blocks
+  retired_on: '2026-10-23'
+  reason: >-
+    Replaced by xpro/course_structure's
+    raw__xpro__openedx__api__course_structure_blocks, which the
+    course_xml_blocks dlt source loads from the same landing files (#2845).
+    Both tables held the same 2,723 files on 2026-10-23. The landing zone
+    keeps only the newest copy of a re-materialized structure, so earlier
+    copies of 946 files exist only in this table. They were not backfilled.
+    The table stays in place, read-only.

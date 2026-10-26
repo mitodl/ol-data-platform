@@ -49,12 +49,14 @@ three deployments (dg_projects/openedx/.../openedx.py::course_structure):
         {mitx,mitxonline,xpro}/openedx/processed_data/course_blocks/
             <course>/<structure hash>.json
 
-One Airbyte source-s3 connection per deployment loads those into
-raw__<deployment>__openedx__api__course_blocks. This source loads them into
-raw__<deployment>__openedx__api__course_structure_blocks, one table per
-deployment because the rows carry no source_system and each deployment has its
-own staging model. On 2026-10-06 the prefixes held 29,953 files (13.2 GB) for
-mitxonline, 3,203 (3.2 GB) for mitx and 2,659 (1.7 GB) for xpro.
+One Airbyte source-s3 connection per deployment loaded those into
+raw__<deployment>__openedx__api__course_blocks until 2026-10. This source loads
+them into raw__<deployment>__openedx__api__course_structure_blocks, which
+replaced it, one table per deployment because the rows carry no source_system
+and each deployment has its own staging model. The retired mitx table was first
+loaded on 2025-03-03 and never held the 717 files that landed before then. On
+2026-10-06 the prefixes held 29,953 files (13.2 GB) for mitxonline, 3,203
+(3.2 GB) for mitx and 2,659 (1.7 GB) for xpro.
 
 Run standalone:
     DLT_PROFILE=dev python -m ol_dlt.sources.course_xml_blocks

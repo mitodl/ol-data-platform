@@ -19,15 +19,8 @@ airbyte:
     status: active
     sync_interval_hours: 12
     streams:
-    - raw__mitx__openedx__api__course_blocks
     - raw__mitx__openedx__api__course_structure
 tables:
-- name: raw__mitx__openedx__api__course_blocks
-  raw_table: raw__mitx__openedx__api__course_blocks
-  sync_mode: incremental_append
-  cursor_field:
-  - _ab_source_file_last_modified
-  modeled: true
 - name: raw__mitx__openedx__api__course_structure
   raw_table: raw__mitx__openedx__api__course_structure
   sync_mode: incremental_append
