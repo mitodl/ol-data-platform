@@ -142,9 +142,9 @@ class EmbeddingsResource(ConfigurableResource[None]):
         "AZURE_OPENAI_ENDPOINT and OPENAI_API_VERSION must be set.",
     )
     trace_content: bool = False
-    opik_vault_mount_point: str = "secret-operations"
+    opik_vault_mount_point: str = "secret-opik"
     opik_vault_path: str = Field(
-        default="sso/opik",
+        default="sdk-client",
         description="KV v1 path of the Keycloak client with url, client_id, "
         "client_secret",
     )

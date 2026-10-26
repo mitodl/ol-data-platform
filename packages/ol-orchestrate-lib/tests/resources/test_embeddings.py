@@ -24,7 +24,7 @@ OPENAI_KEY = "ok"  # pragma: allowlist secret
 SECRETS = {
     ("secret-data", "pipelines/openai"): {"api_key": OPENAI_KEY},
     ("secret-data", "pipelines/qdrant"): {"host": QDRANT_HOST, "api_key": QDRANT_KEY},
-    ("secret-operations", "sso/opik"): {
+    ("secret-opik", "sdk-client"): {
         "url": "https://sso.example.com/realms/ol",
         "client_id": "opik-client",
         "client_secret": OPIK_CLIENT_SECRET,

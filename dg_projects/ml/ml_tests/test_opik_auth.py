@@ -39,9 +39,9 @@ def _build_vault(kv_v1: _FakeKvV1) -> Vault:
 
 
 _OPIK_SECRET = {
-    "secret-operations/sso/opik": {
-        "url": "https://sso-qa.ol.mit.edu/realms/ol-platform-engineering",
-        "client_id": "ol-opik-client",
+    "secret-opik/sdk-client": {
+        "url": "https://sso.ol.mit.edu/realms/ol-platform-engineering",
+        "client_id": "ol-opik-sdk",
         "client_secret": "test-secret",  # pragma: allowlist secret
     }
 }
@@ -103,16 +103,16 @@ def test_configure_reads_vault_and_registers_hook_once(
     auth = registered[0].update_init_arguments({})["auth"]
     assert isinstance(auth, opik_auth.KeycloakClientCredentialsAuth)
     expected_endpoint = (
-        "https://sso-qa.ol.mit.edu/realms/ol-platform-engineering"
+        "https://sso.ol.mit.edu/realms/ol-platform-engineering"
         "/protocol/openid-connect/token"
     )
     assert auth._token_url == expected_endpoint
-    assert auth._client_id == "ol-opik-client"
+    assert auth._client_id == "ol-opik-sdk"
 
 
 def test_configure_handles_vault_read_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik-ci.ol.mit.edu/api/")
-    kv_v1 = _FakeKvV1({})  # secret-operations/sso/opik missing -> KeyError inside
+    kv_v1 = _FakeKvV1({})  # secret-opik/sdk-client missing -> KeyError inside
 
     result = opik_auth.configure_opik_keycloak_auth(_build_vault(kv_v1))
 

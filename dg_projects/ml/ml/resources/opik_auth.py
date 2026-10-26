@@ -109,8 +109,8 @@ def is_opik_configured() -> bool:
 def configure_opik_keycloak_auth(vault: Vault) -> bool:
     """Register the Keycloak auth flow on the Opik SDK's httpx client.
 
-    Reads the client_id/client_secret/realm url from Vault (secret-operations/
-    sso/opik, KV v1 -- same mount/version convention as LLMClientFactory and
+    Reads the client_id/client_secret/realm url from Vault (secret-opik/
+    sdk-client, KV v1 -- same mount/version convention as LLMClientFactory and
     tika.py's secret-operations reads). A Vault read failure is logged and
     treated as "not configured" rather than raised -- this is an optional
     observability integration, not a pipeline dependency.
@@ -127,7 +127,7 @@ def configure_opik_keycloak_auth(vault: Vault) -> bool:
 
     try:
         secret = vault.client.secrets.kv.v1.read_secret(
-            mount_point="secret-operations", path="sso/opik"
+            mount_point="secret-opik", path="sdk-client"
         )["data"]
         auth = KeycloakClientCredentialsAuth(
             token_url=f"{secret['url']}/protocol/openid-connect/token",
@@ -136,7 +136,7 @@ def configure_opik_keycloak_auth(vault: Vault) -> bool:
         )
     except Exception:
         log.warning(
-            "Failed to read secret-operations/sso/opik from Vault; "
+            "Failed to read secret-opik/sdk-client from Vault; "
             "Opik tracing/prompt-library stays disabled",
             exc_info=True,
         )
