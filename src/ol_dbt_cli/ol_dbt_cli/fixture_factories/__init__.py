@@ -39,7 +39,20 @@ and exposes what :class:`ol_dbt_cli.lib.raw_fixtures.UnitFactories` describes:
 
 Tables that reference themselves use :mod:`ol_dbt_cli.lib.fixture_trees`:
 ``Tree`` for a django-treebeard ``MP_Node`` (``path``, ``depth``,
-``numchild``) and ``attach`` for a ``parent_id`` column.
+``numchild``) and ``attach`` for a ``parent_id`` column. A unit with a
+treebeard table also exposes:
+
+``TREE_ALPHABETS``
+    Imported from ``_generated.py``, where the scaffold writes one for each
+    table whose model the dump records as an ``MP_Node``. ``generate_rows``
+    checks each of these tables whole with ``check_tree``: one row to a path,
+    and every row under a row of the table or a stand-in.
+
+``TREE_STAND_INS``
+    The parents a tree's rows sit under that the fixture leaves out (wagtail's
+    root, home and index pages), by raw table, each a stand-in mapping with its
+    ``path``. A stand-in ``generate`` places rows under is one of these, so a
+    mistyped path fails the check. A tree with nothing left out has no entry.
 
 Each factory is a :class:`ol_dbt_cli.lib.fixture_generation.RowFactory` that
 names the table it fills and how many rows it makes at scale 1 with

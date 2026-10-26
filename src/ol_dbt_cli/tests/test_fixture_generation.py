@@ -543,6 +543,50 @@ def test_a_hand_written_parent_loads_as_generate_left_it(tmp_path: Path) -> None
     assert fixture.tables[0].rows[0]["numchild"] == 0
 
 
+def _two_trees(hand_written: Mapping[str, list[dict[str, Any]]], scale: float) -> Any:
+    (home,) = hand_written[PAGE_TREE]
+    # The second tree does not know the page the first placed.
+    first = Tree(hand_written[PAGE_TREE]).add([{"id": 2, "slug": "a"}], under=home)
+    second = Tree(hand_written[PAGE_TREE]).add([{"id": 3, "slug": "b"}], under=home)
+    return {PAGE_TREE: first + second}
+
+
+def _under_a_stand_in(hand_written: Mapping[str, list[dict[str, Any]]], scale: float) -> Any:
+    return {PAGE_TREE: Tree(hand_written[PAGE_TREE]).add([{"id": 2, "slug": "a"}], under={"path": "0002"})}
+
+
+@pytest.mark.parametrize(
+    ("generate", "stand_ins", "message"),
+    [
+        (_two_trees, {}, "the row with id=2 and the row with id=3 both have path '00010001'"),
+        (_under_a_stand_in, {}, "the row with id=2 at path '00020001' is under '0002', which no row or stand-in has"),
+        (_under_a_stand_in, {PAGE_TREE: [{"path": "0003"}]}, "under '0002', which no row or stand-in has"),
+    ],
+)
+def test_a_tree_is_checked_whole_against_its_stand_ins(
+    tmp_path: Path, generate: Callable[..., Any], stand_ins: dict[str, Any], message: str
+) -> None:
+    fixture, unit = _unit(tmp_path, TREE_TABLES)
+    package: Any = SimpleNamespace(
+        SEED=1, generate=generate, TREE_ALPHABETS={PAGE_TREE: "0123456789"}, TREE_STAND_INS=stand_ins
+    )
+
+    with pytest.raises(ValueError, match=message):
+        generate_rows(fixture, unit, package)
+
+
+def test_a_declared_stand_in_passes_the_tree_check(tmp_path: Path) -> None:
+    fixture, unit = _unit(tmp_path, TREE_TABLES)
+    package: Any = SimpleNamespace(
+        SEED=1,
+        generate=_under_a_stand_in,
+        TREE_ALPHABETS={PAGE_TREE: "0123456789"},
+        TREE_STAND_INS={PAGE_TREE: [{"path": "0002"}]},
+    )
+
+    assert [row["path"] for row in generate_rows(fixture, unit, package).generated[PAGE_TREE]] == ["00020001"]
+
+
 def _changing(change: Callable[[list[dict[str, Any]]], Any]) -> Any:
     def generate(hand_written: Mapping[str, list[dict[str, Any]]], scale: float) -> dict[str, Any]:
         change(hand_written[PAGE_TREE])

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from ol_dbt_cli.lib.fixture_generation import pick, seed_generation
-from ol_dbt_cli.lib.fixture_trees import TREEBEARD_STEPLEN, Tree, attach
+from ol_dbt_cli.lib.fixture_trees import TREEBEARD_STEPLEN, Tree, attach, check_tree
 from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, load_units
 from ol_dbt_cli.lib.raw_fixtures import load_fixtures
 
@@ -18,6 +18,9 @@ if TYPE_CHECKING:
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 XPRO_PAGES = "raw__xpro__app__postgres__wagtailcore_page"
+# The pages the committed xPRO fixture leaves out: the root, home and the two index pages.
+XPRO_STAND_INS = [{"path": path} for path in ("0001", "00010001", "000100010001", "000100010002")]
+COURSES_INDEX = {"path": "000100010001", "url_path": "/home/courses/"}
 # MITx Online's ProgramRequirement.alphabet.
 BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
@@ -225,6 +228,77 @@ def test_placement_is_seeded() -> None:
         return roots + children
 
     assert placed() == placed()
+
+
+def test_a_tree_and_its_stand_ins_pass_the_check() -> None:
+    pages = _committed_rows(XPRO_PAGES)
+    tree = Tree(pages)
+    (course,) = tree.add([{"id": 100, "slug": "generated-course"}], under=dict(COURSES_INDEX))
+    placed = [course, *tree.add([{"id": 101, "slug": "about"}], under=course)]
+
+    check_tree(XPRO_PAGES, pages, placed, key_columns=["id"], stand_ins=XPRO_STAND_INS)
+
+
+def test_two_trees_over_one_table_are_refused() -> None:
+    pages = _committed_rows(XPRO_PAGES)
+    # Each tree knows only the hand-written pages, so both place after them.
+    first = Tree(pages).add([{"id": 100, "slug": "first"}], under=dict(COURSES_INDEX))
+    second = Tree(pages).add([{"id": 101, "slug": "second"}], under=dict(COURSES_INDEX))
+
+    with pytest.raises(
+        ValueError,
+        match=f"{XPRO_PAGES}: the row with id=100 and the row with id=101 both have path '0001000100010005'",
+    ):
+        check_tree(XPRO_PAGES, pages, first + second, key_columns=["id"], stand_ins=XPRO_STAND_INS)
+
+
+def _page(path: str, **values: Any) -> Row:
+    return {"id": 100, "path": path, "depth": len(path) // TREEBEARD_STEPLEN, "numchild": 0, **values}
+
+
+@pytest.mark.parametrize(
+    ("generated", "stand_ins", "message"),
+    [
+        # Placed without a tree, on a hand-written page's path.
+        ([_page("0001000100010001")], XPRO_STAND_INS, "the row with id=10 and the row with id=100 both have path"),
+        # A mistyped index page.
+        (
+            [_page("0001000100090001")],
+            XPRO_STAND_INS,
+            "the row with id=100 at path '0001000100090001' is under '000100010009', which no row or stand-in has",
+        ),
+        # The index pages declared, the home page above them not.
+        (
+            [],
+            XPRO_STAND_INS[2:],
+            "stand-in at path '000100010001' is under '00010001', which no row or stand-in has",
+        ),
+        (
+            [],
+            [*XPRO_STAND_INS, {"path": "0001000100010001"}],
+            "stand-in '0001000100010001' is the row with id=10, which the fixture holds",
+        ),
+        ([_page("0001000100010005", depth=3)], XPRO_STAND_INS, "the row with id=100 has depth 3 at path"),
+        (
+            [_page("0001000100010005"), _page("00010001000100050001", id=101)],
+            XPRO_STAND_INS,
+            "the row with id=100 has numchild 0 and 1 children",
+        ),
+        ([_page("00010001000100010")], XPRO_STAND_INS, "path '00010001000100010' is not whole steps"),
+    ],
+)
+def test_rows_that_do_not_make_one_tree_with_their_stand_ins_are_refused(
+    generated: list[Row], stand_ins: list[Row], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        check_tree(XPRO_PAGES, _committed_rows(XPRO_PAGES), generated, key_columns=["id"], stand_ins=stand_ins)
+
+
+def test_a_hand_written_parent_may_count_children_the_fixture_leaves_out() -> None:
+    pages = _committed_rows(XPRO_PAGES)
+    _by_id(pages, 10)["numchild"] = 7
+
+    check_tree(XPRO_PAGES, pages, [], key_columns=["id"], stand_ins=XPRO_STAND_INS)
 
 
 def test_each_level_attaches_to_rows_built_before_it() -> None:
