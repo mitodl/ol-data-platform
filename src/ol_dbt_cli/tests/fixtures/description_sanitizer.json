@@ -1,0 +1,118 @@
+{
+  "openmetadata": "2.0.6-release",
+  "owasp_java_html_sanitizer": "20260101.1",
+  "cases": [
+    {
+      "description": "Learners with a certificate.",
+      "stored": "Learners with a certificate."
+    },
+    {
+      "description": "Edited in the UI.",
+      "stored": "Edited in the UI."
+    },
+    {
+      "description": "Changed again in a later PR.",
+      "stored": "Changed again in a later PR."
+    },
+    {
+      "description": "Created by hand.",
+      "stored": "Created by hand."
+    },
+    {
+      "description": "A learner's \"active\" enrollments, counted once per run.",
+      "stored": "A learner's \"active\" enrollments, counted once per run."
+    },
+    {
+      "description": "a \"b\" & c's @d + e = f `g`",
+      "stored": "a \"b\" & c's @d + e = f `g`"
+    },
+    {
+      "description": "a &amp; b",
+      "stored": "a &amp; b"
+    },
+    {
+      "description": "&lt;b&gt; written as entities",
+      "stored": "&lt;b&gt; written as entities"
+    },
+    {
+      "description": "Bell\u0007 character",
+      "stored": "Bell\u0007 character"
+    },
+    {
+      "description": "A learner's <em>active</em> enrollments, counted once per run.",
+      "stored": "A learner&#39;s <em>active</em> enrollments, counted once per run."
+    },
+    {
+      "description": "Bold <b>and</b> \"quoted\" & 'single' + = @ `tick`",
+      "stored": "Bold <b>and</b> &#34;quoted&#34; &amp; &#39;single&#39; &#43; &#61; &#64; &#96;tick&#96;"
+    },
+    {
+      "description": "a &amp; <b>b</b>",
+      "stored": "a &amp; <b>b</b>"
+    },
+    {
+      "description": "Line one<br>line two",
+      "stored": "Line one<br />line two"
+    },
+    {
+      "description": "Line one<br/>line two",
+      "stored": "Line one<br />line two"
+    },
+    {
+      "description": "Line one<br />line two",
+      "stored": "Line one<br />line two"
+    },
+    {
+      "description": "<p>One paragraph.</p>",
+      "stored": "<p>One paragraph.</p>"
+    },
+    {
+      "description": "See <https://learn.mit.edu> for the catalog.",
+      "stored": "See  for the catalog."
+    },
+    {
+      "description": "Counted when x<y.",
+      "stored": "Counted when x"
+    },
+    {
+      "description": "Counted when x < y.",
+      "stored": "Counted when x &lt; y."
+    },
+    {
+      "description": "x<y and <b>b</b>",
+      "stored": "xb"
+    },
+    {
+      "description": "<script>alert(1)</script>Safe text.",
+      "stored": "Safe text."
+    },
+    {
+      "description": "<a href=\"javascript:alert(1)\">link</a>",
+      "stored": "link"
+    },
+    {
+      "description": "<a href=\"https://learn.mit.edu\" target=\"_blank\">link</a>",
+      "stored": "<a href=\"https://learn.mit.edu\">link</a>"
+    },
+    {
+      "description": "See <#E::table::Starburst Galaxy.db.schema.t> for <b>rows</b>.",
+      "stored": "See <#E::table::Starburst Galaxy.db.schema.t> for <b>rows</b>."
+    },
+    {
+      "description": "Bell\u0007 with <b>markup</b>",
+      "stored": "Bell with <b>markup</b>"
+    },
+    {
+      "description": "Tab\tand <i>newline</i>\nkept",
+      "stored": "Tab\tand <i>newline</i>\nkept"
+    },
+    {
+      "description": "<unknown>tag</unknown> text",
+      "stored": "tag text"
+    },
+    {
+      "description": "<!-- comment --> text",
+      "stored": " text"
+    }
+  ]
+}

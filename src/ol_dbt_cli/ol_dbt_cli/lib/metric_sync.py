@@ -42,9 +42,16 @@ definition fixed). Moved out with no file change, a file that says Approved
 shows status drift, and ``--force`` would approve it again.
 
 The server stores ``DescriptionSanitizer.sanitize(description)`` on create,
-PUT and PATCH. That is the OWASP HTML sanitizer, which decodes the text and
-re-encodes ``& < > " ' + = @ ` `` as entities (``learner's`` is stored as
-``learner&#39;s``), so descriptions are compared after unescaping both sides.
+PUT and PATCH. In 2.0.6 a description with no ``<`` is stored as written. Any
+other goes through the OWASP HTML sanitizer, which drops markup it does not
+allow, rewrites some it keeps (``<br>`` as ``<br />``), reads a bare ``<`` as
+the start of a tag (``x<y`` loses everything from ``<y``) and re-encodes
+``& < > " ' + = @ ` `` in text as entities (``learner's`` as
+``learner&#39;s``). 2.0.5 sanitized every description, so a metric written
+before the upgrade can hold entities without markup. Descriptions are
+therefore compared after unescaping both sides; dropped or rewritten markup
+never compares equal, and sync reports it as ``rewritten``. The tests'
+``fixtures/description_sanitizer.json`` is real 2.0.6 sanitizer output.
 
 Drift is a field sync owns that someone else changed since the bot last wrote
 the metric: the live value is compared with the newest version in
@@ -176,8 +183,9 @@ def _ref_set(refs: list[dict[str, Any]] | None) -> set[tuple[str, str]]:
 def same_description(a: str | None, b: str | None) -> bool:
     """Whether two descriptions read the same once the server's entity encoding is undone.
 
-    Markup the sanitizer strips (e.g. a ``<script>`` or an unknown tag) is not
-    restored, so a description holding it never compares equal.
+    Markup the sanitizer drops or rewrites (e.g. a ``<script>``, or ``<br>``
+    stored as ``<br />``) is not restored, so a description holding it never
+    compares equal.
     """
     return html.unescape(a or "") == html.unescape(b or "")
 
