@@ -1489,7 +1489,8 @@ models:
   - name: programrequirement_is_a_nested_requirement
     description: boolean, whether the course's innermost requirement operator sits
       inside another requirement operator, e.g. an elective set within an elective
-      set, rather than directly under the program root
+      set, or a track's group within the group of tracks, rather than directly under
+      the program root
   - name: programrequirement_parent_requirement_id
     description: int, primary key representing the primary key in stg__mitxonline__app__postgres__courses_programrequirement
       of the operator node of the parent requirement for nested requirements
@@ -2811,3 +2812,122 @@ unit_tests:
     rows:
     - {course_id: 20, programrequirement_is_required: true}
     - {course_id: 21, programrequirement_is_required: false}
+- name: test_int__mitxonline__program_requirements_course_in_two_tracks
+  description: >
+    MITx Online program tracks: a top-level "Minimum # of 1" group holds track nodes,
+    each track holds groups, and the program requires any one whole track. A track
+    node is not an operator, so a track's group is nested in the top-level group.
+    Course 30 sits in both tracks. Its row takes the group of its first course node
+    in tree order, and that group's parent, the same as its sibling course 31. No
+    track course is required on its own.
+  model: int__mitxonline__program_requirements
+  given:
+  - input: ref('stg__mitxonline__app__postgres__courses_programrequirement')
+    rows:
+    - {programrequirement_id: 1, program_id: 1, programrequirement_node_type: program_root,
+      programrequirement_path: "0001"}
+    - {programrequirement_id: 2, program_id: 1, programrequirement_node_type: operator,
+      programrequirement_path: "00010001", programrequirement_title: Choose a track,
+      programrequirement_operator: min_number_of, programrequirement_operator_value: 1}
+    - {programrequirement_id: 3, program_id: 1, programrequirement_node_type: track,
+      programrequirement_path: "000100010001", programrequirement_title: Track A}
+    - {programrequirement_id: 4, program_id: 1, programrequirement_node_type: operator,
+      programrequirement_path: "0001000100010001", programrequirement_title: Group
+        A, programrequirement_operator: all_of}
+    - {programrequirement_id: 5, program_id: 1, course_id: 30, programrequirement_node_type: course,
+      programrequirement_path: "00010001000100010001"}
+    - {programrequirement_id: 6, program_id: 1, course_id: 31, programrequirement_node_type: course,
+      programrequirement_path: "00010001000100010002"}
+    - {programrequirement_id: 7, program_id: 1, programrequirement_node_type: track,
+      programrequirement_path: "000100010002", programrequirement_title: Track B}
+    - {programrequirement_id: 8, program_id: 1, programrequirement_node_type: operator,
+      programrequirement_path: "0001000100020001", programrequirement_title: Group
+        B, programrequirement_operator: all_of}
+    - {programrequirement_id: 9, program_id: 1, course_id: 30, programrequirement_node_type: course,
+      programrequirement_path: "00010001000200010001"}
+    - {programrequirement_id: 10, program_id: 1, course_id: 32, programrequirement_node_type: course,
+      programrequirement_path: "00010001000200010002"}
+  expect:
+    rows:
+    - {course_id: 30, programrequirement_requirement_id: 4, programrequirement_type: Core,
+      programrequirement_is_required: false, programrequirement_is_a_nested_requirement: true,
+      programrequirement_parent_requirement_id: 2, course_order_in_program: 1}
+    - {course_id: 31, programrequirement_requirement_id: 4, programrequirement_type: Core,
+      programrequirement_is_required: false, programrequirement_is_a_nested_requirement: true,
+      programrequirement_parent_requirement_id: 2, course_order_in_program: 2}
+    - {course_id: 32, programrequirement_requirement_id: 8, programrequirement_type: Core,
+      programrequirement_is_required: false, programrequirement_is_a_nested_requirement: true,
+      programrequirement_parent_requirement_id: 2, course_order_in_program: 3}
+- name: test_int__mitxonline__program_requirements_required_group_wins_over_earlier_elective
+  description: >
+    Course 20 sits in an elective set listed first and in a top-level all_of listed
+    second. The all_of requires it, so its row takes the all_of (Core, not nested)
+    and counts as a core course, while its display order still follows its first
+    node in the tree.
+  model: int__mitxonline__program_requirements
+  given:
+  - input: ref('stg__mitxonline__app__postgres__courses_programrequirement')
+    rows:
+    - {programrequirement_id: 1, program_id: 1, programrequirement_node_type: program_root,
+      programrequirement_path: "0001"}
+    - {programrequirement_id: 2, program_id: 1, programrequirement_node_type: operator,
+      programrequirement_path: "00010001", programrequirement_title: Electives, programrequirement_operator: min_number_of,
+      programrequirement_operator_value: 1}
+    - {programrequirement_id: 3, program_id: 1, course_id: 20, programrequirement_node_type: course,
+      programrequirement_path: "000100010001"}
+    - {programrequirement_id: 4, program_id: 1, course_id: 21, programrequirement_node_type: course,
+      programrequirement_path: "000100010002"}
+    - {programrequirement_id: 5, program_id: 1, programrequirement_node_type: operator,
+      programrequirement_path: "00010002", programrequirement_title: Required, programrequirement_operator: all_of}
+    - {programrequirement_id: 6, program_id: 1, course_id: 20, programrequirement_node_type: course,
+      programrequirement_path: "000100020001"}
+    - {programrequirement_id: 7, program_id: 1, course_id: 22, programrequirement_node_type: course,
+      programrequirement_path: "000100020002"}
+  expect:
+    rows:
+    - {course_id: 20, programrequirement_requirement_id: 5, programrequirement_type: Core,
+      programrequirement_is_required: true, programrequirement_is_a_nested_requirement: false,
+      programrequirement_parent_requirement_id: null, course_order_in_program: 1}
+    - {course_id: 21, programrequirement_requirement_id: 2, programrequirement_type: Elective,
+      programrequirement_is_required: false, programrequirement_is_a_nested_requirement: false,
+      programrequirement_parent_requirement_id: null, course_order_in_program: 2}
+    - {course_id: 22, programrequirement_requirement_id: 5, programrequirement_type: Core,
+      programrequirement_is_required: true, programrequirement_is_a_nested_requirement: false,
+      programrequirement_parent_requirement_id: null, course_order_in_program: 3}
+- name: test_int__mitxonline__program_requirements_required_group_wins_over_deeper_nested
+  description: >
+    Course 50 sits in a top-level all_of and in an all_of nested in an elective set.
+    The top-level all_of requires it, so its row takes that group and is not nested,
+    though the nested node is deeper.
+  model: int__mitxonline__program_requirements
+  given:
+  - input: ref('stg__mitxonline__app__postgres__courses_programrequirement')
+    rows:
+    - {programrequirement_id: 1, program_id: 1, programrequirement_node_type: program_root,
+      programrequirement_path: "0001"}
+    - {programrequirement_id: 2, program_id: 1, programrequirement_node_type: operator,
+      programrequirement_path: "00010001", programrequirement_title: Required, programrequirement_operator: all_of}
+    - {programrequirement_id: 3, program_id: 1, course_id: 50, programrequirement_node_type: course,
+      programrequirement_path: "000100010001"}
+    - {programrequirement_id: 4, program_id: 1, programrequirement_node_type: operator,
+      programrequirement_path: "00010002", programrequirement_title: Electives, programrequirement_operator: min_number_of,
+      programrequirement_operator_value: 1}
+    - {programrequirement_id: 5, program_id: 1, programrequirement_node_type: operator,
+      programrequirement_path: "000100020001", programrequirement_title: Pair, programrequirement_operator: all_of}
+    - {programrequirement_id: 6, program_id: 1, course_id: 50, programrequirement_node_type: course,
+      programrequirement_path: "0001000200010001"}
+    - {programrequirement_id: 7, program_id: 1, course_id: 51, programrequirement_node_type: course,
+      programrequirement_path: "0001000200010002"}
+    - {programrequirement_id: 8, program_id: 1, course_id: 52, programrequirement_node_type: course,
+      programrequirement_path: "000100020002"}
+  expect:
+    rows:
+    - {course_id: 50, programrequirement_requirement_id: 2, programrequirement_type: Core,
+      programrequirement_is_required: true, programrequirement_is_a_nested_requirement: false,
+      programrequirement_parent_requirement_id: null, course_order_in_program: 1}
+    - {course_id: 51, programrequirement_requirement_id: 5, programrequirement_type: Core,
+      programrequirement_is_required: false, programrequirement_is_a_nested_requirement: true,
+      programrequirement_parent_requirement_id: 4, course_order_in_program: 2}
+    - {course_id: 52, programrequirement_requirement_id: 4, programrequirement_type: Elective,
+      programrequirement_is_required: false, programrequirement_is_a_nested_requirement: false,
+      programrequirement_parent_requirement_id: null, course_order_in_program: 3}
