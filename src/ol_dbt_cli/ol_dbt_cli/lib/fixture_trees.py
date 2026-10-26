@@ -159,8 +159,9 @@ def check_tree(
         ``TREE_STAND_INS`` for the table.
     :raises ValueError: If a path is not whole steps of ``alphabet``, two rows
         have one path, a stand-in has a row's path, a row's or stand-in's
-        parent is neither a row nor a stand-in, a row's ``depth`` is not its
-        path's, or a generated row's ``numchild`` is not its children's count.
+        parent is neither a row nor a stand-in, a row's ``url_path`` is not
+        under its stand-in parent's, a row's ``depth`` is not its path's, or a
+        generated row's ``numchild`` is not its children's count.
     """
     held: dict[str, Row] = {}
     for row in [*hand_written, *generated]:
@@ -176,19 +177,28 @@ def check_tree(
         if int(row["depth"]) != len(path) // TREEBEARD_STEPLEN:
             msg = f"{raw_table}: {_named(row, key_columns)} has depth {row['depth']!r} at path {path!r}"
             raise ValueError(msg)
-    left_out: set[str] = set()
+    left_out: dict[str, Row] = {}
     for stand_in in stand_ins:
         path = stand_in["path"]
         _check_path(path, alphabet)
         if path in held:
             msg = f"{raw_table}: stand-in {path!r} is {_named(held[path], key_columns)}, which the fixture holds"
             raise ValueError(msg)
-        left_out.add(path)
+        left_out[path] = stand_in
     for path in [*held, *sorted(left_out)]:
         parent_path = path[:-TREEBEARD_STEPLEN]
         if parent_path and parent_path not in held and parent_path not in left_out:
             what = _named(held[path], key_columns) if path in held else "stand-in"
             msg = f"{raw_table}: {what} at path {path!r} is under {parent_path!r}, which no row or stand-in has"
+            raise ValueError(msg)
+        # A page under a stand-in takes its url_path from it, so a mistyped one shows here.
+        parent_url_path = left_out[parent_path].get("url_path") if parent_path in left_out else None
+        url_path = held[path].get("url_path") if path in held else None
+        if parent_url_path is not None and url_path is not None and not url_path.startswith(parent_url_path):
+            msg = (
+                f"{raw_table}: {_named(held[path], key_columns)} has url_path {url_path!r}, "
+                f"not under its stand-in parent's {parent_url_path!r}"
+            )
             raise ValueError(msg)
     children = Counter(path[:-TREEBEARD_STEPLEN] for path in held)
     for row in generated:

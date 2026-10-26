@@ -19,7 +19,15 @@ if TYPE_CHECKING:
 REPO_ROOT = Path(__file__).resolve().parents[3]
 XPRO_PAGES = "raw__xpro__app__postgres__wagtailcore_page"
 # The pages the committed xPRO fixture leaves out: the root, home and the two index pages.
-XPRO_STAND_INS = [{"path": path} for path in ("0001", "00010001", "000100010001", "000100010002")]
+XPRO_STAND_INS = [
+    {"path": path, "url_path": url_path}
+    for path, url_path in [
+        ("0001", "/"),
+        ("00010001", "/home/"),
+        ("000100010001", "/home/courses/"),
+        ("000100010002", "/home/programs/"),
+    ]
+]
 COURSES_INDEX = {"path": "000100010001", "url_path": "/home/courses/"}
 # MITx Online's ProgramRequirement.alphabet.
 BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -277,6 +285,12 @@ def _page(path: str, **values: Any) -> Row:
             [],
             [*XPRO_STAND_INS, {"path": "0001000100010001"}],
             "stand-in '0001000100010001' is the row with id=10, which the fixture holds",
+        ),
+        # The courses index's url_path mistyped: its hand-written pages are not under it.
+        (
+            [],
+            [*XPRO_STAND_INS[:2], {"path": "000100010001", "url_path": "/home/course/"}, XPRO_STAND_INS[3]],
+            "has url_path '/home/courses/local-fixtures-i/', not under its stand-in parent's '/home/course/'",
         ),
         ([_page("0001000100010005", depth=3)], XPRO_STAND_INS, "the row with id=100 has depth 3 at path"),
         (
