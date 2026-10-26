@@ -81,11 +81,21 @@ FROZEN_ENTRY: dict[str, Any] = {
     "frozen": True,
 }
 
+UNMODELED_TABLE = "raw__bootcamps__app__postgres__wagtailcore_page"
+UNMODELED_ENTRY: dict[str, Any] = {
+    **FROZEN_ENTRY,
+    "raw_tables": [UNMODELED_TABLE],
+    "modeled": False,
+}
+
 DECLARED = {
     f"{MITX_PREFIX}auth_user",
     f"{MITX_PREFIX}courseware_studentmodule",
     f"{EDX_PREFIX}tables__auth_user",
 }
+
+# What dbt declares when it agrees with every unit's `modeled:` flag.
+MODELED = {f"{MITX_PREFIX}auth_user", f"{EDX_PREFIX}tables__auth_user"}
 
 
 @pytest.fixture
@@ -180,6 +190,18 @@ class TestWarehouseReconciliation:
 
         assert _messages(report, Severity.WARNING) == [f"{FROZEN_TABLE} is frozen but the warehouse does not hold it"]
 
+    def test_retired_table_still_in_the_warehouse_is_named_as_retired(self, inventory: Path) -> None:
+        # Not unclaimed: the graveyard says what it was. What is left to decide
+        # is whether its data goes or stays, which is the entry's `frozen:`.
+        units = load_units(inventory)
+        report = ValidationReport()
+        retired = f"{MITX_PREFIX}dropped_table"
+        reconcile_warehouse(units, DECLARED | {retired}, report, retired=frozenset({retired}))
+
+        assert [(issue.model, issue.message) for issue in report.issues] == [
+            ("retired.yml", f"{retired} is retired but the warehouse still holds it")
+        ]
+
 
 class TestDbtReconciliation:
     def test_dbt_source_no_unit_loads_is_an_error(self, inventory: Path) -> None:
@@ -263,6 +285,27 @@ class TestDbtReconciliation:
 
         assert report.errors == []
         assert _messages(report, Severity.WARNING) == [f"{FROZEN_TABLE} is frozen but dbt declares no source for it"]
+
+    def test_frozen_table_dbt_never_modeled_is_not_reported(self, inventory: Path) -> None:
+        # `modeled: false` keeps raw history dbt never read, so dbt not
+        # declaring it is the state the entry asserts.
+        _write_retired(inventory, [FROZEN_ENTRY, UNMODELED_ENTRY])
+        units = load_units(inventory)
+        report = ValidationReport()
+        reconcile_dbt(units, MODELED | {FROZEN_TABLE}, inventory, report)
+
+        assert report.issues == []
+
+    def test_frozen_unmodeled_table_dbt_declares_is_a_warning(self, inventory: Path) -> None:
+        _write_retired(inventory, [UNMODELED_ENTRY])
+        units = load_units(inventory)
+        report = ValidationReport()
+        result = reconcile_dbt(units, MODELED | {UNMODELED_TABLE}, inventory, report)
+
+        assert UNMODELED_TABLE not in result.observed_not_declared
+        assert _messages(report, Severity.WARNING) == [
+            f"{UNMODELED_TABLE} is frozen with modeled: false but dbt declares a source for it"
+        ]
 
     def test_loaded_but_unmodeled_is_not_reported(self, inventory: Path) -> None:
         # dbt declares 372 of ~2,090 loaded tables (§1.4), so the gap is the

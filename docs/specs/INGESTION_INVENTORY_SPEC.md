@@ -799,6 +799,13 @@ orphan-file pass deletes only files that no retained snapshot reaches, and the l
 deletes only dbt-suffixed directories that no Glue table references. None of them drops a
 table or a file a frozen table reads.
 
+A frozen entry can also keep tables dbt never modeled. `modeled: false` says so and reverses
+the dbt half: dbt not declaring them is expected, and dbt declaring one is the `WARNING`.
+Bootcamps has two such entries, the 93 tables its Airbyte connections landed and nothing read,
+kept on 2026-10-26 because nobody had decided to drop them. A retired table *without*
+`frozen:` that the warehouse still holds is reported as retired, not as unclaimed: nothing
+loads it and its entry does not say to keep it, so it is waiting to be dropped.
+
 Three details the mechanism above does not spell out, each of which is a rule in the checker:
 
 - `renamed_from:` holds the full previous `raw_table` — e.g.
