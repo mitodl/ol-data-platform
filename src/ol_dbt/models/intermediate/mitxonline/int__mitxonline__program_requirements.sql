@@ -70,17 +70,24 @@ with program_requirements as (
             over (partition by course_node_requirements.course_id, course_node_requirements.program_id) = 1
             as programrequirement_is_required
         -- A course can sit under two groups of a program, e.g. in two tracks. Its row
-        -- takes the course node with the deepest innermost operator, the first in tree
-        -- order on a tie, so its requirement and that requirement's parent come from the
-        -- same branch.
+        -- takes one course node, so its requirement and that requirement's parent come from
+        -- the same branch: a node that requires the course first, so the type and nesting
+        -- agree with programrequirement_is_required, then the deepest innermost operator,
+        -- then the first in tree order.
         , dense_rank()
             over (
                 partition by course_node_requirements.course_id, course_node_requirements.program_id
                 order by
-                    course_node_requirements.innermost_operator_path_length desc
+                    coalesce(course_node_requirements.course_node_is_required, 0) desc
+                    , course_node_requirements.innermost_operator_path_length desc
                     , course_node_requirements.course_node_path asc
             )
             as course_node_rank
+        -- The display order follows the course's first node in the tree, whichever node
+        -- the row takes its requirement from.
+        , min(course_node_requirements.course_node_path)
+            over (partition by course_node_requirements.course_id, course_node_requirements.program_id)
+            as course_first_node_path
     from course_node_requirements
 )
 
@@ -94,7 +101,7 @@ with program_requirements as (
         , all_requirements.programrequirement_title
         , all_requirements.electiveset_required_number
         , all_requirements.programrequirement_path
-        , all_requirements.course_node_path
+        , all_requirements.course_first_node_path
     from all_requirements
     where all_requirements.requirement_nesting = 1 and all_requirements.course_node_rank = 1
 )
@@ -121,7 +128,7 @@ with program_requirements as (
         , child_requirements.programrequirement_is_required
         , child_requirements.programrequirement_title
         , child_requirements.electiveset_required_number
-        , child_requirements.course_node_path
+        , child_requirements.course_first_node_path
         , parent_requirements.programrequirement_requirement_id as programrequirement_parent_requirement_id
         , parent_requirements.programrequirement_requirement_id is not null
             as programrequirement_is_a_nested_requirement
@@ -175,7 +182,7 @@ select
     + coalesce(elective_courses_count.program_num_elective_courses, 0) as program_num_required_courses
     , row_number() over (
         partition by combined_requirements.program_id
-        order by combined_requirements.course_node_path
+        order by combined_requirements.course_first_node_path
     ) as course_order_in_program
 from combined_requirements
 left join core_courses_count on combined_requirements.program_id = core_courses_count.program_id
