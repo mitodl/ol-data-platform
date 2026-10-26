@@ -130,9 +130,9 @@ def test_a_stored_vector_is_kept_for_the_same_text_and_redone_for_a_new_one(
             "embedding_model_version": ["text-embedding-3-large"] * 3,
             "embedding_dim": [3, 3, 1024],
             "idempotency_key": [
-                model.key("hello"),
-                model.key("an older summary"),
-                model.key("world"),
+                model.key("hello", "summary"),
+                model.key("an older summary", "summary"),
+                model.key("world", "summary"),
             ],
         }
     )
@@ -198,8 +198,8 @@ def test_a_table_without_idempotency_key_reembeds_every_conversation(
     assert io_manager.written["conversation_ref"].to_list() == ["1", "5"]
     stored = catalog.load_table(identifier).scan().to_polars().sort("conversation_ref")
     assert stored["idempotency_key"].to_list() == [
-        model.key("hello"),
-        model.key("world"),
+        model.key("hello", "summary"),
+        model.key("world", "summary"),
     ]
     assert stored["embedding_vector"].to_list() == [[1.0] * 3, [1.0] * 3]
 

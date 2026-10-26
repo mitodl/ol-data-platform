@@ -175,15 +175,18 @@ class FeedbackEmbeddingModel:
             pl.col("embedding_dim") == self.dim
         )
 
-    def key(self, text: str) -> str:
+    def key(self, text: str, embedding_input: str) -> str:
         """Return the idempotency key of a conversation's embedding.
 
         :param text: the conversation's resolved_text.
-        :returns: a hex SHA-256 that changes when the text, the model, or the
-            vector length does.
+        :param embedding_input: the arm resolved_text came from. A summary can
+            equal the concatenated turns, and the stored arm decides which
+            clusters the conversation is in.
+        :returns: a hex SHA-256 that changes when the text, the arm, the model,
+            or the vector length does.
         :rtype: str
         """
-        parts = [text, self.model, self.dim]
+        parts = [text, embedding_input, self.model, self.dim]
         return hashlib.sha256(json.dumps(parts).encode()).hexdigest()
 
     def input_text(self, text: str) -> str:
@@ -383,8 +386,10 @@ def filter_unembedded(
     current_key = pl.Series(
         "_current_key",
         [
-            model.key(text) if has_embeddable_text(text) else None
-            for text in source_df["resolved_text"]
+            model.key(text, embedding_input) if has_embeddable_text(text) else None
+            for text, embedding_input in zip(
+                source_df["resolved_text"], source_df["embedding_input"], strict=True
+            )
         ],
         dtype=pl.String,
     )
@@ -585,7 +590,7 @@ def embed_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning knob
         {
             **row,
             "input_text": model.input_text(row["resolved_text"]),
-            "idempotency_key": model.key(row["resolved_text"]),
+            "idempotency_key": model.key(row["resolved_text"], row["embedding_input"]),
         }
         for row in df.to_dicts()
         if has_embeddable_text(row["resolved_text"])

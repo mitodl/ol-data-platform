@@ -229,16 +229,21 @@ def test_matches_selects_the_model_version_and_dim() -> None:
     assert rows.filter(OPENAI.matches()).height == 1
 
 
-def test_key_changes_with_the_text_the_model_and_the_dim() -> None:
+def test_key_changes_with_the_text_the_arm_the_model_and_the_dim() -> None:
     keys = {
-        OPENAI.key("a"),
-        OPENAI.key("b"),
-        embed.resolve_embedding_model("azure:text-embedding-3-large", 3).key("a"),
-        embed.resolve_embedding_model("openai:text-embedding-3-large", 4).key("a"),
+        OPENAI.key("a", "summary"),
+        OPENAI.key("b", "summary"),
+        OPENAI.key("a", "concatenated_turns"),
+        embed.resolve_embedding_model("azure:text-embedding-3-large", 3).key(
+            "a", "summary"
+        ),
+        embed.resolve_embedding_model("openai:text-embedding-3-large", 4).key(
+            "a", "summary"
+        ),
     }
 
-    assert len(keys) == 4
-    assert OPENAI.key("a") == OPENAI.key("a")
+    assert len(keys) == 5
+    assert OPENAI.key("a", "summary") == OPENAI.key("a", "summary")
 
 
 def test_input_text_cuts_titan_by_characters() -> None:
@@ -265,12 +270,14 @@ def _stored(keys: dict[str, str | None]) -> pl.DataFrame:
     )
 
 
+def _key(text: str) -> str:
+    return OPENAI.key(text, "summary")
+
+
 def test_filter_unembedded_drops_a_conversation_embedded_from_the_same_text() -> None:
     source = _rows("same", "new")
 
-    result = embed.filter_unembedded(
-        source, _stored({"pk-0": OPENAI.key("same")}), OPENAI
-    )
+    result = embed.filter_unembedded(source, _stored({"pk-0": _key("same")}), OPENAI)
 
     assert result["conversation_ref"].to_list() == ["1"]
     assert result.columns == source.columns
@@ -281,8 +288,19 @@ def test_filter_unembedded_reembeds_a_changed_text() -> None:
     shows that its stored vector is stale.
     """
     result = embed.filter_unembedded(
-        _rows("a new summary"), _stored({"pk-0": OPENAI.key("the old summary")}), OPENAI
+        _rows("a new summary"), _stored({"pk-0": _key("the old summary")}), OPENAI
     )
+
+    assert result["conversation_ref"].to_list() == ["0"]
+
+
+def test_filter_unembedded_reembeds_an_arm_switch_with_the_same_text() -> None:
+    """A summary equal to the concatenated turns must still update the stored arm,
+    which decides the summary-scoped clusters.
+    """
+    stored = _stored({"pk-0": OPENAI.key("text", "concatenated_turns")})
+
+    result = embed.filter_unembedded(_rows("text"), stored, OPENAI)
 
     assert result["conversation_ref"].to_list() == ["0"]
 
@@ -295,7 +313,7 @@ def test_filter_unembedded_reembeds_a_row_stored_without_a_key_once() -> None:
 
 def test_filter_unembedded_keeps_new_rows_without_text_and_drops_stored_ones() -> None:
     result = embed.filter_unembedded(
-        _rows(None, " "), _stored({"pk-0": OPENAI.key("old")}), OPENAI
+        _rows(None, " "), _stored({"pk-0": _key("old")}), OPENAI
     )
 
     assert result["conversation_ref"].to_list() == ["1"]
@@ -327,7 +345,7 @@ def test_embed_and_checkpoint_writes_the_stored_model_key_and_float32_vectors(
     assert row["embedding_model_version"] == "text-embedding-3-large"
     assert row["embedding_dim"] == 3
     assert row["embedding_vector"] == [5.0, 5.0, 5.0]
-    assert row["idempotency_key"] == OPENAI.key("hello")
+    assert row["idempotency_key"] == _key("hello")
     assert row["turn_count"] == 2
     assert result["embedding_vector"].dtype == pl.List(pl.Float32)
     assert result.columns == list(embed.EMBEDDING_CHECKPOINT_SCHEMA)
