@@ -1031,6 +1031,25 @@ def test_version_mismatch_stops_before_the_first_file(server: FakeOpenMetadata, 
     assert server.calls == [("GET", "/v1/system/version")]
 
 
+def test_minor_version_mismatch_stops_before_the_first_file(server: FakeOpenMetadata, metrics_dir: Path) -> None:
+    major, minor, *_ = SNAPSHOT_VERSION.split(".")
+    server.version = f"{major}.{int(minor) + 1}.0"
+    assert _sync(metrics_dir, dry_run=True) is True
+    assert server.calls == [("GET", "/v1/system/version")]
+
+
+@pytest.mark.parametrize("bump", ["patch", "suffix"])
+def test_patch_version_mismatch_warns_and_syncs(
+    server: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str], bump: str
+) -> None:
+    major, minor, patch = SNAPSHOT_VERSION.split(".")
+    server.version = f"{major}.{minor}.{int(patch) + 1}" if bump == "patch" else f"{SNAPSHOT_VERSION}-SNAPSHOT"
+    assert _sync(metrics_dir) is False
+    out = " ".join(capsys.readouterr().out.split())
+    assert f"OpenMetadata is {server.version} but the CreateMetric snapshot is from {SNAPSHOT_VERSION}" in out
+    assert set(server.metrics) == {"certified_learners", "learner_completion_status"}
+
+
 def test_structural_changes_ignore_server_keys_and_extra_tags() -> None:
     body = {
         "name": "m",
