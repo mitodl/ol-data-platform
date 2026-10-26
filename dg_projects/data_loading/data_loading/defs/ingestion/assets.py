@@ -25,6 +25,7 @@ from dagster._core.definitions.data_version import DATA_VERSION_TAG
 from dagster_dlt import DagsterDltResource, dlt_assets
 from ol_dlt.sources import (
     course_xml_blocks,
+    edxorg_program_reports,
     edxorg_s3,
     keycloak,
     medium,
@@ -417,6 +418,17 @@ course_xml_blocks_assets = [
 ]
 
 
+# edX.org's daily program learner reports, which the edxorg code location copies
+# into the landing zone. Loads beside the Airbyte-loaded
+# raw__edxorg__program_learner_report until staging is repointed.
+edxorg_program_reports_assets = build_batched_assets(
+    name="edxorg_program_learner_report",
+    build_source=edxorg_program_reports.edxorg_program_reports_source,
+    pipeline=edxorg_program_reports.edxorg_program_reports_pipeline(),
+    translator=RawDataDltTranslator(),
+)
+
+
 # Resumes from the dlt cursor every run. A backfill is a deliberate
 # `posthog_events_source(start_date=...)` invocation (see the source's
 # __main__), not something a scheduled run can fall into.
@@ -500,6 +512,7 @@ defs = Definitions(
             ocw_content_assets,
             *edxorg_s3_table_assets,
             *course_xml_blocks_assets,
+            edxorg_program_reports_assets,
         ]
     ),
 )
