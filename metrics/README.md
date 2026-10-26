@@ -213,9 +213,17 @@ it would PATCH. It is not part of the drift check, and a file cannot set it
 (`extension` is not allowed).
 
 An unchanged file writes only the lineage edges, which OpenMetadata upserts.
-OpenMetadata stores descriptions HTML-encoded (`learner's` as `learner&#39;s`),
-so sync compares them with the encoding undone. Markup the server's sanitizer
-removes cannot compare equal, and sync warns that the file needs fixing.
+OpenMetadata 2.0.6 stores a description with no `<` as written, not counting
+the `<` of an entity link (`<#E::...>`), which it sets aside first. Any other
+description goes through its HTML sanitizer, which encodes the text
+(`learner's` as `learner&#39;s`), drops markup it does not allow and control
+characters, and rewrites some markup it keeps (`<br>` as `<br />`; an
+`<https://...>` autolink is dropped; `x<y` loses everything from `<y`). Sync compares descriptions with the encoding undone, so
+encoding alone is not a difference. Dropped or rewritten markup is: sync prints
+a `rewritten` line with what OpenMetadata stored, and PATCHes the description
+again on every run until the file matches it (or writes a literal `<` as
+`&lt;`).
+
 Fields the file does not set are left as OpenMetadata has them, except
 `displayName`: a file without one, for a metric that has one in OpenMetadata,
 is reported as `stale` like any other difference (see above). Deleting a tag
@@ -224,3 +232,9 @@ from a file removes it from the metric only if sync applied it (the tag's
 file listed it too. Lineage from a StarRocks view is skipped with a warning until
 OpenMetadata has a StarRocks service, and an edge whose `implemented_by` entry
 was removed is not deleted.
+
+Drift is read from who wrote each version, so an edit made in the UI or the
+API with the sync bot's own token counts as the bot's last write. Sync cannot
+see it as drift: the next run PATCHes a field the file sets back to it without
+reporting anything. Edit metrics in OpenMetadata as yourself, never with the
+bot's token.
