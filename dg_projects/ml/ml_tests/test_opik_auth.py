@@ -47,6 +47,13 @@ _OPIK_SECRET = {
 }
 
 
+def _configure_opik_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Set what ol-infrastructure sets on a deployment that traces to Opik."""
+    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik.ol.mit.edu/api/")
+    monkeypatch.setenv("OPIK_KEYCLOAK_VAULT_MOUNT", "secret-opik")
+    monkeypatch.setenv("OPIK_KEYCLOAK_VAULT_PATH", "sdk-client")
+
+
 @pytest.fixture(autouse=True)
 def _reset_module_state(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every test starts from the same "never configured" process state.
@@ -62,6 +69,8 @@ def _reset_module_state(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(opik_auth, "_prompt_environment_registered", False)
     monkeypatch.setattr(opik_auth, "PROMPT_ENVIRONMENT", "qa")
     monkeypatch.delenv("OPIK_URL_OVERRIDE", raising=False)
+    monkeypatch.delenv("OPIK_KEYCLOAK_VAULT_MOUNT", raising=False)
+    monkeypatch.delenv("OPIK_KEYCLOAK_VAULT_PATH", raising=False)
 
 
 def test_is_opik_configured_false_without_url_override() -> None:
@@ -71,9 +80,18 @@ def test_is_opik_configured_false_without_url_override() -> None:
 def test_is_opik_configured_true_with_url_override(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik-ci.ol.mit.edu/api/")
+    _configure_opik_env(monkeypatch)
 
     assert opik_auth.is_opik_configured() is True
+
+
+def test_is_opik_configured_false_without_the_client_location(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A URL alone, without where its Keycloak client is, doesn't turn Opik on"""
+    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik.ol.mit.edu/api/")
+
+    assert opik_auth.is_opik_configured() is False
 
 
 def test_configure_skips_vault_when_not_configured() -> None:
@@ -89,7 +107,7 @@ def test_configure_skips_vault_when_not_configured() -> None:
 def test_configure_reads_vault_and_registers_hook_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik-ci.ol.mit.edu/api/")
+    _configure_opik_env(monkeypatch)
     kv_v1 = _FakeKvV1(_OPIK_SECRET)
     vault = _build_vault(kv_v1)
     registered: list[Any] = []
@@ -113,7 +131,7 @@ def test_configure_reads_vault_and_registers_hook_once(
 
 
 def test_configure_handles_vault_read_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik-ci.ol.mit.edu/api/")
+    _configure_opik_env(monkeypatch)
     kv_v1 = _FakeKvV1({})  # secret-opik/sdk-client missing -> KeyError inside
 
     result = opik_auth.configure_opik_keycloak_auth(_build_vault(kv_v1))
@@ -130,7 +148,7 @@ def test_get_opik_client_none_when_auth_hook_never_registered(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """OPIK_URL_OVERRIDE set but configure_opik_keycloak_auth never ran (or failed)."""
-    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik-ci.ol.mit.edu/api/")
+    _configure_opik_env(monkeypatch)
 
     assert opik_auth.get_opik_client() is None
 
@@ -138,7 +156,7 @@ def test_get_opik_client_none_when_auth_hook_never_registered(
 def test_get_opik_client_returns_none_when_construction_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik-ci.ol.mit.edu/api/")
+    _configure_opik_env(monkeypatch)
     monkeypatch.setattr(opik_auth, "_configured", True)
 
     def _raise(**kwargs: Any) -> None:  # noqa: ARG001
@@ -153,7 +171,7 @@ def test_get_opik_client_returns_none_when_construction_fails(
 def test_get_opik_client_caches_after_first_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik-ci.ol.mit.edu/api/")
+    _configure_opik_env(monkeypatch)
     monkeypatch.setattr(opik_auth, "_configured", True)
     build_calls: list[Any] = []
 
@@ -505,7 +523,7 @@ def test_traced_is_a_noop_decorator_when_not_configured() -> None:
 def test_traced_wraps_with_opik_track_when_configured(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik-ci.ol.mit.edu/api/")
+    _configure_opik_env(monkeypatch)
     track_calls: list[dict[str, Any]] = []
 
     def fake_track(**kwargs: Any):
@@ -532,7 +550,7 @@ def test_traced_wraps_with_opik_track_when_configured(
 
 
 def test_traced_forwards_ignore_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik-ci.ol.mit.edu/api/")
+    _configure_opik_env(monkeypatch)
     track_calls: list[dict[str, Any]] = []
 
     def fake_track(**kwargs: Any):
@@ -624,7 +642,7 @@ def _record_span_updates(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]
 def test_attach_span_prompt_links_the_published_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik.example.com")
+    _configure_opik_env(monkeypatch)
     client = _FakeOpikClient()
     monkeypatch.setattr(opik_auth, "get_opik_client", lambda: client)
     updates = _record_span_updates(monkeypatch)
@@ -640,7 +658,7 @@ def test_attach_span_prompt_links_the_published_version(
 def test_attach_span_prompt_skips_a_failed_publish(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik.example.com")
+    _configure_opik_env(monkeypatch)
     # a Prompt with no version recorded is not linked either
     client = _FakeOpikClient(existing={"name": ["template"]}, pointers={"qa": "v1"})
     client.versions["name"][0].version = None

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 import httpx
 import opik
 from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ol_orchestrate.lib.opik import opik_keycloak_vault_location
 from opik import opik_context
 from opik.hooks import HttpxClientHook, add_httpx_client_hook
 
@@ -106,38 +107,44 @@ class KeycloakClientCredentialsAuth(httpx.Auth):
 
 
 def is_opik_configured() -> bool:
-    """Whether this deployment has opted into Opik (set via OPIK_URL_OVERRIDE).
+    """Whether this deployment has opted into Opik.
 
-    Checked before decorating a function with @opik.track and before building
-    a client to fetch Prompt Library entries -- most environments (local dev,
-    CI) leave this unset and get the plain, untraced/hardcoded-prompt path.
+    That takes OPIK_URL_OVERRIDE and the Vault location of the Keycloak client
+    that instance accepts (OPIK_KEYCLOAK_VAULT_MOUNT/PATH), which ol-infrastructure
+    sets together. Checked before decorating a function with @opik.track and
+    before building a client to fetch Prompt Library entries -- local dev leaves
+    them unset and gets the plain, untraced/hardcoded-prompt path.
     """
-    return bool(os.environ.get("OPIK_URL_OVERRIDE"))
+    return (
+        bool(os.environ.get("OPIK_URL_OVERRIDE"))
+        and opik_keycloak_vault_location() is not None
+    )
 
 
 def configure_opik_keycloak_auth(vault: Vault) -> bool:
     """Register the Keycloak auth flow on the Opik SDK's httpx client.
 
-    Reads the client_id/client_secret/realm url from Vault (secret-opik/
-    sdk-client, KV v1 -- same mount/version convention as LLMClientFactory and
-    tika.py's secret-operations reads). A Vault read failure is logged and
-    treated as "not configured" rather than raised -- this is an optional
+    Reads the client_id/client_secret/realm url from Vault (KV v1, at
+    OPIK_KEYCLOAK_VAULT_MOUNT/OPIK_KEYCLOAK_VAULT_PATH). A Vault read failure is
+    logged and treated as "not configured" rather than raised -- this is an optional
     observability integration, not a pipeline dependency.
 
     Returns True if the hook was registered (or already was), False otherwise.
     """
     global _configured  # noqa: PLW0603
 
-    if not is_opik_configured():
-        log.debug("OPIK_URL_OVERRIDE not set, skipping Keycloak auth hook")
+    location = opik_keycloak_vault_location()
+    if not is_opik_configured() or location is None:
+        log.debug("Opik not configured, skipping Keycloak auth hook")
         return False
     if _configured:
         return True
 
+    mount, path = location
     try:
-        secret = vault.client.secrets.kv.v1.read_secret(
-            mount_point="secret-opik", path="sdk-client"
-        )["data"]
+        secret = vault.client.secrets.kv.v1.read_secret(mount_point=mount, path=path)[
+            "data"
+        ]
         auth = KeycloakClientCredentialsAuth(
             token_url=f"{secret['url']}/protocol/openid-connect/token",
             client_id=secret["client_id"],
@@ -145,8 +152,10 @@ def configure_opik_keycloak_auth(vault: Vault) -> bool:
         )
     except Exception:
         log.warning(
-            "Failed to read secret-opik/sdk-client from Vault; "
+            "Failed to read %s/%s from Vault; "
             "Opik tracing/prompt-library stays disabled",
+            mount,
+            path,
             exc_info=True,
         )
         return False
@@ -162,7 +171,7 @@ def configure_opik_keycloak_auth(vault: Vault) -> bool:
 def get_opik_client() -> opik.Opik | None:
     """Return a shared Opik client for Prompt Library reads, or None if unavailable.
 
-    None whenever OPIK_URL_OVERRIDE is unset, the Keycloak auth hook never
+    None whenever is_opik_configured() is False, the Keycloak auth hook never
     registered (see configure_opik_keycloak_auth), or building the client
     itself fails -- every caller must treat this as "fall back to the local
     hardcoded prompt", never as a hard dependency.
@@ -186,7 +195,7 @@ def get_opik_client() -> opik.Opik | None:
 def traced(
     name: str, tags: list[str] | None = None, ignore_arguments: list[str] | None = None
 ) -> Callable[[F], F]:
-    """@opik.track, gated on OPIK_URL_OVERRIDE -- a plain no-op decorator otherwise.
+    """@opik.track, gated on is_opik_configured() -- a no-op decorator otherwise.
 
     Checked at import/decoration time (an env var, stable for the process's
     life), not at call time -- unlike get_opik_client/render_prompt, which

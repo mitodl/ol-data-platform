@@ -180,12 +180,33 @@ def test_azure_ad_auth_needs_the_endpoint_and_api_version(
         )
 
 
+def test_tracing_is_off_without_the_keycloak_client_location(
+    ol_llm_setup: tuple[MagicMock, MagicMock],
+    vault_client: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An Opik URL without the client's Vault location doesn't trace (or fail)"""
+    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik.example.com/api")
+    monkeypatch.delenv("OPIK_KEYCLOAK_VAULT_MOUNT", raising=False)
+    monkeypatch.delenv("OPIK_KEYCLOAK_VAULT_PATH", raising=False)
+    _, configure_tracing = ol_llm_setup
+
+    _set_up(EmbeddingsResource(vault=_vault(), environment="qa"))
+
+    configure_tracing.assert_called_once_with(
+        TracingConfig(enabled=False, include_content=False)
+    )
+    vault_client.secrets.kv.v1.read_secret.assert_not_called()
+
+
 def test_tracing_authenticates_with_the_vault_keycloak_client(
     ol_llm_setup: tuple[MagicMock, MagicMock],
     vault_client: MagicMock,  # noqa: ARG001
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik.example.com/api")
+    monkeypatch.setenv("OPIK_KEYCLOAK_VAULT_MOUNT", "secret-opik")
+    monkeypatch.setenv("OPIK_KEYCLOAK_VAULT_PATH", "sdk-client")
     _, configure_tracing = ol_llm_setup
 
     _set_up(EmbeddingsResource(vault=_vault(), environment="production"))
