@@ -136,7 +136,7 @@ def check_result(report: ParityReport) -> AssetCheckResult:
         return AssetCheckResult(
             passed=False,
             severity=AssetCheckSeverity.WARN,
-            description="Some points or texts differ from Learn's",
+            description="Some points, texts or checksums differ from Learn's",
             metadata=metadata,
         )
     return AssetCheckResult(passed=True, metadata=metadata)

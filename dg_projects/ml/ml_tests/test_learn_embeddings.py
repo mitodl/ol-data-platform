@@ -1002,6 +1002,30 @@ def test_differing_points_and_texts_only_warn(tables, learn_qdrant):
     ) == (1, 1, 1, 0, 0, 0)
 
 
+def test_a_checksum_unlike_learns_warns(tables, learn_qdrant):
+    load_sources(tables, **{"block-v1:a": "First file.", "block-v1:b": "Second."})
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.content_files",
+        [
+            learn_chunk("block-v1:a", "First file."),
+            # The same chunk and vector, from a version of the file Learn read
+            # before or after the platform's.
+            learn_chunk("block-v1:b", "Second.", checksum=md5_hex("Second, edited.")),
+        ],
+    )
+
+    evaluation = check_content_files(tables)
+
+    assert not evaluation.passed
+    assert evaluation.severity == AssetCheckSeverity.WARN
+    metadata = {key: value.value for key, value in evaluation.metadata.items()}
+    assert (
+        metadata["text_matches"],
+        metadata["checksum_matches"],
+        metadata["below_min_cosine"],
+    ) == (2, 1, 0)
+
+
 def test_learn_points_are_read_a_batch_at_a_time():
     platform = pl.DataFrame(
         {
