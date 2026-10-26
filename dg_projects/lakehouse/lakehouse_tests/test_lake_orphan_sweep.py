@@ -77,8 +77,10 @@ def _metadata(config: LakeOrphanSweepConfig) -> dict[str, Any]:
     return {key: value.value for key, value in output.metadata.items()}
 
 
-def test_only_qa_deletes():
-    assert frozenset({"qa"}) == module.LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS
+def test_deletes_in_qa_and_production_only():
+    assert (
+        frozenset({"qa", "production"}) == module.LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS
+    )
 
 
 def test_config_has_no_default_minimum_age():
