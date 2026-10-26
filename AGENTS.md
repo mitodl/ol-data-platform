@@ -367,6 +367,13 @@ incremental until `--full-refresh` is used.
   `dg_projects/delivery/CONTRIBUTING.md`, "Delivering to a local MIT Learn"
 - `DBT_MODEL_LOCAL_LAKE`: in dev, `get_dbt_model_as_dataframe` reads the table
   from the local lake (`ol_warehouse_local_<layer>`) and not Glue. Same section
+- `AZURE_OPENAI_ENDPOINT` + `OPENAI_API_VERSION`: the Azure OpenAI account and
+  API version the ml location's Learn embedding assets call. Deployed envs
+  authenticate with workload identity; in dev set `AZURE_OPENAI_API_KEY` too
+- `LEARN_QDRANT_COLLECTION_BASE`: Learn's Qdrant collection prefix (e.g.
+  `mitlearn-production`) for the ml location's `matches_learn_qdrant` checks.
+  Required in qa and production, where the code location fails to load without
+  it; dev has neither the checks nor the variable
 
 ## Trust These Instructions
 
