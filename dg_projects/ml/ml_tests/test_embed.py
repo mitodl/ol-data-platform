@@ -260,13 +260,25 @@ def test_input_text_cuts_openai_to_its_token_limit() -> None:
     assert OPENAI.input_text("short") == "short"
 
 
-def _stored(keys: dict[str, str | None]) -> pl.DataFrame:
+def _stored(
+    keys: dict[str, str | None],
+    *,
+    turn_count: int = 2,
+    embedding_input: str = "summary",
+) -> pl.DataFrame:
     return pl.DataFrame(
         {
             "feedback_conversation_pk": list(keys),
+            "turn_count": [turn_count] * len(keys),
+            "embedding_input": [embedding_input] * len(keys),
             "idempotency_key": list(keys.values()),
         },
-        schema={"feedback_conversation_pk": pl.String, "idempotency_key": pl.String},
+        schema={
+            "feedback_conversation_pk": pl.String,
+            "turn_count": pl.Int64,
+            "embedding_input": pl.String,
+            "idempotency_key": pl.String,
+        },
     )
 
 
@@ -305,8 +317,24 @@ def test_filter_unembedded_reembeds_an_arm_switch_with_the_same_text() -> None:
     assert result["conversation_ref"].to_list() == ["0"]
 
 
-def test_filter_unembedded_reembeds_a_row_stored_without_a_key_once() -> None:
+def test_filter_unembedded_keeps_a_keyless_row_with_the_same_turns_and_arm() -> None:
+    """Rows embedded before the key existed are not all redone on deploy."""
     result = embed.filter_unembedded(_rows("text"), _stored({"pk-0": None}), OPENAI)
+
+    assert result.height == 0
+
+
+@pytest.mark.parametrize(
+    ("turn_count", "embedding_input"), [(1, "summary"), (2, "concatenated_turns")]
+)
+def test_filter_unembedded_reembeds_a_keyless_row_whose_turns_or_arm_changed(
+    turn_count: int, embedding_input: str
+) -> None:
+    stored = _stored(
+        {"pk-0": None}, turn_count=turn_count, embedding_input=embedding_input
+    )
+
+    result = embed.filter_unembedded(_rows("text"), stored, OPENAI)
 
     assert result["conversation_ref"].to_list() == ["0"]
 

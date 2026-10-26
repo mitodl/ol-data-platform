@@ -367,13 +367,18 @@ def filter_unembedded(
 
     A conversation not stored yet is always kept, with or without text, so the run
     counts one without text. A stored one without text is dropped, which leaves
-    its vector in place. A stored row with no key (embedded before the key
-    existed) is re-embedded once.
+    its vector in place.
+
+    A row embedded before the key existed keeps the rule it was written under: it
+    is re-embedded when its turn_count or embedding_input arm changed. Re-embedding
+    every one of them would give each a new embedded_at, and feedback_cluster_assignment
+    would re-place every conversation. The row gets a key the next time it is
+    embedded.
 
     :param source_df: resolve_embedding_text's output.
     :param already_embedded_df: feedback_embeddings' rows for this model and
-        length: feedback_conversation_pk, and idempotency_key (null for a row
-        written before the column existed).
+        length: feedback_conversation_pk, turn_count, embedding_input, and
+        idempotency_key (null for a row written before the column existed).
     :param model: the run's model.
     :returns: the rows of source_df to embed or count as having no text.
     :rtype: pl.DataFrame
@@ -381,6 +386,8 @@ def filter_unembedded(
     stored = already_embedded_df.select(
         *JOIN_COLS,
         pl.col("idempotency_key").alias("_stored_key"),
+        pl.col("turn_count").alias("_stored_turn_count"),
+        pl.col("embedding_input").alias("_stored_embedding_input"),
         pl.lit(True).alias("_stored"),  # noqa: FBT003
     )
     current_key = pl.Series(
@@ -393,6 +400,9 @@ def filter_unembedded(
         ],
         dtype=pl.String,
     )
+    keyless_changed = pl.col("turn_count").ne_missing(
+        pl.col("_stored_turn_count")
+    ) | pl.col("embedding_input").ne_missing(pl.col("_stored_embedding_input"))
     return (
         source_df.with_columns(current_key)
         .join(stored, on=JOIN_COLS, how="left")
@@ -400,7 +410,9 @@ def filter_unembedded(
             pl.col("_stored").is_null()
             | (
                 pl.col("_current_key").is_not_null()
-                & pl.col("_current_key").ne_missing(pl.col("_stored_key"))
+                & pl.when(pl.col("_stored_key").is_null())
+                .then(keyless_changed)
+                .otherwise(pl.col("_current_key") != pl.col("_stored_key"))
             )
         )
         .select(source_df.columns)

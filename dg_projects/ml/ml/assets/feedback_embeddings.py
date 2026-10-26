@@ -152,7 +152,12 @@ def feedback_embeddings(
     model = resolve_embedding_model(config.embedding_model, config.embedding_dim)
 
     already_embedded_df = pl.DataFrame(
-        schema={**dict.fromkeys(JOIN_COLS, pl.String), "idempotency_key": pl.String}
+        schema={
+            **dict.fromkeys(JOIN_COLS, pl.String),
+            "turn_count": pl.Int64,
+            "embedding_input": pl.String,
+            "idempotency_key": pl.String,
+        }
     )
     if not config.full_refresh:
         with contextlib.suppress(NoSuchTableError):
@@ -161,8 +166,8 @@ def feedback_embeddings(
                 table_name="feedback_embeddings",
             )
             # idempotency_key is a newer column -- a table upserted before it
-            # existed won't have it until upsert_chunk's schema
-            # evolution next runs, and those rows are embedded again once.
+            # existed won't have it until upsert_chunk's schema evolution next
+            # runs, and filter_unembedded keeps main's rule for those rows.
             stored_key = (
                 pl.col("idempotency_key")
                 if "idempotency_key" in embedded_lazy.collect_schema().names()
@@ -172,7 +177,7 @@ def feedback_embeddings(
             # model's vector doesn't fan out the pk-only join in filter_unembedded.
             already_embedded_df = (
                 embedded_lazy.filter(model.matches())
-                .select(*JOIN_COLS, stored_key)
+                .select(*JOIN_COLS, "turn_count", "embedding_input", stored_key)
                 .collect()
             )
 

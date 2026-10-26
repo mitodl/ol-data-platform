@@ -127,6 +127,8 @@ def test_a_stored_vector_is_kept_for_the_same_text_and_redone_for_a_new_one(
     stored = pl.DataFrame(
         {
             "feedback_conversation_pk": ["pk-1", "pk-5", "pk-5"],
+            "turn_count": [3] * 3,
+            "embedding_input": ["summary"] * 3,
             "embedding_model_version": ["text-embedding-3-large"] * 3,
             "embedding_dim": [3, 3, 1024],
             "idempotency_key": [
@@ -155,11 +157,12 @@ def test_a_stored_vector_is_kept_for_the_same_text_and_redone_for_a_new_one(
     assert metadata["already_embedded_count"].value == 2
 
 
-def test_a_table_without_idempotency_key_reembeds_every_conversation(
+def test_a_table_without_idempotency_key_reembeds_only_changed_conversations(
     catalog: SqlCatalog,
 ) -> None:
-    """The deploy case: the real table predates idempotency_key and holds the
-    conversations the run embeds again.
+    """The deploy case: the real table predates idempotency_key. A row whose
+    turn_count and arm are unchanged keeps its vector and embedded_at, so cluster
+    assignment does not re-place it; a changed one is embedded and gets a key.
     """
     model = embed.resolve_embedding_model(MODEL, 3)
     old_rows = embed._embedded_frame(
@@ -170,13 +173,13 @@ def test_a_table_without_idempotency_key_reembeds_every_conversation(
                     "feedback_conversation_pk": f"pk-{ref}",
                     "source_slug": "zendesk",
                     "conversation_ref": ref,
-                    "turn_count": 3,
+                    "turn_count": turn_count,
                     "embedding_input": "summary",
                     "idempotency_key": None,
                 },
                 [0.0] * 3,
             )
-            for ref in ("1", "5")
+            for ref, turn_count in (("1", 3), ("5", 2))
         ],
     ).drop("idempotency_key")
     identifier = f"{database_name}.feedback_embeddings"
@@ -195,13 +198,11 @@ def test_a_table_without_idempotency_key_reembeds_every_conversation(
     )
 
     assert io_manager.written is not None
-    assert io_manager.written["conversation_ref"].to_list() == ["1", "5"]
+    assert io_manager.written["conversation_ref"].to_list() == ["5"]
     stored = catalog.load_table(identifier).scan().to_polars().sort("conversation_ref")
-    assert stored["idempotency_key"].to_list() == [
-        model.key("hello", "summary"),
-        model.key("world", "summary"),
-    ]
-    assert stored["embedding_vector"].to_list() == [[1.0] * 3, [1.0] * 3]
+    assert stored["idempotency_key"].to_list() == [None, model.key("world", "summary")]
+    assert stored["embedding_vector"].to_list() == [[0.0] * 3, [1.0] * 3]
+    assert stored["embedded_at"][0] == old_rows["embedded_at"][0]
 
 
 def test_a_run_that_stops_raises_failure(catalog: SqlCatalog) -> None:
