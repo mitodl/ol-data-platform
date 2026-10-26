@@ -3,9 +3,17 @@ version: 2
 
 sources:
 - name: ol_warehouse_raw_data
+  description: >-
+    Frozen history. The bootcamps application is decommissioned, nothing loads
+    these tables any more, and the last data landed on 2026-02-12. They are kept
+    read-only because the bootcamps staging models feed the dimensional layer.
+    The record is the bootcamps/app_postgres entry in
+    ingestion/inventory/retired.yml.
   loader: airbyte
   database: '{{ target.database | default(none) }}'
   schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  config:
+    freshness:
   tables:
   - name: raw__bootcamps__app__postgres__ecommerce_wiretransferreceipt
     description: Data about a wire transfer
