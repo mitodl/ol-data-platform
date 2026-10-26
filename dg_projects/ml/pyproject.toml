@@ -71,10 +71,16 @@ ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = tr
 # pre-generated with protobuf 7.35.0 gencode while declaring protobuf>=6.33.5,
 # so it crashes at import time under dagster's required protobuf<7 (upstream
 # metadata/gencode mismatch in the 1.82.0 release).
+#
+# Strip litellm: opik hard-requires it but the tracing and prompt paths never
+# import it, and nothing in this location does. The embedding assets call Azure
+# OpenAI through ol-llm, which needs openai, so only litellm is dropped from the
+# list ol-llm's README gives.
 [tool.uv]
 override-dependencies = [
     "pyiceberg>=0.11.1",
     "grpcio-health-checking<1.82.0",
+    "litellm; sys_platform == 'never'",
 ]
 
 # Keep sqlalchemy below 2.1: 2.1 makes a bare postgresql:// URL default to
