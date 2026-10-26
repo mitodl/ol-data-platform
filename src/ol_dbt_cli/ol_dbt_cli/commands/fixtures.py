@@ -71,6 +71,8 @@ LOCAL_PORT = 9030
 YAML_WIDTH = 4096
 # Where `scaffold` writes a unit's factory package.
 FACTORIES_DIR = Path(fixture_factories.__file__).parent
+# The dbt project whose staging tests `scaffold` drafts from for a unit with no models.json.
+DEFAULT_DBT_DIR = Path("src/ol_dbt")
 
 InventoryDir = Annotated[
     Path,
@@ -369,6 +371,9 @@ def scaffold(
     factories_dir: Annotated[
         Path, Parameter(help="The directory holding one factory package per unit.")
     ] = FACTORIES_DIR,
+    dbt_dir: Annotated[
+        Path, Parameter(help="The dbt project, whose staging tests draft a unit that has no models.json.")
+    ] = DEFAULT_DBT_DIR,
 ) -> None:
     """Write a unit's base factories from its source app's Django models.
 
@@ -376,30 +381,48 @@ def scaffold(
     fixture tables) in the unit's factory package, and an `__init__.py` that
     adds no rows if the package has none. A hand-written `__init__.py` is never
     touched. Columns the fixture and the models disagree on are printed.
+
+    A unit with no Django app has no dump. Without --models and with no
+    models.json in its package, `_generated.py` is drafted from the fixture's
+    column types and the tests of the staging models that read each table,
+    and no models.json is written. Tests that do not map are printed.
     """
     # It reads fixture_trees, which imports the generation runtime: seconds
     # that every other command would pay.
-    from ol_dbt_cli.lib.fixture_scaffold import GENERATED_FILE, MODELS_FILE, starter_package  # noqa: PLC0415
+    from ol_dbt_cli.lib.fixture_scaffold import (  # noqa: PLC0415
+        GENERATED_FILE,
+        MODELS_FILE,
+        scaffold_from_tests,
+        starter_package,
+    )
     from ol_dbt_cli.lib.fixture_scaffold import scaffold as fixture_scaffold  # noqa: PLC0415
 
     (selected,) = _select(inventory_dir, [unit])
     (fixture,) = load_fixtures(inventory_dir, [selected], selected=True)
     package = factories_dir / selected.path.stem
     models_path = models or package / MODELS_FILE
-    if not models_path.exists():
-        err_console.print(
-            f"[bold red]No {escape(str(models_path))}. Dump the app's models with bin/django-model-dump.py "
-            "and pass it as --models."
-        )
+    if models is not None and not models.exists():
+        err_console.print(f"[bold red]No {escape(str(models))}.")
         sys.exit(1)
-    result = fixture_scaffold(fixture, selected, json.loads(models_path.read_text()))
-    package.mkdir(parents=True, exist_ok=True)
-    (package / MODELS_FILE).write_text(json.dumps(result.models, indent=2) + "\n")
-    (package / GENERATED_FILE).write_text(result.source)
-    written = [package / MODELS_FILE, package / GENERATED_FILE]
+    written: dict[Path, str] = {}
+    if models_path.exists():
+        result = fixture_scaffold(fixture, selected, json.loads(models_path.read_text()))
+        written[package / MODELS_FILE] = json.dumps(result.models, indent=2) + "\n"
+    else:
+        try:
+            result = scaffold_from_tests(fixture, selected, dbt_dir)
+        except ValueError as error:
+            err_console.print(
+                f"[bold red]No {escape(str(models_path))}, and {escape(str(error))}. Dump the app's models with "
+                "bin/django-model-dump.py and pass it as --models."
+            )
+            sys.exit(1)
+    written[package / GENERATED_FILE] = result.source
     if not (package / "__init__.py").exists():
-        (package / "__init__.py").write_text(starter_package(selected))
-        written.append(package / "__init__.py")
+        written[package / "__init__.py"] = starter_package(selected)
+    package.mkdir(parents=True, exist_ok=True)
+    for path, text in written.items():
+        path.write_text(text)
     for note in result.notes:
         err_console.print(f"[yellow]{escape(note)}", soft_wrap=True)
     for path in written:

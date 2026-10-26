@@ -4,8 +4,8 @@ Nothing in CI loads a fixture into StarRocks, so a package that generated a
 dangling foreign key or a repeated unique value would only be found on a local
 lake. These run each package in process, at scale 1 and at a scale where fixed
 pools run out, and check its rows against the Django model dump committed next
-to it. Primary keys are not checked here: ``generate_rows`` refuses a repeated
-one.
+to it, or, for a unit with no dump, against what its staging tests draft.
+Primary keys are not checked here: ``generate_rows`` refuses a repeated one.
 
 Rows are generated at load, so a mimesis or factory_boy bump could change what
 every contributor's lake holds with no diff in the repo. The digest covers every
@@ -27,9 +27,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from ol_dbt_cli.commands.fixtures import FACTORIES_DIR, generate_command
+from ol_dbt_cli.commands.fixtures import DEFAULT_DBT_DIR, FACTORIES_DIR, generate_command
 from ol_dbt_cli.lib.fixture_generation import RESERVED_DOMAIN, generate_rows
-from ol_dbt_cli.lib.fixture_scaffold import GENERATED_FILE, MODELS_FILE, scaffold
+from ol_dbt_cli.lib.fixture_scaffold import GENERATED_FILE, MODELS_FILE, Scaffold, scaffold, scaffold_from_tests
 from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, Unit, load_units
 from ol_dbt_cli.lib.raw_fixtures import load_fixtures, stored_key, unit_factories
 
@@ -73,13 +73,21 @@ class _Generation:
         return [value for value in stored if value is not None]
 
 
+def _scaffolded(fixture: UnitFixture, unit: Unit) -> Scaffold:
+    """Scaffold ``unit`` as `ol-dbt fixtures scaffold --unit` does: from its models.json, or from its tests."""
+    models = FACTORIES_DIR / unit.path.stem / MODELS_FILE
+    if models.exists():
+        return scaffold(fixture, unit, json.loads(models.read_text()))
+    return scaffold_from_tests(fixture, unit, REPO_ROOT / DEFAULT_DBT_DIR)
+
+
 def _generation(unit: Unit, scale: float) -> _Generation:
     (fixture,) = load_fixtures(INVENTORY_DIR, [unit], selected=True)
     factories = unit_factories(unit)
     assert factories is not None
     rows = generate_rows(fixture, unit, factories, scale)
     prefix = str(unit.data["table_prefix"])
-    dump = json.loads((FACTORIES_DIR / unit.path.stem / MODELS_FILE).read_text())
+    dump = _scaffolded(fixture, unit).models
     return _Generation(
         unit=unit,
         fixture=fixture,
@@ -268,7 +276,7 @@ def test_the_scaffold_reproduces_the_committed_base_factories(unit: Unit) -> Non
     package = FACTORIES_DIR / unit.path.stem
     (fixture,) = load_fixtures(INVENTORY_DIR, [unit], selected=True)
 
-    written = scaffold(fixture, unit, json.loads((package / MODELS_FILE).read_text())).source
+    written = _scaffolded(fixture, unit).source
 
     assert written == (package / GENERATED_FILE).read_text(), (
         f"{unit.path.stem}/{GENERATED_FILE} is not what `ol-dbt fixtures scaffold --unit {unit.key}` writes"

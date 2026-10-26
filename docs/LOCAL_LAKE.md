@@ -228,6 +228,39 @@ names are matched without case, since Airbyte lowercases them. A column the fixt
 the models disagree on (Airbyte drops and adds columns) is printed and drawn by its
 fixture type.
 
+A unit with no Django app (an S3 or API unit such as `ocw/s3`) has no dump. With no
+`--models` and no `models.json` in its package, `scaffold` drafts `_generated.py` from the
+fixture's column types and the dbt tests of the staging models that `source()` each table
+(read from the schema YAML under `src/ol_dbt/models/staging/`, so no warehouse or
+manifest is needed; `--dbt-dir` points elsewhere):
+
+```bash
+ol-dbt fixtures scaffold --unit ocw/s3
+```
+
+A test on a staging column applies to the raw column the model passes through it,
+renamed or cast and nothing more, so `page_ptr_id as wagtail_page_id` carries the tests
+of `wagtail_page_id` back to `page_ptr_id`:
+
+- `not_null` makes the column always set; a column without one is NULL in a share of rows.
+  The inventory's primary key is never NULL and counts on the sequence.
+- `unique` comes from the sequence, unless the column is a union of several raw columns
+  (their sequences would collide) or the fixture's hand-written rows already repeat a
+  value (a staging model that keeps each record's newest load tests unique what the raw
+  history repeats).
+- `accepted_values` cycles through the values.
+- `relationships` to a model that passes the field through from another table of the
+  fixture is a foreign key, drawn from its parent as a dump's would be.
+- `dbt_utils.unique_combination_of_columns` and
+  `dbt_expectations.expect_compound_columns_to_be_unique` become the same
+  "unique together" comment a dump's `unique_together` gives.
+- A string column a hand-written row holds a mapping or list in is JSON, left unset.
+
+The tests of a derived column (`lower(title)`, a JSON extraction, a `coalesce`), a
+relationship to a table the fixture leaves out, and a compound test over a derived
+column are not mapped, and each is printed. No `models.json` is written: the next
+`scaffold` drafts again from the tests as they are then.
+
 ### Adding a fixture
 
 Rows are hand-written or generated, never copied from a deployed environment. Raw
