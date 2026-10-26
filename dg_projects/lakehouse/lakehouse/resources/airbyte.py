@@ -99,6 +99,11 @@ class JobStats:
         )
 
 
+def _count(value: object) -> int | None:
+    # JSON true/false decode to bool, which isinstance treats as int.
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
 def _final_attempt_emitted(attempts: object) -> int | None:
     if not isinstance(attempts, list) or not all(
         isinstance(info, Mapping) for info in attempts
@@ -115,8 +120,7 @@ def _final_attempt_emitted(attempts: object) -> int | None:
         total, Mapping
     ):
         return None
-    emitted = total.get("recordsEmitted")
-    return emitted if isinstance(emitted, int) else None
+    return _count(total.get("recordsEmitted"))
 
 
 @dataclass(frozen=True)
@@ -155,31 +159,26 @@ class StreamSync:
 def records_read(stats: JobStats, stream_name: str) -> tuple[int | None, int | None]:
     """Return a stream's records emitted and committed, or None where unknown.
 
-    A job whose final attempt emitted no records read nothing from any stream.
-    Otherwise a count is known only from a numeric value on the one stats entry
-    for the stream. Whether Airbyte lists a stream that read nothing is not
-    established, so an absent entry is unknown rather than 0, as is a name
-    listed twice (one name in two namespaces).
+    A numeric value on the one stats entry for the stream wins. Without one, a
+    job whose final attempt emitted no records read nothing from any stream.
+    Otherwise the count is unknown: whether Airbyte lists a stream that read
+    nothing is not established, so an absent entry is not 0, and neither is a
+    name listed twice (one name in two namespaces).
 
     :param stats: The job's stats.
     :param stream_name: The stream to count.
     :returns: ``(records_emitted, records_committed)``.
     """
-    if stats.final_attempt_emitted == 0:
-        return 0, 0
     entries = [
         entry for entry in stats.streams or [] if entry.get("streamName") == stream_name
     ]
-    if len(entries) != 1:
-        return None, None
-    emitted, committed = (
-        entries[0].get("recordsEmitted"),
-        entries[0].get("recordsCommitted"),
-    )
-    return (
-        emitted if isinstance(emitted, int) else None,
-        committed if isinstance(committed, int) else None,
-    )
+    if len(entries) == 1:
+        emitted = _count(entries[0].get("recordsEmitted"))
+        if emitted is not None:
+            return emitted, _count(entries[0].get("recordsCommitted"))
+    if stats.final_attempt_emitted == 0:
+        return 0, 0
+    return None, None
 
 
 @beta
