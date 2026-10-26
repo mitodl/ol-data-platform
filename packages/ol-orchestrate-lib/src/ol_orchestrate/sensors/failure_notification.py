@@ -255,22 +255,38 @@ class StepFailure:
     error: Any
 
 
-def step_failure_of(step_failure_events: Sequence[Any]) -> StepFailure | None:
-    """Reduce a run's step failure events to the one its report is built from.
-
-    Pure: the caller does the single read and passes the result in. A run that
-    died without any step failure event -- OOM, eviction, a run monitoring
-    timeout -- has none, and the in-process hook never ran for it either.
-    """
-    if not step_failure_events:
-        return None
-    event = step_failure_events[0]
+def _step_failure_from(event: Any) -> StepFailure:
     error = getattr(event.event_specific_data, "error", None)
     return StepFailure(
         step_key=event.step_key,
         error_type=(user_code_error_type(error) if error is not None else None)
         or "run_failure",
         error=error,
+    )
+
+
+def step_failure_of(step_failure_events: Sequence[Any]) -> StepFailure | None:
+    """Reduce a run's step failure events to the one its report is built from.
+
+    Pure: the caller does the single read and passes the result in. A run that
+    died without any step failure event -- OOM, eviction, a run monitoring
+    timeout -- has none, and the in-process hook never ran for it either.
+
+    The first failure that is not an interruption wins, so the run reads as
+    interrupted only when every step failure is one: a run that monitoring
+    resumed after its worker was killed carries the killed worker's
+    DagsterExecutionInterruptedError ahead of any real failure.
+    """
+    failures = [_step_failure_from(event) for event in step_failure_events]
+    if not failures:
+        return None
+    return next(
+        (
+            failure
+            for failure in failures
+            if failure.error_type not in INTERRUPTION_ERRORS
+        ),
+        failures[0],
     )
 
 
