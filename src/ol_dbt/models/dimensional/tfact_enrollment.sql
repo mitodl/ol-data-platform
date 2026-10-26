@@ -489,14 +489,20 @@ with mitxonline_enrollments as (
     group by platform, enrollment_type
 )
 
--- Snapshot of the target's current foreign keys, used to re-select rows whose user_fk has
--- gone stale after a dim_user re-key, whose courserun_fk has changed (e.g. an Emeritus run
--- code that gains an xPro match), or whose contract_fk has (MITx Online backfilled the
--- enrollment's contract without moving updated_on past our watermark). The source row
--- itself did not change, so the activity-timestamp watermark alone would never catch these.
+-- Snapshot of the target's current foreign keys and enrollment state, used to re-select
+-- rows whose user_fk has gone stale after a dim_user re-key, whose courserun_fk has changed
+-- (e.g. an Emeritus run code that gains an xPro match), or whose contract_fk has (MITx
+-- Online backfilled the enrollment's contract without moving updated_on past our
+-- watermark). The source row itself did not change, so the activity-timestamp watermark
+-- alone would never catch these.
+-- The enrollment state is compared because edX.org and residential enrollments have no
+-- updated_on: an unenrollment or mode change after the 7-day lookback never moves a
+-- watermark, and on 2026-10-26 the production fact still showed 444,301 edX.org enrollments
+-- as active that the source had deactivated. A MITx Online DEDP enrollment's mode is also
+-- derived from orders, which do not bump the enrollment's updated_on.
 -- One row per key: a key a past run wrote twice would otherwise match each source row twice
 -- and be written twice again. It is re-selected instead, so delete+insert leaves one copy.
-, stale_fk_lookup as (
+, stored_row_lookup as (
     select
         enrollment_key
         , max(user_fk) as stored_user_fk
@@ -504,6 +510,9 @@ with mitxonline_enrollments as (
         , max(
             {% if target_has_contract_fk %}contract_fk{% else %}cast(null as varchar){% endif %}
         ) as stored_contract_fk
+        , bool_or(enrollment_is_active) as stored_is_active
+        , max(enrollment_mode) as stored_mode
+        , max(enrollment_status) as stored_status
         , count(*) > 1 as stored_has_copies
     from {{ this }}
     group by enrollment_key
@@ -540,7 +549,7 @@ with mitxonline_enrollments as (
     left join incremental_watermarks w
         on w.watermark_platform = ewf.platform
         and w.watermark_enrollment_type = ewf.enrollment_scope
-    left join stale_fk_lookup as sfk
+    left join stored_row_lookup as sfk
         on sfk.enrollment_key = {{ dbt_utils.generate_surrogate_key([
             "cast(ewf.enrollment_id as varchar)",
             "ewf.platform",
@@ -550,8 +559,9 @@ with mitxonline_enrollments as (
         w.max_activity_on is null  -- platform/type not yet in target, include all
         -- Use >= for updated_on watermark: updated_on can equal max on state changes within same second
         or coalesce(ewf.enrollment_updated_on, ewf.enrollment_created_on) >= w.max_activity_on
-        -- For platforms without updated_on (edxorg, residential), apply a 7-day lookback to catch
-        -- status changes (deactivations, mode upgrades) that don't bump enrollment_created_on
+        -- For platforms without updated_on (edxorg, residential), apply a 7-day lookback so a
+        -- recent enrollment is rewritten while its source row settles. Later changes are
+        -- caught by the stored-state comparison below.
         or (
             ewf.enrollment_updated_on is null
             and ewf.enrollment_created_on is not null
@@ -564,6 +574,10 @@ with mitxonline_enrollments as (
         or sfk.stored_courserun_fk is distinct from ewf.courserun_fk
         -- contract added or re-resolved, including every B2B row on the run that adds the column
         or sfk.stored_contract_fk is distinct from ewf.contract_fk
+        -- unenrolled, reactivated, or mode/status changed with no timestamp to show it
+        or sfk.stored_is_active is distinct from ewf.enrollment_is_active
+        or sfk.stored_mode is distinct from ewf.enrollment_mode
+        or sfk.stored_status is distinct from ewf.enrollment_status
         or sfk.stored_has_copies
     )
     {% endif %}
