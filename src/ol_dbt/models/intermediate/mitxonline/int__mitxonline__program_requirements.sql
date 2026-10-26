@@ -46,12 +46,17 @@ with program_requirements as (
         ) over (partition by course_nodes.programrequirement_id)
             as course_node_is_required
 
+        -- The operators above one course node, innermost first. They sit on one path, so
+        -- their lengths differ and the order has no ties.
         , row_number()
             over (
-                partition by course_nodes.course_id, course_nodes.program_id
+                partition by course_nodes.programrequirement_id
                 order by length(operator_nodes.programrequirement_path) desc
             )
             as requirement_nesting
+        , max(length(operator_nodes.programrequirement_path))
+            over (partition by course_nodes.programrequirement_id)
+            as innermost_operator_path_length
     from course_nodes
     left join operator_nodes
         on course_nodes.programrequirement_path like {{ dbt.concat(["operator_nodes.programrequirement_path", "'%'"]) }}
@@ -64,6 +69,18 @@ with program_requirements as (
         , max(course_node_requirements.course_node_is_required)
             over (partition by course_node_requirements.course_id, course_node_requirements.program_id) = 1
             as programrequirement_is_required
+        -- A course can sit under two groups of a program, e.g. in two tracks. Its row
+        -- takes the course node with the deepest innermost operator, the first in tree
+        -- order on a tie, so its requirement and that requirement's parent come from the
+        -- same branch.
+        , dense_rank()
+            over (
+                partition by course_node_requirements.course_id, course_node_requirements.program_id
+                order by
+                    course_node_requirements.innermost_operator_path_length desc
+                    , course_node_requirements.course_node_path asc
+            )
+            as course_node_rank
     from course_node_requirements
 )
 
@@ -79,7 +96,7 @@ with program_requirements as (
         , all_requirements.programrequirement_path
         , all_requirements.course_node_path
     from all_requirements
-    where all_requirements.requirement_nesting = 1
+    where all_requirements.requirement_nesting = 1 and all_requirements.course_node_rank = 1
 )
 
 , parent_requirements as (
@@ -92,7 +109,7 @@ with program_requirements as (
         , all_requirements.electiveset_required_number
         , all_requirements.programrequirement_path
     from all_requirements
-    where all_requirements.requirement_nesting = 2
+    where all_requirements.requirement_nesting = 2 and all_requirements.course_node_rank = 1
 )
 
 , combined_requirements as (
@@ -111,8 +128,7 @@ with program_requirements as (
     from child_requirements
     left join parent_requirements
         on
-            child_requirements.programrequirement_path like {{ dbt.concat(["parent_requirements.programrequirement_path", "'%'"]) }}
-            and child_requirements.course_id = parent_requirements.course_id
+            child_requirements.course_id = parent_requirements.course_id
             and child_requirements.program_id = parent_requirements.program_id
 )
 
