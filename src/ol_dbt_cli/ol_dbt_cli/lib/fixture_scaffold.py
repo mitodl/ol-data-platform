@@ -155,6 +155,8 @@ _FIXTURE_TYPE_FIELDS = {
     "timestamp": "DateTimeField",
     "string": "CharField",
 }
+# The fields a drafted column can be whose unique values the writer draws.
+_UNIQUE_TYPES = _INTEGER_TYPES | {"CharField"}
 # A compound unique test, and the argument that lists its columns.
 _UNIQUE_TOGETHER_TESTS = {
     "dbt_utils.unique_combination_of_columns": "combination_of_columns",
@@ -218,8 +220,9 @@ def starter_package(unit: Unit) -> str:
     return f'''"""The factory package of the `{unit.key}` unit.
 
 `_generated.py` holds the base factories `ol-dbt fixtures scaffold` wrote from
-the app's models. This module subclasses them for what the models cannot say
-and wires the tables together in `generate` (see ol_dbt_cli.fixture_factories).
+the app's models, or for a unit with no app from its staging models' tests. This
+module subclasses them for what those cannot say and wires the tables together
+in `generate` (see ol_dbt_cli.fixture_factories).
 """
 
 from __future__ import annotations
@@ -345,6 +348,7 @@ def _models_from_tests(fixture: UnitFixture, unit: Unit, dbt_dir: Path) -> tuple
                 notes += _map_test(test, f"{model_name}.{column_name}", raw, columns, repeated, staged, unit)
         for test in declared.data_tests:
             if test.name not in _UNIQUE_TOGETHER_TESTS:
+                notes.append(f"{model_name}: {test.name} not mapped; the writer has no equivalent")
                 continue
             listed = [name.lower() for name in test.arguments[_UNIQUE_TOGETHER_TESTS[test.name]]]
             raw_columns = [model.passed.get(name, []) for name in listed]
@@ -427,7 +431,7 @@ def _map_test(
 ) -> list[str]:
     """Set what ``test`` on a staging column says on each raw column it passes, and return what was not mapped."""
     if test.name not in {"not_null", "unique", "accepted_values", "relationships"}:
-        return []
+        return [f"{where}: {test.name} not mapped; the writer has no equivalent"]
     if not raw:
         return [f"{where}: {test.name} not mapped; the column is derived, not a raw column renamed or cast"]
     targets = [columns[raw_table][raw_column] for raw_table, raw_column in raw]
@@ -441,12 +445,17 @@ def _map_test(
             return [f"{where}: unique not mapped; it unions {len(targets)} raw columns"]
         if raw[0] in repeated:
             return [f"{where}: unique not mapped; the fixture's rows repeat a value of {raw[0][0]}.{raw[0][1]}"]
+        if targets[0]["internal_type"] not in _UNIQUE_TYPES:
+            return [f"{where}: unique not mapped; the writer draws no distinct {targets[0]['internal_type']}"]
         targets[0]["unique"] = True
     elif test.name == "accepted_values":
         for facts in targets:
             # YAML reads an unquoted 2025 as a number; a string column holds its text.
             values = [str(value) if facts["field"] == "CharField" else value for value in test.arguments["values"]]
             facts["choices"] = [value for value in facts.get("choices", values) if value in values]
+            if not facts["choices"]:
+                del facts["choices"]
+                return [f"{where}: accepted_values not mapped; another staging model accepts none of its values"]
     else:
         parent = _parent(str(test.arguments["to"]), str(test.arguments["field"]).lower(), columns, staged)
         if parent is None:

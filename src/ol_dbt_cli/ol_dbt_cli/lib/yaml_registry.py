@@ -15,7 +15,11 @@ class DataTest:
 
     name: str
     arguments: dict[str, Any] = field(default_factory=dict)
-    """The test's arguments, from ``arguments:`` or the legacy top-level keys; never its ``config``."""
+    """The test's arguments, from ``arguments:`` or the legacy top-level keys.
+
+    A legacy entry's top-level config keys (``where:``) land here too, since
+    nothing tells them from arguments; ``config:`` itself never does.
+    """
 
 
 @dataclass

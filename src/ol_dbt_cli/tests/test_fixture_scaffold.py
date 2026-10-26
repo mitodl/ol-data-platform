@@ -650,6 +650,11 @@ models:
     tests: [not_null]
 - name: stg__demo__courseruns
   tests:
+  - dbt_utils.recency:
+      arguments:
+        datepart: day
+        field: courserun_year
+        interval: 1
   - dbt_utils.unique_combination_of_columns:
       arguments:
         combination_of_columns: [course_id, courserun_tag]
@@ -657,7 +662,7 @@ models:
       column_list: [course_id, courserun_tag_upper]
   columns:
   - name: courserun_id
-    tests: [not_null, unique]
+    tests: [not_null, unique, json_array]
   - name: course_id
     tests:
     - not_null
@@ -769,8 +774,10 @@ def test_relationships_and_compound_unique_map_where_the_writer_has_an_equivalen
 def test_what_does_not_map_is_noted(drafted: Scaffold) -> None:
     assert drafted.notes == [
         f"{PREFIX}courses_unread: no staging model reads it; every column is drawn by its fixture type",
+        "stg__demo__courseruns.courserun_id: json_array not mapped; the writer has no equivalent",
         "stg__demo__courseruns.status_id: relationships to ref('stg__demo__statuses') not mapped; "
         "its status_id is not a column of a fixture table renamed or cast",
+        "stg__demo__courseruns: dbt_utils.recency not mapped; the writer has no equivalent",
         "stg__demo__courseruns: dbt_expectations.expect_compound_columns_to_be_unique on course_id, "
         "courserun_tag_upper not mapped; its columns are not all passed through from one table",
         f"stg__demo__courses.course_code: unique not mapped; the fixture's rows repeat a value of "

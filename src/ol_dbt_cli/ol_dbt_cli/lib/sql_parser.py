@@ -1447,25 +1447,42 @@ def passthrough_columns_via_scope(
         return {}
     return {
         column: [(placeholder_to_name[table], name) for table, name in passed if table in placeholder_to_name]
-        for column, passed in _scope_outputs(root)
+        for column, passed in _scope_outputs(root, {})
         if any(table in placeholder_to_name for table, _ in passed)
     }
 
 
-def _scope_outputs(scope: Scope) -> list[tuple[str, list[tuple[str, str]]]]:
-    """Return each output column of *scope* in order, with the ``(table, column)`` pairs it passes through."""
+_ScopeOutputs = list[tuple[str, list[tuple[str, str]]]]
+
+
+def _scope_outputs(scope: Scope, traced: dict[int, _ScopeOutputs]) -> _ScopeOutputs:
+    """Return each output column of *scope* in order, with the ``(table, column)`` pairs it passes through.
+
+    *traced* holds the scopes already traced, by id: every column of a CTE's
+    reader asks for the CTE's outputs, so without it a chain of CTEs is traced
+    once per column per level.
+    """
+    if id(scope) not in traced:
+        traced[id(scope)] = _traced_outputs(scope, traced)
+    return traced[id(scope)]
+
+
+def _traced_outputs(scope: Scope, traced: dict[int, _ScopeOutputs]) -> _ScopeOutputs:
     if isinstance(scope.expression, exp.SetOperation):
-        left, right = (_scope_outputs(branch) for branch in scope.set_operation_scopes)
+        left, right = (_scope_outputs(branch, traced) for branch in scope.set_operation_scopes)
         if not isinstance(scope.expression, exp.Union):
             return left
         return [(name, passed + right[position][1]) for position, (name, passed) in enumerate(left[: len(right)])]
     # A table function (UNNEST) makes its columns rather than passing any.
     if not isinstance(scope.expression, exp.Query):
         return []
-    return [(projection.alias_or_name.lower(), _passed(scope, projection)) for projection in scope.expression.selects]
+    return [
+        (projection.alias_or_name.lower(), _passed(scope, projection, traced))
+        for projection in scope.expression.selects
+    ]
 
 
-def _passed(scope: Scope, expression: exp.Expr) -> list[tuple[str, str]]:
+def _passed(scope: Scope, expression: exp.Expr, traced: dict[int, _ScopeOutputs]) -> list[tuple[str, str]]:
     # TryCast is a Cast.
     while isinstance(expression, exp.Alias | exp.Cast | exp.Paren):
         expression = expression.this
@@ -1475,7 +1492,7 @@ def _passed(scope: Scope, expression: exp.Expr) -> list[tuple[str, str]]:
     if isinstance(source, exp.Table):
         return [(source.name, expression.name.lower())]
     if isinstance(source, Scope):
-        return dict(_scope_outputs(source)).get(expression.name.lower(), [])
+        return dict(_scope_outputs(source, traced)).get(expression.name.lower(), [])
     return []
 
 
