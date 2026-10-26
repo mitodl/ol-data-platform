@@ -178,6 +178,7 @@ class TestFinalAttempt:
             ([_attempt(0, recordsEmitted=0), _attempt(1, recordsEmitted=9)], 9),
             ([_attempt(0)], None),
             ([_attempt(0, recordsEmitted=None)], None),
+            ([_attempt(0, recordsEmitted=False)], None),
             ([_attempt(0, "failed", recordsEmitted=0)], None),
             ([_attempt(0, recordsEmitted=0), "x"], None),
             ([{"attempt": {"status": "succeeded"}}], None),
@@ -228,6 +229,19 @@ class TestRecordsRead:
     ) -> None:
         stats = JobStats(streams=streams, final_attempt_emitted=0)
         assert records_read(stats, "absent") == (0, 0)
+
+    def test_a_stream_count_wins_over_the_final_attempt(self) -> None:
+        """A resumed final attempt can emit 0 after an earlier one read the rows."""
+        stats = JobStats(streams=self.STATS.streams, final_attempt_emitted=0)
+        assert records_read(stats, "users") == (12, 11)
+
+    @pytest.mark.parametrize("value", [True, False])
+    def test_a_boolean_count_is_unknown(self, value) -> None:
+        stats = JobStats(
+            streams=[{"streamName": "users", "recordsEmitted": value}],
+            final_attempt_emitted=None,
+        )
+        assert records_read(stats, "users") == (None, None)
 
 
 def _job(job_id: int, status: AirbyteJobStatusType | str) -> AirbyteJob:
