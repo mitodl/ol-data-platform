@@ -660,18 +660,24 @@ models:
   - name: unique_courses_taken_in_program
     description: int, count of unique course readable ids the learner enrolled in
       within that program, in any enrollment mode. Program courses are matched on
-      program_readable_id. program_enrollment_with_user_report.courses_taken_in_program
+      program_readable_id, which only MITx Online-hosted courses of MITx Online programs
+      and xPRO program courses carry, so edX.org program rows are always 0. program_enrollment_with_user_report.courses_taken_in_program
       counts verified enrollments only, matched through bridge_program_course, so
       the two differ.
   - name: capstone_indicator
     description: str, Y if the learner has an enrollment, in any mode, in a program
-      course with the word capstone in the title, otherwise N. program_enrollment_with_user_report.capstone_ind
-      counts verified enrollments only.
+      course with the word capstone in the title, otherwise N. Program courses are
+      matched as for unique_courses_taken_in_program, so edX.org program rows are
+      always N. program_enrollment_with_user_report.capstone_ind counts verified enrollments
+      only.
   - name: program_completion_days
-    description: int, number of days between the first verified course enrollment's
-      start date and the program completion certificate date. Ignores unverified/audit
-      enrollments when determining the start date. program_enrollment_with_user_report
-      carries the same value as program_complete_days.
+    description: int, number of days from the start date of the earliest course run
+      the learner holds a verified enrollment in to the program certificate's creation
+      date. Ignores unverified/audit enrollments when determining the start date.
+      Program courses are matched as for unique_courses_taken_in_program, so it is
+      null on edX.org program rows. A revoked certificate keeps its creation date,
+      so this is set on revoked MITx Online and xPRO rows where user_has_completed_program
+      is false. program_enrollment_with_user_report carries the same value as program_complete_days.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
