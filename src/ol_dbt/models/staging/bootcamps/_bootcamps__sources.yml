@@ -234,6 +234,11 @@ sources:
       description: string, postal code
 
   - name: raw__bootcamps__app__postgres__profiles_profile
+    description: >-
+      User profiles as of 2025-02-24. This table stopped loading a year before the
+      rest of bootcamps, so the 1,165 users who joined after 2025-02-25 have no
+      row here (nor does one user from 2019). See its entry in
+      ingestion/inventory/retired.yml.
     columns:
     - name: id
       description: int, sequential ID
