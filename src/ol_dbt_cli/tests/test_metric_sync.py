@@ -52,6 +52,7 @@ from ol_dbt_cli.lib.metric_sync import (
     file_digest,
     lineage_sources,
     same_description,
+    stale_edges,
     structural_changes,
 )
 from ol_dbt_cli.lib.openmetadata import OpenMetadataClient, OpenMetadataError
@@ -149,7 +150,15 @@ class FakeOpenMetadata(OpenMetadataClient):
         self.metrics: dict[str, dict[str, Any]] = {}
         # Every version of each metric, oldest first.
         self.history: dict[str, list[dict[str, Any]]] = {}
+        # Every AddLineage body PUT, in order.
         self.lineage: list[dict[str, Any]] = []
+        # Stored edges: (from id, to id) -> (from type, lineageDetails).
+        self.edges: dict[tuple[str, str], tuple[str, dict[str, Any]]] = {}
+        # Upstream ids whose edge DELETE answers 500.
+        self.failing_deletes: set[str] = set()
+        # Who OM_BOT_JWT_TOKEN logs in as.
+        self.user = BOT
+        self.is_bot = True
         self.calls: list[tuple[str, str]] = []
         # Metrics whose GET answers 500.
         self.broken: set[str] = set()
@@ -168,6 +177,31 @@ class FakeOpenMetadata(OpenMetadataClient):
             fields["tags"] = _stamp_tags(updated.get("tags", []), fields["tags"], user)
         updated.update(fields)
         self._store_patch(updated, user)
+
+    def add_edge(self, from_id: str, metric: str, user: str, from_type: str = "table") -> None:
+        """Store an edge into *metric* the way PUT /v1/lineage does for *user*."""
+        self._store_edge(
+            {"fromEntity": {"id": from_id, "type": from_type}, "toEntity": {"id": self.metrics[metric]["id"]}}, user
+        )
+
+    def _store_edge(self, edge: dict[str, Any], user: str) -> None:
+        """Keep the first createdBy of an edge (LineageRepository.applyTemporalFields, resolveCreatedBy)."""
+        key = (edge["fromEntity"]["id"], edge["toEntity"]["id"])
+        prior = self.edges.get(key, ("", {}))[1]
+        details = {**edge.get("lineageDetails", {}), "createdBy": prior.get("createdBy", user), "updatedBy": user}
+        self.edges[key] = (edge["fromEntity"]["type"], details)
+
+    def _upstream(self, metric_id: str) -> dict[str, Any]:
+        """Answer GET /v1/lineage/metric/{id} with upstreamDepth=1."""
+        fqns = {table_id: fqn for fqn, table_id in self.tables.items()}
+        edges = {k: v for k, v in self.edges.items() if k[1] == metric_id}
+        return {
+            "nodes": [{"id": f, "type": t, "fullyQualifiedName": fqns[f]} for (f, _), (t, _) in edges.items()],
+            "upstreamEdges": [
+                {"fromEntity": f, "toEntity": m, "lineageDetails": d} for (f, m), (_, d) in edges.items()
+            ],
+            "downstreamEdges": [],
+        }
 
     def _record(self, metric: dict[str, Any]) -> None:
         self.history.setdefault(metric["name"], []).append(copy.deepcopy(metric))
@@ -231,7 +265,7 @@ class FakeOpenMetadata(OpenMetadataClient):
             case ("GET", "system", "version"):
                 return {"version": self.version}
             case ("GET", "users", "loggedInUser"):
-                return {"name": BOT, "isBot": True}
+                return {"name": self.user, "isBot": self.is_bot}
             case ("GET", "teams", "name", team) if team in self.teams:
                 return {"id": self.teams[team]}
             case ("GET", "glossaryTerms", "name", term) if unquote(term) in self.glossary_terms:
@@ -260,7 +294,16 @@ class FakeOpenMetadata(OpenMetadataClient):
                 return self._store_patch(updated, BOT)
             case ("PUT", "lineage"):
                 self.lineage.append(body)
+                self._store_edge(body["edge"], BOT)
                 # LineageResource.addLineage answers 200 with no body.
+                return None
+            case ("GET", "lineage", "metric", metric_id):
+                assert query == {"upstreamDepth": "1", "downstreamDepth": "0"}
+                return self._upstream(metric_id)
+            case ("DELETE", "lineage", _, from_id, "metric", _) if from_id in self.failing_deletes:
+                raise OpenMetadataError(f"{method} {path} -> 500: boom", 500)
+            case ("DELETE", "lineage", _, from_id, "metric", metric_id) if (from_id, metric_id) in self.edges:
+                del self.edges[(from_id, metric_id)]
                 return None
         raise OpenMetadataError(f"{method} {path} -> 404: not found", 404)
 
@@ -1103,6 +1146,170 @@ def test_a_trino_table_openmetadata_lacks_is_still_unresolved(server: FakeOpenMe
     del server.tables[PROGRESS_FQN]
     assert _sync(metrics_dir) is True
     assert server.writes() == []
+
+
+UTILIZATION = "mv_b2b_contract_utilization"
+
+
+def _drop_implementation(metrics_dir: Path, name: str, model: str) -> None:
+    path = metrics_dir / f"{name}.yaml"
+    raw = yaml.safe_load(path.read_text())
+    raw["implemented_by"] = [i for i in raw["implemented_by"] if i.get("dbt_model") != model]
+    path.write_text(yaml.safe_dump(raw))
+
+
+def _sources_of(server: FakeOpenMetadata, metric: str) -> set[str]:
+    metric_id = server.metrics[metric]["id"]
+    return {from_id for from_id, to_id in server.edges if to_id == metric_id}
+
+
+@pytest.fixture
+def catalogued(server: FakeOpenMetadata) -> FakeOpenMetadata:
+    """Catalogue every StarRocks view, as Production does, and an unrelated table."""
+    for view in STARROCKS_VIEWS:
+        server.tables[_starrocks_fqn(view)] = f"view-{view}"
+    server.tables["Starburst Galaxy.ol_data_lake_production.ol_warehouse_production_mart.other"] = "other"
+    return server
+
+
+def test_an_edge_sync_created_is_removed_when_the_file_drops_its_table(
+    catalogued: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir)
+    assert f"view-{UTILIZATION}" in _sources_of(catalogued, "certified_learners")
+    _drop_implementation(metrics_dir, "certified_learners", UTILIZATION)
+    catalogued.calls.clear()
+    assert _sync(metrics_dir) is False
+    metric_id = catalogued.metrics["certified_learners"]["id"]
+    assert ("DELETE", f"/v1/lineage/table/view-{UTILIZATION}/metric/{metric_id}") in catalogued.writes()
+    assert _sources_of(catalogued, "certified_learners") == {"table-1"} | {
+        f"view-{v}" for v in STARROCKS_VIEWS if v != UTILIZATION
+    }
+    out = " ".join(capsys.readouterr().out.split())
+    assert f"removed certified_learners: lineage from {_starrocks_fqn(UTILIZATION)}," in out
+    # The other metric declared no change and loses nothing.
+    assert _sources_of(catalogued, "learner_completion_status") == {"table-1", f"view-{LEARNER_ENROLLMENT}"}
+
+
+def test_an_edge_a_person_added_stays(catalogued: FakeOpenMetadata, metrics_dir: Path) -> None:
+    _sync(metrics_dir)
+    catalogued.add_edge("other", "certified_learners", "someone")
+    assert _sync(metrics_dir) is False
+    assert "other" in _sources_of(catalogued, "certified_learners")
+    assert not [c for c in catalogued.writes() if c[0] == "DELETE"]
+
+
+def test_an_edge_a_person_added_first_stays_after_the_file_lists_then_drops_it(
+    catalogued: FakeOpenMetadata, metrics_dir: Path
+) -> None:
+    _sync(metrics_dir)
+    metric_id = catalogued.metrics["certified_learners"]["id"]
+    # The person's edge predates the file's entry, and sync's PUT keeps its createdBy.
+    del catalogued.edges[(f"view-{UTILIZATION}", metric_id)]
+    catalogued.add_edge(f"view-{UTILIZATION}", "certified_learners", "someone")
+    _sync(metrics_dir)
+    assert catalogued.edges[(f"view-{UTILIZATION}", metric_id)][1]["createdBy"] == "someone"
+    _drop_implementation(metrics_dir, "certified_learners", UTILIZATION)
+    assert _sync(metrics_dir) is False
+    assert f"view-{UTILIZATION}" in _sources_of(catalogued, "certified_learners")
+
+
+def test_dry_run_reports_the_edges_it_would_remove(
+    catalogued: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir)
+    _drop_implementation(metrics_dir, "certified_learners", UTILIZATION)
+    capsys.readouterr()
+    catalogued.calls.clear()
+    assert _sync(metrics_dir, dry_run=True) is False
+    assert catalogued.writes() == []
+    out = " ".join(capsys.readouterr().out.split())
+    assert f"remove lineage {_starrocks_fqn(UTILIZATION)} -> certified_learners" in out
+
+
+def test_a_metric_in_review_keeps_the_edges_its_file_dropped(catalogued: FakeOpenMetadata, metrics_dir: Path) -> None:
+    _sync(metrics_dir)
+    catalogued.metrics["certified_learners"]["entityStatus"] = "In Review"
+    _drop_implementation(metrics_dir, "certified_learners", UTILIZATION)
+    assert _sync(metrics_dir) is True
+    assert f"view-{UTILIZATION}" in _sources_of(catalogued, "certified_learners")
+
+
+def test_stale_edges_are_the_bots_edges_into_the_metric_from_undeclared_entities() -> None:
+    lineage = {
+        "nodes": [
+            {"id": "t1", "type": "table", "fullyQualifiedName": PROGRESS_FQN},
+            {"id": "o1", "type": "table", "fullyQualifiedName": "Starburst Galaxy.x.y.other"},
+            {"id": "p1", "type": "table", "fullyQualifiedName": "Starburst Galaxy.x.y.by_a_person"},
+            {"id": "n1", "type": "table", "fullyQualifiedName": "Starburst Galaxy.x.y.no_creator"},
+        ],
+        "upstreamEdges": [
+            {"fromEntity": "t1", "toEntity": "m1", "lineageDetails": {"createdBy": BOT}},
+            {"fromEntity": "o1", "toEntity": "m1", "lineageDetails": {"createdBy": BOT}},
+            {"fromEntity": "p1", "toEntity": "m1", "lineageDetails": {"createdBy": "someone"}},
+            # An edge with no createdBy, e.g. one stored before the server recorded it.
+            {"fromEntity": "n1", "toEntity": "m1", "lineageDetails": {}},
+            # An edge into another entity is never this metric's.
+            {"fromEntity": "o1", "toEntity": "m2", "lineageDetails": {"createdBy": BOT}},
+        ],
+    }
+    assert [n["id"] for n in stale_edges(lineage, "m1", {"t1"}, BOT)] == ["o1"]
+
+
+def test_a_wrong_starrocks_service_removes_no_edge_from_the_real_views(
+    catalogued: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir)
+    before = {name: _sources_of(catalogued, name) for name in catalogued.metrics}
+    assert f"view-{UTILIZATION}" in before["certified_learners"]
+    capsys.readouterr()
+    catalogued.calls.clear()
+    # Every view answers 404 under a service that is not the one cataloguing them.
+    assert _sync(metrics_dir, starrocks_service="starrocks", dry_run=True) is False
+    assert _sync(metrics_dir, starrocks_service="starrocks") is False
+    assert not [c for c in catalogued.writes() if c[0] == "DELETE"]
+    assert {name: _sources_of(catalogued, name) for name in catalogued.metrics} == before
+    out = " ".join(capsys.readouterr().out.split())
+    assert "remove lineage" not in out
+    assert out.count("kept certified_learners: removes no lineage edge this run") == 2
+
+
+def test_a_token_that_is_not_a_bots_removes_no_edge(
+    catalogued: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir)
+    catalogued.add_edge("other", "certified_learners", "someone")
+    catalogued.user, catalogued.is_bot = "someone", False
+    capsys.readouterr()
+    catalogued.calls.clear()
+    assert _sync(metrics_dir) is False
+    assert "other" in _sources_of(catalogued, "certified_learners")
+    assert not [c for c in catalogued.writes() if c[0] == "DELETE"]
+    # The rest of sync runs as before.
+    assert ("PUT", "/v1/lineage") in catalogued.writes()
+    out = " ".join(capsys.readouterr().out.split())
+    assert "no prune OM_BOT_JWT_TOKEN belongs to someone, who is not a bot" in out
+
+
+def test_each_removed_edge_is_reported_before_a_later_delete_fails(
+    catalogued: FakeOpenMetadata, metrics_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _sync(metrics_dir)
+    dropped = [UTILIZATION, "mv_b2b_mit_admin_contract_health"]
+    for model in dropped:
+        _drop_implementation(metrics_dir, "certified_learners", model)
+    metric_id = catalogued.metrics["certified_learners"]["id"]
+    order = [f for f, m in catalogued.edges if m == metric_id]
+    first, second = sorted((f"view-{m}" for m in dropped), key=order.index)
+    catalogued.failing_deletes.add(second)
+    capsys.readouterr()
+    assert _sync(metrics_dir) is True
+    out = " ".join(capsys.readouterr().out.split())
+    fqn_of = {f"view-{m}": _starrocks_fqn(m) for m in dropped}
+    assert f"removed certified_learners: lineage from {fqn_of[first]}," in out
+    assert f"lineage from {fqn_of[second]}, which sync created" not in out
+    assert "failed certified_learners: DELETE" in out
+    assert first not in _sources_of(catalogued, "certified_learners")
 
 
 class _Response(io.BytesIO):

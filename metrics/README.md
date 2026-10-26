@@ -197,7 +197,9 @@ snapshot. For each file it:
    description, existing owners and custom properties and resets the status,
    so these land only by PATCH;
 5. PUTs a table-to-metric lineage edge per `implemented_by` table. OpenMetadata
-   stores no column lineage for a Metric, so the columns stay in this file.
+   stores no column lineage for a Metric, so the columns stay in this file;
+6. deletes each edge into the metric that sync created and whose table the
+   file no longer lists (below).
 
 Sync records a SHA-256 of what the file declares (`metric`, `status` and
 `implemented_by`) in the metric's `metricFileSha256` custom property, and
@@ -229,8 +231,27 @@ Fields the file does not set are left as OpenMetadata has them, except
 is reported as `stale` like any other difference (see above). Deleting a tag
 from a file removes it from the metric only if sync applied it (the tag's
 `appliedBy` is the bot); a tag someone added in OpenMetadata stays, even if the
-file listed it too. An edge whose `implemented_by` entry was removed is not
-deleted.
+file listed it too.
+
+Lineage works the same way. Deleting an `implemented_by` entry deletes that
+table's edge to the metric only if sync created it. OpenMetadata records the
+caller who first stored an edge as its `lineageDetails.createdBy` and keeps
+that on every later PUT or PATCH of the edge
+(`LineageRepository.applyTemporalFields`), so an edge someone drew in
+OpenMetadata stays, even if the file listed the same table too, and an edge
+sync created is still sync's after someone edits its description. `createdBy`
+is only the user name, so an edge drawn in OpenMetadata while logged in with
+the bot's token is recorded as sync's and is removed like one. `--dry-run`
+lists the edges it would remove. A metric that is In Review or Rejected keeps
+them, like every other write.
+
+Sync removes nothing for a metric when any of its StarRocks views was skipped
+for a 404 in that run, because a view not catalogued yet and a
+`--starrocks-service` that names the wrong service look the same, and the
+second would make every view's edge look stale. It removes nothing at all when
+`OM_BOT_JWT_TOKEN` belongs to a user who is not a bot, since that user's
+hand-drawn edges would carry the same name. Both cases print a warning and
+leave the rest of the sync unchanged.
 
 Drift is read from who wrote each version, so an edit made in the UI or the
 API with the sync bot's own token counts as the bot's last write. Sync cannot
