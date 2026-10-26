@@ -13,6 +13,7 @@ from dagster import (
     AssetKey,
     DagsterInstance,
     MaterializeResult,
+    RetryPolicy,
     asset,
     materialize,
 )
@@ -115,6 +116,41 @@ def test_an_empty_load_after_a_failed_run_moves_the_data_version() -> None:
     assert not materialize([raw], instance=instance, raise_on_error=False).success
 
     assert _load(instance, [0]) != loaded
+
+
+def test_an_empty_retry_after_a_committed_batch_moves_the_data_version() -> None:
+    """A step retry, like a daemon resume of a run whose pod died, re-runs the
+    step under the same run id, so the planned-run check cannot see it.
+    """
+    instance = DagsterInstance.ephemeral()
+    loaded = _load(instance, [5, 0])
+    pipeline = _FakePipeline([7, 0])
+
+    class _FailsOnSecondBatchOnce(_FakeDlt):
+        failed = False
+
+        def run(self, **kwargs: Any) -> Any:
+            if pipeline.last_trace is not None and not self.failed:
+                _FailsOnSecondBatchOnce.failed = True
+                msg = "Pod evicted after batch 1 committed"
+                raise RuntimeError(msg)
+            return super().run(**kwargs)
+
+    @asset(key=_KEY, retry_policy=RetryPolicy(max_retries=1))
+    def raw(context: AssetExecutionContext) -> Any:
+        yield from assets.drain(
+            context=context,
+            dlt=_FailsOnSecondBatchOnce(pipeline),
+            build_source=_FakeSource,
+            pipeline=pipeline,
+        )
+
+    assert materialize([raw], instance=instance).success
+    event = instance.get_latest_materialization_event(_KEY)
+    assert event is not None
+    assert event.asset_materialization is not None
+    assert event.asset_materialization.metadata["rows_loaded"].value == 0
+    assert event.asset_materialization.tags[DATA_VERSION_TAG] != loaded
 
 
 def test_the_first_load_records_a_data_version_even_when_empty() -> None:

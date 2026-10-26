@@ -16,6 +16,7 @@ from dagster import (
     AssetKey,
     AssetsDefinition,
     Config,
+    DagsterEventType,
     DataVersion,
     Definitions,
     MaterializeResult,
@@ -269,11 +270,19 @@ def _previous_data_version(
 ) -> DataVersion | None:
     """Return the data version the asset's latest materialization recorded.
 
-    None when the run before this one planned the asset and did not
-    materialize it. Each batch commits its own cursor, so a run that failed
-    after a batch can have loaded rows that no materialization reports, and
-    this run starting past them reads as empty.
+    None when an earlier attempt could have loaded rows that no
+    materialization reports: the run before this one planned the asset and did
+    not materialize it, or this step already started once in this run (a step
+    retry, or the daemon resuming a run whose pod died). Each batch commits its
+    own cursor, so this attempt starts past those rows and reads as empty.
     """
+    step_key = context.get_step_execution_context().step.key
+    step_starts = context.instance.get_records_for_run(
+        context.run.run_id,
+        of_type={DagsterEventType.STEP_START, DagsterEventType.STEP_RESTARTED},
+    ).records
+    if sum(record.event_log_entry.step_key == step_key for record in step_starts) > 1:
+        return None
     event = context.instance.get_latest_materialization_event(asset_key)
     if event is None or event.asset_materialization is None:
         return None
@@ -282,7 +291,7 @@ def _previous_data_version(
         for record in context.instance.fetch_planned_materializations(
             asset_key, limit=2
         ).records
-        if record.event_log_entry.run_id != context.run_id
+        if record.event_log_entry.run_id != context.run.run_id
     ]
     if planned_runs and planned_runs[0] != event.run_id:
         return None
