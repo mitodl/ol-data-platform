@@ -646,11 +646,13 @@ retired:
     updated_on 2025-02-24T22:17Z, 66,447 rows), which was converted to Iceberg
     on 2026-09-11. auth_user kept syncing until 2026-02-12. 1,166 users have no
     profile row (1,165 joined after 2025-02-25, one in 2019 never had one), so
-    int__bootcamps__users carries null profile fields for them. dim_user does
-    too, unless the same person's account on another platform supplies the
-    field. Everyone else's profile is as of 2025-02-24. Served as is, decided
-    2026-10-26: the app is decommissioned, so the missing profiles cannot be
-    loaded, and the older ones are still the best record we have
+    int__bootcamps__users carries null profile fields for them. dim_user takes
+    profile fields from the person's account with the newest join date, so it
+    carries the nulls when that is the bootcamps account, and only full_name
+    falls back to another account. Everyone else's profile is as of
+    2025-02-24. Served as is, decided 2026-10-26: the app is decommissioned, so
+    the missing profiles cannot be loaded, and the older ones are still the best
+    record we have
     (tk-bootcamps-profiles-profile-froze-2025-02-24-neve-7fbf5a).
   frozen: true
 - deployment: github
