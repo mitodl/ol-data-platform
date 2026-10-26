@@ -44,6 +44,12 @@ def test_require_rows_reads_only_the_matching_rows_and_columns():
     assert rows.to_dicts() == [{"key": "a", "content": "A of mitxonline."}]
 
 
+@pytest.mark.usefixtures("catalog")
+def test_require_rows_without_a_column_value_refuses_to_read_the_table():
+    with pytest.raises(ValueError, match="at least one column value"):
+        warehouse.require_rows("integrations", "content_files", ["key"])
+
+
 def test_require_rows_of_a_missing_table_fails(monkeypatch):
     def missing(_database_name: str, table_name: str):
         raise NoSuchTableError(table_name)

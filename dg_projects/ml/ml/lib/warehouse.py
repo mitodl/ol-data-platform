@@ -98,10 +98,14 @@ def load_matching_rows(
     :param database_name: the Glue database
     :param table_name: the table
     :param columns: the columns to read
-    :param equals: column values every returned row has
+    :param equals: column values every returned row has, at least one
     :returns: the rows, with ``columns`` in the order given
     :rtype: pl.DataFrame
+    :raises ValueError: when ``equals`` is empty
     """
+    if not equals:
+        msg = f"reading {database_name}.{table_name} needs at least one column value"
+        raise ValueError(msg)
     scan = load_dbt_model_table(database_name, table_name).scan(
         row_filter=reduce(
             And, (EqualTo(column, value) for column, value in equals.items())
@@ -117,10 +121,12 @@ def require_rows(
 ) -> pl.DataFrame:
     """Read the rows of an upstream table whose columns equal the given values.
 
-    The filter goes into the Iceberg scan, which reads a file at a time and keeps
-    only the matching rows. A filter on :func:`require_table`'s scan does not:
-    it loads every file first, which took 18.7 GB to read one mitxonline course
-    run (2,279 rows) of the unpartitioned integrations__learn__content_files.
+    Every equality goes into the Iceberg scan, which keeps only the matching
+    rows. polars does not do that for a filter on :func:`require_table`'s scan:
+    of ``etl_source == "mitxonline" & run_readable_id == <run>`` it handed
+    pyiceberg only the ``etl_source`` term, so the scan returned all 2.6M
+    mitxonline rows of integrations__learn__content_files with their text, and
+    reading one course run (2,279 rows) took 18.7 GB.
 
     :param layer: the warehouse layer
     :param table: the table name
