@@ -497,9 +497,8 @@ with mitxonline_enrollments as (
 -- alone would never catch these.
 -- The enrollment state is compared because edX.org and residential enrollments have no
 -- updated_on: an unenrollment or mode change after the 7-day lookback never moves a
--- watermark, and on 2026-10-26 the production fact still showed 444,301 edX.org enrollments
--- as active that the source had deactivated. A MITx Online DEDP enrollment's mode is also
--- derived from orders, which do not bump the enrollment's updated_on.
+-- watermark, so the fact kept such enrollments active. A MITx Online DEDP enrollment's mode
+-- is also derived from orders, which do not bump the enrollment's updated_on.
 -- One row per key: a key a past run wrote twice would otherwise match each source row twice
 -- and be written twice again. It is re-selected instead, so delete+insert leaves one copy.
 , stored_row_lookup as (
