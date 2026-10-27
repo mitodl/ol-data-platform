@@ -68,7 +68,7 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
 
 # Must run before any Opik client/tracer/@opik.track call in this process --
 # see ml/resources/opik_auth.py. A no-op (returns False) wherever
-# OPIK_URL_OVERRIDE isn't set for this deployment.
+# is_opik_configured() is False for this deployment.
 configure_opik_keycloak_auth(vault)
 
 data_export_job = define_asset_job(
