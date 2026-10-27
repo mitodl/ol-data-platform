@@ -170,10 +170,6 @@ models:
       with the user's email has user_has_completed_program true, otherwise null (never
       false). A revoked certificate does not count. For which programs the user completed,
       read marts__combined_program_enrollment_detail.
-  - name: has_dedp_program_certificate
-    description: boolean, true if any DEDP marts__combined_program_enrollment_detail
-      row with the user's email has a programcertificate_uuid, otherwise null (never
-      false). Unlike has_program_certificate, this counts revoked certificates.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:

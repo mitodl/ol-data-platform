@@ -50,18 +50,6 @@ with mitx__users as (
     select
         user_email
         , sum(case when user_has_completed_program = true then 1 else 0 end) as completed_program_count
-        , sum(case
-            when
-                program_title in (
-                    'Data, Economics, and Design of Policy'
-                    , 'Data, Economics, and Design of Policy: International Development'
-                    , 'Data, Economics, and Design of Policy: Public Policy'
-                )
-                and
-                programcertificate_uuid is not null
-                then 1
-            else 0
-        end) as dedp_program_cred_count
     from combined_programs
     group by user_email
 )
@@ -324,7 +312,6 @@ select
     , orders_stats.total_amount_paid_orders
     , income.latest_income_usd
     , case when program_stats.completed_program_count > 0 then true end as has_program_certificate
-    , case when program_stats.dedp_program_cred_count > 0 then true end as has_dedp_program_certificate
 from combined_users
 left join course_stats on combined_users.user_email = course_stats.user_email
 left join program_stats on combined_users.user_email = program_stats.user_email
