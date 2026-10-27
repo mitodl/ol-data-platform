@@ -39,22 +39,50 @@ with combined__users as (
     where program_report_key is not null
 )
 
-, program_course_certificates as (
-    select
+, learner_program_courses as (
+    select distinct
         lower(combined_course_enrollment_detail.user_email) as user_email
+        , combined_course_enrollment_detail.course_readable_id
         , program_course_keys.program_key
         , program_course_keys.program_readable_id
         , program_course_keys.program_title
-        , count(distinct combined_course_enrollment_detail.course_readable_id) as program_course_cert_count
     from combined_course_enrollment_detail
     inner join program_course_keys
         on combined_course_enrollment_detail.course_readable_id = program_course_keys.course_readable_id
     where combined_course_enrollment_detail.courseruncertificate_is_earned = true
-    group by
-        lower(combined_course_enrollment_detail.user_email)
-        , program_course_keys.program_key
-        , program_course_keys.program_readable_id
-        , program_course_keys.program_title
+)
+
+, program_course_certificates as (
+    select
+        user_email
+        , program_key
+        , program_readable_id
+        , program_title
+        , count(distinct course_readable_id) as program_course_cert_count
+    from learner_program_courses
+    group by user_email, program_key, program_readable_id, program_title
+)
+
+-- The program name each program key reports under, from the program enrollment mart.
+-- Programs that share a name (e.g. the three DEDP programs) are counted together below.
+, program_names as (
+    select
+        program_report_key as program_key
+        , min(report_program_name) as program_name
+    from program_enrollment_detail
+    where program_report_key is not null
+    group by program_report_key
+)
+
+, program_name_course_certificates as (
+    select
+        learner_program_courses.user_email
+        , program_names.program_name
+        , count(distinct learner_program_courses.course_readable_id) as program_name_course_cert_count
+    from learner_program_courses
+    inner join program_names
+        on learner_program_courses.program_key = program_names.program_key
+    group by learner_program_courses.user_email, program_names.program_name
 )
 
 , user_programs as (
@@ -93,6 +121,7 @@ select
         as program_readable_id
     , coalesce(program_enrollments.program_title, program_course_certificates.program_title) as program_title
     , program_course_certificates.program_course_cert_count
+    , program_name_course_certificates.program_name_course_cert_count
     , case when program_enrollments.has_completed_program = 1 then 'Y' end as program_cert_ind
     , case when program_enrollments.user_email is not null then 'Y' end as program_enroll_ind
 from combined__users
@@ -106,4 +135,10 @@ left join program_course_certificates
     on
         user_programs.user_email = program_course_certificates.user_email
         and user_programs.program_key = program_course_certificates.program_key
+left join program_names
+    on user_programs.program_key = program_names.program_key
+left join program_name_course_certificates
+    on
+        user_programs.user_email = program_name_course_certificates.user_email
+        and program_names.program_name = program_name_course_certificates.program_name
 where combined__users.user_hashed_id is not null

@@ -309,6 +309,20 @@ columns:
   python_date_format: null
   type: VARCHAR
   verbose_name: null
+- advanced_data_type: null
+  column_name: program_name_course_cert_count
+  datetime_format: null
+  description: null
+  expression: ''
+  extra:
+    warning_markdown: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT
+  verbose_name: null
 currency_code_column: null
 database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
 default_endpoint: null
