@@ -1,0 +1,815 @@
+---
+# Dimensional tables for the b2b materialized views (models/b2b_analytics and
+# models/b2b_learner_records), so ol-analytics-api and MIT Learn's org analytics
+# dashboard can run against the local lake. Load with:
+#
+#   ol-dbt fixtures load-dimensional b2b_organization \
+#       --set sso_organization_id=<Keycloak organization id> --set contract_id=<MITx Online contract id>
+#   ol-dbt starrocks build --env dev --target starrocks_local_b2b --select tag:starrocks
+#
+# Both parameters are ids the local stack assigns, and the dashboard asks for
+# them by those ids: it reads the organization and its contracts from MITx
+# Online's manager API. See "B2B views" in docs/LOCAL_LAKE.md.
+#
+# Each table has only the columns the views read. One organization, one
+# contract, two course runs in one program, and eight learners, which keeps
+# every per-run and per-month cohort the dashboard shows at or above
+# ol-analytics-api's anonymization floor of 5. Statuses cover certified,
+# passed, in progress, not started and an unenrolled learner; consent covers
+# shared, refused and undecided. needs_attention_since follows
+# afact_learner_courserun_progress: the enrollment day when not started, the
+# last active day plus needs_attention_quiet_days (30) when in progress.
+schema_version: 1
+parameters:
+  sso_organization_id:
+    type: string
+    description: The Keycloak organization's id (MITx Online's OrganizationPage.sso_organization_id).
+  contract_id:
+    type: long
+    description: The MITx Online contract's id (ContractPage id) under that organization.
+tables:
+  dim_organization:
+    columns:
+      organization_pk: string
+      organization_key: string
+      sso_organization_id: string
+      organization_name: string
+      platform: string
+    rows:
+    - organization_pk: fixture-org
+      organization_key: fixture-org-key
+      sso_organization_id: $sso_organization_id
+      organization_name: Fixture Organization
+      platform: mitxonline
+  dim_contract:
+    columns:
+      contract_pk: string
+      contract_id: long
+      organization_fk: string
+      b2b_contract_name: string
+      b2b_contract_is_active: boolean
+      b2b_contract_start_date: date
+      b2b_contract_end_date: date
+      b2b_contract_max_learners: long
+      b2b_contract_membership_type: string
+    rows:
+    - contract_pk: fixture-contract
+      contract_id: $contract_id
+      organization_fk: fixture-org
+      b2b_contract_name: Fixture Contract
+      b2b_contract_is_active: true
+      b2b_contract_start_date: 2026-06-01
+      b2b_contract_end_date: 2027-05-31
+      b2b_contract_max_learners: 20
+      b2b_contract_membership_type: managed
+  dim_course_run:
+    columns:
+      courserun_pk: string
+      course_fk: string
+      courserun_readable_id: string
+      courserun_title: string
+      courserun_start_on: string
+      courserun_end_on: string
+      is_current: boolean
+    rows:
+    - courserun_pk: fixture-run-1
+      course_fk: fixture-course-1
+      courserun_readable_id: course-v1:MITxT+FIX.101x+2026_Summer
+      courserun_title: Fixture Foundations
+      courserun_start_on: '2026-07-01T00:00:00.000000Z'
+      courserun_end_on: '2026-09-30T00:00:00.000000Z'
+      is_current: true
+    - courserun_pk: fixture-run-2
+      course_fk: fixture-course-2
+      courserun_readable_id: course-v1:MITxT+FIX.102x+2026_Fall
+      courserun_title: Fixture Applications
+      courserun_start_on: '2026-08-17T00:00:00.000000Z'
+      courserun_end_on: '2026-11-30T00:00:00.000000Z'
+      is_current: true
+  dim_program:
+    columns:
+      program_pk: string
+      program_title: string
+    rows:
+    - program_pk: fixture-program
+      program_title: Fixture Program
+  bridge_program_course:
+    columns:
+      program_fk: string
+      course_fk: string
+    rows:
+    - program_fk: fixture-program
+      course_fk: fixture-course-1
+    - program_fk: fixture-program
+      course_fk: fixture-course-2
+  bridge_organization_courserun:
+    columns:
+      contract_fk: string
+      courserun_fk: string
+    rows:
+    - contract_fk: fixture-contract
+      courserun_fk: fixture-run-1
+    - contract_fk: fixture-contract
+      courserun_fk: fixture-run-2
+  dim_user:
+    columns:
+      user_pk: string
+      user_global_id: string
+      email: string
+      full_name: string
+    rows:
+    - user_pk: fixture-user-1
+      user_global_id: 00000000-0000-4000-8000-000000000001
+      email: fixture.learner1@example.com
+      full_name: Fixture Learner 1
+    - user_pk: fixture-user-2
+      user_global_id: 00000000-0000-4000-8000-000000000002
+      email: fixture.learner2@example.com
+      full_name: Fixture Learner 2
+    - user_pk: fixture-user-3
+      user_global_id: 00000000-0000-4000-8000-000000000003
+      email: fixture.learner3@example.com
+      full_name: Fixture Learner 3
+    - user_pk: fixture-user-4
+      user_global_id: 00000000-0000-4000-8000-000000000004
+      email: fixture.learner4@example.com
+      full_name: Fixture Learner 4
+    - user_pk: fixture-user-5
+      user_global_id: 00000000-0000-4000-8000-000000000005
+      email: fixture.learner5@example.com
+      full_name: Fixture Learner 5
+    - user_pk: fixture-user-6
+      user_global_id: 00000000-0000-4000-8000-000000000006
+      email: fixture.learner6@example.com
+      full_name: Fixture Learner 6
+    - user_pk: fixture-user-7
+      user_global_id: 00000000-0000-4000-8000-000000000007
+      email: fixture.learner7@example.com
+      full_name: Fixture Learner 7
+    - user_pk: fixture-user-8
+      user_global_id: 00000000-0000-4000-8000-000000000008
+      email: fixture.learner8@example.com
+      full_name: Fixture Learner 8
+  bridge_user_organization:
+    columns:
+      organization_fk: string
+      user_fk: string
+      userorganization_is_manager: boolean
+    rows:
+    - organization_fk: fixture-org
+      user_fk: fixture-user-1
+      userorganization_is_manager: false
+    - organization_fk: fixture-org
+      user_fk: fixture-user-2
+      userorganization_is_manager: false
+    - organization_fk: fixture-org
+      user_fk: fixture-user-3
+      userorganization_is_manager: false
+    - organization_fk: fixture-org
+      user_fk: fixture-user-4
+      userorganization_is_manager: false
+    - organization_fk: fixture-org
+      user_fk: fixture-user-5
+      userorganization_is_manager: false
+    - organization_fk: fixture-org
+      user_fk: fixture-user-6
+      userorganization_is_manager: false
+    - organization_fk: fixture-org
+      user_fk: fixture-user-7
+      userorganization_is_manager: false
+    - organization_fk: fixture-org
+      user_fk: fixture-user-8
+      userorganization_is_manager: false
+  bridge_user_contract:
+    columns:
+      organization_fk: string
+      user_fk: string
+      contract_fk: string
+      membership_is_current: boolean
+      consented_to_data_sharing: boolean
+      consent_modified_at: string
+    rows:
+    - organization_fk: fixture-org
+      user_fk: fixture-user-1
+      contract_fk: fixture-contract
+      membership_is_current: true
+      consented_to_data_sharing: true
+      consent_modified_at: '2026-07-01T10:00:00.000000Z'
+    - organization_fk: fixture-org
+      user_fk: fixture-user-2
+      contract_fk: fixture-contract
+      membership_is_current: true
+      consented_to_data_sharing: true
+      consent_modified_at: '2026-07-01T11:00:00.000000Z'
+    - organization_fk: fixture-org
+      user_fk: fixture-user-3
+      contract_fk: fixture-contract
+      membership_is_current: true
+      consented_to_data_sharing: true
+      consent_modified_at: '2026-07-01T12:00:00.000000Z'
+    - organization_fk: fixture-org
+      user_fk: fixture-user-4
+      contract_fk: fixture-contract
+      membership_is_current: true
+      consented_to_data_sharing: true
+      consent_modified_at: '2026-07-01T13:00:00.000000Z'
+    - organization_fk: fixture-org
+      user_fk: fixture-user-5
+      contract_fk: fixture-contract
+      membership_is_current: true
+      consented_to_data_sharing: true
+      consent_modified_at: '2026-07-01T14:00:00.000000Z'
+    - organization_fk: fixture-org
+      user_fk: fixture-user-6
+      contract_fk: fixture-contract
+      membership_is_current: true
+      consented_to_data_sharing: false
+      consent_modified_at: '2026-07-01T15:00:00.000000Z'
+    - organization_fk: fixture-org
+      user_fk: fixture-user-7
+      contract_fk: fixture-contract
+      membership_is_current: true
+    - organization_fk: fixture-org
+      user_fk: fixture-user-8
+      contract_fk: fixture-contract
+      membership_is_current: true
+  afact_learner_courserun_progress:
+    columns:
+      platform: string
+      user_fk: string
+      courserun_fk: string
+      contract_fk: string
+      enrollment_is_active: boolean
+      enrollment_created_on: string
+      enrollment_updated_on: string
+      enrollment_mode: string
+      enrollment_status: string
+      is_passing: boolean
+      is_certified: boolean
+      is_in_progress: boolean
+      is_not_started: boolean
+      grade_value: double
+      letter_grade: string
+      grade_updated_on: string
+      certificate_issued_on: string
+      certificate_is_revoked: boolean
+      certificate_updated_on: string
+      last_active_on: date
+      completion_status: string
+      needs_attention_since: date
+      content_progress: double
+    rows:
+    - platform: mitxonline
+      user_fk: fixture-user-1
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+      enrollment_is_active: true
+      enrollment_created_on: '2026-07-06T15:00:00.000000Z'
+      enrollment_updated_on: '2026-07-06T15:00:00.000000Z'
+      enrollment_mode: verified
+      is_passing: true
+      is_certified: true
+      is_in_progress: false
+      is_not_started: false
+      grade_value: 0.92
+      completion_status: certified
+      content_progress: 1.0
+      letter_grade: A
+      grade_updated_on: '2026-09-15T18:00:00.000000Z'
+      certificate_issued_on: '2026-09-28T15:00:00.000000Z'
+      certificate_updated_on: '2026-09-28T15:00:00.000000Z'
+      certificate_is_revoked: false
+      last_active_on: 2026-09-15
+    - platform: mitxonline
+      user_fk: fixture-user-2
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+      enrollment_is_active: true
+      enrollment_created_on: '2026-07-06T15:00:00.000000Z'
+      enrollment_updated_on: '2026-07-06T15:00:00.000000Z'
+      enrollment_mode: verified
+      is_passing: true
+      is_certified: true
+      is_in_progress: false
+      is_not_started: false
+      grade_value: 0.88
+      completion_status: certified
+      content_progress: 0.95
+      letter_grade: B
+      grade_updated_on: '2026-09-16T18:00:00.000000Z'
+      certificate_issued_on: '2026-09-29T15:00:00.000000Z'
+      certificate_updated_on: '2026-09-29T15:00:00.000000Z'
+      certificate_is_revoked: false
+      last_active_on: 2026-09-16
+    - platform: mitxonline
+      user_fk: fixture-user-3
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+      enrollment_is_active: true
+      enrollment_created_on: '2026-07-07T15:00:00.000000Z'
+      enrollment_updated_on: '2026-07-07T15:00:00.000000Z'
+      enrollment_mode: verified
+      is_passing: true
+      is_certified: true
+      is_in_progress: false
+      is_not_started: false
+      grade_value: 0.81
+      completion_status: certified
+      content_progress: 0.9
+      letter_grade: B
+      grade_updated_on: '2026-09-22T18:00:00.000000Z'
+      certificate_issued_on: '2026-09-30T15:00:00.000000Z'
+      certificate_updated_on: '2026-09-30T15:00:00.000000Z'
+      certificate_is_revoked: false
+      last_active_on: 2026-09-22
+    - platform: mitxonline
+      user_fk: fixture-user-4
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+      enrollment_is_active: true
+      enrollment_created_on: '2026-07-08T15:00:00.000000Z'
+      enrollment_updated_on: '2026-07-08T15:00:00.000000Z'
+      enrollment_mode: verified
+      is_passing: true
+      is_certified: false
+      is_in_progress: false
+      is_not_started: false
+      grade_value: 0.74
+      completion_status: passed
+      content_progress: 0.8
+      letter_grade: C
+      grade_updated_on: '2026-09-08T18:00:00.000000Z'
+      last_active_on: 2026-09-08
+    - platform: mitxonline
+      user_fk: fixture-user-5
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+      enrollment_is_active: true
+      enrollment_created_on: '2026-07-08T15:00:00.000000Z'
+      enrollment_updated_on: '2026-07-08T15:00:00.000000Z'
+      enrollment_mode: audit
+      is_passing: false
+      is_certified: false
+      is_in_progress: true
+      is_not_started: false
+      grade_value: 0.41
+      completion_status: in_progress
+      content_progress: 0.55
+      grade_updated_on: '2026-10-14T18:00:00.000000Z'
+      last_active_on: 2026-10-14
+      needs_attention_since: 2026-11-13
+    - platform: mitxonline
+      user_fk: fixture-user-6
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+      enrollment_is_active: true
+      enrollment_created_on: '2026-07-09T15:00:00.000000Z'
+      enrollment_updated_on: '2026-07-09T15:00:00.000000Z'
+      enrollment_mode: audit
+      is_passing: false
+      is_certified: false
+      is_in_progress: true
+      is_not_started: false
+      grade_value: 0.22
+      completion_status: in_progress
+      content_progress: 0.3
+      grade_updated_on: '2026-08-03T18:00:00.000000Z'
+      last_active_on: 2026-08-03
+      needs_attention_since: 2026-09-02
+    - platform: mitxonline
+      user_fk: fixture-user-7
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+      enrollment_is_active: true
+      enrollment_created_on: '2026-07-10T15:00:00.000000Z'
+      enrollment_updated_on: '2026-07-10T15:00:00.000000Z'
+      enrollment_mode: verified
+      is_passing: false
+      is_certified: false
+      is_in_progress: true
+      is_not_started: false
+      grade_value: 0.35
+      completion_status: in_progress
+      content_progress: 0.45
+      grade_updated_on: '2026-10-21T18:00:00.000000Z'
+      last_active_on: 2026-10-21
+      needs_attention_since: 2026-11-20
+    - platform: mitxonline
+      user_fk: fixture-user-8
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+      enrollment_is_active: true
+      enrollment_created_on: '2026-07-13T15:00:00.000000Z'
+      enrollment_updated_on: '2026-07-13T15:00:00.000000Z'
+      enrollment_mode: audit
+      is_passing: false
+      is_certified: false
+      is_in_progress: false
+      is_not_started: true
+      grade_value: 0.0
+      completion_status: not_started
+      content_progress: 0.0
+      needs_attention_since: 2026-07-13
+    - platform: mitxonline
+      user_fk: fixture-user-1
+      courserun_fk: fixture-run-2
+      contract_fk: fixture-contract
+      enrollment_is_active: true
+      enrollment_created_on: '2026-08-17T15:00:00.000000Z'
+      enrollment_updated_on: '2026-08-17T15:00:00.000000Z'
+      enrollment_mode: verified
+      is_passing: true
+      is_certified: true
+      is_in_progress: false
+      is_not_started: false
+      grade_value: 0.9
+      completion_status: certified
+      content_progress: 1.0
+      letter_grade: A
+      grade_updated_on: '2026-10-12T18:00:00.000000Z'
+      certificate_issued_on: '2026-10-19T15:00:00.000000Z'
+      certificate_updated_on: '2026-10-19T15:00:00.000000Z'
+      certificate_is_revoked: false
+      last_active_on: 2026-10-12
+    - platform: mitxonline
+      user_fk: fixture-user-2
+      courserun_fk: fixture-run-2
+      contract_fk: fixture-contract
+      enrollment_is_active: true
+      enrollment_created_on: '2026-08-17T15:00:00.000000Z'
+      enrollment_updated_on: '2026-08-17T15:00:00.000000Z'
+      enrollment_mode: verified
+      is_passing: true
+      is_certified: true
+      is_in_progress: false
+      is_not_started: false
+      grade_value: 0.86
+      completion_status: certified
+      content_progress: 0.92
+      letter_grade: B
+      grade_updated_on: '2026-10-13T18:00:00.000000Z'
+      certificate_issued_on: '2026-10-20T15:00:00.000000Z'
+      certificate_updated_on: '2026-10-20T15:00:00.000000Z'
+      certificate_is_revoked: false
+      last_active_on: 2026-10-13
+    - platform: mitxonline
+      user_fk: fixture-user-3
+      courserun_fk: fixture-run-2
+      contract_fk: fixture-contract
+      enrollment_is_active: true
+      enrollment_created_on: '2026-08-18T15:00:00.000000Z'
+      enrollment_updated_on: '2026-08-18T15:00:00.000000Z'
+      enrollment_mode: verified
+      is_passing: false
+      is_certified: false
+      is_in_progress: true
+      is_not_started: false
+      grade_value: 0.5
+      completion_status: in_progress
+      content_progress: 0.6
+      grade_updated_on: '2026-10-15T18:00:00.000000Z'
+      last_active_on: 2026-10-15
+      needs_attention_since: 2026-11-14
+    - platform: mitxonline
+      user_fk: fixture-user-4
+      courserun_fk: fixture-run-2
+      contract_fk: fixture-contract
+      enrollment_is_active: true
+      enrollment_created_on: '2026-08-18T15:00:00.000000Z'
+      enrollment_updated_on: '2026-08-18T15:00:00.000000Z'
+      enrollment_mode: verified
+      is_passing: false
+      is_certified: false
+      is_in_progress: true
+      is_not_started: false
+      grade_value: 0.31
+      completion_status: in_progress
+      content_progress: 0.4
+      grade_updated_on: '2026-09-02T18:00:00.000000Z'
+      last_active_on: 2026-09-02
+      needs_attention_since: 2026-10-02
+    - platform: mitxonline
+      user_fk: fixture-user-5
+      courserun_fk: fixture-run-2
+      contract_fk: fixture-contract
+      enrollment_is_active: true
+      enrollment_created_on: '2026-08-19T15:00:00.000000Z'
+      enrollment_updated_on: '2026-08-19T15:00:00.000000Z'
+      enrollment_mode: audit
+      is_passing: false
+      is_certified: false
+      is_in_progress: false
+      is_not_started: true
+      grade_value: 0.0
+      completion_status: not_started
+      content_progress: 0.0
+      needs_attention_since: 2026-08-19
+    - platform: mitxonline
+      user_fk: fixture-user-6
+      courserun_fk: fixture-run-2
+      contract_fk: fixture-contract
+      enrollment_is_active: false
+      enrollment_created_on: '2026-08-19T15:00:00.000000Z'
+      enrollment_updated_on: '2026-09-01T15:00:00.000000Z'
+      enrollment_mode: audit
+      is_passing: false
+      is_certified: false
+      is_in_progress: false
+      is_not_started: true
+      grade_value: 0.0
+      completion_status: not_started
+      content_progress: 0.0
+      enrollment_status: unenrolled
+      needs_attention_since: 2026-08-19
+  tfact_enrollment:
+    columns:
+      user_fk: string
+      courserun_fk: string
+      contract_fk: string
+      program_fk: string
+    rows:
+    - user_fk: fixture-user-1
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+      program_fk: fixture-program
+    - user_fk: fixture-user-2
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+      program_fk: fixture-program
+    - user_fk: fixture-user-3
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+      program_fk: fixture-program
+    - user_fk: fixture-user-4
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+      program_fk: fixture-program
+    - user_fk: fixture-user-5
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+    - user_fk: fixture-user-6
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+    - user_fk: fixture-user-7
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+    - user_fk: fixture-user-8
+      courserun_fk: fixture-run-1
+      contract_fk: fixture-contract
+    - user_fk: fixture-user-1
+      courserun_fk: fixture-run-2
+      contract_fk: fixture-contract
+      program_fk: fixture-program
+    - user_fk: fixture-user-2
+      courserun_fk: fixture-run-2
+      contract_fk: fixture-contract
+      program_fk: fixture-program
+    - user_fk: fixture-user-3
+      courserun_fk: fixture-run-2
+      contract_fk: fixture-contract
+      program_fk: fixture-program
+    - user_fk: fixture-user-4
+      courserun_fk: fixture-run-2
+      contract_fk: fixture-contract
+      program_fk: fixture-program
+    - user_fk: fixture-user-5
+      courserun_fk: fixture-run-2
+      contract_fk: fixture-contract
+    - user_fk: fixture-user-6
+      courserun_fk: fixture-run-2
+      contract_fk: fixture-contract
+  tfact_certificate:
+    columns:
+      user_fk: string
+      program_fk: string
+      certificate_scope: string
+      platform: string
+      certificate_is_revoked: boolean
+      certificate_updated_on: string
+    rows:
+    - user_fk: fixture-user-1
+      program_fk: fixture-program
+      certificate_scope: program
+      platform: mitxonline
+      certificate_is_revoked: false
+      certificate_updated_on: '2026-10-26T15:00:00.000000Z'
+  afact_learner_courserun_daily_activity:
+    columns:
+      platform: string
+      user_fk: string
+      courserun_fk: string
+      activity_date_key: int
+      videos_played: long
+      problems_attempted: long
+      chatbot_interactions: long
+    rows:
+    - platform: mitxonline
+      user_fk: fixture-user-1
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260708
+      videos_played: 4
+      problems_attempted: 3
+      chatbot_interactions: 1
+    - platform: mitxonline
+      user_fk: fixture-user-1
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260804
+      videos_played: 5
+      problems_attempted: 6
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-1
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260915
+      videos_played: 2
+      problems_attempted: 4
+      chatbot_interactions: 2
+    - platform: mitxonline
+      user_fk: fixture-user-2
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260709
+      videos_played: 3
+      problems_attempted: 2
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-2
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260805
+      videos_played: 4
+      problems_attempted: 5
+      chatbot_interactions: 1
+    - platform: mitxonline
+      user_fk: fixture-user-2
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260916
+      videos_played: 1
+      problems_attempted: 3
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-3
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260710
+      videos_played: 2
+      problems_attempted: 1
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-3
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260811
+      videos_played: 3
+      problems_attempted: 4
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-3
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260922
+      videos_played: 2
+      problems_attempted: 2
+      chatbot_interactions: 1
+    - platform: mitxonline
+      user_fk: fixture-user-4
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260714
+      videos_played: 5
+      problems_attempted: 2
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-4
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260812
+      videos_played: 2
+      problems_attempted: 3
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-4
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260908
+      videos_played: 1
+      problems_attempted: 1
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-5
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260715
+      videos_played: 3
+      problems_attempted: 1
+      chatbot_interactions: 2
+    - platform: mitxonline
+      user_fk: fixture-user-5
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260819
+      videos_played: 2
+      problems_attempted: 2
+      chatbot_interactions: 1
+    - platform: mitxonline
+      user_fk: fixture-user-5
+      courserun_fk: fixture-run-1
+      activity_date_key: 20261014
+      videos_played: 1
+      problems_attempted: 0
+      chatbot_interactions: 1
+    - platform: mitxonline
+      user_fk: fixture-user-6
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260716
+      videos_played: 2
+      problems_attempted: 0
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-6
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260803
+      videos_played: 1
+      problems_attempted: 1
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-7
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260721
+      videos_played: 1
+      problems_attempted: 1
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-7
+      courserun_fk: fixture-run-1
+      activity_date_key: 20260909
+      videos_played: 2
+      problems_attempted: 2
+      chatbot_interactions: 1
+    - platform: mitxonline
+      user_fk: fixture-user-7
+      courserun_fk: fixture-run-1
+      activity_date_key: 20261021
+      videos_played: 3
+      problems_attempted: 1
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-1
+      courserun_fk: fixture-run-2
+      activity_date_key: 20260824
+      videos_played: 3
+      problems_attempted: 2
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-1
+      courserun_fk: fixture-run-2
+      activity_date_key: 20260914
+      videos_played: 4
+      problems_attempted: 4
+      chatbot_interactions: 1
+    - platform: mitxonline
+      user_fk: fixture-user-1
+      courserun_fk: fixture-run-2
+      activity_date_key: 20261012
+      videos_played: 2
+      problems_attempted: 3
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-2
+      courserun_fk: fixture-run-2
+      activity_date_key: 20260825
+      videos_played: 2
+      problems_attempted: 1
+      chatbot_interactions: 1
+    - platform: mitxonline
+      user_fk: fixture-user-2
+      courserun_fk: fixture-run-2
+      activity_date_key: 20260915
+      videos_played: 3
+      problems_attempted: 3
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-2
+      courserun_fk: fixture-run-2
+      activity_date_key: 20261013
+      videos_played: 1
+      problems_attempted: 2
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-3
+      courserun_fk: fixture-run-2
+      activity_date_key: 20260826
+      videos_played: 2
+      problems_attempted: 2
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-3
+      courserun_fk: fixture-run-2
+      activity_date_key: 20261015
+      videos_played: 2
+      problems_attempted: 1
+      chatbot_interactions: 1
+    - platform: mitxonline
+      user_fk: fixture-user-4
+      courserun_fk: fixture-run-2
+      activity_date_key: 20260831
+      videos_played: 1
+      problems_attempted: 0
+      chatbot_interactions: 0
+    - platform: mitxonline
+      user_fk: fixture-user-4
+      courserun_fk: fixture-run-2
+      activity_date_key: 20260902
+      videos_played: 1
+      problems_attempted: 1
+      chatbot_interactions: 0
