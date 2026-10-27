@@ -49,7 +49,7 @@ with mitx__users as (
 , program_stats as (
     select
         user_email
-        , count(distinct programcertificate_uuid) as cert_count
+        , sum(case when user_has_completed_program = true then 1 else 0 end) as completed_program_count
         , sum(case
             when
                 program_title in (
@@ -323,7 +323,7 @@ select
     , course_stats.number_of_courserun_certificates
     , orders_stats.total_amount_paid_orders
     , income.latest_income_usd
-    , case when program_stats.cert_count > 0 then true end as has_program_certificate
+    , case when program_stats.completed_program_count > 0 then true end as has_program_certificate
     , case when program_stats.dedp_program_cred_count > 0 then true end as has_dedp_program_certificate
 from combined_users
 left join course_stats on combined_users.user_email = course_stats.user_email
