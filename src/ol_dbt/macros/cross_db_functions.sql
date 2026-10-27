@@ -844,7 +844,7 @@
 {#
     try_or_null: `expr`, or NULL where evaluating it raises. StarRocks has no try();
     only wrap expressions whose StarRocks form already returns NULL on bad input
-    (date_parse, which is str_to_date there).
+    (date_parse with strict=false, which is a bare str_to_date there).
 #}
 {% macro try_or_null(expr) -%}
     {{ adapter.dispatch('try_or_null', 'open_learning')(expr) }}
