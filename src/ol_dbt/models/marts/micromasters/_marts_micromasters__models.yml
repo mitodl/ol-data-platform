@@ -313,3 +313,21 @@ models:
   - name: program_is_dedp
     description: boolean, indicates whether this program is the Data, Economics, and
       Design of Policy (DEDP) program
+
+unit_tests:
+- name: test_marts__micromasters_program_certificates_leaves_out_revoked_certificates
+  description: >
+    int__micromasters__program_certificates keeps revoked certificates; this
+    mart lists the certificates learners hold, so it drops them. A null flag
+    (MicroMasters and edX.org, no revocation) is kept.
+  model: marts__micromasters_program_certificates
+  given:
+  - input: ref('int__micromasters__program_certificates')
+    rows:
+    - {program_certificate_hashed_id: revoked, programcertificate_is_revoked: true}
+    - {program_certificate_hashed_id: valid, programcertificate_is_revoked: false}
+    - {program_certificate_hashed_id: no-revocation, programcertificate_is_revoked: null}
+  expect:
+    rows:
+    - {program_certificate_hashed_id: valid}
+    - {program_certificate_hashed_id: no-revocation}

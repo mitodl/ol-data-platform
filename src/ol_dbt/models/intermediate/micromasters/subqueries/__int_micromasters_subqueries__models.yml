@@ -643,3 +643,27 @@ unit_tests:
     - {program_certificate_hashed_id: u1-methods}
     - {program_certificate_hashed_id: u2-finance}
     - {program_certificate_hashed_id: u3-general-aaa}
+- name: test___micromasters_program_certificates_dedp_from_mitxonline_keeps_revoked_certificates
+  description: >
+    A revoked MITx Online DEDP certificate is kept with its flag, so MIT Learn
+    can learn of the revocation. Non-DEDP certificates are left out.
+  model: __micromasters_program_certificates_dedp_from_mitxonline
+  given:
+  - input: ref('int__mitxonline__program_certificates')
+    rows:
+    - {user_id: 1, user_username: revoked, program_id: 1, programcertificate_uuid: uuid-revoked,
+      programcertificate_created_on: "2023-01-01T00:00:00Z", programcertificate_is_revoked: true}
+    - {user_id: 2, user_username: valid, program_id: 1, programcertificate_uuid: uuid-valid,
+      programcertificate_created_on: "2023-01-01T00:00:00Z", programcertificate_is_revoked: false}
+    - {user_id: 3, user_username: other-program, program_id: 9, programcertificate_uuid: uuid-other,
+      programcertificate_created_on: "2023-01-01T00:00:00Z", programcertificate_is_revoked: false}
+  - input: ref('int__mitx__programs')
+    rows:
+    - {mitxonline_program_id: 1, micromasters_program_id: 2, program_title: DEDP ID,
+      is_dedp_program: true}
+    - {mitxonline_program_id: 9, micromasters_program_id: null, program_title: Other,
+      is_dedp_program: false}
+  expect:
+    rows:
+    - {user_mitxonline_id: 1, programcertificate_is_revoked: true}
+    - {user_mitxonline_id: 2, programcertificate_is_revoked: false}
