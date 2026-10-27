@@ -42,6 +42,7 @@ def test_every_source_package_is_covered() -> None:
     """Fail when a new source package appears without being considered here."""
     known = {
         "course_xml_blocks",
+        "edxorg_program_reports",
         "edxorg_s3",
         "keycloak",
         "medium",

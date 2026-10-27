@@ -40,7 +40,9 @@ airbyte:
     - b2b_contractprogramitem
     - b2b_discountcontractattachmentredemption
     - b2b_organizationindexpage
+    - b2b_organizationonboarding
     - b2b_organizationpage
+    - b2b_organizationprovisioningaudit
     - b2b_userb2bcontract
     - b2b_userorganization
     - cms_certificatepage
@@ -137,6 +139,13 @@ tables:
   primary_key:
   - - page_ptr_id
   modeled: false
+- name: b2b_organizationonboarding
+  raw_table: raw__mitxonline__app__postgres__b2b_organizationonboarding
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
 - name: b2b_organizationpage
   raw_table: raw__mitxonline__app__postgres__b2b_organizationpage
   sync_mode: full_refresh_overwrite
@@ -144,6 +153,13 @@ tables:
   primary_key:
   - - page_ptr_id
   modeled: true
+- name: b2b_organizationprovisioningaudit
+  raw_table: raw__mitxonline__app__postgres__b2b_organizationprovisioningaudit
+  sync_mode: incremental_deduped_history
+  namespace: public
+  primary_key:
+  - - id
+  modeled: false
 - name: b2b_userb2bcontract
   raw_table: raw__mitxonline__app__postgres__b2b_userb2bcontract
   sync_mode: incremental_deduped_history
@@ -256,9 +272,18 @@ tables:
   primary_key:
   - - id
   modeled: true
+# xmin incremental, so a run taken out of a contract keeps its row in production
+# raw until the dlt cutover. It stays under that contract in
+# int__mitxonline__b2b_contract_to_courseruns, bridge_organization_courserun and
+# the bridge's readers (mv_b2b_contract_courserun, mv_b2b_program_funnel,
+# organization_administration_report). On 2026-10-23 no row pointed at a run or
+# contract gone from the full-refresh courses_courserun or b2b_contractpage. A
+# removal that leaves both in place cannot be seen from raw, unless the run is
+# added back: the new row fails the staging (courserun_id, b2b_contract_id)
+# uniqueness test.
 - name: courses_courserun_b2b_contracts
   raw_table: raw__mitxonline__app__postgres__courses_courserun_b2b_contracts
-  sync_mode: full_refresh_overwrite
+  sync_mode: incremental_deduped_history
   namespace: public
   primary_key:
   - - id
@@ -473,6 +498,11 @@ tables:
   primary_key:
   - - id
   modeled: true
+# xmin incremental, so a product deleted in MITx Online stays in production raw
+# until the dlt cutover (replace). Accepted 2026-10-21: the Learn views take
+# prices from the CMS pages, not this table. On 2026-10-21, 183 rows pointed at
+# course runs gone from courses_courserun (upGrad UAI_SOURCE variants). They
+# reach int__mitxonline__ecommerce_product, dim_product and the order models.
 - name: ecommerce_product
   raw_table: raw__mitxonline__app__postgres__ecommerce_product
   sync_mode: incremental_deduped_history
@@ -585,6 +615,10 @@ tables:
   primary_key:
   - - id
   modeled: true
+# xmin incremental, so a deleted page stays in production raw until the dlt
+# cutover. Accepted 2026-10-21: int__mitxonline__catalog_pages inner-joins it to
+# the full-refresh cms_coursepage and cms_programpage, so a deleted catalog page
+# never reaches the Learn views. Join from a full-refresh table, not this one.
 - name: wagtailcore_page
   raw_table: raw__mitxonline__app__postgres__wagtailcore_page
   sync_mode: incremental_deduped_history

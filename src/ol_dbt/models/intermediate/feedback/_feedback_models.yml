@@ -94,14 +94,14 @@ models:
       qa_branches:
       - learn_ai/app_postgres
       - micromasters/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/tracking_logs
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/tracking_logs
   columns:
   - name: source_slug
@@ -370,14 +370,14 @@ models:
       - learn_ai/app_postgres
       - micromasters/app_postgres
       - mitlearn/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/tracking_logs
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/tracking_logs
   columns:
   - name: source_slug

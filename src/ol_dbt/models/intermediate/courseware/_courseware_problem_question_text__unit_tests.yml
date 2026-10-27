@@ -1,0 +1,61 @@
+---
+unit_tests:
+- name: test_int__courseware__extraction_sources_problem_text_has_no_answers
+  description: >
+    A problem's source text is its question and choices. A solution that holds a hint
+    goes whole, text after the hint included, and a self-closing hint does not run
+    on
+    to the next closing hint tag and take the question with it.
+  model: int__courseware__extraction_sources
+  given:
+  - input: ref('dim_course_content')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: r1, is_latest: true, block_category: sequential,
+      block_id: seq1, block_title: Primes, block_index: 1, sequential_block_id: seq1,
+      parent_block_id: ch1}
+    - {platform: mitxonline, courserun_readable_id: r1, is_latest: true, block_category: vertical,
+      block_id: vert1, block_title: Unit, block_index: 2, sequential_block_id: seq1,
+      parent_block_id: seq1}
+    - {platform: mitxonline, courserun_readable_id: r1, is_latest: true, block_category: problem,
+      block_id: "block-v1:X+type@problem+block@p1", block_title: Prime check, block_index: 3,
+      sequential_block_id: seq1, parent_block_id: vert1}
+  - input: ref('int__combined__course_xml_blocks')
+    rows:
+    - courserun_readable_id: r1
+      coursestructure_xml_source_system: mitxonline
+      coursestructure_xml_block_type: problem
+      coursestructure_xml_block_path: course/problem/p1.xml
+      coursestructure_xml_retrieved_at: "2026-10-01 00:00:00"
+      coursestructure_xml_raw_xml: >-
+        <problem><hint/><p>Which is prime?</p><multiplechoiceresponse><choicegroup>
+        <choice correct="true">Seven<choicehint>Seven has no divisors.</choicehint></choice>
+        <choice correct="false">Nine</choice></choicegroup></multiplechoiceresponse>
+        <solution><p>Seven is prime.</p><hint>Think of divisors.</hint><p>Nine is
+        three squared.</p></solution>
+        <demandhint><hint>First hint</hint><hint>Second hint</hint></demandhint>
+        <p>Explain why.</p></problem>
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows: []
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows: []
+  - input: ref('int__courseware__ocw_files')
+    rows: []
+  - input: ref('int__courseware__ocw_table_rows')
+    rows: []
+  - input: ref('int__courseware__ocw_resources')
+    rows: []
+  - input: ref('stg__ocw__s3__course_content')
+    rows: []
+  - input: ref('int__courseware__extraction_allowlist')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: r1, allowlist_level: courserun}
+  expect:
+    rows:
+    - courserun_readable_id: r1
+      scope_id: seq1
+      source_kind: problem
+      source_text: "Which is prime? Seven Nine Explain why."

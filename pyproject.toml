@@ -11,7 +11,7 @@ classifiers = [
 ]
 dependencies = [
     "boto3>=1.42.42",
-    "cyclopts~=5.2.0",
+    "cyclopts~=5.3.2",
     "dbt-duckdb>=1.10.0",
     "httpx>=0.28",
     "hvac[parser]>=2.0.0,<3",
@@ -50,10 +50,11 @@ override-dependencies = [
 # Tracked upstream in dagster-io/dagster#34232, #34235 and #33959.
 constraint-dependencies = [
     "sqlalchemy<2.1",
+    "certifi>=2026.10.19",  # eMudhra CA compromise: never resolve a certifi that trusts the compromised CAs
 ]
 
 [dependency-groups]
-prek = ["prek==0.5.5"]
+prek = ["prek==0.5.7"]
 # The sqlfluff hooks run in this group (see bin/sqlfluff-dbt-hook.py).
 sqlfluff = [
     "dbt-core>=1.12",

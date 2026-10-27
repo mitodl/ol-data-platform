@@ -128,28 +128,58 @@ with enrollment as (
     select * from {{ ref('int__mitxonline__program_course_run_orders') }}
 )
 
+, program_order_discounts as (
+    select
+        order_id
+        , platform
+        , max(discount_fk) as program_discount_fk
+    from order_fact
+    group by order_id, platform
+)
+
+, enrollment_orders as (
+    select
+        resolved_orders.enrollment_key
+        , resolved_orders.order_fk
+        , resolved_orders.order_id
+        , resolved_orders.order_reference_number
+        , resolved_orders.order_state
+        , resolved_orders.order_updated_on
+        , resolved_orders.discount_fk
+        , resolved_orders.discount_type_fk
+        , resolved_orders.line_price
+        , resolved_orders.platform
+        -- xPRO enrollments from a program purchase carry the program order itself; MITx Online
+        -- enrollments carry a $0 course run order, so their program order is matched.
+        , coalesce(
+            case
+                when resolved_orders.product_type in ('program', 'courses_programrun')
+                    then resolved_orders.order_id
+            end
+            , mitxonline_program_course_run_orders.program_order_id
+        ) as program_order_id
+    from resolved_orders
+    left join mitxonline_program_course_run_orders
+        on
+            resolved_orders.platform = 'mitxonline'
+            and resolved_orders.line_id = cast(mitxonline_program_course_run_orders.line_id as varchar)
+    where resolved_orders.row_num = 1
+)
+
 select
-    resolved_orders.enrollment_key
-    , resolved_orders.order_fk
-    , resolved_orders.order_id
-    , resolved_orders.order_reference_number
-    , resolved_orders.order_state
-    , resolved_orders.order_updated_on
-    , resolved_orders.discount_fk
-    , resolved_orders.discount_type_fk
-    , resolved_orders.line_price
-    -- xPRO enrollments from a program purchase carry the program order itself; MITx Online
-    -- enrollments carry a $0 course run order, so their program order is matched.
-    , coalesce(
-        case
-            when resolved_orders.product_type in ('program', 'courses_programrun')
-                then resolved_orders.order_id
-        end
-        , mitxonline_program_course_run_orders.program_order_id
-    ) as program_order_id
-from resolved_orders
-left join mitxonline_program_course_run_orders
+    enrollment_orders.enrollment_key
+    , enrollment_orders.order_fk
+    , enrollment_orders.order_id
+    , enrollment_orders.order_reference_number
+    , enrollment_orders.order_state
+    , enrollment_orders.order_updated_on
+    , enrollment_orders.discount_fk
+    , enrollment_orders.discount_type_fk
+    , enrollment_orders.line_price
+    , enrollment_orders.program_order_id
+    , program_order_discounts.program_discount_fk
+from enrollment_orders
+left join program_order_discounts
     on
-        resolved_orders.platform = 'mitxonline'
-        and resolved_orders.line_id = cast(mitxonline_program_course_run_orders.line_id as varchar)
-where resolved_orders.row_num = 1
+        enrollment_orders.program_order_id = program_order_discounts.order_id
+        and enrollment_orders.platform = program_order_discounts.platform

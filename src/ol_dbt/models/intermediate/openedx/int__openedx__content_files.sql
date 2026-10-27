@@ -21,6 +21,13 @@
   the check its files would include ones Learn hides, and a scoped pull would
   publish them.
 
+  release_date is the date Learn's OlxArchive.release_dates gives the file, from
+  the OLX start dates on its path down from the course, as the exclusions asset
+  computes it. Like Learn's key_dates, a key that two files share (foo bar.pdf and
+  foo_bar.pdf) takes the later of their dates, counting every ingestable file of
+  the key, empty or not. Learn shows a file only once that date has passed
+  (ContentFile.objects.visible()), so it stays in this model, dated.
+
   The course root files course.xml and course/<run>.xml come from
   course_xml_blocks like any other block, and only for an export parsed after
   that asset started carrying them (2026-10). A run whose blocks file is older
@@ -154,7 +161,9 @@ with blocks as (
 -- excluded_olx_paths. The exclusion rows are keyed by the path below the
 -- export's root directory, which block paths still carry.
 , kept_files as (
-    select candidate_files.*
+    select
+        candidate_files.*
+        , file_exclusions.content_file_release_date as release_date
     from candidate_files
     inner join checked_runs
         on candidate_files.courserun_readable_id = checked_runs.courserun_readable_id
@@ -163,8 +172,7 @@ with blocks as (
         on candidate_files.courserun_readable_id = file_exclusions.courserun_readable_id
         and candidate_files.source_system = file_exclusions.content_file_source_system
         and regexp_replace(candidate_files.source_path, '^[^/]*/', '') = file_exclusions.content_file_path
-        and file_exclusions.content_file_is_excluded
-    where file_exclusions.content_file_path is null
+    where not coalesce(file_exclusions.content_file_is_excluded, false)
 )
 
 , keyed_files as (
@@ -201,6 +209,16 @@ with blocks as (
         end as edx_module_id
         , {{ regexp_replace_all('original_file_name', "'\\.[^.]*$'", "''") }} as original_stem
     from keyed_files
+)
+
+, dated_files as (
+    select
+        *
+        -- ISO 8601 UTC strings of one fixed width, so the latest sorts last
+        , max(release_date) over (
+            partition by source_system, courserun_readable_id, edx_module_id
+        ) as key_release_date
+    from module_files
 )
 
 -- get_video_metadata: every transcript a video/*.xml block names, mapped to that
@@ -260,6 +278,7 @@ with blocks as (
         , module_files.extraction_status
         , module_files.extracted_at
         , module_files.edx_module_id
+        , module_files.key_release_date as release_date
         , case module_files.source_system
             when 'mitxonline' then 'https://courses.mitxonline.mit.edu'
             when 'xpro' then 'https://courses.xpro.mit.edu'
@@ -276,7 +295,7 @@ with blocks as (
             end, '')
             , {{ title_case("replace(replace(module_files.original_stem, '_', ' '), '-', ' ')") }}
         ) as title
-    from module_files
+    from dated_files as module_files
     left join video_transcript_map
         on module_files.courserun_readable_id = video_transcript_map.courserun_readable_id
         and module_files.source_system = video_transcript_map.source_system
@@ -336,5 +355,6 @@ select
     , content
     , extraction_status
     , extracted_at
+    , release_date
 from with_urls
 where key_rank = 1

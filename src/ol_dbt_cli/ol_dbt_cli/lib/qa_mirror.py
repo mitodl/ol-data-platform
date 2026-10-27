@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from ol_dbt_cli.lib.inventory import (
@@ -27,6 +28,7 @@ from ol_dbt_cli.lib.qa_observation import QA_GLUE_DATABASE, qa_strategy
 
 if TYPE_CHECKING:
     from ol_dbt_cli.lib.inventory import Unit
+    from ol_dbt_cli.lib.qa_observation import Observation
 
 PRODUCTION_CATALOG = "ol_data_lake_production"
 PRODUCTION_DATABASE = "ol_warehouse_production_raw"
@@ -106,6 +108,35 @@ def mirror_tables(units: list[Unit]) -> dict[str, list[MirrorTable]]:
         if tables:
             grouped[unit.key] = tables
     return grouped
+
+
+def stale_copies(units: list[Unit], observation: Observation) -> list[str]:
+    """Mirrored tables whose QA copy is older than the unit's ``mirror_max_age_days``.
+
+    Age is measured at ``observation.observed_at``. For a live observation that
+    is now, which is the measurement the qa_branch_contract check cannot make:
+    it reads the committed observation, so it measures age at whenever someone
+    last ran ``ol-dbt inventory observe``, and a copy that only gets older never
+    prompts anyone to.
+
+    A table with no current snapshot has no copy to age. Whether that matters
+    is the contract's empty-branch finding, not this one.
+    """
+    by_key = {unit.key: unit for unit in units}
+    findings = []
+    for unit_key, tables in mirror_tables(units).items():
+        max_age = timedelta(days=by_key[unit_key].data["mirror_max_age_days"])
+        for table in tables:
+            state = observation.tables.get(table.raw_table)
+            if state is None or state.snapshot_at is None:
+                continue
+            age = observation.observed_at - state.snapshot_at
+            if age > max_age:
+                findings.append(
+                    f"{table.raw_table}: copied {state.snapshot_at:%Y-%m-%d}, {age.days} days ago, "
+                    f"past {unit_key}'s mirror_max_age_days of {max_age.days}"
+                )
+    return sorted(findings)
 
 
 STRING_ONLY_MODES = frozenset({"hash", "redact"})

@@ -184,9 +184,10 @@ models:
 
 - name: __micromasters_program_certificates_non_dedp
   description: Non DEDP program certificate earners. Data come from learners report
-    from edX.org with deduplication. If learners have records in both 'Statistics
-    and Data Science (General track)' and 'Statistics and Data Science', they only
-    appear once in this table
+    from edX.org, with one certificate per learner per MITx Online program (see edxorg_to_mitxonline_program_mapping).
+    A learner with both 2U General Track program records, both Social Sciences Track
+    records, or both 'Finance' and 'MIT Finance', appears once; a learner with several
+    Statistics and Data Science tracks appears once per track
   config:
     meta:
       qa_branches:
@@ -220,7 +221,7 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["user_edxorg_username", "micromasters_program_id"]
+        column_list: ["user_edxorg_username", "program_title"]
 
 - name: __micromasters_course_certificates_dedp_from_micromasters
   description: DEDP course certificates from MicroMasters database
@@ -575,3 +576,58 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["user_edxorg_username", "courserun_readable_id"]
+
+unit_tests:
+- name: test___micromasters_program_certificates_non_dedp_one_per_learner_and_mitxonline_program
+  description: >
+    A learner keeps one certificate per MITx Online program. Of two certificates
+    for one program, the earlier-awarded one is kept, then the lower program_uuid
+    when both were awarded at once; 'Finance' wins over 'MIT Finance'. Each SDS
+    track is its own program, so a learner keeps one certificate per track.
+  model: __micromasters_program_certificates_non_dedp
+  given:
+  - input: ref('int__edxorg__mitx_program_certificates')
+    rows:
+    - {program_certificate_hashed_id: u1-general-later, program_type: MicroMasters,
+      program_uuid: aaa, program_title: Statistics and Data Science (General Track),
+      user_id: 1, micromasters_program_id: 4, program_certificate_awarded_on: "2021-01-01T00:00:00.000"}
+    - {program_certificate_hashed_id: u1-general-earlier, program_type: MicroMasters,
+      program_uuid: bbb, program_title: Statistics and Data Science (General Track),
+      user_id: 1, micromasters_program_id: 4, program_certificate_awarded_on: "2020-01-01T00:00:00.000"}
+    - {program_certificate_hashed_id: u1-methods, program_type: MicroMasters, program_uuid: ccc,
+      program_title: Statistics and Data Science (Methods Track), user_id: 1, micromasters_program_id: 4,
+      program_certificate_awarded_on: "2022-01-01T00:00:00.000"}
+    - {program_certificate_hashed_id: u2-mit-finance, program_type: MicroMasters,
+      program_uuid: ddd, program_title: MIT Finance, user_id: 2, micromasters_program_id: 5,
+      program_certificate_awarded_on: "2020-01-01T00:00:00.000"}
+    - {program_certificate_hashed_id: u2-finance, program_type: MicroMasters, program_uuid: eee,
+      program_title: Finance, user_id: 2, micromasters_program_id: 5, program_certificate_awarded_on: "2021-01-01T00:00:00.000"}
+    - {program_certificate_hashed_id: u3-general-bbb, program_type: MicroMasters,
+      program_uuid: bbb, program_title: Statistics and Data Science (General Track),
+      user_id: 3, micromasters_program_id: 4, program_certificate_awarded_on: "2020-01-01T00:00:00.000"}
+    - {program_certificate_hashed_id: u3-general-aaa, program_type: MicroMasters,
+      program_uuid: aaa, program_title: Statistics and Data Science (General Track),
+      user_id: 3, micromasters_program_id: 4, program_certificate_awarded_on: "2020-01-01T00:00:00.000"}
+  - input: ref('edxorg_to_mitxonline_program_mapping')
+    rows:
+    - {edxorg_program_title: Statistics and Data Science (General Track), mitxonline_program_readable_id: program-v1:MITxT+SDS-General-Track}
+    - {edxorg_program_title: Statistics and Data Science (Methods Track), mitxonline_program_readable_id: program-v1:MITxT+SDS-Methods-Track}
+    - {edxorg_program_title: Finance, mitxonline_program_readable_id: program-v1:MITxT+FIN}
+    - {edxorg_program_title: MIT Finance, mitxonline_program_readable_id: program-v1:MITxT+FIN}
+  - input: ref('int__edxorg__mitx_users')
+    rows:
+    - {user_id: 1, user_username: one}
+    - {user_id: 2, user_username: two}
+    - {user_id: 3, user_username: three}
+  - input: ref('int__mitx__programs')
+    rows:
+    - {micromasters_program_id: 4, program_title: Statistics and Data Science, is_dedp_program: false}
+    - {micromasters_program_id: 5, program_title: Finance, is_dedp_program: false}
+  - input: ref('stg__micromasters__app__user_program_certificate_override_list')
+    rows: []
+  expect:
+    rows:
+    - {program_certificate_hashed_id: u1-general-earlier}
+    - {program_certificate_hashed_id: u1-methods}
+    - {program_certificate_hashed_id: u2-finance}
+    - {program_certificate_hashed_id: u3-general-aaa}

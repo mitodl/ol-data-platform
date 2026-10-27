@@ -40,6 +40,24 @@ seeds:
     tests:
     - not_null
 
+- name: edxorg_to_mitxonline_program_mapping
+  description: Maps each edX.org MicroMasters program title, at the track level for
+    Statistics and Data Science, to the MITx Online program it moved to. Keyed on
+    the title because int__micromasters__program_certificates has no other column
+    that tells SDS tracks apart, and mapped to the readable id, not the database id,
+    so the seed does not depend on one environment's id sequence.
+  columns:
+  - name: edxorg_program_title
+    description: string, program title on an edX.org MicroMasters program certificate,
+      or the MicroMasters program title on an override certificate
+    tests:
+    - not_null
+    - unique
+  - name: mitxonline_program_readable_id
+    description: string, readable id of the MITx Online program, formatted as program-v1:{org}+{code}
+    tests:
+    - not_null
+
 - name: legacy_edx_certificate_revision_mapping
   description: Mapping edX certificates to MITx Online certificate revisions for legacy
     edX courses that were missing signatory information from edX course export.These
@@ -211,3 +229,64 @@ seeds:
     - unique
   - name: currency_name
     description: str, the currency's name
+- name: courseware_extraction_allowlist
+  description: >
+    The course runs whose courseware is assembled for claim extraction, and the
+    extractor version each is approved for. A run takes its own row, else its
+    course's row, else its platform's row (course_readable_id and
+    courserun_readable_id both empty), and a run matching no row is left out of
+    int__courseware__extraction_sources and never extracted. The courseware
+    extraction sensor observes a run only while its approved version is the one the
+    deployed extractor runs, so a prompt or schema change extracts nothing until the
+    rows here name the new version. Approve a run, or a new version, by editing this
+    file. The version values are the ones dim_courseware_extraction shows.
+  config:
+    column_types:
+      platform: varchar
+      course_readable_id: varchar
+      courserun_readable_id: varchar
+      extractor_id: varchar
+      prompt_version: varchar
+      schema_version: varchar
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - platform
+        - course_readable_id
+        - courserun_readable_id
+  # A row naming both would tie with the run's own row, and the build would pick
+  # one of the two arbitrarily.
+  - dbt_utils.expression_is_true:
+      expression: course_readable_id is null or courserun_readable_id is null
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [mitxonline, mitxpro, residential]
+  - name: course_readable_id
+    description: str, the course whose runs this row approves, as dim_course spells
+      it (e.g. course-v1:UAI_SOURCE+UAI.4); empty for a run or platform row
+  - name: courserun_readable_id
+    description: str, the run this row approves; empty for a course or platform row
+  - name: extractor_id
+    description: str, the extractor version's id, e.g. courseware_claims_v1
+    tests:
+    - not_null:
+        config:
+          error_if: ">0"
+  - name: prompt_version
+    description: str, the first 12 hex digits of the system prompt's sha256
+    tests:
+    - not_null:
+        config:
+          error_if: ">0"
+  - name: schema_version
+    description: str, the first 12 hex digits of the output schema's sha256
+    tests:
+    - not_null:
+        config:
+          error_if: ">0"

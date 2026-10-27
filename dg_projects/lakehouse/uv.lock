@@ -8,7 +8,10 @@ resolution-markers = [
 ]
 
 [manifest]
-constraints = [{ name = "sqlalchemy", specifier = "<2.1" }]
+constraints = [
+    { name = "certifi", specifier = ">=2026.10.19" },
+    { name = "sqlalchemy", specifier = "<2.1" },
+]
 overrides = [{ name = "grpcio-health-checking", specifier = "<1.82.0" }]
 
 [[package]]
@@ -256,11 +259,11 @@ wheels = [
 
 [[package]]
 name = "certifi"
-version = "2026.7.22"
+version = "2026.10.23"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a3/c2/24167ea9858356b47a87a50d39908bfdb72ceeefe0041586e704e5376b3a/certifi-2026.7.22.tar.gz", hash = "sha256:741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55", size = 138112, upload-time = "2026-07-22T03:35:12.644Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fd/11/b524cbd9bbdaca58608e4cf4053fd463417549e1959fa8d3aa18319f9555/certifi-2026.10.23.tar.gz", hash = "sha256:a9895e6e2758b371e0545e321a3a8fd1fcfd9829ada8824a936dfb16aaaf36cd", size = 136225, upload-time = "2026-10-23T11:36:16.478Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl", hash = "sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775", size = 136983, upload-time = "2026-07-22T03:35:11.276Z" },
+    { url = "https://files.pythonhosted.org/packages/32/d1/a3652fe2c19134d0d15922177821d863cbd7e842d53a21bbe7e8e3a1b5ac/certifi-2026.10.23-py3-none-any.whl", hash = "sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1", size = 135082, upload-time = "2026-10-23T11:36:14.763Z" },
 ]
 
 [[package]]
@@ -961,6 +964,30 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/b0/5d/5f8571bd5dedc80863191621ac4be001f3f3dd8315d2ec078705dab7dec1/durationpy-0.11.tar.gz", hash = "sha256:181898e1ae282e288f0a2291829656bf1b6b3aadf30a97993b85db4943642905", size = 3582, upload-time = "2026-08-26T13:56:00.991Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e6/c4/ebdf7837bc4ef6fd98cfb013c28855bb358467bf86c1af011bbc21e21df0/durationpy-0.11-py3-none-any.whl", hash = "sha256:a739fe2b8972c250ff72f8e2c488d18cf25f7b852f49ee76048775d5171df30c", size = 4133, upload-time = "2026-08-26T13:55:59.456Z" },
+]
+
+[[package]]
+name = "factory-boy"
+version = "3.3.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "faker" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ba/98/75cacae9945f67cfe323829fc2ac451f64517a8a330b572a06a323997065/factory_boy-3.3.3.tar.gz", hash = "sha256:866862d226128dfac7f2b4160287e899daf54f2612778327dd03d0e2cb1e3d03", size = 164146, upload-time = "2025-02-03T09:49:04.433Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/27/8d/2bc5f5546ff2ccb3f7de06742853483ab75bf74f36a92254702f8baecc79/factory_boy-3.3.3-py2.py3-none-any.whl", hash = "sha256:1c39e3289f7e667c4285433f305f8d506efc2fe9c73aaea4151ebd5cdea394fc", size = 37036, upload-time = "2025-02-03T09:49:01.659Z" },
+]
+
+[[package]]
+name = "faker"
+version = "40.43.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/33/6c/b8793efc2f00a912ef17cf0b61b717cddf34607499efcb8a32238c119368/faker-40.43.0.tar.gz", hash = "sha256:02fae4327c03a4a6315e1b428a3878f435bfc276c93435ea349b95c0c9372361", size = 2032713, upload-time = "2026-10-09T20:06:29.652Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/81/ed/0d6d0d6467ae3d009fb82fb411867c7fcfeadbdd25602cab0d7a7963f400/faker-40.43.0-py3-none-any.whl", hash = "sha256:9dd7c0ddfaf30c842b05502d3cf641c135e0120a3a19047008ba8525b72953ed", size = 2069082, upload-time = "2026-10-09T20:06:27.166Z" },
 ]
 
 [[package]]
@@ -1808,6 +1835,15 @@ wheels = [
 ]
 
 [[package]]
+name = "mimesis"
+version = "22.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e0/2b/629274dd6e23df1ab470e2c039c77033f674f73f0d48cca3d0c7777fce67/mimesis-22.2.0.tar.gz", hash = "sha256:7cd7d9dadd226129fd8bc6039fb0ff9b58efb2b4001022357f69381208e1df68", size = 18289536, upload-time = "2026-09-23T10:29:30.901Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/89/a6/1031fb1c0f453abd96589e2126707a42bcc4d19ec1d705886df6188182df/mimesis-22.2.0-py3-none-any.whl", hash = "sha256:037011eb3d5edf0b0b5d9eafd74d9881f6dce25b4f01032da0e13fb2a56f37e9", size = 4463089, upload-time = "2026-09-23T10:29:27.931Z" },
+]
+
+[[package]]
 name = "mmh3"
 version = "5.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2017,10 +2053,12 @@ dependencies = [
     { name = "boto3" },
     { name = "cyclopts" },
     { name = "duckdb" },
+    { name = "factory-boy" },
     { name = "hvac", extra = ["parser"] },
     { name = "jinja2" },
     { name = "jsonschema" },
     { name = "markupsafe" },
+    { name = "mimesis" },
     { name = "mysql-connector-python" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -2035,10 +2073,12 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.35" },
     { name = "cyclopts", specifier = ">=4.0" },
     { name = "duckdb", specifier = ">=1.0,!=1.5.0,!=1.5.1" },
+    { name = "factory-boy", specifier = ">=3.3.3,<4" },
     { name = "hvac", extras = ["parser"], specifier = ">=2.0.0,<3" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "jsonschema", specifier = ">=4.0" },
     { name = "markupsafe", specifier = ">=2.1" },
+    { name = "mimesis", specifier = "==22.2.0" },
     { name = "mysql-connector-python", specifier = ">=9.1" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0" },
@@ -2047,6 +2087,9 @@ requires-dist = [
     { name = "sqlglot", specifier = ">=25.26" },
     { name = "trino", specifier = ">=0.329" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "ruff" }]
 
 [[package]]
 name = "ol-orchestrate-lib"
@@ -2091,6 +2134,8 @@ requires-dist = [
     { name = "google-cloud-storage", specifier = ">=3.0" },
     { name = "httpx2", specifier = ">=2.2.0" },
     { name = "hvac", specifier = "~=2.4.0" },
+    { name = "langchain-text-splitters", marker = "extra == 'embeddings'", specifier = "==1.1.2" },
+    { name = "ol-llm", extras = ["bedrock", "google", "openai"], marker = "extra == 'embeddings'", specifier = "==0.0.3" },
     { name = "pandas", specifier = "~=3.0.0" },
     { name = "polars", specifier = ">=1.35.1" },
     { name = "psycopg2-binary", specifier = "~=2.9.10" },
@@ -2099,13 +2144,16 @@ requires-dist = [
     { name = "pygithub", specifier = ">=2.8.1" },
     { name = "pyiceberg", extras = ["polars"], specifier = ">=0.11.1" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "qdrant-client", marker = "extra == 'embeddings'", specifier = "~=1.18.0" },
     { name = "s3fs", specifier = ">=2026.0.0,<2027.0.0" },
     { name = "sentry-sdk", specifier = "~=2.66" },
     { name = "slack-sdk", specifier = "~=3.36" },
     { name = "sqlalchemy", specifier = ">=2.0" },
+    { name = "tiktoken", marker = "extra == 'embeddings'", specifier = "~=0.13.0" },
     { name = "trino", specifier = ">=0.329" },
     { name = "universal-pathlib", specifier = "~=0.3.1" },
 ]
+provides-extras = ["embeddings"]
 
 [[package]]
 name = "opentelemetry-api"

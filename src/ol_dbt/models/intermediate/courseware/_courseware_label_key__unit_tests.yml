@@ -1,0 +1,37 @@
+---
+unit_tests:
+- name: test_int__courseware__claims_label_keys_keep_symbols_that_name_things
+  description: >
+    C, C++ and C# are three languages, and .NET is not NET, so + and # are spelled
+    out
+    and a leading dot is "dot". A + or # standing alone is a separator, letters and
+    numbers outside ASCII are kept, and a label with no letters or numbers has no
+    key.
+  model: int__courseware__claims
+  given:
+  - input: ref('int__courseware__extractions')
+    rows:
+    - {extraction_key: k, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      scope_id: s, scope_part: 1, extracted_at: "2026-10-17T00:00:00"}
+  - input: source('courseware_intermediate', 'courseware_claim')
+    rows:
+    - {extraction_key: k, claim_ordinal: 1, claim_kind: concept, label: C}
+    - {extraction_key: k, claim_ordinal: 2, claim_kind: concept, label: C++}
+    - {extraction_key: k, claim_ordinal: 3, claim_kind: concept, label: "C#"}
+    - {extraction_key: k, claim_ordinal: 4, claim_kind: concept, label: .NET}
+    - {extraction_key: k, claim_ordinal: 5, claim_kind: concept, label: "# of rows"}
+    - {extraction_key: k, claim_ordinal: 6, claim_kind: concept, label: adjusted R²}
+    - {extraction_key: k, claim_ordinal: 7, claim_kind: concept, label: K-Means  Clustering!}
+    - {extraction_key: k, claim_ordinal: 8, claim_kind: concept, label: "+"}
+  - input: source('courseware_intermediate', 'courseware_claim_evidence')
+    rows: []
+  expect:
+    rows:
+    - {claim_ordinal: 1, concept_label_key: c}
+    - {claim_ordinal: 2, concept_label_key: c plus plus}
+    - {claim_ordinal: 3, concept_label_key: c sharp}
+    - {claim_ordinal: 4, concept_label_key: dot net}
+    - {claim_ordinal: 5, concept_label_key: of rows}
+    - {claim_ordinal: 6, concept_label_key: adjusted r²}
+    - {claim_ordinal: 7, concept_label_key: k means clustering}
+    - {claim_ordinal: 8, concept_label_key: null}
