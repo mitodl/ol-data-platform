@@ -336,7 +336,10 @@ unit_tests:
     but is not required, and the bridge takes that from programrequirement_is_required.
     xPRO has no elective sets, so every xPRO program course is required. A
     MicroMasters course in two elective sets of one program is one bridge row.
-    Other edX.org MITx program memberships are retained from the program-course API.
+    An xPRO course is in the program its program_id names and in any program
+    whose CMS page lists it. Other edX.org MITx program memberships are retained
+    from the program-course API, matched to the MITx Online course key when the
+    course moved to MITx Online.
   model: bridge_program_course
   given:
   - input: ref('int__mitxonline__program_requirements')
@@ -350,6 +353,11 @@ unit_tests:
   - input: ref('int__mitxpro__coursesinprogram')
     rows:
     - {program_id: 2, course_id: 20, course_order: 1}
+  - input: ref('int__mitxpro__courses')
+    rows:
+    - {course_id: 20, program_id: 2}
+    - {course_id: 21, program_id: 2}
+    - {course_id: 22, program_id: null}
   - input: ref('int__micromasters__program_requirements')
     rows:
     - {program_id: 3, course_id: 30, electiveset_id: null, programrequirement_type: Core,
@@ -382,11 +390,13 @@ unit_tests:
     - {course_pk: c11, source_id: 11, primary_platform: mitxonline, is_current: true}
     - {course_pk: c12, source_id: 12, primary_platform: mitxonline, is_current: true}
     - {course_pk: c20, source_id: 20, primary_platform: mitxpro, is_current: true}
+    - {course_pk: c21, source_id: 21, primary_platform: mitxpro, is_current: true}
+    - {course_pk: c22, source_id: 22, primary_platform: mitxpro, is_current: true}
     - {course_pk: c30, course_readable_id: "MITx+MM.1", primary_platform: edxorg,
       is_current: true}
     - {course_pk: c31, course_readable_id: "MITx+MM.2", primary_platform: edxorg,
       is_current: true}
-    - {course_pk: c40, course_readable_id: "course-v1:MITxT+OTHER+1", primary_platform: edxorg,
+    - {course_pk: c40, course_readable_id: "course-v1:MITxT+OTHER+1", primary_platform: mitxonline,
       is_current: true}
   expect:
     rows:
@@ -394,6 +404,7 @@ unit_tests:
     - {program_fk: p1, course_fk: c11, is_required: false}
     - {program_fk: p1, course_fk: c12, is_required: false}
     - {program_fk: p2, course_fk: c20, is_required: true}
+    - {program_fk: p2, course_fk: c21, is_required: true}
     - {program_fk: p3, course_fk: c30, is_required: true}
     - {program_fk: p3, course_fk: c31, is_required: false}
     - {program_fk: p4, course_fk: c40, is_required: true}
