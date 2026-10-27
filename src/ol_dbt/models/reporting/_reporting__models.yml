@@ -881,8 +881,9 @@ models:
       across all three, the way the old dedp_course_cert_count did. Each MITx Online
       Statistics and Data Science track has its own program name, so for those rows
       it equals program_course_cert_count. It differs from program_course_cert_count
-      only where programs share a name. Null when there are none, or when no program
-      enrollment row gives this program a name.
+      only where programs share a name. A program with no enrollment rows has no program
+      name, so it counts on its own and equals program_course_cert_count. Null when
+      there are none.
   - name: program_cert_ind
     description: str, 'Y' when any marts__combined_program_enrollment_detail row for
       the user's email and this program has user_has_completed_program true, otherwise
@@ -2021,7 +2022,8 @@ unit_tests:
     in course-2 (only in the International Development track), course-1 (in both tracks)
     and course-5 (only in the Public Policy track), so each track row counts 2 courses
     and program_name_course_cert_count, across both tracks of the Policy name, is
-    3.
+    3. The Elective program has courses but no enrollment rows, so it has no program
+    name and its program_name_course_cert_count equals its program_course_cert_count.
   model: learner_demographics_and_cert_info
   given:
   - input: ref('marts__combined__users')
@@ -2061,6 +2063,7 @@ unit_tests:
     - {user_email: "a@example.com", course_readable_id: "course-5", courseruncertificate_is_earned: true}
     - {user_email: "c@example.com", course_readable_id: "course-1", courseruncertificate_is_earned: true}
     - {user_email: "c@example.com", course_readable_id: "course-4", courseruncertificate_is_earned: true}
+    - {user_email: "c@example.com", course_readable_id: "course-6", courseruncertificate_is_earned: true}
   - input: ref('marts__combined_coursesinprogram')
     rows:
     - {course_readable_id: "course-1", program_report_key: "program-v1:MITx+ID", report_program_readable_id: "program-v1:MITx+ID",
@@ -2073,6 +2076,8 @@ unit_tests:
       report_program_title: "Policy: International Development"}
     - {course_readable_id: "course-5", program_report_key: "program-v1:MITx+PP", report_program_readable_id: "program-v1:MITx+PP",
       report_program_title: "Policy: Public Policy"}
+    - {course_readable_id: "course-6", program_report_key: "program-v1:MITx+EL", report_program_readable_id: "program-v1:MITx+EL",
+      report_program_title: "Elective"}
     - {course_readable_id: "course-4", program_report_key: null, report_program_readable_id: null,
       report_program_title: null}
   expect:
@@ -2095,6 +2100,9 @@ unit_tests:
     - {user_hashed_id: "c", program_readable_id: "program-v1:MITx+PP", program_title: "Policy:\
         \ Public Policy", program_course_cert_count: 1, program_name_course_cert_count: 1,
       program_cert_ind: null, program_enroll_ind: null}
+    - {user_hashed_id: "c", program_readable_id: "program-v1:MITx+EL", program_title: "Elective",
+      program_course_cert_count: 1, program_name_course_cert_count: 1, program_cert_ind: null,
+      program_enroll_ind: null}
     - {user_hashed_id: "d", program_readable_id: null, program_title: null, program_course_cert_count: null,
       program_name_course_cert_count: null, program_cert_ind: null, program_enroll_ind: null}
     - {user_hashed_id: "e", program_readable_id: "program-v1:MITx+PP", program_title: "Policy:\
