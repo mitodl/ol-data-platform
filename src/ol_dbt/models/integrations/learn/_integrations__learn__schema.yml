@@ -753,11 +753,12 @@ models:
   tests:
   # One certificate per learner per program. The program is the MITx Online program, or the
   # MicroMasters one when an edX.org title has no MITx Online mapping. micromasters_program_id
-  # alone is not the grain: Statistics and Data Science tracks share one.
+  # alone is not the grain: Statistics and Data Science tracks share one. Each part is coalesced to
+  # '' because concat is null when any argument is, which would skip rows with neither program id.
   - unique:
       arguments:
-        column_name: "concat(user_email, '|', cast(coalesce(mitxonline_program_id,\
-          \ micromasters_program_id) as varchar))"
+        column_name: "concat(coalesce(user_email, ''), '|', coalesce(cast(coalesce(mitxonline_program_id,\
+          \ micromasters_program_id) as varchar), ''))"
 
 unit_tests:
 - name: test_integrations__learn__ocw_courses_builds_learns_ids_and_urls
