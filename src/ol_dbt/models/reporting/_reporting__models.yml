@@ -14,9 +14,8 @@ models:
     that program. xPRO programs keep their own rows. Course membership is keyed by
     the same lookup, from marts__combined_coursesinprogram. A program has a row only
     when it has both program enrollments and enrollments in its courses. Every learner
-    count is a count of distinct user_email, compared as stored, so one person with
-    different emails on edX.org and MITx Online, or the same email in different letter
-    case, counts twice.
+    count is a count of distinct lowercased user_email, so one person with different
+    emails on edX.org and MITx Online counts twice.
   config:
     meta:
       qa_branches:
@@ -60,47 +59,48 @@ models:
     tests:
     - not_null
   - name: total_enrollments
-    description: int, count of course enrollments in the program, aggregated by user_email
-      and courserun_readable_id
+    description: int, count of course enrollments in the program, aggregated by lowercased
+      user_email and courserun_readable_id
     tests:
     - not_null
   - name: unique_users
     description: int, count of unique users who took courses in the program, aggregated
-      by user_email
+      by lowercased user_email
     tests:
     - not_null
   - name: unique_countries
-    description: int, count of unique countries of enrolled users, aggregated by user_email
+    description: int, count of unique countries of enrolled users, aggregated by lowercased
+      user_email
     tests:
     - not_null
   - name: verified_enrollments
     description: int, count of verified (paid) enrollments in the program's courses,
-      aggregated by user_email and courserun_readable_id
+      aggregated by lowercased user_email and courserun_readable_id
     tests:
     - not_null
   - name: unique_verified_users
     description: int, count of unique verified users enrolled in the program's courses,
-      aggregated by user_email
+      aggregated by lowercased user_email
     tests:
     - not_null
   - name: course_certificates
     description: int, count of course certificate earned for the courses in the program,
-      aggregated by user_email and courserun_readable_id
+      aggregated by lowercased user_email and courserun_readable_id
     tests:
     - not_null
   - name: unique_course_certificate_earners
     description: int, count of unique users who earned a certificate for one of the
-      program's courses, aggregated by user_email
+      program's courses, aggregated by lowercased user_email
     tests:
     - not_null
   - name: program_certificates
-    description: int, count of distinct user_email per program whose marts__combined_program_enrollment_detail
+    description: int, count of distinct lowercased user_email per program whose marts__combined_program_enrollment_detail
       row has user_has_completed_program, so revoked certificates are not counted.
       Certificates from edX.org and MITx Online are counted together, so a learner
-      certified on both platforms under the same email is one certificate. Under two
-      different emails the learner is two. A learner certified in two tracks is in
-      each track's row, so summing the DEDP or Statistics and Data Science rows counts
-      that learner more than once.
+      certified on both platforms under the same email, in any letter case, is one
+      certificate. Under two different emails the learner is two. A learner certified
+      in two tracks is in each track's row, so summing the DEDP or Statistics and
+      Data Science rows counts that learner more than once.
 
 - name: learner_engagement_report
   description: Engagement report by learner, course, courserun, section and subsection.
@@ -1937,13 +1937,16 @@ unit_tests:
     MicroMasters program keeps its own row, keyed on its title in both the
     certificate and the course enrollment counts, with a null program_readable_id.
     A MicroMasters row the mart gave a MITx Online readable id keeps that program
-    with no title mapping. An xPRO program keeps its own row.
+    with no title mapping. An xPRO program keeps its own row. Emails that differ
+    only in letter case are one learner in both halves.
   model: program_summary_report
   given:
   - input: ref('marts__combined_program_enrollment_detail')
     rows:
     - {platform_name: MITx Online, program_readable_id: "program-v1:MITxT+SDS-General-Track",
       program_title: "SDS General", user_email: a@example.com, user_has_completed_program: true}
+    - {platform_name: MITx Online, program_readable_id: "program-v1:MITxT+SDS-General-Track",
+      program_title: "SDS General", user_email: B@Example.com, user_has_completed_program: true}
     - {platform_name: edX.org, program_readable_id: "program-v1:MITx+SDS+General-Track",
       program_title: "SDS General on edX", user_email: a@example.com, user_has_completed_program: true}
     - {platform_name: edX.org, program_readable_id: "program-v1:MITx+SDS+General-Track",
@@ -1965,6 +1968,9 @@ unit_tests:
     rows:
     - {course_readable_id: "course-v1:MITxT+A", courserun_readable_id: "course-v1:MITxT+A+1T2020",
       user_email: a@example.com, user_country_code: US, courserunenrollment_enrollment_mode: verified,
+      courseruncertificate_is_earned: false}
+    - {course_readable_id: "course-v1:MITxT+A", courserun_readable_id: "course-v1:MITxT+A+1T2020",
+      user_email: A@EXAMPLE.COM, user_country_code: US, courserunenrollment_enrollment_mode: verified,
       courseruncertificate_is_earned: false}
     - {course_readable_id: "MITx/OM1", courserun_readable_id: "MITx/OM1/1T2015", user_email: c@example.com,
       user_country_code: FR, courserunenrollment_enrollment_mode: audit, courseruncertificate_is_earned: false}
@@ -1994,11 +2000,11 @@ unit_tests:
   expect:
     rows:
     - {program_readable_id: "program-v1:MITxT+SDS-General-Track", program_title: "SDS\
-        \ General", total_enrollments: 1, verified_enrollments: 1, course_certificates: 0,
-      program_certificates: 2}
+        \ General", total_enrollments: 1, unique_users: 1, verified_enrollments: 1,
+      course_certificates: 0, program_certificates: 2}
     - {program_readable_id: "program-v1:MITx+DEDP", program_title: DEDP ID, total_enrollments: 1,
-      verified_enrollments: 1, course_certificates: 1, program_certificates: 1}
+      unique_users: 1, verified_enrollments: 1, course_certificates: 1, program_certificates: 1}
     - {program_readable_id: null, program_title: Old MicroMasters, total_enrollments: 1,
-      verified_enrollments: 0, course_certificates: 0, program_certificates: 1}
+      unique_users: 1, verified_enrollments: 0, course_certificates: 0, program_certificates: 1}
     - {program_readable_id: "program-v1:xPRO+X", program_title: X Program, total_enrollments: 1,
-      verified_enrollments: 0, course_certificates: 1, program_certificates: 1}
+      unique_users: 1, verified_enrollments: 0, course_certificates: 1, program_certificates: 1}
