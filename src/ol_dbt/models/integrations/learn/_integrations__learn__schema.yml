@@ -682,8 +682,10 @@ models:
       Certificate recipient's email: the MITx Online email for a DEDP
       certificate from MITx Online, the MicroMasters email for a DEDP
       certificate only MicroMasters holds, and the edX.org email otherwise
-      (see int__micromasters__program_certificates). Empty string, not
-      NULL, when no email could be resolved.
+      (see int__micromasters__program_certificates), lowercased. MIT Learn
+      compares it case-sensitively with the signed-in user's email, which
+      is almost always lowercase. Empty string, not NULL, when no email
+      could be resolved.
     tests: [not_null]
   - name: user_edxorg_id
     description: Certificate recipient's edX.org user id, when resolvable.
@@ -1069,6 +1071,26 @@ unit_tests:
     - {record_hash: sds-methods, mitxonline_program_id: 46}
     - {record_hash: dedp, mitxonline_program_id: 2}
     - {record_hash: unmapped, mitxonline_program_id: null}
+- name: test_integrations__learn__program_certificates_lowercases_user_email
+  description: >
+    user_email is lowercased, because MIT Learn matches it case-sensitively
+    against the user's lowercase email. A missing email is an empty string.
+  model: integrations__learn__program_certificates
+  given:
+  - input: ref('int__micromasters__program_certificates')
+    rows:
+    - {program_certificate_hashed_id: mixed-case, program_title: SCM, user_email: Learner@Example.COM}
+    - {program_certificate_hashed_id: lowercase, program_title: SCM, user_email: learner@example.com}
+    - {program_certificate_hashed_id: missing, program_title: SCM, user_email: null}
+  - input: ref('edxorg_to_mitxonline_program_mapping')
+    rows: []
+  - input: ref('int__mitxonline__programs')
+    rows: []
+  expect:
+    rows:
+    - {record_hash: mixed-case, user_email: learner@example.com}
+    - {record_hash: lowercase, user_email: learner@example.com}
+    - {record_hash: missing, user_email: ''}
 - name: test_integrations__learn__program_certificates_is_revoked_never_null
   description: >
     is_revoked passes MITx Online's revoked flag through and is false for
