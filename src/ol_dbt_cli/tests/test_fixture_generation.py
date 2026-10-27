@@ -404,6 +404,8 @@ def test_generated_addresses_are_on_the_reserved_domain(tmp_path: Path, demo: Un
         ("datetime.formatted_date", {}, "datetime.formatted_date defaults start and end to the current year"),
         ("datetime.past_date", {}, "datetime.past_date counts from today"),
         ("development.calver", {}, "development.calver counts from today"),
+        ("cryptographic.jwt", {}, "cryptographic.jwt without a payload stamps iat and exp from the clock"),
+        ("cryptographic.jwt", {"payload": None}, "cryptographic.jwt without a payload"),
         ("internet.ip_v4", {}, "internet.ip_v4 makes up IP addresses outside the ranges reserved for documentation"),
         ("internet.ip_v4_with_port", {}, "internet.ip_v4_with_port makes up IP addresses"),
         ("internet.ip_v6_object", {}, "internet.ip_v6_object makes up IP addresses"),
@@ -433,6 +435,14 @@ def test_an_email_keeps_the_domain_the_factory_names() -> None:
 
     assert draw("person.email", domains=["mail.test"]).endswith("@mail.test")
     assert draw("person.email", domains=None).endswith(f"@{RESERVED_DOMAIN}")
+
+
+def test_a_jwt_with_a_payload_repeats_under_one_seed() -> None:
+    seed_generation(1)
+    first = draw("cryptographic.jwt", payload={"sub": "user1"})
+    seed_generation(1)
+
+    assert draw("cryptographic.jwt", payload={"sub": "user1"}) == first
 
 
 def test_building_before_seeding_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:

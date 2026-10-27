@@ -40,10 +40,11 @@ pair shape this module:
 
 :func:`generate_rows` seeds all of it from the package's ``SEED``, so one
 commit generates the same rows in every process. Three things would break that
-and are refused: a mimesis provider whose default range ends at the current
-year, a key taken from a provider instead of the sequence (``email(unique=
-True)`` raises under a seed), and a ``factory.Faker`` column, whose values come
-from faker, a second source none of :func:`value`'s checks see.
+and are refused: a mimesis provider that reads the clock (a default range that
+ends at the current year, a JWT's default claims), a key taken from a provider
+instead of the sequence (``email(unique=True)`` raises under a seed), and a
+``factory.Faker`` column, whose values come from faker, a second source none of
+:func:`value`'s checks see.
 """
 
 from __future__ import annotations
@@ -267,9 +268,9 @@ def value(provider: str, **kwargs: Any) -> Any:
     :param kwargs: The provider's arguments.
     :returns: A factory_boy declaration.
     :raises ValueError: For a provider that makes up a hostname (use
-        :func:`url`), an IP address or a phone number that can be real, or one
+        :func:`url`), an IP address or a phone number that can be real, one
         whose default range ends at the current year and is not given its
-        bounds.
+        bounds, or ``cryptographic.jwt`` without a ``payload``.
     """
     kwargs = _checked(provider, kwargs)
     return factory.LazyFunction(lambda: _current().field(provider, **kwargs))
@@ -286,6 +287,9 @@ def _checked(provider: str, kwargs: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(msg)
     if missing := [bound for bound in _CLOCK_BOUNDS.get(method, ()) if bound not in kwargs]:
         msg = f"{provider} defaults {' and '.join(missing)} to the current year, so its rows change with the date"
+        raise ValueError(msg)
+    if method == "jwt" and kwargs.get("payload") is None:
+        msg = f"{provider} without a payload stamps iat and exp from the clock, so its rows change with the date"
         raise ValueError(msg)
     if method == "email" and kwargs.get("domains") is None:
         return {**kwargs, "domains": [RESERVED_DOMAIN]}
