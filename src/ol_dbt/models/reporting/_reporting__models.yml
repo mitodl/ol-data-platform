@@ -871,6 +871,18 @@ models:
       mapped to the program key the same way) for which the user earned a course certificate.
       Null when there are none. A course that belongs to two tracks counts in both
       tracks' rows, so summing a program's track rows can count a course twice.
+  - name: program_name_course_cert_count
+    description: int, count of distinct courses for which the user earned a course
+      certificate, across every program that shares this row's program name (report_program_name
+      in marts__combined_program_enrollment_detail). The value repeats on each of
+      the user's rows for those programs. The three DEDP programs (International Development,
+      Public Policy and Data, Economics, and Design of Policy) share the name 'Data,
+      Economics, and Design of Policy', so this counts a learner's DEDP courses once
+      across all three, the way the old dedp_course_cert_count did. Each MITx Online
+      Statistics and Data Science track has its own program name, so for those rows
+      it equals program_course_cert_count. It differs from program_course_cert_count
+      only where programs share a name. Null when there are none, or when no program
+      enrollment row gives this program a name.
   - name: program_cert_ind
     description: str, 'Y' when any marts__combined_program_enrollment_detail row for
       the user's email and this program has user_has_completed_program true, otherwise
@@ -2005,7 +2017,11 @@ unit_tests:
     A revoked certificate (user_has_completed_program false) does not set program_cert_ind.
     A course certificate alone adds a row with no enrollment, and a user with neither
     gets one row with null program columns. Emails match regardless of letter case.
-    A program row the marts key to no program adds no row.
+    A program row the marts key to no program adds no row. Learner a holds certificates
+    in course-2 (only in the International Development track), course-1 (in both tracks)
+    and course-5 (only in the Public Policy track), so each track row counts 2 courses
+    and program_name_course_cert_count, across both tracks of the Policy name, is
+    3.
   model: learner_demographics_and_cert_info
   given:
   - input: ref('marts__combined__users')
@@ -2019,28 +2035,30 @@ unit_tests:
     rows:
     - {user_email: "a@example.com", user_has_completed_program: true, program_report_key: "program-v1:MITx+ID",
       report_program_readable_id: "program-v1:MITx+ID", report_program_title: "Policy:\
-        \ International Development"}
+        \ International Development", report_program_name: "Policy"}
     - {user_email: "a@example.com", user_has_completed_program: true, program_report_key: "program-v1:MITx+PP",
       report_program_readable_id: "program-v1:MITx+PP", report_program_title: "Policy:\
-        \ Public Policy"}
+        \ Public Policy", report_program_name: "Policy"}
     - {user_email: "a@example.com", user_has_completed_program: false, program_report_key: "program-v1:MITx+ID",
       report_program_readable_id: "program-v1:MITx+ID", report_program_title: "Policy:\
-        \ International Development"}
+        \ International Development", report_program_name: "Policy"}
     - {user_email: "a@example.com", user_has_completed_program: true, program_report_key: null,
-      report_program_readable_id: null, report_program_title: null}
+      report_program_readable_id: null, report_program_title: null, report_program_name: null}
     - {user_email: "b@example.com", user_has_completed_program: false, program_report_key: "program-v1:xPRO+L",
-      report_program_readable_id: "program-v1:xPRO+L", report_program_title: "Leadership"}
+      report_program_readable_id: "program-v1:xPRO+L", report_program_title: "Leadership",
+      report_program_name: "Leadership"}
     - {user_email: "b@example.com", user_has_completed_program: true, program_report_key: "Computer\
         \ Science", report_program_readable_id: null, report_program_title: "Computer\
-        \ Science"}
+        \ Science", report_program_name: "Computer Science"}
     - {user_email: "e@example.com", user_has_completed_program: true, program_report_key: "program-v1:MITx+PP",
       report_program_readable_id: "program-v1:MITx+PP", report_program_title: "Policy:\
-        \ Public Policy"}
+        \ Public Policy", report_program_name: "Policy"}
   - input: ref('marts__combined_course_enrollment_detail')
     rows:
     - {user_email: "a@example.com", course_readable_id: "course-1", courseruncertificate_is_earned: true}
     - {user_email: "a@example.com", course_readable_id: "course-2", courseruncertificate_is_earned: true}
     - {user_email: "a@example.com", course_readable_id: "course-3", courseruncertificate_is_earned: false}
+    - {user_email: "a@example.com", course_readable_id: "course-5", courseruncertificate_is_earned: true}
     - {user_email: "c@example.com", course_readable_id: "course-1", courseruncertificate_is_earned: true}
     - {user_email: "c@example.com", course_readable_id: "course-4", courseruncertificate_is_earned: true}
   - input: ref('marts__combined_coursesinprogram')
@@ -2053,26 +2071,32 @@ unit_tests:
       report_program_title: "Policy: International Development"}
     - {course_readable_id: "course-3", program_report_key: "program-v1:MITx+ID", report_program_readable_id: "program-v1:MITx+ID",
       report_program_title: "Policy: International Development"}
+    - {course_readable_id: "course-5", program_report_key: "program-v1:MITx+PP", report_program_readable_id: "program-v1:MITx+PP",
+      report_program_title: "Policy: Public Policy"}
     - {course_readable_id: "course-4", program_report_key: null, report_program_readable_id: null,
       report_program_title: null}
   expect:
     rows:
     - {user_hashed_id: "a", program_readable_id: "program-v1:MITx+ID", program_title: "Policy:\
-        \ International Development", program_course_cert_count: 2, program_cert_ind: "Y",
-      program_enroll_ind: "Y"}
+        \ International Development", program_course_cert_count: 2, program_name_course_cert_count: 3,
+      program_cert_ind: "Y", program_enroll_ind: "Y"}
     - {user_hashed_id: "a", program_readable_id: "program-v1:MITx+PP", program_title: "Policy:\
-        \ Public Policy", program_course_cert_count: 1, program_cert_ind: "Y", program_enroll_ind: "Y"}
+        \ Public Policy", program_course_cert_count: 2, program_name_course_cert_count: 3,
+      program_cert_ind: "Y", program_enroll_ind: "Y"}
     - {user_hashed_id: "b", program_readable_id: "program-v1:xPRO+L", program_title: "Leadership",
-      program_course_cert_count: null, program_cert_ind: null, program_enroll_ind: "Y"}
-    - {user_hashed_id: "b", program_readable_id: null, program_title: "Computer Science",
-      program_course_cert_count: null, program_cert_ind: "Y", program_enroll_ind: "Y"}
-    - {user_hashed_id: "c", program_readable_id: "program-v1:MITx+ID", program_title: "Policy:\
-        \ International Development", program_course_cert_count: 1, program_cert_ind: null,
-      program_enroll_ind: null}
-    - {user_hashed_id: "c", program_readable_id: "program-v1:MITx+PP", program_title: "Policy:\
-        \ Public Policy", program_course_cert_count: 1, program_cert_ind: null, program_enroll_ind: null}
-    - {user_hashed_id: "d", program_readable_id: null, program_title: null, program_course_cert_count: null,
-      program_cert_ind: null, program_enroll_ind: null}
-    - {user_hashed_id: "e", program_readable_id: "program-v1:MITx+PP", program_title: "Policy:\
-        \ Public Policy", program_course_cert_count: null, program_cert_ind: "Y",
+      program_course_cert_count: null, program_name_course_cert_count: null, program_cert_ind: null,
       program_enroll_ind: "Y"}
+    - {user_hashed_id: "b", program_readable_id: null, program_title: "Computer Science",
+      program_course_cert_count: null, program_name_course_cert_count: null, program_cert_ind: "Y",
+      program_enroll_ind: "Y"}
+    - {user_hashed_id: "c", program_readable_id: "program-v1:MITx+ID", program_title: "Policy:\
+        \ International Development", program_course_cert_count: 1, program_name_course_cert_count: 1,
+      program_cert_ind: null, program_enroll_ind: null}
+    - {user_hashed_id: "c", program_readable_id: "program-v1:MITx+PP", program_title: "Policy:\
+        \ Public Policy", program_course_cert_count: 1, program_name_course_cert_count: 1,
+      program_cert_ind: null, program_enroll_ind: null}
+    - {user_hashed_id: "d", program_readable_id: null, program_title: null, program_course_cert_count: null,
+      program_name_course_cert_count: null, program_cert_ind: null, program_enroll_ind: null}
+    - {user_hashed_id: "e", program_readable_id: "program-v1:MITx+PP", program_title: "Policy:\
+        \ Public Policy", program_course_cert_count: null, program_name_course_cert_count: null,
+      program_cert_ind: "Y", program_enroll_ind: "Y"}

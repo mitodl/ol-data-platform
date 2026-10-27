@@ -34,6 +34,7 @@ params:
   - program_readable_id
   - program_title
   - program_course_cert_count
+  - program_name_course_cert_count
   - program_cert_ind
   - program_enroll_ind
   include_search: false
