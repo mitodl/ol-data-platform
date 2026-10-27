@@ -205,9 +205,9 @@ def test_a_full_step_has_no_room_for_another_child() -> None:
 @pytest.mark.parametrize(
     ("rows", "message"),
     [
-        ([{"path": "00010"}], "path '00010' is not whole steps of 4 characters"),
-        ([{"path": "000a"}], "path '000a' is not whole steps"),
-        ([{"path": ""}], "path '' is not whole steps"),
+        ([{"path": "00010"}], "a row has path '00010', which is not whole steps of 4 characters"),
+        ([{"path": "000a"}], "path '000a', which is not whole steps"),
+        ([{"path": ""}], "path '', which is not whole steps"),
         ([{"path": "0001"}, {"path": "0001"}], "two rows have path '0001'"),
         (
             [{"path": "0001", "url_path": "/home/"}, {"path": "0002", "url_path": "/home/"}],
@@ -303,7 +303,35 @@ def _page(path: str, **values: Any) -> Row:
             XPRO_STAND_INS,
             "the row with id=100 has numchild 0 and 1 children",
         ),
-        ([_page("00010001000100010")], XPRO_STAND_INS, "path '00010001000100010' is not whole steps"),
+        (
+            [_page("00010001000100010")],
+            XPRO_STAND_INS,
+            f"{XPRO_PAGES}: the row with id=100 has path '00010001000100010', which is not whole steps",
+        ),
+        (
+            [],
+            [*XPRO_STAND_INS, {"path": "00010001000"}],
+            f"{XPRO_PAGES}: a stand-in has path '00010001000', which is not whole steps",
+        ),
+        # Declared, and nothing placed under it.
+        (
+            [],
+            [*XPRO_STAND_INS, {"path": "000100010003", "url_path": "/home/faculty/"}],
+            f"{XPRO_PAGES}: stand-in '000100010003' has no row or stand-in under it",
+        ),
+        *(
+            (
+                [{key: value for key, value in _page("0001000100010005").items() if key != column}],
+                XPRO_STAND_INS,
+                message,
+            )
+            for column, message in [
+                ("path", f"{XPRO_PAGES}: the row with id=100 has no path"),
+                ("depth", f"{XPRO_PAGES}: the row with id=100 has no depth"),
+                ("numchild", f"{XPRO_PAGES}: the row with id=100 has no numchild"),
+            ]
+        ),
+        ([{"id": 100, "path": None, "numchild": 0}], XPRO_STAND_INS, "id=100 has no path or depth"),
     ],
 )
 def test_rows_that_do_not_make_one_tree_with_their_stand_ins_are_refused(
@@ -311,6 +339,14 @@ def test_rows_that_do_not_make_one_tree_with_their_stand_ins_are_refused(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         check_tree(XPRO_PAGES, _committed_rows(XPRO_PAGES), generated, key_columns=["id"], stand_ins=stand_ins)
+
+
+def test_a_hand_written_row_without_a_path_is_named() -> None:
+    pages = _committed_rows(XPRO_PAGES)
+    del _by_id(pages, 10)["path"]
+
+    with pytest.raises(ValueError, match=f"{XPRO_PAGES}: the row with id=10 has no path"):
+        check_tree(XPRO_PAGES, pages, [], key_columns=["id"], stand_ins=XPRO_STAND_INS)
 
 
 def test_a_hand_written_parent_may_count_children_the_fixture_leaves_out() -> None:

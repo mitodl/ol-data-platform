@@ -115,7 +115,7 @@ class Tree:
 
     def _hold(self, row: Row) -> None:
         path = row["path"]
-        _check_path(path, self._alphabet)
+        _check_path(path, self._alphabet, "a row")
         if path in self._rows:
             msg = f"two rows have path {path!r}"
             raise ValueError(msg)
@@ -157,16 +157,23 @@ def check_tree(
     :param alphabet: The model's ``MP_Node.alphabet``.
     :param stand_ins: The parents the fixture leaves out, the package's
         ``TREE_STAND_INS`` for the table.
-    :raises ValueError: If a path is not whole steps of ``alphabet``, two rows
-        have one path, a stand-in has a row's path, a row's or stand-in's
-        parent is neither a row nor a stand-in, a row's ``url_path`` is not
-        under its stand-in parent's, a row's ``depth`` is not its path's, or a
-        generated row's ``numchild`` is not its children's count.
+    :raises ValueError: If a row has no ``path`` or ``depth`` (or a generated
+        row no ``numchild``), a path is not whole steps of ``alphabet``, two
+        rows have one path, a stand-in has a row's path or nothing under it, a
+        row's or stand-in's parent is neither a row nor a stand-in, a row's
+        ``url_path`` is not under its stand-in parent's, a row's ``depth`` is
+        not its path's, or a generated row's ``numchild`` is not its children's
+        count.
     """
+    for rows, columns in ((hand_written, ("path", "depth")), (generated, ("path", "depth", "numchild"))):
+        for row in rows:
+            if missing := [column for column in columns if row.get(column) is None]:
+                msg = f"{raw_table}: {_named(row, key_columns)} has no {' or '.join(missing)}"
+                raise ValueError(msg)
     held: dict[str, Row] = {}
     for row in [*hand_written, *generated]:
         path = row["path"]
-        _check_path(path, alphabet)
+        _check_path(path, alphabet, f"{raw_table}: {_named(row, key_columns)}")
         if path in held:
             msg = (
                 f"{raw_table}: {_named(held[path], key_columns)} and {_named(row, key_columns)} both have path {path!r}"
@@ -180,7 +187,7 @@ def check_tree(
     left_out: dict[str, Row] = {}
     for stand_in in stand_ins:
         path = stand_in["path"]
-        _check_path(path, alphabet)
+        _check_path(path, alphabet, f"{raw_table}: a stand-in")
         if path in held:
             msg = f"{raw_table}: stand-in {path!r} is {_named(held[path], key_columns)}, which the fixture holds"
             raise ValueError(msg)
@@ -206,6 +213,13 @@ def check_tree(
             )
             raise ValueError(msg)
     children = Counter(path[:-TREEBEARD_STEPLEN] for path in held)
+    # A stand-in nothing is under is one generate never placed under: a stale
+    # TREE_STAND_INS entry, or a path that differs from the one generate used.
+    # A stand-in loads no row, so nothing else would show it.
+    stand_in_children = Counter(path[:-TREEBEARD_STEPLEN] for path in left_out)
+    if empty := [path for path in sorted(left_out) if not children[path] and not stand_in_children[path]]:
+        msg = f"{raw_table}: stand-in {empty[0]!r} has no row or stand-in under it"
+        raise ValueError(msg)
     for row in generated:
         if row["numchild"] != children[row["path"]]:
             msg = (
@@ -215,9 +229,9 @@ def check_tree(
             raise ValueError(msg)
 
 
-def _check_path(path: str, alphabet: str) -> None:
+def _check_path(path: str, alphabet: str, owner: str) -> None:
     if not path or len(path) % TREEBEARD_STEPLEN or set(path) - set(alphabet):
-        msg = f"path {path!r} is not whole steps of {TREEBEARD_STEPLEN} characters from {alphabet!r}"
+        msg = f"{owner} has path {path!r}, which is not whole steps of {TREEBEARD_STEPLEN} characters from {alphabet!r}"
         raise ValueError(msg)
 
 
