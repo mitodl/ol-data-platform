@@ -35,6 +35,21 @@ models:
   - name: program_readable_id
     description: str, readable ID from xpro or mitxonline formatted as program-v1:{org}+{program
       code} e.g.program-v1:xPRO+MLx
+  - name: program_report_key
+    description: str, the program the row counts toward in program reports, from dim_program_report_key.
+      A row with a MITx Online or xPRO program_readable_id looks it up by that id.
+      Any other row looks up its program_title, so an edX.org or MicroMasters program
+      takes the MITx Online program its title maps to, or else keys on its own title.
+      Same key as marts__combined_program_enrollment_detail.program_report_key.
+    tests:
+    - not_null
+  - name: report_program_readable_id
+    description: str, readable id of the program_report_key program, null for an edX.org
+      or MicroMasters program that maps to no MITx Online program
+  - name: report_program_title
+    description: str, title of the program_report_key program
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -688,6 +703,30 @@ models:
       its creation date, so it can be set on a revoked MITx Online or xPRO row where
       user_has_completed_program is false. program_enrollment_with_user_report carries
       the same value as program_complete_days.
+  - name: program_report_key
+    description: str, the program the row counts toward in program reports, from dim_program_report_key.
+      A row whose program_readable_id is a MITx Online or xPRO program's looks it
+      up by that id, including a MicroMasters row that carries its MITx Online program's
+      id (e.g. program-v1:MITx+DEDP). Any other row, an edX.org row with a generated
+      program_readable_id, looks up its program_title, so it takes the MITx Online
+      program the title maps to, or else keys on its own title. program_summary_report
+      groups on it.
+    tests:
+    - not_null
+  - name: report_program_readable_id
+    description: str, readable id of the program_report_key program, null for an edX.org
+      program that maps to no MITx Online program
+  - name: report_program_title
+    description: str, title of the program_report_key program, the MITx Online program's
+      title for a mapped edX.org row
+    tests:
+    - not_null
+  - name: report_program_name
+    description: str, name of the program_report_key program, shared by the tracks
+      of a MITx Online program split into tracks
+  - name: report_program_type
+    description: str, type of the program_report_key program, e.g. MicroMasters, Series,
+      XSeries, Professional Certificate
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -1245,11 +1284,11 @@ unit_tests:
       course_readable_id: "MITx/C1"}
   - input: ref('dim_program_report_key')
     rows:
-    - {lookup_type: title, lookup_value: Shared, mapped_by: none}
-    - {lookup_type: title, lookup_value: Circuits, mapped_by: title}
+    - {lookup_type: title, lookup_value: Shared, mapped_by: none, program_key: Shared}
+    - {lookup_type: title, lookup_value: Circuits, mapped_by: title, program_key: "program-v1:MITxT+XS-MCE"}
   expect:
     rows:
-    - {platform: edX.org, program_title: Shared, course_readable_id: "MITx/SH1"}
+    - {platform: edX.org, program_title: Shared, course_readable_id: "MITx/SH1", program_report_key: Shared}
 - name: test_program_enrollment_detail_matches_courses_on_own_platform
   description: >
     A MITx Online learner and an edX.org learner share user_id 7. Each row
@@ -1257,7 +1296,10 @@ unit_tests:
     the MITx Online program, so it takes its courses from that program's
     bridge_program_course rows. A non-current dim_course version of C under an
     older key adds no course, and an audit enrollment in an earlier run of C
-    does not move the start date program_completion_days counts from.
+    does not move the start date program_completion_days counts from. The
+    MITx Online row's readable id and title match different dim_program_report_key
+    rows, and the readable id wins; the edX.org row's generated readable id
+    matches none, so its title maps it to the MITx Online program.
   model: marts__combined_program_enrollment_detail
   given:
   - input: ref('int__mitxpro__programenrollments')
@@ -1276,8 +1318,7 @@ unit_tests:
   - input: ref('int__mitxonline__programs')
     rows:
     - {program_id: 45, program_readable_id: "program-v1:MITxT+SDS-General-Track",
-      program_title: "Statistics and Data Science (General Track)", program_name: "Statistics\
-        \ and Data Science (General Track)", program_type: MicroMasters}
+      program_title: "SDS General Track", program_name: "SDS General Track", program_type: MicroMasters}
   - input: ref('int__mitxonline__users')
     rows: []
   - input: ref('int__mitxonline__program_certificates')
@@ -1299,7 +1340,13 @@ unit_tests:
   - input: ref('dim_program_report_key')
     rows:
     - {lookup_type: title, lookup_value: "Statistics and Data Science (General Track)",
-      mitxonline_program_id: 45}
+      mitxonline_program_id: 45, program_key: "program-v1:MITxT+SDS-General-Track",
+      program_title: "SDS General Track"}
+    - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+SDS-General-Track",
+      mitxonline_program_id: 45, program_key: "program-v1:MITxT+SDS-General-Track",
+      program_title: "SDS General Track"}
+    - {lookup_type: title, lookup_value: "SDS General Track", program_key: "SDS General\
+        \ Track", program_title: "SDS General Track"}
   - input: ref('bridge_program_course')
     rows:
     - {program_fk: p45, course_fk: ca}
@@ -1334,6 +1381,6 @@ unit_tests:
   expect:
     rows:
     - {platform_name: MITx Online, user_id: 7, unique_courses_taken_in_program: 2,
-      capstone_indicator: N, program_completion_days: null}
+      capstone_indicator: N, program_completion_days: null, program_report_key: "program-v1:MITxT+SDS-General-Track"}
     - {platform_name: edX.org, user_id: 7, unique_courses_taken_in_program: 1, capstone_indicator: Y,
-      program_completion_days: 181}
+      program_completion_days: 181, program_report_key: "program-v1:MITxT+SDS-General-Track"}
