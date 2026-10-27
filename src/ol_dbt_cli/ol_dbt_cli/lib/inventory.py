@@ -1341,8 +1341,10 @@ def check_drift(snapshot: dict[str, Any], units: list[Unit], report: ValidationR
     Severity follows what the finding says about the inventory. A declaration
     the workspace does not honour means the inventory is *wrong* — a model may
     be reading a table nothing loads — and is an ERROR. Something live the
-    inventory does not cover is a WARNING: it is usually config that should
-    have been deleted, and it costs nothing until somebody depends on it.
+    inventory does not cover is a WARNING: it is usually config created in the
+    UI, or a retired connection someone resumed, and it costs nothing until
+    somebody depends on it. A retired connection that stays disabled is the
+    expected end state and is not reported.
     """
     rendered = render_airbyte(units)
     live = _live_connections(snapshot)
@@ -1377,13 +1379,14 @@ def check_drift(snapshot: dict[str, Any], units: list[Unit], report: ValidationR
         # A retired connection is disabled, not deleted (§10.1), so one that
         # loads nothing is the expected end state. Resuming it makes it active
         # and brings the warning back.
-        if live[name].get("status") in STOPPED_CONNECTION_STATUSES:
+        status = live[name].get("status")
+        if status in STOPPED_CONNECTION_STATUSES:
             continue
         report.add(
             DRIFT_CHECK,
             Severity.WARNING,
             "(undeclared)",
-            f"connection {name!r} is active in Airbyte but no unit declares it",
+            f"connection {name!r} is {status!r} in Airbyte but no unit declares it",
             "Either it was created in the UI, or it is retired config that "
             "was resumed. Retiring a connection means disabling it in Airbyte "
             "as well as recording its tables in retired.yml.",
