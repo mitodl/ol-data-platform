@@ -628,8 +628,8 @@ models:
       DEDP: completion comes from MITx Online certificates, including the ones
       migrated from MicroMasters. The edX.org DEDP rows are MicroMasters program
       enrollments with no 2U report row, and none of them is complete. A few DEDP
-      certificates MicroMasters issued before 2022-10-01 have no MITx Online copy.
-      They are in int__micromasters__program_certificates and are not counted here.
+      certificates MicroMasters issued have no MITx Online copy. int__micromasters__program_certificates
+      keeps them as MicroMasters rows, and they are not counted here.
     tests:
     - not_null
   - name: programenrollment_is_active

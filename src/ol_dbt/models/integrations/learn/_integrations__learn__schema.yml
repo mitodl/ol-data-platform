@@ -679,9 +679,10 @@ models:
     description: Certificate recipient's full name.
   - name: user_email
     description: >
-      Certificate recipient's email, preferring MicroMasters/MITx Online/
-      edX.org email in that order depending on program type and completion
-      date (see int__micromasters__program_certificates). Empty string, not
+      Certificate recipient's email: the MITx Online email for a DEDP
+      certificate from MITx Online, the MicroMasters email for a DEDP
+      certificate only MicroMasters holds, and the edX.org email otherwise
+      (see int__micromasters__program_certificates). Empty string, not
       NULL, when no email could be resolved.
     tests: [not_null]
   - name: user_edxorg_id
@@ -1068,3 +1069,24 @@ unit_tests:
     - {record_hash: sds-methods, mitxonline_program_id: 46}
     - {record_hash: dedp, mitxonline_program_id: 2}
     - {record_hash: unmapped, mitxonline_program_id: null}
+- name: test_integrations__learn__program_certificates_is_revoked_never_null
+  description: >
+    is_revoked passes MITx Online's revoked flag through and is false for
+    certificates with no revocation (MicroMasters and edX.org), so MIT Learn
+    never reads a null.
+  model: integrations__learn__program_certificates
+  given:
+  - input: ref('int__micromasters__program_certificates')
+    rows:
+    - {program_certificate_hashed_id: revoked, program_title: DEDP, programcertificate_is_revoked: true}
+    - {program_certificate_hashed_id: unrevoked, program_title: DEDP, programcertificate_is_revoked: false}
+    - {program_certificate_hashed_id: edxorg, program_title: SCM, programcertificate_is_revoked: null}
+  - input: ref('edxorg_to_mitxonline_program_mapping')
+    rows: []
+  - input: ref('int__mitxonline__programs')
+    rows: []
+  expect:
+    rows:
+    - {record_hash: revoked, is_revoked: true}
+    - {record_hash: unrevoked, is_revoked: false}
+    - {record_hash: edxorg, is_revoked: false}
