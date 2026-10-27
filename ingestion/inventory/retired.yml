@@ -639,21 +639,32 @@ retired:
   layer: app_postgres
   raw_tables:
   - raw__bootcamps__app__postgres__applications_bootcampapplicationline
+  retired_on: '2026-02-12'
+  reason: >-
+    This table was in the Iceberg connection with the tables above, but dbt
+    never modeled it, so it is kept as raw history nothing reads. It stopped
+    with that connection. It holds 44,102 rows, and its only retained snapshot
+    was committed 2026-01-28T00:08Z. Measured in production raw on 2026-10-26.
+    Kept by the owner's decision of 2026-10-27, which dropped the two empty
+    tables that shared this entry until then (see the next entry)
+    (tk-decide-what-to-do-with-the-93-raw-bootcamps-app--ddd6f0).
+  frozen: true
+  modeled: false
+- deployment: bootcamps
+  layer: app_postgres
+  raw_tables:
   - raw__bootcamps__app__postgres__klasses_bootcamprunenrollmentaudit
   - raw__bootcamps__app__postgres__profiles_changeemailrequest
   retired_on: '2026-02-12'
   reason: >-
-    These three were in the Iceberg connection with the tables above, but dbt
-    never modeled them, so they are kept as raw history nothing reads. They
-    stopped with that connection. applications_bootcampapplicationline holds
-    44,102 rows, and its only retained snapshot was committed 2026-01-28T00:08Z.
-    klasses_bootcamprunenrollmentaudit and profiles_changeemailrequest hold no
-    rows: each has one snapshot, the empty initial load of 2025-02-25. Measured
-    in production raw on 2026-10-26. Kept rather than dropped, because no data
-    is dropped without a decision to drop it
+    These two were in the Iceberg connection with the tables above and stopped
+    with it. dbt never modeled them. Neither held a row: each had one snapshot,
+    the empty initial load of 2025-02-25 (measured in production raw on
+    2026-10-26 and again on 2026-10-27). They were frozen with
+    applications_bootcampapplicationline on 2026-10-26 until someone decided
+    what to do with them, and were dropped from Glue on 2026-10-27 by the
+    owner's decision, with the 90 empty tables of the 2025-02-25 entry below
     (tk-decide-what-to-do-with-the-93-raw-bootcamps-app--ddd6f0).
-  frozen: true
-  modeled: false
 - deployment: bootcamps
   layer: app_postgres
   raw_tables:
@@ -771,16 +782,21 @@ retired:
   reason: >-
     These came from the JSONL connection profiles_profile came from, and stopped
     when it did. Its last files landed on 2025-02-25, and the Iceberg connection
-    that replaced it the same day never wrote these streams. None of them holds a
-    row. Each Glue location under raw/bootcamps/app/postgres/public/ holds only the
+    that replaced it the same day never wrote these streams. None of them held a
+    row. Each Glue location under raw/bootcamps/app/postgres/public/ held only the
     metadata.json that bin/migrate-raw-jsonl-to-iceberg.py wrote on 2026-09-11,
     when it rebuilt the table as an empty Iceberg table from its Glue columns, and
     S3 keeps no older version of any file there. dbt never modeled them. Measured
-    in production raw on 2026-10-26. Kept rather than dropped, because no data is
-    dropped without a decision to drop it
-    (tk-decide-what-to-do-with-the-93-raw-bootcamps-app--ddd6f0).
-  frozen: true
-  modeled: false
+    in production raw on 2026-10-26 and again on 2026-10-27. They were frozen on
+    2026-10-26 until someone decided what to do with them, and were dropped from
+    Glue on 2026-10-27 by the owner's decision
+    (tk-decide-what-to-do-with-the-93-raw-bootcamps-app--ddd6f0). The same
+    decision keeps, on purpose, the 19 JSONL directories under
+    s3://ol-data-lake-raw-production/raw/bootcamps/app/postgres/public/ that this
+    connection wrote for the tables that do hold rows (the 18 of the first
+    2026-02-12 entry above and applications_bootcampapplicationline). Last written
+    2025-02-25, 24.2 MB in all, they are the pre-Iceberg copies of those tables.
+    No Glue table references them.
 - deployment: github
   layer: api
   raw_tables:
@@ -932,6 +948,10 @@ retired:
     data for these tables exists in the current lake: the 7 that are
     registered in Glue (under raw/, created 2026-09-11) hold metadata only.
     This date is when the retirement was recorded. dbt modeled none of them.
+    Those 7 (contacts_merged_audit, contacts_property_history, form_submissions,
+    goals, owners, owners_archived and tickets) had no snapshot when measured on
+    2026-10-27 and were dropped from Glue that day, with the empty bootcamps
+    app_postgres tables (tk-decide-what-to-do-with-the-93-raw-bootcamps-app--ddd6f0).
 - deployment: mitxonline
   layer: app_postgres
   raw_tables:
