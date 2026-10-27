@@ -1278,9 +1278,9 @@ unit_tests:
     - {program_pk: p45, source_id: "45", platform_code: mitxonline}
   - input: ref('dim_course')
     rows:
-    - {course_pk: ca, course_readable_id: "course-v1:MITxT+A"}
-    - {course_pk: cb, course_readable_id: "course-v1:MITxT+B"}
-    - {course_pk: cc, course_readable_id: "course-v1:MITxT+C"}
+    - {course_pk: ca, course_readable_id: "course-v1:MITxT+A", is_current: true}
+    - {course_pk: cb, course_readable_id: "course-v1:MITxT+B", is_current: true}
+    - {course_pk: cc, course_readable_id: "course-v1:MITxT+C", is_current: true}
   - input: ref('int__combined__courserun_enrollments')
     rows:
     - {platform: MITx Online, user_id: "7", course_readable_id: "course-v1:MITxT+A",

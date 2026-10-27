@@ -269,7 +269,9 @@ with mitxpro__programenrollments as (
     inner join dim_program
         on bridge_program_course.program_fk = dim_program.program_pk
     inner join dim_course
-        on bridge_program_course.course_fk = dim_course.course_pk
+        on
+            bridge_program_course.course_fk = dim_course.course_pk
+            and dim_course.is_current = true
 )
 
 -- One row per program and learner. user_id is only unique within a platform, so the
