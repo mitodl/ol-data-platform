@@ -92,7 +92,7 @@ with micromasters_course_keys as (
     left join {{ ref('dim_program_report_key') }} as program_report_key
         on
             program_report_key.lookup_type = 'title'
-            and program_report_key.mapped_by in ('seed', 'title')
+            and program_report_key.is_mapped_to_mitxonline
             and program_courses.program_title = program_report_key.lookup_value
     left join {{ ref('int__mitx__courses') }} as mitx_courses
         on

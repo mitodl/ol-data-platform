@@ -29,7 +29,7 @@ with mitx_programs as (
 , mitxonline_mapped_titles as (
     select lookup_value as program_title
     from program_report_key
-    where lookup_type = 'title' and mapped_by in ('seed', 'title')
+    where lookup_type = 'title' and is_mapped_to_mitxonline
 )
 
 , program_courses as (
