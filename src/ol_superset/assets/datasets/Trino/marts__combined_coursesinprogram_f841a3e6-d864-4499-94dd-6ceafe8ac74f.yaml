@@ -3,6 +3,42 @@ cache_timeout: null
 catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
+  column_name: program_report_key
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: report_program_readable_id
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: report_program_title
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
   column_name: program_readable_id
   description: null
   expression: ''

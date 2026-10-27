@@ -1930,45 +1930,40 @@ models:
         column_list: ["source", "conversation_id"]
 
 unit_tests:
-- name: test_program_summary_report_keys_programs
+- name: test_program_summary_report_groups_on_mart_program_key
   description: >
-    An edX.org program mapped to a MITx Online program counts in that
-    program's row, with one certificate per distinct email. An unmapped edX.org
-    MicroMasters program keeps its own row, keyed on its title in both the
-    certificate and the course enrollment counts, with a null program_readable_id.
-    A MicroMasters row the mart gave a MITx Online readable id keeps that program
-    with no title mapping. An xPRO program keeps its own row. Emails that differ
-    only in letter case are one learner in both halves. An XSeries whose title
-    maps to nothing, as a title two MITx Online programs share does, keeps its
-    own row.
+    The report groups on the program_report_key both marts carry. Rows from two
+    platforms with the same key are one program row, with one certificate per
+    distinct lowercased email in both halves. A program with no readable id
+    keeps its own row, keyed on its title.
   model: program_summary_report
   given:
   - input: ref('marts__combined_program_enrollment_detail')
     rows:
-    - {platform_name: MITx Online, program_readable_id: "program-v1:MITxT+SDS-General-Track",
-      program_title: "SDS General", user_email: a@example.com, user_has_completed_program: true}
-    - {platform_name: MITx Online, program_readable_id: "program-v1:MITxT+SDS-General-Track",
-      program_title: "SDS General", user_email: B@Example.com, user_has_completed_program: true}
-    - {platform_name: edX.org, program_readable_id: "program-v1:MITx+SDS+General-Track",
-      program_title: "SDS General on edX", user_email: a@example.com, user_has_completed_program: true}
-    - {platform_name: edX.org, program_readable_id: "program-v1:MITx+SDS+General-Track",
-      program_title: "SDS General on edX", user_email: b@example.com, user_has_completed_program: true}
-    - {platform_name: edX.org, program_readable_id: "program-v1:MITx+OM", program_title: Old
-        MicroMasters, user_email: c@example.com, user_has_completed_program: true}
-    - {platform_name: edX.org, program_readable_id: "program-v1:MITx+DEDP", program_title: DEDP
-        no mapping, user_email: e@example.com, user_has_completed_program: true}
-    - {platform_name: xPRO, program_readable_id: "program-v1:xPRO+X", program_title: X
-        Program, user_email: d@example.com, user_has_completed_program: true}
-    - {platform_name: edX.org, program_readable_id: null, program_title: Shared, user_email: h@example.com,
-      user_has_completed_program: true}
+    - {platform_name: MITx Online, program_readable_id: "program-v1:MITxT+SDS", program_title: SDS,
+      user_email: a@example.com, user_has_completed_program: true, program_report_key: "program-v1:MITxT+SDS",
+      report_program_readable_id: "program-v1:MITxT+SDS", report_program_title: SDS,
+      report_program_name: SDS, report_program_type: MicroMasters}
+    - {platform_name: edX.org, program_readable_id: "program-v1:MITx+SDS", program_title: SDS
+        on edX, user_email: A@Example.com, user_has_completed_program: true, program_report_key: "program-v1:MITxT+SDS",
+      report_program_readable_id: "program-v1:MITxT+SDS", report_program_title: SDS,
+      report_program_name: SDS, report_program_type: MicroMasters}
+    - {platform_name: edX.org, program_readable_id: "program-v1:MITx+SDS", program_title: SDS
+        on edX, user_email: b@example.com, user_has_completed_program: true, program_report_key: "program-v1:MITxT+SDS",
+      report_program_readable_id: "program-v1:MITxT+SDS", report_program_title: SDS,
+      report_program_name: SDS, report_program_type: MicroMasters}
+    - {platform_name: edX.org, program_readable_id: null, program_title: Computer
+        Science, user_email: c@example.com, user_has_completed_program: true, program_report_key: Computer
+        Science, report_program_readable_id: null, report_program_title: Computer
+        Science, report_program_name: Computer Science, report_program_type: XSeries}
   - input: ref('marts__combined_coursesinprogram')
     rows:
-    - {program_readable_id: "program-v1:MITxT+SDS-General-Track", program_title: "SDS\
-        \ General", course_readable_id: "course-v1:MITxT+A"}
-    - {program_readable_id: null, program_title: Old MicroMasters, course_readable_id: "MITx/OM1"}
-    - {program_readable_id: "program-v1:MITx+DEDP", program_title: DEDP ID, course_readable_id: "course-v1:MITxT+D"}
-    - {program_readable_id: "program-v1:xPRO+X", program_title: X Program, course_readable_id: "course-v1:xPRO+X1"}
-    - {program_readable_id: null, program_title: Shared, course_readable_id: "MITx/SH1"}
+    - {program_readable_id: "program-v1:MITxT+SDS", program_title: SDS, course_readable_id: "course-v1:MITxT+A",
+      program_report_key: "program-v1:MITxT+SDS"}
+    - {program_readable_id: null, program_title: Statistics and Data Science, course_readable_id: "MITx/B",
+      program_report_key: "program-v1:MITxT+SDS"}
+    - {program_readable_id: null, program_title: Computer Science, course_readable_id: "MITx/CS1",
+      program_report_key: Computer Science}
   - input: ref('marts__combined_course_enrollment_detail')
     rows:
     - {course_readable_id: "course-v1:MITxT+A", courserun_readable_id: "course-v1:MITxT+A+1T2020",
@@ -1977,45 +1972,15 @@ unit_tests:
     - {course_readable_id: "course-v1:MITxT+A", courserun_readable_id: "course-v1:MITxT+A+1T2020",
       user_email: A@EXAMPLE.COM, user_country_code: US, courserunenrollment_enrollment_mode: verified,
       courseruncertificate_is_earned: false}
-    - {course_readable_id: "MITx/OM1", courserun_readable_id: "MITx/OM1/1T2015", user_email: c@example.com,
-      user_country_code: FR, courserunenrollment_enrollment_mode: audit, courseruncertificate_is_earned: false}
-    - {course_readable_id: "course-v1:MITxT+D", courserun_readable_id: "course-v1:MITxT+D+1T2020",
-      user_email: e@example.com, user_country_code: IN, courserunenrollment_enrollment_mode: verified,
-      courseruncertificate_is_earned: true}
-    - {course_readable_id: "course-v1:xPRO+X1", courserun_readable_id: "course-v1:xPRO+X1+R1",
-      user_email: d@example.com, user_country_code: US, courserunenrollment_enrollment_mode: audit,
-      courseruncertificate_is_earned: true}
-    - {course_readable_id: "MITx/SH1", courserun_readable_id: "MITx/SH1/1T2016", user_email: h@example.com,
-      user_country_code: US, courserunenrollment_enrollment_mode: audit, courseruncertificate_is_earned: false}
-  - input: ref('dim_program_report_key')
-    rows:
-    - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+SDS-General-Track",
-      program_key: "program-v1:MITxT+SDS-General-Track", program_readable_id: "program-v1:MITxT+SDS-General-Track",
-      program_title: "SDS General", program_name: "SDS General", program_type: MicroMasters}
-    - {lookup_type: readable_id, lookup_value: "program-v1:MITx+DEDP", program_key: "program-v1:MITx+DEDP",
-      program_readable_id: "program-v1:MITx+DEDP", program_title: DEDP ID, program_name: DEDP,
-      program_type: MicroMasters}
-    - {lookup_type: readable_id, lookup_value: "program-v1:xPRO+X", program_key: "program-v1:xPRO+X",
-      program_readable_id: "program-v1:xPRO+X", program_title: X Program, program_name: X
-        Program, program_type: Professional Certificate}
-    - {lookup_type: title, lookup_value: "SDS General on edX", program_key: "program-v1:MITxT+SDS-General-Track",
-      program_readable_id: "program-v1:MITxT+SDS-General-Track", program_title: "SDS\
-        \ General", program_name: "SDS General", program_type: MicroMasters}
-    - {lookup_type: title, lookup_value: Old MicroMasters, program_key: Old MicroMasters,
-      program_readable_id: null, program_title: Old MicroMasters, program_name: Old
-        MicroMasters, program_type: MicroMasters}
-    - {lookup_type: title, lookup_value: Shared, program_key: Shared, program_readable_id: null,
-      program_title: Shared, program_name: Shared, program_type: XSeries}
+    - {course_readable_id: "MITx/B", courserun_readable_id: "MITx/B/1T2015", user_email: b@example.com,
+      user_country_code: FR, courserunenrollment_enrollment_mode: audit, courseruncertificate_is_earned: true}
+    - {course_readable_id: "MITx/CS1", courserun_readable_id: "MITx/CS1/1T2016", user_email: c@example.com,
+      user_country_code: IN, courserunenrollment_enrollment_mode: audit, courseruncertificate_is_earned: false}
   expect:
     rows:
-    - {program_readable_id: "program-v1:MITxT+SDS-General-Track", program_title: "SDS\
-        \ General", total_enrollments: 1, unique_users: 1, verified_enrollments: 1,
-      course_certificates: 0, program_certificates: 2}
-    - {program_readable_id: "program-v1:MITx+DEDP", program_title: DEDP ID, total_enrollments: 1,
-      unique_users: 1, verified_enrollments: 1, course_certificates: 1, program_certificates: 1}
-    - {program_readable_id: null, program_title: Old MicroMasters, total_enrollments: 1,
-      unique_users: 1, verified_enrollments: 0, course_certificates: 0, program_certificates: 1}
-    - {program_readable_id: "program-v1:xPRO+X", program_title: X Program, total_enrollments: 1,
-      unique_users: 1, verified_enrollments: 0, course_certificates: 1, program_certificates: 1}
-    - {program_readable_id: null, program_title: Shared, total_enrollments: 1, unique_users: 1,
-      verified_enrollments: 0, course_certificates: 0, program_certificates: 1}
+    - {program_readable_id: "program-v1:MITxT+SDS", program_title: SDS, program_type: MicroMasters,
+      total_enrollments: 2, unique_users: 2, verified_enrollments: 1, course_certificates: 1,
+      program_certificates: 2}
+    - {program_readable_id: null, program_title: Computer Science, program_type: XSeries,
+      total_enrollments: 1, unique_users: 1, verified_enrollments: 0, course_certificates: 0,
+      program_certificates: 1}
