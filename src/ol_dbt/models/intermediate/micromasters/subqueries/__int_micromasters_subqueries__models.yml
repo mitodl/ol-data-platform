@@ -145,9 +145,12 @@ models:
     description: str, user id in the micromasters database
     tests:
     - not_null
+  - name: programcertificate_is_revoked
+    description: boolean, always null. MicroMasters has no certificate revocation.
 
 - name: __micromasters_program_certificates_dedp_from_mitxonline
-  description: DEDP program certificate earners according to the mitxonline database
+  description: DEDP program certificates in the mitxonline database, revoked ones
+    included
   config:
     meta:
       qa_branches:
@@ -179,6 +182,10 @@ models:
   - name: program_completion_timestamp
     description: timestamp, timestamp of the course certificate that completed the
       program
+    tests:
+    - not_null
+  - name: programcertificate_is_revoked
+    description: boolean, whether MITx Online revoked the certificate
     tests:
     - not_null
 
@@ -218,6 +225,9 @@ models:
   - name: program_completion_timestamp
     description: timestamp, timestamp of the course certificate that completed the
       program
+  - name: programcertificate_is_revoked
+    description: boolean, always null. 2U's program learner report and the override
+      list have no certificate revocation.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:

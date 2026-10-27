@@ -174,7 +174,8 @@ models:
       so this number might be slightly higher than the actual since some users may
       use  differnt email addresses for their edxorg and mitxonline logins
   - name: program_certificates
-    description: int, count of program certificates earned for the the program
+    description: int, count of program certificates earned for the the program. Revoked
+      certificates are not counted.
 
 - name: marts__micromasters_summary
   description: MicroMasters aggregate statistics
@@ -228,12 +229,14 @@ models:
     tests:
     - not_null
   - name: program_certificates
-    description: int, count of program certificates earned for the the program
+    description: int, count of program certificates earned for the the program. Revoked
+      certificates are not counted.
 
 - name: marts__micromasters_program_certificates
-  description: MicroMasters program certificate earners. User's profile fields are
-    selected in the order of MITx Online, MicroMasters, and edX.org, whichever is
-    not null.
+  description: MicroMasters program certificate earners. Revoked certificates are
+    left out, so every row is a certificate the learner holds. User's profile fields
+    are selected in the order of MITx Online, MicroMasters, and edX.org, whichever
+    is not null.
   config:
     meta:
       qa_branches:

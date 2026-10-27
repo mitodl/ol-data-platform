@@ -48,6 +48,7 @@ with program_certificates_dedp_from_micromasters as (
         , mitx_users.user_address_postal_code
         , mitx_users.user_street_address
         , true as program_is_dedp
+        , program_certificates_dedp_from_micromasters.programcertificate_is_revoked
     from program_certificates_dedp_from_micromasters
     left join mitx_users
         on program_certificates_dedp_from_micromasters.user_micromasters_id = mitx_users.user_micromasters_id
@@ -76,6 +77,7 @@ with program_certificates_dedp_from_micromasters as (
         , mitx_users.user_address_postal_code
         , mitx_users.user_street_address
         , true as program_is_dedp
+        , program_certificates_dedp_from_mitxonline.programcertificate_is_revoked
     from program_certificates_dedp_from_mitxonline
     left join mitx_users
         on program_certificates_dedp_from_mitxonline.user_mitxonline_id = mitx_users.user_mitxonline_id
@@ -104,6 +106,7 @@ with program_certificates_dedp_from_micromasters as (
         , mitx_users.user_address_postal_code
         , mitx_users.user_street_address
         , false as program_is_dedp
+        , program_certificates_non_dedp.programcertificate_is_revoked
     from program_certificates_non_dedp
     left join mitx_users
         on program_certificates_non_dedp.user_edxorg_id = mitx_users.user_edxorg_id
@@ -130,6 +133,7 @@ select
     , report.user_street_address
     , report.user_address_state_or_territory
     , report.program_is_dedp
+    , report.programcertificate_is_revoked
     , if(
         mitxonline_programs.program_id is not null
         , mitxonline_programs.program_readable_id

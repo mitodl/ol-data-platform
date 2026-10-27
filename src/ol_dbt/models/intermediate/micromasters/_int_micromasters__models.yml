@@ -230,7 +230,8 @@ models:
     description: int, sequential number indicating the course position in a program
 
 - name: int__micromasters__program_certificates
-  description: MicroMasters program certificate earners. User's profile fields are
+  description: MicroMasters program certificates, revoked ones included. Filter on
+    programcertificate_is_revoked to count certificates. User's profile fields are
     chosen in the order of MITx Online, MicroMasters, and edX.org, whichever is not
     null.
   config:
@@ -301,6 +302,11 @@ models:
       MicroMasters
   - name: program_is_dedp
     description: boolean, specifying if the program is DEDP
+  - name: programcertificate_is_revoked
+    description: boolean, whether MITx Online revoked the certificate. Set for MITx
+      Online DEDP certificates. Null for MicroMasters and edX.org certificates, which
+      have no revocation, as in marts__combined_program_enrollment_detail. Exclude
+      revoked certificates with coalesce(programcertificate_is_revoked, false) = false.
   - name: program_readable_id
     description: str, readable ID formatted as program-v1:{org}+{program code}, e.g.,
       program-v1:MITx+DEDP

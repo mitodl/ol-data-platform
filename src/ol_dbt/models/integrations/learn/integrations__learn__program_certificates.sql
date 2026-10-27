@@ -75,6 +75,8 @@ select
     , certificates.user_address_postal_code
     , certificates.user_street_address
     , certificates.program_completion_timestamp
+    -- Null upstream for edX.org and MicroMasters certificates, which have no revocation
+    , coalesce(certificates.programcertificate_is_revoked, false) as is_revoked
     , coalesce(
         {{ from_iso8601_timestamp('certificates.program_completion_timestamp') }}
         , {{ current_timestamptz() }}

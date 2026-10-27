@@ -726,6 +726,15 @@ models:
       NULL for "override" certificates (a hardcoded list of recipients
       granted a certificate outside the normal completion-tracking path,
       with no completion time to report).
+  - name: is_revoked
+    description: >
+      Whether MITx Online revoked the certificate. The view keeps revoked
+      certificates because MIT Learn never deletes a certificate row, so
+      it needs the flag to stop serving a letter for one. False for
+      edX.org and MicroMasters certificates, which have no revocation.
+      A revocation does not change last_modified, so an incremental pull
+      misses it; MIT Learn's daily full_refresh run picks it up.
+    tests: [not_null]
   - name: last_modified
     description: >
       No genuine last-modified signal exists in the source lineage (a

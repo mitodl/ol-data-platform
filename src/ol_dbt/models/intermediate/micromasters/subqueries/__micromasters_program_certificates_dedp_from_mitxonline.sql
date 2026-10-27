@@ -18,8 +18,7 @@ select
     , mitx_programs.mitxonline_program_id
     , {{ generate_hash_id('mitxonline_program_certificates.programcertificate_uuid') }} as program_certificate_hashed_id
     , mitxonline_program_certificates.programcertificate_created_on as program_completion_timestamp
+    , mitxonline_program_certificates.programcertificate_is_revoked
 from mitxonline_program_certificates
 left join mitx_programs on mitxonline_program_certificates.program_id = mitx_programs.mitxonline_program_id
-where
-    mitx_programs.is_dedp_program = true
-    and mitxonline_program_certificates.programcertificate_is_revoked = false
+where mitx_programs.is_dedp_program = true

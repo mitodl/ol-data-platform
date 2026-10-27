@@ -24,6 +24,7 @@ with micromasters_program_certificates as (
         , micromasters_program_certificates.user_edxorg_username
         , micromasters_program_certificates.user_email
         , micromasters_program_certificates.user_full_name
+        , micromasters_program_certificates.programcertificate_is_revoked
     from micromasters_program_certificates
 
     union all
@@ -37,6 +38,7 @@ with micromasters_program_certificates as (
         , mitxonline_program_certificates.user_edxorg_username
         , mitxonline_program_certificates.user_email
         , mitxonline_program_certificates.user_full_name
+        , mitxonline_program_certificates.programcertificate_is_revoked
     from mitxonline_program_certificates
     left join mitx_programs
         on mitxonline_program_certificates.program_id = mitx_programs.mitxonline_program_id
