@@ -127,8 +127,8 @@ models:
     and then the title keys its own program with a null
     program_readable_id. A title two MITx Online programs share maps to neither.
     bridge_program_course and marts__combined_coursesinprogram leave out an edX.org
-    program's own courses exactly when this model maps its title (mapped_by seed or
-    title), so the program then takes the MITx Online program's courses. The
+    program's own courses exactly when is_mapped_to_mitxonline is true for its title,
+    so the program then takes the MITx Online program's courses. The
     title rows cover every title the edX.org and MicroMasters rows of those two marts
     carry. Built in the dimensional layer so marts and reporting models read it rather
     than the intermediate models it comes from.
@@ -195,6 +195,13 @@ models:
     - accepted_values:
         arguments:
           values: ['own', 'seed', 'title', 'none']
+  - name: is_mapped_to_mitxonline
+    description: boolean, true for a title row that maps to a MITx Online program
+      (mapped_by seed or title), false for any other row. bridge_program_course and
+      marts__combined_coursesinprogram filter on it to leave out an edX.org program's
+      own courses.
+    tests:
+    - not_null
 
 unit_tests:
 - name: test_dim_program_report_key_title_rules
@@ -240,21 +247,22 @@ unit_tests:
   expect:
     rows:
     - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+FIN", program_key: "program-v1:MITxT+FIN",
-      mapped_by: own}
+      mapped_by: own, is_mapped_to_mitxonline: false}
     - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+OTHER", program_key: "program-v1:MITxT+OTHER",
-      mapped_by: own}
+      mapped_by: own, is_mapped_to_mitxonline: false}
     - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+DUP1", program_key: "program-v1:MITxT+DUP1",
-      mapped_by: own}
+      mapped_by: own, is_mapped_to_mitxonline: false}
     - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+DUP2", program_key: "program-v1:MITxT+DUP2",
-      mapped_by: own}
+      mapped_by: own, is_mapped_to_mitxonline: false}
     - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+XS-MCE", program_key: "program-v1:MITxT+XS-MCE",
-      mapped_by: own}
+      mapped_by: own, is_mapped_to_mitxonline: false}
     - {lookup_type: readable_id, lookup_value: "program-v1:xPRO+X", program_key: "program-v1:xPRO+X",
-      mapped_by: own}
+      mapped_by: own, is_mapped_to_mitxonline: false}
     - {lookup_type: title, lookup_value: Finance, program_key: "program-v1:MITxT+FIN",
-      mapped_by: seed}
+      mapped_by: seed, is_mapped_to_mitxonline: true}
     - {lookup_type: title, lookup_value: Circuits, program_key: "program-v1:MITxT+XS-MCE",
-      mapped_by: title}
-    - {lookup_type: title, lookup_value: Shared, program_key: Shared, mapped_by: none}
+      mapped_by: title, is_mapped_to_mitxonline: true}
+    - {lookup_type: title, lookup_value: Shared, program_key: Shared, mapped_by: none,
+      is_mapped_to_mitxonline: false}
     - {lookup_type: title, lookup_value: Computer Science, program_key: Computer Science,
-      mapped_by: none}
+      mapped_by: none, is_mapped_to_mitxonline: false}
