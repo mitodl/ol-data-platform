@@ -133,6 +133,36 @@ class Tree:
         self._last_step[parent_path] = max(self._last_step.get(parent_path, 0), number)
 
 
+def check_tree_rows(
+    raw_table: str,
+    rows: Sequence[Row],
+    *,
+    key_columns: Sequence[str],
+    alphabet: str = TREEBEARD_ALPHABET,
+    columns: Sequence[str] = ("path", "depth"),
+) -> None:
+    """Check that each row has the tree's ``columns`` and a path of whole steps.
+
+    :func:`~ol_dbt_cli.lib.fixture_generation.generate_rows` runs it on the
+    hand-written rows before ``generate`` builds a :class:`Tree` from them, so
+    a bad one is named here and not in the Tree's messages, which cannot say
+    its table.
+
+    :param raw_table: The table, for the messages.
+    :param rows: The rows to check.
+    :param key_columns: The table's primary key, which names a row in the messages.
+    :param alphabet: The model's ``MP_Node.alphabet``.
+    :param columns: The columns each row must set.
+    :raises ValueError: If a row leaves one of ``columns`` out or NULL, or its
+        path is not whole steps of ``alphabet``.
+    """
+    for row in rows:
+        if missing := [column for column in columns if row.get(column) is None]:
+            msg = f"{raw_table}: {_named(row, key_columns)} has no {' or '.join(missing)}"
+            raise ValueError(msg)
+        _check_path(row["path"], alphabet, f"{raw_table}: {_named(row, key_columns)}")
+
+
 def check_tree(
     raw_table: str,
     hand_written: Sequence[Row],
@@ -165,15 +195,13 @@ def check_tree(
         not its path's, or a generated row's ``numchild`` is not its children's
         count.
     """
-    for rows, columns in ((hand_written, ("path", "depth")), (generated, ("path", "depth", "numchild"))):
-        for row in rows:
-            if missing := [column for column in columns if row.get(column) is None]:
-                msg = f"{raw_table}: {_named(row, key_columns)} has no {' or '.join(missing)}"
-                raise ValueError(msg)
+    check_tree_rows(raw_table, hand_written, key_columns=key_columns, alphabet=alphabet)
+    check_tree_rows(
+        raw_table, generated, key_columns=key_columns, alphabet=alphabet, columns=("path", "depth", "numchild")
+    )
     held: dict[str, Row] = {}
     for row in [*hand_written, *generated]:
         path = row["path"]
-        _check_path(path, alphabet, f"{raw_table}: {_named(row, key_columns)}")
         if path in held:
             msg = (
                 f"{raw_table}: {_named(held[path], key_columns)} and {_named(row, key_columns)} both have path {path!r}"
@@ -236,7 +264,8 @@ def _check_path(path: str, alphabet: str, owner: str) -> None:
 
 
 def _named(row: Row, key_columns: Sequence[str]) -> str:
-    return "the row with " + ", ".join(f"{column}={row[column]!r}" for column in key_columns)
+    # A hand-written row may leave its key out, and loads NULL there.
+    return "the row with " + ", ".join(f"{column}={row.get(column)!r}" for column in key_columns)
 
 
 def attach(children: Sequence[Row], parents: Sequence[Row], *, column: str = "parent_id", key: str = "id") -> list[Row]:

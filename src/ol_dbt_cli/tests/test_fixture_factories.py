@@ -237,6 +237,36 @@ def test_generate_rows_checks_every_tree_the_models_have(unit: Unit) -> None:
     assert set(getattr(unit_factories(unit), "TREE_ALPHABETS", {})) == trees
 
 
+XPRO_PAGES = "raw__xpro__app__postgres__wagtailcore_page"
+
+
+@pytest.mark.parametrize(
+    ("changed", "message"),
+    [
+        ({"path": None}, f"{XPRO_PAGES}: the row with id=10 has no path"),
+        ({"path": "00010001000100010"}, f"{XPRO_PAGES}: the row with id=10 has path '00010001000100010', which is not"),
+        # The loader stores a key a hand-written row leaves out as NULL.
+        ({"id": None, "path": "00010001000100010"}, f"{XPRO_PAGES}: the row with id=None has path '00010001000100010'"),
+    ],
+)
+def test_a_bad_hand_written_tree_row_is_named_before_generate_reads_it(changed: dict[str, Any], message: str) -> None:
+    """``generate`` builds a Tree from the hand-written rows, whose messages cannot name the table."""
+    (unit,) = (unit for unit in UNITS if unit.key == "xpro/app_postgres")
+    (fixture,) = load_fixtures(INVENTORY_DIR, [unit], selected=True)
+    (pages,) = (table for table in fixture.tables if table.raw_table == XPRO_PAGES)
+    (page,) = (row for row in pages.rows if row["id"] == 10)  # noqa: PLR2004
+    for column, value in changed.items():
+        if value is None:
+            del page[column]
+        else:
+            page[column] = value
+    factories = unit_factories(unit)
+    assert factories is not None
+
+    with pytest.raises(ValueError, match=re.escape(message)):
+        generate_rows(fixture, unit, factories)
+
+
 def _strings(value: Any) -> Iterator[str]:
     if isinstance(value, str):
         yield value

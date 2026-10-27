@@ -341,11 +341,14 @@ def test_rows_that_do_not_make_one_tree_with_their_stand_ins_are_refused(
         check_tree(XPRO_PAGES, _committed_rows(XPRO_PAGES), generated, key_columns=["id"], stand_ins=stand_ins)
 
 
-def test_a_hand_written_row_without_a_path_is_named() -> None:
+def test_a_hand_written_row_without_its_key_is_named_by_null() -> None:
     pages = _committed_rows(XPRO_PAGES)
-    del _by_id(pages, 10)["path"]
+    keyless, pathless = _by_id(pages, 10), _by_id(pages, 13)
+    del keyless["id"]
+    del pathless["path"]
 
-    with pytest.raises(ValueError, match=f"{XPRO_PAGES}: the row with id=10 has no path"):
+    # The row with no key comes first and is a valid one, so the check reaches the row with no path.
+    with pytest.raises(ValueError, match=f"{XPRO_PAGES}: the row with id=13 has no path"):
         check_tree(XPRO_PAGES, pages, [], key_columns=["id"], stand_ins=XPRO_STAND_INS)
 
 
