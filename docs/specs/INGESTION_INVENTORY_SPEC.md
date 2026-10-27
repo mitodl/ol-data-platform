@@ -812,9 +812,9 @@ Airbyte connection writing Iceberg, and it was not among the streams that moved:
 stayed the JSONL table of that morning's load until `bin/migrate-raw-jsonl-to-iceberg.py`
 converted it on 2026-09-11. Nothing flagged it. Trino kept reading the old JSON, so the dbt
 models built without error on profiles as of 2025-02-24, and the check above had nothing to
-catch, because the table and its dbt source both stayed. Where the unit's retirement was
-deliberate, this was a silent per-table stall, and it is recorded as its own frozen entry dated
-when it stopped (#3140).
+catch, because the table and its dbt source both stayed. The unit's retirement was deliberate.
+This was a silent per-table stall, and it is recorded as its own frozen entry dated when it
+stopped (#3140).
 Either of two checks would have caught it: an expected sync cadence per table, reporting a
 table whose newest load is older than that cadence, or a check that every table a
 `*__sources.yml` declares is `table_type=ICEBERG` in Glue, since a table still on JSON after its
