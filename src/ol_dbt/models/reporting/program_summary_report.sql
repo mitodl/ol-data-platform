@@ -2,8 +2,17 @@ with program_enrollments as (
     select * from {{ ref('marts__combined_program_enrollment_detail') }}
 )
 
+-- Learners are counted by email, lowercased because the platforms store some addresses
+-- in different letter case
 , course_enrollments as (
-    select * from {{ ref('marts__combined_course_enrollment_detail') }}
+    select
+        course_readable_id
+        , courserun_readable_id
+        , lower(user_email) as user_email
+        , user_country_code
+        , courserunenrollment_enrollment_mode
+        , courseruncertificate_is_earned
+    from {{ ref('marts__combined_course_enrollment_detail') }}
 )
 
 , program_courses as (
@@ -18,7 +27,7 @@ with program_enrollments as (
 , program_rows as (
     select
         'enrollment' as row_source
-        , program_enrollments.user_email
+        , lower(program_enrollments.user_email) as user_email
         , program_enrollments.user_has_completed_program
         , cast(null as varchar) as course_readable_id
         , program_enrollments.program_readable_id
