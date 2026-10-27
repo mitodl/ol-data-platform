@@ -48,7 +48,22 @@
           "frozen": {
             "type": "boolean",
             "default": false,
-            "description": "The source is gone but its tables stay in the raw layer, read-only, because dbt still models their history. `ol-dbt inventory reconcile` then expects dbt to declare them and the warehouse to hold them, and reports either going missing. See INGESTION_INVENTORY_SPEC.md §7.2."
+            "description": "The source is gone but its tables stay in the raw layer, read-only, as history. `ol-dbt inventory reconcile` then expects the warehouse to hold them and, unless `modeled: false`, dbt to declare them, and reports either going missing. See INGESTION_INVENTORY_SPEC.md §7.2."
+          },
+          "modeled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Only with `frozen: true`. False keeps tables dbt never modeled, so `reconcile` expects the warehouse to hold them and dbt not to declare them. See INGESTION_INVENTORY_SPEC.md §7.2."
+          }
+        },
+        "dependentSchemas": {
+          "modeled": {
+            "required": ["frozen"],
+            "properties": {
+              "frozen": {
+                "const": true
+              }
+            }
           }
         }
       }

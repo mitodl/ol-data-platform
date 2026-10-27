@@ -651,10 +651,17 @@ def retired_pairs(entries: list[dict[str, Any]]) -> set[tuple[str, str]]:
     return pairs
 
 
-def frozen_tables(entries: list[dict[str, Any]]) -> frozenset[str]:
-    """Raw tables the graveyard keeps as modeled history (`frozen: true`, §7.2)."""
+def frozen_tables(entries: list[dict[str, Any]], *, modeled_only: bool = False) -> frozenset[str]:
+    """Raw tables the graveyard keeps in the raw layer (`frozen: true`, §7.2).
+
+    :param modeled_only: Leave out entries marked `modeled: false`, whose tables
+        dbt never read.
+    """
     return frozenset(
-        str(raw_table) for entry in entries if entry.get("frozen", False) for raw_table in entry["raw_tables"]
+        str(raw_table)
+        for entry in entries
+        if entry.get("frozen", False) and (entry.get("modeled", True) or not modeled_only)
+        for raw_table in entry["raw_tables"]
     )
 
 
@@ -1048,6 +1055,7 @@ def reconcile_warehouse(
     report: ValidationReport,
     *,
     frozen: frozenset[str] = frozenset(),
+    retired: frozenset[str] = frozenset(),
 ) -> Reconciliation:
     """Report the inventory against the tables the warehouse actually holds.
 
@@ -1060,7 +1068,8 @@ def reconcile_warehouse(
 
     *frozen* tables (`frozen_tables`) belong in the warehouse although no unit
     declares them, so they are left out of the buckets. One that has gone
-    missing is reported instead: nothing can reload it.
+    missing is reported instead: nothing can reload it. Any other *retired*
+    table the warehouse still holds is named as retired, not as unclaimed.
     """
     owners = tables_by_raw_name(units)
     result = reconcile_tables(set(owners), warehouse_tables - frozen)
@@ -1071,8 +1080,8 @@ def reconcile_warehouse(
             Severity.WARNING,
             RETIRED_FILENAME,
             f"{raw_table} is frozen but the warehouse does not hold it",
-            "Its source is decommissioned, so no loader can bring it back, and the "
-            "dbt models reading it as history will fail or build empty. If its "
+            "Its source is decommissioned, so no loader can bring it back, and any "
+            "dbt model reading it as history will fail or build empty. If its "
             "files are still in S3, re-register the table from its last metadata.json.",
         )
 
@@ -1089,6 +1098,17 @@ def reconcile_warehouse(
         )
 
     for raw_table in sorted(result.observed_not_declared):
+        if raw_table in retired:
+            report.add(
+                RECONCILE_CHECK,
+                Severity.WARNING,
+                RETIRED_FILENAME,
+                f"{raw_table} is retired but the warehouse still holds it",
+                "Nothing loads it, and the entry does not say to keep it. Drop the "
+                "table, or set `frozen: true` on its entry if its history stays "
+                "(with `modeled: false` if dbt never read it).",
+            )
+            continue
         candidates = units_for_table(units, raw_table)
         if not candidates:
             model, detail = (
@@ -1139,15 +1159,27 @@ def reconcile_dbt(
       from the generation.
 
     A frozen graveyard table is meant to be a dbt source, so it is left out of
-    the buckets; what is reported is a frozen table dbt no longer reads.
+    the buckets; what is reported is a frozen table dbt no longer reads. An
+    entry marked `modeled: false` says the opposite, so dbt declaring one of
+    its tables is what is reported there.
     """
     entries = load_retired(inventory_dir)
     retired = {raw_table for _, raw_table in retired_pairs(entries)}
     frozen = frozen_tables(entries)
+    frozen_modeled = frozen_tables(entries, modeled_only=True)
     owners = tables_by_raw_name(units)
     result = reconcile_tables(set(owners), dbt_tables - frozen)
 
-    for raw_table in sorted(frozen - dbt_tables):
+    for raw_table in sorted((frozen - frozen_modeled) & dbt_tables):
+        report.add(
+            RECONCILE_CHECK,
+            Severity.WARNING,
+            RETIRED_FILENAME,
+            f"{raw_table} is frozen with modeled: false but dbt declares a source for it",
+            "The entry says dbt never read this table. Drop `modeled: false` if a model reads it now.",
+        )
+
+    for raw_table in sorted(frozen_modeled - dbt_tables):
         report.add(
             RECONCILE_CHECK,
             Severity.WARNING,
