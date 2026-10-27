@@ -820,6 +820,10 @@ with mitx_users as (
                 , industry asc
                 , address_state asc
                 , mitlearn_user_id asc
+                -- Last, so tied rows that differ only in address still pick the same one on every build.
+                , user_street_address asc
+                , user_address_city asc
+                , user_address_postal_code asc
         ) as row_num
         , coalesce(
             nullif(trim(user_street_address), '')

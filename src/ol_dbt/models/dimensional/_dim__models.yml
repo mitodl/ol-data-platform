@@ -2324,7 +2324,8 @@ unit_tests:
     first account that has it would return the MITx Pro city and postal code
     beside the Bootcamps street. A Residential account that joined later and
     has only a city does not replace a fuller address. Blank and padded
-    values come out trimmed, and blank ones as NULL.
+    values come out trimmed, and blank ones as NULL. Two Global Alumni rows
+    that tie on everything but the address take the lowest street.
   model: dim_user
   given:
   - input: ref('stg__mitxpro__app__postgres__users_user')
@@ -2373,8 +2374,22 @@ unit_tests:
     rows: []
   - input: ref('stg__emeritus__api__bigquery__user_enrollments')
     rows: []
+  # One student id sent under two emails that differ only in case, with identical
+  # demographics. The higher address is listed first so an unordered tie would pick it.
   - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
-    rows: []
+    rows:
+    - user_id: S1
+      user_email: Erin@Example.com
+      user_full_name: Erin Tied
+      user_address_street: 2 Tied Street
+      user_gdpr_consent_date: '2024-01-01T00:00:00'
+      courserun_start_on: '2024-01-01T00:00:00'
+    - user_id: S1
+      user_email: erin@example.com
+      user_full_name: Erin Tied
+      user_address_street: 1 Tied Street
+      user_gdpr_consent_date: '2024-01-01T00:00:00'
+      courserun_start_on: '2024-01-01T00:00:00'
   - input: ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopic')
     rows: []
   - input: ref('stg__mitlearn__app__postgres__profiles_profile')
@@ -2415,6 +2430,11 @@ unit_tests:
     - email: dave@example.com
       user_bootcamps_username: dave-bootcamps
       user_street_address: 5 Padded Street
+      user_address_city:
+      user_address_postal_code:
+    - email: erin@example.com
+      user_bootcamps_username:
+      user_street_address: 1 Tied Street
       user_address_city:
       user_address_postal_code:
 - name: test_afact_learner_courserun_progress_status_and_needs_attention
