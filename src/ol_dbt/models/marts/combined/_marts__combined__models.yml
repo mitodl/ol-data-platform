@@ -661,30 +661,33 @@ models:
       edX.org or certificates that have been revoked.
   - name: unique_courses_taken_in_program
     description: int, count of unique courses in the program the learner enrolled
-      in, in any enrollment mode. Courses are matched on the row's program_readable_id,
-      which only MITx Online and xPRO programs share with their courses. edX.org rows
-      carry a generated program_readable_id, so the count is 0 for edX.org MicroMasters
-      and XSeries rows alike. The exception is MicroMasters learners missing from
-      2U's program report. Those rows take the MITx Online program's program_readable_id
-      and can count courses, matched to enrollments by user_id with no platform condition.
-      program_enrollment_with_user_report.courses_taken_in_program counts verified
-      enrollments only, matched through bridge_program_course, so the two differ.
+      in, in any enrollment mode. Program courses, required and elective, come from
+      bridge_program_course. An edX.org row whose program title int__mitx__program_title_to_mitxonline_program
+      maps to a MITx Online program takes that program's courses. These are the MicroMasters
+      programs, DEDP, and the XSeries programs with a MITx Online program of the same
+      title. Any other edX.org row takes its own edX.org program's courses, which
+      bridge_program_course lists for only some XSeries programs, so the rest count
+      0. Enrollments match on the row's own platform and user_id (edX.org for MicroMasters
+      rows), because user ids repeat across platforms. A course keeps one readable
+      id across platforms, so an edX.org enrollment in a course that moved to MITx
+      Online still matches. Enrollments the learner holds on another platform do not
+      count. program_enrollment_with_user_report.courses_taken_in_program counts verified
+      enrollments only, so the two differ.
   - name: capstone_indicator
     description: str, Y if the learner has an enrollment, in any mode, in a program
-      course with the word capstone in the title, otherwise N. Program courses are
-      matched as for unique_courses_taken_in_program, so most edX.org rows are N.
-      program_enrollment_with_user_report.capstone_ind counts verified enrollments
-      only.
+      course with the word capstone in the title, otherwise N. Program courses and
+      enrollments are matched as for unique_courses_taken_in_program. program_enrollment_with_user_report.capstone_ind
+      counts verified enrollments only.
   - name: program_completion_days
     description: int, number of days from the start date of the earliest course run
       the learner holds a verified enrollment in to the program certificate's creation
       date. Ignores unverified/audit enrollments when determining the start date.
       It is null unless both dates exist, a certificate creation date and a matched
-      verified enrollment in a course run with a start date. Program courses are matched
-      as for unique_courses_taken_in_program, so it is null on most edX.org rows.
-      A revoked certificate keeps its creation date, so it can be set on a revoked
-      MITx Online or xPRO row where user_has_completed_program is false. program_enrollment_with_user_report
-      carries the same value as program_complete_days.
+      verified enrollment in a course run with a start date. Program courses and enrollments
+      are matched as for unique_courses_taken_in_program. A revoked certificate keeps
+      its creation date, so it can be set on a revoked MITx Online or xPRO row where
+      user_has_completed_program is false. program_enrollment_with_user_report carries
+      the same value as program_complete_days.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -1216,3 +1219,82 @@ models:
       arguments:
         column_list: ["b2bcoupon_id", "discount_id", "platform", "couponpaymentversion_id",
           "b2b_contract_number", "product_readable_id"]
+
+unit_tests:
+- name: test_program_enrollment_detail_matches_courses_on_own_platform
+  description: >
+    A MITx Online learner and an edX.org learner share user_id 7. Each row
+    counts only its own platform's enrollments. The edX.org program maps to
+    the MITx Online program, so it takes its courses from that program's
+    bridge_program_course rows.
+  model: marts__combined_program_enrollment_detail
+  given:
+  - input: ref('int__mitxpro__programenrollments')
+    rows: []
+  - input: ref('int__mitxpro__programs')
+    rows: []
+  - input: ref('int__mitxpro__program_certificates')
+    rows: []
+  - input: ref('int__mitxpro__users')
+    rows: []
+  - input: ref('int__mitx__programs')
+    rows: []
+  - input: ref('int__mitxonline__programenrollments')
+    rows:
+    - {program_id: 45, user_id: 7, user_email: online@example.com, user_username: online7}
+  - input: ref('int__mitxonline__programs')
+    rows:
+    - {program_id: 45, program_readable_id: "program-v1:MITxT+SDS-General-Track",
+      program_title: "Statistics and Data Science (General Track)", program_name: "Statistics\
+        \ and Data Science (General Track)", program_type: MicroMasters}
+  - input: ref('int__mitxonline__users')
+    rows: []
+  - input: ref('int__mitxonline__program_certificates')
+    rows: []
+  - input: ref('int__edxorg__mitx_program_enrollments')
+    rows:
+    - {micromasters_program_id: 4, program_uuid: sds-general, program_title: "Statistics\
+        \ and Data Science (General Track)", program_type: MicroMasters, user_id: 7,
+      user_username: edx7}
+  - input: ref('int__edxorg__mitx_program_certificates')
+    rows:
+    - {program_uuid: sds-general, user_id: 7, program_certificate_awarded_on: "2020-06-30T00:00:00Z",
+      program_certificate_hashed_id: h7, user_has_completed_program: true}
+  - input: ref('int__edxorg__mitx_users')
+    rows:
+    - {user_id: 7, user_email: edx@example.com}
+  - input: ref('int__micromasters__program_enrollments')
+    rows: []
+  - input: ref('int__mitx__program_title_to_mitxonline_program')
+    rows:
+    - {program_title: "Statistics and Data Science (General Track)", mitxonline_program_id: 45}
+  - input: ref('bridge_program_course')
+    rows:
+    - {program_fk: p45, course_fk: ca}
+    - {program_fk: p45, course_fk: cb}
+    - {program_fk: p45, course_fk: cc}
+  - input: ref('dim_program')
+    rows:
+    - {program_pk: p45, source_id: "45", platform_code: mitxonline}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: ca, course_readable_id: "course-v1:MITxT+A"}
+    - {course_pk: cb, course_readable_id: "course-v1:MITxT+B"}
+    - {course_pk: cc, course_readable_id: "course-v1:MITxT+C"}
+  - input: ref('int__combined__courserun_enrollments')
+    rows:
+    - {platform: MITx Online, user_id: "7", course_readable_id: "course-v1:MITxT+A",
+      courserun_readable_id: "course-v1:MITxT+A+1T2020", course_title: A, courserunenrollment_enrollment_mode: audit}
+    - {platform: MITx Online, user_id: "7", course_readable_id: "course-v1:MITxT+B",
+      courserun_readable_id: "course-v1:MITxT+B+1T2020", course_title: B, courserunenrollment_enrollment_mode: audit}
+    - {platform: edX.org, user_id: "7", course_readable_id: "course-v1:MITxT+C", courserun_readable_id: "course-v1:MITxT+C+1T2020",
+      course_title: C Capstone, courserunenrollment_enrollment_mode: verified}
+  - input: ref('int__combined__course_runs')
+    rows:
+    - {courserun_readable_id: "course-v1:MITxT+C+1T2020", courserun_start_on: "2020-01-01T00:00:00Z"}
+  expect:
+    rows:
+    - {platform_name: MITx Online, user_id: 7, unique_courses_taken_in_program: 2,
+      capstone_indicator: N, program_completion_days: null}
+    - {platform_name: edX.org, user_id: 7, unique_courses_taken_in_program: 1, capstone_indicator: Y,
+      program_completion_days: 181}
