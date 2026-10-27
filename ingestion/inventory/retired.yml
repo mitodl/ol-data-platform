@@ -794,7 +794,8 @@ retired:
     decision keeps, on purpose, the 19 JSONL directories under
     s3://ol-data-lake-raw-production/raw/bootcamps/app/postgres/public/ that this
     connection wrote for the tables that do hold rows (the 18 of the first
-    2026-02-12 entry above and applications_bootcampapplicationline). Last written
+    2026-02-12 entry above and applications_bootcampapplicationline;
+    profiles_profile's directory there is its Glue location). Last written
     2025-02-25, 24.2 MB in all, they are the pre-Iceberg copies of those tables.
     No Glue table references them.
 - deployment: github
@@ -941,12 +942,12 @@ retired:
   - raw__bootcamps__hubspot__workflows
   retired_on: '2026-10-01'
   reason: >-
-    The bootcamps application is no longer deployed (see the bootcamps
+    The bootcamps application is no longer deployed (see the first bootcamps
     app_postgres entry). The "HubSpot Bootcamps → S3" connection was inactive
     when the inventory was snapshotted on 2026-08-14 and was deleted from
     Airbyte before 2026-09-29, when the drift check started reporting it. No
-    data for these tables exists in the current lake: the 7 that are
-    registered in Glue (under raw/, created 2026-09-11) hold metadata only.
+    data for these tables exists in the current lake: the 7 that were
+    registered in Glue (under raw/, created 2026-09-11) held metadata only.
     This date is when the retirement was recorded. dbt modeled none of them.
     Those 7 (contacts_merged_audit, contacts_property_history, form_submissions,
     goals, owners, owners_archived and tickets) had no snapshot when measured on
