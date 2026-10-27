@@ -22,6 +22,12 @@ with mitx_programs as (
     select * from {{ ref('int__mitxonline__programs') }}
 )
 
+, mitxonline_mapped_titles as (
+    select lookup_value as program_title
+    from {{ ref('dim_program_report_key') }}
+    where lookup_type = 'title' and mapped_by in ('seed', 'title')
+)
+
 select
     '{{ var("mitxonline") }}' as platform
     , mitx__courses.course_title
@@ -63,13 +69,15 @@ select
     , coalesce(mitx__courses.course_readable_id, edxorg_mitx_program_courses.course_readable_id) as course_readable_id
     , null as program_readable_id
 from edxorg_mitx_program_courses
-left join mitx_programs
-    on edxorg_mitx_program_courses.program_name = mitx_programs.program_title
+-- A program that dim_program_report_key maps to a MITx Online program takes that
+-- program's courses, as bridge_program_course does.
+left join mitxonline_mapped_titles
+    on edxorg_mitx_program_courses.program_title = mitxonline_mapped_titles.program_title
 left join mitx__courses
     on
         replace(edxorg_mitx_program_courses.course_readable_id, 'MITx/', '')
         = replace(mitx__courses.course_readable_id, 'course-v1:MITxT+', '')
-where mitx_programs.program_title is null
+where mitxonline_mapped_titles.program_title is null
 
 union all
 
