@@ -8,7 +8,7 @@ from typing import Any
 
 import polars as pl
 from ml.lib.iceberg_helpers import upsert_chunk
-from ml.resources.opik_auth import OPIK_PROJECT_NAME
+from ml.resources.opik_auth import OPIK_PROJECT_NAME, seed_prompt_environment
 from ol_llm import (
     Attribution,
     BatchKeys,
@@ -126,6 +126,10 @@ def summary_use_case(model: str) -> UseCase:
 def fetch_summary_prompt() -> ManagedPrompt[TextTemplate]:
     """Fetch the summary prompt labeled with this deployment's environment.
 
+    CI and QA without a labeled version get their own version of SUMMARY_PROMPT
+    on first use. Production's label moves only by hand or from the promotion
+    job, so there a missing label raises.
+
     Warns when the labeled version's text differs from SUMMARY_PROMPT. The
     template hash is part of every row's key, so a run that then falls back to
     SUMMARY_PROMPT re-summarizes every conversation, and the next run that
@@ -134,12 +138,19 @@ def fetch_summary_prompt() -> ManagedPrompt[TextTemplate]:
     :returns: the prompt, or SUMMARY_PROMPT marked degraded when Opik could not
         be reached.
     :rtype: ManagedPrompt[TextTemplate]
-    :raises LookupError: if Opik has no version of the prompt with this label.
+    :raises PromptLabelMissingError: in Production, if Opik has no version of the
+        prompt labeled production.
     """
     embedded = TextTemplate(template=SUMMARY_PROMPT)
-    prompt = get_prompt(
-        SUMMARY_PROMPT_NAME, project_name=OPIK_PROJECT_NAME, default=embedded
-    )
+    try:
+        prompt = get_prompt(
+            SUMMARY_PROMPT_NAME, project_name=OPIK_PROJECT_NAME, default=embedded
+        )
+    except LookupError:
+        seed_prompt_environment(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT)
+        prompt = get_prompt(
+            SUMMARY_PROMPT_NAME, project_name=OPIK_PROJECT_NAME, default=embedded
+        )
     if prompt.source == "opik" and prompt.template_hash != embedded.template_hash:
         logger.warning(
             "Opik's %s %s differs from SUMMARY_PROMPT; copy it into the code so "

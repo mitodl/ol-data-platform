@@ -54,6 +54,14 @@ CREATED_FOR_METADATA_KEY = "created_for_environment"
 _prompt_environment_registered = False
 
 
+class PromptLabelMissingError(LookupError):
+    """No version of a prompt carries this deployment's environment label.
+
+    A configuration error, not an outage (llm-opik-lifecycle-spec.md §3), so
+    render_prompt raises it instead of falling back to the code default.
+    """
+
+
 def is_opik_configured() -> bool:
     """Whether this deployment has opted into Opik.
 
@@ -252,11 +260,6 @@ def _register_prompt_environment(client: opik.Opik) -> None:
     _prompt_environment_registered = True
 
 
-def _version_number(prompt: opik.Prompt) -> int:
-    """Return the N of a "vN" version selector."""
-    return int((prompt.version or "v0").removeprefix("v"))
-
-
 def _is_own_version(prompt: opik.Prompt) -> bool:
     """Whether prompt's version was created for PROMPT_ENVIRONMENT."""
     created_for = (prompt.metadata or {}).get(CREATED_FOR_METADATA_KEY)
@@ -306,39 +309,59 @@ def _own_version(client: opik.Opik, name: str, template: str) -> opik.Prompt:
     )
 
 
+def _seed_environment(client: opik.Opik, name: str, template: str) -> opik.Prompt:
+    """Point PROMPT_ENVIRONMENT at its own version of template.
+
+    Never in Production: its label moves only by hand or from the promotion job
+    that reads the repository's pointer file, so deployed code never writes it.
+
+    :raises PromptLabelMissingError: in Production.
+    """
+    if PROMPT_ENVIRONMENT == "production":
+        msg = f"No version of Opik prompt {name!r} is labeled production"
+        raise PromptLabelMissingError(msg)
+    _register_prompt_environment(client)
+    prompt = _own_version(client, name, template)
+    _point_environment_at(client, prompt)
+    return prompt
+
+
+def seed_prompt_environment(name: str, template: str) -> None:
+    """Point CI or QA at its own version of template, for a prompt with no label yet.
+
+    For prompts fetched through ol_llm.get_prompt, which raises LookupError when
+    the environment has no version, so CI and QA start from the code default as
+    render_prompt's prompts do.
+
+    :param name: the prompt's name.
+    :param template: the code default.
+    :raises PromptLabelMissingError: in Production, or when there is no Opik
+        client to write with.
+    """
+    client = get_opik_client()
+    if client is None:
+        msg = f"No Opik client to label prompt {name!r} for {PROMPT_ENVIRONMENT}"
+        raise PromptLabelMissingError(msg)
+    _seed_environment(client, name, template)
+
+
 def _environment_prompt(
-    client: opik.Opik, name: str, default_template: str | None
-) -> opik.Prompt | None:
+    client: opik.Opik, name: str, default_template: str
+) -> opik.Prompt:
     """Return the version of name that PROMPT_ENVIRONMENT points at.
 
-    An environment without a version yet is pointed at its own version of
+    CI and QA without a version yet are pointed at their own version of
     default_template, never at whatever version is latest, which may be another
-    environment's. The exception is Production reading a prompt it has no
-    version of yet: the newest version from before environment scoping (no
-    CREATED_FOR_METADATA_KEY) is the one Production rendered before, so it
-    keeps it, whichever environment has added versions since.
-    Returns None when the environment has no version and no default_template is
-    given.
+    environment's.
+
+    :raises PromptLabelMissingError: in Production, when no version is labeled
+        production.
     """
     _register_prompt_environment(client)
     prompt = client.get_prompt(name=name, environment=PROMPT_ENVIRONMENT)
     if prompt is not None:
         return prompt
-    if PROMPT_ENVIRONMENT == "production" and client.get_prompt(name=name):
-        unscoped = [
-            version
-            for version in client.get_prompt_history(name=name)
-            if CREATED_FOR_METADATA_KEY not in (version.metadata or {})
-        ]
-        if unscoped:
-            newest = max(unscoped, key=_version_number)
-            if _point_environment_at(client, newest):
-                return newest
-    if default_template is None:
-        return None
-    prompt = _own_version(client, name, default_template)
-    _point_environment_at(client, prompt)
-    return prompt
+    return _seed_environment(client, name, default_template)
 
 
 def publish_prompt_version(name: str, template: str) -> str:
@@ -347,11 +370,12 @@ def publish_prompt_version(name: str, template: str) -> str:
     For prompts that stay authoritative in code, where rendering an Opik edit
     would change what is sent without changing what the caller records as the
     prompt version (the courseware extractor keys every row on a hash of its code
-    prompt). Opik versions what ran instead, and PROMPT_ENVIRONMENT is pointed at
-    its own version of that text (see _own_version), reusing an earlier one
-    rather than adding a version each run. Returns LOCAL_PROMPT_VERSION when Opik
-    is unavailable or the publish fails in any way: this is provenance, never a
-    reason to fail a run.
+    prompt). Opik versions what ran instead, in PROMPT_ENVIRONMENT's own version of
+    that text (see _own_version), reusing an earlier one rather than adding a
+    version each run. CI and QA are pointed at it; Production's label is left
+    where it is, since deployed code never moves it. Returns LOCAL_PROMPT_VERSION
+    when Opik is unavailable or the publish fails in any way: this is provenance,
+    never a reason to fail a run.
     """
     client = get_opik_client()
     if client is None:
@@ -361,7 +385,8 @@ def publish_prompt_version(name: str, template: str) -> str:
         prompt = client.get_prompt(name=name, environment=PROMPT_ENVIRONMENT)
         if prompt is None or prompt.prompt != template:
             prompt = _own_version(client, name, template)
-            _point_environment_at(client, prompt)
+            if PROMPT_ENVIRONMENT != "production":
+                _point_environment_at(client, prompt)
         version = prompt.version or prompt.commit
     except Exception:
         log.warning("Opik prompt publish failed for %s", name, exc_info=True)
@@ -389,20 +414,23 @@ def attach_span_prompt(template: str) -> None:
 def render_prompt(name: str, default_template: str, **variables: Any) -> str:
     """Render a Prompt Library entry (mustache {{var}} placeholders).
 
-    Seeds Opik with default_template on first use (via create_prompt) so the
-    prompt shows up in the Prompt Library ready to edit. Renders the version
+    In CI and QA, seeds Opik with default_template on first use so the prompt
+    shows up in the Prompt Library ready to edit. Renders the version
     PROMPT_ENVIRONMENT points at, so an edit takes effect, with no redeploy, in
     the environments pointed at the new version. Falls back to rendering
     default_template locally whenever Opik is unreachable or not configured for
     this environment.
+
+    :raises PromptLabelMissingError: in Production, when no version is labeled
+        production.
     """
     template = default_template
     client = get_opik_client()
     if client is not None:
         try:
-            prompt = _environment_prompt(client, name, default_template)
-            if prompt is not None:
-                template = prompt.prompt
+            template = _environment_prompt(client, name, default_template).prompt
+        except PromptLabelMissingError:
+            raise
         except Exception:
             log.warning(
                 "Opik prompt fetch/create failed for %s; using local default",

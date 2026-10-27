@@ -6,6 +6,7 @@ import polars as pl
 import pytest
 from ml.lib import summarize
 from ml.lib.iceberg_helpers import upsert_chunk
+from ml.resources import opik_auth
 from ol_llm import (
     BatchFailed,
     BatchKeys,
@@ -464,6 +465,43 @@ def test_fetch_summary_prompt_warns_when_opik_differs_from_the_embedded_copy(
 
     assert prompt is PROMPT
     assert "differs from SUMMARY_PROMPT" in caplog.text
+
+
+def test_fetch_summary_prompt_seeds_a_missing_label_then_fetches_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    labeled: list[tuple[str, str]] = []
+
+    def _get_prompt(*_args: Any, **_kwargs: Any) -> ManagedPrompt[TextTemplate]:
+        if not labeled:
+            msg = "no qa label"
+            raise LookupError(msg)
+        return PROMPT
+
+    monkeypatch.setattr(summarize, "get_prompt", _get_prompt)
+    monkeypatch.setattr(
+        summarize,
+        "seed_prompt_environment",
+        lambda name, template: labeled.append((name, template)),
+    )
+
+    assert summarize.fetch_summary_prompt() is PROMPT
+    assert labeled == [("feedback-summary", summarize.SUMMARY_PROMPT)]
+
+
+def test_fetch_summary_prompt_raises_when_production_has_no_label(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _missing(*_args: Any, **_kwargs: Any) -> ManagedPrompt[TextTemplate]:
+        msg = "no production label"
+        raise LookupError(msg)
+
+    monkeypatch.setattr(summarize, "get_prompt", _missing)
+    monkeypatch.setattr(opik_auth, "PROMPT_ENVIRONMENT", "production")
+    monkeypatch.setattr(opik_auth, "get_opik_client", object)
+
+    with pytest.raises(opik_auth.PromptLabelMissingError, match="labeled production"):
+        summarize.fetch_summary_prompt()
 
 
 def test_summarize_and_checkpoint_updates_a_table_from_before_the_key_columns(

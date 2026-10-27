@@ -395,40 +395,56 @@ def test_render_prompt_new_environment_uses_its_own_default_not_latest(
     assert fake_client.versions["feedback-summary"][2].metadata == _created_for("qa")
 
 
-def test_render_prompt_production_keeps_its_unscoped_version(
+def test_render_prompt_raises_when_production_has_no_label(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """
-    Production's first read takes the newest version from before environment
-    scoping, even after QA added its own versions
-    """
+    """Production never labels a version itself, however old or new it is"""
     fake_client = _FakeOpikClient(
-        existing={
-            "feedback-summary": ["Old: {{x}}", "Custom: {{x}}", ("QA: {{x}}", "qa")]
-        },
-        pointers={"qa": "v3"},
+        existing={"feedback-summary": ["Old: {{x}}", ("QA: {{x}}", "qa")]},
+        pointers={"qa": "v2"},
     )
     monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
     monkeypatch.setattr(opik_auth, "PROMPT_ENVIRONMENT", "production")
 
-    result = opik_auth.render_prompt("feedback-summary", "Default: {{x}}", x="hi")
+    with pytest.raises(opik_auth.PromptLabelMissingError, match="labeled production"):
+        opik_auth.render_prompt("feedback-summary", "Default: {{x}}", x="hi")
 
-    assert result == "Custom: hi"
-    assert fake_client.pointers("feedback-summary") == {"production": "v2", "qa": "v3"}
+    assert fake_client.writes == []
+    assert len(fake_client.versions["feedback-summary"]) == 2
 
 
-def test_render_prompt_production_ignores_a_version_qa_failed_to_claim(
+def test_seed_prompt_environment_points_qa_at_its_own_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A new prompt QA created but never pointed at doesn't reach Production"""
-    fake_client = _FakeOpikClient(existing={"new-prompt": [("QA: {{x}}", "qa")]})
+    fake_client = _FakeOpikClient(
+        existing={"feedback-summary": ["Prod: {{x}}"]}, pointers={"production": "v1"}
+    )
+    monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
+    monkeypatch.setattr(opik_auth, "PROMPT_ENVIRONMENT", "qa")
+
+    opik_auth.seed_prompt_environment("feedback-summary", "Default: {{x}}")
+
+    assert fake_client.pointers("feedback-summary") == {"production": "v1", "qa": "v2"}
+    assert fake_client.versions["feedback-summary"][1].metadata == _created_for("qa")
+
+
+def test_seed_prompt_environment_refuses_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_client = _FakeOpikClient(existing={"feedback-summary": ["Prod: {{x}}"]})
     monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
     monkeypatch.setattr(opik_auth, "PROMPT_ENVIRONMENT", "production")
 
-    result = opik_auth.render_prompt("new-prompt", "Default: {{x}}", x="hi")
+    with pytest.raises(opik_auth.PromptLabelMissingError):
+        opik_auth.seed_prompt_environment("feedback-summary", "Default: {{x}}")
 
-    assert result == "Default: hi"
-    assert fake_client.pointers("new-prompt") == {"production": "v2"}
+    assert fake_client.writes == []
+    assert len(fake_client.versions["feedback-summary"]) == 1
+
+
+def test_seed_prompt_environment_raises_without_an_opik_client() -> None:
+    with pytest.raises(opik_auth.PromptLabelMissingError, match="No Opik client"):
+        opik_auth.seed_prompt_environment("feedback-summary", "Default: {{x}}")
 
 
 def test_render_prompt_seeds_opik_when_prompt_missing(
@@ -459,6 +475,23 @@ def test_publish_prompt_version_adds_its_own_version_for_new_text(
 
     assert opik_auth.publish_prompt_version("extract", "new") == "v3"
     assert fake_client.pointers("extract") == {"production": "v1", "qa": "v3"}
+
+
+def test_publish_prompt_version_leaves_the_production_label(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production records the version that ran without moving its label"""
+    fake_client = _FakeOpikClient(
+        existing={"extract": ["prod"]}, pointers={"production": "v1"}
+    )
+    monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
+    monkeypatch.setattr(opik_auth, "PROMPT_ENVIRONMENT", "production")
+
+    assert opik_auth.publish_prompt_version("extract", "new") == "v2"
+    assert fake_client.pointers("extract") == {"production": "v1"}
+    assert fake_client.writes == []
+    assert opik_auth.publish_prompt_version("extract", "new") == "v2"
+    assert len(fake_client.versions["extract"]) == 2
 
 
 def test_publish_prompt_version_reuses_its_own_earlier_version(
