@@ -662,7 +662,7 @@ models:
   - name: unique_courses_taken_in_program
     description: int, count of unique courses in the program the learner enrolled
       in, in any enrollment mode. Program courses, required and elective, come from
-      bridge_program_course. An edX.org row whose program title int__mitx__program_title_to_mitxonline_program
+      bridge_program_course. An edX.org row whose program title dim_program_report_key
       maps to a MITx Online program takes that program's courses. These are the MicroMasters
       programs, DEDP, and the XSeries programs with a MITx Online program of the same
       title. Any other edX.org row takes its own edX.org program's courses, which
@@ -1265,9 +1265,10 @@ unit_tests:
     - {user_id: 7, user_email: edx@example.com}
   - input: ref('int__micromasters__program_enrollments')
     rows: []
-  - input: ref('int__mitx__program_title_to_mitxonline_program')
+  - input: ref('dim_program_report_key')
     rows:
-    - {program_title: "Statistics and Data Science (General Track)", mitxonline_program_id: 45}
+    - {lookup_type: title, lookup_value: "Statistics and Data Science (General Track)",
+      mitxonline_program_id: 45}
   - input: ref('bridge_program_course')
     rows:
     - {program_fk: p45, course_fk: ca}
