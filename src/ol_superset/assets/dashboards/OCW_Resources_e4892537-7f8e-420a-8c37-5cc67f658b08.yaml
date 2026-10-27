@@ -1,11 +1,86 @@
+certification_details: ''
+certified_by: ''
+css: ''
 dashboard_title: OCW Resources
 description: null
-css: ''
-slug: null
-certified_by: ''
-certification_details: ''
-published: false
-uuid: e4892537-7f8e-420a-8c37-5cc67f658b08
+metadata:
+  chart_configuration:
+    '155':
+      crossFilters:
+        chartsInScope: []
+        scope: global
+      id: 155
+  chart_customization_config: []
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  default_filters: '{}'
+  expanded_slices: {}
+  global_chart_configuration:
+    chartsInScope:
+    - 155
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors: {}
+  native_filter_configuration:
+  - cascadeParentIds: []
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-gO5VtfHnhN5YblhhVPEag
+    name: Resource Type
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    sortMetric: null
+    targets:
+    - column:
+        name: resource_type
+      datasetUuid: 8bb67686-3d31-4418-bda9-87fdeb25b665
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-7YEUdq3hZX_9DN5zuIjBA
+    name: Learning Resource Types
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    sortMetric: null
+    targets:
+    - column:
+        name: learning_resource_types
+      datasetUuid: 8bb67686-3d31-4418-bda9-87fdeb25b665
+    type: NATIVE_FILTER
+  refresh_frequency: 0
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
 position:
   CHART-uA4gRVvCOr_4xADmT0QEp:
     children: []
@@ -49,83 +124,8 @@ position:
     - ROOT_ID
     - GRID_ID
     type: ROW
-metadata:
-  chart_configuration:
-    '155':
-      id: 155
-      crossFilters:
-        scope: global
-        chartsInScope: []
-  global_chart_configuration:
-    scope:
-      rootPath:
-      - ROOT_ID
-      excluded: []
-    chartsInScope:
-    - 155
-  native_filter_configuration:
-  - id: NATIVE_FILTER-gO5VtfHnhN5YblhhVPEag
-    type: NATIVE_FILTER
-    name: Resource Type
-    filterType: filter_select
-    description: ''
-    targets:
-    - column:
-        name: resource_type
-      datasetUuid: 8bb67686-3d31-4418-bda9-87fdeb25b665
-    scope:
-      rootPath:
-      - ROOT_ID
-      excluded: []
-    controlValues:
-      enableEmptyFilter: false
-      defaultToFirstItem: false
-      creatable: true
-      multiSelect: true
-      searchAllOptions: false
-      inverseSelection: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds: []
-    sortMetric: null
-  - id: NATIVE_FILTER-7YEUdq3hZX_9DN5zuIjBA
-    type: NATIVE_FILTER
-    name: Learning Resource Types
-    filterType: filter_select
-    description: ''
-    targets:
-    - column:
-        name: learning_resource_types
-      datasetUuid: 8bb67686-3d31-4418-bda9-87fdeb25b665
-    scope:
-      rootPath:
-      - ROOT_ID
-      excluded: []
-    controlValues:
-      enableEmptyFilter: false
-      defaultToFirstItem: false
-      creatable: true
-      multiSelect: true
-      searchAllOptions: false
-      inverseSelection: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds: []
-    sortMetric: null
-  chart_customization_config: []
-  map_label_colors: {}
-  color_scheme: ''
-  refresh_frequency: 0
-  color_scheme_domain: []
-  expanded_slices: {}
-  label_colors: {}
-  shared_label_colors: []
-  timed_refresh_immune_slices: []
-  cross_filters_enabled: true
-  default_filters: '{}'
+published: false
+slug: null
 theme_uuid: null
+uuid: e4892537-7f8e-420a-8c37-5cc67f658b08
 version: 1.0.0
