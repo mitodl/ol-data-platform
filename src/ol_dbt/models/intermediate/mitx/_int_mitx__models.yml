@@ -68,6 +68,47 @@ models:
   - name: micromasters_course_id
     description: int, primary key representing the course in the MicroMasters database
 
+- name: int__mitx__program_title_to_mitxonline_program
+  description: Maps a program title to the MITx Online program it belongs to, so edX.org
+    and MicroMasters program rows, which carry no MITx Online id, can be matched to
+    one. A title in edxorg_to_mitxonline_program_mapping maps to the program the seed
+    names. Any other title maps to the MITx Online program with that exact title.
+    bridge_program_course and marts__combined_coursesinprogram use the same title
+    match to leave an edX.org program's courses to the MITx Online program (e.g. the
+    Circuits and Electronics XSeries). A title two MITx Online programs share maps
+    to neither.
+  config:
+    meta:
+      qa_branches:
+      - mitxonline/app_postgres
+  columns:
+  - name: program_title
+    description: str, a program title as an edX.org program, a MicroMasters program,
+      or a MITx Online program carries it
+    tests:
+    - not_null
+    - unique
+  - name: mitxonline_program_id
+    description: int, id of the MITx Online program the title maps to
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('int__mitxonline__programs')
+          field: program_id
+  - name: mitxonline_program_readable_id
+    description: str, readable id of that MITx Online program, formatted as program-v1:{org}+{code}
+    tests:
+    - not_null
+  - name: mapped_by
+    description: str, 'seed' when edxorg_to_mitxonline_program_mapping names the program,
+      'title' when the MITx Online program has the same title
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ['seed', 'title']
+
 - name: int__mitx__program_requirements
   config:
     meta:
