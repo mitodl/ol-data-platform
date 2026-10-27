@@ -1083,9 +1083,9 @@ Local app is the directory under `ol-infrastructure/local-dev/apps/` that runs t
 | 13 | `mitx/tracking_logs` | none | 44 | 0 | |
 | 14 | `xpro/tracking_logs` | none | 44 | 0 | |
 | 15 | `edxorg/tracking_logs` | none | 44 | 0 | |
-| 16 | `mitxonline/api` | none | 39 | 0 | |
-| 17 | `xpro/api` | none | 34 | 0 | |
-| 18 | `mitx/api` | none | 33 | 0 | |
+| 16 | `mitxonline/api` | none | 39 | 0 | Retired. Blocks load through dlt as `mitxonline/course_structure`; the whole-document table had no reader (`retired.yml`) |
+| 17 | `xpro/api` | none | 34 | 0 | Retired. Blocks load through dlt as `xpro/course_structure`; the whole-document table had no reader (`retired.yml`) |
+| 18 | `mitx/api` | none | 33 | 0 | Retired. Blocks load through dlt as `mitx/course_structure`; the whole-document table had no reader (`retired.yml`) |
 | 19 | `edxorg/google_sheets` | none | 3 | 0 | |
 | 20 | `irx/bigquery` | none | 144 | 1 | |
 | 21 | `emeritus/bigquery` | none | 59 | 0 | |
