@@ -1080,8 +1080,8 @@ def reconcile_warehouse(
             Severity.WARNING,
             RETIRED_FILENAME,
             f"{raw_table} is frozen but the warehouse does not hold it",
-            "Its source is decommissioned, so no loader can bring it back, and the "
-            "dbt models reading it as history will fail or build empty. If its "
+            "Its source is decommissioned, so no loader can bring it back, and any "
+            "dbt model reading it as history will fail or build empty. If its "
             "files are still in S3, re-register the table from its last metadata.json.",
         )
 
@@ -1105,7 +1105,8 @@ def reconcile_warehouse(
                 RETIRED_FILENAME,
                 f"{raw_table} is retired but the warehouse still holds it",
                 "Nothing loads it, and the entry does not say to keep it. Drop the "
-                "table, or set `frozen: true` on its entry if its history stays.",
+                "table, or set `frozen: true` on its entry if its history stays "
+                "(with `modeled: false` if dbt never read it).",
             )
             continue
         candidates = units_for_table(units, raw_table)

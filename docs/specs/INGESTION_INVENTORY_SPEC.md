@@ -803,7 +803,7 @@ A frozen entry can also keep tables dbt never modeled. `modeled: false` says so 
 the dbt half: dbt not declaring them is expected, and dbt declaring one is the `WARNING`.
 Bootcamps has two such entries, the 93 tables its Airbyte connections landed and nothing read,
 kept on 2026-10-26 because nobody had decided to drop them. A retired table *without*
-`frozen:` that the warehouse still holds is reported as retired, not as unclaimed: nothing
+`frozen:` that the warehouse still holds is reported as retired, not as undeclared: nothing
 loads it and its entry does not say to keep it, so it is waiting to be dropped.
 
 Not every stop is a removal. Bootcamps' `profiles_profile` stopped loading on 2025-02-25,

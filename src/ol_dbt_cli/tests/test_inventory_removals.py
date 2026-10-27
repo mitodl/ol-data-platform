@@ -206,6 +206,13 @@ class TestGraveyardIsNeverEmptied:
         validate_inventory(root, report)
         assert "'frozen' is a required property" in _messages(report)
 
+    def test_modeled_false_on_an_unfrozen_entry_is_rejected(self, tmp_path: Path) -> None:
+        entry = {**RETIRED_ENTRY, "frozen": False, "modeled": False}
+        root = _materialize(tmp_path, _without_second_table(), [entry])
+        report = ValidationReport()
+        validate_inventory(root, report)
+        assert "frozen True was expected" in _messages(report)
+
     def test_a_missing_retired_schema_fails_loudly_rather_than_skipping_validation(self, tmp_path: Path) -> None:
         # An optional schema means deleting retired.schema.json silently waives
         # every date/reason requirement, letting a malformed entry acknowledge a
