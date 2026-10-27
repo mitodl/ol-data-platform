@@ -763,6 +763,27 @@ unit_tests:
     - {readable_id: RES.TL-002, url: "https://ocw.mit.edu/courses/res-tl-002-star/",
       slug: courses/res-tl-002-star, image_url: null, year: null, run_id: a062e4e8db044bcdbb1d4d6f80c18083}
 
+- name: test_integrations__learn__ocw_courses_slugifies_terms_as_django_does
+  description: >
+    The term is folded to ASCII and loses a leading or trailing hyphen or
+    underscore, as Django's slugify does. A term with nothing left still adds
+    the "+", as in Learn.
+  model: integrations__learn__ocw_courses
+  given:
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: a, courserun_readable_id: a1, course_title: A, course_primary_course_number: "1.00",
+      course_term: " Été - ", course_year: "2001"}
+    - {course_slug: b, courserun_readable_id: b1, course_title: B, course_primary_course_number: "2.00",
+      course_term: _Spring  Term_, course_year: "2002"}
+    - {course_slug: c, courserun_readable_id: c1, course_title: C, course_primary_course_number: "3.00",
+      course_term: "???", course_year: "2003"}
+  expect:
+    rows:
+    - {run_id: a1, readable_id: 1.00+ete_2001}
+    - {run_id: b1, readable_id: 2.00+spring-term_2002}
+    - {run_id: c1, readable_id: 3.00+_2003}
+
 - name: test_integrations__learn__mitxonline_runs_published_status_and_prices
   description: >
     A run is published when it is not a variant, is enrollable and the course page
