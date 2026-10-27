@@ -547,3 +547,67 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [courserun_readable_id, coursestructure_xml_block_id, coursestructure_xml_block_type,
         coursestructure_xml_retrieved_at]
+
+unit_tests:
+- name: test_int__combined__courserun_enrollments_resolves_one_xpro_run_per_external_code
+  description: >
+    Two xPro runs can carry one external run code. An Emeritus enrollment with that
+    code
+    resolves to the earliest-created run, as tfact_enrollment resolves it, and stays
+    one
+    row. A run with an empty external code matches no enrollment.
+  model: int__combined__courserun_enrollments
+  given:
+  - input: ref('int__mitx__courserun_enrollments')
+    rows: []
+  - input: ref('int__mitxpro__courserunenrollments')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows:
+    - user_id: "E-1"
+      user_email: "ana@example.com"
+      courserun_external_readable_id: "MO-MCPO-26-12#1"
+      courserun_title: "Emeritus title"
+      is_enrolled: true
+      enrollment_status: "Active"
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('int__bootcamps__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_enrollments')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_grades')
+    rows: []
+  - input: ref('int__mitx__courserun_grades')
+    rows: []
+  - input: ref('int__mitxpro__courserun_grades')
+    rows: []
+  - input: ref('int__combined__courserun_certificates')
+    rows: []
+  - input: ref('int__combined__course_runs')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows:
+    - courserun_id: 1477
+      courserun_external_readable_id: "MO-MCPO-26-12#1"
+      courserun_readable_id: "course-v1:xPRO+MCPO+26-12-1"
+      courserun_title: "MCPO"
+      courserun_created_on: "2026-10-02T09:55:54"
+    - courserun_id: 1490
+      courserun_external_readable_id: "MO-MCPO-26-12#1"
+      courserun_readable_id: "course-v1:xPRO+MO_MCPO+26-12-1"
+      courserun_title: "MO_MCPO"
+      courserun_created_on: "2026-10-14T14:18:29"
+    - courserun_id: 1500
+      courserun_external_readable_id: ""
+      courserun_readable_id: "course-v1:xPRO+NOCODE+1"
+      courserun_title: "No code"
+      courserun_created_on: "2026-01-01T00:00:00"
+  expect:
+    rows:
+    - platform: "xPRO Emeritus"
+      user_id: "E-1"
+      user_email: "ana@example.com"
+      courserun_id: 1477
+      courserun_title: "MCPO"
+      courserun_readable_id: "course-v1:xPRO+MCPO+26-12-1"
