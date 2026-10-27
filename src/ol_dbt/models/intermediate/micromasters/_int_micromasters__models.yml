@@ -238,9 +238,13 @@ models:
     int__mitx__users. Certificates neither side matched that way are matched by email,
     ignoring case, and program, preferring the exact creation time, because int__mitx__users
     links some MicroMasters accounts to a different MITx Online account or to none.
-    Non-DEDP certificates come from 2U's program learner report. User's profile fields
-    are chosen in the order of MITx Online, MicroMasters, and edX.org, whichever is
-    not null.
+    A learner with a MicroMasters certificate and a MITx Online one created on or
+    after 2022-10-01 for the same program gets two rows on purpose, as before this
+    model read MITx Online for every date, because the later certificate's hash is
+    already in MIT Learn. When both rows carry the same email, the unique test on
+    user_email and program_readable_id fails. Non-DEDP certificates come from 2U's
+    program learner report. User's profile fields are chosen in the order of MITx
+    Online, MicroMasters, and edX.org, whichever is not null.
   config:
     meta:
       qa_branches:
