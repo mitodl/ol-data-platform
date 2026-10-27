@@ -882,8 +882,9 @@ models:
       Statistics and Data Science track has its own program name, so for those rows
       it equals program_course_cert_count. It differs from program_course_cert_count
       only where programs share a name. A program with no enrollment rows has no program
-      name, so it counts on its own and equals program_course_cert_count. Null when
-      there are none.
+      name and groups on its own program_report_key instead, which for a title-keyed
+      program is its title, as dim_program_report_key's program_name would be. Null
+      when there are none.
   - name: program_cert_ind
     description: str, 'Y' when any marts__combined_program_enrollment_detail row for
       the user's email and this program has user_has_completed_program true, otherwise
@@ -2017,7 +2018,8 @@ unit_tests:
     Each track is its own row, and a program keyed on its title has a null program_readable_id.
     A revoked certificate (user_has_completed_program false) does not set program_cert_ind.
     A course certificate alone adds a row with no enrollment, and a user with neither
-    gets one row with null program columns. Emails match regardless of letter case.
+    gets one row with null program columns. Emails match regardless of letter case
+    on the user, program enrollment and course enrollment sides.
     A program row the marts key to no program adds no row. Learner a holds certificates
     in course-2 (only in the International Development track), course-1 (in both tracks)
     and course-5 (only in the Public Policy track), so each track row counts 2 courses
@@ -2046,7 +2048,7 @@ unit_tests:
         \ International Development", report_program_name: "Policy"}
     - {user_email: "a@example.com", user_has_completed_program: true, program_report_key: null,
       report_program_readable_id: null, report_program_title: null, report_program_name: null}
-    - {user_email: "b@example.com", user_has_completed_program: false, program_report_key: "program-v1:xPRO+L",
+    - {user_email: "B@Example.com", user_has_completed_program: false, program_report_key: "program-v1:xPRO+L",
       report_program_readable_id: "program-v1:xPRO+L", report_program_title: "Leadership",
       report_program_name: "Leadership"}
     - {user_email: "b@example.com", user_has_completed_program: true, program_report_key: "Computer\
@@ -2063,7 +2065,7 @@ unit_tests:
     - {user_email: "a@example.com", course_readable_id: "course-5", courseruncertificate_is_earned: true}
     - {user_email: "c@example.com", course_readable_id: "course-1", courseruncertificate_is_earned: true}
     - {user_email: "c@example.com", course_readable_id: "course-4", courseruncertificate_is_earned: true}
-    - {user_email: "c@example.com", course_readable_id: "course-6", courseruncertificate_is_earned: true}
+    - {user_email: "C@Example.com", course_readable_id: "course-6", courseruncertificate_is_earned: true}
   - input: ref('marts__combined_coursesinprogram')
     rows:
     - {course_readable_id: "course-1", program_report_key: "program-v1:MITx+ID", report_program_readable_id: "program-v1:MITx+ID",
