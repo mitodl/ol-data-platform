@@ -72,8 +72,8 @@ metadata:
       ownState: {}
     description: ''
     filterType: filter_select
-    id: NATIVE_FILTER-RV4K3jCG00isIH5GM8vi8
-    name: DEDP_Program_Cert_Indicator
+    id: NATIVE_FILTER-SDAUM5euCgpM0iShyPHdk
+    name: Program
     scope:
       excluded: []
       rootPath:
@@ -83,7 +83,37 @@ metadata:
     - TAB-dhOB0wMgmenerPbUQNy7K
     targets:
     - column:
-        name: any_dedp_program_cert_ind
+        name: program_name
+      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 261
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-RV4K3jCG00isIH5GM8vi8
+    name: Program Cert Indicator
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    sortMetric: null
+    tabsInScope:
+    - TAB-dhOB0wMgmenerPbUQNy7K
+    targets:
+    - column:
+        name: program_cert_ind
       datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
     type: NATIVE_FILTER
   - cascadeParentIds: []
@@ -103,7 +133,7 @@ metadata:
     description: ''
     filterType: filter_select
     id: NATIVE_FILTER-qPMfIWPCHb2lhenCJVuMT
-    name: DEDP_Course_Cert_Count
+    name: Program Course Cert Count
     scope:
       excluded: []
       rootPath:
@@ -113,7 +143,7 @@ metadata:
     - TAB-dhOB0wMgmenerPbUQNy7K
     targets:
     - column:
-        name: dedp_course_cert_count
+        name: program_course_cert_count
       datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
     type: NATIVE_FILTER
   - cascadeParentIds:
@@ -194,7 +224,7 @@ metadata:
     description: ''
     filterType: filter_select
     id: NATIVE_FILTER-neydWriKnWkdQrS0Dh_w7
-    name: DEDP Program Enrolled Indicator
+    name: Program Enrolled Indicator
     scope:
       excluded: []
       rootPath:
@@ -204,7 +234,7 @@ metadata:
     - TAB-dhOB0wMgmenerPbUQNy7K
     targets:
     - column:
-        name: any_dedp_program_enroll_ind
+        name: program_enroll_ind
       datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
     type: NATIVE_FILTER
   refresh_frequency: 0
@@ -247,7 +277,12 @@ position:
       code: '### Change Log
 
         **2/2/26**: Enabled search functionality on User Email and User Full Name
-        filters'
+        filters
+
+        **10/27/26**: Replaced the DEDP columns and filters with program columns
+        and filters. The table has one row per learner and program. To see the
+        former DEDP view, select Data, Economics, and Design of Policy in the Program
+        filter. A learner''s completed tracks are in program_completed_tracks.'
       height: 50
       width: 12
     parents:
