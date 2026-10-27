@@ -159,7 +159,7 @@ Embedding cost is bounded by the input checksum instead of a separate cache tabl
 - `evaluation`: the in-process evaluator of §3 and `log_opik_experiment`.
 - `learn`: `LEARN_V1_CONTENT_FILES`, Learn's point keys, `ContentFilePointMapper` and `chunk_and_embed`. Its tests run a copy of Learn's own code against it.
 
-`ol_orchestrate.resources.embeddings` has `EmbeddingsResource` (configures ol-llm and its Opik tracing, with the Keycloak client from Vault `secret-opik/sdk-client`, and gives each strategy an ol-llm use case `embed-<strategy>`) and `QdrantResource`.
+`ol_orchestrate.resources.embeddings` has `EmbeddingsResource` (configures ol-llm and its Opik tracing, with dagster-ml's own Keycloak client for the environment, `opik-dagster-ml-<env>`, read from the Vault location in `OPIK_KEYCLOAK_VAULT_MOUNT`/`OPIK_KEYCLOAK_VAULT_PATH` (`secret-opik/sdk-dagster-ml`), and gives each strategy an ol-llm use case `embed-<strategy>`) and `QdrantResource`.
 
 ### Dagster assets
 
