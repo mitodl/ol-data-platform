@@ -341,7 +341,7 @@ def test_rows_that_do_not_make_one_tree_with_their_stand_ins_are_refused(
         check_tree(XPRO_PAGES, _committed_rows(XPRO_PAGES), generated, key_columns=["id"], stand_ins=stand_ins)
 
 
-def test_a_hand_written_row_without_its_key_is_named_by_null() -> None:
+def test_a_hand_written_row_without_its_key_passes_the_check() -> None:
     pages = _committed_rows(XPRO_PAGES)
     keyless, pathless = _by_id(pages, 10), _by_id(pages, 13)
     del keyless["id"]
