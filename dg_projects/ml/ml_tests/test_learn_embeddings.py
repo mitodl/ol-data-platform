@@ -931,15 +931,23 @@ def learn_chunk(
     )
 
 
-def check_content_files(tables, selection: AssetSelection | None = None) -> Any:
+def check_content_files(
+    tables,
+    selection: AssetSelection | None = None,
+    partition: MultiPartitionKey = PARTITION,
+) -> Any:
+    dagster_instance = DagsterInstance.ephemeral()
+    dagster_instance.add_dynamic_partitions(
+        "learn_content_file_run", [partition.keys_by_dimension["run"]]
+    )
     result = materialize(
         [
             content_file_embedding_chunks,
             content_file_embedding_vectors,
             content_file_vectors_match_learn,
         ],
-        partition_key=PARTITION,
-        instance=instance(),
+        partition_key=partition,
+        instance=dagster_instance,
         resources={
             "learn_embeddings_io_manager": Warehouse(tables),
             "embeddings": fake_embeddings(),
@@ -982,6 +990,42 @@ def test_vectors_that_match_learns_pass(tables, learn_qdrant):
     assert metadata["checksum_matches"] == 2
     assert metadata["compared_vectors"] == 2
     assert metadata[f"{AZURE_MODEL}/cosine_min"] == pytest.approx(1.0)
+
+
+def xpro_learn_chunk(key: str, text: str) -> models.PointStruct:
+    return models.PointStruct(
+        id=learn_point_id("emeritus", XPRO_COURSE, XPRO_RUN, key, "0"),
+        vector={DENSE: fake_vector(text)},
+        payload={
+            "chunk_content": text,
+            "chunk_number": 0,
+            "checksum": md5_hex(text),
+            "run_readable_id": XPRO_RUN,
+            "resource_readable_id": XPRO_COURSE,
+            "platform": {"code": "emeritus"},
+            "key": key,
+            "file_type": None,
+        },
+    )
+
+
+def test_an_xpro_run_is_compared_under_its_platform_code(tables, learn_qdrant):
+    load_xpro(tables, "emeritus")
+    learn_qdrant.upsert(
+        f"{LEARN_BASE}.content_files",
+        [
+            xpro_learn_chunk("block-v1:a", "Program management."),
+            # Found only by listing the run's points under its platform code.
+            xpro_learn_chunk("block-v1:gone", "A file the platform does not have."),
+        ],
+    )
+
+    evaluation = check_content_files(tables, partition=XPRO_PARTITION)
+
+    metadata = {key: value.value for key, value in evaluation.metadata.items()}
+    assert metadata["matched_ids"] == 1
+    assert metadata["compared_vectors"] == 1
+    assert metadata["missing_on_platform"] == 1
 
 
 def test_a_vector_unlike_learns_for_the_same_text_is_an_error(tables, learn_qdrant):
