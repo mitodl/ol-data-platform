@@ -623,10 +623,9 @@ models:
   - name: user_has_completed_program
     description: >-
       boolean, whether the learner has completed the program. This column is the
-      program completion rule, and the other program completion columns
-      (marts__combined__users.has_program_certificate, program_summary_report.program_certificates,
-      learner_demographics_and_cert_info's DEDP indicators) state how they differ
-      from it. The rule depends on the platform.
+      program completion rule. marts__combined__users.has_program_certificate,
+      program_summary_report.program_certificates and learner_demographics_and_cert_info.program_cert_ind
+      read it. The rule depends on the platform.
       MITx Online and xPRO (platform_name is the xPRO program's platform, xPRO or
       Simplilearn): true when the application holds an unrevoked program certificate.
       The rule reads programcertificate_url, which is null when the certificate
