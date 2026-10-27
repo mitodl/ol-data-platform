@@ -1938,7 +1938,9 @@ unit_tests:
     certificate and the course enrollment counts, with a null program_readable_id.
     A MicroMasters row the mart gave a MITx Online readable id keeps that program
     with no title mapping. An xPRO program keeps its own row. Emails that differ
-    only in letter case are one learner in both halves.
+    only in letter case are one learner in both halves. An XSeries whose title
+    maps to nothing, as a title two MITx Online programs share does, keeps its
+    own row.
   model: program_summary_report
   given:
   - input: ref('marts__combined_program_enrollment_detail')
@@ -1957,6 +1959,8 @@ unit_tests:
         no mapping, user_email: e@example.com, user_has_completed_program: true}
     - {platform_name: xPRO, program_readable_id: "program-v1:xPRO+X", program_title: X
         Program, user_email: d@example.com, user_has_completed_program: true}
+    - {platform_name: edX.org, program_readable_id: null, program_title: Shared, user_email: h@example.com,
+      user_has_completed_program: true}
   - input: ref('marts__combined_coursesinprogram')
     rows:
     - {program_readable_id: "program-v1:MITxT+SDS-General-Track", program_title: "SDS\
@@ -1964,6 +1968,7 @@ unit_tests:
     - {program_readable_id: null, program_title: Old MicroMasters, course_readable_id: "MITx/OM1"}
     - {program_readable_id: "program-v1:MITx+DEDP", program_title: DEDP ID, course_readable_id: "course-v1:MITxT+D"}
     - {program_readable_id: "program-v1:xPRO+X", program_title: X Program, course_readable_id: "course-v1:xPRO+X1"}
+    - {program_readable_id: null, program_title: Shared, course_readable_id: "MITx/SH1"}
   - input: ref('marts__combined_course_enrollment_detail')
     rows:
     - {course_readable_id: "course-v1:MITxT+A", courserun_readable_id: "course-v1:MITxT+A+1T2020",
@@ -1980,6 +1985,8 @@ unit_tests:
     - {course_readable_id: "course-v1:xPRO+X1", courserun_readable_id: "course-v1:xPRO+X1+R1",
       user_email: d@example.com, user_country_code: US, courserunenrollment_enrollment_mode: audit,
       courseruncertificate_is_earned: true}
+    - {course_readable_id: "MITx/SH1", courserun_readable_id: "MITx/SH1/1T2016", user_email: h@example.com,
+      user_country_code: US, courserunenrollment_enrollment_mode: audit, courseruncertificate_is_earned: false}
   - input: ref('dim_program_report_key')
     rows:
     - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+SDS-General-Track",
@@ -1997,6 +2004,8 @@ unit_tests:
     - {lookup_type: title, lookup_value: Old MicroMasters, program_key: Old MicroMasters,
       program_readable_id: null, program_title: Old MicroMasters, program_name: Old
         MicroMasters, program_type: MicroMasters}
+    - {lookup_type: title, lookup_value: Shared, program_key: Shared, program_readable_id: null,
+      program_title: Shared, program_name: Shared, program_type: XSeries}
   expect:
     rows:
     - {program_readable_id: "program-v1:MITxT+SDS-General-Track", program_title: "SDS\
@@ -2008,3 +2017,5 @@ unit_tests:
       unique_users: 1, verified_enrollments: 0, course_certificates: 0, program_certificates: 1}
     - {program_readable_id: "program-v1:xPRO+X", program_title: X Program, total_enrollments: 1,
       unique_users: 1, verified_enrollments: 0, course_certificates: 1, program_certificates: 1}
+    - {program_readable_id: null, program_title: Shared, total_enrollments: 1, unique_users: 1,
+      verified_enrollments: 0, course_certificates: 0, program_certificates: 1}

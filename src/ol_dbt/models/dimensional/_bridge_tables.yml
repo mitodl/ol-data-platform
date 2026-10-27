@@ -340,6 +340,9 @@ unit_tests:
     whose CMS page lists it. Other edX.org MITx program memberships are retained
     from the program-course API, matched to the MITx Online course key when the
     course moved to MITx Online and to the edX.org course key when it did not.
+    An edX.org program whose title dim_program_report_key maps to a MITx Online
+    program is left out. One it leaves unmapped, e.g. a title two MITx Online
+    programs share, keeps its courses.
   model: bridge_program_course
   given:
   - input: ref('int__mitxonline__program_requirements')
@@ -368,10 +371,16 @@ unit_tests:
       course_position_in_program: 2}
   - input: ref('int__edxorg__mitx_program_courses')
     rows:
-    - {program_uuid: "edxorg-program", program_name: "Other Program", course_readable_id: "MITx/OTHER+1"}
-    - {program_uuid: "edxorg-program", program_name: "Other Program", course_readable_id: "MITx/EDXONLY"}
-  - input: ref('int__mitx__programs')
-    rows: []
+    - {program_uuid: "edxorg-program", program_title: "Other Program", program_name: "Other\
+        \ Program", course_readable_id: "MITx/OTHER+1"}
+    - {program_uuid: "edxorg-program", program_title: "Other Program", program_name: "Other\
+        \ Program", course_readable_id: "MITx/EDXONLY"}
+    - {program_uuid: "edxorg-mapped", program_title: "Mapped Program", program_name: "Mapped\
+        \ Program", course_readable_id: "MITx/EDXONLY"}
+  - input: ref('dim_program_report_key')
+    rows:
+    - {lookup_type: title, lookup_value: "Other Program", mapped_by: none}
+    - {lookup_type: title, lookup_value: "Mapped Program", mapped_by: seed}
   - input: ref('int__mitx__courses')
     rows:
     - {course_readable_id: "course-v1:MITxT+OTHER+1"}
@@ -385,6 +394,7 @@ unit_tests:
     - {program_pk: p2, source_id: "2", platform_code: mitxpro}
     - {program_pk: p3, source_id: "3", platform_code: micromasters}
     - {program_pk: p4, source_id: "edxorg-program", platform_code: edxorg}
+    - {program_pk: p5, source_id: "edxorg-mapped", platform_code: edxorg}
   - input: ref('dim_course')
     rows:
     - {course_pk: c10, source_id: 10, primary_platform: mitxonline, is_current: true}
