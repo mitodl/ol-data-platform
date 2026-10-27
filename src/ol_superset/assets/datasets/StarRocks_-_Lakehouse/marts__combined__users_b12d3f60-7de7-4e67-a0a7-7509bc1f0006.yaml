@@ -406,19 +406,6 @@ columns:
   type: BIGINT(20)
   verbose_name: null
 - advanced_data_type: null
-  column_name: has_dedp_program_certificate
-  datetime_format: null
-  description: null
-  expression: ''
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: BOOLEAN
-  verbose_name: null
-- advanced_data_type: null
   column_name: has_program_certificate
   datetime_format: null
   description: null
