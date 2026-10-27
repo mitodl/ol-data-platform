@@ -1255,6 +1255,7 @@ def reconcile_dbt(
 DRIFT_CHECK = "inventory_drift"
 
 MANUAL_SCHEDULE = "manual"
+STOPPED_CONNECTION_STATUSES = frozenset({"inactive", "deprecated"})
 
 # How Airbyte spells a Postgres replication method, mapped to the inventory's
 # vocabulary. Mirrors `bin/airbyte-inventory.py`, which cannot be imported from
@@ -1373,14 +1374,19 @@ def check_drift(snapshot: dict[str, Any], units: list[Unit], report: ValidationR
         )
 
     for name in sorted(set(live) - set(declared)):
+        # A retired connection is disabled, not deleted (§10.1), so one that
+        # loads nothing is the expected end state. Resuming it makes it active
+        # and brings the warning back.
+        if live[name].get("status") in STOPPED_CONNECTION_STATUSES:
+            continue
         report.add(
             DRIFT_CHECK,
             Severity.WARNING,
             "(undeclared)",
-            f"connection {name!r} exists in Airbyte but no unit declares it",
-            "Either it was created in the UI, or it is config we meant to "
-            "delete and did not. Retiring a connection means deleting it in "
-            "Airbyte as well as recording its tables in retired.yml.",
+            f"connection {name!r} is active in Airbyte but no unit declares it",
+            "Either it was created in the UI, or it is retired config that "
+            "was resumed. Retiring a connection means disabling it in Airbyte "
+            "as well as recording its tables in retired.yml.",
         )
 
     for name in sorted(set(live) & set(declared)):

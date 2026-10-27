@@ -516,6 +516,10 @@ against the inventory, and report any difference. Same read-only path `bin/airby
 already uses. This is what makes the inventory trustworthy between changes, and it is the only
 part of the Airbyte-as-code story that needs to run on a timer.
 
+Retiring a connection disables it in Airbyte rather than deleting it, as a production cutover
+does (§10.1), so the check stays silent about a connection no unit declares while that
+connection is `inactive`. Resuming one brings the warning back.
+
 ---
 
 ## 5. What the inventory generates
