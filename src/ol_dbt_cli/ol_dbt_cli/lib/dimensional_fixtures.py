@@ -117,6 +117,10 @@ def parse_dimensional_fixture(path: Path) -> DimensionalFixture:
         except ValueError as error:
             msg = f"{path}: parameter {name}: {error}"
             raise ValueError(msg) from error
+        # A value comes from --set as text, and a boolean column takes only 0 or 1.
+        if body["type"] == "boolean":
+            msg = f"{path}: parameter {name} is boolean, which --set cannot supply; parameters are ids"
+            raise ValueError(msg)
         parameters[name] = Parameter(name, body["type"], body["description"])
 
     used: set[str] = set()

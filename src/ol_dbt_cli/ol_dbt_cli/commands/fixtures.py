@@ -141,6 +141,14 @@ def connect_local_lake(host: str = LOCAL_HOST, port: int = LOCAL_PORT) -> MySQLC
     )
 
 
+def _replace_table(cursor: Any, schema: str, table: TableFixture, parameters: list[tuple[Any, ...]]) -> None:
+    """Drop ``table`` in the local catalog's ``schema``, create it again and insert ``parameters``."""
+    cursor.execute(f"DROP TABLE IF EXISTS {qualified_name(LOCAL_CATALOG, schema, table.raw_table)} FORCE")
+    cursor.execute(create_table_sql(table, LOCAL_CATALOG, schema))
+    for start in range(0, len(parameters), INSERT_BATCH_ROWS):
+        cursor.executemany(insert_sql(table, LOCAL_CATALOG, schema), parameters[start : start + INSERT_BATCH_ROWS])
+
+
 def _select(inventory_dir: Path, unit: list[str] | None) -> list[Unit]:
     units = load_units(inventory_dir)
     if not unit:
@@ -220,10 +228,7 @@ def load(
     cursor.execute(f"CREATE DATABASE IF NOT EXISTS {qualified_name(LOCAL_CATALOG, schema)}")
     for loaded, parameters in prepared:
         table = loaded.table
-        cursor.execute(f"DROP TABLE IF EXISTS {qualified_name(LOCAL_CATALOG, schema, table.raw_table)} FORCE")
-        cursor.execute(create_table_sql(table, LOCAL_CATALOG, schema))
-        for start in range(0, len(parameters), INSERT_BATCH_ROWS):
-            cursor.executemany(insert_sql(table, LOCAL_CATALOG, schema), parameters[start : start + INSERT_BATCH_ROWS])
+        _replace_table(cursor, schema, table, parameters)
         counts = (
             f"{len(loaded.hand_written)} row(s)"
             if loaded.generated is None
@@ -264,8 +269,13 @@ def load_dimensional(
     values: dict[str, str] = {}
     for assignment in set_ or []:
         key, separator, value = assignment.partition("=")
-        if not separator or not key:
-            err_console.print(f"[bold red]--set {escape(assignment)}: expected NAME=VALUE.")
+        # An empty value is most often an unset shell variable, and it would
+        # load views keyed to nothing, which reads as a broken dashboard.
+        if not separator or not key or not value:
+            err_console.print(f"[bold red]--set {escape(assignment)}: expected NAME=VALUE with a non-empty VALUE.")
+            sys.exit(1)
+        if key in values:
+            err_console.print(f"[bold red]--set {escape(key)} is given more than once.")
             sys.exit(1)
         values[key] = value
     try:
@@ -283,15 +293,7 @@ def load_dimensional(
     cursor = connection.cursor()
     cursor.execute(f"CREATE DATABASE IF NOT EXISTS {qualified_name(LOCAL_CATALOG, LOCAL_DIMENSIONAL_SCHEMA)}")
     for table, parameters in prepared:
-        cursor.execute(
-            f"DROP TABLE IF EXISTS {qualified_name(LOCAL_CATALOG, LOCAL_DIMENSIONAL_SCHEMA, table.raw_table)} FORCE"
-        )
-        cursor.execute(create_table_sql(table, LOCAL_CATALOG, LOCAL_DIMENSIONAL_SCHEMA))
-        for start in range(0, len(parameters), INSERT_BATCH_ROWS):
-            cursor.executemany(
-                insert_sql(table, LOCAL_CATALOG, LOCAL_DIMENSIONAL_SCHEMA),
-                parameters[start : start + INSERT_BATCH_ROWS],
-            )
+        _replace_table(cursor, LOCAL_DIMENSIONAL_SCHEMA, table, parameters)
         console.print(f"{LOCAL_DIMENSIONAL_SCHEMA}.{escape(table.raw_table)}: {len(parameters)} row(s)", soft_wrap=True)
     connection.close()
 

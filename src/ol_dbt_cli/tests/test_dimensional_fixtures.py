@@ -81,6 +81,7 @@ def test_placeholders_are_replaced_with_typed_values(tmp_path: Path) -> None:
         ([{"thing_pk": "a"}], {"external_id": "string"}, "string", "used by no row"),
         ([{"thing_pk": "a", "other": "$external_id"}], {"external_id": "string"}, "string", "does not have"),
         ([{"thing_pk": "a", "external_id": "x"}], {}, "long", "not a valid long"),
+        ([{"thing_pk": "a", "external_id": "$external_id"}], {"external_id": "boolean"}, "boolean", "--set cannot"),
     ],
 )
 def test_parse_rejects(
@@ -194,7 +195,7 @@ def test_every_b2b_view_shows_rows_from_the_fixture() -> None:
         assert rows, f"{view} returns no rows"
         if view in primaries:
             cohorts = [row[primaries[view]] for row in rows]
-            assert max(cohorts) >= ANONYMIZATION_FLOOR, f"{view}: every {primaries[view]} in {cohorts} is suppressed"
+            assert min(cohorts) >= ANONYMIZATION_FLOOR, f"{view}: a {primaries[view]} in {cohorts} is suppressed"
         assert all(row["sso_organization_id"] == B2B_VALUES["sso_organization_id"] for row in rows), (
             f"{view} has rows for another organization"
         )
@@ -239,8 +240,17 @@ def test_load_dimensional_writes_the_dimensional_schema(tmp_path: Path, monkeypa
     assert connection.statements[-1][1] == [("a", "x-1")]
 
 
-def test_load_dimensional_without_a_parameter_connects_to_nothing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    "assignments",
+    [
+        [],
+        # What `--set external_id=$UNSET_VARIABLE` reaches the command as.
+        ["external_id="],
+        ["external_id=a", "external_id=b"],
+    ],
+)
+def test_load_dimensional_with_a_bad_set_connects_to_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, assignments: list[str]
 ) -> None:
     _write(tmp_path, _document([{"thing_pk": "a", "external_id": "$external_id"}], {"external_id": "string"}))
 
@@ -250,4 +260,4 @@ def test_load_dimensional_without_a_parameter_connects_to_nothing(
     monkeypatch.setattr(fixtures_command, "connect_local_lake", refuse)
 
     with pytest.raises(SystemExit):
-        fixtures_command.load_dimensional("demo", fixtures_dir=tmp_path)
+        fixtures_command.load_dimensional("demo", set_=assignments, fixtures_dir=tmp_path)
