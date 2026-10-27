@@ -1,6 +1,8 @@
 """Reads of the warehouse tables the ml assets consume and write."""
 
 import os
+from collections.abc import Mapping, Sequence
+from functools import reduce
 
 import polars as pl
 from dagster import Failure
@@ -10,8 +12,10 @@ from ol_orchestrate.lib.glue_helper import (
     FIXTURE_DIR_VARIABLE,
     LOCAL_LAKE_VARIABLE,
     get_dbt_model_as_dataframe,
+    load_dbt_model_table,
 )
 from pyiceberg.exceptions import NoSuchTableError
+from pyiceberg.expressions import And, EqualTo
 
 
 def warehouse_database(layer: str) -> str:
@@ -35,15 +39,7 @@ def warehouse_database(layer: str) -> str:
     return f"ol_warehouse_{DAGSTER_ENV}_{layer}"
 
 
-def read_table(layer: str, table: str) -> pl.LazyFrame | None:
-    """Scan a warehouse table, or return None when it does not exist yet.
-
-    :param layer: the warehouse layer, e.g. intermediate
-    :param table: the table name
-    :returns: the table, lazily
-    :rtype: pl.LazyFrame | None
-    :raises PermanentFailure: when a dev read redirect is set (see below)
-    """
+def _refuse_dev_redirects() -> None:
     # These redirect the read to fixtures or the local lake, while the assets that
     # use this always write to Glue. Each reads its own earlier output to know what
     # is stored, so a redirected read finds nothing and pays for the whole corpus
@@ -59,6 +55,18 @@ def read_table(layer: str, table: str) -> pl.LazyFrame | None:
             "read what they stored from there."
         )
         raise permanent_failure(msg)
+
+
+def read_table(layer: str, table: str) -> pl.LazyFrame | None:
+    """Scan a warehouse table, or return None when it does not exist yet.
+
+    :param layer: the warehouse layer, e.g. intermediate
+    :param table: the table name
+    :returns: the table, lazily
+    :rtype: pl.LazyFrame | None
+    :raises PermanentFailure: when a dev read redirect is set
+    """
+    _refuse_dev_redirects()
     try:
         return get_dbt_model_as_dataframe(
             database_name=warehouse_database(layer), table_name=table
@@ -77,3 +85,60 @@ def require_table(layer: str, table: str) -> pl.LazyFrame:
         msg = f"{warehouse_database(layer)}.{table} has not been built yet"
         raise Failure(msg)
     return rows
+
+
+def load_matching_rows(
+    database_name: str,
+    table_name: str,
+    columns: Sequence[str],
+    equals: Mapping[str, str],
+) -> pl.DataFrame:
+    """Read the rows of an Iceberg table whose columns equal the given values.
+
+    :param database_name: the Glue database
+    :param table_name: the table
+    :param columns: the columns to read
+    :param equals: column values every returned row has, at least one
+    :returns: the rows, with ``columns`` in the order given
+    :rtype: pl.DataFrame
+    :raises ValueError: when ``equals`` is empty
+    """
+    if not equals:
+        msg = f"reading {database_name}.{table_name} needs at least one column value"
+        raise ValueError(msg)
+    scan = load_dbt_model_table(database_name, table_name).scan(
+        row_filter=reduce(
+            And, (EqualTo(column, value) for column, value in equals.items())
+        ),
+        selected_fields=tuple(columns),
+    )
+    # The scan returns the selected columns in the table's order.
+    return pl.DataFrame(scan.to_arrow_batch_reader().read_all()).select(columns)
+
+
+def require_rows(
+    layer: str, table: str, columns: Sequence[str], **equals: str
+) -> pl.DataFrame:
+    """Read the rows of an upstream table whose columns equal the given values.
+
+    Every equality goes into the Iceberg scan, which keeps only the matching
+    rows. polars does not do that for a filter on :func:`require_table`'s scan:
+    of ``etl_source == "mitxonline" & run_readable_id == <run>`` it handed
+    pyiceberg only the ``etl_source`` term, so the scan returned all 2.6M
+    mitxonline rows of integrations__learn__content_files with their text, and
+    reading one course run (2,279 rows) took 18.7 GB.
+
+    :param layer: the warehouse layer
+    :param table: the table name
+    :param columns: the columns to read
+    :param equals: column values every returned row has, at least one
+    :rtype: pl.DataFrame
+    :raises Failure: when the table has not been built yet
+    """
+    _refuse_dev_redirects()
+    database = warehouse_database(layer)
+    try:
+        return load_matching_rows(database, table, columns, equals)
+    except NoSuchTableError as error:
+        msg = f"{database}.{table} has not been built yet"
+        raise Failure(msg) from error
