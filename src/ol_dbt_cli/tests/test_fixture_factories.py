@@ -4,8 +4,8 @@ Nothing in CI loads a fixture into StarRocks, so a package that generated a
 dangling foreign key or a repeated unique value would only be found on a local
 lake. These run each package in process, at scale 1 and at a scale where fixed
 pools run out, and check its rows against the Django model dump committed next
-to it. Primary keys are not checked here: ``generate_rows`` refuses a repeated
-one.
+to it, or, for a unit with no dump, against what its staging tests draft.
+Primary keys are not checked here: ``generate_rows`` refuses a repeated one.
 
 Rows are generated at load, so a mimesis or factory_boy bump could change what
 every contributor's lake holds with no diff in the repo. The digest covers every
@@ -27,9 +27,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from ol_dbt_cli.commands.fixtures import FACTORIES_DIR, generate_command
+from ol_dbt_cli.commands.fixtures import DEFAULT_DBT_DIR, FACTORIES_DIR, generate_command
 from ol_dbt_cli.lib.fixture_generation import RESERVED_DOMAIN, generate_rows
-from ol_dbt_cli.lib.fixture_scaffold import GENERATED_FILE, MODELS_FILE, scaffold
+from ol_dbt_cli.lib.fixture_scaffold import GENERATED_FILE, MODELS_FILE, Scaffold, scaffold, scaffold_from_tests
 from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, Unit, load_units
 from ol_dbt_cli.lib.raw_fixtures import load_fixtures, stored_key, unit_factories
 
@@ -73,13 +73,21 @@ class _Generation:
         return [value for value in stored if value is not None]
 
 
+def _scaffolded(fixture: UnitFixture, unit: Unit) -> Scaffold:
+    """Scaffold ``unit`` as `ol-dbt fixtures scaffold --unit` does: from its models.json, or from its tests."""
+    models = FACTORIES_DIR / unit.path.stem / MODELS_FILE
+    if models.exists():
+        return scaffold(fixture, unit, json.loads(models.read_text()))
+    return scaffold_from_tests(fixture, unit, REPO_ROOT / DEFAULT_DBT_DIR)
+
+
 def _generation(unit: Unit, scale: float) -> _Generation:
     (fixture,) = load_fixtures(INVENTORY_DIR, [unit], selected=True)
     factories = unit_factories(unit)
     assert factories is not None
     rows = generate_rows(fixture, unit, factories, scale)
     prefix = str(unit.data["table_prefix"])
-    dump = json.loads((FACTORIES_DIR / unit.path.stem / MODELS_FILE).read_text())
+    dump = _scaffolded(fixture, unit).models
     return _Generation(
         unit=unit,
         fixture=fixture,
@@ -214,6 +222,51 @@ def test_trees_have_one_row_per_path_and_count_their_children(generation: _Gener
             assert added == generated_children[after["path"]], after["path"]
 
 
+@pytest.mark.parametrize("unit", UNITS, ids=lambda unit: unit.key)
+def test_generate_rows_checks_every_tree_the_models_have(unit: Unit) -> None:
+    """It checks the trees the package's TREE_ALPHABETS names, so a package that does not import it is not checked."""
+    (fixture,) = load_fixtures(INVENTORY_DIR, [unit], selected=True)
+    prefix = str(unit.data["table_prefix"])
+    models = json.loads((FACTORIES_DIR / unit.path.stem / MODELS_FILE).read_text())["tables"]
+    trees = {
+        table.raw_table
+        for table in fixture.tables
+        if "treebeard" in models.get(table.raw_table.removeprefix(prefix), {})
+    }
+
+    assert set(getattr(unit_factories(unit), "TREE_ALPHABETS", {})) == trees
+
+
+XPRO_PAGES = "raw__xpro__app__postgres__wagtailcore_page"
+
+
+@pytest.mark.parametrize(
+    ("changed", "message"),
+    [
+        ({"path": None}, f"{XPRO_PAGES}: the row with id=10 has no path"),
+        ({"path": "00010001000100010"}, f"{XPRO_PAGES}: the row with id=10 has path '00010001000100010', which is not"),
+        # The loader stores a key a hand-written row leaves out as NULL.
+        ({"id": None, "path": "00010001000100010"}, f"{XPRO_PAGES}: the row with id=None has path '00010001000100010'"),
+    ],
+)
+def test_a_bad_hand_written_tree_row_is_named_before_generate_reads_it(changed: dict[str, Any], message: str) -> None:
+    """``generate`` builds a Tree from the hand-written rows, whose messages cannot name the table."""
+    (unit,) = (unit for unit in UNITS if unit.key == "xpro/app_postgres")
+    (fixture,) = load_fixtures(INVENTORY_DIR, [unit], selected=True)
+    (pages,) = (table for table in fixture.tables if table.raw_table == XPRO_PAGES)
+    (page,) = (row for row in pages.rows if row["id"] == 10)  # noqa: PLR2004
+    for column, value in changed.items():
+        if value is None:
+            del page[column]
+        else:
+            page[column] = value
+    factories = unit_factories(unit)
+    assert factories is not None
+
+    with pytest.raises(ValueError, match=re.escape(message)):
+        generate_rows(fixture, unit, factories)
+
+
 def _strings(value: Any) -> Iterator[str]:
     if isinstance(value, str):
         yield value
@@ -253,7 +306,7 @@ def test_the_scaffold_reproduces_the_committed_base_factories(unit: Unit) -> Non
     package = FACTORIES_DIR / unit.path.stem
     (fixture,) = load_fixtures(INVENTORY_DIR, [unit], selected=True)
 
-    written = scaffold(fixture, unit, json.loads((package / MODELS_FILE).read_text())).source
+    written = _scaffolded(fixture, unit).source
 
     assert written == (package / GENERATED_FILE).read_text(), (
         f"{unit.path.stem}/{GENERATED_FILE} is not what `ol-dbt fixtures scaffold --unit {unit.key}` writes"

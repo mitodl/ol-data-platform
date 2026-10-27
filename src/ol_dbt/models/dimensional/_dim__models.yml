@@ -10,15 +10,15 @@ models:
       qa_branches:
       - micromasters/app_postgres
       - mitlearn/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
       - mitxonline/tracking_logs
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
       - xpro/tracking_logs
   columns:
@@ -105,11 +105,11 @@ models:
   config:
     meta:
       qa_branches:
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
-      - mitxonline/api
+      - mitxonline/course_structure
       - mitxonline/mysql
-      - xpro/api
+      - xpro/course_structure
       - xpro/mysql
   columns:
   - name: video_block_pk
@@ -157,11 +157,11 @@ models:
   config:
     meta:
       qa_branches:
-      - mitx/api
+      - mitx/course_structure
       - mitx/tracking_logs
-      - mitxonline/api
+      - mitxonline/course_structure
       - mitxonline/tracking_logs
-      - xpro/api
+      - xpro/course_structure
       - xpro/tracking_logs
   columns:
   - name: problem_block_pk
@@ -209,9 +209,9 @@ models:
   config:
     meta:
       qa_branches:
-      - mitx/api
-      - mitxonline/api
-      - xpro/api
+      - mitx/course_structure
+      - mitxonline/course_structure
+      - xpro/course_structure
   columns:
   - name: discussion_topic_pk
     description: string, primary key for this table
@@ -253,9 +253,9 @@ models:
   config:
     meta:
       qa_branches:
-      - mitx/api
-      - mitxonline/api
-      - xpro/api
+      - mitx/course_structure
+      - mitxonline/course_structure
+      - xpro/course_structure
   columns:
   - name: content_block_pk
     description: string, primary key for this table
@@ -1250,15 +1250,15 @@ models:
       qa_branches:
       - micromasters/app_postgres
       - mitlearn/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
       - mitxonline/tracking_logs
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
       - xpro/tracking_logs
   columns:
@@ -1312,15 +1312,15 @@ models:
       qa_branches:
       - micromasters/app_postgres
       - mitlearn/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
       - mitxonline/tracking_logs
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
       - xpro/tracking_logs
   columns:
@@ -1374,15 +1374,15 @@ models:
       qa_branches:
       - micromasters/app_postgres
       - mitlearn/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
       - mitxonline/tracking_logs
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
       - xpro/tracking_logs
   columns:
@@ -1800,10 +1800,16 @@ models:
     deferrals, transfers) the active one is reported, else the newest.
 
     One rule covers every platform, and its inputs are weaker outside MITx
-    Online and xPRO. edxorg certificates are never marked revoked. residential
-    has no grades or certificates, so only in_progress and not_started occur.
-    bootcamps has certificates but no grades or activity, so every uncertified
-    enrollment is not_started and gets a needs_attention_since.
+    Online and xPRO. is_passing is tfact_grade's, whose YAML states the passing
+    rule for each platform. edxorg certificates are never marked revoked.
+    residential has grades (from tfact_grade) but no certificates, so certified
+    does not occur. bootcamps has certificates but no grades or activity, so
+    every uncertified enrollment is not_started and gets a needs_attention_since.
+    emeritus' and global_alumni's own sources supply no grades, certificates or
+    activity. An enrollment on an xPRO-mapped run carries the xPRO run's
+    courserun_fk, and dim_user groups the learner's accounts by email, so the row
+    reaches another status only through the same learner's xPRO grade, certificate
+    or activity on the same run. Otherwise it is not_started.
 
     Consent is not applied. A consumer-facing model built on this one must
     carry or apply consent itself.
@@ -1850,7 +1856,7 @@ models:
       for a non-B2B enrollment and on every other platform.
   - name: platform
     description: string, platform of the enrollment (mitxonline, mitxpro, edxorg,
-      residential, bootcamps).
+      residential, bootcamps, emeritus, global_alumni).
     tests:
     - not_null
     config:
@@ -1884,17 +1890,22 @@ models:
       from tfact_enrollment.
   - name: is_passing
     description: boolean, the grade's own passing flag, carried from tfact_grade whatever
-      the certificate status. Null when there is no grade. A certified learner with
-      a passing grade is true here, so count this for "passed" totals and use completion_status
-      = 'passed' for passed-and-not-certified. A certified learner can also be false
-      or null, because an unrevoked certificate is certified without a passing grade.
+      the certificate status. The rule differs per platform; tfact_grade.is_passing
+      states it. Null when there is no grade, which is every bootcamps enrollment
+      and every emeritus and global_alumni enrollment without the same learner's xPRO
+      grade on the same run. A certified learner with a passing grade is true here,
+      so count this for "passed" totals and use completion_status = 'passed' for passed-and-not-certified.
+      A certified learner can also be false or null, because an unrevoked certificate
+      is certified without a passing grade.
     config:
       meta:
         openmetadata:
           glossary:
           - open-learning.ferpa-classification.education-record
   - name: grade_value
-    description: double, grade between 0.0 and 1.0. Null when there is no grade.
+    description: double, grade on a 0.0 to 1.0 scale, carried from tfact_grade, so
+      it can exceed 1.0 where the source allows it (tfact_grade.grade_value). Null
+      when there is no grade.
     config:
       meta:
         openmetadata:
@@ -2039,12 +2050,12 @@ models:
     meta:
       qa_branches:
       - micromasters/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
-      - mitxonline/api
       - mitxonline/app_postgres
-      - xpro/api
+      - mitxonline/course_structure
       - xpro/app_postgres
+      - xpro/course_structure
   columns:
   - name: courserun_fk
     description: string, foreign key to dim_course_run. Null when the course structure's
@@ -2133,13 +2144,13 @@ models:
       qa_branches:
       - micromasters/app_postgres
       - mitlearn/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
   columns:
   - name: user_fk

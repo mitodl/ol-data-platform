@@ -3,7 +3,7 @@
 import json
 
 import dagster as dg
-from ol_dlt.sources import course_xml_blocks, ocw_content
+from ol_dlt.sources import course_xml_blocks, edxorg_program_reports, ocw_content
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from data_loading.defs.ingestion.assets import (
@@ -200,9 +200,11 @@ posthog_events_ingest_schedule = dg.ScheduleDefinition(
     # Schedule tags are strings; dagster-k8s parses this one as JSON.
     #
     # max_runtime bounds a run that hangs with its pod still alive, which would
-    # otherwise hold should_execute's skip forever: the instance sets no global
-    # limit (run_monitoring max_runtime_seconds: 0). Every load commits its own
-    # cursor, so a run cut off mid-backlog loses at most one load.
+    # otherwise hold should_execute's skip. This tag is the bound for these
+    # runs: it overrides the instance's 2-day run_monitoring
+    # max_runtime_seconds, which only applies to runs with no tag. Every load
+    # commits its own cursor, so a run cut off mid-backlog loses at most one
+    # load.
     tags={
         "dagster/max_runtime": str(6 * 60 * 60),
         "dagster-k8s/config": json.dumps(
@@ -239,6 +241,27 @@ course_xml_blocks_ingest_schedule = dg.ScheduleDefinition(
         )
     ),
     cron_schedule="45 4 * * *",
+    execution_timezone="Etc/UTC",
+    default_status=(
+        dg.DefaultScheduleStatus.RUNNING
+        if DAGSTER_ENV == "production"
+        else dg.DefaultScheduleStatus.STOPPED
+    ),
+)
+
+# edX.org's learner reports reach the landing zone at about 15:00 UTC (S3
+# modification times 14:51 to 15:02 on 2026-10-14 to 2026-10-23), so the day's
+# reports are loaded well ahead of the next non_airbyte_staging_daily at 06:00.
+# The first runs walk the 4.93 TB backlog, about 430 GB per run at the
+# 200-batch cap; later runs read one day of reports. RUNNING by default in
+# production only, as for the course XML blocks: the source always reads the
+# production landing zone.
+edxorg_program_reports_ingest_schedule = dg.ScheduleDefinition(
+    name="edxorg_program_reports_ingest_daily_schedule",
+    target=dg.AssetSelection.keys(
+        ["ol_warehouse_raw_data", edxorg_program_reports.RAW_TABLE]
+    ),
+    cron_schedule="30 16 * * *",
     execution_timezone="Etc/UTC",
     default_status=(
         dg.DefaultScheduleStatus.RUNNING
@@ -342,6 +365,7 @@ defs = dg.Definitions(
         *([xpro_app_ingest_schedule] if xpro_app_ingest_schedule else []),
         posthog_events_ingest_schedule,
         course_xml_blocks_ingest_schedule,
+        edxorg_program_reports_ingest_schedule,
         ocw_content_ingest_schedule,
     ],
 )

@@ -12,11 +12,20 @@
   MIT Learn keeps the newer of the two by data.json's S3 modification time,
   which the load does not record. ocw-studio's url_path is the path a site is
   published at now, so a directory no site has as its url_path is left out.
+
+  A site keeps its url_path when it is unpublished. ocw-studio sets
+  unpublish_status on the unpublish request, clears it when a live publish is
+  requested, and leaves a site with any unpublish_status out of its own builds.
+  The bucket load drops the course only on its next daily sweep after the
+  prefix is removed, and never while the removal is pending or has errored, so
+  the site is left out here from the first sync of ocw-studio's database after
+  the request.
 #}
 
 with published_paths as (
     select distinct website_url_path
     from {{ ref('stg__ocw__studio__postgres__websites_website') }}
+    where website_unpublish_status is null
 )
 
 , content as (

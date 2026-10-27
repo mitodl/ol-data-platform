@@ -1,4 +1,4 @@
-from collections.abc import Iterator, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -12,6 +12,7 @@ from dagster import (
     MaterializeResult,
     multi_asset,
 )
+from dagster_dbt import DagsterDbtTranslator
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 
 from lakehouse.lib.dbt_environment import DBT_AUTOMATION_ENABLED
@@ -46,6 +47,34 @@ def _validate_superset_database_config(database_id: int, database_name: str) -> 
             "Received database_id=1, which is the default reserved for Trino."
         )
         raise ValueError(msg)
+
+
+def superset_dataset_keys(
+    asset_keys: Iterable[AssetKey],
+    manifest: Mapping[str, Any],
+    translator: DagsterDbtTranslator,
+    layers: Collection[str],
+) -> list[AssetKey]:
+    """Return the dbt model keys to build Superset datasets for.
+
+    A model in one of layers gets a dataset unless its dbt meta sets
+    ``superset_dataset: false``, e.g. a model holding verbatim course text that no
+    source-visibility policy covers yet.
+
+    :param asset_keys: the dbt project's asset keys
+    :param manifest: the dbt manifest the keys come from
+    :param translator: the translator that keyed the manifest's nodes
+    :param layers: the first key segments (dbt layers) that get datasets
+    :returns: the keys to build datasets for
+    :rtype: list[AssetKey]
+    """
+    opted_out = {
+        translator.get_asset_key(node)
+        for node in manifest["nodes"].values()
+        if node["resource_type"] == "model"
+        and node["config"].get("meta", {}).get("superset_dataset") is False
+    }
+    return [key for key in asset_keys if key.path[0] in layers and key not in opted_out]
 
 
 def _dataset_key(database_name: str, dbt_model_name: str) -> AssetKey:

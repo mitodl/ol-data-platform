@@ -1,8 +1,7 @@
 {# Wagtail added description after QA's last xPro sync (2026-06-04), so the QA raw
    table does not have the column yet. #}
 {% set raw_images = source('ol_warehouse_raw_data', 'raw__xpro__app__postgres__wagtailimages_image') %}
-{% set description_exists = not execute
-    or 'description' in adapter.get_columns_in_relation(raw_images) | map(attribute='name') | map('lower') %}
+{% set description_exists = relation_has_column(raw_images, 'description') %}
 
 with source as (
     select * from {{ raw_images }}
