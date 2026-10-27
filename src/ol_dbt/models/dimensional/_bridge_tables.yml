@@ -339,7 +339,7 @@ unit_tests:
     An xPRO course is in the program its program_id names and in any program
     whose CMS page lists it. Other edX.org MITx program memberships are retained
     from the program-course API, matched to the MITx Online course key when the
-    course moved to MITx Online.
+    course moved to MITx Online and to the edX.org course key when it did not.
   model: bridge_program_course
   given:
   - input: ref('int__mitxonline__program_requirements')
@@ -369,6 +369,7 @@ unit_tests:
   - input: ref('int__edxorg__mitx_program_courses')
     rows:
     - {program_uuid: "edxorg-program", program_name: "Other Program", course_readable_id: "MITx/OTHER+1"}
+    - {program_uuid: "edxorg-program", program_name: "Other Program", course_readable_id: "MITx/EDXONLY"}
   - input: ref('int__mitx__programs')
     rows: []
   - input: ref('int__mitx__courses')
@@ -398,6 +399,8 @@ unit_tests:
       is_current: true}
     - {course_pk: c40, course_readable_id: "course-v1:MITxT+OTHER+1", primary_platform: mitxonline,
       is_current: true}
+    - {course_pk: c41, course_readable_id: "MITx/EDXONLY", primary_platform: edxorg,
+      is_current: true}
   expect:
     rows:
     - {program_fk: p1, course_fk: c10, is_required: true}
@@ -408,3 +411,4 @@ unit_tests:
     - {program_fk: p3, course_fk: c30, is_required: true}
     - {program_fk: p3, course_fk: c31, is_required: false}
     - {program_fk: p4, course_fk: c40, is_required: true}
+    - {program_fk: p4, course_fk: c41, is_required: true}
