@@ -2034,22 +2034,6 @@ sources:
     - name: submitter_completed_at
       description: timestamp, specifying when assessment workflow step was completed
 
-  - name: raw__xpro__openedx__api__course_structure
-    description: It contains xPro course content at any point in time - json structure
-    columns:
-    - name: course_id
-      description: str, Open edX Course ID formatted as course-v1:xPRO+{course code}+{run_tag}
-    - name: content_hash
-      description: str, sha256 hashed string for the course content
-    - name: course_structure
-      description: str, json string of the course content
-    - name: course_structure_flattened
-      description: str, flatten json string of the course content. It flattens block's
-        category, metadata and children to same level.
-    - name: retrieved_at
-      description: timestamp, time indicating when this course structure was initially
-        retrieved from REST API.
-
   - name: raw__xpro__openedx__api__course_structure_blocks
     description: xPro course structure blocks, one row per block per structure version,
       loaded by the course_xml_blocks dlt source from xpro/openedx/processed_data/course_blocks/<course_id>/

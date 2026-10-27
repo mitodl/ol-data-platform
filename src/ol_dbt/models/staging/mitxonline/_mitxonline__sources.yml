@@ -937,23 +937,6 @@ sources:
       description: str, internal used field to indicate environment for the event.
         e.g. mitxonline-production
 
-  - name: raw__mitxonline__openedx__api__course_structure
-    description: It contains MITx Online course content at any point in time - json
-      structure
-    columns:
-    - name: course_id
-      description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
-    - name: content_hash
-      description: str, sha256 hashed string for the course content
-    - name: course_structure
-      description: str, json string of the course content
-    - name: course_structure_flattened
-      description: str, flatten json string of the course content. It flattens block's
-        category, metadata and children to same level.
-    - name: retrieved_at
-      description: timestamp, time indicating when this course structure was initially
-        retrieved from REST API.
-
   - name: raw__mitxonline__openedx__api__course_structure_blocks
     description: MITx Online course structure blocks, one row per block per structure
       version, loaded by the course_xml_blocks dlt source from mitxonline/openedx/processed_data/course_blocks/<course_id>/

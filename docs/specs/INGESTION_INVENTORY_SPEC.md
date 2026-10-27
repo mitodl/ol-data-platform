@@ -799,6 +799,27 @@ orphan-file pass deletes only files that no retained snapshot reaches, and the l
 deletes only dbt-suffixed directories that no Glue table references. None of them drops a
 table or a file a frozen table reads.
 
+A frozen entry can also keep tables dbt never modeled. `modeled: false` says so and reverses
+the dbt half: dbt not declaring them is expected, and dbt declaring one is the `WARNING`.
+Bootcamps has two such entries, the 93 tables its Airbyte connections landed and nothing read,
+kept on 2026-10-26 because nobody had decided to drop them. A retired table *without*
+`frozen:` that the warehouse still holds is reported as retired, not as undeclared: nothing
+loads it and its entry does not say to keep it, so it is waiting to be dropped.
+
+Not every stop is a removal. Bootcamps' `profiles_profile` stopped loading on 2025-02-25,
+almost a year before the unit was retired on 2026-02-12. That day its siblings moved to an
+Airbyte connection writing Iceberg, and it was not among the streams that moved: its Glue entry
+stayed the JSONL table of that morning's load until `bin/migrate-raw-jsonl-to-iceberg.py`
+converted it on 2026-09-11. Nothing flagged it. Trino kept reading the old JSON, so the dbt
+models built without error on profiles as of 2025-02-24, and the check above had nothing to
+catch, because the table and its dbt source both stayed. The unit's retirement was deliberate.
+This was a silent per-table stall, and it is recorded as its own frozen entry dated when it
+stopped (#3140).
+Either of two checks would have caught it: an expected sync cadence per table, reporting a
+table whose newest load is older than that cadence, or a check that every table a
+`*__sources.yml` declares is `table_type=ICEBERG` in Glue, since a table still on JSON after its
+connection moved to Iceberg is one nothing writes.
+
 Three details the mechanism above does not spell out, each of which is a rule in the checker:
 
 - `renamed_from:` holds the full previous `raw_table` — e.g.
@@ -1062,9 +1083,9 @@ Local app is the directory under `ol-infrastructure/local-dev/apps/` that runs t
 | 13 | `mitx/tracking_logs` | none | 44 | 0 | |
 | 14 | `xpro/tracking_logs` | none | 44 | 0 | |
 | 15 | `edxorg/tracking_logs` | none | 44 | 0 | |
-| 16 | `mitxonline/api` | none | 39 | 0 | |
-| 17 | `xpro/api` | none | 34 | 0 | |
-| 18 | `mitx/api` | none | 33 | 0 | |
+| 16 | `mitxonline/api` | none | 39 | 0 | Retired. Blocks load through dlt as `mitxonline/course_structure`; the whole-document table had no reader (`retired.yml`) |
+| 17 | `xpro/api` | none | 34 | 0 | Retired. Blocks load through dlt as `xpro/course_structure`; the whole-document table had no reader (`retired.yml`) |
+| 18 | `mitx/api` | none | 33 | 0 | Retired. Blocks load through dlt as `mitx/course_structure`; the whole-document table had no reader (`retired.yml`) |
 | 19 | `edxorg/google_sheets` | none | 3 | 0 | |
 | 20 | `irx/bigquery` | none | 144 | 1 | |
 | 21 | `emeritus/bigquery` | none | 59 | 0 | |

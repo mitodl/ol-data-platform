@@ -30,6 +30,7 @@ from qdrant_client import QdrantClient
 
 from ol_orchestrate.lib.embeddings.models import OlLlmEmbedder
 from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy, QdrantTarget
+from ol_orchestrate.lib.opik import opik_keycloak_vault_location
 from ol_orchestrate.resources.secrets.vault import Vault
 
 QDRANT_GRPC_PORT = 6334
@@ -122,8 +123,10 @@ class EmbeddingsResource(ConfigurableResource[None]):
     Vault (``provider_keys``); Bedrock needs none, as it authenticates with the
     pod's IAM role, and neither does Azure OpenAI with ``azure_ad_auth`` set.
 
-    Tracing to Opik is on when ``OPIK_URL_OVERRIDE`` is set, as for the ml code
-    location. The Keycloak client that authenticates to it is read from Vault.
+    Tracing to Opik is on when ``OPIK_URL_OVERRIDE`` is set together with the Vault
+    location of the Keycloak client that authenticates to it
+    (``OPIK_KEYCLOAK_VAULT_MOUNT``/``OPIK_KEYCLOAK_VAULT_PATH``), as for the ml
+    code location.
     Traces leave out the embedded texts unless ``trace_content`` is set, since
     a backfill would otherwise copy the corpus into Opik.
     """
@@ -142,12 +145,6 @@ class EmbeddingsResource(ConfigurableResource[None]):
         "AZURE_OPENAI_ENDPOINT and OPENAI_API_VERSION must be set.",
     )
     trace_content: bool = False
-    opik_vault_mount_point: str = "secret-operations"
-    opik_vault_path: str = Field(
-        default="sso/opik",
-        description="KV v1 path of the Keycloak client with url, client_id, "
-        "client_secret",
-    )
 
     _run_id: str | None = PrivateAttr(default=None)
 
@@ -179,11 +176,10 @@ class EmbeddingsResource(ConfigurableResource[None]):
         self._run_id = context.run_id
 
     def _tracing_config(self) -> TracingConfig:
-        if not os.environ.get("OPIK_URL_OVERRIDE"):
+        location = opik_keycloak_vault_location()
+        if not os.environ.get("OPIK_URL_OVERRIDE") or location is None:
             return TracingConfig(enabled=False, include_content=self.trace_content)
-        secret = _read_kv1_secret(
-            self.vault, self.opik_vault_mount_point, self.opik_vault_path
-        )
+        secret = _read_kv1_secret(self.vault, *location)
         return TracingConfig(
             keycloak=KeycloakClient(
                 token_url=f"{secret['url']}/protocol/openid-connect/token",

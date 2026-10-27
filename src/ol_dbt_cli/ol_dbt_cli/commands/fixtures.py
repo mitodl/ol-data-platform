@@ -68,6 +68,10 @@ LOCAL_USER = "root"
 # it for the QA profile would send this command's root login to QA.
 LOCAL_HOST = "127.0.0.1"
 LOCAL_PORT = 9030
+# Rows per INSERT. mysql-connector sends an executemany as one multi-row INSERT,
+# and one of ~10k rows of a 28-column table OOM-killed the local StarRocks. Each
+# batch commits one Iceberg snapshot.
+INSERT_BATCH_ROWS = 1000
 YAML_WIDTH = 4096
 # Where `scaffold` writes a unit's factory package.
 FACTORIES_DIR = Path(fixture_factories.__file__).parent
@@ -211,8 +215,8 @@ def load(
         table = loaded.table
         cursor.execute(f"DROP TABLE IF EXISTS {qualified_name(LOCAL_CATALOG, schema, table.raw_table)} FORCE")
         cursor.execute(create_table_sql(table, LOCAL_CATALOG, schema))
-        if parameters:
-            cursor.executemany(insert_sql(table, LOCAL_CATALOG, schema), parameters)
+        for start in range(0, len(parameters), INSERT_BATCH_ROWS):
+            cursor.executemany(insert_sql(table, LOCAL_CATALOG, schema), parameters[start : start + INSERT_BATCH_ROWS])
         counts = (
             f"{len(loaded.hand_written)} row(s)"
             if loaded.generated is None

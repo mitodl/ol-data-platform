@@ -42,6 +42,7 @@ from ol_dbt_cli.lib.inventory import (
     render_airbyte,
     render_dagster_intervals,
     render_dbt_metadata_columns,
+    retired_pairs,
     validate_inventory,
 )
 from ol_dbt_cli.lib.qa_observation import (
@@ -336,7 +337,9 @@ def reconcile(
 
     dbt_tables = collect_source_tables(dbt_dir / "models", RAW_SOURCE_NAME)
     dbt_result = reconcile_dbt(units, dbt_tables, inventory_dir, report)
-    frozen = frozen_tables(load_retired(inventory_dir))
+    retired_entries = load_retired(inventory_dir)
+    frozen = frozen_tables(retired_entries)
+    retired = frozenset(raw_table for _, raw_table in retired_pairs(retired_entries))
 
     if warehouse_tables_path and duckdb_path:
         err_console.print("[bold red]Pass either --warehouse-tables or --duckdb-path, not both.")
@@ -368,7 +371,7 @@ def reconcile(
                 "table list is not empty."
             )
             sys.exit(1)
-        warehouse_result = reconcile_warehouse(units, warehouse, report, frozen=frozen)
+        warehouse_result = reconcile_warehouse(units, warehouse, report, frozen=frozen, retired=retired)
 
     if output_format == "json":
         _emit_json(report.issues)

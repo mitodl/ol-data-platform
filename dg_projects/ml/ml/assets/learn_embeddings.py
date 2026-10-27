@@ -53,7 +53,12 @@ from ml.lib.learn_embeddings import (
     strategies_version,
     topic_documents,
 )
-from ml.lib.warehouse import read_table, require_table, warehouse_database
+from ml.lib.warehouse import (
+    read_table,
+    require_rows,
+    require_table,
+    warehouse_database,
+)
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.embeddings.documents import md5_hex
 from ol_orchestrate.lib.embeddings.learn import CONTENT_FILE_DOC_KIND
@@ -232,13 +237,12 @@ def content_file_embedding_chunks(
     """
     etl_source, run = partition_run(context.partition_key)
     source = CONTENT_FILE_SOURCES[etl_source]
-    files = (
-        require_table(LAYER, source.files_relation)
-        .filter(
-            (pl.col("etl_source") == etl_source) & (pl.col("run_readable_id") == run)
-        )
-        .select(CONTENT_FILE_COLUMNS)
-        .collect()
+    files = require_rows(
+        LAYER,
+        source.files_relation,
+        CONTENT_FILE_COLUMNS,
+        etl_source=etl_source,
+        run_readable_id=run,
     )
     runs = (
         require_table(LAYER, source.runs_relation)
