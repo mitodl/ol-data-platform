@@ -21,6 +21,26 @@ with micromasters_course_keys as (
     from {{ ref('int__mitxonline__program_requirements') }}
 )
 
+, mitxpro_program_courses as (
+    -- A course names its program in courses_course.program_id. The CMS program pages
+    -- list fewer programs' courses, but add courses listed under a second program and
+    -- the course order.
+    select
+        program_id
+        , course_id
+        , cast(null as bigint) as course_order
+    from {{ ref('int__mitxpro__courses') }}
+    where program_id is not null
+
+    union all
+
+    select
+        program_id
+        , course_id
+        , course_order
+    from {{ ref('int__mitxpro__coursesinprogram') }}
+)
+
 , mitxpro_program_requirements as (
     select
         cast(program_id as varchar) as program_id
@@ -30,8 +50,9 @@ with micromasters_course_keys as (
         , true as is_required
         , 'mitxpro' as platform
         , 'mitxpro' as platform_code
-        , course_order
-    from {{ ref('int__mitxpro__coursesinprogram') }}
+        , max(course_order) as course_order
+    from mitxpro_program_courses
+    group by program_id, course_id
 )
 
 , micromasters_requirements as (
@@ -116,10 +137,11 @@ with micromasters_course_keys as (
             or (combined_requirements.platform_code = 'micromasters'
                 and combined_requirements.course_readable_id = dim_course.course_readable_id
                 and dim_course.primary_platform = 'edxorg')
-            -- Other edX.org MITx programs use API course keys normalized above
+            -- Other edX.org MITx programs use API course keys normalized above. A course
+            -- in int__mitx__courses gets its MITx Online key, which dim_course holds under
+            -- mitxonline, so the key alone identifies the course.
             or (combined_requirements.platform_code = 'edxorg'
-                and combined_requirements.course_readable_id = dim_course.course_readable_id
-                and dim_course.primary_platform = 'edxorg')
+                and combined_requirements.course_readable_id = dim_course.course_readable_id)
         )
 )
 
