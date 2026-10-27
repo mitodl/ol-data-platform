@@ -22,7 +22,10 @@ with program_certificates_dedp_from_micromasters as (
 )
 
 -- MITx Online is the source of DEDP certificates. It holds copies of most certificates MicroMasters
--- issued, so a MicroMasters certificate is kept only when MITx Online has no copy of it.
+-- issued, so a MicroMasters certificate is kept only when MITx Online has no copy of it. A copy takes the
+-- MicroMasters certificate's hash: before this model read MITx Online for every date, it published the
+-- MicroMasters certificate, and MIT Learn upserts on the hash, never deletes, and references the row from
+-- its program letters.
 , dedp_micromasters as (
     select
         program_certificates_dedp_from_micromasters.program_certificate_hashed_id
@@ -35,7 +38,10 @@ with program_certificates_dedp_from_micromasters as (
         on program_certificates_dedp_from_micromasters.user_micromasters_id = mitx_users.user_micromasters_id
 )
 
-, dedp_mitxonline as (
+-- Only a certificate MITx Online created before 2022-10-01 can be a copy. This model already published
+-- the later ones under their own hash, so they keep it, even when the learner also holds a MicroMasters
+-- certificate for the program.
+, dedp_mitxonline_before_cutoff as (
     select
         program_certificates_dedp_from_mitxonline.program_certificate_hashed_id
         , program_certificates_dedp_from_mitxonline.mitxonline_program_id
@@ -45,47 +51,87 @@ with program_certificates_dedp_from_micromasters as (
     from program_certificates_dedp_from_mitxonline
     left join mitx_users
         on program_certificates_dedp_from_mitxonline.user_mitxonline_id = mitx_users.user_mitxonline_id
+    where program_certificates_dedp_from_mitxonline.program_completion_timestamp < '2022-10-01'
 )
 
 -- A copy is first matched by user and program, with the MicroMasters account linked to the MITx Online
--- account through int__mitx__users.
+-- account through int__mitx__users. MicroMasters and MITx Online each allow one certificate per user and
+-- program, so this match is one to one.
 , dedp_matches_by_user as (
     select
         dedp_micromasters.program_certificate_hashed_id as micromasters_program_certificate_hashed_id
-        , dedp_mitxonline.program_certificate_hashed_id as mitxonline_program_certificate_hashed_id
+        , dedp_mitxonline_before_cutoff.program_certificate_hashed_id as mitxonline_program_certificate_hashed_id
     from dedp_micromasters
-    inner join dedp_mitxonline
+    inner join dedp_mitxonline_before_cutoff
         on
-            dedp_micromasters.user_mitxonline_id = dedp_mitxonline.user_mitxonline_id
-            and dedp_micromasters.mitxonline_program_id = dedp_mitxonline.mitxonline_program_id
+            dedp_micromasters.user_mitxonline_id = dedp_mitxonline_before_cutoff.user_mitxonline_id
+            and dedp_micromasters.mitxonline_program_id = dedp_mitxonline_before_cutoff.mitxonline_program_id
 )
 
--- Fallback for certificates with no match by user: int__mitx__users links some MicroMasters accounts to a
--- different MITx Online account, or to none, while the copy sits on a MITx Online account with the
--- learner's MicroMasters email. The migration kept each certificate's creation time, so the same email,
--- program and exact creation time identify the copy. Without this the copy would be a second certificate
--- for the learner in MIT Learn.
-, dedp_matches_by_email as (
+-- Fallback for certificates neither side matched by user: int__mitx__users links some MicroMasters accounts
+-- to a different MITx Online account, or to none, while the copy sits on a MITx Online account with the
+-- learner's MicroMasters email. The same email (ignoring case) and program is the same learner's
+-- certificate for the program. The migration kept each certificate's creation time, so an exact creation
+-- time is preferred when there are several candidates, and the pick is made one to one and deterministic.
+, dedp_email_candidates as (
     select
         dedp_micromasters.program_certificate_hashed_id as micromasters_program_certificate_hashed_id
-        , dedp_mitxonline.program_certificate_hashed_id as mitxonline_program_certificate_hashed_id
+        , dedp_mitxonline_before_cutoff.program_certificate_hashed_id as mitxonline_program_certificate_hashed_id
+        , dedp_micromasters.program_completion_timestamp as micromasters_program_completion_timestamp
+        , dedp_mitxonline_before_cutoff.program_completion_timestamp as mitxonline_program_completion_timestamp
+        , if(
+            dedp_micromasters.program_completion_timestamp
+            = dedp_mitxonline_before_cutoff.program_completion_timestamp
+            , 0
+            , 1
+        ) as timestamp_mismatch
     from dedp_micromasters
-    inner join dedp_mitxonline
+    inner join dedp_mitxonline_before_cutoff
         on
-            dedp_micromasters.user_email = dedp_mitxonline.user_email
-            and dedp_micromasters.mitxonline_program_id = dedp_mitxonline.mitxonline_program_id
-            and dedp_micromasters.program_completion_timestamp = dedp_mitxonline.program_completion_timestamp
+            dedp_micromasters.user_email = dedp_mitxonline_before_cutoff.user_email
+            and dedp_micromasters.mitxonline_program_id = dedp_mitxonline_before_cutoff.mitxonline_program_id
     left join dedp_matches_by_user as micromasters_matched
         on
             dedp_micromasters.program_certificate_hashed_id
             = micromasters_matched.micromasters_program_certificate_hashed_id
     left join dedp_matches_by_user as mitxonline_matched
         on
-            dedp_mitxonline.program_certificate_hashed_id
+            dedp_mitxonline_before_cutoff.program_certificate_hashed_id
             = mitxonline_matched.mitxonline_program_certificate_hashed_id
     where
         micromasters_matched.micromasters_program_certificate_hashed_id is null
         and mitxonline_matched.mitxonline_program_certificate_hashed_id is null
+)
+
+, dedp_email_candidates_per_micromasters_certificate as (
+    select
+        *
+        , row_number() over (
+            partition by micromasters_program_certificate_hashed_id
+            order by timestamp_mismatch, mitxonline_program_completion_timestamp, mitxonline_program_certificate_hashed_id
+        ) as micromasters_rank
+    from dedp_email_candidates
+)
+
+, dedp_email_candidates_per_mitxonline_certificate as (
+    select
+        micromasters_program_certificate_hashed_id
+        , mitxonline_program_certificate_hashed_id
+        , row_number() over (
+            partition by mitxonline_program_certificate_hashed_id
+            order by
+                timestamp_mismatch, micromasters_program_completion_timestamp, micromasters_program_certificate_hashed_id
+        ) as mitxonline_rank
+    from dedp_email_candidates_per_micromasters_certificate
+    where micromasters_rank = 1
+)
+
+, dedp_matches_by_email as (
+    select
+        micromasters_program_certificate_hashed_id
+        , mitxonline_program_certificate_hashed_id
+    from dedp_email_candidates_per_mitxonline_certificate
+    where mitxonline_rank = 1
 )
 
 , dedp_certificate_matches as (
@@ -128,9 +174,7 @@ with program_certificates_dedp_from_micromasters as (
 
     union all
 
-    -- MIT Learn upserts certificates on this hash and never deletes one, and its program letters
-    -- reference the certificate row. A MITx Online copy of a MicroMasters certificate keeps the
-    -- MicroMasters hash, so the row Learn already has is updated and not duplicated.
+    -- A copy keeps the MicroMasters certificate's hash (see dedp_micromasters)
     select
         coalesce(
             dedp_certificate_matches.micromasters_program_certificate_hashed_id
