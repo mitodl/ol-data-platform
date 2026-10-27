@@ -252,10 +252,17 @@ course_xml_blocks_ingest_schedule = dg.ScheduleDefinition(
 # edX.org's learner reports reach the landing zone at about 15:00 UTC (S3
 # modification times 14:51 to 15:02 on 2026-10-14 to 2026-10-23), so the day's
 # reports are loaded well ahead of the next non_airbyte_staging_daily at 06:00.
-# The first runs walk the 4.93 TB backlog, about 430 GB per run at the
-# 200-batch cap; later runs read one day of reports. RUNNING by default in
-# production only, as for the course XML blocks: the source always reads the
-# production landing zone.
+# The first runs walk the 4.93 TB backlog, at most 430 GB per run at the
+# 200-batch cap (the first run, 2026-10-27, read 385 GB); later runs read one
+# day of reports. RUNNING by default in production only, as for the course XML
+# blocks: the source always reads the production landing zone.
+#
+# That first run peaked at 8.06 GB RSS against the 8Gi default limit, with the
+# largest batch at 2.05 GiB, so a load peaks near 3.7x its batch. A batch can
+# reach the 2 GiB budget plus the unread files in the cursor's second, which
+# edxorg_files exempts from the budget (up to 1.06 GiB of reports share one
+# second on recent days), so ~3.1 GiB and ~12 GB. 16Gi covers that. The
+# request stays low, as for the PostHog schedule above.
 edxorg_program_reports_ingest_schedule = dg.ScheduleDefinition(
     name="edxorg_program_reports_ingest_daily_schedule",
     target=dg.AssetSelection.keys(
@@ -263,6 +270,18 @@ edxorg_program_reports_ingest_schedule = dg.ScheduleDefinition(
     ),
     cron_schedule="30 16 * * *",
     execution_timezone="Etc/UTC",
+    tags={
+        "dagster-k8s/config": json.dumps(
+            {
+                "container_config": {
+                    "resources": {
+                        "requests": {"memory": "2Gi"},
+                        "limits": {"memory": "16Gi"},
+                    }
+                }
+            }
+        ),
+    },
     default_status=(
         dg.DefaultScheduleStatus.RUNNING
         if DAGSTER_ENV == "production"
