@@ -12,7 +12,9 @@ models:
     no MITx Online program keeps its own row, keyed on its title, with a null program_readable_id.
     xPRO programs keep their own rows. Course membership is mapped the same way, from
     marts__combined_coursesinprogram. A program has a row only when it has both program
-    enrollments and enrollments in its courses.
+    enrollments and enrollments in its courses. Every learner count is a count of
+    distinct user_email, compared as stored, so one person with different emails on
+    edX.org and MITx Online, or the same email in different letter case, counts twice.
   config:
     meta:
       qa_branches:
@@ -92,10 +94,11 @@ models:
   - name: program_certificates
     description: int, count of distinct user_email per program whose marts__combined_program_enrollment_detail
       row has user_has_completed_program, so revoked certificates are not counted.
-      A learner certified in a program on both edX.org and MITx Online counts once
-      in that program's row. A learner certified in two tracks counts once in each
-      track's row, so summing the DEDP or Statistics and Data Science rows counts
-      such a learner more than once.
+      Certificates from edX.org and MITx Online are counted together, so a learner
+      certified on both platforms under the same email is one certificate. Under two
+      different emails the learner is two. A learner certified in two tracks is in
+      each track's row, so summing the DEDP or Statistics and Data Science rows counts
+      that learner more than once.
 
 - name: learner_engagement_report
   description: Engagement report by learner, course, courserun, section and subsection.
