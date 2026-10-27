@@ -15,17 +15,18 @@ with combined__users as (
 )
 
 -- Both program marts carry the program each row counts toward, keyed as in
--- program_summary_report.
+-- program_summary_report. Learners are matched by email, lowercased because the
+-- platforms store some addresses in different letter case.
 , program_enrollments as (
     select
-        user_email
+        lower(user_email) as user_email
         , program_report_key as program_key
         , report_program_readable_id as program_readable_id
         , report_program_title as program_title
         , max(case when user_has_completed_program = true then 1 else 0 end) as has_completed_program
     from program_enrollment_detail
     where program_report_key is not null
-    group by user_email, program_report_key, report_program_readable_id, report_program_title
+    group by lower(user_email), program_report_key, report_program_readable_id, report_program_title
 )
 
 , program_course_keys as (
@@ -40,7 +41,7 @@ with combined__users as (
 
 , program_course_certificates as (
     select
-        combined_course_enrollment_detail.user_email
+        lower(combined_course_enrollment_detail.user_email) as user_email
         , program_course_keys.program_key
         , program_course_keys.program_readable_id
         , program_course_keys.program_title
@@ -50,7 +51,7 @@ with combined__users as (
         on combined_course_enrollment_detail.course_readable_id = program_course_keys.course_readable_id
     where combined_course_enrollment_detail.courseruncertificate_is_earned = true
     group by
-        combined_course_enrollment_detail.user_email
+        lower(combined_course_enrollment_detail.user_email)
         , program_course_keys.program_key
         , program_course_keys.program_readable_id
         , program_course_keys.program_title
@@ -96,7 +97,7 @@ select
     , case when program_enrollments.user_email is not null then 'Y' end as program_enroll_ind
 from combined__users
 left join user_programs
-    on combined__users.user_email = user_programs.user_email
+    on lower(combined__users.user_email) = user_programs.user_email
 left join program_enrollments
     on
         user_programs.user_email = program_enrollments.user_email
