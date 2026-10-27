@@ -21,11 +21,13 @@ from ol_llm.gate import GateContext, Suite
 from opik.evaluation.metrics import Hallucination
 
 # Markdown the prompt rules out: a heading, list item, quote, or table row at a
-# line start, emphasis, code, or a link. A bare __ is left alone, since a summary
-# of a Python course's feedback can name __init__.
+# line start, emphasis, code, or a link. A bare __ and an underscore inside a word
+# are left alone, since a summary of a Python course's feedback can name __init__
+# or snake_case names.
 _MARKDOWN = re.compile(
     r"^\s*(?:#{1,6}\s|[-*+]\s|\d{1,2}[.)]\s|>|\|)"
-    r"|\*\*|(?<![\w*])\*[^*\s][^*\n]*\*(?!\w)|`|\[[^\]\n]+\]\(",
+    r"|\*\*|(?<![\w*])\*[^*\s][^*\n]*\*(?!\w)"
+    r"|(?<!\w)_[^_\s][^_\n]*_(?!\w)|`|\[[^\]\n]+\]\(",
     re.MULTILINE,
 )
 # An email address or a North American phone number. URLs are allowed: the
@@ -35,11 +37,13 @@ _CONTACT = re.compile(
     r"|(?:\(\d{3}\)\s?|\b\d{3}[-.\s])\d{3}[-.\s]\d{4}\b|\b\d{10}\b"
 )
 # The prompt asks for 1-3 sentences. A sentence ends at a mark, optionally inside
-# a closing quote or bracket, before a capital or the end of the text, so "e.g. a
-# finance course" and "M.I.T. finance" do not end one.
+# a closing quote or bracket, before a capital (in any script, so Spanish "Él"
+# counts), a digit, or the end of the text, so "e.g. a finance course" and "M.I.T.
+# finance" do not end one. Text after the last end is a sentence without its mark.
 MAX_SENTENCES = 3
-_SENTENCE_END = re.compile(
-    r"[.!?]+[\"'\u201d\u2019)\]]*(?=\s+[\"'\u201c(]?[A-Z0-9]|\s*$)"
+_SENTENCE_BREAK = re.compile(
+    r"(?P<end>[.!?]+[\"'\u201d\u2019)\]]*)"
+    r"(?:\s+[\"'\u201c(\u00bf\u00a1]?(?P<next>.)|\s*$)"
 )
 
 
@@ -66,7 +70,15 @@ def withholds_details(output: str, must_not_appear: list[str]) -> list[str]:
 
 def at_most_three_sentences(output: str) -> list[str]:
     """Return a problem when the summary runs past three sentences."""
-    count = len(_SENTENCE_END.findall(output.strip()))
+    text = output.strip()
+    count, last_end = 0, 0
+    for match in _SENTENCE_BREAK.finditer(text):
+        following = match.group("next")
+        if following is None or following.isupper() or following.isdigit():
+            count += 1
+            last_end = match.end("end")
+    if text[last_end:].strip():
+        count += 1
     return [f"{count} sentences"] if count > MAX_SENTENCES else []
 
 

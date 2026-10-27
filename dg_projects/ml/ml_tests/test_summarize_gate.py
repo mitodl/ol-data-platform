@@ -47,11 +47,13 @@ def test_every_golden_item_lists_what_must_not_appear() -> None:
     [
         ("The learner could not download the slides.", []),
         ("The learner's __init__ method failed the autograder.", []),
+        ("The snake_case_name and _private names failed.", []),
         ("They hoped to finish by 2024.\nThey asked for a deadline.", []),
         ("## Problem\nThe slides 404.", ["Markdown '##'"]),
         ("- slides are missing", ["Markdown '-'"]),
         ("The **slides** are missing.", ["Markdown '**'"]),
         ("The *slides* are missing.", ["Markdown '*slides*'"]),
+        ("The _slides_ are missing.", ["Markdown '_slides_'"]),
         ("Run `pip install` first.", ["Markdown '`'"]),
         ("See [the page](https://x.example).", ["Markdown '[the page]('"]),
         ("> The learner quoted support.", ["Markdown '>'"]),
@@ -91,7 +93,17 @@ def test_withholds_details(
         ("A learner asked for captions on version 2.1 of the lab.", []),
         ("The learner asked about the M.I.T. finance course. It stalls. Okay.", []),
         ("They want a course, e.g. a finance one. It is missing. Add it.", []),
+        ("A learner asked for captions", []),
         ("One. Two. Three. Four.", ["4 sentences"]),
+        ("One. Two. Three. Four", ["4 sentences"]),
+        (
+            (
+                "El vídeo falla. Él pidió ayuda. Él no recibió respuesta. "
+                "Él dejó el curso."
+            ),
+            ["4 sentences"],
+        ),
+        ("¿Por qué falla? Lo intentó. Pidió ayuda. ¡Nadie respondió!", ["4 sentences"]),
         ('They said "Fix this." It stalls. It fails. They left.', ["4 sentences"]),
     ],
 )
