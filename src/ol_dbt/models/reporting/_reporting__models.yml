@@ -63,8 +63,13 @@ models:
   - name: program_certificates
     description: int, count of distinct user_email per program whose marts__combined_program_enrollment_detail
       row has user_has_completed_program, so revoked certificates are not counted.
-      If a user gets the Statistics and Data Science program certificate in both the
-      General and Social Sciences tracks, it would be counted as one program certificate.
+      Rows are per program_name, which does not separate tracks the same way on every
+      platform. Both DEDP tracks and the DEDP program share the program_name 'Data,
+      Economics, and Design of Policy', so DEDP is one row and a learner with both
+      track certificates counts once. On edX.org every Statistics and Data Science
+      track has the program_name 'Statistics and Data Science', while on MITx Online
+      each track has its own program_name and row, so a learner certified in a track
+      on both platforms counts in both rows.
 
 - name: learner_engagement_report
   description: Engagement report by learner, course, courserun, section and subsection.
@@ -1207,8 +1212,8 @@ models:
     description: int, count of distinct courses for which the user has earned a certificate
       within the program
   - name: courses_taken_in_program
-    description: int, compatibility alias for verified_courses_taken_in_program. marts__combined_program_enrollment_detail.unique_courses_taken_in_program
-      counts enrollments in any mode, so the two differ.
+    description: int, the same value as verified_courses_taken_in_program, under the
+      older name that existing charts read.
   - name: verified_courses_passed_in_program
     description: int, count of distinct verified courses the user has passed within
       the program
