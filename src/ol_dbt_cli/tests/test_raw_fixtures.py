@@ -632,6 +632,17 @@ def test_load_recreates_each_table_on_the_local_catalog(tmp_path: Path, monkeypa
     ]
 
 
+def test_load_inserts_a_table_in_batches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    rows = [{"id": number} for number in range(1, 8)]
+    inventory_dir, recorder = _recording(tmp_path, monkeypatch, _fixture({"id": "long"}, rows))
+    monkeypatch.setattr(fixtures_command, "INSERT_BATCH_ROWS", 3)
+
+    fixtures_command.load(inventory_dir=inventory_dir, generate=False)
+
+    batches = [parameters for statement, parameters in recorder.statements if statement.startswith("INSERT")]
+    assert batches == [[(1,), (2,), (3,)], [(4,), (5,), (6,)], [(7,)]]
+
+
 def test_load_without_fixtures_exits(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         fixtures_command.load(inventory_dir=_inventory(tmp_path, None))
