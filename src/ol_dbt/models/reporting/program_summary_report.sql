@@ -10,50 +10,65 @@ with program_enrollments as (
     select * from {{ ref('marts__combined_coursesinprogram') }}
 )
 
-, program_title_to_mitxonline_program as (
-    select * from {{ ref('int__mitx__program_title_to_mitxonline_program') }}
+, program_report_key as (
+    select * from {{ ref('dim_program_report_key') }}
 )
 
-, mitxonline_programs as (
-    select * from {{ ref('int__mitxonline__programs') }}
-)
-
--- One row per program. An edX.org program that maps to a MITx Online program counts in
--- that program's row. One that maps to none keeps its own row, keyed on its title when
--- it has no readable id.
-, program_enrollment_programs as (
+-- Program enrollment rows and program course rows, so that one lookup below keys both
+, program_rows as (
     select
-        program_enrollments.user_email
+        'enrollment' as row_source
+        , program_enrollments.user_email
         , program_enrollments.user_has_completed_program
-        , coalesce(mitxonline_programs.program_readable_id, program_enrollments.program_readable_id)
-            as program_readable_id
-        , coalesce(mitxonline_programs.program_title, program_enrollments.program_title) as program_title
-        , coalesce(mitxonline_programs.program_name, program_enrollments.program_name) as program_name
-        , coalesce(mitxonline_programs.program_type, program_enrollments.program_type) as program_type
+        , cast(null as varchar) as course_readable_id
+        , program_enrollments.program_readable_id
+        , program_enrollments.program_title
     from program_enrollments
-    left join program_title_to_mitxonline_program
-        on
-            program_enrollments.platform_name = '{{ var("edxorg") }}'
-            and program_enrollments.program_title = program_title_to_mitxonline_program.program_title
-    left join mitxonline_programs
-        on program_title_to_mitxonline_program.mitxonline_program_id = mitxonline_programs.program_id
+
+    union all
+
+    select
+        'course' as row_source
+        , cast(null as varchar) as user_email
+        , cast(null as boolean) as user_has_completed_program
+        , program_courses.course_readable_id
+        , program_courses.program_readable_id
+        , program_courses.program_title
+    from program_courses
 )
 
--- The same key for course membership. MITx Online and xPRO rows carry their program's
--- readable id; the edX.org and MicroMasters rows are mapped by title.
-, program_course_keys as (
+-- A row whose readable id is a MITx Online or xPRO program's takes that program, including
+-- a MicroMasters row the mart gave its MITx Online program's id. Any other row (the mart's
+-- generated edX.org ids, and coursesinprogram rows with none) is looked up by its title.
+, keyed_program_rows as (
     select
-        program_courses.course_readable_id
-        , coalesce(
-            program_courses.program_readable_id
-            , program_title_to_mitxonline_program.mitxonline_program_readable_id
-            , program_courses.program_title
-        ) as program_key
-    from program_courses
-    left join program_title_to_mitxonline_program
+        program_rows.row_source
+        , program_rows.user_email
+        , program_rows.user_has_completed_program
+        , program_rows.course_readable_id
+        , coalesce(by_readable_id.program_key, by_title.program_key) as program_key
+        , coalesce(by_readable_id.program_readable_id, by_title.program_readable_id) as program_readable_id
+        , coalesce(by_readable_id.program_title, by_title.program_title) as program_title
+        , coalesce(by_readable_id.program_name, by_title.program_name) as program_name
+        , coalesce(by_readable_id.program_type, by_title.program_type) as program_type
+    from program_rows
+    left join program_report_key as by_readable_id
         on
-            program_courses.program_readable_id is null
-            and program_courses.program_title = program_title_to_mitxonline_program.program_title
+            by_readable_id.lookup_type = 'readable_id'
+            and program_rows.program_readable_id = by_readable_id.lookup_value
+    left join program_report_key as by_title
+        on
+            by_readable_id.lookup_value is null
+            and by_title.lookup_type = 'title'
+            and program_rows.program_title = by_title.lookup_value
+)
+
+, program_enrollment_programs as (
+    select * from keyed_program_rows where row_source = 'enrollment'
+)
+
+, program_course_keys as (
+    select * from keyed_program_rows where row_source = 'course'
 )
 
 , aggregated_course_enrollments as (
@@ -97,7 +112,7 @@ with program_enrollments as (
         , program_title
         , program_name
         , program_type
-        , coalesce(program_readable_id, program_title) as program_key
+        , program_key
         , count(
               distinct case
                   when user_has_completed_program = true
@@ -105,7 +120,7 @@ with program_enrollments as (
               end
         ) as program_certificates
     from program_enrollment_programs
-    group by program_readable_id, program_title, program_name, program_type
+    group by program_readable_id, program_key, program_title, program_name, program_type
 )
 
 select
