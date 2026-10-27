@@ -41,9 +41,10 @@ pair shape this module:
 :func:`generate_rows` seeds all of it from the package's ``SEED``, so one
 commit generates the same rows in every process. Three things would break that
 and are refused: a mimesis provider that reads the clock (a default range that
-ends at the current year, a JWT's default claims), a key taken from a provider instead of the sequence (``email(unique=
-True)`` raises under a seed), and a ``factory.Faker`` column, whose values come
-from faker, a second source none of :func:`value`'s checks see.
+ends at the current year, a JWT's default claims), a key taken from a provider
+instead of the sequence (``email(unique=True)`` raises under a seed), and a
+``factory.Faker`` column, whose values come from faker, a second source none of
+:func:`value`'s checks see.
 """
 
 from __future__ import annotations
