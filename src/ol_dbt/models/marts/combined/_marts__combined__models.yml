@@ -1255,7 +1255,9 @@ unit_tests:
     A MITx Online learner and an edX.org learner share user_id 7. Each row
     counts only its own platform's enrollments. The edX.org program maps to
     the MITx Online program, so it takes its courses from that program's
-    bridge_program_course rows.
+    bridge_program_course rows. A non-current dim_course version of C under an
+    older key adds no course, and an audit enrollment in an earlier run of C
+    does not move the start date program_completion_days counts from.
   model: marts__combined_program_enrollment_detail
   given:
   - input: ref('int__mitxpro__programenrollments')
@@ -1311,6 +1313,7 @@ unit_tests:
     - {course_pk: ca, course_readable_id: "course-v1:MITxT+A", is_current: true}
     - {course_pk: cb, course_readable_id: "course-v1:MITxT+B", is_current: true}
     - {course_pk: cc, course_readable_id: "course-v1:MITxT+C", is_current: true}
+    - {course_pk: cc, course_readable_id: "course-v1:MITxT+C-OLD", is_current: false}
   - input: ref('int__combined__courserun_enrollments')
     rows:
     - {platform: MITx Online, user_id: "7", course_readable_id: "course-v1:MITxT+A",
@@ -1319,9 +1322,15 @@ unit_tests:
       courserun_readable_id: "course-v1:MITxT+B+1T2020", course_title: B, courserunenrollment_enrollment_mode: audit}
     - {platform: edX.org, user_id: "7", course_readable_id: "course-v1:MITxT+C", courserun_readable_id: "course-v1:MITxT+C+1T2020",
       course_title: C Capstone, courserunenrollment_enrollment_mode: verified}
+    - {platform: edX.org, user_id: "7", course_readable_id: "course-v1:MITxT+C", courserun_readable_id: "course-v1:MITxT+C+3T2019",
+      course_title: C Capstone, courserunenrollment_enrollment_mode: audit}
+    - {platform: edX.org, user_id: "7", course_readable_id: "course-v1:MITxT+C-OLD",
+      courserun_readable_id: "course-v1:MITxT+C-OLD+1T2018", course_title: C Old,
+      courserunenrollment_enrollment_mode: audit}
   - input: ref('int__combined__course_runs')
     rows:
     - {courserun_readable_id: "course-v1:MITxT+C+1T2020", courserun_start_on: "2020-01-01T00:00:00Z"}
+    - {courserun_readable_id: "course-v1:MITxT+C+3T2019", courserun_start_on: "2019-09-01T00:00:00Z"}
   expect:
     rows:
     - {platform_name: MITx Online, user_id: 7, unique_courses_taken_in_program: 2,
