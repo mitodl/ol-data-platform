@@ -47,6 +47,10 @@ class ManifestModel:
     """``config.meta``: dbt merges project-level and YAML ``meta`` into it."""
     tags: list[str] = field(default_factory=list)
     """``tags``: dbt merges project-level, YAML and SQL ``tags`` into it."""
+    alias: str = ""
+    """For a model, the relation name dbt builds (``alias``), which defaults to ``name``."""
+    custom_schema: str = ""
+    """``config.schema``, the ``+schema`` before the target's ``generate_schema_name`` resolves it into ``schema``."""
 
     @property
     def column_names(self) -> set[str]:
@@ -104,6 +108,11 @@ class ManifestRegistry:
     """macro unique_id -> ManifestMacro for every macro in the project graph."""
     foreign_keys: dict[str, list[ForeignKeyRef]] = field(default_factory=dict)
     """child unique_id -> the FK edges its ``relationships`` tests declare."""
+    disabled: dict[str, ManifestModel] = field(default_factory=dict)
+    """model name -> ManifestModel for models the manifest's target disabled.
+
+    A production (Trino) manifest lists the StarRocks-only models here, with
+    their ``starrocks`` tag, and not under ``nodes``."""
 
     def get_model(self, name: str) -> ManifestModel | None:
         return self.by_name.get(name)
@@ -236,6 +245,8 @@ def _parse_node(node_data: dict[str, Any]) -> ManifestModel:
         identifier=node_data.get("identifier") or "",
         meta=(node_data.get("config") or {}).get("meta") or {},
         tags=node_data.get("tags") or [],
+        alias=node_data.get("alias") or "",
+        custom_schema=(node_data.get("config") or {}).get("schema") or "",
     )
 
 
@@ -321,6 +332,11 @@ def registry_from_manifest(raw: dict[str, Any]) -> ManifestRegistry:
         fk = _parse_relationship_test(node_data)
         if fk is not None:
             registry.foreign_keys.setdefault(fk.child_unique_id, []).append(fk)
+
+    for versions in raw.get("disabled", {}).values():
+        for node_data in versions:
+            if node_data.get("resource_type") == "model":
+                registry.disabled[node_data["name"]] = _parse_node(node_data)
 
     for uid, macro_data in raw.get("macros", {}).items():
         registry.macros[uid] = _parse_macro(macro_data)

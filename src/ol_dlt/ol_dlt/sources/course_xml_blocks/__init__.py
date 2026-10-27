@@ -49,12 +49,14 @@ three deployments (dg_projects/openedx/.../openedx.py::course_structure):
         {mitx,mitxonline,xpro}/openedx/processed_data/course_blocks/
             <course>/<structure hash>.json
 
-One Airbyte source-s3 connection per deployment loads those into
-raw__<deployment>__openedx__api__course_blocks. This source loads them into
-raw__<deployment>__openedx__api__course_structure_blocks, one table per
-deployment because the rows carry no source_system and each deployment has its
-own staging model. On 2026-10-06 the prefixes held 29,953 files (13.2 GB) for
-mitxonline, 3,203 (3.2 GB) for mitx and 2,659 (1.7 GB) for xpro.
+One Airbyte source-s3 connection per deployment loaded those into
+raw__<deployment>__openedx__api__course_blocks until 2026-10. This source loads
+them into raw__<deployment>__openedx__api__course_structure_blocks, which
+replaced it, one table per deployment because the rows carry no source_system
+and each deployment has its own staging model. The retired mitx table was first
+loaded on 2025-03-03 and never held the 717 files that landed before then. On
+2026-10-06 the prefixes held 29,953 files (13.2 GB) for mitxonline, 3,203
+(3.2 GB) for mitx and 2,659 (1.7 GB) for xpro.
 
 Run standalone:
     DLT_PROFILE=dev python -m ol_dlt.sources.course_xml_blocks
@@ -151,10 +153,15 @@ CONTENT_TEXT_FIELDS = (
     "extraction_status",
     "extracted_at",
 )
+# The document text asset also records, on each html row, the static files the
+# body links to, as a list that lands as JSON text. Absent from files written
+# before it did.
+DOCUMENT_TEXT_FIELDS = (*CONTENT_TEXT_FIELDS, "static_references")
 
 # The row the file exclusions asset writes
 # (dg_projects/openedx/openedx/assets/content_file_exclusions.py).
-# extracted_at is absent from files written before the asset stamped it.
+# extracted_at is absent from files written before the asset stamped it, and
+# release_date from files written before it dated files.
 FILE_EXCLUSION_FIELDS = (
     "course_id",
     "source_system",
@@ -163,6 +170,7 @@ FILE_EXCLUSION_FIELDS = (
     "excluded",
     "exclusion_reason",
     "extracted_at",
+    "release_date",
 )
 
 
@@ -256,8 +264,8 @@ OPENEDX_DOCUMENT_TEXT = XmlBlocksTable(
         f"{deployment}/openedx/processed_data/course_document_text/**/*.jsonl"
         for deployment in _OPENEDX_DEPLOYMENTS
     ),
-    fields=CONTENT_TEXT_FIELDS,
-    optional_fields=frozenset({"file_extension", "extracted_at"}),
+    fields=DOCUMENT_TEXT_FIELDS,
+    optional_fields=frozenset({"file_extension", "extracted_at", "static_references"}),
     pipeline_name="course_document_text__openedx",
     marks_empty_files=True,
 )
@@ -281,7 +289,7 @@ OPENEDX_FILE_EXCLUSIONS = XmlBlocksTable(
         for deployment in _OPENEDX_DEPLOYMENTS
     ),
     fields=FILE_EXCLUSION_FIELDS,
-    optional_fields=frozenset({"extracted_at"}),
+    optional_fields=frozenset({"extracted_at", "release_date"}),
     pipeline_name="course_file_exclusions__openedx",
 )
 TABLES = {

@@ -119,7 +119,7 @@ models:
         cohort:
           role: dimension
   - name: seat_limit
-    description: b2b_contract_max_learners.
+    description: b2b_contract_max_learners, with 0 (unlimited) published as null.
     config:
       meta:
         api_description: How many seats the contract includes. Empty or zero means
@@ -367,15 +367,17 @@ models:
           role: dimension
   - name: monthly_active_learners
     description: >
-      Distinct learners with tracked course activity in the month (a video
-      play, problem check, navigation, discussion event or chatbot submit).
-      Enrolling or being issued a certificate does not count as activity.
+      Distinct learners with tracked course activity in an active enrollment
+      in the month (a video play, problem check, navigation, discussion event
+      or chatbot submit). Enrolling or being issued a certificate does not
+      count as activity.
     config:
       meta:
         api_description: 'Learners who did course work this month: watched a video,
           attempted a problem, posted in a discussion, used the chatbot or moved through
-          course pages. Enrolling or earning a certificate alone doesn''t count. Withheld
-          when too few learners are in the group to report without identifying them.'
+          course pages. Only activity in an enrollment that is still active counts.
+          Enrolling or earning a certificate alone doesn''t count. Withheld when too
+          few learners are in the group to report without identifying them.'
         cohort:
           role: secondary
           uncontained: true
@@ -468,8 +470,9 @@ models:
       monthly_active_learners.
     config:
       meta:
-        api_description: Learners who watched at least one video this month. Withheld
-          when too few learners are in the group to report without identifying them.
+        api_description: Learners who watched at least one video this month. Only
+          activity in an enrollment that is still active counts. Withheld when too
+          few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: monthly_active_learners
@@ -494,8 +497,9 @@ models:
       cohort total_problems_attempted is attributable to.
     config:
       meta:
-        api_description: Learners who attempted at least one problem this month. Withheld
-          when too few learners are in the group to report without identifying them.
+        api_description: Learners who attempted at least one problem this month. Only
+          activity in an enrollment that is still active counts. Withheld when too
+          few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: monthly_active_learners
@@ -517,8 +521,9 @@ models:
       total_chatbot_interactions is attributable to.
     config:
       meta:
-        api_description: Learners who used the chatbot this month. Withheld when too
-          few learners are in the group to report without identifying them.
+        api_description: Learners who used the chatbot this month. Only activity in
+          an enrollment that is still active counts. Withheld when too few learners
+          are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: monthly_active_learners
@@ -706,15 +711,17 @@ models:
           role: primary
   - name: engaged_learners
     description: >
-      Distinct enrolled learners with at least one day of tracked course
-      activity in the run. A certificate alone does not count. They are the
-      denominator of both avg_* columns and of engagement_rate_pct.
+      Distinct learners with an active enrollment and at least one day of
+      tracked course activity in the run. A certificate alone does not count.
+      They are the denominator of both avg_* columns and of
+      engagement_rate_pct.
     config:
       meta:
-        api_description: 'Enrolled learners who did anything in the course: watched
-          a video, attempted a problem, posted in a discussion, used the chatbot or
-          moved through course pages. Withheld when too few learners are in the group
-          to report without identifying them.'
+        api_description: 'Learners whose enrollment in this course run is still active
+          and who did anything in the course: watched a video, attempted a problem,
+          posted in a discussion, used the chatbot or moved through course pages.
+          Withheld when too few learners are in the group to report without identifying
+          them.'
         cohort:
           role: secondary
           contained_in: total_enrolled_learners
@@ -749,8 +756,8 @@ models:
     config:
       meta:
         api_description: Learners who watched at least one video in this course run.
-          Withheld when too few learners are in the group to report without identifying
-          them.
+          Only activity in an enrollment that is still active counts. Withheld when
+          too few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: engaged_learners
@@ -790,8 +797,8 @@ models:
     config:
       meta:
         api_description: Learners who attempted at least one problem in this course
-          run. Withheld when too few learners are in the group to report without identifying
-          them.
+          run. Only activity in an enrollment that is still active counts. Withheld
+          when too few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: engaged_learners
@@ -826,8 +833,9 @@ models:
       total_chatbot_interactions is attributable to.
     config:
       meta:
-        api_description: Learners who used the chatbot in this course run. Withheld
-          when too few learners are in the group to report without identifying them.
+        api_description: Learners who used the chatbot in this course run. Only activity
+          in an enrollment that is still active counts. Withheld when too few learners
+          are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: engaged_learners
@@ -948,7 +956,7 @@ models:
         cohort:
           role: dimension
   - name: seat_limit
-    description: b2b_contract_max_learners.
+    description: b2b_contract_max_learners, with 0 (unlimited) published as null.
     config:
       meta:
         api_description: How many seats the contract includes. Empty or zero means
@@ -1093,16 +1101,18 @@ models:
           role: dimension
   - name: monthly_active_learners
     description: >
-      Distinct learners with tracked course activity in the month (enrolling
-      or being issued a certificate does not count), under course runs
-      belonging to this contract. A learner active under two contracts counts
-      in both rows, so contract rows do not partition the org's learner count.
+      Distinct learners with tracked course activity in an active enrollment
+      in the month (enrolling or being issued a certificate does not count),
+      under course runs belonging to this contract. A learner active under two
+      contracts counts in both rows, so contract rows do not partition the
+      org's learner count.
     config:
       meta:
         api_description: 'Learners who did course work this month: watched a video,
           attempted a problem, posted in a discussion, used the chatbot or moved through
-          course pages. Enrolling or earning a certificate alone doesn''t count. Withheld
-          when too few learners are in the group to report without identifying them.'
+          course pages. Only activity in an enrollment that is still active counts.
+          Enrolling or earning a certificate alone doesn''t count. Withheld when too
+          few learners are in the group to report without identifying them.'
         cohort:
           role: secondary
           uncontained: true
@@ -1195,8 +1205,9 @@ models:
       monthly_active_learners.
     config:
       meta:
-        api_description: Learners who watched at least one video this month. Withheld
-          when too few learners are in the group to report without identifying them.
+        api_description: Learners who watched at least one video this month. Only
+          activity in an enrollment that is still active counts. Withheld when too
+          few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: monthly_active_learners
@@ -1221,8 +1232,9 @@ models:
       cohort total_problems_attempted is attributable to.
     config:
       meta:
-        api_description: Learners who attempted at least one problem this month. Withheld
-          when too few learners are in the group to report without identifying them.
+        api_description: Learners who attempted at least one problem this month. Only
+          activity in an enrollment that is still active counts. Withheld when too
+          few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: monthly_active_learners
@@ -1244,8 +1256,9 @@ models:
       total_chatbot_interactions is attributable to.
     config:
       meta:
-        api_description: Learners who used the chatbot this month. Withheld when too
-          few learners are in the group to report without identifying them.
+        api_description: Learners who used the chatbot this month. Only activity in
+          an enrollment that is still active counts. Withheld when too few learners
+          are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: monthly_active_learners
@@ -1347,14 +1360,16 @@ models:
           role: primary
   - name: engaged_learners
     description: >
-      Distinct enrolled learners with at least one day of tracked course
-      activity in this course run. A certificate alone does not count.
+      Distinct learners with an active enrollment and at least one day of
+      tracked course activity in this course run. A certificate alone does
+      not count.
     config:
       meta:
-        api_description: 'Enrolled learners who did anything in the course: watched
-          a video, attempted a problem, posted in a discussion, used the chatbot or
-          moved through course pages. Withheld when too few learners are in the group
-          to report without identifying them.'
+        api_description: 'Learners whose enrollment in this course run is still active
+          and who did anything in the course: watched a video, attempted a problem,
+          posted in a discussion, used the chatbot or moved through course pages.
+          Withheld when too few learners are in the group to report without identifying
+          them.'
         cohort:
           role: secondary
           contained_in: total_enrolled_learners
@@ -1390,8 +1405,8 @@ models:
     config:
       meta:
         api_description: Learners who watched at least one video in this course run.
-          Withheld when too few learners are in the group to report without identifying
-          them.
+          Only activity in an enrollment that is still active counts. Withheld when
+          too few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: engaged_learners
@@ -1433,8 +1448,8 @@ models:
     config:
       meta:
         api_description: Learners who attempted at least one problem in this course
-          run. Withheld when too few learners are in the group to report without identifying
-          them.
+          run. Only activity in an enrollment that is still active counts. Withheld
+          when too few learners are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: engaged_learners
@@ -1469,8 +1484,9 @@ models:
       total_chatbot_interactions is attributable to.
     config:
       meta:
-        api_description: Learners who used the chatbot in this course run. Withheld
-          when too few learners are in the group to report without identifying them.
+        api_description: Learners who used the chatbot in this course run. Only activity
+          in an enrollment that is still active counts. Withheld when too few learners
+          are in the group to report without identifying them.
         cohort:
           role: secondary
           contained_in: engaged_learners

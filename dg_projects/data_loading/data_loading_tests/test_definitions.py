@@ -118,6 +118,7 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__openedx__s3__course_transcript_text",
         "ol_warehouse_raw_data/raw__openedx__s3__course_file_exclusions",
         "ol_warehouse_raw_data/raw__ocw__s3__course_content",
+        "ol_warehouse_raw_data/raw__edxorg__s3__program_learner_report",
     ):
         assert expected in asset_keys
 
@@ -133,6 +134,7 @@ def test_schedules_and_sensors_load() -> None:
         "news_events_ingest_daily_schedule",
         "posthog_events_ingest_hourly_schedule",
         "course_xml_blocks_ingest_daily_schedule",
+        "edxorg_program_reports_ingest_daily_schedule",
         "ocw_content_ingest_daily_schedule",
     }
     assert {s.name for s in _REPO.sensor_defs} >= {

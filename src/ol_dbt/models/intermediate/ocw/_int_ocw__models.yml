@@ -369,7 +369,8 @@ models:
 - name: int__ocw__live_courses
   description: One row per OCW course published to the OCW live bucket, with the fields
     of its data.json that MIT Learn's OCW ETL reads. A directory left in the bucket
-    by a site that ocw-studio has since published under another path is not a course.
+    by a site that ocw-studio has since published under another path is not a course,
+    and neither is a site ocw-studio has unpublished and not published again.
   config:
     meta:
       # It reads the OCW live bucket, and ocw/s3 is qa: omit in the inventory.
@@ -623,16 +624,23 @@ unit_tests:
 - name: test_int__ocw__live_courses_reads_what_learn_reads
   description: >
     The run id prefers legacy_uid, cross-listed numbers are split and trimmed,
-    topic paths are flattened, absent keys give empty values, and the directory
-    a renamed site left behind is not a course.
+    topic paths are flattened, absent keys give empty values, the directory
+    a renamed site left behind is not a course, and neither is a site with any
+    unpublish_status. ocw-studio sets it on the unpublish request and clears it
+    when a live publish is requested (publish_version in websites/views.py), so
+    a republished site has none.
   model: int__ocw__live_courses
   given:
   - input: ref('stg__ocw__studio__postgres__websites_website')
     rows:
-    - {website_url_path: courses/a-course}
-    - {website_url_path: courses/b-course}
+    # a-course was unpublished and published again.
+    - {website_url_path: courses/a-course, website_unpublish_status: null}
+    - {website_url_path: courses/b-course, website_unpublish_status: null}
     # Two sites holding one url_path do not double the course.
-    - {website_url_path: courses/b-course}
+    - {website_url_path: courses/b-course, website_unpublish_status: null}
+    # Requested, with the bucket not yet emptied, and removed.
+    - {website_url_path: courses/c-course, website_unpublish_status: not-started}
+    - {website_url_path: courses/d-course, website_unpublish_status: succeeded}
   - input: ref('stg__ocw__s3__course_content')
     rows:
     - course_slug: a-course
@@ -663,6 +671,10 @@ unit_tests:
       course_legacy_uid: ""
       course_data_json: >-
         {"course_title": "B Course", "primary_course_number": "6.1810"}
+    - {course_slug: c-course, coursecontent_kind: course, course_site_uid: 0d6d3c0e-3f7e-4c55-9f43-1d2b1f3e5a10,
+      course_data_json: '{"course_title": "C Course"}'}
+    - {course_slug: d-course, coursecontent_kind: course, course_site_uid: 7f0c2a9b-55d1-4e1a-8c3e-2b6a9d4e8f21,
+      course_data_json: '{"course_title": "D Course"}'}
     # Pages and resources are not courses.
     - {course_slug: a-course, coursecontent_kind: page, course_data_json: null}
   expect:

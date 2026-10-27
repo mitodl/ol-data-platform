@@ -5,19 +5,13 @@ them and ``validate`` asks OpenMetadata to evaluate them now instead of waiting
 for its daily run. The credential-free schema check is ``ol-dbt validate --only
 data_contract``; see ``ol_dbt_cli.lib.data_contracts``.
 
-Both commands read ``OM_SERVER_URL`` (the API root, e.g.
-``https://data.ol.mit.edu/api``) and ``OM_BOT_JWT_TOKEN`` from the environment,
-the same pair the OpenMetadata bootstrap Job in ol-infrastructure uses.
+Both commands read ``OM_SERVER_URL`` and ``OM_BOT_JWT_TOKEN`` from the
+environment; see ``ol_dbt_cli.lib.openmetadata``.
 """
 
 from __future__ import annotations
 
-import json
-import os
 import sys
-import urllib.error
-import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -27,14 +21,14 @@ from rich.markup import escape
 
 from ol_dbt_cli.lib.data_contracts import (
     DEFAULT_CONTRACTS_DIR,
-    ENTITY_COLLECTIONS,
     DataContract,
     create_request,
     load_contracts,
     om_fqn,
 )
 from ol_dbt_cli.lib.git_utils import get_repo_root
-from ol_dbt_cli.lib.manifest import ManifestRegistry, find_manifest, load_manifest
+from ol_dbt_cli.lib.manifest import ManifestRegistry
+from ol_dbt_cli.lib.openmetadata import OpenMetadataClient, load_catalog_manifest
 
 console = Console()
 err_console = Console(stderr=True)
@@ -44,9 +38,6 @@ contracts_app = App(
     help="Publish and validate OpenMetadata data contracts from contracts/.",
 )
 
-HTTP_TIMEOUT_SECONDS = 60
-
-_OWNER_COLLECTIONS = {"team": "teams", "user": "users"}
 _FAILED_STATUSES = {"Failed", "Aborted"}
 
 
@@ -69,52 +60,6 @@ def _report_unresolved(contract: DataContract, exc: Exception) -> None:
     console.print(f"[bold red]unresolved[/] {escape(contract.body['name'])}: {escape(str(exc))}")
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Refuse redirects: urllib would forward the bearer token to the new host."""
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
-_OPENER = urllib.request.build_opener(_NoRedirect)
-
-
-class OpenMetadataClient:
-    def __init__(self, server_url: str, token: str) -> None:
-        """Talk to the OpenMetadata API at *server_url* (the ``/api`` root) with a bot JWT."""
-        self.server_url = server_url.rstrip("/")
-        self._headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-
-    @classmethod
-    def from_env(cls) -> OpenMetadataClient:
-        return cls(os.environ["OM_SERVER_URL"], os.environ["OM_BOT_JWT_TOKEN"])
-
-    def request(self, method: str, path: str, body: Any = None, query: dict[str, str] | None = None) -> Any:
-        url = f"{self.server_url}{path}"
-        if query:
-            url = f"{url}?{urllib.parse.urlencode(query)}"
-        data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(url, data=data, method=method, headers=self._headers)  # noqa: S310
-        try:
-            with _OPENER.open(req, timeout=HTTP_TIMEOUT_SECONDS) as resp:
-                return json.loads(resp.read())
-        except urllib.error.HTTPError as exc:
-            msg = f"{method} {path} -> {exc.code}: {exc.read().decode(errors='replace')[:500]}"
-            raise RuntimeError(msg) from exc
-
-    def entity_id(self, entity_type: str, fqn: str) -> str:
-        collection = ENTITY_COLLECTIONS[entity_type]
-        return self.request("GET", f"/v1/{collection}/name/{urllib.parse.quote(fqn, safe='')}")["id"]
-
-    def owner_refs(self, owners: list[dict[str, str]]) -> list[dict[str, str]]:
-        refs = []
-        for owner in owners:
-            collection = _OWNER_COLLECTIONS[owner["type"]]
-            found = self.request("GET", f"/v1/{collection}/name/{urllib.parse.quote(owner['name'], safe='')}")
-            refs.append({"id": found["id"], "type": owner["type"]})
-        return refs
-
-
 def _resolve_dirs(dbt_dir_path: str | None, contracts_dir_path: str | None) -> tuple[Path, Path]:
     repo_root = get_repo_root()
     dbt_dir = Path(dbt_dir_path).resolve() if dbt_dir_path else repo_root / "src" / "ol_dbt"
@@ -135,14 +80,11 @@ def _load(
         contracts = [c for c in contracts if c.body["name"] in names]
     manifest = ManifestRegistry()
     if any(c.entity.kind != "fqn" for c in contracts):
-        path = Path(manifest_path) if manifest_path else find_manifest(dbt_dir)
-        if path is None:
-            err_console.print(
-                "[red]Error:[/] dbt-bound contracts need a manifest built for the target OpenMetadata "
-                "catalogs (production). Pass --manifest."
-            )
+        try:
+            manifest = load_catalog_manifest(dbt_dir, manifest_path)
+        except ValueError as exc:
+            err_console.print(f"[red]Error:[/] {escape(str(exc))}")
             sys.exit(1)
-        manifest = load_manifest(path)
     return contracts, manifest
 
 
@@ -196,7 +138,7 @@ def sync(
             body = create_request(
                 contract,
                 client.entity_id(contract.entity.entity_type, fqn),
-                client.owner_refs(owners) if owners else None,
+                client.named_refs(owners) if owners else None,
             )
         except (ValueError, RuntimeError) as exc:
             failures += 1
