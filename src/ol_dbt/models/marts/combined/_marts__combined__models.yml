@@ -625,11 +625,11 @@ models:
       flags the learner as having completed the program. A row has a programcertificate_uuid
       (a hash of user and program) only when that flag is true, and the report has
       no revocation, so programcertificate_is_revoked is null.
-      DEDP: on MITx Online rows, completion comes from MITx Online certificates.
-      A DEDP learner without a MITx Online account is an edX.org row and follows
-      the edX.org rule above.
-      DEDP certificates issued by MicroMasters before 2022-10-01 (int__micromasters__program_certificates)
-      are not read here.
+      DEDP: completion comes from MITx Online certificates, including the ones
+      migrated from MicroMasters. The edX.org DEDP rows are MicroMasters program
+      enrollments with no 2U report row, and none of them is complete. A few DEDP
+      certificates MicroMasters issued before 2022-10-01 have no MITx Online copy.
+      They are in int__micromasters__program_certificates and are not counted here.
     tests:
     - not_null
   - name: programenrollment_is_active
@@ -660,17 +660,15 @@ models:
       on either mitxonline.mit.edu or xpro.mit.edu. Null for certificate earned on
       edX.org or certificates that have been revoked.
   - name: unique_courses_taken_in_program
-    description: int, count of unique course readable ids the learner enrolled in
-      within that program, in any enrollment mode. Program courses are matched on
-      program_readable_id. Only MITx Online-hosted courses of MITx Online programs
-      and xPRO program courses carry one, so a row counts nothing unless its program_readable_id
-      is a MITx Online or xPRO program's. Most edX.org rows carry a generated id and
-      count 0. The exception is MicroMasters enrollments missing from the edX.org
-      program report, which take the linked MITx Online program's program_readable_id
-      and are matched to enrollments by user_id with no platform condition, so they
-      can count courses. program_enrollment_with_user_report.courses_taken_in_program
-      counts verified enrollments only, matched through bridge_program_course, so
-      the two differ.
+    description: int, count of unique courses in the program the learner enrolled
+      in, in any enrollment mode. Courses are matched on the row's program_readable_id,
+      which only MITx Online and xPRO programs share with their courses. edX.org rows
+      carry a generated program_readable_id, so the count is 0 for edX.org MicroMasters
+      and XSeries rows alike. The exception is MicroMasters learners missing from
+      2U's program report. Those rows take the MITx Online program's program_readable_id
+      and can count courses, matched to enrollments by user_id with no platform condition.
+      program_enrollment_with_user_report.courses_taken_in_program counts verified
+      enrollments only, matched through bridge_program_course, so the two differ.
   - name: capstone_indicator
     description: str, Y if the learner has an enrollment, in any mode, in a program
       course with the word capstone in the title, otherwise N. Program courses are
