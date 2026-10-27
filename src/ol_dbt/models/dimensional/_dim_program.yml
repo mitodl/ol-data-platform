@@ -111,3 +111,149 @@ models:
     description: Program enrollment start date
   - name: enrollment_end_date
     description: Program enrollment end date
+
+- name: dim_program_report_key
+  description: >
+    Maps each way a program row names its program to the program it counts toward
+    in
+    program reports, so every report keys programs the same way. A row with a MITx
+    Online or xPRO readable id looks it up with lookup_type 'readable_id'; that includes
+    a MicroMasters row that marts__combined_program_enrollment_detail gives its MITx
+    Online program's readable id. Any other row (an edX.org row, whose readable id
+    in
+    the mart is generated, or a marts__combined_coursesinprogram row with none) looks
+    up its title with lookup_type 'title'. A title maps to the MITx Online program
+    edxorg_to_mitxonline_program_mapping names, else to the MITx Online program with
+    that exact title (the rule bridge_program_course and marts__combined_coursesinprogram
+    use to leave an edX.org program's courses to it, e.g. the Circuits and Electronics
+    XSeries), else to nothing, and then the title keys its own program with a null
+    program_readable_id. A title two MITx Online programs share maps to neither. The
+    title rows cover every title the edX.org and MicroMasters rows of those two marts
+    carry. Built in the dimensional layer so marts and reporting models read it rather
+    than the intermediate models it comes from.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - xpro/app_postgres
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - lookup_type
+        - lookup_value
+  columns:
+  - name: lookup_type
+    description: str, 'readable_id' when lookup_value is a MITx Online or xPRO program
+      readable id, 'title' when it is a program title
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ['readable_id', 'title']
+  - name: lookup_value
+    description: str, the readable id or title a program row carries
+    tests:
+    - not_null
+  - name: program_key
+    description: str, the program the row counts toward. The MITx Online or xPRO readable
+      id, or the title for a program with no readable id
+    tests:
+    - not_null
+  - name: program_readable_id
+    description: str, readable id of that program, formatted as program-v1:{org}+{code}.
+      Null for an edX.org or MicroMasters title that maps to no MITx Online program.
+  - name: program_title
+    description: str, title of that program, the MITx Online program's title for a
+      mapped title
+    tests:
+    - not_null
+  - name: program_name
+    description: str, name of that program, shared by the tracks of a MITx Online
+      program split into tracks (e.g. Data, Economics, and Design of Policy)
+    tests:
+    - not_null
+  - name: program_type
+    description: str, type of that program, e.g. MicroMasters, Series, XSeries, Professional
+      Certificate
+  - name: mitxonline_program_id
+    description: int, id of the MITx Online program, null for xPRO programs and unmapped
+      titles
+    tests:
+    - relationships:
+        arguments:
+          to: ref('int__mitxonline__programs')
+          field: program_id
+  - name: mapped_by
+    description: str, 'own' for a program looked up by its own readable id, 'seed'
+      or 'title' for a title mapped through the seed or an identical MITx Online title,
+      'none' for a title that maps to no MITx Online program
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ['own', 'seed', 'title', 'none']
+
+unit_tests:
+- name: test_dim_program_report_key_title_rules
+  description: >
+    A seed title maps to the program the seed names, even when another MITx
+    Online program has that exact title. A title two MITx Online programs
+    share maps to nothing, so it keys its own program. An edX.org title with
+    an identical MITx Online title maps to it. xPRO programs key on their
+    own readable id.
+  model: dim_program_report_key
+  given:
+  - input: ref('int__mitxonline__programs')
+    rows:
+    - {program_id: 1, program_readable_id: "program-v1:MITxT+FIN", program_title: "MITx\
+        \ MicroMasters Program in Finance", program_name: "MITx MicroMasters Program\
+        \ in Finance", program_type: MicroMasters}
+    - {program_id: 2, program_readable_id: "program-v1:MITxT+OTHER", program_title: Finance,
+      program_name: Finance, program_type: Series}
+    - {program_id: 3, program_readable_id: "program-v1:MITxT+DUP1", program_title: Shared,
+      program_name: Shared, program_type: Program}
+    - {program_id: 4, program_readable_id: "program-v1:MITxT+DUP2", program_title: Shared,
+      program_name: Shared, program_type: Program}
+    - {program_id: 5, program_readable_id: "program-v1:MITxT+XS-MCE", program_title: Circuits,
+      program_name: Circuits, program_type: Series}
+  - input: ref('int__mitxpro__programs')
+    rows:
+    - {program_readable_id: "program-v1:xPRO+X", program_title: X Program}
+  - input: ref('edxorg_to_mitxonline_program_mapping')
+    rows:
+    - {edxorg_program_title: Finance, mitxonline_program_readable_id: "program-v1:MITxT+FIN"}
+  - input: ref('int__edxorg__mitx_program_enrollments')
+    rows:
+    - {program_title: Finance, program_type: MicroMasters}
+    - {program_title: Circuits, program_type: XSeries}
+    - {program_title: Shared, program_type: XSeries}
+  - input: ref('int__edxorg__mitx_program_courses')
+    rows:
+    - {program_title: Computer Science, program_type: XSeries}
+  - input: ref('int__micromasters__program_enrollments')
+    rows: []
+  - input: ref('int__mitx__program_requirements')
+    rows: []
+  expect:
+    rows:
+    - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+FIN", program_key: "program-v1:MITxT+FIN",
+      mapped_by: own}
+    - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+OTHER", program_key: "program-v1:MITxT+OTHER",
+      mapped_by: own}
+    - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+DUP1", program_key: "program-v1:MITxT+DUP1",
+      mapped_by: own}
+    - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+DUP2", program_key: "program-v1:MITxT+DUP2",
+      mapped_by: own}
+    - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+XS-MCE", program_key: "program-v1:MITxT+XS-MCE",
+      mapped_by: own}
+    - {lookup_type: readable_id, lookup_value: "program-v1:xPRO+X", program_key: "program-v1:xPRO+X",
+      mapped_by: own}
+    - {lookup_type: title, lookup_value: Finance, program_key: "program-v1:MITxT+FIN",
+      mapped_by: seed}
+    - {lookup_type: title, lookup_value: Circuits, program_key: "program-v1:MITxT+XS-MCE",
+      mapped_by: title}
+    - {lookup_type: title, lookup_value: Shared, program_key: Shared, mapped_by: none}
+    - {lookup_type: title, lookup_value: Computer Science, program_key: Computer Science,
+      mapped_by: none}

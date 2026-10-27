@@ -6,15 +6,17 @@ models:
     (audit and verified), certificates and program credentials, one row per program.
     MITx Online programs are the key, so each DEDP and Statistics and Data Science
     track is its own row. An edX.org program row counts toward the MITx Online program
-    that int__mitx__program_title_to_mitxonline_program maps its title to, through
-    edxorg_to_mitxonline_program_mapping for the MicroMasters programs or an identical
-    MITx Online title for the XSeries programs that have one. An edX.org program with
-    no MITx Online program keeps its own row, keyed on its title, with a null program_readable_id.
-    xPRO programs keep their own rows. Course membership is mapped the same way, from
-    marts__combined_coursesinprogram. A program has a row only when it has both program
-    enrollments and enrollments in its courses. Every learner count is a count of
-    distinct user_email, compared as stored, so one person with different emails on
-    edX.org and MITx Online, or the same email in different letter case, counts twice.
+    that dim_program_report_key maps its title to, through edxorg_to_mitxonline_program_mapping
+    for the MicroMasters programs or an identical MITx Online title for the XSeries
+    programs that have one. An edX.org or MicroMasters program with no MITx Online
+    program keeps its own row, keyed on its title, with a null program_readable_id.
+    A MicroMasters row the mart gives its MITx Online program's readable id keeps
+    that program. xPRO programs keep their own rows. Course membership is keyed by
+    the same lookup, from marts__combined_coursesinprogram. A program has a row only
+    when it has both program enrollments and enrollments in its courses. Every learner
+    count is a count of distinct user_email, compared as stored, so one person with
+    different emails on edX.org and MITx Online, or the same email in different letter
+    case, counts twice.
   config:
     meta:
       qa_branches:
@@ -1926,3 +1928,77 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["source", "conversation_id"]
+
+unit_tests:
+- name: test_program_summary_report_keys_programs
+  description: >
+    An edX.org program mapped to a MITx Online program counts in that
+    program's row, with one certificate per distinct email. An unmapped edX.org
+    MicroMasters program keeps its own row, keyed on its title in both the
+    certificate and the course enrollment counts, with a null program_readable_id.
+    A MicroMasters row the mart gave a MITx Online readable id keeps that program
+    with no title mapping. An xPRO program keeps its own row.
+  model: program_summary_report
+  given:
+  - input: ref('marts__combined_program_enrollment_detail')
+    rows:
+    - {platform_name: MITx Online, program_readable_id: "program-v1:MITxT+SDS-General-Track",
+      program_title: "SDS General", user_email: a@example.com, user_has_completed_program: true}
+    - {platform_name: edX.org, program_readable_id: "program-v1:MITx+SDS+General-Track",
+      program_title: "SDS General on edX", user_email: a@example.com, user_has_completed_program: true}
+    - {platform_name: edX.org, program_readable_id: "program-v1:MITx+SDS+General-Track",
+      program_title: "SDS General on edX", user_email: b@example.com, user_has_completed_program: true}
+    - {platform_name: edX.org, program_readable_id: "program-v1:MITx+OM", program_title: Old
+        MicroMasters, user_email: c@example.com, user_has_completed_program: true}
+    - {platform_name: edX.org, program_readable_id: "program-v1:MITx+DEDP", program_title: DEDP
+        no mapping, user_email: e@example.com, user_has_completed_program: true}
+    - {platform_name: xPRO, program_readable_id: "program-v1:xPRO+X", program_title: X
+        Program, user_email: d@example.com, user_has_completed_program: true}
+  - input: ref('marts__combined_coursesinprogram')
+    rows:
+    - {program_readable_id: "program-v1:MITxT+SDS-General-Track", program_title: "SDS\
+        \ General", course_readable_id: "course-v1:MITxT+A"}
+    - {program_readable_id: null, program_title: Old MicroMasters, course_readable_id: "MITx/OM1"}
+    - {program_readable_id: "program-v1:MITx+DEDP", program_title: DEDP ID, course_readable_id: "course-v1:MITxT+D"}
+    - {program_readable_id: "program-v1:xPRO+X", program_title: X Program, course_readable_id: "course-v1:xPRO+X1"}
+  - input: ref('marts__combined_course_enrollment_detail')
+    rows:
+    - {course_readable_id: "course-v1:MITxT+A", courserun_readable_id: "course-v1:MITxT+A+1T2020",
+      user_email: a@example.com, user_country_code: US, courserunenrollment_enrollment_mode: verified,
+      courseruncertificate_is_earned: false}
+    - {course_readable_id: "MITx/OM1", courserun_readable_id: "MITx/OM1/1T2015", user_email: c@example.com,
+      user_country_code: FR, courserunenrollment_enrollment_mode: audit, courseruncertificate_is_earned: false}
+    - {course_readable_id: "course-v1:MITxT+D", courserun_readable_id: "course-v1:MITxT+D+1T2020",
+      user_email: e@example.com, user_country_code: IN, courserunenrollment_enrollment_mode: verified,
+      courseruncertificate_is_earned: true}
+    - {course_readable_id: "course-v1:xPRO+X1", courserun_readable_id: "course-v1:xPRO+X1+R1",
+      user_email: d@example.com, user_country_code: US, courserunenrollment_enrollment_mode: audit,
+      courseruncertificate_is_earned: true}
+  - input: ref('dim_program_report_key')
+    rows:
+    - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+SDS-General-Track",
+      program_key: "program-v1:MITxT+SDS-General-Track", program_readable_id: "program-v1:MITxT+SDS-General-Track",
+      program_title: "SDS General", program_name: "SDS General", program_type: MicroMasters}
+    - {lookup_type: readable_id, lookup_value: "program-v1:MITx+DEDP", program_key: "program-v1:MITx+DEDP",
+      program_readable_id: "program-v1:MITx+DEDP", program_title: DEDP ID, program_name: DEDP,
+      program_type: MicroMasters}
+    - {lookup_type: readable_id, lookup_value: "program-v1:xPRO+X", program_key: "program-v1:xPRO+X",
+      program_readable_id: "program-v1:xPRO+X", program_title: X Program, program_name: X
+        Program, program_type: Professional Certificate}
+    - {lookup_type: title, lookup_value: "SDS General on edX", program_key: "program-v1:MITxT+SDS-General-Track",
+      program_readable_id: "program-v1:MITxT+SDS-General-Track", program_title: "SDS\
+        \ General", program_name: "SDS General", program_type: MicroMasters}
+    - {lookup_type: title, lookup_value: Old MicroMasters, program_key: Old MicroMasters,
+      program_readable_id: null, program_title: Old MicroMasters, program_name: Old
+        MicroMasters, program_type: MicroMasters}
+  expect:
+    rows:
+    - {program_readable_id: "program-v1:MITxT+SDS-General-Track", program_title: "SDS\
+        \ General", total_enrollments: 1, verified_enrollments: 1, course_certificates: 0,
+      program_certificates: 2}
+    - {program_readable_id: "program-v1:MITx+DEDP", program_title: DEDP ID, total_enrollments: 1,
+      verified_enrollments: 1, course_certificates: 1, program_certificates: 1}
+    - {program_readable_id: null, program_title: Old MicroMasters, total_enrollments: 1,
+      verified_enrollments: 0, course_certificates: 0, program_certificates: 1}
+    - {program_readable_id: "program-v1:xPRO+X", program_title: X Program, total_enrollments: 1,
+      verified_enrollments: 0, course_certificates: 1, program_certificates: 1}

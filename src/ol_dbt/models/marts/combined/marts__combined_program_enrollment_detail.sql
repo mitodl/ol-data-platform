@@ -50,8 +50,13 @@ with mitxpro__programenrollments as (
     select * from {{ ref('int__micromasters__program_enrollments') }}
 )
 
+-- edX.org and MicroMasters rows name their program by title
 , program_title_to_mitxonline_program as (
-    select * from {{ ref('int__mitx__program_title_to_mitxonline_program') }}
+    select
+        lookup_value as program_title
+        , mitxonline_program_id
+    from {{ ref('dim_program_report_key') }}
+    where lookup_type = 'title'
 )
 
 , bridge_program_course as (
