@@ -244,6 +244,9 @@ def test_a_bad_line_names_its_file_and_line(test_profile: Path, tmp_path: Path) 
     [
         pytest.param(b'{"ip": "1"}\n', id="not_gzip"),
         pytest.param(gzip.compress(b'{"ip": "1"}\n')[:-12], id="truncated"),
+        # A valid gzip header over a deflate block of the reserved type, which
+        # zlib rejects with zlib.error rather than gzip.BadGzipFile.
+        pytest.param(gzip.compress(b'{"ip": "1"}\n')[:10] + b"\xff" * 16, id="corrupt"),
         pytest.param(gzip.compress(b'{"ip": "1"}\n{"ip": "\xff"}\n'), id="not_utf8"),
     ],
 )
@@ -341,7 +344,7 @@ def test_batches_sharing_a_listing_list_once(
 
     run = edxorg_s3.FileListing()
     first = _sources_read(pipeline, valid, budget_bytes=2 * size, listing=run)
-    _land(valid, f"{day}/late.log.gz", [_EVENT], start + timedelta(minutes=5))
+    _land(valid, f"{day}/late.log.gz", [_EVENT], start + timedelta(minutes=4))
     second = _sources_read(pipeline, valid, budget_bytes=2 * size, listing=run)
     third = _sources_read(pipeline, valid, budget_bytes=2 * size, listing=run)
 
@@ -383,3 +386,32 @@ def test_batches_without_a_listing_list_every_batch(
 
     assert glob_calls[0] == "**/*.gz"
     assert len(glob_calls) > 1
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("local_s3")
+def test_a_listing_leaves_files_past_its_horizon_for_the_next_run(
+    test_profile: Path, tmp_path: Path
+) -> None:
+    """A file modified within ``settle`` of the listing waits, though listed.
+
+    Reading it could carry the cursor past a file that landed in a prefix the
+    listing had already passed, so it is read by a later run's listing instead.
+    """
+    valid = tmp_path / "landing" / "valid"
+    now = _now()
+    day = f"{now:%Y-%m-%d}"
+    _land(valid, f"{day}/settled.log.gz", [_EVENT], now - timedelta(minutes=10))
+    recent = _land(valid, f"{day}/recent.log.gz", [_EVENT], now - timedelta(minutes=1))
+    pipeline = tracking_logs.tracking_logs_pipeline_for(_XPRO.raw_table)
+
+    run = edxorg_s3.FileListing()
+    assert _sources_read(pipeline, valid, listing=run) == ["settled.log.gz"]
+    assert _sources_read(pipeline, valid, listing=run) == []
+
+    # A later run, once the file has settled.
+    settled_at = (now - timedelta(minutes=6)).timestamp()
+    os.utime(recent, (settled_at, settled_at))
+    assert _sources_read(pipeline, valid, listing=edxorg_s3.FileListing()) == [
+        "recent.log.gz"
+    ]

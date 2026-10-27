@@ -21,7 +21,7 @@ import tempfile
 from bisect import bisect_left
 from collections.abc import Callable, Generator, Iterable, Iterator, Sequence
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -400,13 +400,23 @@ class FileListing:
     770 MB on 2026-10-27, which a backlog of hundreds of batches would pay
     every batch.
 
-    Files that land after the listing wait for the next run. Use one per
-    resource: it holds whatever the first resource that read it listed.
+    Files that land after the listing wait for the next run. So do files
+    modified at or after ``horizon``, ``settle`` before the listing started,
+    although the listing holds them. A listing is not a snapshot: a file that
+    lands in a prefix already listed is missed while a newer one in a prefix
+    listed later is not, and reading that newer one would carry the cursor
+    past the missed file for good. ``settle`` also covers clock skew between
+    the run and S3, and an upload still in flight when the listing starts.
+
+    Use one per resource: it holds whatever the first resource that read it
+    listed.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, settle: timedelta = timedelta(minutes=5)) -> None:
         self._files: list[FileItem] | None = None
+        self._settle = settle
         self.globs: Sequence[str] = ()
+        self.horizon: datetime | None = None
 
     def files(
         self,
@@ -420,6 +430,9 @@ class FileListing:
         ``globs`` keeps the ones it was taken with.
         """
         if self._files is None:
+            # S3 reports whole seconds, so the horizon does too.
+            started = datetime.now(UTC).replace(microsecond=0)
+            self.horizon = started - self._settle
             self._files = list_files(credentials, bucket_url, file_globs)
             self.globs = file_globs
         return self._files
@@ -485,15 +498,18 @@ def edxorg_files(
 
     ``listing``, when given, is shared by every batch of one run: the first
     batch lists and the rest carve their files from that listing (see
-    ``FileListing``). Without it each batch lists again.
+    ``FileListing``), stopping at its ``horizon``. Without it each batch lists
+    again.
     """
     cursor_value = modification_date.last_value
     globs = file_globs(cursor_value) if callable(file_globs) else file_globs
+    horizon = None
     if listing is None:
         listed = list_files(credentials, bucket_url, globs)
     else:
         listed = listing.files(credentials, bucket_url, globs)
         globs = listing.globs
+        horizon = listing.horizon
     # Files before the cursor were read by an earlier batch. Bisecting past
     # them keeps a run of hundreds of batches over one 473,914-file listing
     # from walking it from the start every batch.
@@ -512,6 +528,15 @@ def edxorg_files(
     for file_item in listed[start:]:
         modified_at = file_item["modification_date"]
         size = file_item["size_in_bytes"]
+
+        if horizon is not None and modified_at >= horizon:
+            logger.info(
+                "Leaving files for %s modified at or after %s for the next run's "
+                "listing.",
+                ", ".join(globs),
+                horizon,
+            )
+            return
 
         if cursor_value is not None and modified_at == cursor_value:
             # The boundary second. dlt's cursor boundary is inclusive, so the

@@ -30,6 +30,7 @@ import gzip
 import io
 import json
 import logging
+import zlib
 from collections.abc import Generator, Iterable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -210,9 +211,9 @@ def read_tracking_logs(
 
     :raises TrackingLogLineError: A line does not parse as a JSON object, named
         by file and line number.
-    :raises TrackingLogUnreadableError: A file is not gzip, is truncated, or
-        holds invalid UTF-8, named by file. dlt's own error would name only
-        the resource.
+    :raises TrackingLogUnreadableError: A file is not gzip, is truncated, has a
+        corrupt compressed stream, or holds invalid UTF-8, named by file. dlt's
+        own error would name only the resource.
     """
     for item in items:
         rows: list[dict[str, str | None]] = []
@@ -235,7 +236,7 @@ def read_tracking_logs(
                     if len(rows) == batch_rows:
                         yield _stamp(rows, item, table)
                         rows = []
-        except (UnicodeDecodeError, EOFError, gzip.BadGzipFile) as error:
+        except (UnicodeDecodeError, EOFError, gzip.BadGzipFile, zlib.error) as error:
             msg = f"{item['file_url']} after line {line_number}: {error}"
             raise TrackingLogUnreadableError(msg) from error
         if rows:
