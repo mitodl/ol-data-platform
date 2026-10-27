@@ -83,7 +83,7 @@ metadata:
     - TAB-dhOB0wMgmenerPbUQNy7K
     targets:
     - column:
-        name: program_readable_id
+        name: program_title
       datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
     type: NATIVE_FILTER
   - cascadeParentIds: []
@@ -282,10 +282,11 @@ position:
         **10/27/26**: Replaced the DEDP columns and filters with program columns
         and filters. The table has one row per learner and program, and each DEDP
         track is its own program. To see the former DEDP view, select the three
-        DEDP programs in the Program filter: program-v1:MITx+DEDP (International
-        Development), program-v1:MITx+DEDP-Public-Policy (Public Policy) and program-v1:MITx+DEDP+2T2023
-        (Data, Economics, and Design of Policy). A learner in two DEDP programs
-        has a row for each.'
+        DEDP programs in the Program filter: Data, Economics, and Design of Policy:
+        International Development (program-v1:MITx+DEDP), Data, Economics, and Design
+        of Policy: Public Policy (program-v1:MITx+DEDP-Public-Policy) and Data, Economics,
+        and Design of Policy (program-v1:MITx+DEDP+2T2023). A learner in two DEDP
+        programs has a row for each.'
       height: 50
       width: 12
     parents:
