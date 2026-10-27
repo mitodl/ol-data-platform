@@ -1221,6 +1221,35 @@ models:
           "b2b_contract_number", "product_readable_id"]
 
 unit_tests:
+- name: test_coursesinprogram_keeps_unmapped_edxorg_program_courses
+  description: >
+    An edX.org program whose title dim_program_report_key maps to a MITx Online
+    program leaves its courses to that program. One whose title two MITx Online
+    programs share maps to nothing, so it keeps its own edX.org courses.
+  model: marts__combined_coursesinprogram
+  given:
+  - input: ref('int__mitx__program_requirements')
+    rows: []
+  - input: ref('int__mitx__courses')
+    rows: []
+  - input: ref('int__mitxpro__courses')
+    rows: []
+  - input: ref('int__mitxpro__programs')
+    rows: []
+  - input: ref('int__mitxonline__programs')
+    rows: []
+  - input: ref('int__edxorg__mitx_program_courses')
+    rows:
+    - {program_title: Shared, program_name: Shared, course_title: Shared One, course_readable_id: "MITx/SH1"}
+    - {program_title: Circuits, program_name: Circuits, course_title: Circuits One,
+      course_readable_id: "MITx/C1"}
+  - input: ref('dim_program_report_key')
+    rows:
+    - {lookup_type: title, lookup_value: Shared, mapped_by: none}
+    - {lookup_type: title, lookup_value: Circuits, mapped_by: title}
+  expect:
+    rows:
+    - {platform: edX.org, program_title: Shared, course_readable_id: "MITx/SH1"}
 - name: test_program_enrollment_detail_matches_courses_on_own_platform
   description: >
     A MITx Online learner and an edX.org learner share user_id 7. Each row

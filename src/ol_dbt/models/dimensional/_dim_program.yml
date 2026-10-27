@@ -120,14 +120,15 @@ models:
     Online or xPRO readable id looks it up with lookup_type 'readable_id'; that includes
     a MicroMasters row that marts__combined_program_enrollment_detail gives its MITx
     Online program's readable id. Any other row (an edX.org row, whose readable id
-    in
-    the mart is generated, or a marts__combined_coursesinprogram row with none) looks
-    up its title with lookup_type 'title'. A title maps to the MITx Online program
+    in the mart is generated, or a marts__combined_coursesinprogram row with none)
+    looks up its title with lookup_type 'title'. A title maps to the MITx Online program
     edxorg_to_mitxonline_program_mapping names, else to the MITx Online program with
-    that exact title (the rule bridge_program_course and marts__combined_coursesinprogram
-    use to leave an edX.org program's courses to it, e.g. the Circuits and Electronics
-    XSeries), else to nothing, and then the title keys its own program with a null
-    program_readable_id. A title two MITx Online programs share maps to neither. The
+    that exact title (e.g. the Circuits and Electronics XSeries), else to nothing,
+    and then the title keys its own program with a null
+    program_readable_id. A title two MITx Online programs share maps to neither.
+    bridge_program_course and marts__combined_coursesinprogram leave out an edX.org
+    program's own courses exactly when this model maps its title (mapped_by seed or
+    title), so the program then takes the MITx Online program's courses. The
     title rows cover every title the edX.org and MicroMasters rows of those two marts
     carry. Built in the dimensional layer so marts and reporting models read it rather
     than the intermediate models it comes from.
