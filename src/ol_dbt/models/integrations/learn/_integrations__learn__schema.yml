@@ -552,6 +552,16 @@ models:
     description: boolean, whether price is above zero, as MIT Learn's xPRO ETL sets
       it.
     tests: [not_null]
+  - name: platform_code
+    description: str, MIT Learn's platform code for the course's platform, as its
+      XPRO_PLATFORM_TRANSFORM maps the platform name in integrations__learn__xpro_courses.
+      It is the run's resource's platform.code, part of a content file's vector point
+      key. Null for a platform Learn does not map; Learn's loader skips such a course,
+      so the run has no resource there.
+    tests:
+    - accepted_values:
+        arguments:
+          values: ['emeritus', 'globalalumni', 'simplilearn', 'susskind', 'whu', 'xpro']
 
 - name: integrations__learn__xpro_programs
   config:
@@ -1059,3 +1069,40 @@ unit_tests:
     - {record_hash: sds-methods, mitxonline_program_id: 46}
     - {record_hash: dedp, mitxonline_program_id: 2}
     - {record_hash: unmapped, mitxonline_program_id: null}
+
+- name: test_integrations__learn__xpro_runs_maps_the_course_platform_as_learn_does
+  description: >
+    platform_code is what MIT Learn's XPRO_PLATFORM_TRANSFORM gives the course's
+    platform name, matched exactly, and null for a name it does not map.
+  model: integrations__learn__xpro_runs
+  given:
+  - input: ref('int__mitxpro__catalog_course_runs')
+    rows:
+    - {course_id: 1, courserun_readable_id: run-xpro, courserun_is_unexpired: true,
+      product_id: 1, courserun_current_price: 100}
+    - {course_id: 2, courserun_readable_id: run-alumni, courserun_is_unexpired: true,
+      product_id: 2, courserun_current_price: 100}
+    - {course_id: 3, courserun_readable_id: run-lowercase, courserun_is_unexpired: true,
+      product_id: 3, courserun_current_price: 100}
+    - {course_id: 4, courserun_readable_id: run-no-platform, courserun_is_unexpired: true,
+      product_id: 4, courserun_current_price: 100}
+  - input: ref('stg__mitxpro__app__postgres__courses_course')
+    rows:
+    - {course_id: 1, course_readable_id: course-xpro}
+    - {course_id: 2, course_readable_id: course-alumni}
+    - {course_id: 3, course_readable_id: course-lowercase}
+    - {course_id: 4, course_readable_id: course-no-platform}
+  - input: ref('integrations__learn__xpro_courses')
+    rows:
+    - {readable_id: course-xpro, platform: xPRO}
+    - {readable_id: course-alumni, platform: Global Alumni}
+    - {readable_id: course-lowercase, platform: emeritus}
+    - {readable_id: course-no-platform, platform: null}
+  - input: ref('int__mitxpro__catalog_pages')
+    rows: []
+  expect:
+    rows:
+    - {run_id: run-xpro, platform_code: xpro}
+    - {run_id: run-alumni, platform_code: globalalumni}
+    - {run_id: run-lowercase, platform_code: null}
+    - {run_id: run-no-platform, platform_code: null}

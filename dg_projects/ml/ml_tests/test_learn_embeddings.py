@@ -371,6 +371,79 @@ def test_ocw_chunks_take_the_course_as_resource(tables):
     assert row["source_relation"] == "integrations__learn__ocw_content_files"
 
 
+XPRO_RUN = "course-v1:xPRO+EMX1+R1"
+XPRO_COURSE = "course-v1:xPRO+EMX1"
+XPRO_PARTITION = MultiPartitionKey({"etl_source": "xpro", "run": XPRO_RUN})
+
+
+def load_xpro(tables: dict[str, pl.DataFrame], platform_code: str | None) -> None:
+    tables["integrations__learn__content_files"] = content_files(
+        **{"block-v1:a": "Program management."}
+    ).with_columns(
+        pl.lit("xpro").alias("etl_source"), pl.lit(XPRO_RUN).alias("run_readable_id")
+    )
+    tables["integrations__learn__xpro_runs"] = pl.DataFrame(
+        [
+            {
+                "readable_id": XPRO_COURSE,
+                "run_id": XPRO_RUN,
+                "platform_code": platform_code,
+            }
+        ],
+        schema={
+            "readable_id": pl.String,
+            "run_id": pl.String,
+            "platform_code": pl.String,
+        },
+    )
+
+
+def build_xpro_chunks(tables) -> Any:
+    dagster_instance = DagsterInstance.ephemeral()
+    dagster_instance.add_dynamic_partitions("learn_content_file_run", [XPRO_RUN])
+    return materialize(
+        [content_file_embedding_chunks],
+        partition_key=XPRO_PARTITION,
+        instance=dagster_instance,
+        resources={"learn_embeddings_io_manager": Warehouse(tables)},
+    )
+
+
+def test_xpro_chunks_take_the_runs_platform_code(tables):
+    load_xpro(tables, "emeritus")
+
+    assert build_xpro_chunks(tables).success
+
+    row = tables[CONTENT_FILE_CHUNKS_KEY.path[-1]].row(0, named=True)
+    assert row["point_id"] == learn_point_id(
+        "emeritus", XPRO_COURSE, XPRO_RUN, "block-v1:a", "0"
+    )
+
+
+def test_an_xpro_run_without_a_platform_code_is_not_chunked(tables):
+    load_xpro(tables, None)
+
+    assert build_xpro_chunks(tables).success
+
+    assert tables[CONTENT_FILE_CHUNKS_KEY.path[-1]].is_empty()
+    # Not offered to the sensor, and emptied once registered.
+    assert content_file_text_versions("xpro").is_empty()
+    assert content_file_text_versions("xpro", registered=[XPRO_RUN])[
+        "text_version"
+    ].to_list() == [EMPTY_TEXT_VERSION]
+
+
+def test_a_platform_change_moves_the_text_version(tables):
+    load_xpro(tables, "xpro")
+    before = content_file_text_versions("xpro")["text_version"].to_list()
+    load_xpro(tables, "simplilearn")
+
+    after = content_file_text_versions("xpro")["text_version"].to_list()
+
+    assert len(before) == len(after) == 1
+    assert before != after
+
+
 def test_topic_point_id_is_the_topic_uuid(tables):
     tables[TOPICS_RELATION] = pl.DataFrame(
         [
@@ -644,7 +717,11 @@ def test_candidate_vectors_survive_a_serving_run(tables):
 # ------------------------------------------------------------------------ sensor
 def load_empty_xpro_and_ocw(tables: dict[str, pl.DataFrame]) -> None:
     tables["integrations__learn__xpro_runs"] = pl.DataFrame(
-        schema={"readable_id": pl.String, "run_id": pl.String}
+        schema={
+            "readable_id": pl.String,
+            "run_id": pl.String,
+            "platform_code": pl.String,
+        }
     )
     tables["integrations__learn__ocw_content_files"] = content_files(none="").clear()
     tables["integrations__learn__ocw_courses"] = pl.DataFrame(
