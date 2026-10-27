@@ -801,8 +801,13 @@ table or a file a frozen table reads.
 
 A frozen entry can also keep tables dbt never modeled. `modeled: false` says so and reverses
 the dbt half: dbt not declaring them is expected, and dbt declaring one is the `WARNING`.
-Bootcamps has two such entries, the 93 tables its Airbyte connections landed and nothing read,
-kept on 2026-10-26 because nobody had decided to drop them. A retired table *without*
+Bootcamps has one: `applications_bootcampapplicationline`, 44,102 rows dbt never read. It was
+one of 93 such tables frozen on 2026-10-26 because nobody had decided to drop them. The other
+92 held no rows, and on 2026-10-27 the owner decided to drop them from Glue, so their entries
+lost `frozen:` (the two that shared an entry with `applications_bootcampapplicationline` moved
+to an entry of their own, since the flag is per entry). The same decision kept the 19 JSONL
+directories the pre-Iceberg connection left under `raw/bootcamps/app/postgres/public/`, which
+no Glue table references; the 90-table entry's reason records them. A retired table *without*
 `frozen:` that the warehouse still holds is reported as retired, not as undeclared: nothing
 loads it and its entry does not say to keep it, so it is waiting to be dropped.
 
