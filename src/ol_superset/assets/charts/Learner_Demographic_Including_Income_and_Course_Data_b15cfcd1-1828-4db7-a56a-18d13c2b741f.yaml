@@ -31,10 +31,10 @@ params:
   - first_course_start_datetime
   - last_course_start_datetime
   - num_of_course_enrolled
-  - program_name
+  - program_readable_id
+  - program_title
   - program_course_cert_count
   - program_cert_ind
-  - program_completed_tracks
   - program_enroll_ind
   include_search: false
   matrixify_all_sort_by_columns: a_to_z

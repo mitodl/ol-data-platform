@@ -16,7 +16,7 @@ columns:
   type: VARCHAR(1073741824)
   verbose_name: null
 - advanced_data_type: null
-  column_name: program_completed_tracks
+  column_name: program_title
   datetime_format: null
   description: null
   expression: ''
@@ -276,7 +276,7 @@ columns:
   type: DOUBLE
   verbose_name: null
 - advanced_data_type: null
-  column_name: program_name
+  column_name: program_readable_id
   datetime_format: null
   description: null
   expression: ''
