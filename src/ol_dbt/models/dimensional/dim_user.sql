@@ -292,7 +292,8 @@ with mitx_users as (
 )
 
 -- Some Learn profile names are a Python dict repr, {'givenName': 'A', 'familyName': 'B'}.
--- `.` stands for the quote characters, which are ' or " depending on the name.
+-- `.` stands for the quote characters, which are ' or " depending on the name. Only a name
+-- that matches the whole pattern is parsed, so a display name like {Gaurav} Gaming is kept.
 {% set learn_dict_name = "'givenName.: .(.*?)., .familyName.: .(.*).[}]$'" %}
 
 , learn_user_view as(
@@ -304,7 +305,7 @@ with mitx_users as (
         , coalesce(
             nullif(trim(
                 case
-                    when substr(trim(learn_profile.user_name), 1, 1) = '{'
+                    when {{ regexp_like('learn_profile.user_name', learn_dict_name) }}
                     then concat(
                         {{ regexp_extract_or_null('learn_profile.user_name', learn_dict_name, 1) }}
                         , ' '
