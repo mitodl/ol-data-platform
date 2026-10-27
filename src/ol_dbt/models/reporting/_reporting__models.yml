@@ -803,11 +803,12 @@ models:
   description: A report that contains learner demographics and certificate information.
     One row per user and program, for each program the user enrolled in or holds a
     course certificate for. A user with neither has one row with null program columns.
-    Programs are keyed as in program_summary_report, through dim_program_report_key,
-    so each DEDP and Statistics and Data Science track is its own row, and an edX.org
+    Rows group on the program_report_key that marts__combined_program_enrollment_detail
+    and marts__combined_coursesinprogram carry, the key program_summary_report groups
+    on, so each DEDP and Statistics and Data Science track is its own row and an edX.org
     or MicroMasters program counts toward the MITx Online program its title maps to.
-    A program row that dim_program_report_key keys to no program is left out. The
-    program is matched to the user by email.
+    A program row with no program_report_key is left out. Programs are matched to
+    the user by email.
   config:
     meta:
       qa_branches:
@@ -1999,13 +2000,12 @@ unit_tests:
       program_certificates: 1}
 - name: test_learner_demographics_and_cert_info_program_rows
   description: >
-    One row per user and program. Each track is its own row, and an edX.org program
-    counts toward the MITx Online program its title maps to. A revoked certificate
-    (user_has_completed_program false) does not set program_cert_ind. A course
-    certificate alone adds a row with no enrollment, and a user with neither gets
-    one
-    row with null program columns. An edX.org program with no MITx Online program
-    keys on its title with a null program_readable_id.
+    One row per user and program, grouped on the program key both program marts carry.
+    Each track is its own row, and a program keyed on its title has a null program_readable_id.
+    A revoked certificate (user_has_completed_program false) does not set program_cert_ind.
+    A course certificate alone adds a row with no enrollment, and a user with neither
+    gets one row with null program columns.
+    A program row the marts key to no program adds no row.
   model: learner_demographics_and_cert_info
   given:
   - input: ref('marts__combined__users')
@@ -2016,46 +2016,41 @@ unit_tests:
     - {user_hashed_id: "d", user_email: "d@example.com"}
   - input: ref('marts__combined_program_enrollment_detail')
     rows:
-    - {user_email: "a@example.com", platform_name: "MITx Online", program_readable_id: "program-v1:MITx+ID",
-      program_title: "Policy: International Development", user_has_completed_program: true}
-    - {user_email: "a@example.com", platform_name: "MITx Online", program_readable_id: "program-v1:MITx+PP",
-      program_title: "Policy: Public Policy", user_has_completed_program: true}
-    - {user_email: "a@example.com", platform_name: "edX.org", program_readable_id: "program-v1:MITx+EDXID",
-      program_title: "Policy: International Development (edX)", user_has_completed_program: false}
-    - {user_email: "b@example.com", platform_name: "xPro", program_readable_id: "program-v1:xPRO+L",
-      program_title: "Leadership", user_has_completed_program: false}
-    - {user_email: "b@example.com", platform_name: "edX.org", program_readable_id: "program-v1:MITx+GENERATED",
-      program_title: "Computer Science", user_has_completed_program: true}
-  - input: ref('dim_program_report_key')
-    rows:
-    - {lookup_type: readable_id, lookup_value: "program-v1:MITx+ID", program_key: "program-v1:MITx+ID",
-      program_readable_id: "program-v1:MITx+ID", program_title: "Policy: International\
-        \ Development"}
-    - {lookup_type: readable_id, lookup_value: "program-v1:MITx+PP", program_key: "program-v1:MITx+PP",
-      program_readable_id: "program-v1:MITx+PP", program_title: "Policy: Public Policy"}
-    - {lookup_type: readable_id, lookup_value: "program-v1:xPRO+L", program_key: "program-v1:xPRO+L",
-      program_readable_id: "program-v1:xPRO+L", program_title: "Leadership"}
-    - {lookup_type: title, lookup_value: "Policy: International Development (edX)",
-      program_key: "program-v1:MITx+ID", program_readable_id: "program-v1:MITx+ID",
-      program_title: "Policy: International Development"}
-    - {lookup_type: title, lookup_value: "Computer Science", program_key: "Computer\
-        \ Science", program_readable_id: null, program_title: "Computer Science"}
+    - {user_email: "a@example.com", user_has_completed_program: true, program_report_key: "program-v1:MITx+ID",
+      report_program_readable_id: "program-v1:MITx+ID", report_program_title: "Policy:\
+        \ International Development"}
+    - {user_email: "a@example.com", user_has_completed_program: true, program_report_key: "program-v1:MITx+PP",
+      report_program_readable_id: "program-v1:MITx+PP", report_program_title: "Policy:\
+        \ Public Policy"}
+    - {user_email: "a@example.com", user_has_completed_program: false, program_report_key: "program-v1:MITx+ID",
+      report_program_readable_id: "program-v1:MITx+ID", report_program_title: "Policy:\
+        \ International Development"}
+    - {user_email: "a@example.com", user_has_completed_program: true, program_report_key: null,
+      report_program_readable_id: null, report_program_title: null}
+    - {user_email: "b@example.com", user_has_completed_program: false, program_report_key: "program-v1:xPRO+L",
+      report_program_readable_id: "program-v1:xPRO+L", report_program_title: "Leadership"}
+    - {user_email: "b@example.com", user_has_completed_program: true, program_report_key: "Computer\
+        \ Science", report_program_readable_id: null, report_program_title: "Computer\
+        \ Science"}
   - input: ref('marts__combined_course_enrollment_detail')
     rows:
     - {user_email: "a@example.com", course_readable_id: "course-1", courseruncertificate_is_earned: true}
     - {user_email: "a@example.com", course_readable_id: "course-2", courseruncertificate_is_earned: true}
     - {user_email: "a@example.com", course_readable_id: "course-3", courseruncertificate_is_earned: false}
     - {user_email: "c@example.com", course_readable_id: "course-1", courseruncertificate_is_earned: true}
+    - {user_email: "c@example.com", course_readable_id: "course-4", courseruncertificate_is_earned: true}
   - input: ref('marts__combined_coursesinprogram')
     rows:
-    - {course_readable_id: "course-1", program_readable_id: "program-v1:MITx+ID",
-      program_title: "Policy: International Development"}
-    - {course_readable_id: "course-1", program_readable_id: "program-v1:MITx+PP",
-      program_title: "Policy: Public Policy"}
-    - {course_readable_id: "course-2", program_readable_id: "program-v1:MITx+ID",
-      program_title: "Policy: International Development"}
-    - {course_readable_id: "course-3", program_readable_id: "program-v1:MITx+ID",
-      program_title: "Policy: International Development"}
+    - {course_readable_id: "course-1", program_report_key: "program-v1:MITx+ID", report_program_readable_id: "program-v1:MITx+ID",
+      report_program_title: "Policy: International Development"}
+    - {course_readable_id: "course-1", program_report_key: "program-v1:MITx+PP", report_program_readable_id: "program-v1:MITx+PP",
+      report_program_title: "Policy: Public Policy"}
+    - {course_readable_id: "course-2", program_report_key: "program-v1:MITx+ID", report_program_readable_id: "program-v1:MITx+ID",
+      report_program_title: "Policy: International Development"}
+    - {course_readable_id: "course-3", program_report_key: "program-v1:MITx+ID", report_program_readable_id: "program-v1:MITx+ID",
+      report_program_title: "Policy: International Development"}
+    - {course_readable_id: "course-4", program_report_key: null, report_program_readable_id: null,
+      report_program_title: null}
   expect:
     rows:
     - {user_hashed_id: "a", program_readable_id: "program-v1:MITx+ID", program_title: "Policy:\
