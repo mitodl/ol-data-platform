@@ -50,12 +50,16 @@ with mitxpro__programenrollments as (
     select * from {{ ref('int__micromasters__program_enrollments') }}
 )
 
+, program_report_key as (
+    select * from {{ ref('dim_program_report_key') }}
+)
+
 -- edX.org and MicroMasters rows name their program by title
 , program_title_to_mitxonline_program as (
     select
         lookup_value as program_title
         , mitxonline_program_id
-    from {{ ref('dim_program_report_key') }}
+    from program_report_key
     where lookup_type = 'title'
 )
 
@@ -406,4 +410,21 @@ select
         , final_combined_programs.first_courserun_start_on_date
         , final_combined_programs.programcertificate_created_on_date
     ) as program_completion_days
+    -- The program the row counts toward in program reports. A MITx Online or xPRO readable
+    -- id names it, including the MITx Online id a MicroMasters row carries; any other row
+    -- (an edX.org row's readable id is generated) is looked up by its title.
+    , coalesce(by_readable_id.program_key, by_title.program_key) as program_report_key
+    , coalesce(by_readable_id.program_readable_id, by_title.program_readable_id) as report_program_readable_id
+    , coalesce(by_readable_id.program_title, by_title.program_title) as report_program_title
+    , coalesce(by_readable_id.program_name, by_title.program_name) as report_program_name
+    , coalesce(by_readable_id.program_type, by_title.program_type) as report_program_type
 from final_combined_programs
+left join program_report_key as by_readable_id
+    on
+        by_readable_id.lookup_type = 'readable_id'
+        and final_combined_programs.program_readable_id = by_readable_id.lookup_value
+left join program_report_key as by_title
+    on
+        by_readable_id.lookup_value is null
+        and by_title.lookup_type = 'title'
+        and final_combined_programs.program_title = by_title.lookup_value
