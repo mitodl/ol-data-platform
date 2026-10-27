@@ -65,6 +65,7 @@ with combined__users as (
 
 -- The program name each program key reports under, from the program enrollment mart.
 -- Programs that share a name (e.g. the three DEDP programs) are counted together below.
+-- A program with no enrollment rows has no name here and counts on its own key.
 , program_names as (
     select
         program_report_key as program_key
@@ -77,12 +78,14 @@ with combined__users as (
 , program_name_course_certificates as (
     select
         learner_program_courses.user_email
-        , program_names.program_name
+        , coalesce(program_names.program_name, learner_program_courses.program_key) as program_name_group
         , count(distinct learner_program_courses.course_readable_id) as program_name_course_cert_count
     from learner_program_courses
-    inner join program_names
+    left join program_names
         on learner_program_courses.program_key = program_names.program_key
-    group by learner_program_courses.user_email, program_names.program_name
+    group by
+        learner_program_courses.user_email
+        , coalesce(program_names.program_name, learner_program_courses.program_key)
 )
 
 , user_programs as (
@@ -140,5 +143,6 @@ left join program_names
 left join program_name_course_certificates
     on
         user_programs.user_email = program_name_course_certificates.user_email
-        and program_names.program_name = program_name_course_certificates.program_name
+        and coalesce(program_names.program_name, user_programs.program_key)
+        = program_name_course_certificates.program_name_group
 where combined__users.user_hashed_id is not null
