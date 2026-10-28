@@ -198,10 +198,20 @@ def content_file_vectors_match_learn(
         checksum_field="checksum",
         vector_name=vector_name,
     )
+    source = CONTENT_FILE_SOURCES[etl_source]
+    platform_code = source.platform_code
+    if platform_code is None:
+        # An xPRO run's code is its course's. A run with none, or no longer in
+        # the runs model, gets "", the code Learn gives a resource with no
+        # platform, so no xPRO point matches it.
+        platform_code = (
+            source.run_resources(require_table(LAYER, source.runs_relation))
+            .filter(pl.col("run_id") == run)
+            .collect()["platform_code"]
+            .first()
+        ) or ""
     learn_ids = scroll_point_ids(
-        client,
-        collection,
-        content_file_run_filter(CONTENT_FILE_SOURCES[etl_source].platform_code, run),
+        client, collection, content_file_run_filter(platform_code, run)
     )
     return check_result(
         compare_with_learn(
