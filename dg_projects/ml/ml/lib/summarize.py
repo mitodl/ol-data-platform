@@ -23,7 +23,8 @@ from ol_llm import (
     process_batch,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
-from pydantic_ai import ModelRetry, TextOutput
+from pydantic_ai import ModelRetry, RunContext, TextOutput
+from pydantic_ai.messages import ModelResponse
 from pydantic_ai.settings import ThinkingEffort
 from pyiceberg.catalog import Catalog
 
@@ -242,12 +243,18 @@ def filter_unsummarized(
     )
 
 
-def _non_empty(summary: str) -> str:
-    """Send an empty summary back to the model once before the row fails.
+def _complete_summary(ctx: RunContext[None], summary: str) -> str:
+    """Send an empty or cut-off summary back to the model once before the row fails.
 
     A model with thinking on can spend its whole output on hidden thinking and
-    return no text rather than raising.
+    return no text rather than raising. Thinking shares max_tokens with the
+    answer, so it can also stop mid-summary, and a partial summary stored under
+    the current key is never re-submitted.
     """
+    response = ctx.messages[-1]
+    if isinstance(response, ModelResponse) and response.finish_reason == "length":
+        msg = "The summary was cut off. Write the 1-3 sentence summary."
+        raise ModelRetry(msg)
     if not summary.strip():
         msg = "The summary was empty. Write the 1-3 sentence summary."
         raise ModelRetry(msg)
@@ -287,7 +294,7 @@ class Summarizer:
         return complete_sync(
             self.use_case,
             self.prompt.format(conversation_text=row["conversation_text"]),
-            output_type=TextOutput(_non_empty),
+            output_type=TextOutput(_complete_summary),
             model_settings={
                 "max_tokens": SUMMARY_MAX_TOKENS,
                 "thinking": SUMMARY_THINKING,

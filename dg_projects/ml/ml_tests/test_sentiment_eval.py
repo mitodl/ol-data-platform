@@ -4,7 +4,9 @@ import numpy as np
 import polars as pl
 import pytest
 from anthropic import Anthropic, AnthropicBedrock
+from anthropic.types import TextBlock, ThinkingBlock
 from ml.lib import sentiment_eval
+from ml_tests.fake_anthropic import FakeAnthropicClient, FakeMessage
 from openai import OpenAI
 
 
@@ -225,3 +227,35 @@ def test_run_sentiment_eval_includes_llm_arm_when_client_given() -> None:
 
     assert "llm" in result["methods"]
     assert result["methods"]["llm"]["call_count"] == result["n_test"]
+
+
+def test_anthropic_sentiment_client_reads_the_word_after_a_thinking_block() -> None:
+    """claude-haiku-5-5 thinks by default, so the reply opens with a thinking block."""
+    fake = FakeAnthropicClient(
+        FakeMessage(
+            [
+                ThinkingBlock(type="thinking", thinking="", signature="sig"),
+                TextBlock(type="text", text="Negative"),
+            ]
+        )
+    )
+    client = sentiment_eval.AnthropicSentimentClient(fake, "claude-haiku-5-5")
+
+    assert client.classify("some conversation text") == "negative"
+    assert fake.requests[0]["output_config"] == {
+        "effort": sentiment_eval.SENTIMENT_EFFORT
+    }
+
+
+def test_anthropic_sentiment_client_leaves_a_cut_off_reply_unlabeled() -> None:
+    client = sentiment_eval.AnthropicSentimentClient(
+        FakeAnthropicClient(
+            FakeMessage(
+                [ThinkingBlock(type="thinking", thinking="", signature="sig")],
+                stop_reason="max_tokens",
+            )
+        ),
+        "claude-haiku-5-5",
+    )
+
+    assert client.classify("some conversation text") is None

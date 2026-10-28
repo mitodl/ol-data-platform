@@ -67,13 +67,13 @@ def call_anthropic(
 
 
 def message_text(message: Message) -> str | None:
-    """Return the reply's first text block, or None when it has no answer to read.
+    """Return the reply's first text block, or None when it has no complete answer.
 
-    Claude Haiku 5.5 thinks by default, so a reply can open with thinking blocks
-    or stop at max_tokens before any text. A refusal can carry partial text that
-    is not an answer.
+    Claude Haiku 5.5 thinks by default, so a reply can open with thinking blocks,
+    and thinking shares max_tokens with the answer. A reply cut off at max_tokens
+    or a refusal can carry partial text that is not an answer.
     """
-    if message.stop_reason == "refusal":
+    if message.stop_reason in ("refusal", "max_tokens"):
         return None
     return next((block.text for block in message.content if block.type == "text"), None)
 

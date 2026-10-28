@@ -382,6 +382,32 @@ def test_summarizer_fails_a_summary_that_stays_empty() -> None:
     assert len(calls) == 2
 
 
+def test_summarizer_retries_a_summary_cut_off_at_max_tokens() -> None:
+    """Thinking shares max_tokens, so a reply can stop mid-summary; the partial
+    text is sent back, not stored.
+    """
+    replies = [
+        ModelResponse(parts=[TextPart("The learner wanted")], finish_reason="length"),
+        ModelResponse(parts=[TextPart("The learner wanted a refund.")]),
+    ]
+
+    def cut_off_once(_messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+        return replies.pop(0)
+
+    with override_models(FunctionModel(cut_off_once)):
+        result = SUMMARIZER.summarize(_conversation_row())
+
+    assert result.output == "The learner wanted a refund."
+
+
+def test_summarizer_fails_a_summary_cut_off_twice() -> None:
+    def cut_off(_messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+        return ModelResponse(parts=[TextPart("The learner")], finish_reason="length")
+
+    with override_models(FunctionModel(cut_off)), pytest.raises(LLMInvalidOutput):
+        SUMMARIZER.summarize(_conversation_row())
+
+
 def test_summarized_frame_records_the_key_and_provenance() -> None:
     row = _conversation_row(conversation_ref="1")
     with override_models(FunctionModel(_summarize)):
