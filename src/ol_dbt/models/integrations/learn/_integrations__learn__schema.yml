@@ -759,6 +759,8 @@ models:
       arguments:
         column_name: "concat(coalesce(user_email, ''), '|', coalesce(cast(coalesce(mitxonline_program_id,\
           \ micromasters_program_id) as varchar), ''))"
+      config:
+        error_if: ">0"
 
 unit_tests:
 - name: test_integrations__learn__ocw_courses_builds_learns_ids_and_urls
