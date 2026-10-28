@@ -60,7 +60,12 @@ with mitxonline_discounts as (
         , coupon_id as source_discount_id
         , coupon_code as discount_code
         , coupon_amount_type as discount_type
-        , coupon_amount as discount_amount
+        -- MicroMasters stores a percent-discount as a fraction, like xPRO
+        , case
+            when coupon_amount_type = 'percent-discount'
+                then coupon_amount * 100
+            else coupon_amount
+        end as discount_amount
         , null as redemption_type
         , null as discount_source
         , 1 as max_redemptions
