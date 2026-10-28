@@ -8,6 +8,8 @@ version: 2
 
 models:
 - name: integrations__learn__mit_climate_articles
+  config:
+    tags: [qa_scheduled]
   description: >
     MIT Climate Portal articles (Explainers + Ask MIT Climate) exposed for
     MIT Learn's ETL. One row per article, identified by uuid.
@@ -53,6 +55,8 @@ models:
       Always 'climate' (differs from etl_source, which is 'mit_climate').
 
 - name: integrations__learn__mitpe_courses
+  config:
+    tags: [qa_scheduled]
   description: >
     MIT Professional Education courses for MIT Learn webhook delivery, one row per
     course with at least one published run (integrations__learn__mitpe_runs). A
@@ -106,6 +110,8 @@ models:
     tests: [not_null]
 
 - name: integrations__learn__mitpe_programs
+  config:
+    tags: [qa_scheduled]
   description: >
     MIT Professional Education programs for MIT Learn webhook delivery, one row per
     program with at least one published run, with the delivered courses it contains.
@@ -161,6 +167,8 @@ models:
     tests: [not_null]
 
 - name: integrations__learn__mitpe_runs
+  config:
+    tags: [qa_scheduled]
   description: >
     Published runs of MIT Professional Education courses and programs, for MIT Learn
     webhook delivery. Publication is evaluated when the model is built. Dates are
@@ -190,6 +198,8 @@ models:
     description: str, ISO 8601 enrollment end instant, null if none.
 
 - name: integrations__learn__oll_courses
+  config:
+    tags: [qa_scheduled]
   description: >
     Open Learning Library courses for MIT Learn webhook delivery, shaped as MIT
     Learn's legacy OLL ETL (learning_resources/etl/oll.py) writes them. One row per

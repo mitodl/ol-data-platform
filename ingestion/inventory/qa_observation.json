@@ -1,6 +1,6 @@
 {
   "glue_database": "ol_warehouse_qa_raw",
-  "observed_at": "2026-10-28T20:00:13.341205+00:00",
+  "observed_at": "2026-10-28T20:22:22.737701+00:00",
   "tables": {
     "raw__edxorg__discovery__api__mitx_course": {"iceberg": true, "present": true, "rows": 213146, "snapshot_at": "2026-10-07T19:27:39.433000+00:00"},
     "raw__edxorg__discovery__api__mitx_course_run": {"iceberg": true, "present": true, "rows": 702224, "snapshot_at": "2026-10-07T19:27:45.028000+00:00"},
@@ -111,6 +111,7 @@
     "raw__micromasters__app__postgres__social_auth_usersocialauth": {"iceberg": true, "present": true, "rows": 314, "snapshot_at": "2026-09-08T15:57:36.454000+00:00"},
     "raw__micromasters__app__postgres__wagtailcore_page": {"iceberg": true, "present": true, "rows": 44, "snapshot_at": "2026-09-11T17:10:20.552000+00:00"},
     "raw__micromasters__app__postgres__wagtailimages_image": {"iceberg": true, "present": true, "rows": 110, "snapshot_at": "2026-09-08T15:59:03.611000+00:00"},
+    "raw__mit_climate__api__articles": {"iceberg": true, "present": true, "rows": 101, "snapshot_at": "2026-10-28T03:30:20.679000+00:00"},
     "raw__mitlearn__app__postgres__articles_article": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
     "raw__mitlearn__app__postgres__auth_group": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
     "raw__mitlearn__app__postgres__auth_group_permissions": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
@@ -208,6 +209,9 @@
     "raw__mitlearn__app__postgres__users_user_user_permissions": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
     "raw__mitlearn__app__postgres__widgets_widgetinstance": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
     "raw__mitlearn__app__postgres__widgets_widgetlist": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
+    "raw__mitpe__api__courses": {"iceberg": true, "present": true, "rows": 133, "snapshot_at": "2026-10-28T03:15:21.064000+00:00"},
+    "raw__mitpe__api__events": {"iceberg": true, "present": true, "rows": 266, "snapshot_at": "2026-10-28T04:50:26.094000+00:00"},
+    "raw__mitpe__api__news": {"iceberg": true, "present": true, "rows": 197, "snapshot_at": "2026-10-28T04:50:26.030000+00:00"},
     "raw__mitx__openedx__api__course_structure_blocks": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
     "raw__mitx__openedx__mysql__assessment_aiclassifier": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
     "raw__mitx__openedx__mysql__assessment_aiclassifierset": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
@@ -462,6 +466,7 @@
     "raw__ocw__studio__postgres__websites_websitecontent": {"iceberg": false, "present": true, "rows": null, "snapshot_at": null},
     "raw__ocw__studio__postgres__websites_websitecontent_referencing_content": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
     "raw__ocw__studio__postgres__websites_websitestarter": {"iceberg": true, "present": true, "rows": 5, "snapshot_at": "2026-09-08T16:35:02.289000+00:00"},
+    "raw__oll__google_sheets__courses": {"iceberg": true, "present": true, "rows": 64, "snapshot_at": "2026-10-28T03:00:34.116000+00:00"},
     "raw__openedx__s3__course_document_text": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
     "raw__openedx__s3__course_file_exclusions": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},
     "raw__openedx__s3__course_transcript_text": {"iceberg": false, "present": false, "rows": null, "snapshot_at": null},

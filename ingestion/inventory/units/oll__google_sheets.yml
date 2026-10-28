@@ -6,7 +6,7 @@ deployment: oll
 layer: google_sheets
 scope: scoped
 strategies:
-  qa: omit
+  qa: ingest
   local: fixture
 loader: dlt
 table_prefix: raw__oll__google_sheets__
