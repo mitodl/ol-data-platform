@@ -720,14 +720,18 @@ unit_tests:
   given:
   - input: ref('int__ocw__resources')
     rows:
-    - {course_uuid: course-1, resource_uuid: resource-1, learning_resource_types: "Lecture Notes, Readings"}
-    - {course_uuid: course-1, resource_uuid: resource-2, learning_resource_types: Lecture Notes}
+    - {course_uuid: course-1, resource_uuid: resource-1, learning_resource_types: "Lecture\
+        \ Notes, Readings"}
+    - {course_uuid: course-1, resource_uuid: resource-2, learning_resource_types: Lecture
+        Notes}
     - {course_uuid: course-1, resource_uuid: resource-3, learning_resource_types: null}
   expect:
     rows:
-    - {course_uuid: course-1, resource_uuid: resource-1, learning_resource_type: Lecture Notes}
+    - {course_uuid: course-1, resource_uuid: resource-1, learning_resource_type: Lecture
+        Notes}
     - {course_uuid: course-1, resource_uuid: resource-1, learning_resource_type: Readings}
-    - {course_uuid: course-1, resource_uuid: resource-2, learning_resource_type: Lecture Notes}
+    - {course_uuid: course-1, resource_uuid: resource-2, learning_resource_type: Lecture
+        Notes}
 - name: test_int__ocw__live_courses_reads_other_shapes_as_learn_does
   description: >
     A level, department_numbers or learning_resource_types object gives its
