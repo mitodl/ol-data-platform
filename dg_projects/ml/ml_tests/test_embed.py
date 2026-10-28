@@ -207,6 +207,23 @@ def test_resolve_embedding_model_sizes_requests_per_backend_and_model(
     assert spec.max_request_tokens == max_request_tokens
 
 
+@pytest.mark.parametrize(
+    ("model", "max_input_tokens"),
+    [
+        ("google:gemini-embedding-001", 2048),
+        ("google:gemini-embedding-2", 8192),
+        ("google:gemini-embedding-2-preview", 8192),
+        ("google-cloud:gemini-embedding-001", 2048),
+        ("google-cloud:gemini-embedding-2", 8192),
+        ("google-cloud:text-embedding-005", 2048),
+    ],
+)
+def test_resolve_embedding_model_caps_google_texts_per_model(
+    model: str, max_input_tokens: int
+) -> None:
+    assert embed.resolve_embedding_model(model).max_input_tokens == max_input_tokens
+
+
 def test_resolve_embedding_model_rejects_a_model_it_cannot_size() -> None:
     with pytest.raises(ValueError, match="No request sizing"):
         embed.resolve_embedding_model(

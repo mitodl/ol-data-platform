@@ -106,6 +106,9 @@ GEMINI_API_BATCH_SIZE = 250
 VERTEX_MAX_REQUEST_TOKENS = 20_000
 VERTEX_TEXT_EMBEDDING_BATCH_SIZE = 5
 GOOGLE_MAX_INPUT_TOKENS = 2048
+# gemini-embedding-2 takes 8,192 tokens per text on both the Gemini API
+# (https://ai.google.dev/gemini-api/docs/embeddings) and Vertex.
+GEMINI_EMBEDDING_2_MAX_INPUT_TOKENS = 8192
 # Titan has no batch endpoint, so a request is one text. Titan v2 takes at most
 # 50,000 characters or 8,192 tokens of its own tokenizer, which tiktoken cannot
 # count, so a text over the token limit is shortened and sent again instead.
@@ -246,6 +249,11 @@ def resolve_embedding_model(
     model = model or EMBEDDING_MODEL
     dim = dim or EMBEDDING_DIM
     provider, _, name = model.partition(":")
+    google_max_input_tokens = (
+        GEMINI_EMBEDDING_2_MAX_INPUT_TOKENS
+        if name.startswith("gemini-embedding-2")
+        else GOOGLE_MAX_INPUT_TOKENS
+    )
     if provider in {"openai", "azure"}:
         return FeedbackEmbeddingModel(
             spec=EmbeddingModelSpec(model=model, dimensions=dim),
@@ -256,7 +264,7 @@ def resolve_embedding_model(
             spec=EmbeddingModelSpec(
                 model=model, dimensions=dim, batch_size=GEMINI_API_BATCH_SIZE
             ),
-            max_input_tokens=GOOGLE_MAX_INPUT_TOKENS,
+            max_input_tokens=google_max_input_tokens,
         )
     if provider == "google-cloud":
         batch_size = (
@@ -271,7 +279,7 @@ def resolve_embedding_model(
                 batch_size=batch_size,
                 max_request_tokens=VERTEX_MAX_REQUEST_TOKENS,
             ),
-            max_input_tokens=GOOGLE_MAX_INPUT_TOKENS,
+            max_input_tokens=google_max_input_tokens,
         )
     if provider == "bedrock" and name.startswith("amazon.titan-embed"):
         return FeedbackEmbeddingModel(
