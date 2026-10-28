@@ -75,9 +75,11 @@ with micromasters_course_keys as (
 )
 
 , edxorg_program_requirements as (
-    -- Preserve edX.org program memberships not already represented by a MITx Online
-    -- program. Normalize the API course key to the MITx Online course key when the
-    -- course moved there.
+    -- Every edX.org MITx program keeps its own memberships, also one that
+    -- dim_program_report_key maps to a MITx Online program: its edX.org learners took
+    -- courses that program may not list, e.g. 18.03x's 18.031x under its MITx Online key
+    -- 18.03.1x, or a capstone exam it dropped. Normalize the API course key to the MITx
+    -- Online course key when the course moved there.
     select
         cast(program_courses.program_uuid as varchar) as program_id
         , cast(null as integer) as course_id
@@ -87,18 +89,10 @@ with micromasters_course_keys as (
         , 'edxorg' as platform_code
         , cast(null as integer) as course_order
     from {{ ref('int__edxorg__mitx_program_courses') }} as program_courses
-    -- A program that dim_program_report_key maps to a MITx Online program takes that
-    -- program's courses, so its own edX.org memberships are left out.
-    left join {{ ref('dim_program_report_key') }} as program_report_key
-        on
-            program_report_key.lookup_type = 'title'
-            and program_report_key.is_mapped_to_mitxonline
-            and program_courses.program_title = program_report_key.lookup_value
     left join {{ ref('int__mitx__courses') }} as mitx_courses
         on
             replace(program_courses.course_readable_id, 'MITx/', '')
             = replace(mitx_courses.course_readable_id, 'course-v1:MITxT+', '')
-    where program_report_key.lookup_value is null
 )
 
 , combined_requirements as (

@@ -83,7 +83,6 @@ select
     , program_type
     , program_id as mitxonline_program_id
     , 'own' as mapped_by
-    , false as is_mapped_to_mitxonline
 from mitxonline_programs
 
 union all
@@ -98,7 +97,6 @@ select
     , 'Professional Certificate' as program_type
     , cast(null as integer) as mitxonline_program_id
     , 'own' as mapped_by
-    , false as is_mapped_to_mitxonline
 from mitxpro_programs
 
 union all
@@ -114,7 +112,6 @@ select
     , coalesce(mitxonline_programs.program_type, title_matches.program_type) as program_type
     , title_matches.mitxonline_program_id
     , title_matches.mapped_by
-    , title_matches.mitxonline_program_id is not null as is_mapped_to_mitxonline
 from title_matches
 left join mitxonline_programs
     on title_matches.mitxonline_program_id = mitxonline_programs.program_id
