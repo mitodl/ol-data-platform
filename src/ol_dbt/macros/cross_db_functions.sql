@@ -632,24 +632,56 @@
     Trino: json_parse(json_query(col, 'lax $.path')) cast to array(varchar)
     DuckDB: json_extract(col, '$.path') cast to varchar[]
 
+    A path holding something other than an array of scalars (a string, an object)
+    raises on Trino; with lenient=true it gives NULL instead. lenient does not change
+    the StarRocks SQL.
+
     Usage:
       {{ array_join(json_extract_varchar_array('metadata', "'$.level'"), ', ') }}
 #}
-{% macro json_extract_varchar_array(json_col, json_path) -%}
-    {{ adapter.dispatch('json_extract_varchar_array', 'open_learning')(json_col, json_path) }}
+{% macro json_extract_varchar_array(json_col, json_path, lenient=false) -%}
+    {{ adapter.dispatch('json_extract_varchar_array', 'open_learning')(json_col, json_path, lenient) }}
 {%- endmacro %}
 
-{% macro default__json_extract_varchar_array(json_col, json_path) -%}
-    cast(json_parse(json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}')) as array(varchar))
+{% macro default__json_extract_varchar_array(json_col, json_path, lenient=false) -%}
+    {{ 'try_cast' if lenient else 'cast' }}(json_parse(json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}')) as array(varchar))
 {%- endmacro %}
 
-{% macro duckdb__json_extract_varchar_array(json_col, json_path) -%}
-    cast(json_extract({{ json_col }}, {{ json_path }}) as varchar[])
+{% macro duckdb__json_extract_varchar_array(json_col, json_path, lenient=false) -%}
+    {{ 'try_cast' if lenient else 'cast' }}(json_extract({{ json_col }}, {{ json_path }}) as varchar[])
 {%- endmacro %}
 
-{% macro starrocks__json_extract_varchar_array(json_col, json_path) -%}
+{% macro starrocks__json_extract_varchar_array(json_col, json_path, lenient=false) -%}
     {# StarRocks: json_query returns a JSON value; array casts require v2.4+ #}
     cast(json_query(parse_json({{ json_col }}), {{ json_path }}) as array<varchar>)
+{%- endmacro %}
+
+{#
+    json_object_key_array: The keys of the JSON object at a path, sorted, as an array of
+    varchar. NULL when the path holds anything other than an object. Sorted because
+    Trino's map has no key order.
+
+    Usage:
+      coalesce({{ json_extract_varchar_array('data', "'$.level'", lenient=true) }}
+               , {{ json_object_key_array('data', "'$.level'") }})
+#}
+{% macro json_object_key_array(json_col, json_path) -%}
+    {{ adapter.dispatch('json_object_key_array', 'open_learning')(json_col, json_path) }}
+{%- endmacro %}
+
+{% macro default__json_object_key_array(json_col, json_path) -%}
+    array_sort(map_keys(try_cast(json_parse(json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}')) as map(varchar, json))))
+{%- endmacro %}
+
+{% macro duckdb__json_object_key_array(json_col, json_path) -%}
+    case
+        when json_type(json_extract({{ json_col }}, {{ json_path }})) = 'OBJECT'
+            then array_sort(json_keys(json_extract({{ json_col }}, {{ json_path }})))
+    end
+{%- endmacro %}
+
+{% macro starrocks__json_object_key_array(json_col, json_path) -%}
+    array_sort(cast(json_keys(json_query(parse_json({{ json_col }}), {{ json_path }})) as array<varchar>))
 {%- endmacro %}
 
 
@@ -921,6 +953,40 @@
 #}
 {% macro strip_whitespace(string_expr) -%}
     {{ regexp_replace_all(regexp_replace_all(string_expr, "'^\\s+'", "''"), "'\\s+$'", "''") }}
+{%- endmacro %}
+
+
+{#
+    python_strip: `string_expr` without the leading and trailing characters Python's
+    str.strip() removes, the ones str.isspace() is true for. \s matches only ASCII
+    whitespace on Trino and leaves out \v on DuckDB, so the set is spelled out.
+#}
+{% macro python_strip(string_expr) -%}
+    {%- set space = "[\\x{9}-\\x{d}\\x{1c}-\\x{20}\\x{85}\\x{a0}\\x{1680}\\x{2000}-\\x{200a}"
+        ~ "\\x{2028}\\x{2029}\\x{202f}\\x{205f}\\x{3000}]+" -%}
+    {{ regexp_replace_all(regexp_replace_all(string_expr, "'^" ~ space ~ "'", "''"), "'" ~ space ~ "$'", "''") }}
+{%- endmacro %}
+
+
+{#
+    nfkd_normalize: `string_expr` in Unicode normalization form NFKD. DuckDB has no
+    NFKD: strip_accents removes accents but leaves a compatibility character (ﬁ, ½)
+    that NFKD decomposes. StarRocks has neither and returns the string as is.
+#}
+{% macro nfkd_normalize(string_expr) -%}
+    {{ adapter.dispatch('nfkd_normalize', 'open_learning')(string_expr) }}
+{%- endmacro %}
+
+{% macro default__nfkd_normalize(string_expr) -%}
+    normalize({{ string_expr }}, NFKD)
+{%- endmacro %}
+
+{% macro duckdb__nfkd_normalize(string_expr) -%}
+    strip_accents({{ string_expr }})
+{%- endmacro %}
+
+{% macro starrocks__nfkd_normalize(string_expr) -%}
+    {{ string_expr }}
 {%- endmacro %}
 
 
@@ -1358,26 +1424,27 @@
 {#
     json_nested_array_distinct_values: the distinct strings in a JSON array of arrays
     at `json_path`, sorted. '[["b", "a"], ["a"]]' -> ['a', 'b']. An absent path gives
-    an empty array.
+    an empty array. Any other shape (a flat array, a string) raises on Trino; with
+    lenient=true it gives an empty array too. lenient does not change the StarRocks SQL.
 #}
-{% macro json_nested_array_distinct_values(json_col, json_path) -%}
+{% macro json_nested_array_distinct_values(json_col, json_path, lenient=false) -%}
     coalesce(
         array_sort(array_distinct({{ 'array_flatten' if target.type == 'starrocks' else 'flatten' }}(
-            {{ adapter.dispatch('json_extract_nested_varchar_array', 'open_learning')(json_col, json_path) }}
+            {{ adapter.dispatch('json_extract_nested_varchar_array', 'open_learning')(json_col, json_path, lenient) }}
         )))
         , {{ empty_varchar_array() }}
     )
 {%- endmacro %}
 
-{% macro default__json_extract_nested_varchar_array(json_col, json_path) -%}
-    cast(json_parse(json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}')) as array(array(varchar)))
+{% macro default__json_extract_nested_varchar_array(json_col, json_path, lenient=false) -%}
+    {{ 'try_cast' if lenient else 'cast' }}(json_parse(json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}')) as array(array(varchar)))
 {%- endmacro %}
 
-{% macro duckdb__json_extract_nested_varchar_array(json_col, json_path) -%}
-    cast(json_extract({{ json_col }}, {{ json_path }}) as varchar[][])
+{% macro duckdb__json_extract_nested_varchar_array(json_col, json_path, lenient=false) -%}
+    {{ 'try_cast' if lenient else 'cast' }}(json_extract({{ json_col }}, {{ json_path }}) as varchar[][])
 {%- endmacro %}
 
-{% macro starrocks__json_extract_nested_varchar_array(json_col, json_path) -%}
+{% macro starrocks__json_extract_nested_varchar_array(json_col, json_path, lenient=false) -%}
     {# StarRocks refuses a cast from JSON straight to array<array<varchar>>. #}
     array_map(
         inner_array -> cast(inner_array as array<varchar>)
