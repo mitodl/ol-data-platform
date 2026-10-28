@@ -69,7 +69,11 @@ tables:
       last_activity_date: copy
     # One day of reports, which is a full report of every program. A day's
     # reports land within about 11 minutes of each other, a day apart, so 12
-    # hours keeps the newest day and none of the one before.
+    # hours keeps the newest day and none of the one before. That day is still
+    # too large for the staging dedup on QA's Trino cluster, as it was for the
+    # Airbyte table (edxorg/s3), so this takes the same one learner in ten, and
+    # a sampled learner keeps its rows here and in the irx/bigquery tables.
     where: >-
       _file_modified_at >=
       (SELECT max(_file_modified_at) FROM {source}) - INTERVAL 12 HOUR
+      AND cast(user_id AS bigint) % 10 = 0
