@@ -653,8 +653,8 @@ models:
 
     QA builds this view on learn_integrations_qa_daily so MIT Learn's
     SyncProgramCertificatesTask can be rehearsed there, and QA's rows are
-    not production's. The edX.org and IRx inputs (edxorg/s3, irx/bigquery)
-    are masked mirrors of production: usernames and emails are SHA-256
+    not production's. The edX.org and IRx inputs (edxorg/program_reports,
+    irx/bigquery) are masked mirrors of production: usernames and emails are SHA-256
     digests, names and addresses read 'redacted' and year of birth is NULL.
     MITx Online and MicroMasters are QA's own apps, with their own users.
     So learners do not join across platforms the way they do in production,
@@ -669,7 +669,7 @@ models:
     tags: [qa_scheduled]
     meta:
       qa_branches:
-      - edxorg/s3
+      - edxorg/program_reports
       - irx/bigquery
       - micromasters/app_postgres
       - mitxonline/app_postgres

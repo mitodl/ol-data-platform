@@ -1,31 +1,36 @@
 with source as (
     select
         *
+        -- Each report is a full snapshot of its program, so a key's newest row is the one
+        -- in its newest report. The file's mtime does not order the backlog, which was
+        -- copied into the landing zone in bulk, so the report date in its name leads.
+        , {{ regexp_extract_or_null('_source_file', "'learner_report__(\\d{4}-\\d{2}-\\d{2})\\.csv$'", 1) }} as report_date
         , case
-            when {{ adapter.quote('date program certificate awarded') }} = 'null' then null -- noqa: ST10
+            when date_program_certificate_awarded = 'null' then null -- noqa: ST10
             else
             -- Try parsing once and handle both formats
                 coalesce(
-                    {{ try_or_null(cast_timestamp_to_iso8601(date_parse(adapter.quote('date program certificate awarded'), "'%Y-%m-%dT%H:%i:%sZ'", strict=false))) }}
-                    , {{ cast_timestamp_to_iso8601(date_parse(adapter.quote('date program certificate awarded'), "'%Y-%m-%d %H:%i:%s Z'", strict=false)) }}
+                    {{ try_or_null(cast_timestamp_to_iso8601(date_parse('date_program_certificate_awarded', "'%Y-%m-%dT%H:%i:%sZ'", strict=false))) }}
+                    , {{ cast_timestamp_to_iso8601(date_parse('date_program_certificate_awarded', "'%Y-%m-%d %H:%i:%s Z'", strict=false)) }}
                 )
 
         end as program_certificate_awarded_at
-    from {{ source('ol_warehouse_raw_data','raw__edxorg__program_learner_report') }}
+    from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__program_learner_report') }}
 )
 
 {{ deduplicate_raw_table(
-    raw_table='raw__edxorg__program_learner_report'
-    , partition_columns=adapter.quote('user id') ~ ', ' ~ adapter.quote('course run key') ~ ', ' ~ adapter.quote('program uuid')
+    raw_table='raw__edxorg__s3__program_learner_report'
+    , partition_columns='user_id, course_run_key, program_uuid'
+    , first_by='report_date'
 ) }}
 
 , aggregated_program_certificate as (
     select
-        cast({{ adapter.quote('user id') }} as integer) as user_id
-        , {{ adapter.quote('program uuid') }} as program_uuid
-        , {{ adapter.quote('course run key') }} as courserun_readable_id
+        cast(user_id as integer) as user_id
+        , program_uuid
+        , course_run_key as courserun_readable_id
         , min(program_certificate_awarded_at) as earliest_program_cert_award_on
-        , max({{ adapter.quote('completed program') }}) as ever_completed_program
+        , max(completed_program) as ever_completed_program
     from source
     group by 1, 2, 3
 )
@@ -33,46 +38,46 @@ with source as (
 , cleaned as (
 
     select
-        {{ adapter.quote('authoring institution') }} as org_id
-        , {{ adapter.quote('program type') }} as program_type
-        , {{ adapter.quote('program uuid') }} as program_uuid
+        authoring_institution as org_id
+        , program_type
+        , program_uuid
         , username as user_username
         , name as user_full_name
-        , {{ adapter.quote('course run key') }} as courserun_readable_id
-        , {{ adapter.quote('course title') }} as course_title
+        , course_run_key as courserun_readable_id
+        , course_title
         , track as courserunenrollment_enrollment_mode
-        , cast({{ adapter.quote('user id') }} as integer) as user_id
+        , cast(user_id as integer) as user_id
         , cast(completed as boolean) as user_has_completed_course
-        , cast({{ adapter.quote('completed program') }} as boolean) as user_has_completed_program
-        , cast({{ adapter.quote('currently enrolled') }} as boolean) as courserunenrollment_is_active
-        , cast({{ adapter.quote('purchased as bundle') }} as boolean) as user_has_purchased_as_bundle
-        , if({{ adapter.quote('user roles') }} = 'null', null, {{ adapter.quote('user roles') }}) as user_roles -- noqa: ST10
-        , if({{ adapter.quote('letter grade') }} = 'null', null, {{ adapter.quote('letter grade') }}) as courserungrade_letter_grade -- noqa: ST10
+        , cast(completed_program as boolean) as user_has_completed_program
+        , cast(currently_enrolled as boolean) as courserunenrollment_is_active
+        , cast(purchased_as_bundle as boolean) as user_has_purchased_as_bundle
+        , if(user_roles = 'null', null, user_roles) as user_roles -- noqa: ST10
+        , if(letter_grade = 'null', null, letter_grade) as courserungrade_letter_grade -- noqa: ST10
         , if(grade = 'null', null, grade) as courserungrade_grade
         , case
-            when {{ adapter.quote('program uuid') }} like '%941d3eaf56966c7' then 'Finance'
-            when {{ adapter.quote('program uuid') }} like '%3173ff51e11a748' then 'MIT Finance'
-            when {{ adapter.quote('program uuid') }} like '%8c11bfd9c0d7b07' then 'Statistics and Data Science (General Track)'
-            when {{ adapter.quote('program uuid') }} like '%cd7c6461dd9b1d4' then 'Statistics and Data Science (Social Sciences Track)'
-            else {{ adapter.quote('program title') }}
+            when program_uuid like '%941d3eaf56966c7' then 'Finance'
+            when program_uuid like '%3173ff51e11a748' then 'MIT Finance'
+            when program_uuid like '%8c11bfd9c0d7b07' then 'Statistics and Data Science (General Track)'
+            when program_uuid like '%cd7c6461dd9b1d4' then 'Statistics and Data Science (Social Sciences Track)'
+            else program_title
         end as program_title
-        , {{ cast_timestamp_to_iso8601(date_parse(adapter.quote('course run start date'), "'%Y-%m-%d %H:%i:%s Z'")) }} as courserun_start_on
-        , {{ cast_timestamp_to_iso8601(date_parse(adapter.quote('date first enrolled'), "'%Y-%m-%d %H:%i:%s Z'")) }} as courserunenrollment_created_on
+        , {{ cast_timestamp_to_iso8601(date_parse('course_run_start_date', "'%Y-%m-%d %H:%i:%s Z'")) }} as courserun_start_on
+        , {{ cast_timestamp_to_iso8601(date_parse('date_first_enrolled', "'%Y-%m-%d %H:%i:%s Z'")) }} as courserunenrollment_created_on
         , case
-            when {{ adapter.quote('date completed') }} = 'null' then null -- noqa: ST10
-            else {{ cast_timestamp_to_iso8601(date_parse(adapter.quote('date completed'), "'%Y-%m-%d %H:%i:%s Z'", strict=false)) }}
+            when date_completed = 'null' then null -- noqa: ST10
+            else {{ cast_timestamp_to_iso8601(date_parse('date_completed', "'%Y-%m-%d %H:%i:%s Z'", strict=false)) }}
         end as completed_course_on
         , case
-            when {{ adapter.quote('last activity date') }} = 'null' then null -- noqa: ST10
-            else {{ cast_date_to_iso8601(adapter.quote('last activity date')) }}
+            when last_activity_date = 'null' then null -- noqa: ST10
+            else {{ cast_date_to_iso8601('last_activity_date') }}
         end as courseactivity_last_activity_date
         , case
-            when {{ adapter.quote('date last unenrolled') }} = 'null' then null -- noqa: ST10
-            else {{ cast_timestamp_to_iso8601(date_parse(adapter.quote('date last unenrolled'), "'%Y-%m-%d %H:%i:%s Z'", strict=false)) }}
+            when date_last_unenrolled = 'null' then null -- noqa: ST10
+            else {{ cast_timestamp_to_iso8601(date_parse('date_last_unenrolled', "'%Y-%m-%d %H:%i:%s Z'", strict=false)) }}
         end as courserunenrollment_unenrolled_on
         , case
-            when {{ adapter.quote('date first upgraded to verified') }} = 'null' then null -- noqa: ST10
-            else {{ cast_timestamp_to_iso8601(date_parse(adapter.quote('date first upgraded to verified'), "'%Y-%m-%d %H:%i:%s Z'", strict=false)) }}
+            when date_first_upgraded_to_verified = 'null' then null -- noqa: ST10
+            else {{ cast_timestamp_to_iso8601(date_parse('date_first_upgraded_to_verified', "'%Y-%m-%d %H:%i:%s Z'", strict=false)) }}
         end as courserunenrollment_upgraded_on
         , program_certificate_awarded_at as program_certificate_awarded_on
     from most_recent_source

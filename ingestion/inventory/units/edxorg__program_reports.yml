@@ -6,9 +6,9 @@
 # edX.org's daily learner report for each MITx program, which the edxorg code
 # location copies into the landing zone
 # (edxorg-program-credentials/reports_v2/MITx/<program uuid>/) and
-# ol_dlt.sources.edxorg_program_reports loads. The table loads beside edxorg/s3's
-# Airbyte-loaded raw__edxorg__program_learner_report, to replace it, and is
-# unmodeled until staging is repointed at it.
+# ol_dlt.sources.edxorg_program_reports loads. stg__edxorg__s3__program_learner_report
+# reads it. edxorg/s3's Airbyte-loaded raw__edxorg__program_learner_report still
+# loads beside it until that connection is retired.
 schema_version: 1
 deployment: edxorg
 layer: program_reports
@@ -21,9 +21,9 @@ loader: dlt
 # The load appends every report, each a full snapshot of its program, so
 # staging picks each learner's row from the newest file. Same reasoning as
 # edxorg/course_xml. The mtime does not follow the report date across the
-# backlog, which was copied in bulk (1,580 files on 2024-02-19), so ordering
-# older reports needs the date in _source_file. The Airbyte table's
-# _ab_source_file_last_modified has the same flaw.
+# backlog, which was copied in bulk (1,580 files on 2024-02-19), so staging
+# orders by the date in _source_file first and this column second. The Airbyte
+# table's _ab_source_file_last_modified has the same flaw.
 raw_metadata_column: _file_modified_at
 table_prefix: raw__edxorg__s3__program_learner_report
 dlt:
@@ -35,7 +35,7 @@ tables:
   sync_mode: incremental_append
   cursor_field:
   - _file_modified_at
-  modeled: false
+  modeled: true
   mirror:
     # The same masking as edxorg/s3's Airbyte table, under the report's columns
     # as this table names them. user_key (an institution-assigned learner key)
