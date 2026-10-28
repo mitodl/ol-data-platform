@@ -679,10 +679,13 @@ models:
     description: Certificate recipient's full name.
   - name: user_email
     description: >
-      Certificate recipient's email, preferring MicroMasters/MITx Online/
-      edX.org email in that order depending on program type and completion
-      date (see int__micromasters__program_certificates). Empty string, not
-      NULL, when no email could be resolved.
+      Certificate recipient's email: the MITx Online email for a DEDP
+      certificate from MITx Online, the MicroMasters email for a DEDP
+      certificate only MicroMasters holds, and the edX.org email otherwise
+      (see int__micromasters__program_certificates), lowercased. MIT Learn
+      compares it case-sensitively with the signed-in user's email, which
+      is almost always lowercase. Empty string, not NULL, when no email
+      could be resolved.
     tests: [not_null]
   - name: user_edxorg_id
     description: Certificate recipient's edX.org user id, when resolvable.
@@ -726,6 +729,15 @@ models:
       NULL for "override" certificates (a hardcoded list of recipients
       granted a certificate outside the normal completion-tracking path,
       with no completion time to report).
+  - name: is_revoked
+    description: >
+      Whether MITx Online revoked the certificate. The view keeps revoked
+      certificates because MIT Learn never deletes a certificate row, so
+      it needs the flag to stop serving a letter for one. False for
+      edX.org and MicroMasters certificates, which have no revocation.
+      A revocation does not change last_modified, so an incremental pull
+      misses it; MIT Learn's daily full_refresh run picks it up.
+    tests: [not_null]
   - name: last_modified
     description: >
       No genuine last-modified signal exists in the source lineage (a
@@ -738,6 +750,17 @@ models:
       (a no-op) on every incremental run instead of never matching an
       incremental `since` filter.
     tests: [not_null]
+  tests:
+  # One certificate per learner per program. The program is the MITx Online program, or the
+  # MicroMasters one when an edX.org title has no MITx Online mapping. micromasters_program_id
+  # alone is not the grain: Statistics and Data Science tracks share one. Each part is coalesced to
+  # '' because concat is null when any argument is, which would skip rows with neither program id.
+  - unique:
+      arguments:
+        column_name: "concat(coalesce(user_email, ''), '|', coalesce(cast(coalesce(mitxonline_program_id,\
+          \ micromasters_program_id) as varchar), ''))"
+      config:
+        error_if: ">0"
 
 unit_tests:
 - name: test_integrations__learn__ocw_courses_builds_learns_ids_and_urls
@@ -1059,3 +1082,44 @@ unit_tests:
     - {record_hash: sds-methods, mitxonline_program_id: 46}
     - {record_hash: dedp, mitxonline_program_id: 2}
     - {record_hash: unmapped, mitxonline_program_id: null}
+- name: test_integrations__learn__program_certificates_lowercases_user_email
+  description: >
+    user_email is lowercased, because MIT Learn matches it case-sensitively
+    against the user's lowercase email. A missing email is an empty string.
+  model: integrations__learn__program_certificates
+  given:
+  - input: ref('int__micromasters__program_certificates')
+    rows:
+    - {program_certificate_hashed_id: mixed-case, program_title: SCM, user_email: Learner@Example.COM}
+    - {program_certificate_hashed_id: lowercase, program_title: SCM, user_email: learner@example.com}
+    - {program_certificate_hashed_id: missing, program_title: SCM, user_email: null}
+  - input: ref('edxorg_to_mitxonline_program_mapping')
+    rows: []
+  - input: ref('int__mitxonline__programs')
+    rows: []
+  expect:
+    rows:
+    - {record_hash: mixed-case, user_email: learner@example.com}
+    - {record_hash: lowercase, user_email: learner@example.com}
+    - {record_hash: missing, user_email: ''}
+- name: test_integrations__learn__program_certificates_is_revoked_never_null
+  description: >
+    is_revoked passes MITx Online's revoked flag through and is false for
+    certificates with no revocation (MicroMasters and edX.org), so MIT Learn
+    never reads a null.
+  model: integrations__learn__program_certificates
+  given:
+  - input: ref('int__micromasters__program_certificates')
+    rows:
+    - {program_certificate_hashed_id: revoked, program_title: DEDP, programcertificate_is_revoked: true}
+    - {program_certificate_hashed_id: unrevoked, program_title: DEDP, programcertificate_is_revoked: false}
+    - {program_certificate_hashed_id: edxorg, program_title: SCM, programcertificate_is_revoked: null}
+  - input: ref('edxorg_to_mitxonline_program_mapping')
+    rows: []
+  - input: ref('int__mitxonline__programs')
+    rows: []
+  expect:
+    rows:
+    - {record_hash: revoked, is_revoked: true}
+    - {record_hash: unrevoked, is_revoked: false}
+    - {record_hash: edxorg, is_revoked: false}

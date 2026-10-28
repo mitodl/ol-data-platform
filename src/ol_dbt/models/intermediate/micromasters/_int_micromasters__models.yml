@@ -230,9 +230,18 @@ models:
     description: int, sequential number indicating the course position in a program
 
 - name: int__micromasters__program_certificates
-  description: MicroMasters program certificate earners. User's profile fields are
-    chosen in the order of MITx Online, MicroMasters, and edX.org, whichever is not
-    null.
+  description: MicroMasters program certificates, revoked ones included. Filter on
+    programcertificate_is_revoked to count certificates. DEDP certificates come from
+    MITx Online for every date. A certificate MicroMasters issued is kept only when
+    MITx Online has no copy of it. A copy is matched by its uuid, which MITx Online's
+    migration set to the MicroMasters certificate's hash (see __micromasters_program_certificates_dedp_from_mitxonline).
+    A learner with a MicroMasters certificate and a MITx Online certificate that is
+    not a copy, for the same program, gets two rows on purpose, as before this model
+    read MITx Online for every date, because the later certificate's hash is already
+    in MIT Learn. When both rows carry the same email, the unique test on user_email
+    and program_readable_id fails. Non-DEDP certificates come from 2U's program learner
+    report. User's profile fields are chosen in the order of MITx Online, MicroMasters,
+    and edX.org, whichever is not null.
   config:
     meta:
       qa_branches:
@@ -247,7 +256,9 @@ models:
   - name: user_mitxonline_username
     description: str, username on MITx Online
   - name: user_email
-    description: str, user's email address from MITx Online, MicroMasters, or edX.org
+    description: str, user's email address. MITx Online email for a DEDP certificate
+      from MITx Online, MicroMasters email for a DEDP certificate only MicroMasters
+      holds, and edX.org email for a non-DEDP certificate.
     tests:
     - not_null
   - name: program_title
@@ -261,13 +272,21 @@ models:
   - name: user_edxorg_id
     description: int, Numerical user ID of a learner on the edX platform
   - name: program_certificate_hashed_id
-    description: str, unique hash value used to identify the program certificate
+    description: str, unique hash value used to identify the program certificate.
+      MIT Learn upserts on it (integrations__learn__program_certificates.record_hash),
+      so it must not change for a certificate. A MITx Online certificate that copies
+      a MicroMasters certificate (see the model description) takes the MicroMasters
+      certificate's hash, which this model published before it read DEDP from MITx
+      Online for every date. Any other MITx Online certificate keeps its own hash,
+      which this model has published since 2022-10-01.
     tests:
     - unique
     - not_null
   - name: program_completion_timestamp
-    description: timestamp, timestamp of the course certificate that completed the
-      program
+    description: timestamp, when the certificate was created on MITx Online or MicroMasters
+      for a DEDP certificate. For a non-DEDP certificate, when 2U's report says the
+      program certificate was awarded, which can be null (e.g. SCM). Null for the
+      override list's certificates.
   - name: user_gender
     description: str, gender on user's profile from MITx Online, MicroMasters, or
       edX.org
@@ -301,6 +320,12 @@ models:
       MicroMasters
   - name: program_is_dedp
     description: boolean, specifying if the program is DEDP
+  - name: programcertificate_is_revoked
+    data_type: boolean
+    description: boolean, whether MITx Online revoked the certificate. Set for MITx
+      Online DEDP certificates. Null for MicroMasters and edX.org certificates, which
+      have no revocation, as in marts__combined_program_enrollment_detail. Exclude
+      revoked certificates with coalesce(programcertificate_is_revoked, false) = false.
   - name: program_readable_id
     description: str, readable ID formatted as program-v1:{org}+{program code}, e.g.,
       program-v1:MITx+DEDP
@@ -744,3 +769,87 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["user_edxorg_username", "program_title", "user_email"]
+
+unit_tests:
+- name: test_int__micromasters__program_certificates_reads_dedp_from_mitxonline
+  description: >
+    A MITx Online DEDP certificate that copies a MicroMasters one, found by
+    its uuid, replaces it and keeps the MicroMasters hash, so MIT Learn
+    updates the row it has, including when the copy is revoked. The match
+    holds when the copy is on a MITx Online account int__mitx__users does
+    not link, under another email. A MicroMasters certificate with no copy
+    stays, and a MITx Online certificate that is not a copy keeps its own
+    hash, even when the learner also holds a MicroMasters certificate for
+    the program.
+  model: int__micromasters__program_certificates
+  given:
+  - input: ref('__micromasters_program_certificates_dedp_from_micromasters')
+    rows:
+    - {program_certificate_hashed_id: mm-copied, user_micromasters_id: 10, micromasters_program_id: 2,
+      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2020-01-01T00:00:00Z",
+      programcertificate_is_revoked: null}
+    - {program_certificate_hashed_id: mm-copy-revoked, user_micromasters_id: 11, micromasters_program_id: 2,
+      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2020-02-01T00:00:00Z",
+      programcertificate_is_revoked: null}
+    - {program_certificate_hashed_id: mm-copied-to-unlinked-account, user_micromasters_id: 12,
+      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
+      program_completion_timestamp: "2018-06-28T00:00:00Z", programcertificate_is_revoked: null}
+    - {program_certificate_hashed_id: mm-no-copy, user_micromasters_id: 13, micromasters_program_id: 2,
+      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2019-01-01T00:00:00Z",
+      programcertificate_is_revoked: null}
+  - input: ref('__micromasters_program_certificates_dedp_from_mitxonline')
+    rows:
+    - {program_certificate_hashed_id: mxo-copy, micromasters_program_certificate_hashed_id: mm-copied,
+      user_mitxonline_id: 20, micromasters_program_id: 2, mitxonline_program_id: 1,
+      program_title: DEDP ID, program_completion_timestamp: "2020-01-01T00:00:00Z",
+      programcertificate_is_revoked: false}
+    - {program_certificate_hashed_id: mxo-copy-revoked, micromasters_program_certificate_hashed_id: mm-copy-revoked,
+      user_mitxonline_id: 21, micromasters_program_id: 2, mitxonline_program_id: 1,
+      program_title: DEDP ID, program_completion_timestamp: "2020-02-01T00:00:00Z",
+      programcertificate_is_revoked: true}
+    - {program_certificate_hashed_id: mxo-copy-on-unlinked-account, micromasters_program_certificate_hashed_id: mm-copied-to-unlinked-account,
+      user_mitxonline_id: 24, micromasters_program_id: 2, mitxonline_program_id: 1,
+      program_title: DEDP ID, program_completion_timestamp: "2018-06-28T00:00:00Z",
+      programcertificate_is_revoked: false}
+    - {program_certificate_hashed_id: mxo-not-a-copy, micromasters_program_certificate_hashed_id: no-micromasters-certificate,
+      user_mitxonline_id: 23, micromasters_program_id: 2, mitxonline_program_id: 1,
+      program_title: DEDP ID, program_completion_timestamp: "2023-02-01T00:00:00Z",
+      programcertificate_is_revoked: false}
+    - {program_certificate_hashed_id: mxo-public-policy-revoked, micromasters_program_certificate_hashed_id: no-micromasters-certificate-either,
+      user_mitxonline_id: 25, micromasters_program_id: null, mitxonline_program_id: 2,
+      program_title: DEDP PP, program_completion_timestamp: "2024-01-01T00:00:00Z",
+      programcertificate_is_revoked: true}
+  - input: ref('__micromasters_program_certificates_non_dedp')
+    rows: []
+  - input: ref('int__mitx__users')
+    rows:
+    - {user_micromasters_id: 10, user_mitxonline_id: 20, user_micromasters_email: a@micromasters,
+      user_mitxonline_email: a@mitxonline}
+    - {user_micromasters_id: 11, user_mitxonline_id: 21, user_micromasters_email: b@micromasters,
+      user_mitxonline_email: b@mitxonline}
+    - {user_micromasters_id: 12, user_mitxonline_id: 22, user_micromasters_email: c@micromasters,
+      user_mitxonline_email: c-linked@mitxonline}
+    - {user_micromasters_id: null, user_mitxonline_id: 24, user_micromasters_email: null,
+      user_mitxonline_email: c-changed@mitxonline}
+    - {user_micromasters_id: 13, user_mitxonline_id: 23, user_micromasters_email: d@micromasters,
+      user_mitxonline_email: d@mitxonline}
+    - {user_micromasters_id: null, user_mitxonline_id: 25, user_micromasters_email: null,
+      user_mitxonline_email: e@mitxonline}
+  - input: ref('int__mitxonline__programs')
+    rows:
+    - {program_id: 1, program_readable_id: program-v1:MITx+DEDP-ID}
+    - {program_id: 2, program_readable_id: program-v1:MITx+DEDP-PP}
+  expect:
+    rows:
+    - {program_certificate_hashed_id: mm-copied, user_email: a@mitxonline, program_completion_timestamp: "2020-01-01T00:00:00Z",
+      programcertificate_is_revoked: false}
+    - {program_certificate_hashed_id: mm-copy-revoked, user_email: b@mitxonline, program_completion_timestamp: "2020-02-01T00:00:00Z",
+      programcertificate_is_revoked: true}
+    - {program_certificate_hashed_id: mm-copied-to-unlinked-account, user_email: c-changed@mitxonline,
+      program_completion_timestamp: "2018-06-28T00:00:00Z", programcertificate_is_revoked: false}
+    - {program_certificate_hashed_id: mm-no-copy, user_email: d@micromasters, program_completion_timestamp: "2019-01-01T00:00:00Z",
+      programcertificate_is_revoked: null}
+    - {program_certificate_hashed_id: mxo-not-a-copy, user_email: d@mitxonline, program_completion_timestamp: "2023-02-01T00:00:00Z",
+      programcertificate_is_revoked: false}
+    - {program_certificate_hashed_id: mxo-public-policy-revoked, user_email: e@mitxonline,
+      program_completion_timestamp: "2024-01-01T00:00:00Z", programcertificate_is_revoked: true}

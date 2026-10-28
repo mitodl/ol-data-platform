@@ -53,6 +53,8 @@ with program_mapping as (
         , micromasters_program_certificates.user_id as user_edxorg_id
         , micromasters_program_certificates.program_certificate_hashed_id
         , micromasters_program_certificates.program_certificate_awarded_on as program_completion_timestamp
+        -- 2U's program learner report has no certificate revocation
+        , cast(null as boolean) as programcertificate_is_revoked
     from micromasters_program_certificates
     left join edx_users
         on micromasters_program_certificates.user_id = edx_users.user_id
@@ -75,6 +77,7 @@ with program_mapping as (
         , edx_users.user_id as user_edxorg_id
         , program_certificates_override_list.program_certificate_hashed_id
         , null as program_completion_timestamp
+        , cast(null as boolean) as programcertificate_is_revoked
     from program_certificates_override_list
     inner join edx_users
         on program_certificates_override_list.user_edxorg_id = edx_users.user_id

@@ -174,7 +174,8 @@ models:
       so this number might be slightly higher than the actual since some users may
       use  differnt email addresses for their edxorg and mitxonline logins
   - name: program_certificates
-    description: int, count of program certificates earned for the the program
+    description: int, count of program certificates earned for the the program. Revoked
+      certificates are not counted.
 
 - name: marts__micromasters_summary
   description: MicroMasters aggregate statistics
@@ -228,12 +229,14 @@ models:
     tests:
     - not_null
   - name: program_certificates
-    description: int, count of program certificates earned for the the program
+    description: int, count of program certificates earned for the the program. Revoked
+      certificates are not counted.
 
 - name: marts__micromasters_program_certificates
-  description: MicroMasters program certificate earners. User's profile fields are
-    selected in the order of MITx Online, MicroMasters, and edX.org, whichever is
-    not null.
+  description: MicroMasters program certificate earners. Revoked certificates are
+    left out, so every row is a certificate the learner holds. User's profile fields
+    are selected in the order of MITx Online, MicroMasters, and edX.org, whichever
+    is not null.
   config:
     meta:
       qa_branches:
@@ -310,3 +313,21 @@ models:
   - name: program_is_dedp
     description: boolean, indicates whether this program is the Data, Economics, and
       Design of Policy (DEDP) program
+
+unit_tests:
+- name: test_marts__micromasters_program_certificates_leaves_out_revoked_certificates
+  description: >
+    int__micromasters__program_certificates keeps revoked certificates; this
+    mart lists the certificates learners hold, so it drops them. A null flag
+    (MicroMasters and edX.org, no revocation) is kept.
+  model: marts__micromasters_program_certificates
+  given:
+  - input: ref('int__micromasters__program_certificates')
+    rows:
+    - {program_certificate_hashed_id: revoked, programcertificate_is_revoked: true}
+    - {program_certificate_hashed_id: valid, programcertificate_is_revoked: false}
+    - {program_certificate_hashed_id: no-revocation, programcertificate_is_revoked: null}
+  expect:
+    rows:
+    - {program_certificate_hashed_id: valid}
+    - {program_certificate_hashed_id: no-revocation}
