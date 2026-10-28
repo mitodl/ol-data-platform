@@ -552,6 +552,16 @@ models:
     description: boolean, whether price is above zero, as MIT Learn's xPRO ETL sets
       it.
     tests: [not_null]
+  - name: platform_code
+    description: str, MIT Learn's platform code for the course's platform, as its
+      XPRO_PLATFORM_TRANSFORM maps the platform name in integrations__learn__xpro_courses.
+      It is the run's resource's platform.code, part of a content file's vector point
+      key. Null for a platform Learn does not map; Learn's loader skips such a course,
+      so the run has no resource there.
+    tests:
+    - accepted_values:
+        arguments:
+          values: ['emeritus', 'globalalumni', 'simplilearn', 'susskind', 'whu', 'xpro']
 
 - name: integrations__learn__xpro_programs
   config:
@@ -762,6 +772,27 @@ unit_tests:
       year: 2007, run_id: b89637d2d64abf7896f604f5d40d48a9}
     - {readable_id: RES.TL-002, url: "https://ocw.mit.edu/courses/res-tl-002-star/",
       slug: courses/res-tl-002-star, image_url: null, year: null, run_id: a062e4e8db044bcdbb1d4d6f80c18083}
+
+- name: test_integrations__learn__ocw_courses_slugifies_terms_as_django_does
+  description: >
+    The term is folded to ASCII and loses a leading or trailing hyphen or
+    underscore, as Django's slugify does. A term with nothing left still adds
+    the "+", as in Learn.
+  model: integrations__learn__ocw_courses
+  given:
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: a, courserun_readable_id: a1, course_title: A, course_primary_course_number: "1.00",
+      course_term: " Été - ", course_year: "2001"}
+    - {course_slug: b, courserun_readable_id: b1, course_title: B, course_primary_course_number: "2.00",
+      course_term: _Spring  Term_, course_year: "2002"}
+    - {course_slug: c, courserun_readable_id: c1, course_title: C, course_primary_course_number: "3.00",
+      course_term: "???", course_year: "2003"}
+  expect:
+    rows:
+    - {run_id: a1, readable_id: 1.00+ete_2001}
+    - {run_id: b1, readable_id: 2.00+spring-term_2002}
+    - {run_id: c1, readable_id: 3.00+_2003}
 
 - name: test_integrations__learn__mitxonline_runs_published_status_and_prices
   description: >
@@ -1059,3 +1090,40 @@ unit_tests:
     - {record_hash: sds-methods, mitxonline_program_id: 46}
     - {record_hash: dedp, mitxonline_program_id: 2}
     - {record_hash: unmapped, mitxonline_program_id: null}
+
+- name: test_integrations__learn__xpro_runs_maps_the_course_platform_as_learn_does
+  description: >
+    platform_code is what MIT Learn's XPRO_PLATFORM_TRANSFORM gives the course's
+    platform name, matched exactly, and null for a name it does not map.
+  model: integrations__learn__xpro_runs
+  given:
+  - input: ref('int__mitxpro__catalog_course_runs')
+    rows:
+    - {course_id: 1, courserun_readable_id: run-xpro, courserun_is_unexpired: true,
+      product_id: 1, courserun_current_price: 100}
+    - {course_id: 2, courserun_readable_id: run-alumni, courserun_is_unexpired: true,
+      product_id: 2, courserun_current_price: 100}
+    - {course_id: 3, courserun_readable_id: run-lowercase, courserun_is_unexpired: true,
+      product_id: 3, courserun_current_price: 100}
+    - {course_id: 4, courserun_readable_id: run-no-platform, courserun_is_unexpired: true,
+      product_id: 4, courserun_current_price: 100}
+  - input: ref('stg__mitxpro__app__postgres__courses_course')
+    rows:
+    - {course_id: 1, course_readable_id: course-xpro}
+    - {course_id: 2, course_readable_id: course-alumni}
+    - {course_id: 3, course_readable_id: course-lowercase}
+    - {course_id: 4, course_readable_id: course-no-platform}
+  - input: ref('integrations__learn__xpro_courses')
+    rows:
+    - {readable_id: course-xpro, platform: xPRO}
+    - {readable_id: course-alumni, platform: Global Alumni}
+    - {readable_id: course-lowercase, platform: emeritus}
+    - {readable_id: course-no-platform, platform: null}
+  - input: ref('int__mitxpro__catalog_pages')
+    rows: []
+  expect:
+    rows:
+    - {run_id: run-xpro, platform_code: xpro}
+    - {run_id: run-alumni, platform_code: globalalumni}
+    - {run_id: run-lowercase, platform_code: null}
+    - {run_id: run-no-platform, platform_code: null}

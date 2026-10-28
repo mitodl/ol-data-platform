@@ -18,13 +18,16 @@ Run standalone:
 import logging
 import shutil
 import tempfile
-from collections.abc import Generator, Iterable, Iterator, Sequence
+from bisect import bisect_left
+from collections.abc import Callable, Generator, Iterable, Iterator, Sequence
 from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import dlt
 import s3fs
+from dlt.common.storages.fsspec_filesystem import FileItem
 from dlt.sources import incremental
 from dlt.sources.filesystem import FileItemDict
 from dlt.sources.filesystem.helpers import fetch_arrow
@@ -356,6 +359,85 @@ def read_edxorg_tsv(
                 raise EdxorgTSVUnreadableError(msg) from error
 
 
+def _modification_date(file_item: FileItem) -> datetime:
+    return file_item["modification_date"]
+
+
+def list_files(
+    credentials: Any,  # noqa: ANN401
+    bucket_url: str,
+    file_globs: Iterable[str],
+) -> list[FileItem]:
+    """List every file the globs match under ``bucket_url``, oldest first.
+
+    :param credentials: The fsspec filesystem to list through.
+    :param bucket_url: URL the globs are relative to.
+    :param file_globs: fsspec globs, listed together so one cursor orders files
+        across all of them.
+    :returns: The matching files sorted by modification time.
+    :rtype: list[FileItem]
+    """
+    # Imported here so tests can patch the module attribute.
+    from dlt.common.storages.fsspec_filesystem import glob_files  # noqa: PLC0415
+
+    return sorted(
+        (
+            file_item
+            for file_glob in file_globs
+            for file_item in glob_files(credentials, bucket_url, file_glob)
+        ),
+        key=_modification_date,
+    )
+
+
+class FileListing:
+    """One resource's listing, taken by a run's first batch and reused by the rest.
+
+    ``load_in_batches`` in data_loading builds a fresh source per batch, because
+    a source's generators are spent once its load ends, so without this every
+    batch lists the landing zone again. Listing
+    mitx-production-edxapp-tracking/valid/ (473,914 files) took 89 s and
+    770 MB on 2026-10-27, which a backlog of hundreds of batches would pay
+    every batch.
+
+    Files that land after the listing wait for the next run. So do files
+    modified at or after ``horizon``, ``settle`` before the listing started,
+    although the listing holds them. A listing is not a snapshot: a file that
+    lands in a prefix already listed is missed while a newer one in a prefix
+    listed later is not, and reading that newer one would carry the cursor
+    past the missed file for good. ``settle`` also covers clock skew between
+    the run and S3, and an upload still in flight when the listing starts.
+
+    Use one per resource: it holds whatever the first resource that read it
+    listed.
+    """
+
+    def __init__(self, settle: timedelta = timedelta(minutes=5)) -> None:
+        self._files: list[FileItem] | None = None
+        self._settle = settle
+        self.globs: Sequence[str] = ()
+        self.horizon: datetime | None = None
+
+    def files(
+        self,
+        credentials: Any,  # noqa: ANN401
+        bucket_url: str,
+        file_globs: Sequence[str],
+    ) -> list[FileItem]:
+        """Return the listing, taking it with ``list_files`` on first use only.
+
+        Later calls return the first listing whatever globs they pass, and
+        ``globs`` keeps the ones it was taken with.
+        """
+        if self._files is None:
+            # S3 reports whole seconds, so the horizon does too.
+            started = datetime.now(UTC).replace(microsecond=0)
+            self.horizon = started - self._settle
+            self._files = list_files(credentials, bucket_url, file_globs)
+            self.globs = file_globs
+        return self._files
+
+
 # dlt keys incremental state by "<parent resource>_<piped resource>", so this
 # name is part of every table's saved cursor. It stays "filesystem" -- what
 # dlt.sources.filesystem.filesystem was called -- because renaming it orphans
@@ -367,9 +449,10 @@ def read_edxorg_tsv(
 @dlt.resource(name="filesystem", primary_key="file_url", standalone=True)
 def edxorg_files(
     bucket_url: str,
-    file_globs: Sequence[str],
+    file_globs: Sequence[str] | Callable[[datetime | None], Sequence[str]],
     credentials: Any,
     budget_bytes: int = _DEFAULT_BUDGET_BYTES,
+    listing: FileListing | None = None,
     modification_date: incremental[Any] = dlt.sources.incremental(  # noqa: B008
         "modification_date"
     ),
@@ -404,18 +487,37 @@ def edxorg_files(
     ``dlt.sources.filesystem.filesystem`` is not reused because its budget
     would have to be enforced downstream of its own yields, which is the
     failure above.
-    """
-    from dlt.common.storages.fsspec_filesystem import glob_files  # noqa: PLC0415
 
-    listed = sorted(
-        (
-            file_item
-            for file_glob in file_globs
-            for file_item in glob_files(credentials, bucket_url, file_glob)
-        ),
-        key=lambda file_item: file_item["modification_date"],
-    )
+    The budget counts the bytes the listing reports, which for a gzipped file
+    is its compressed size. A source of gzip files sizes its budget in gzip
+    bytes accordingly (see ol_dlt.sources.tracking_logs).
+
+    ``file_globs`` may instead be a function of the cursor (None before the
+    first load) returning the globs, so a source whose keys carry a date can
+    list only the prefixes the cursor has not passed.
+
+    ``listing``, when given, is shared by every batch of one run: the first
+    batch lists and the rest carve their files from that listing (see
+    ``FileListing``), stopping at its ``horizon``. Without it each batch lists
+    again.
+    """
     cursor_value = modification_date.last_value
+    globs = file_globs(cursor_value) if callable(file_globs) else file_globs
+    horizon = None
+    if listing is None:
+        listed = list_files(credentials, bucket_url, globs)
+    else:
+        listed = listing.files(credentials, bucket_url, globs)
+        globs = listing.globs
+        horizon = listing.horizon
+    # Files before the cursor were read by an earlier batch. Bisecting past
+    # them keeps a run of hundreds of batches over one 473,914-file listing
+    # from walking it from the start every batch.
+    start = (
+        0
+        if cursor_value is None
+        else bisect_left(listed, cursor_value, key=_modification_date)
+    )
     batch_bytes = 0
     boundary_bytes = 0
     # "Definitely unread", not merely "unread": a boundary file may be a
@@ -423,12 +525,18 @@ def edxorg_files(
     # the reader, so it cannot be counted as progress.
     yielded_definitely_unread = False
 
-    for file_item in listed:
+    for file_item in listed[start:]:
         modified_at = file_item["modification_date"]
         size = file_item["size_in_bytes"]
 
-        if cursor_value is not None and modified_at < cursor_value:
-            continue  # read by an earlier batch
+        if horizon is not None and modified_at >= horizon:
+            logger.info(
+                "Leaving files for %s modified at or after %s for the next run's "
+                "listing.",
+                ", ".join(globs),
+                horizon,
+            )
+            return
 
         if cursor_value is not None and modified_at == cursor_value:
             # The boundary second. dlt's cursor boundary is inclusive, so the
@@ -456,7 +564,7 @@ def edxorg_files(
                 "Listed %s bytes for %s against a %s byte budget (%s more on "
                 "the cursor boundary); ending this batch.",
                 batch_bytes,
-                ", ".join(file_globs),
+                ", ".join(globs),
                 budget_bytes,
                 boundary_bytes,
             )
