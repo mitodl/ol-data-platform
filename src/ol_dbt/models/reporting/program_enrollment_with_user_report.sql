@@ -22,11 +22,36 @@ with enrollment_detail as (
     select * from {{ ref('dim_program') }}
 )
 
+-- An enrollment row with a readable id matches the programs that carry it, and one
+-- without (an edX.org XSeries row) matches every program with its title, e.g. both the
+-- edX.org program and the MITx Online program it moved to. Each key's courses are
+-- counted once across all of its programs, so a row matches one courses_detail row.
+, program_course_match_keys as (
+    select
+        program_course.course_fk
+        , 'readable_id' as match_type
+        , program.program_readable_id as match_value
+    from program_course
+    inner join program
+        on program_course.program_fk = program.program_pk
+    where program.program_readable_id is not null
+
+    union all
+
+    select
+        program_course.course_fk
+        , 'title' as match_type
+        , program.program_title as match_value
+    from program_course
+    inner join program
+        on program_course.program_fk = program.program_pk
+)
+
 , courses_detail as (
     select
         course_enrollment_detail.platform
-        , program.program_title
-        , program.program_readable_id
+        , program_course_match_keys.match_type
+        , program_course_match_keys.match_value
         , course_enrollment_detail.user_email
         , count(
             distinct case
@@ -67,14 +92,13 @@ with enrollment_detail as (
         inner join course
             on course_enrollment_detail.course_readable_id = course.course_readable_id
             and course.is_current = true
-        inner join program_course
-            on course.course_pk = program_course.course_fk
-        inner join program
-            on program_course.program_fk = program.program_pk
+        inner join (select distinct course_fk, match_type, match_value from program_course_match_keys)
+            as program_course_match_keys
+            on course.course_pk = program_course_match_keys.course_fk
     group by
         course_enrollment_detail.platform
-        , program.program_title
-        , program.program_readable_id
+        , program_course_match_keys.match_type
+        , program_course_match_keys.match_value
         , course_enrollment_detail.user_email
 )
 
@@ -140,8 +164,6 @@ left join combined_users as combined_users2
     on enrollment_detail.user_hashed_id = combined_users2.user_hashed_id
 left join courses_detail
     on enrollment_detail.platform_name = courses_detail.platform
-    and (
-            enrollment_detail.program_readable_id = courses_detail.program_readable_id
-        or (enrollment_detail.program_readable_id is null
-            and enrollment_detail.program_title = courses_detail.program_title))
+    and courses_detail.match_type = if(enrollment_detail.program_readable_id is not null, 'readable_id', 'title')
+    and coalesce(enrollment_detail.program_readable_id, enrollment_detail.program_title) = courses_detail.match_value
     and enrollment_detail.user_email = courses_detail.user_email

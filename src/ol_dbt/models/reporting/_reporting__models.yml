@@ -1984,3 +1984,50 @@ unit_tests:
     - {program_readable_id: null, program_title: Computer Science, program_type: XSeries,
       total_enrollments: 1, unique_users: 1, verified_enrollments: 0, course_certificates: 0,
       program_certificates: 1}
+
+- name: test_program_enrollment_with_user_report_matches_one_course_set_per_row
+  description: >
+    An edX.org XSeries row has no readable id, so it matches every program with
+    its title: the edX.org program and the MITx Online program it moved to. It
+    stays one row and counts the courses of both, a course they share once. A
+    MITx Online row matches its program by readable id only.
+  model: program_enrollment_with_user_report
+  given:
+  - input: ref('marts__combined_program_enrollment_detail')
+    rows:
+    - {platform_name: edX.org, program_title: Series, program_readable_id: null, user_id: 7,
+      user_hashed_id: e7, user_email: learner@example.com}
+    - {platform_name: MITx Online, program_title: Series, program_readable_id: "program-v1:MITxT+S",
+      user_id: 8, user_hashed_id: m8, user_email: learner@example.com}
+  - input: ref('marts__combined__users')
+    rows: []
+  - input: ref('dim_program')
+    rows:
+    - {program_pk: pm, program_title: Series, program_readable_id: "program-v1:MITxT+S"}
+    - {program_pk: pe, program_title: Series, program_readable_id: null}
+  - input: ref('bridge_program_course')
+    rows:
+    - {program_fk: pm, course_fk: ca}
+    - {program_fk: pm, course_fk: cb}
+    - {program_fk: pe, course_fk: cb}
+    - {program_fk: pe, course_fk: cc}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: ca, course_readable_id: "course-v1:MITxT+A", course_title: A, is_current: true}
+    - {course_pk: cb, course_readable_id: "course-v1:MITxT+B", course_title: B Capstone,
+      is_current: true}
+    - {course_pk: cc, course_readable_id: "course-v1:MITxT+C", course_title: C, is_current: true}
+  - input: ref('marts__combined_course_enrollment_detail')
+    rows:
+    - {platform: edX.org, user_email: learner@example.com, course_readable_id: "course-v1:MITxT+A",
+      courserunenrollment_enrollment_mode: verified}
+    - {platform: edX.org, user_email: learner@example.com, course_readable_id: "course-v1:MITxT+B",
+      courserunenrollment_enrollment_mode: verified}
+    - {platform: edX.org, user_email: learner@example.com, course_readable_id: "course-v1:MITxT+C",
+      courserunenrollment_enrollment_mode: verified}
+    - {platform: MITx Online, user_email: learner@example.com, course_readable_id: "course-v1:MITxT+C",
+      courserunenrollment_enrollment_mode: verified}
+  expect:
+    rows:
+    - {platform_name: edX.org, verified_courses_taken_in_program: 3, capstone_ind: Y}
+    - {platform_name: MITx Online, verified_courses_taken_in_program: 0, capstone_ind: N}
