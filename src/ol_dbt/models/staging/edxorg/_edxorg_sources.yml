@@ -558,8 +558,13 @@ sources:
 
 
   - name: raw__edxorg__s3__tracking_logs
-    description: edX.org event data that are emitted by server, the browser, or the
-      mobile device to capture information about user's interactions with a course
+    description: >-
+      edX.org event data that are emitted by server, the browser, or the mobile
+      device to capture information about user's interactions with a course.
+      Frozen history: MIT has moved its courses off edX.org, nothing loads this
+      table after 2026-10-28, and the newest file it holds was modified
+      2026-10-25. The record is the frozen edxorg/tracking_logs entry in
+      ingestion/inventory/retired.yml.
     columns:
     - name: username
       description: str, username of the open edX user who caused the event to be emitted.
