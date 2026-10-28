@@ -632,12 +632,21 @@ def test_titan_fails_a_rejection_that_is_not_about_length(target: Target) -> Non
     assert len(embedder.calls) == 1
 
 
-def _titan_response(vector: list[float]) -> dict[str, Any]:
-    body = json.dumps({"embedding": vector}).encode()
+def _bedrock_response(payload: dict[str, Any]) -> dict[str, Any]:
+    body = json.dumps(payload).encode()
     return {
         "body": StreamingBody(io.BytesIO(body), len(body)),
         "contentType": "application/json",
     }
+
+
+def _bedrock_client() -> Any:
+    return boto3.client(
+        "bedrock-runtime",
+        region_name="us-east-1",
+        aws_access_key_id="test",  # pragma: allowlist secret
+        aws_secret_access_key="test",  # pragma: allowlist secret
+    )
 
 
 def test_titan_shortens_through_ol_llm_and_pydantic_ai_bedrock(target: Target) -> None:
@@ -645,12 +654,7 @@ def test_titan_shortens_through_ol_llm_and_pydantic_ai_bedrock(target: Target) -
     ol-llm's policy wrapper, arrives as LLMRejected with the token counts in its
     message, which is what the shorten-and-retry reads.
     """
-    client = boto3.client(
-        "bedrock-runtime",
-        region_name="us-east-1",
-        aws_access_key_id="test",  # pragma: allowlist secret
-        aws_secret_access_key="test",  # pragma: allowlist secret
-    )
+    client = _bedrock_client()
     stubber = Stubber(client)
     stubber.add_client_error(
         "invoke_model",
@@ -658,7 +662,9 @@ def test_titan_shortens_through_ol_llm_and_pydantic_ai_bedrock(target: Target) -
         service_message=TITAN_TOO_LONG.format(max_tokens=8192, tokens=16384),
         http_status_code=400,
     )
-    stubber.add_response("invoke_model", _titan_response([0.1, 0.2, 0.3]))
+    stubber.add_response(
+        "invoke_model", _bedrock_response({"embedding": [0.1, 0.2, 0.3]})
+    )
     model = BedrockEmbeddingModel(
         "amazon.titan-embed-text-v2:0", provider=BedrockProvider(bedrock_client=client)
     )
@@ -682,6 +688,55 @@ def test_titan_shortens_through_ol_llm_and_pydantic_ai_bedrock(target: Target) -
     assert result["embedding_vector"].to_list() == [
         pytest.approx([0.1, 0.2, 0.3], rel=1e-6)
     ]
+
+
+def test_cohere_isolates_through_ol_llm_and_pydantic_ai_bedrock(
+    target: Target,
+) -> None:
+    """Bedrock's per-text error, through PydanticAI's Bedrock model and ol-llm's
+    policy wrapper, keeps the "#/texts/<index>" pointer in LLMRejected's message,
+    which is what rejects_one_text reads.
+    """
+    client = _bedrock_client()
+    stubber = Stubber(client)
+
+    def reject_text(index: int) -> None:
+        stubber.add_client_error(
+            "invoke_model",
+            service_error_code="ValidationException",
+            service_message=(
+                f"Malformed input request: #/texts/{index}: expected maxLength: "
+                "2048, actual: 3000, please reformat your input and try again."
+            ),
+            http_status_code=400,
+        )
+
+    # The request, then "hello", "boom", and "world" one at a time.
+    reject_text(1)
+    stubber.add_response("invoke_model", _bedrock_response({"embeddings": [[0.1] * 3]}))
+    reject_text(0)
+    stubber.add_response("invoke_model", _bedrock_response({"embeddings": [[0.2] * 3]}))
+    model = BedrockEmbeddingModel(
+        "cohere.embed-english-v3", provider=BedrockProvider(bedrock_client=client)
+    )
+
+    with (
+        stubber,
+        override_embedding_models(model),
+        override_allow_model_requests(allow_model_requests=True),
+    ):
+        result, report = embed.embed_and_checkpoint(
+            _rows("hello", "boom", "world"),
+            COHERE,
+            COHERE.embedder(run_id="run"),
+            target,
+            max_concurrency=1,
+        )
+        stubber.assert_no_pending_responses()
+
+    assert result["conversation_ref"].to_list() == ["0", "2"]
+    [failure] = report.failures
+    assert failure.row["conversation_ref"] == "1"
 
 
 def test_embedder_calls_ol_llm_with_the_feedback_embedding_use_case(

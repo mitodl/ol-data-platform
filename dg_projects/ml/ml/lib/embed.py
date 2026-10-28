@@ -105,6 +105,7 @@ GEMINI_API_BATCH_SIZE = 250
 # truncates what is left over.
 VERTEX_MAX_REQUEST_TOKENS = 20_000
 VERTEX_TEXT_EMBEDDING_BATCH_SIZE = 5
+# gemini-embedding-001 and the text-embedding models.
 GOOGLE_MAX_INPUT_TOKENS = 2048
 # gemini-embedding-2 takes 8,192 tokens per text on both the Gemini API
 # (https://ai.google.dev/gemini-api/docs/embeddings) and Vertex.
