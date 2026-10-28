@@ -1238,8 +1238,8 @@ models:
       user matches.
   - name: verified_courses_taken_in_program
     description: int, count of distinct verified courses the user has taken within
-      the program. Always 0 on xPRO and Simplilearn rows, whose enrollments use mode
-      no-id-professional, never verified.
+      the program. 0 on rows from the xPRO app (xPRO, Simplilearn) unless an enrollment
+      there is mode verified. An enrollment with an order is no-id-professional.
   - name: course_certificate_sum
     description: int, count of distinct courses for which the user has earned a certificate
       within the program
