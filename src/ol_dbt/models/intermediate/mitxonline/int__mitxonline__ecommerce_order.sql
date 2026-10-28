@@ -101,9 +101,11 @@ select
     -- A fixed-price discount's amount is the price the learner pays, not an amount off,
     -- and MITx Online charges the lower of it and the product price.
     -- paid-amount-off stores 0 and is resolved at checkout, so it has no amount here.
+    -- Multiply before dividing: Trino keeps a decimal quotient at the dividend's scale,
+    -- so amount / 100 would round 12.5% to 0.13.
     , case
         when discounts.discount_type = 'percent-off'
-            then cast(intermediate_products_view.product_price * (discounts.discount_amount / 100) as decimal(38, 2))
+            then cast(intermediate_products_view.product_price * discounts.discount_amount / 100 as decimal(38, 2))
         when discounts.discount_type = 'dollars-off'
             then cast(least(discounts.discount_amount, intermediate_products_view.product_price) as decimal(38, 2))
         when discounts.discount_type = 'fixed-price'

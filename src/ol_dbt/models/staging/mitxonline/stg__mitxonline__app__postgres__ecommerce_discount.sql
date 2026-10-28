@@ -10,7 +10,8 @@ with source as (
 
     select
         id as discount_id
-        , cast(amount as decimal(38, 2)) as discount_amount
+        -- MITx Online stores the amount as numeric(20, 5)
+        , cast(amount as decimal(38, 5)) as discount_amount
         , discount_code
         , discount_type
         , max_redemptions as discount_max_redemptions
