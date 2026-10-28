@@ -195,7 +195,10 @@ def transcript_text(relative_path: str, raw: bytes) -> str | None:
     # Learn keeps it. Stripping the parsed text afterwards is not the same:
     # Learn's text keeps the space an empty cue leaves at either end. Learn's
     # checksum is md5(content), so each such file reads as changed to a
-    # checksum-based sync.
+    # checksum-based sync. Learn strips before SJSON parsing too, so an SJSON
+    # wrapped in whitespace json.loads rejects (e.g. a no-break space) parses
+    # here as it does there. WebVTT output is unchanged: its blocks are
+    # stripped one by one.
     content = content.strip()
 
     suffix = Path(relative_path).suffix.lower()

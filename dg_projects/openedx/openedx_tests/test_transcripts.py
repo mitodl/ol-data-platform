@@ -421,6 +421,12 @@ def test_srt_opening_on_an_empty_cue_keeps_learns_leading_space():
     assert transcript_text("static/x-en.srt", srt.encode()) == " First caption."
 
 
+def test_srt_leading_blank_lines_leave_no_leading_whitespace():
+    srt = "\n \n1\n00:00:00,000 --> 00:00:02,000\nFirst caption.\n"
+
+    assert transcript_text("static/x-en.srt", srt.encode()) == "First caption."
+
+
 def test_srt_trailing_blank_lines_leave_no_trailing_whitespace():
     srt = (
         "1\n"
