@@ -15,8 +15,12 @@ models:
     tests:
     - not_null
   - name: course_readable_id
-    description: str, Open edX ID formatted as course-v1:{org}+{course code} e.g.
-      course-v1:xPRO+MLx2
+    description: str, the course's key as learners' course enrollments carry it. A
+      MITx Online or xPRO course's is course-v1:{org}+{course code}, e.g. course-v1:xPRO+MLx2.
+      An edX.org course's is its int__mitx__courses key, which is course-v1:MITxT+{course
+      code} when the course moved to MITx Online, else its edX.org key, {org}+{course
+      code} or {org}/{course code}. An edX.org program course int__mitx__courses does
+      not hold keeps the programs API key, {org}+{course code}, e.g. MITx+MITENB01.
   - name: course_title
     description: str, title of the course
   - name: program_title
@@ -30,8 +34,12 @@ models:
   - name: program_id
     description: int, foreign key representing a single program
   - name: course_readable_id
-    description: str, Open edX ID formatted as course-v1:{org}+{course code} e.g.
-      course-v1:xPRO+MLx2
+    description: str, the course's key as learners' course enrollments carry it. A
+      MITx Online or xPRO course's is course-v1:{org}+{course code}, e.g. course-v1:xPRO+MLx2.
+      An edX.org course's is its int__mitx__courses key, which is course-v1:MITxT+{course
+      code} when the course moved to MITx Online, else its edX.org key, {org}+{course
+      code} or {org}/{course code}. An edX.org program course int__mitx__courses does
+      not hold keeps the programs API key, {org}+{course code}, e.g. MITx+MITENB01.
   - name: program_readable_id
     description: str, readable ID from xpro or mitxonline formatted as program-v1:{org}+{program
       code} e.g.program-v1:xPRO+MLx
