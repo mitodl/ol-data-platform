@@ -48,13 +48,9 @@ with mitx_programs as (
         , edxorg_mitx_program_courses.program_title
         , edxorg_mitx_program_courses.program_name
         , null as program_id
-        , coalesce(mitx__courses.course_readable_id, edxorg_mitx_program_courses.course_readable_id) as course_readable_id
+        , edxorg_mitx_program_courses.mitx_course_readable_id as course_readable_id
         , null as program_readable_id
     from edxorg_mitx_program_courses
-    left join mitx__courses
-        on
-            replace(edxorg_mitx_program_courses.course_readable_id, 'MITx/', '')
-            = replace(mitx__courses.course_readable_id, 'course-v1:MITxT+', '')
 )
 
 , program_courses as (

@@ -15,8 +15,12 @@ models:
     tests:
     - not_null
   - name: course_readable_id
-    description: str, Open edX ID formatted as course-v1:{org}+{course code} e.g.
-      course-v1:xPRO+MLx2
+    description: str, the course's key as learners' course enrollments carry it. A
+      MITx Online or xPRO course's is course-v1:{org}+{course code}, e.g. course-v1:xPRO+MLx2.
+      An edX.org course's is its int__mitx__courses key, which is course-v1:MITxT+{course
+      code} when the course moved to MITx Online, else its edX.org key, {org}+{course
+      code} or {org}/{course code}. An edX.org program course int__mitx__courses does
+      not hold keeps the programs API key, {org}+{course code}, e.g. MITx+MITENB01.
   - name: course_title
     description: str, title of the course
   - name: program_title
@@ -30,8 +34,12 @@ models:
   - name: program_id
     description: int, foreign key representing a single program
   - name: course_readable_id
-    description: str, Open edX ID formatted as course-v1:{org}+{course code} e.g.
-      course-v1:xPRO+MLx2
+    description: str, the course's key as learners' course enrollments carry it. A
+      MITx Online or xPRO course's is course-v1:{org}+{course code}, e.g. course-v1:xPRO+MLx2.
+      An edX.org course's is its int__mitx__courses key, which is course-v1:MITxT+{course
+      code} when the course moved to MITx Online, else its edX.org key, {org}+{course
+      code} or {org}/{course code}. An edX.org program course int__mitx__courses does
+      not hold keeps the programs API key, {org}+{course code}, e.g. MITx+MITENB01.
   - name: program_readable_id
     description: str, readable ID from xpro or mitxonline formatted as program-v1:{org}+{program
       code} e.g.program-v1:xPRO+MLx
@@ -1294,13 +1302,13 @@ unit_tests:
         Title}
   - input: ref('int__edxorg__mitx_program_courses')
     rows:
-    - {program_title: Shared, program_name: Shared, course_title: Shared One, course_readable_id: "MITx/SH1"}
+    - {program_title: Shared, program_name: Shared, course_title: Shared One, mitx_course_readable_id: "MITx+SH1"}
     - {program_title: Circuits, program_name: Circuits, course_title: Circuits One,
-      course_readable_id: "MITx/C1"}
-    - {program_title: Finance, program_name: Finance, course_title: Finance One, course_readable_id: "MITx/F1"}
-    - {program_title: Finance, program_name: Finance, course_title: Finance Two, course_readable_id: "MITx/F2"}
+      mitx_course_readable_id: "MITx+C1"}
+    - {program_title: Finance, program_name: Finance, course_title: Finance One, mitx_course_readable_id: "MITx+F1"}
+    - {program_title: Finance, program_name: Finance, course_title: Finance Two, mitx_course_readable_id: "course-v1:MITxT+F2"}
     - {program_title: Retired Old Version, program_name: Finance, course_title: Retired
-        One, course_readable_id: "MITx/R1"}
+        One, mitx_course_readable_id: "MITx+R1"}
   - input: ref('dim_program_report_key')
     rows:
     - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+P", program_key: "program-v1:MITxT+P",
@@ -1320,11 +1328,11 @@ unit_tests:
       program_report_key: "program-v1:MITxT+P"}
     - {platform: edX.org, program_title: Finance, course_readable_id: "course-v1:MITxT+F2",
       program_report_key: "program-v1:MITxT+FIN"}
-    - {platform: edX.org, program_title: Shared, course_readable_id: "MITx/SH1", program_report_key: Shared}
-    - {platform: edX.org, program_title: Circuits, course_readable_id: "MITx/C1",
+    - {platform: edX.org, program_title: Shared, course_readable_id: "MITx+SH1", program_report_key: Shared}
+    - {platform: edX.org, program_title: Circuits, course_readable_id: "MITx+C1",
       program_report_key: "program-v1:MITxT+XS-MCE"}
-    - {platform: edX.org, program_title: Finance, course_readable_id: "MITx/F1", program_report_key: "program-v1:MITxT+FIN"}
-    - {platform: edX.org, program_title: Retired Old Version, course_readable_id: "MITx/R1",
+    - {platform: edX.org, program_title: Finance, course_readable_id: "MITx+F1", program_report_key: "program-v1:MITxT+FIN"}
+    - {platform: edX.org, program_title: Retired Old Version, course_readable_id: "MITx+R1",
       program_report_key: Retired Old Version}
 
 - name: test_program_enrollment_detail_matches_courses_on_own_platform

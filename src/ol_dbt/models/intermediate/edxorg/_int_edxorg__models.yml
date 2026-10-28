@@ -941,6 +941,14 @@ models:
     description: str, readable ID for the course in {org}/{course} format. e.g., MITx/15.415.1x
     tests:
     - not_null
+  - name: mitx_course_readable_id
+    description: str, the course's key in int__mitx__courses, which learners' course
+      enrollments carry, found by the course number of its edX.org runs. The MITx
+      Online key when the course moved there, e.g. course-v1:MITxT+16.101x for MITx/16.101x_2,
+      else its edX.org key. A course whose runs carry no course number keeps the programs
+      API key, e.g. MITx+MITENB01, which is dim_course's key for it.
+    tests:
+    - not_null
   - name: course_title
     description: str, title of the course
   - name: course_type
@@ -1259,3 +1267,51 @@ unit_tests:
     rows:
     - {readable_id: p, level: graduate, start_date: "2098-01-01T00:00:00Z", end_date: "2098-06-01T00:00:00Z",
       price: 100, currency: USD, availability: dated}
+
+- name: test_int__edxorg__mitx_program_courses_resolves_course_keys
+  description: >
+    A course edX.org re-created under a suffixed key runs under its course number,
+    which int__mitx__courses keys to MITx Online when the course moved there. A
+    course that stayed on edX.org takes its edX.org key from int__mitx__courses.
+    A course only BigQuery has runs for keys them MITx/{course}, and still finds
+    its number. A course with a later run carrying another course's number takes
+    the number most of its runs carry. A course whose runs carry no course number
+    keeps the programs API key.
+  model: int__edxorg__mitx_program_courses
+  given:
+  - input: ref('stg__edxorg__s3__programs')
+    rows:
+    - {program_uuid: u1, program_title: Aerodynamics, program_type: XSeries, program_organization: MITx}
+  - input: ref('stg__edxorg__s3__program_courses')
+    rows:
+    - {program_uuid: u1, course_readable_id: "MITx/16.101x_2", course_key: "MITx+16.101x_2"}
+    - {program_uuid: u1, course_readable_id: "MITx/EDX.1x", course_key: "MITx+EDX.1x"}
+    - {program_uuid: u1, course_readable_id: "MITx/BQ.1x", course_key: "MITx+BQ.1x"}
+    - {program_uuid: u1, course_readable_id: "MITx/15.762x", course_key: "MITx+15.762x"}
+    - {program_uuid: u1, course_readable_id: "MITx/NONUM", course_key: "MITx+NONUM"}
+  - input: ref('int__micromasters__programs')
+    rows: []
+  - input: ref('int__edxorg__mitx_courseruns')
+    rows:
+    - {course_readable_id: "MITx+16.101x_2", course_number: 16.101x, courserun_start_date: "2018-01-01"}
+    - {course_readable_id: "MITx+16.101x_2", course_number: 16.101x, courserun_start_date: "2019-01-01"}
+    - {course_readable_id: "MITx+EDX.1x", course_number: EDX.1x, courserun_start_date: "2018-01-01"}
+    - {course_readable_id: "MITx/BQ.1x", course_number: BQ.1x, courserun_start_date: "2014-01-01"}
+    - {course_readable_id: "MITx+15.762x", course_number: 15.762x, courserun_start_date: "2025-01-01"}
+    - {course_readable_id: "MITx+15.762x", course_number: 15.762x, courserun_start_date: "2026-01-01"}
+    - {course_readable_id: "MITx/15.762x", course_number: 2.961.1x, courserun_start_date: "2026-10-01"}
+    - {course_readable_id: "MITx+NONUM", course_number: null, courserun_start_date: "2023-01-01"}
+  - input: ref('int__mitx__courses')
+    rows:
+    - {course_number: 16.101x, course_readable_id: "course-v1:MITxT+16.101x"}
+    - {course_number: EDX.1x, course_readable_id: "MITx+EDX.1x"}
+    - {course_number: BQ.1x, course_readable_id: "MITx/BQ.1x"}
+    - {course_number: 15.762x, course_readable_id: "course-v1:MITxT+15.762x"}
+    - {course_number: 2.961.1x, course_readable_id: "course-v1:MITxT+2.961.1x"}
+  expect:
+    rows:
+    - {course_readable_id: "MITx/16.101x_2", mitx_course_readable_id: "course-v1:MITxT+16.101x"}
+    - {course_readable_id: "MITx/EDX.1x", mitx_course_readable_id: "MITx+EDX.1x"}
+    - {course_readable_id: "MITx/BQ.1x", mitx_course_readable_id: "MITx/BQ.1x"}
+    - {course_readable_id: "MITx/15.762x", mitx_course_readable_id: "course-v1:MITxT+15.762x"}
+    - {course_readable_id: "MITx/NONUM", mitx_course_readable_id: "MITx+NONUM"}
