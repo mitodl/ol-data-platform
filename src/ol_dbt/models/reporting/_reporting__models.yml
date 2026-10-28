@@ -1890,8 +1890,8 @@ unit_tests:
   description: >
     xPRO records a payment as a CyberSource 'sale' receipt and keeps cancelled and
     declined attempts beside it, so an xPRO enrollment reports its order's accepted
-    sale receipt. A MITx Online enrollment reports its 'payment' transaction,
-    never its refund.
+    sale receipt, the latest when it has two, and none when no receipt was accepted.
+    A MITx Online enrollment reports its 'payment' transaction, never its refund.
   model: enrollment_detail_report
   given:
   - input: ref('tfact_enrollment')
@@ -1899,6 +1899,10 @@ unit_tests:
     - {enrollment_key: e-pro, platform: mitxpro, platform_fk: p-pro, courserun_fk: run-1,
       user_fk: u-1}
     - {enrollment_key: e-online, platform: mitxonline, platform_fk: p-online, courserun_fk: run-1,
+      user_fk: u-1}
+    - {enrollment_key: e-pro-two-accepted, platform: mitxpro, platform_fk: p-pro,
+      courserun_fk: run-1, user_fk: u-1}
+    - {enrollment_key: e-pro-declined, platform: mitxpro, platform_fk: p-pro, courserun_fk: run-1,
       user_fk: u-1}
   - input: ref('dim_course_run')
     rows:
@@ -1910,6 +1914,8 @@ unit_tests:
     rows:
     - {enrollment_key: e-pro, order_id: 10}
     - {enrollment_key: e-online, order_id: 20}
+    - {enrollment_key: e-pro-two-accepted, order_id: 11}
+    - {enrollment_key: e-pro-declined, order_id: 12}
   - input: ref('tfact_payment')
     rows:
     - {payment_id: 1, order_id: 10, platform_fk: p-pro, transaction_type: sale, transaction_status: ACCEPT,
@@ -1922,6 +1928,12 @@ unit_tests:
       transaction_status: ACCEPT, transaction_amount: 250.00, transaction_created_on: '2026-01-01T00:00:00'}
     - {payment_id: 5, order_id: 20, platform_fk: p-online, transaction_type: refund,
       transaction_status: null, transaction_amount: 250.00, transaction_created_on: '2026-01-05T00:00:00'}
+    - {payment_id: 6, order_id: 11, platform_fk: p-pro, transaction_type: sale, transaction_status: ACCEPT,
+      transaction_amount: 400.00, transaction_created_on: '2026-02-01T00:00:00'}
+    - {payment_id: 7, order_id: 11, platform_fk: p-pro, transaction_type: sale, transaction_status: ACCEPT,
+      transaction_amount: 450.00, transaction_created_on: '2026-02-02T00:00:00'}
+    - {payment_id: 8, order_id: 12, platform_fk: p-pro, transaction_type: sale, transaction_status: DECLINE,
+      transaction_amount: 900.00, transaction_created_on: '2026-03-01T00:00:00'}
   - input: ref('dim_contract')
     rows: []
   - input: ref('dim_course')
@@ -1950,3 +1962,5 @@ unit_tests:
     rows:
     - {enrollment_key: e-pro, receipt_payment_amount: 900.00, receipt_payment_timestamp: '2026-01-01T00:00:00'}
     - {enrollment_key: e-online, receipt_payment_amount: 250.00, receipt_payment_timestamp: '2026-01-01T00:00:00'}
+    - {enrollment_key: e-pro-two-accepted, receipt_payment_amount: 450.00, receipt_payment_timestamp: '2026-02-02T00:00:00'}
+    - {enrollment_key: e-pro-declined, receipt_payment_amount: null, receipt_payment_timestamp: null}
