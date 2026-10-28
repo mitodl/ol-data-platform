@@ -335,7 +335,8 @@ unit_tests:
     A MITx Online course under an all_of nested in an elective set reads Core
     but is not required, and the bridge takes that from programrequirement_is_required.
     xPRO has no elective sets, so every xPRO program course is required. A
-    MicroMasters course in two elective sets of one program is one bridge row.
+    MicroMasters course in two elective sets of one program is one bridge row,
+    keyed to the MITx Online course with its course number.
     An xPRO course is in the program its program_id names and in any program
     whose CMS page lists it. Other edX.org MITx program memberships are retained
     from the program-course API, matched to the MITx Online course key when the
@@ -385,8 +386,12 @@ unit_tests:
     - {course_readable_id: "course-v1:MITxT+OTHER+1"}
   - input: ref('stg__micromasters__app__postgres__courses_course')
     rows:
-    - {course_id: 30, course_edx_key: "MITx+MM.1"}
-    - {course_id: 31, course_edx_key: "MITx+MM.2"}
+    - {course_id: 30, course_edx_key: "MITxT/MM.1"}
+    - {course_id: 31, course_edx_key: "MITx/MM.2"}
+  - input: ref('int__mitxonline__courses')
+    rows:
+    - {course_id: 130, course_number: MM.1}
+    - {course_id: 131, course_number: MM.2}
   - input: ref('dim_program')
     rows:
     - {program_pk: p1, source_id: "1", platform_code: mitxonline}
@@ -404,9 +409,9 @@ unit_tests:
     - {course_pk: c20, source_id: 20, primary_platform: mitxpro, is_current: true}
     - {course_pk: c21, source_id: 21, primary_platform: mitxpro, is_current: true}
     - {course_pk: c22, source_id: 22, primary_platform: mitxpro, is_current: true}
-    - {course_pk: c30, course_readable_id: "MITx+MM.1", primary_platform: edxorg,
-      is_current: true}
-    - {course_pk: c31, course_readable_id: "MITx+MM.2", primary_platform: edxorg,
+    - {course_pk: c30, source_id: 130, primary_platform: mitxonline, is_current: true}
+    - {course_pk: c31, source_id: 131, primary_platform: mitxonline, is_current: true}
+    - {course_pk: c32, course_readable_id: "MITx/MM.2", primary_platform: edxorg,
       is_current: true}
     - {course_pk: c40, course_readable_id: "course-v1:MITxT+OTHER+1", primary_platform: mitxonline,
       is_current: true}
