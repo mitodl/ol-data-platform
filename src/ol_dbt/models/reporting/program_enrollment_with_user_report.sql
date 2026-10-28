@@ -162,8 +162,14 @@ left join combined_users
     and enrollment_detail.user_id = combined_users.user_edxorg_id
 left join combined_users as combined_users2
     on enrollment_detail.user_hashed_id = combined_users2.user_hashed_id
+-- The course enrollment mart labels every enrollment from the xPRO app 'xPro', while the
+-- program mart's xPRO rows carry the program's own platform ('xPRO', 'Simplilearn').
 left join courses_detail
-    on enrollment_detail.platform_name = courses_detail.platform
+    on courses_detail.platform = if(
+        enrollment_detail.platform_name in ('{{ var("mitxonline") }}', '{{ var("edxorg") }}')
+        , enrollment_detail.platform_name
+        , '{{ var("mitxpro") }}'
+    )
     and courses_detail.match_type = if(enrollment_detail.program_readable_id is not null, 'readable_id', 'title')
     and coalesce(enrollment_detail.program_readable_id, enrollment_detail.program_title) = courses_detail.match_value
     and enrollment_detail.user_email = courses_detail.user_email

@@ -1238,7 +1238,8 @@ models:
       user matches.
   - name: verified_courses_taken_in_program
     description: int, count of distinct verified courses the user has taken within
-      the program
+      the program. Always 0 on xPRO and Simplilearn rows, whose enrollments use mode
+      no-id-professional, never verified.
   - name: course_certificate_sum
     description: int, count of distinct courses for which the user has earned a certificate
       within the program
@@ -2031,3 +2032,43 @@ unit_tests:
     rows:
     - {platform_name: edX.org, verified_courses_taken_in_program: 3, capstone_ind: Y}
     - {platform_name: MITx Online, verified_courses_taken_in_program: 0, capstone_ind: N}
+
+- name: test_program_enrollment_with_user_report_matches_xpro_course_enrollments
+  description: >
+    The course enrollment mart labels every enrollment from the xPRO app 'xPro',
+    while xPRO program rows carry the program's own platform, 'xPRO' or
+    'Simplilearn'. Both match. xPRO enrollments are never mode verified, so the
+    verified counts stay 0 while passed and certificate counts do not.
+  model: program_enrollment_with_user_report
+  given:
+  - input: ref('marts__combined_program_enrollment_detail')
+    rows:
+    - {platform_name: xPRO, program_title: ML, program_readable_id: "program-v1:xPRO+MLx",
+      user_id: 1, user_hashed_id: x1, user_email: learner@example.com}
+    - {platform_name: Simplilearn, program_title: ML SL, program_readable_id: "program-v1:xPRO+MLx-SL",
+      user_id: 2, user_hashed_id: x2, user_email: learner@example.com}
+  - input: ref('marts__combined__users')
+    rows: []
+  - input: ref('dim_program')
+    rows:
+    - {program_pk: px, program_title: ML, program_readable_id: "program-v1:xPRO+MLx"}
+    - {program_pk: ps, program_title: ML SL, program_readable_id: "program-v1:xPRO+MLx-SL"}
+  - input: ref('bridge_program_course')
+    rows:
+    - {program_fk: px, course_fk: ca}
+    - {program_fk: ps, course_fk: ca}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: ca, course_readable_id: "course-v1:xPRO+MLx1", course_title: A,
+      is_current: true}
+  - input: ref('marts__combined_course_enrollment_detail')
+    rows:
+    - {platform: xPro, user_email: learner@example.com, course_readable_id: "course-v1:xPRO+MLx1",
+      courserunenrollment_enrollment_mode: no-id-professional, courserungrade_is_passing: true,
+      courseruncertificate_is_earned: true}
+  expect:
+    rows:
+    - {platform_name: xPRO, verified_courses_taken_in_program: 0, all_courses_passed_in_program: 1,
+      course_certificate_sum: 1}
+    - {platform_name: Simplilearn, verified_courses_taken_in_program: 0, all_courses_passed_in_program: 1,
+      course_certificate_sum: 1}
