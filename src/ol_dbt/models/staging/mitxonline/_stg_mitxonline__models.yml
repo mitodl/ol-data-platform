@@ -489,26 +489,30 @@ models:
     tests:
     - not_null
   - name: discount_type
-    description: string, one of  "percent-off", "dollars-off" and "fixed-price". Specifys
-      if the ammount of the discount refers to a percent of, a dollar amount off or
-      a discounted price
+    description: string, one of "percent-off", "dollars-off", "fixed-price" and "paid-amount-off".
+      Specifies if the amount of the discount refers to a percent off, a dollar amount
+      off, a discounted price, or the amount the learner paid for a qualifying prior
+      purchase (resolved at checkout; the discount stores 0)
     tests:
     - not_null
     - accepted_values:
         arguments:
-          values: ["percent-off", "dollars-off", "fixed-price"]
+          values: ["percent-off", "dollars-off", "fixed-price", "paid-amount-off"]
   - name: discount_amount_text
     description: str, discount amount in readable format. It can be percent-off which
-      is <dollar amount>% off, dollars-off which is $<dollar amount> off or fixed-price
+      is <dollar amount>% off, dollars-off which is $<dollar amount> off, fixed-price
+      which is Fixed Price followed by the price, or "Paid Amount Off" for paid-amount-off
     tests:
     - not_null
   - name: discount_redemption_type
-    description: string, one of  "one-time",  "one-time-per-user" and "unlimited"
+    description: string, one of "one-time", "one-time-per-user", "unlimited", "program-child-purchase"
+      (required by paid-amount-off) and "internal" (attached by MITx Online itself)
     tests:
     - not_null
     - accepted_values:
         arguments:
-          values: ["one-time", "one-time-per-user", "unlimited"]
+          values: ["one-time", "one-time-per-user", "unlimited", "program-child-purchase",
+            "internal"]
   - name: discount_max_redemptions
     description: int, maximum times a coupon can be redeemed
   - name: discount_code

@@ -24,6 +24,9 @@ with source as (
                 then concat('$', format('%.2f', amount))
             when discount_type = 'fixed-price'
                 then concat('Fixed Price: ', format('%.2f', amount))
+            -- The amount is resolved per learner at checkout; the discount stores 0
+            when discount_type = 'paid-amount-off'
+                then 'Paid Amount Off'
         end as discount_amount_text
         ,{{ cast_timestamp_to_iso8601('created_on') }} as discount_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as discount_updated_on
