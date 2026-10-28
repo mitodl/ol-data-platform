@@ -291,10 +291,12 @@ with mitx_users as (
 
 )
 
--- Some Learn profile names are a Python dict repr, {'givenName': 'A', 'familyName': 'B'}.
--- `.` stands for the quote characters, which are ' or " depending on the name. Only a name
--- that matches the whole pattern is parsed, so a display name like {Gaurav} Gaming is kept.
-{% set learn_dict_name = "'givenName.: .(.*?)., .familyName.: .(.*).[}]$'" %}
+-- Some Learn profile names are a Python dict repr, {'givenName': 'A', 'familyName': 'B'},
+-- where a missing part is None. Only a name that starts like that dict is parsed, so a display
+-- name like {Gaurav} Gaming is kept. A part that is None or not quoted extracts as null.
+{% set learn_dict_name = "'^[ ]*[{][''\"]givenName[''\"]: '" %}
+{% set learn_dict_given_name = "'[''\"]givenName[''\"]: [''\"](.*?)[''\"], [''\"]familyName[''\"]'" %}
+{% set learn_dict_family_name = "'[''\"]familyName[''\"]: [''\"](.*)[''\"][}]$'" %}
 
 , learn_user_view as(
     select
@@ -307,9 +309,9 @@ with mitx_users as (
                 case
                     when {{ regexp_like('learn_profile.user_name', learn_dict_name) }}
                     then concat(
-                        {{ regexp_extract_or_null('learn_profile.user_name', learn_dict_name, 1) }}
+                        coalesce({{ regexp_extract_or_null('learn_profile.user_name', learn_dict_given_name, 1) }}, '')
                         , ' '
-                        , {{ regexp_extract_or_null('learn_profile.user_name', learn_dict_name, 2) }}
+                        , coalesce({{ regexp_extract_or_null('learn_profile.user_name', learn_dict_family_name, 1) }}, '')
                     )
                     else learn_profile.user_name
                 end
