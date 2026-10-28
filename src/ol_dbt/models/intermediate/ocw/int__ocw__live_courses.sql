@@ -73,17 +73,22 @@ select
     end as course_extra_course_numbers
     , course_term
     , course_year
-    -- A list field of another shape is empty, so one course cannot fail the build.
-    -- Learn would take each character of a string as a label.
+    -- Learn iterates these fields, so an object gives its keys. Any other shape is
+    -- empty, so one course cannot fail the build. Learn would take each character
+    -- of a string as a tag or a department id, and fail the load on an unknown one.
     , coalesce(
-        {{ json_extract_varchar_array('course_data_json', "'$.level'", lenient=true) }}, {{ empty_varchar_array() }}
+        {{ json_extract_varchar_array('course_data_json', "'$.level'", lenient=true) }}
+        , {{ json_object_key_array('course_data_json', "'$.level'") }}
+        , {{ empty_varchar_array() }}
     ) as course_levels
     , coalesce(
         {{ json_extract_varchar_array('course_data_json', "'$.department_numbers'", lenient=true) }}
+        , {{ json_object_key_array('course_data_json', "'$.department_numbers'") }}
         , {{ empty_varchar_array() }}
     ) as course_department_numbers
     , coalesce(
         {{ json_extract_varchar_array('course_data_json', "'$.learning_resource_types'", lenient=true) }}
+        , {{ json_object_key_array('course_data_json', "'$.learning_resource_types'") }}
         , {{ empty_varchar_array() }}
     ) as course_learning_resource_types
     , {{ json_nested_array_distinct_values('course_data_json', "'$.topics'", lenient=true) }} as course_topics

@@ -696,7 +696,9 @@ unit_tests:
       course_hides_download: false}
 - name: test_int__ocw__live_courses_reads_other_shapes_as_learn_does
   description: >
-    A list field that is not a list is empty rather than failing the build.
+    A level, department_numbers or learning_resource_types object gives its
+    keys, as Learn iterates it. A list field of another shape is empty rather
+    than failing the build.
     hide_download is read for its Python truth, so the string "false" hides
     the download. Any non-empty extra_course_numbers is split on commas and
     each number stripped of Unicode whitespace, as str.strip() does.
@@ -720,8 +722,10 @@ unit_tests:
     - course_slug: f-course
       coursecontent_kind: course
       course_site_uid: 5b7e9f21-6c3d-4a8b-b2e0-9d4f1a7c3e58
-      course_data_json: '{"course_title": "F Course", "extra_course_numbers": "  ",
-        "hide_download": 0}'
+      course_data_json: >-
+        {"course_title": "F Course", "extra_course_numbers": "  ",
+        "level": {"Undergraduate": true, "Graduate": 1},
+        "learning_resource_types": {"Lecture Notes": true}, "hide_download": 0}
     - course_slug: g-course
       coursecontent_kind: course
       course_site_uid: 8e4a6d13-2f9b-4c7e-a5d0-6b1c3e9f2a74
@@ -730,11 +734,11 @@ unit_tests:
   expect:
     rows:
     - {course_slug: e-course, course_extra_course_numbers: ["2.002", "2.003", ""],
-      course_levels: [], course_department_numbers: [], course_learning_resource_types: [],
+      course_levels: [], course_department_numbers: ["2"], course_learning_resource_types: [],
       course_topics: [], course_learn_topics: [], course_hides_download: true}
-    - {course_slug: f-course, course_extra_course_numbers: [""], course_levels: [],
-      course_department_numbers: [], course_learning_resource_types: [], course_topics: [],
-      course_learn_topics: [], course_hides_download: false}
+    - {course_slug: f-course, course_extra_course_numbers: [""], course_levels: [
+        Graduate, Undergraduate], course_department_numbers: [], course_learning_resource_types: [
+        Lecture Notes], course_topics: [], course_learn_topics: [], course_hides_download: false}
     - {course_slug: g-course, course_extra_course_numbers: [], course_levels: [],
       course_department_numbers: [], course_learning_resource_types: [], course_topics: [],
       course_learn_topics: [], course_hides_download: true}

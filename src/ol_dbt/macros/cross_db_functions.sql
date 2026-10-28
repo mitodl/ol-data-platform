@@ -656,6 +656,34 @@
     cast(json_query(parse_json({{ json_col }}), {{ json_path }}) as array<varchar>)
 {%- endmacro %}
 
+{#
+    json_object_key_array: The keys of the JSON object at a path, sorted, as an array of
+    varchar. NULL when the path holds anything other than an object. Sorted because
+    Trino's map has no key order.
+
+    Usage:
+      coalesce({{ json_extract_varchar_array('data', "'$.level'", lenient=true) }}
+               , {{ json_object_key_array('data', "'$.level'") }})
+#}
+{% macro json_object_key_array(json_col, json_path) -%}
+    {{ adapter.dispatch('json_object_key_array', 'open_learning')(json_col, json_path) }}
+{%- endmacro %}
+
+{% macro default__json_object_key_array(json_col, json_path) -%}
+    array_sort(map_keys(try_cast(json_parse(json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}')) as map(varchar, json))))
+{%- endmacro %}
+
+{% macro duckdb__json_object_key_array(json_col, json_path) -%}
+    case
+        when json_type(json_extract({{ json_col }}, {{ json_path }})) = 'OBJECT'
+            then array_sort(json_keys(json_extract({{ json_col }}, {{ json_path }})))
+    end
+{%- endmacro %}
+
+{% macro starrocks__json_object_key_array(json_col, json_path) -%}
+    array_sort(cast(json_keys(json_query(parse_json({{ json_col }}), {{ json_path }})) as array<varchar>))
+{%- endmacro %}
+
 
 
 {% macro is_courserun_current(start_on_timestamp_str, end_on_timestamp_str) -%}
