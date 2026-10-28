@@ -26,10 +26,35 @@ with mitx_programs as (
     select * from {{ ref('dim_program_report_key') }}
 )
 
-, mitxonline_mapped_titles as (
-    select lookup_value as program_title
-    from program_report_key
-    where lookup_type = 'title' and is_mapped_to_mitxonline
+, edxorg_requirement_courses as (
+    select
+        '{{ var("edxorg") }}' as platform
+        , mitx__courses.course_title
+        , mitx_programs.program_title
+        , mitx_programs.program_title as program_name
+        , mitx_programs.micromasters_program_id as program_id
+        , mitx__courses.course_readable_id
+        , null as program_readable_id
+    from mitx_programs
+    inner join mitx__courses
+        on mitx_programs.course_number = mitx__courses.course_number
+    where mitx__courses.is_on_mitxonline = false
+)
+
+, edxorg_program_api_courses as (
+    select
+        '{{ var("edxorg") }}' as platform
+        , edxorg_mitx_program_courses.course_title
+        , edxorg_mitx_program_courses.program_title
+        , edxorg_mitx_program_courses.program_name
+        , null as program_id
+        , coalesce(mitx__courses.course_readable_id, edxorg_mitx_program_courses.course_readable_id) as course_readable_id
+        , null as program_readable_id
+    from edxorg_mitx_program_courses
+    left join mitx__courses
+        on
+            replace(edxorg_mitx_program_courses.course_readable_id, 'MITx/', '')
+            = replace(mitx__courses.course_readable_id, 'course-v1:MITxT+', '')
 )
 
 , program_courses as (
@@ -50,39 +75,21 @@ with mitx_programs as (
 
     union all
 
-    select
-        '{{ var("edxorg") }}' as platform
-        , mitx__courses.course_title
-        , mitx_programs.program_title
-        , mitx_programs.program_title as program_name
-        , mitx_programs.micromasters_program_id as program_id
-        , mitx__courses.course_readable_id
-        , null as program_readable_id
-    from mitx_programs
-    inner join mitx__courses
-        on mitx_programs.course_number = mitx__courses.course_number
-    where mitx__courses.is_on_mitxonline = false
+    select * from edxorg_requirement_courses
 
     union all
 
-    select
-        '{{ var("edxorg") }}' as platform
-        , edxorg_mitx_program_courses.course_title
-        , edxorg_mitx_program_courses.program_title
-        , edxorg_mitx_program_courses.program_name
-        , null as program_id
-        , coalesce(mitx__courses.course_readable_id, edxorg_mitx_program_courses.course_readable_id) as course_readable_id
-        , null as program_readable_id
-    from edxorg_mitx_program_courses
-    -- A program that dim_program_report_key maps to a MITx Online program takes that
-    -- program's courses, as bridge_program_course does.
-    left join mitxonline_mapped_titles
-        on edxorg_mitx_program_courses.program_title = mitxonline_mapped_titles.program_title
-    left join mitx__courses
+    -- Every edX.org MITx program keeps its own courses, also one that moved to MITx
+    -- Online, as bridge_program_course does: its edX.org learners took courses the MITx
+    -- Online program may not list. A course the program's requirements already list is
+    -- left out.
+    select edxorg_program_api_courses.*
+    from edxorg_program_api_courses
+    left join edxorg_requirement_courses
         on
-            replace(edxorg_mitx_program_courses.course_readable_id, 'MITx/', '')
-            = replace(mitx__courses.course_readable_id, 'course-v1:MITxT+', '')
-    where mitxonline_mapped_titles.program_title is null
+            edxorg_program_api_courses.program_title = edxorg_requirement_courses.program_title
+            and edxorg_program_api_courses.course_readable_id = edxorg_requirement_courses.course_readable_id
+    where edxorg_requirement_courses.course_readable_id is null
 
     union all
 

@@ -340,10 +340,8 @@ unit_tests:
     whose CMS page lists it. Other edX.org MITx program memberships are retained
     from the program-course API, matched to the MITx Online course key when the
     course moved to MITx Online and to the edX.org course key when it did not.
-    An edX.org program whose title dim_program_report_key maps to a MITx Online
-    program, by the seed or by title, is left out. One it leaves unmapped, e.g. a
-    title two MITx Online programs share, keeps its courses, also when its
-    program_name is a mapped title, as for the retired "old version" SDS programs.
+    An edX.org program that dim_program_report_key maps to a MITx Online program,
+    by the seed or by title, keeps its own courses too.
   model: bridge_program_course
   given:
   - input: ref('int__mitxonline__program_requirements')
@@ -382,13 +380,6 @@ unit_tests:
       program_name: "Title Mapped Program", course_readable_id: "MITx/EDXONLY"}
     - {program_uuid: "edxorg-retired", program_title: "Retired Old Version", program_name: "Mapped\
         \ Program", course_readable_id: "MITx/EDXONLY"}
-  - input: ref('dim_program_report_key')
-    rows:
-    - {lookup_type: title, lookup_value: "Other Program", mapped_by: none, is_mapped_to_mitxonline: false}
-    - {lookup_type: title, lookup_value: "Mapped Program", mapped_by: seed, is_mapped_to_mitxonline: true}
-    - {lookup_type: title, lookup_value: "Title Mapped Program", mapped_by: title,
-      is_mapped_to_mitxonline: true}
-    - {lookup_type: title, lookup_value: "Retired Old Version", mapped_by: none, is_mapped_to_mitxonline: false}
   - input: ref('int__mitx__courses')
     rows:
     - {course_readable_id: "course-v1:MITxT+OTHER+1"}
@@ -432,4 +423,6 @@ unit_tests:
     - {program_fk: p3, course_fk: c31, is_required: false}
     - {program_fk: p4, course_fk: c40, is_required: true}
     - {program_fk: p4, course_fk: c41, is_required: true}
+    - {program_fk: p5, course_fk: c41, is_required: true}
+    - {program_fk: p6, course_fk: c41, is_required: true}
     - {program_fk: p7, course_fk: c41, is_required: true}

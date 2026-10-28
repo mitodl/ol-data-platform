@@ -110,6 +110,8 @@ with mitxpro__programenrollments as (
             as user_has_completed_program
         , 'mitxpro' as course_program_platform_code
         , cast(mitxpro__programs.program_id as varchar) as course_program_source_id
+        , 'mitxpro' as own_course_program_platform_code
+        , cast(mitxpro__programs.program_id as varchar) as own_course_program_source_id
         , '{{ var("mitxpro") }}' as user_platform
     from mitxpro__programenrollments
     inner join mitxpro__programs
@@ -149,6 +151,8 @@ with mitxpro__programenrollments as (
             as user_has_completed_program
         , 'mitxonline' as course_program_platform_code
         , cast(mitxonline__programs.program_id as varchar) as course_program_source_id
+        , 'mitxonline' as own_course_program_platform_code
+        , cast(mitxonline__programs.program_id as varchar) as own_course_program_source_id
         , '{{ var("mitxonline") }}' as user_platform
     from mitxonline__programenrollments
     inner join mitxonline__programs
@@ -190,13 +194,16 @@ with mitxpro__programenrollments as (
         , if(edx_program_certificates.user_has_completed_program = true, true, false) as user_has_completed_program
         -- An edX.org program that moved to MITx Online takes its courses from the MITx
         -- Online program. Course readable ids are shared across platforms, so the
-        -- learner's edX.org enrollments still match them.
+        -- learner's edX.org enrollments still match them. It also keeps its own
+        -- edX.org program's courses, which the MITx Online program may not list.
         , if(program_title_to_mitxonline_program.mitxonline_program_id is not null, 'mitxonline', 'edxorg')
             as course_program_platform_code
         , coalesce(
             cast(program_title_to_mitxonline_program.mitxonline_program_id as varchar)
             , edx_program_enrollments.program_uuid
         ) as course_program_source_id
+        , 'edxorg' as own_course_program_platform_code
+        , edx_program_enrollments.program_uuid as own_course_program_source_id
         , '{{ var("edxorg") }}' as user_platform
     from edx_program_enrollments
     left join edxorg__users
@@ -246,6 +253,9 @@ with mitxpro__programenrollments as (
             )
             , cast(micromasters__program_enrollments.micromasters_program_id as varchar)
         ) as course_program_source_id
+        , 'micromasters' as own_course_program_platform_code
+        , cast(micromasters__program_enrollments.micromasters_program_id as varchar)
+            as own_course_program_source_id
         , '{{ var("edxorg") }}' as user_platform
     from micromasters__program_enrollments
     left join mitx__programs
@@ -283,12 +293,47 @@ with mitxpro__programenrollments as (
             and dim_course.is_current = true
 )
 
--- One row per program and learner. user_id is only unique within a platform, so the
--- enrollment's platform is part of the key the program rows join on.
+-- A row counts the courses of the program its courses come from and of its own program,
+-- when that is another one (an edX.org or MicroMasters program that moved to MITx Online)
+, program_course_sets as (
+    select distinct
+        course_program_platform_code
+        , course_program_source_id
+        , own_course_program_platform_code
+        , own_course_program_source_id
+    from combined_programs
+)
+
+, program_course_set_members as (
+    select
+        course_program_platform_code
+        , course_program_source_id
+        , own_course_program_platform_code
+        , own_course_program_source_id
+        , course_program_platform_code as platform_code
+        , course_program_source_id as source_id
+    from program_course_sets
+
+    union
+
+    select
+        course_program_platform_code
+        , course_program_source_id
+        , own_course_program_platform_code
+        , own_course_program_source_id
+        , own_course_program_platform_code as platform_code
+        , own_course_program_source_id as source_id
+    from program_course_sets
+)
+
+-- One row per program course set and learner. user_id is only unique within a platform,
+-- so the enrollment's platform is part of the key the program rows join on.
 , program_course_enrollments as (
     select
-        program_courses.platform_code
-        , program_courses.source_id
+        program_course_set_members.course_program_platform_code
+        , program_course_set_members.course_program_source_id
+        , program_course_set_members.own_course_program_platform_code
+        , program_course_set_members.own_course_program_source_id
         , combined_enrollments.platform
         , combined_enrollments.user_id
         , sum(case when upper(combined_enrollments.course_title) like '%CAPSTONE%' then 1 else 0 end)
@@ -300,14 +345,20 @@ with mitxpro__programenrollments as (
             end
         ) as first_courserun_start_on_date
         , count(distinct combined_enrollments.course_readable_id) as unique_courses_taken_in_program
-    from program_courses
+    from program_course_set_members
+    inner join program_courses
+        on
+            program_course_set_members.platform_code = program_courses.platform_code
+            and program_course_set_members.source_id = program_courses.source_id
     inner join combined_enrollments
         on program_courses.course_readable_id = combined_enrollments.course_readable_id
     left join combined_courseruns
         on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
     group by
-        program_courses.platform_code
-        , program_courses.source_id
+        program_course_set_members.course_program_platform_code
+        , program_course_set_members.course_program_source_id
+        , program_course_set_members.own_course_program_platform_code
+        , program_course_set_members.own_course_program_source_id
         , combined_enrollments.platform
         , combined_enrollments.user_id
 )
@@ -347,8 +398,11 @@ with mitxpro__programenrollments as (
     from combined_programs
     left join program_course_enrollments
         on
-            combined_programs.course_program_platform_code = program_course_enrollments.platform_code
-            and combined_programs.course_program_source_id = program_course_enrollments.source_id
+            combined_programs.course_program_platform_code = program_course_enrollments.course_program_platform_code
+            and combined_programs.course_program_source_id = program_course_enrollments.course_program_source_id
+            and combined_programs.own_course_program_platform_code
+            = program_course_enrollments.own_course_program_platform_code
+            and combined_programs.own_course_program_source_id = program_course_enrollments.own_course_program_source_id
             and combined_programs.user_platform = program_course_enrollments.platform
             and cast(combined_programs.user_id as varchar) = program_course_enrollments.user_id
     group by
