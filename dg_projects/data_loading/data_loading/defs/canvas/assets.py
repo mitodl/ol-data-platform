@@ -1,3 +1,9 @@
+"""Canvas course exports, one partition per course listed in the course ID sheet.
+
+Moved here from the canvas code location (issue #2260). The webhook that tells
+MIT Learn about each export lives in delivery (delivery.assets.canvas).
+"""
+
 import json
 import time
 from pathlib import Path
@@ -5,22 +11,20 @@ from pathlib import Path
 import httpx2 as httpx
 from dagster import (
     AssetExecutionContext,
-    AssetIn,
     AssetKey,
     AssetOut,
     DataVersion,
+    Definitions,
     DynamicPartitionsDefinition,
     Failure,
     Output,
-    asset,
     multi_asset,
 )
-from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import (
     EXPORT_TYPE_COMMON_CARTRIDGE,
     EXPORT_TYPE_EXTENSIONS,
 )
-from ol_orchestrate.lib.failures import permanent_failure
+from ol_orchestrate.lib.failures import permanent_failure, with_failure_hooks
 from ol_orchestrate.lib.http_errors import http_failure
 from ol_orchestrate.lib.utils import compute_zip_content_hash
 
@@ -244,77 +248,4 @@ def export_course_content(context: AssetExecutionContext):
     )
 
 
-@asset(
-    code_version="canvas_course_export_webhook_v1",
-    key=AssetKey(["canvas", "course_content_metadata"]),
-    group_name="course_content_metadata",
-    description="Notify Learn API via webhook after canvas course export.",
-    automation_condition=upstream_or_code_changes(),
-    partitions_def=canvas_course_ids,
-    ins={
-        "canvas_content_export": AssetIn(key=AssetKey(["canvas", "course_content"])),
-        "course_metadata_export": AssetIn(key=AssetKey(["canvas", "course_metadata"])),
-    },
-    required_resource_keys={"canvas_api", "learn_api"},
-)
-def course_content_metadata(
-    context: AssetExecutionContext, canvas_content_export, course_metadata_export
-):
-    course_id = int(context.partition_key)
-    metadata = context.resources.canvas_api.client.get_course(course_id)
-    # canvas_content_export is a full path to the exported course content file
-    relative_path = str(canvas_content_export).split("canvas/course_content/", 1)[-1]
-    content_path = f"canvas/course_content/{relative_path}"
-
-    metadata_relative_path = str(course_metadata_export).split(
-        "canvas/course_content/", 1
-    )[-1]
-    metadata_path = f"canvas/course_content/{metadata_relative_path}"
-
-    data = {
-        "course_id": course_id,
-        "course_name": metadata["name"],
-        "course_code": metadata["course_code"],
-        "content_path": content_path,
-        "metadata_path": metadata_path,
-        "source": "canvas",
-        "time": time.time(),
-    }
-    # Learn rejects a null course_readable_id, which Canvas returns for any
-    # course with no SIS mapping.
-    if metadata["sis_course_id"]:
-        data["course_readable_id"] = metadata["sis_course_id"]
-    context.log.info(
-        "Sending webhook notification to Learn API for course_id=%s and data=%s",
-        course_id,
-        data,
-    )
-
-    try:
-        response = context.resources.learn_api.client.notify_course_export(data)
-        context.log.info(
-            "Learn API webhook notification succeeded for course_id=%s, response=%s",
-            course_id,
-            response,
-        )
-        return Output(
-            value={"course_id": course_id},
-            metadata={
-                "status": "success",
-                "course_id": course_id,
-                "response": response,
-            },
-        )
-
-    except httpx.HTTPStatusError as error:
-        context.log.exception(
-            "Learn API webhook notification failed for course_id=%s with status "
-            "code %s",
-            course_id,
-            error.response.status_code,
-        )
-        raise http_failure(
-            error,
-            "Learn API webhook notification failed",
-            metadata={"course_id": course_id},
-        ) from error
+defs = Definitions(assets=with_failure_hooks([export_course_content]))

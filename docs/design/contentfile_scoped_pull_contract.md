@@ -17,14 +17,14 @@ Today three Dagster locations already POST to `/api/v1/webhooks/content_files/`:
 |---|---|
 | `dg_projects/openedx/openedx/assets/openedx.py:731` | `partitions_def` (per deployment, per course) |
 | `dg_projects/edxorg/edxorg/assets/openedx_course_archives.py:332` | `course_and_source_partitions` |
-| `dg_projects/canvas/canvas/assets/canvas.py:294` | `canvas_course_ids` (`DynamicPartitionsDefinition`) |
+| `dg_projects/delivery/delivery/assets/canvas.py:96` | `canvas_course_ids` (`DynamicPartitionsDefinition`) |
 
 All three send a **pointer**: `{course_id, course_readable_id, content_path, source}`. On receipt
 MIT Learn fires `ingest_edx_run_archive` (or `ingest_canvas_course` for Canvas) — i.e. the message
 means *"a new archive is at this path, go extract it yourself."* **MIT Learn does the extraction.**
 
 **Known gap in the current Canvas sender:** `course_readable_id` is only set when Canvas's
-`sis_course_id` is truthy (`dg_projects/canvas/canvas/assets/canvas.py:283-286`) — Learn rejects a
+`sis_course_id` is truthy (`dg_projects/delivery/delivery/assets/canvas.py:85-88`) — Learn rejects a
 null value, so some Canvas courses never carry this field today. The new endpoint closes this gap
 rather than inheriting it: §2 has the Canvas sender compute `readable_id` itself from
 `course_id`/`course_code`, so it no longer depends on `sis_course_id` being set.
