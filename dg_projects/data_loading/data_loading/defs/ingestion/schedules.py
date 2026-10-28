@@ -306,10 +306,16 @@ edxorg_program_reports_ingest_schedule = dg.ScheduleDefinition(
 # unit xpro/tracking_logs). The first production runs walk the 44.3 GB backlog
 # at most 200 batches of 128 MiB gzip a run, so it takes about two runs, and
 # the guard keeps a run that outlasts the interval from overlapping the next.
-# max_runtime ends a hung run before the following tick (see the PostHog
-# schedule). The default 8Gi pod covers a batch, which should peak near 4.3 GB
-# at the worst gzip ratio measured (see tracking_logs.BUDGET_BYTES), plus the
-# run's listing (474 MB for the whole bucket).
+# The guard sees only this schedule's runs and their retries, not a run launched
+# by hand. max_runtime fails a hung run after 11 hours, and run_retries
+# relaunches it with the same tags, so a hang that repeats on every attempt
+# holds the schedule off until the retries run out.
+#
+# A batch should peak near 4.3 GB at the worst gzip ratio measured (see
+# tracking_logs.BUDGET_BYTES), and the run also holds its listing (474 MB for
+# the whole bucket). Nothing has been measured in a deployed pod, and the other
+# two batched loads each passed 7 GB against the 8Gi default, so this takes
+# their 16Gi limit. The request stays low, as for those schedules.
 #
 # RUNNING in production and QA, which reads the QA deployment's bucket (51,857
 # files, 0.9 GB on 2026-10-28). Stopped elsewhere, where the source would read
@@ -322,7 +328,19 @@ xpro_tracking_logs_ingest_schedule = dg.ScheduleDefinition(
     cron_schedule="50 */12 * * *",
     execution_timezone="Etc/UTC",
     should_execute=no_xpro_tracking_logs_run_in_flight,
-    tags={"dagster/max_runtime": str(11 * 60 * 60)},
+    tags={
+        "dagster/max_runtime": str(11 * 60 * 60),
+        "dagster-k8s/config": json.dumps(
+            {
+                "container_config": {
+                    "resources": {
+                        "requests": {"memory": "2Gi"},
+                        "limits": {"memory": "16Gi"},
+                    }
+                }
+            }
+        ),
+    },
     default_status=(
         dg.DefaultScheduleStatus.RUNNING
         if DAGSTER_ENV in {"qa", "production"}

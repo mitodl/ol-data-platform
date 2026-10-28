@@ -308,3 +308,14 @@ def test_posthog_schedule_runs_get_the_memory_limit_and_runtime_cap() -> None:
     container = get_user_defined_k8s_config(tags).container_config
     assert container["resources"]["limits"]["memory"] == "16Gi"
     assert tags["dagster/max_runtime"] == str(6 * 60 * 60)
+
+
+def test_xpro_tracking_logs_runs_get_the_memory_limit_and_runtime_cap() -> None:
+    from dagster_k8s.job import get_user_defined_k8s_config  # noqa: PLC0415
+    from data_loading.defs.ingestion import schedules  # noqa: PLC0415
+
+    tags = schedules.xpro_tracking_logs_ingest_schedule.tags
+    container = get_user_defined_k8s_config(tags).container_config
+    assert container["resources"]["limits"]["memory"] == "16Gi"
+    assert container["resources"]["requests"]["memory"] == "2Gi"
+    assert tags["dagster/max_runtime"] == str(11 * 60 * 60)
