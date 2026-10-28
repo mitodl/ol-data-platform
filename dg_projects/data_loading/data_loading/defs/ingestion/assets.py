@@ -39,6 +39,7 @@ from ol_dlt.sources import (
     podcast_rss,
     posthog_events,
     see,
+    tracking_logs,
     xpro_app,
     youtube,
 )
@@ -450,6 +451,22 @@ edxorg_program_reports_assets = build_batched_assets(
 )
 
 
+# The xPro tracking log, loaded in full beside the Airbyte-loaded
+# raw__xpro__openedx__tracking_logs until staging is repointed at it. One
+# listing per run: a full listing of the production bucket (264,950 files on
+# 2026-10-27) takes about 50 s, and the first runs walk ~331 batches.
+XPRO_TRACKING_LOGS_TABLE = "raw__xpro__openedx__tracking_log_events"
+xpro_tracking_logs_assets = build_batched_assets(
+    name="xpro_tracking_logs",
+    build_source=partial(
+        tracking_logs.tracking_logs_source, raw_table=XPRO_TRACKING_LOGS_TABLE
+    ),
+    pipeline=tracking_logs.tracking_logs_pipeline_for(XPRO_TRACKING_LOGS_TABLE),
+    translator=RawDataDltTranslator(),
+    list_once=True,
+)
+
+
 # Resumes from the dlt cursor every run. A backfill is a deliberate
 # `posthog_events_source(start_date=...)` invocation (see the source's
 # __main__), not something a scheduled run can fall into.
@@ -534,6 +551,7 @@ defs = Definitions(
             *edxorg_s3_table_assets,
             *course_xml_blocks_assets,
             edxorg_program_reports_assets,
+            xpro_tracking_logs_assets,
         ]
     ),
 )

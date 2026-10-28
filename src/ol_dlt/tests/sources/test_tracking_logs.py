@@ -107,6 +107,18 @@ def test_edxorg_has_no_openedx_only_columns() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    ("profile", "expected"),
+    [
+        ("qa", "s3://xpro-qa-edxapp-tracking/valid/"),
+        ("production", "s3://xpro-production-edxapp-tracking/valid/"),
+        ("dev", "s3://xpro-production-edxapp-tracking/valid/"),
+    ],
+)
+def test_openedx_reads_the_qa_bucket_only_in_qa(profile: str, expected: str) -> None:
+    assert _XPRO.bucket_url_for(profile) == expected
+
+
 _TODAY = date(2026, 10, 27)
 
 
