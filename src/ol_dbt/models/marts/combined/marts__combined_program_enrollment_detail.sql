@@ -200,10 +200,10 @@ with mitxpro__programenrollments as (
             as course_program_platform_code
         , coalesce(
             cast(program_title_to_mitxonline_program.mitxonline_program_id as varchar)
-            , edx_program_enrollments.program_uuid
+            , replace(edx_program_enrollments.program_uuid, '-', '')
         ) as course_program_source_id
         , 'edxorg' as own_course_program_platform_code
-        , edx_program_enrollments.program_uuid as own_course_program_source_id
+        , replace(edx_program_enrollments.program_uuid, '-', '') as own_course_program_source_id
         , '{{ var("edxorg") }}' as user_platform
     from edx_program_enrollments
     left join edxorg__users
@@ -278,11 +278,13 @@ with mitxpro__programenrollments as (
         and edx_program_enrollments.micromasters_program_id is null
 )
 
--- Every course in the program, required or elective, as bridge_program_course lists it
+-- Every course in the program, required or elective, as bridge_program_course lists it.
+-- dim_program holds an edX.org program's uuid with hyphens and the program enrollments
+-- without, so both sides drop them.
 , program_courses as (
     select
         dim_program.platform_code
-        , dim_program.source_id
+        , replace(dim_program.source_id, '-', '') as source_id
         , dim_course.course_readable_id
     from bridge_program_course
     inner join dim_program

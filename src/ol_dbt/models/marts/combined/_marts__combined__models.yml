@@ -683,14 +683,13 @@ models:
       programs, DEDP, and the XSeries programs with a MITx Online program of the same
       title. The program's own courses add the ones the MITx Online program doesn't
       list, e.g. 18.03x's 18.031x, which MITx Online lists as 18.03.1x, or a capstone
-      exam it dropped. Any other edX.org row takes its own edX.org program's courses,
-      which bridge_program_course lists for only some XSeries programs, so the rest
-      count 0. Enrollments match on the row's own platform and user_id (edX.org for
-      MicroMasters rows), because user ids repeat across platforms. A course keeps
-      one readable id across platforms, so an edX.org enrollment in a course that
-      moved to MITx Online still matches. Enrollments the learner holds on another
-      platform do not count. program_enrollment_with_user_report.courses_taken_in_program
-      counts verified enrollments only, so the two differ.
+      exam it dropped. Any other edX.org row takes its own edX.org program's courses.
+      Enrollments match on the row's own platform and user_id (edX.org for MicroMasters
+      rows), because user ids repeat across platforms. A course keeps one readable
+      id across platforms, so an edX.org enrollment in a course that moved to MITx
+      Online still matches. Enrollments the learner holds on another platform do not
+      count. program_enrollment_with_user_report.courses_taken_in_program counts verified
+      enrollments only, so the two differ.
   - name: capstone_indicator
     description: str, Y if the learner has an enrollment, in any mode, in a program
       course with the word capstone in the title, otherwise N. Program courses and
@@ -1334,7 +1333,9 @@ unit_tests:
     the MITx Online program, so it takes its courses from that program's
     bridge_program_course rows and from its own edX.org program's, counting a course
     both list once. A course only the edX.org program lists counts for the edX.org
-    row, not for the MITx Online row. A non-current dim_course version of C under
+    row, not for the MITx Online row. The program enrollments carry the edX.org
+    program uuid without hyphens and dim_program with them. A non-current dim_course
+    version of C under
     an
     older key adds no course, and an audit enrollment in an earlier run of C
     does not move the start date program_completion_days counts from. The
@@ -1366,12 +1367,12 @@ unit_tests:
     rows: []
   - input: ref('int__edxorg__mitx_program_enrollments')
     rows:
-    - {micromasters_program_id: 4, program_uuid: sds-general, program_title: "Statistics\
+    - {micromasters_program_id: 4, program_uuid: sdsgeneral, program_title: "Statistics\
         \ and Data Science (General Track)", program_type: MicroMasters, user_id: 7,
       user_username: edx7}
   - input: ref('int__edxorg__mitx_program_certificates')
     rows:
-    - {program_uuid: sds-general, user_id: 7, program_certificate_awarded_on: "2020-06-30T00:00:00Z",
+    - {program_uuid: sdsgeneral, user_id: 7, program_certificate_awarded_on: "2020-06-30T00:00:00Z",
       program_certificate_hashed_id: h7, user_has_completed_program: true}
   - input: ref('int__edxorg__mitx_users')
     rows:
