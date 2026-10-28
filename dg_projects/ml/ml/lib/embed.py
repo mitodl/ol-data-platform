@@ -122,6 +122,10 @@ _TITAN_TOKEN_COUNTS = re.compile(
 COHERE_BATCH_SIZE = 96
 COHERE_V3_MAX_INPUT_CHARS = 2048
 COHERE_V4_MAX_INPUT_TOKENS = 128_000
+# Bedrock's ValidationException also covers a bad dimension or request schema,
+# which a text sent alone fails the same way. Only Cohere's per-text limit names
+# the text, as a JSON pointer such as "#/texts/3: expected maxLength".
+BEDROCK_TEXT_REJECTION_MARKER = "#/texts/"
 
 logger = logging.getLogger(__name__)
 
@@ -137,12 +141,15 @@ class FeedbackEmbeddingModel:
         may not exceed.
     :param shortens_on_token_limit: shorten a text the model rejects for its
         token count and send it again (Titan).
+    :param text_rejection_marker: text a rejection's message has only when it is
+        about one text; unset when every row rejection is.
     """
 
     spec: EmbeddingModelSpec
     max_input_chars: int | None = None
     max_input_tokens: int | None = None
     shortens_on_token_limit: bool = False
+    text_rejection_marker: str | None = None
 
     @property
     def model(self) -> str:
@@ -209,6 +216,17 @@ class FeedbackEmbeddingModel:
         document = Document(doc_key="", doc_kind=FEEDBACK_DOC_KIND, text=text)
         [chunk] = chunker.chunk(document)
         return chunk.text
+
+    def rejects_one_text(self, error: LLMError) -> bool:
+        """Whether a request's error is about one of its texts, not the request.
+
+        :param error: what the request raised.
+        :rtype: bool
+        """
+        return rejects_the_row(error) and (
+            self.text_rejection_marker is None
+            or self.text_rejection_marker in str(error)
+        )
 
     def use_case(self) -> UseCase:
         """Return the feedback-embedding use case calling this model.
@@ -295,6 +313,7 @@ def resolve_embedding_model(
                 model=model, dimensions=dim, batch_size=COHERE_BATCH_SIZE
             ),
             max_input_chars=COHERE_V3_MAX_INPUT_CHARS,
+            text_rejection_marker=BEDROCK_TEXT_REJECTION_MARKER,
         )
     if provider == "bedrock" and name.startswith("cohere.embed-v4"):
         return FeedbackEmbeddingModel(
@@ -302,6 +321,7 @@ def resolve_embedding_model(
                 model=model, dimensions=dim, batch_size=COHERE_BATCH_SIZE
             ),
             max_input_tokens=COHERE_V4_MAX_INPUT_TOKENS,
+            text_rejection_marker=BEDROCK_TEXT_REJECTION_MARKER,
         )
     msg = (
         f"No request sizing for embedding model {model!r}. Supported: openai:, "
@@ -466,15 +486,16 @@ class _RequestEmbedder:
         """Embed one request, isolating a conversation the provider rejects.
 
         A rejection of one text's input (ol-llm's rejects_the_row: a 400, 413, or
-        422) fails the whole multi-text request, so its texts are sent again one
-        at a time to keep the rest of the request. Any other failure (a rate limit
-        or outage that outlasted ol-llm's retries, a rejected credential) is the
-        request's, and raises so process_batch's circuit breaker counts it.
+        422, narrowed by the model's rejects_one_text) fails the whole multi-text
+        request, so its texts are sent again one at a time to keep the rest of
+        the request. Any other failure (a rate limit or outage that outlasted
+        ol-llm's retries, a rejected credential) is the request's, and raises so
+        process_batch's circuit breaker counts it.
         """
         try:
             vectors, input_tokens = self._embed([row["input_text"] for row in request])
         except LLMError as error:
-            if len(request) == 1 or not rejects_the_row(error):
+            if len(request) == 1 or not self.model.rejects_one_text(error):
                 raise
             self.log.warning(
                 "A request of %d conversations was rejected (%s); embedding them "
@@ -497,7 +518,7 @@ class _RequestEmbedder:
             try:
                 [vector], tokens = self._embed([row["input_text"]])
             except LLMError as row_error:
-                if not rejects_the_row(row_error):
+                if not self.model.rejects_one_text(row_error):
                     raise
                 rejected.append(RowFailure(row, row_error))
                 continue

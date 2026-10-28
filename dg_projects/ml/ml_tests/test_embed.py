@@ -27,6 +27,7 @@ from pyiceberg.catalog.sql import SqlCatalog
 OPENAI = embed.resolve_embedding_model("openai:text-embedding-3-large", 3)
 TITAN = embed.resolve_embedding_model("bedrock:amazon.titan-embed-text-v2:0", 3)
 VERTEX_TEXT = embed.resolve_embedding_model("google-cloud:text-embedding-005", 3)
+COHERE = embed.resolve_embedding_model("bedrock:cohere.embed-english-v3", 3)
 
 TITAN_TOO_LONG = (
     "400 Bad Request: Too many input tokens. Max input tokens: {max_tokens}, "
@@ -76,6 +77,22 @@ class _FakeEmbedder:
             vectors=[[float(len(text))] * self._spec.vector_length for text in texts],
             input_tokens=len(texts),
         )
+
+
+class _CohereEmbedder(_FakeEmbedder):
+    """Rejects any request containing "boom" with Bedrock's ValidationException."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(COHERE)
+        self._message = message
+
+    def embed(
+        self, texts: Sequence[str], *, input_type: EmbedInputType
+    ) -> EmbeddingBatch:
+        if "boom" in texts:
+            self.calls.append(list(texts))
+            raise _rejected(self._message.format(index=list(texts).index("boom")))
+        return super().embed(texts, input_type=input_type)
 
 
 class _TitanLimitEmbedder(_FakeEmbedder):
@@ -523,6 +540,39 @@ def test_embed_and_checkpoint_isolates_a_rejected_text_in_a_request(
     [failure] = report.failures
     assert failure.row["conversation_ref"] == "1"
     assert failure.retry_next_run is False
+
+
+def test_cohere_isolates_a_text_bedrock_names_in_its_rejection(
+    target: Target,
+) -> None:
+    embedder = _CohereEmbedder(
+        "ValidationException: #/texts/{index}: expected maxLength"
+    )
+
+    result, report = embed.embed_and_checkpoint(
+        _rows("hello", "boom", "world"), COHERE, embedder, target
+    )
+
+    assert result["conversation_ref"].to_list() == ["0", "2"]
+    assert len(embedder.calls) == 4
+    [failure] = report.failures
+    assert failure.row["conversation_ref"] == "1"
+
+
+def test_cohere_fails_a_request_level_rejection_without_splitting_it(
+    target: Target,
+) -> None:
+    """A 400 that names no text (e.g. a dimension the model does not take) fails
+    the same way for every text alone, so it is not retried 96 times.
+    """
+    embedder = _CohereEmbedder("ValidationException: Malformed input request")
+
+    with pytest.raises(BatchFailed, match="Malformed input request"):
+        embed.embed_and_checkpoint(
+            _rows("hello", "boom", "world"), COHERE, embedder, target
+        )
+
+    assert embedder.calls == [["hello", "boom", "world"]]
 
 
 def test_embed_and_checkpoint_stops_on_a_rejected_credential(target: Target) -> None:
