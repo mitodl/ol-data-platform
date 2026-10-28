@@ -133,7 +133,7 @@ def test_build_sentiment_client_rejects_claude_model_for_real_openai() -> None:
                 OpenAI(api_key="sk-test"),  # pragma: allowlist secret
                 client_class="openai",
             ),
-            model_version="claude-haiku-4-5",
+            model_version="claude-haiku-5-5",
         )
 
 
@@ -146,11 +146,11 @@ def test_build_sentiment_client_allows_claude_model_for_openai_compatible() -> N
             ),
             client_class="openai_compatible",
         ),
-        model_version="claude-haiku-4-5",
+        model_version="claude-haiku-5-5",
     )
 
     assert isinstance(client, sentiment_eval.OpenAISentimentClient)
-    assert client.model_version == "claude-haiku-4-5"
+    assert client.model_version == "claude-haiku-5-5"
 
 
 class _FakeSentimentClient:

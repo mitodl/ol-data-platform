@@ -2,8 +2,10 @@
 
 from typing import Any
 
+import boto3
 import polars as pl
 import pytest
+from botocore.stub import Stubber
 from ml.lib import summarize
 from ml.lib.iceberg_helpers import upsert_chunk
 from ml.resources import opik_auth
@@ -17,7 +19,10 @@ from ol_llm import (
 from ol_llm.testing import override_models
 from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, UserPromptPart
+from pydantic_ai.models import override_allow_model_requests
+from pydantic_ai.models.bedrock import BedrockConverseModel
 from pydantic_ai.models.function import AgentInfo, FunctionModel
+from pydantic_ai.providers.bedrock import BedrockProvider
 from pyiceberg.catalog.sql import SqlCatalog
 
 MODEL = "anthropic:claude-haiku-4-5"
@@ -300,7 +305,7 @@ def test_summarizer_sends_the_rendered_prompt_and_returns_the_summary() -> None:
     assert result.prompt_version == "v4"
 
 
-def test_summarizer_caps_the_summary_length() -> None:
+def test_summarizer_caps_the_summary_length_and_thinking() -> None:
     sent: list[AgentInfo] = []
 
     def record(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
@@ -313,6 +318,53 @@ def test_summarizer_caps_the_summary_length() -> None:
     [info] = sent
     assert info.model_settings is not None
     assert info.model_settings["max_tokens"] == summarize.SUMMARY_MAX_TOKENS
+
+
+def test_summarizer_sends_bedrock_haiku_low_effort() -> None:
+    """The thinking setting reaches Bedrock as Anthropic's effort. FunctionModel
+    drops it (its profile has no thinking), so this stubs Bedrock's Converse.
+    """
+    client = boto3.client(
+        "bedrock-runtime",
+        region_name="us-east-1",
+        aws_access_key_id="test",  # pragma: allowlist secret
+        aws_secret_access_key="test",  # pragma: allowlist secret
+    )
+    sent: list[dict[str, Any]] = []
+    client.meta.events.register(
+        "provide-client-params.bedrock-runtime.Converse",
+        lambda params, **_: sent.append(params),
+    )
+    stubber = Stubber(client)
+    stubber.add_response(
+        "converse",
+        {
+            "output": {
+                "message": {"role": "assistant", "content": [{"text": "A summary."}]}
+            },
+            "stopReason": "end_turn",
+            "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+            "metrics": {"latencyMs": 1},
+        },
+    )
+    model = BedrockConverseModel(
+        "us.anthropic.claude-haiku-5-5",
+        provider=BedrockProvider(bedrock_client=client),
+    )
+    summarizer = summarize.Summarizer(
+        use_case=summarize.summary_use_case("bedrock:us.anthropic.claude-haiku-5-5"),
+        prompt=SUMMARIZER.prompt,
+    )
+
+    with (
+        stubber,
+        override_models(model),
+        override_allow_model_requests(allow_model_requests=True),
+    ):
+        summarizer.summarize(_conversation_row())
+
+    [params] = sent
+    assert params["additionalModelRequestFields"]["output_config"] == {"effort": "low"}
 
 
 def test_summarizer_fails_a_summary_that_stays_empty() -> None:

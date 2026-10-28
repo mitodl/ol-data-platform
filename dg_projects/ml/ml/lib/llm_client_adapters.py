@@ -11,6 +11,7 @@ from typing import Protocol, TypeVar
 
 from anthropic import Anthropic, AnthropicBedrock
 from anthropic.types import Message
+from ml.lib.courseware.extract import Effort
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import attach_llm_usage, infer_llm_provider
 from openai import OpenAI
@@ -41,12 +42,14 @@ def call_anthropic(
     model_version: str,
     *,
     max_tokens: int,
+    effort: Effort,
     prompt: str,
 ) -> Message:
-    """messages.create + Opik usage attach. Caller handles content/empty-response."""
+    """messages.create + Opik usage attach. Caller reads the reply with message_text."""
     message = client.messages.create(
         model=model_version,
         max_tokens=max_tokens,
+        output_config={"effort": effort},
         messages=[{"role": "user", "content": prompt}],
     )
     if message.usage is not None:
@@ -61,6 +64,18 @@ def call_anthropic(
             provider="bedrock" if isinstance(client, AnthropicBedrock) else "anthropic",
         )
     return message
+
+
+def message_text(message: Message) -> str | None:
+    """Return the reply's first text block, or None when it has no answer to read.
+
+    Claude Haiku 5.5 thinks by default, so a reply can open with thinking blocks
+    or stop at max_tokens before any text. A refusal can carry partial text that
+    is not an answer.
+    """
+    if message.stop_reason == "refusal":
+        return None
+    return next((block.text for block in message.content if block.type == "text"), None)
 
 
 def call_openai(client: OpenAI, model_version: str, *, prompt: str) -> ChatCompletion:

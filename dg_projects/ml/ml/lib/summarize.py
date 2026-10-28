@@ -24,6 +24,7 @@ from ol_llm import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from pydantic_ai import ModelRetry, TextOutput
+from pydantic_ai.settings import ThinkingEffort
 from pyiceberg.catalog import Catalog
 
 JOIN_COLS = ["feedback_conversation_pk"]
@@ -58,18 +59,20 @@ SUMMARIZE_MAX_CONCURRENCY = int(os.environ.get("SUMMARIZE_MAX_CONCURRENCY", "20"
 # per run.
 SUMMARY_MODEL = os.environ.get(
     "SUMMARY_MODEL",
-    "anthropic:claude-haiku-4-5"
+    "anthropic:claude-haiku-5-5"
     if DAGSTER_ENV == "dev"
-    else "bedrock:global.anthropic.claude-haiku-4-5-20251001-v1:0",
+    else "bedrock:us.anthropic.claude-haiku-5-5",
 )
 
-# 200 was enough for claude-haiku-4-5 (no thinking), but a model with adaptive
-# thinking on by default (e.g. claude-sonnet-5/claude-opus-5) can spend the whole
-# budget on hidden thinking before any visible output, so this leaves headroom for
-# thinking plus the summary. Without a cap, pydantic-ai-slim 2.60 sends a Bedrock
-# Claude model its maximum output (64,000 for Haiku 4.5), and Bedrock reserves that
-# much of the tokens-per-minute quota for every concurrent request.
+# 200 was enough for claude-haiku-4-5 (no thinking), but claude-haiku-5-5 thinks by
+# default and thinking counts toward max_tokens, so it can spend the whole budget
+# on hidden thinking before any visible output. This leaves headroom for thinking
+# plus the summary. Without a cap, pydantic-ai-slim 2.60 sends a Bedrock Claude
+# model its maximum output, and Bedrock reserves that much of the
+# tokens-per-minute quota for every concurrent request.
 SUMMARY_MAX_TOKENS = int(os.environ.get("SUMMARY_MAX_TOKENS", "1024"))
+# A 1-3 sentence summary needs little reasoning; low keeps thinking short.
+SUMMARY_THINKING: ThinkingEffort = "low"
 
 SUMMARY_PROMPT_NAME = "feedback-summary"
 
@@ -285,7 +288,10 @@ class Summarizer:
             self.use_case,
             self.prompt.format(conversation_text=row["conversation_text"]),
             output_type=TextOutput(_non_empty),
-            model_settings={"max_tokens": SUMMARY_MAX_TOKENS},
+            model_settings={
+                "max_tokens": SUMMARY_MAX_TOKENS,
+                "thinking": SUMMARY_THINKING,
+            },
             attribution=Attribution(
                 thread_id=row["feedback_conversation_pk"], run_id=self.run_id
             ),
