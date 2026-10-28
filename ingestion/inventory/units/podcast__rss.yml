@@ -6,7 +6,7 @@ deployment: podcast
 layer: rss
 scope: scoped
 strategies:
-  qa: omit
+  qa: ingest
   local: fixture
 loader: dlt
 table_prefix: raw__podcast__rss__

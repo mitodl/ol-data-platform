@@ -8,7 +8,7 @@ deployment: youtube
 layer: api
 scope: scoped
 strategies:
-  qa: omit
+  qa: ingest
   local: fixture
 loader: dlt
 table_prefix: raw__youtube__api__

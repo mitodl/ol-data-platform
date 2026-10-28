@@ -14,6 +14,8 @@ version: 2
 
 models:
 - name: integrations__learn__podcasts
+  config:
+    tags: [qa_scheduled]
   description: >
     MIT podcast channels exposed for MIT Learn's ETL. One row per podcast
     configured in mitodl/open-podcast-data. Sourced from
@@ -75,6 +77,8 @@ models:
       appearing, and MIT Learn's load_podcasts() unpublishes it.
 
 - name: integrations__learn__podcast_episodes
+  config:
+    tags: [qa_scheduled]
   description: >
     MIT podcast episodes exposed for MIT Learn's ETL. One row per episode
     across all configured podcasts. Sourced from stg__podcast__rss__episodes,
@@ -158,6 +162,8 @@ models:
     description: Always true.
 
 - name: integrations__learn__youtube_channels
+  config:
+    tags: [qa_scheduled]
   description: >
     YouTube channels configured in mitodl/open-video-data, exposed for MIT
     Learn's VideoChannel rows. Mirrors transform_channel in
@@ -185,6 +191,8 @@ models:
     description: The dlt load the row came from (the channels table's newest).
 
 - name: integrations__learn__youtube_playlists
+  config:
+    tags: [qa_scheduled]
   description: >
     YouTube playlists exposed for MIT Learn's video_playlist LearningResources.
     Mirrors transform_playlist in learning_resources/etl/youtube.py. Only rows
@@ -234,6 +242,8 @@ models:
     description: The dlt load the row came from (the playlists table's newest).
 
 - name: integrations__learn__youtube_playlist_videos
+  config:
+    tags: [qa_scheduled]
   description: >
     The videos of each delivered YouTube playlist, in playlist order. MIT Learn
     stores these as PLAYLIST_VIDEOS relationships. Private and deleted videos
@@ -262,6 +272,8 @@ models:
     tests: [not_null]
 
 - name: integrations__learn__youtube_videos
+  config:
+    tags: [qa_scheduled]
   description: >
     YouTube videos in the delivered playlists, exposed for MIT Learn's video
     LearningResources. Mirrors transform_video in

@@ -709,11 +709,12 @@ non_airbyte_staging_schedules = (
 # one ingestion unit unless it declares every one of them in qa_branches and the
 # committed QA observation shows them held (program_certificates lists the
 # empty mitxonline/mysql auth_user in qa_partial_tables), so a QA build is
-# complete relative to QA's apps rather than a silently partial union. The rest
-# wait on raw tables QA does not have: ocw_courses on the OCW live bucket (the
-# ocw__s3 unit is omitted in QA), and the dlt/API sources (mit_edx_programs on
-# the edX catalog, mitpe, mit_climate, oll, podcasts) whose loaders run in
-# production only.
+# complete relative to QA's apps rather than a silently partial union. The
+# YouTube and podcast views read public APIs that QA's data_loading schedules
+# load daily, so QA holds the same rows as production. ocw_courses waits on
+# the OCW live bucket (the ocw__s3 unit is omitted in QA). mit_edx_programs,
+# mitpe, mit_climate and oll are not tagged yet: their raw also loads in QA, but
+# their units still say qa: omit.
 learn_integrations_qa_schedule = ScheduleDefinition(
     name="learn_integrations_qa_daily",
     job=define_asset_job(
