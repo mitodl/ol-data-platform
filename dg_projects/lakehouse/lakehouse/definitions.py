@@ -725,8 +725,10 @@ learn_integrations_qa_schedule = ScheduleDefinition(
         ),
     ),
     # The QA sync_and_stage schedules run at 00:00 (QA renders no inventory
-    # intervals, so every group takes the 24-hour default).
-    cron_schedule="0 3 * * *",
+    # intervals, so every group takes the 24-hour default), and the data_loading
+    # dlt schedules from 03:00 to 04:50, the YouTube load finishing around
+    # 05:10. Building at 03:00 left the dlt-fed views a day behind their raw.
+    cron_schedule="0 6 * * *",
     execution_timezone="UTC",
     default_status=DefaultScheduleStatus.RUNNING,
 )
