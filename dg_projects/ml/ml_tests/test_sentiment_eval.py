@@ -259,3 +259,20 @@ def test_anthropic_sentiment_client_leaves_a_cut_off_reply_unlabeled() -> None:
     )
 
     assert client.classify("some conversation text") is None
+
+
+@pytest.mark.parametrize("stop_reason", ["max_tokens", "model_context_window_exceeded"])
+def test_anthropic_sentiment_client_leaves_partial_text_unlabeled(
+    stop_reason: str,
+) -> None:
+    """A reply cut off mid-answer can still carry a sentiment word."""
+    client = sentiment_eval.AnthropicSentimentClient(
+        FakeAnthropicClient(
+            FakeMessage(
+                [TextBlock(type="text", text="negative")], stop_reason=stop_reason
+            )
+        ),
+        "claude-haiku-5-5",
+    )
+
+    assert client.classify("some conversation text") is None

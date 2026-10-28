@@ -71,9 +71,14 @@ def message_text(message: Message) -> str | None:
 
     Claude Haiku 5.5 thinks by default, so a reply can open with thinking blocks,
     and thinking shares max_tokens with the answer. A reply cut off at max_tokens
-    or a refusal can carry partial text that is not an answer.
+    or the context window, or a refusal, can carry partial text that is not an
+    answer.
     """
-    if message.stop_reason in ("refusal", "max_tokens"):
+    if message.stop_reason in (
+        "refusal",
+        "max_tokens",
+        "model_context_window_exceeded",
+    ):
         return None
     return next((block.text for block in message.content if block.type == "text"), None)
 

@@ -398,6 +398,24 @@ def test_summarizer_retries_a_summary_cut_off_at_max_tokens() -> None:
     assert result.output == "The learner wanted a refund."
 
 
+def test_summarizer_retries_a_summary_bedrock_marked_malformed() -> None:
+    """Bedrock's malformed_model_output arrives as finish_reason "error"."""
+    replies = [
+        ModelResponse(parts=[TextPart("The learner")], finish_reason="error"),
+        ModelResponse(parts=[TextPart("The learner wanted a refund.")]),
+    ]
+
+    def malformed_once(
+        _messages: list[ModelMessage], _info: AgentInfo
+    ) -> ModelResponse:
+        return replies.pop(0)
+
+    with override_models(FunctionModel(malformed_once)):
+        result = SUMMARIZER.summarize(_conversation_row())
+
+    assert result.output == "The learner wanted a refund."
+
+
 def test_summarizer_fails_a_summary_cut_off_twice() -> None:
     def cut_off(_messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
         return ModelResponse(parts=[TextPart("The learner")], finish_reason="length")

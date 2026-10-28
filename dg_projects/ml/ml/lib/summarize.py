@@ -183,8 +183,9 @@ def filter_unsummarized(
 
     The idempotency key covers the conversation text, the prompt's template hash,
     and the model, so a new turn, a prompt edit, or a model change re-submits a
-    conversation. A run that fell back to the embedded prompt computes the same
-    key as one that fetched the same text, so an Opik outage re-submits nothing.
+    conversation that has a key (see below for one that doesn't). A run that
+    fell back to the embedded prompt computes the same key as one that fetched
+    the same text, so an Opik outage re-submits nothing.
 
     A conversation not stored yet is always kept, with or without text, so a
     skipped one gets its row. A stored one without text is dropped, which leaves
@@ -242,16 +243,24 @@ def filter_unsummarized(
     )
 
 
-def _complete_summary(ctx: RunContext[None], summary: str) -> str:
-    """Send an empty or cut-off summary back to the model once before the row fails.
+# Finish reasons that can come with partial text: max_tokens (thinking shares it
+# with the answer) and Bedrock's malformed_model_output.
+_CUT_OFF_FINISH_REASONS = frozenset({"length", "error"})
 
-    A model with thinking on can spend its whole output on hidden thinking and
-    return no text rather than raising. Thinking shares max_tokens with the
-    answer, so it can also stop mid-summary, and a partial summary stored under
-    the current key is never re-submitted.
+
+def _complete_summary(ctx: RunContext[None], summary: str) -> str:
+    """Send a cut-off or blank summary back to the model once before the row fails.
+
+    A partial summary stored under the current key is never re-submitted. A reply
+    with no text at all doesn't reach this: PydanticAI fails it at once when it
+    stopped at max_tokens (thinking used the whole budget) and otherwise asks
+    again itself.
     """
     response = ctx.messages[-1]
-    if isinstance(response, ModelResponse) and response.finish_reason == "length":
+    if (
+        isinstance(response, ModelResponse)
+        and response.finish_reason in _CUT_OFF_FINISH_REASONS
+    ):
         msg = "The summary was cut off. Write the 1-3 sentence summary."
         raise ModelRetry(msg)
     if not summary.strip():
@@ -287,8 +296,9 @@ class Summarizer:
         :param row: a conversation with text.
         :returns: the result.
         :rtype: LLMResult[str]
-        :raises LLMError: on a model failure, a content filter, or a summary that
-            was still empty after one retry.
+        :raises LLMError: on a model failure, a content filter, a reply whose
+            thinking used the whole max_tokens, or a summary that was still cut
+            off or blank after one retry.
         """
         return complete_sync(
             self.use_case,
