@@ -42,8 +42,10 @@ with mitx_enrollments as (
     select * from {{ ref('int__combined__course_runs') }}
 )
 
+-- Emeritus and Global Alumni enrollments resolve their external run code to one xPro run,
+-- the same run tfact_enrollment resolves them to.
 , mitxpro_courseruns as (
-    select * from {{ ref('int__mitxpro__course_runs') }}
+    {{ mitxpro_course_runs_by_external_readable_id() }}
 )
 
 , combined_enrollments as (

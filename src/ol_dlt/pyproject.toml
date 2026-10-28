@@ -22,7 +22,7 @@ dependencies = [
     "youtube-transcript-api>=1.0,<2",
     # Backfill entrypoints (ol_dlt.sources.posthog_events.__main__) take real
     # arguments -- a date window and a chunk size -- rather than env vars.
-    "cyclopts~=5.2.0",
+    "cyclopts~=5.3.2",
 ]
 
 [dependency-groups]
@@ -65,3 +65,6 @@ testpaths = ["tests"]
 markers = [
     "integration: marks tests that run a real dlt pipeline against the ephemeral test profile",
 ]
+
+[tool.uv]
+constraint-dependencies = ["certifi>=2026.10.19"]  # eMudhra CA compromise: never resolve a certifi that trusts the compromised CAs

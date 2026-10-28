@@ -1,5 +1,10 @@
+{# QA's MicroMasters raw table (last loaded 2026-09-08) has no description column;
+   production's does. #}
+{% set raw_images = source('ol_warehouse_raw_data', 'raw__micromasters__app__postgres__wagtailimages_image') %}
+{% set description_exists = relation_has_column(raw_images, 'description') %}
+
 with source as (
-    select * from {{ source('ol_warehouse_raw_data', 'raw__micromasters__app__postgres__wagtailimages_image') }}
+    select * from {{ raw_images }}
 )
 
 , cleaned as (
@@ -19,7 +24,7 @@ with source as (
         , focal_point_width                                         as image_focal_point_width
         , focal_point_height                                        as image_focal_point_height
         , uploaded_by_user_id
-        , description                                               as image_description
+        , {{ 'description' if description_exists else 'cast(null as varchar)' }} as image_description
     from source
 )
 

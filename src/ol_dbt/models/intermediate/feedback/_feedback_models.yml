@@ -94,14 +94,14 @@ models:
       qa_branches:
       - learn_ai/app_postgres
       - micromasters/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/tracking_logs
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/tracking_logs
   columns:
   - name: source_slug
@@ -370,14 +370,14 @@ models:
       - learn_ai/app_postgres
       - micromasters/app_postgres
       - mitlearn/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/tracking_logs
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/tracking_logs
   columns:
   - name: source_slug
@@ -512,12 +512,13 @@ models:
     description: str, the LLM-generated summary. Null for a single-turn/short conversation
       (skipped by design, §A.1) or if the table doesn't exist yet.
   - name: summary_model_version
-    description: str, which model produced conversation_summary. Null under the same
-      conditions as conversation_summary.
+    description: str, which model produced conversation_summary, in ol-llm's provider:model
+      form. Null under the same conditions as conversation_summary.
   - name: prompt_version
-    description: str, the Opik Prompt Library version of feedback-summary active when
-      this row was summarized (or "local" if Opik wasn't configured). Null under the
-      same conditions as conversation_summary.
+    description: str, the Opik version of the feedback-summary prompt that produced
+      conversation_summary. Null under the same conditions as conversation_summary,
+      and when the run used the prompt embedded in the code (tracing off, or Opik
+      unreachable at the start of the run).
   - name: summarized_at
     description: ISO8601 varchar, when conversation_summary was generated. Null under
       the same conditions as conversation_summary.

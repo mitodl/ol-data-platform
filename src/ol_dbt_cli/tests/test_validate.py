@@ -1068,6 +1068,7 @@ class TestChangedOnlyWithNoChangedModel:
             yaml.safe_dump(
                 {
                     "metric": {"name": "learner_completion_status", "metricType": "OTHER"},
+                    "status": "Draft",
                     "implemented_by": [{"dbt_model": "no_such_model", "columns": ["completion_status"]}],
                 }
             )

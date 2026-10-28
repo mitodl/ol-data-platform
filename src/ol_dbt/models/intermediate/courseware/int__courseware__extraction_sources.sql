@@ -33,7 +33,11 @@
     development against production text.
 
     OCW courses (platform ocw, keyed by Learn's run id) are read from the published
-    site, int__ocw__content_files:
+    site, int__ocw__content_files, through int__courseware__ocw_files,
+    int__courseware__ocw_table_rows and int__courseware__ocw_resources. Those are tables
+    because this model reads each from many places, and Trino plans every reference to
+    a CTE again; as CTEs they made 2,705 stages, past Trino's limit of 600
+    (QUERY_HAS_TOO_MANY_STAGES):
 
       unit       a page that has child pages, with its children (a week of an OCW Scholar
                  course, a part of a unit); a top-level section page (Lecture Notes,
@@ -72,7 +76,10 @@
 
     var('courseware_ocw_courses') selects OCW courses by slug. Without it a build reads
     no OCW course, since the allowlist does not cover OCW yet. Setting either selector
-    alone builds only what it selects.
+    alone builds only what it selects. The three int__courseware__ocw_* tables apply
+    the var when they build, so build them with this model whenever it changes:
+    --select "int__courseware__ocw_files+,+int__courseware__extraction_sources" selects
+    the four. Built alone, this model reads the courses they were last built for.
 #}
 {% set courseruns = var('courseware_courseruns', []) %}
 {% set ocw_courses = var('courseware_ocw_courses', []) %}
@@ -84,21 +91,11 @@
 
 {% if courseruns or ocw_courses %}
     {% set courserun_filter = "('" ~ courseruns | join("', '") ~ "')" if courseruns else "('')" %}
-    {% set ocw_course_filter = "('" ~ ocw_courses | join("', '") ~ "')" if ocw_courses else "('')" %}
 {% else %}
     {% set courserun_filter = "(select courserun_readable_id from " ~ ref('int__courseware__extraction_allowlist') ~ ")" %}
-    {# the allowlist has no OCW rows yet, so a deployed build reads no OCW course #}
-    {% set ocw_course_filter = "('')" %}
 {% endif %}
-{% set ocw_context_sections = ['syllabus'] %}
-{# about the course rather than its content; calendar rows still title and place sessions #}
-{% set ocw_skipped_sections = ['calendar', 'related-resources', 'instructor-insights', 'download', 'resource-index'] %}
-{% set ocw_textbook_section = "'^((open|online)-)?textbooks?(-|$)'" %}
-{% set ocw_transcript_extensions = ['.srt', '.vtt', '.webvtt'] %}
-{% set ocw_resource_href = "'href=\"/(courses/[^/\"]+/resources/[^/\"#?]+)'" %}
-{# a table column of answer keys: "Solutions", "Exam Solutions", "Answer Key"; not "Problem Sets and Solutions" #}
-{% set ocw_solution_column = "'^((problem sets?|psets?|exams?|quiz(zes)?|labs?|homeworks?|assignments?|practice exams?|exam review|sample|recitations?|midterms?|finals?|final exam) )?(solutions?|answers?|answer keys?|keys?|solns?)$'" %}
-{% set ocw_table_cell = "'(?s)<t[dh](?:\\s[^>]*)?>(.*?)</t[dh]>'" %}
+{% set ocw_resource_href = courseware_ocw_resource_href() %}
+{% set ocw_table_cell = courseware_ocw_table_cell() %}
 {% set ocw_problem_set_release = "'(?:^|[^a-z])(?:problem set|pset|ps) ?#? ?([0-9]+),? (?:out|assigned|released|handed out)'" %}
 
 with content as (
@@ -570,143 +567,33 @@ with content as (
     from {{ ref('int__ocw__live_courses') }}
     where
         courserun_readable_id is not null
-        and course_slug in {{ ocw_course_filter }}
-)
-
-, ocw_named_files as (
-    select
-        files.courserun_readable_id
-        , files.course_slug
-        , files.content_file_key
-        , files.content_type
-        , files.title
-        , files.file_extension
-        , files.content
-        , coalesce(files.content_tags, '') as content_tags
-        , lower(coalesce(files.title, '')) as title_lower
-        , {{ courseware_ocw_resource_name('files.content_file_key') }} as file_name
-        , case
-            when files.content_type = 'page'
-                then {{ courseware_text_head(regexp_replace_all('substr(files.content, 1, 3000)', "'<[^>]*>'", "' '")) }}
-            else {{ courseware_text_head('files.content') }}
-        end as text_head
-        , {{ courseware_answer_markers('files.content') }} as answer_markers
-    from {{ ref('int__ocw__content_files') }} as files
-    inner join ocw_courses
-        on files.course_slug = ocw_courses.course_slug
-)
-
-, ocw_files as (
-    select
-        courserun_readable_id
-        , course_slug
-        , content_file_key
-        , content_type
-        , title
-        , file_extension
-        -- a page's key is courses/<slug>/pages/<path>/; the course's root page has no path
-        , {{ regexp_extract_or_null('content_file_key', "'/pages/(.+)$'", 1) }} as page_path
-        , {{ regexp_extract_or_null('content_file_key', "'/pages/([^/]+)/'", 1) }} as section
-        , {{ regexp_replace_all('content_file_key', "'[^/]+/$'", "''") }} as parent_key
-        , (
-            -- a section page's opening lists its problem sets and their solutions, so a
-            -- page is judged without its opening
-            {{ courseware_ocw_answer_resource(
-                'file_name', 'title_lower', 'content_type', 'file_extension', 'content_tags'
-                , "case when content_type != 'page' then text_head end", 'answer_markers'
-            ) }}
-            -- a page of "Answer:" entries on homework, e.g. virtual office hours
-            or (
-                content_type = 'page'
-                and content_tags not like '%Videos%'
-                and coalesce(answer_markers, 0) >= 3
-                and {{ regexp_like('text_head', "'problem sets?|psets?|homework|exams?|quiz|midterm'") }}
-            )
-        )
-        -- a page of problems and their solutions keeps its problems; its solution
-        -- resources are left out on their own
-        and not (
-            content_type = 'page'
-            and {{ regexp_like("concat(title_lower, ' ', file_name)", "'(and|&|with|/)[ _-]solutions?|solutions?[ _-](and|&)'") }}
-        ) as is_solution
-        , case
-            when content_type = 'page' then {{ courseware_ocw_answers_removed('content') }}
-            else content
-        end as body
-    from ocw_named_files
-)
-
-, ocw_page_children as (
-    select
-        parent_key as page_key
-        , count(*) as child_count
-    from ocw_files
-    where page_path is not null
-    group by parent_key
-)
-
--- counted by section: RES.8-005's one Problem Solving Videos section has 11 child
--- pages with children of their own
-, ocw_taught_by_groups as (
-    select files.courserun_readable_id
-    from ocw_files as files
-    inner join ocw_page_children as children
-        on files.content_file_key = children.page_key
-    where
-        files.page_path is not null
-        and files.section not in ('{{ (ocw_context_sections + ocw_skipped_sections) | join("', '") }}')
-        and not {{ regexp_like('files.section', ocw_textbook_section) }}
-    group by files.courserun_readable_id
-    having count(distinct files.section) >= 3
+        and course_slug in {{ courseware_ocw_course_filter() }}
 )
 
 , ocw_pages as (
     select
-        files.courserun_readable_id
-        , files.course_slug
-        , files.content_file_key as page_key
-        , files.title
-        , files.section
-        , files.parent_key
-        , files.body
-        , length(files.page_path) - length(replace(files.page_path, '/', '')) as depth
-        , coalesce(children.child_count, 0) > 0 as has_children
-        , files.is_solution
-        -- a solution page with children keeps them: "In-Class Questions and Video
-        -- Solutions" holds the questions, and its own text and links are not read
-        , case
-            when files.is_solution and coalesce(children.child_count, 0) = 0 then 'solution'
-            when files.section in ('{{ ocw_context_sections | join("', '") }}') then 'context'
-            when files.section in ('{{ ocw_skipped_sections | join("', '") }}') then 'skipped'
-            when
-                grouped.courserun_readable_id is not null
-                and {{ regexp_like('files.section', ocw_textbook_section) }}
-                then 'reference'
-            else 'unit'
-        end as page_role
-    from ocw_files as files
-    left join ocw_page_children as children
-        on files.content_file_key = children.page_key
-    left join ocw_taught_by_groups as grouped
-        on files.courserun_readable_id = grouped.courserun_readable_id
-    where files.page_path is not null
+        courserun_readable_id
+        , content_file_key as page_key
+        , title
+        , section
+        , parent_key
+        , body
+        , depth
+        , has_children
+        , is_solution
+        , page_role
+        , unit_key
+        , is_flat_section
+    from {{ ref('int__courseware__ocw_files') }}
+    where page_path is not null
 )
 
 -- A page with children is a unit, and so is a top-level section page; any other page
 -- belongs to its parent's unit. A page whose parent the site does not publish is a unit
 -- of its own (8.02T's visualizations/ pages have no visualizations page).
 , ocw_unit_pages as (
-    select
-        pages.*
-        , case
-            when pages.has_children or pages.depth = 1 or parents.page_key is null then pages.page_key
-            else pages.parent_key
-        end as unit_key
-        , pages.depth = 1 and not pages.has_children as is_flat_section
-    from ocw_pages as pages
-    left join ocw_pages as parents
-        on pages.parent_key = parents.page_key
-    where pages.page_role = 'unit'
+    select * from ocw_pages
+    where page_role = 'unit'
 )
 
 , ocw_page_hrefs as (
@@ -782,161 +669,12 @@ with content as (
             and page_links.target_key = description_links.resource_key
 )
 
--- Every page's tables, one row per table row. On top-level section pages and the
--- calendar, a row whose first cell is a number, in a table whose first header names
--- sessions, lectures or weeks, is that session's row.
-, ocw_row_pages as (
-    select
-        pages.courserun_readable_id
-        , pages.page_key
-        , pages.section
-        , coalesce(unit_pages.is_flat_section, false) or pages.section = 'calendar' as reads_sessions
-        , {{ regexp_split('pages.body', "'<table'") }} as tables
-    from ocw_pages as pages
-    left join ocw_unit_pages as unit_pages
-        on pages.page_key = unit_pages.page_key
-    where pages.body like '%<table%'
-)
-
-, ocw_tables as (
-    select
-        row_pages.courserun_readable_id
-        , row_pages.page_key
-        , row_pages.section
-        , row_pages.reads_sessions
-        , page_tables.table_index
-        , {{ regexp_split(
-            "split_part(" ~ element_at_array('row_pages.tables', 'page_tables.table_index') ~ ", '</table>', 1)"
-            , "'<tr'"
-        ) }} as table_rows
-    from ocw_row_pages as row_pages
-    cross join {{ unnest_sequence(array_length('row_pages.tables'), 'page_tables', 'table_index') }}
-    where page_tables.table_index > 1
-)
-
 , ocw_table_rows as (
-    select
-        tables.courserun_readable_id
-        , tables.page_key
-        , tables.section
-        , tables.reads_sessions
-        , tables.table_index
-        , table_rows.row_index
-        , {{ element_at_array('tables.table_rows', 'table_rows.row_index') }} as row_html
-        -- the table's first cell, its header
-        , {{ regexp_extract_or_null(element_at_array('tables.table_rows', 2), ocw_table_cell, 1) }} as header_html
-    from ocw_tables as tables
-    cross join {{ unnest_sequence(array_length('tables.table_rows'), 'table_rows', 'row_index') }}
-    where table_rows.row_index > 1
-)
-
--- the header cells of each table's first row, and the columns among them that hold
--- answer keys
-, ocw_table_headers as (
-    select
-        courserun_readable_id
-        , page_key
-        , table_index
-        , {{ regexp_extract_all(element_at_array('table_rows', 2), ocw_table_cell, 1) }} as header_cells
-    from ocw_tables
-    where {{ array_length('table_rows') }} > 1
-)
-
-, ocw_table_columns as (
-    select
-        headers.courserun_readable_id
-        , headers.page_key
-        , headers.table_index
-        , {{ array_length('headers.header_cells') }} as column_count
-        , columns.column_index
-        , lower({{ courseware_html_text(element_at_array('headers.header_cells', 'columns.column_index')) }})
-            as header_text
-    from ocw_table_headers as headers
-    cross join {{ unnest_sequence(array_length('headers.header_cells'), 'columns', 'column_index') }}
-    where {{ array_length('headers.header_cells') }} > 0
-)
-
--- a row whose cells line up with the header's; rows spanning columns are left out
-, ocw_solution_cells as (
-    select
-        table_rows.courserun_readable_id
-        , {{ regexp_extract_all(
-            element_at_array(regexp_extract_all('table_rows.row_html', ocw_table_cell, 1), 'columns.column_index')
-            , ocw_resource_href
-            , 1
-        ) }} as hrefs
-    from ocw_table_rows as table_rows
-    inner join ocw_table_columns as columns
-        on
-            table_rows.page_key = columns.page_key
-            and table_rows.table_index = columns.table_index
-    where
-        table_rows.row_index > 2
-        and {{ regexp_like("replace(columns.header_text, '&amp;', '&')", ocw_solution_column) }}
-        and {{ array_length(regexp_extract_all('table_rows.row_html', ocw_table_cell, 1)) }} = columns.column_count
-)
-
-, ocw_solution_resources as (
-    select distinct
-        solution_cells.courserun_readable_id
-        , concat({{ element_at_array('solution_cells.hrefs', 'links.link_index') }}, '/') as content_file_key
-    from ocw_solution_cells as solution_cells
-    cross join {{ unnest_sequence(array_length('solution_cells.hrefs'), 'links', 'link_index') }}
-    where {{ array_length('solution_cells.hrefs') }} > 0
-
-    union
-
-    select
-        courserun_readable_id
-        , content_file_key
-    from ocw_files
-    where content_type != 'page' and is_solution
-)
-
--- OCW publishes one file under several resources; a copy of a key is a key
-, ocw_solution_texts as (
-    select distinct
-        files.courserun_readable_id
-        , {{ dbt.hash('files.body') }} as text_hash
-    from ocw_files as files
-    inner join ocw_solution_resources as solution_resources
-        on
-            files.courserun_readable_id = solution_resources.courserun_readable_id
-            and files.content_file_key = solution_resources.content_file_key
-    -- a scan with no text layer reads as its file name, which a problem set can share
-    where length(files.body) > 200
+    select * from {{ ref('int__courseware__ocw_table_rows') }}
 )
 
 , ocw_resources as (
-    select
-        files.courserun_readable_id
-        , files.content_file_key
-        , files.content_type
-        , files.file_extension
-        , files.title
-        , files.body as resource_text
-        , case
-            when
-                files.content_type = 'video'
-                or files.file_extension in ('{{ ocw_transcript_extensions | join("', '") }}')
-                or lower(files.title) like '%transcript'
-                then 'video_transcript'
-            else 'document'
-        end as source_kind
-    from ocw_files as files
-    left join ocw_solution_resources as solution_resources
-        on
-            files.courserun_readable_id = solution_resources.courserun_readable_id
-            and files.content_file_key = solution_resources.content_file_key
-    left join ocw_solution_texts as solution_texts
-        on
-            files.courserun_readable_id = solution_texts.courserun_readable_id
-            and {{ dbt.hash('files.body') }} = solution_texts.text_hash
-    where
-        files.content_type != 'page'
-        and files.body is not null
-        and solution_resources.content_file_key is null
-        and solution_texts.text_hash is null
+    select * from {{ ref('int__courseware__ocw_resources') }}
 )
 
 , ocw_table_cells as (

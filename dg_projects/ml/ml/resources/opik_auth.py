@@ -1,21 +1,33 @@
-"""Keycloak-fronted Opik auth, LLM tracing, and Prompt Library access."""
+"""ol-llm's process configuration, LLM tracing, and Prompt Library access.
+
+configure_ol_llm hands Opik's Keycloak authentication to ol-llm, which registers
+it on the Opik SDK. The @opik.track spans below then share its token cache with
+the root traces of ol-llm's runs.
+"""
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
-import threading
-import time
 from typing import TYPE_CHECKING, Any, TypeVar
 
-import httpx
 import opik
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+from ml.resources.llm import COGNITIVE_SERVICES_SCOPE
+from ol_llm import (
+    KeycloakClient,
+    Settings,
+    TracingConfig,
+    configure,
+    configure_tracing,
+)
 from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ol_orchestrate.lib.opik import opik_keycloak_vault_location
 from opik import opik_context
-from opik.hooks import HttpxClientHook, add_httpx_client_hook
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
+    from collections.abc import Callable
 
     from ol_orchestrate.resources.secrets.vault import Vault
 
@@ -26,135 +38,124 @@ log = logging.getLogger(__name__)
 OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "dagster-ml")
 LOCAL_PROMPT_VERSION = "local"
 
-_REFRESH_SKEW_SECONDS = 30
-_TOKEN_REQUEST_TIMEOUT_SECONDS = 10
-
 _configured = False
 _opik_client: opik.Opik | None = None
 _client_init_attempted = False
 # template -> the Prompt Library version publish_prompt_version recorded for it
 _published_prompts: dict[str, opik.Prompt] = {}
+# Every deployment shares the Production Opik, so each one reads and publishes
+# prompts through its own Opik environment: a version takes effect only in the
+# environments that point at it, and editing a prompt for QA leaves Production
+# on its version until Production is pointed at the new one.
+PROMPT_ENVIRONMENT: str = DAGSTER_ENV
+# Metadata key naming the environment a version was created for. Versions
+# without it predate environment scoping and are Production's.
+CREATED_FOR_METADATA_KEY = "created_for_environment"
+_prompt_environment_registered = False
 
 
-class KeycloakClientCredentialsAuth(httpx.Auth):
-    """httpx auth flow that injects a Keycloak access token via client-credentials.
+class PromptLabelMissingError(LookupError):
+    """No version of a prompt carries this deployment's environment label.
 
-    A single instance is shared across every request the SDK makes. The cached
-    token is refreshed proactively before expiry and reactively on a 401.
+    A configuration error, not an outage (llm-opik-lifecycle-spec.md §3), so
+    render_prompt raises it instead of falling back to the code default.
     """
-
-    def __init__(self, token_url: str, client_id: str, client_secret: str) -> None:
-        self._token_url = token_url
-        self._client_id = client_id
-        self._client_secret = client_secret
-        # Dedicated client for the token endpoint so we never recurse through
-        # the SDK's own (authed) client.
-        self._token_client = httpx.Client(timeout=_TOKEN_REQUEST_TIMEOUT_SECONDS)
-
-        self._lock = threading.Lock()
-        self._access_token: str | None = None
-        self._expires_at: float = 0.0  # monotonic-clock deadline
-
-    def auth_flow(
-        self, request: httpx.Request
-    ) -> Generator[httpx.Request, httpx.Response, None]:
-        """Attach a bearer token; on a 401 refresh it and retry exactly once."""
-        request.headers["Authorization"] = f"Bearer {self._get_token()}"
-        response = yield request
-
-        if response.status_code == httpx.codes.UNAUTHORIZED:
-            response.close()
-            request.headers["Authorization"] = (
-                f"Bearer {self._get_token(force_refresh=True)}"
-            )
-            yield request
-
-    def _get_token(self, *, force_refresh: bool = False) -> str:
-        with self._lock:
-            now = time.monotonic()
-            if force_refresh or self._access_token is None or now >= self._expires_at:
-                self._refresh_locked()
-            assert self._access_token is not None  # noqa: S101 -- set by _refresh_locked above
-            return self._access_token
-
-    def _refresh_locked(self) -> None:
-        resp = self._token_client.post(
-            self._token_url,
-            data={
-                "grant_type": "client_credentials",
-                "client_id": self._client_id,
-                "client_secret": self._client_secret,
-            },
-        )
-        resp.raise_for_status()
-        payload = resp.json()
-
-        self._access_token = payload["access_token"]
-        expires_in = float(payload.get("expires_in", 60))
-        self._expires_at = time.monotonic() + max(
-            0.0, expires_in - _REFRESH_SKEW_SECONDS
-        )
 
 
 def is_opik_configured() -> bool:
-    """Whether this deployment has opted into Opik (set via OPIK_URL_OVERRIDE).
+    """Whether this deployment has opted into Opik.
 
-    Checked before decorating a function with @opik.track and before building
-    a client to fetch Prompt Library entries -- most environments (local dev,
-    CI) leave this unset and get the plain, untraced/hardcoded-prompt path.
+    That takes OPIK_URL_OVERRIDE and the Vault location of the Keycloak client
+    that instance accepts (OPIK_KEYCLOAK_VAULT_MOUNT/PATH), which ol-infrastructure
+    sets together. Checked before decorating a function with @opik.track and
+    before building a client to fetch Prompt Library entries -- local dev leaves
+    them unset and gets the plain, untraced/hardcoded-prompt path.
     """
-    return bool(os.environ.get("OPIK_URL_OVERRIDE"))
+    return (
+        bool(os.environ.get("OPIK_URL_OVERRIDE"))
+        and opik_keycloak_vault_location() is not None
+    )
 
 
-def configure_opik_keycloak_auth(vault: Vault) -> bool:
-    """Register the Keycloak auth flow on the Opik SDK's httpx client.
+def configure_ol_llm(vault: Vault) -> bool:
+    """Configure ol-llm's settings and Opik tracing for this process.
 
-    Reads the client_id/client_secret/realm url from Vault (secret-operations/
-    sso/opik, KV v1 -- same mount/version convention as LLMClientFactory and
-    tika.py's secret-operations reads). A Vault read failure is logged and
-    treated as "not configured" rather than raised -- this is an optional
-    observability integration, not a pipeline dependency.
+    Must run before anything builds an Opik client or an ol-llm model: the SDK
+    reads its client hooks when it builds its HTTP client.
 
-    Returns True if the hook was registered (or already was), False otherwise.
+    The environment is DAGSTER_ENV, which is also the Opik label prompts are
+    fetched by. Gateway routes come from OL_LLM_GATEWAY_* as ol-llm reads them.
+    Azure OpenAI, when LLM_AZURE_ENDPOINT is set, authenticates with an Entra
+    token from DefaultAzureCredential, as LLMClientFactory does.
+
+    Tracing is on only when is_opik_configured() and OPIK_TRACK_DISABLE is unset.
+    The Keycloak client is read from Vault (KV v1, at
+    OPIK_KEYCLOAK_VAULT_MOUNT/OPIK_KEYCLOAK_VAULT_PATH).
+    A read failure is logged and leaves tracing off rather than failing the code
+    location: tracing is observability, not a pipeline dependency.
+
+    :param vault: the authenticated Vault resource.
+    :returns: whether tracing is on.
+    :rtype: bool
     """
     global _configured  # noqa: PLW0603
 
-    if not is_opik_configured():
-        log.debug("OPIK_URL_OVERRIDE not set, skipping Keycloak auth hook")
-        return False
-    if _configured:
-        return True
+    settings = Settings.from_env({**os.environ, "OL_LLM_ENVIRONMENT": DAGSTER_ENV})
+    if azure_endpoint := os.environ.get("LLM_AZURE_ENDPOINT"):
+        # The Azure provider reads its endpoint from the SDK's own variable.
+        os.environ.setdefault("AZURE_OPENAI_ENDPOINT", azure_endpoint)
+        settings = dataclasses.replace(
+            settings,
+            azure_ad_token_provider=get_bearer_token_provider(
+                DefaultAzureCredential(), COGNITIVE_SERVICES_SCOPE
+            ),
+        )
+    configure(settings)
 
+    # from_env keeps OPIK_TRACK_DISABLE and OL_LLM_TRACE_CONTENT in effect.
+    tracing = TracingConfig.from_env()
+    keycloak = (
+        _opik_keycloak_client(vault)
+        if tracing.enabled and is_opik_configured()
+        else None
+    )
+    configure_tracing(
+        dataclasses.replace(tracing, enabled=keycloak is not None, keycloak=keycloak)
+    )
+    _configured = keycloak is not None
+    return _configured
+
+
+def _opik_keycloak_client(vault: Vault) -> KeycloakClient | None:
+    location = opik_keycloak_vault_location()
+    if location is None:
+        return None
+    mount, path = location
     try:
-        secret = vault.client.secrets.kv.v1.read_secret(
-            mount_point="secret-operations", path="sso/opik"
-        )["data"]
-        auth = KeycloakClientCredentialsAuth(
+        secret = vault.client.secrets.kv.v1.read_secret(mount_point=mount, path=path)[
+            "data"
+        ]
+        return KeycloakClient(
             token_url=f"{secret['url']}/protocol/openid-connect/token",
             client_id=secret["client_id"],
             client_secret=secret["client_secret"],
         )
     except Exception:
         log.warning(
-            "Failed to read secret-operations/sso/opik from Vault; "
+            "Failed to read %s/%s from Vault; "
             "Opik tracing/prompt-library stays disabled",
+            mount,
+            path,
             exc_info=True,
         )
-        return False
-
-    add_httpx_client_hook(
-        HttpxClientHook(client_modifier=None, client_init_arguments={"auth": auth})
-    )
-    _configured = True
-    log.info("Opik Keycloak auth hook registered")
-    return True
+        return None
 
 
 def get_opik_client() -> opik.Opik | None:
     """Return a shared Opik client for Prompt Library reads, or None if unavailable.
 
-    None whenever OPIK_URL_OVERRIDE is unset, the Keycloak auth hook never
-    registered (see configure_opik_keycloak_auth), or building the client
+    None whenever is_opik_configured() is False, the Keycloak auth hook never
+    registered (see configure_ol_llm), or building the client
     itself fails -- every caller must treat this as "fall back to the local
     hardcoded prompt", never as a hard dependency.
     """
@@ -177,7 +178,7 @@ def get_opik_client() -> opik.Opik | None:
 def traced(
     name: str, tags: list[str] | None = None, ignore_arguments: list[str] | None = None
 ) -> Callable[[F], F]:
-    """@opik.track, gated on OPIK_URL_OVERRIDE -- a plain no-op decorator otherwise.
+    """@opik.track, gated on is_opik_configured() -- a no-op decorator otherwise.
 
     Checked at import/decoration time (an env var, stable for the process's
     life), not at call time -- unlike get_opik_client/render_prompt, which
@@ -244,31 +245,123 @@ def attach_span_metadata(metadata: dict[str, Any]) -> None:
     opik_context.update_current_span(metadata=metadata)
 
 
-def get_prompt_version(name: str, default_template: str | None = None) -> str:
-    """Return name's currently-active Prompt Library version, or "local" if unavailable.
+def _register_prompt_environment(client: opik.Opik) -> None:
+    """Register PROMPT_ENVIRONMENT in the Opik workspace if it isn't yet.
 
-    Lets a caller fold this into whatever it records as a call's model/prompt
-    provenance (e.g. summary_model_version) -- otherwise editing a prompt in
-    Opik changes behavior for new calls without that edit being visible in
-    what checkpointing already persisted as "the version that produced this".
+    Opik only knows development/staging/production out of the box, and
+    set_prompt_environments rejects an unregistered environment.
+    """
+    global _prompt_environment_registered  # noqa: PLW0603
 
-    Pass default_template when the caller also render_prompt(name, ...)s in the
-    same run, so this create-if-missing's the same as render_prompt's own
-    get-or-create -- otherwise a prompt's first run reads "local" here, then a
-    later run sees the version render_prompt created and wrongly treats it as
-    a prompt change.
+    if _prompt_environment_registered:
+        return
+    if not any(env.name == PROMPT_ENVIRONMENT for env in client.get_environments()):
+        client.create_environment(PROMPT_ENVIRONMENT)
+    _prompt_environment_registered = True
+
+
+def _is_own_version(prompt: opik.Prompt) -> bool:
+    """Whether prompt's version was created for PROMPT_ENVIRONMENT."""
+    created_for = (prompt.metadata or {}).get(CREATED_FOR_METADATA_KEY)
+    if created_for is None:
+        return PROMPT_ENVIRONMENT == "production"
+    return created_for == PROMPT_ENVIRONMENT
+
+
+def _point_environment_at(client: opik.Opik, prompt: opik.Prompt) -> bool:
+    """Point PROMPT_ENVIRONMENT at prompt's version if no other environment owns it.
+
+    set_prompt_environments replaces a version's whole environment set and Opik
+    has no call that adds one environment, so writing another environment's
+    ownership back from an earlier read could move that environment back onto
+    this version. Every write here names PROMPT_ENVIRONMENT alone, on a version
+    no other environment owns (re-read past the SDK's prompt cache), so it can
+    never move another environment's pointer.
+
+    Returns False, writing nothing, when another environment owns the version.
+    """
+    current = client.get_prompt(name=prompt.name, version=prompt.version, no_cache=True)
+    owners = set((current.environments if current is not None else None) or [])
+    if owners - {PROMPT_ENVIRONMENT}:
+        return False
+    client.set_prompt_environments(
+        prompt.name, [PROMPT_ENVIRONMENT], version=prompt.version
+    )
+    return True
+
+
+def _own_version(client: opik.Opik, name: str, template: str) -> opik.Prompt:
+    """Return a version of name with template's text for PROMPT_ENVIRONMENT to own.
+
+    Reuses an earlier version created for this environment that no other
+    environment owns, and otherwise adds one, marked with the environment, so
+    environments never share a version.
+    """
+    if client.get_prompt(name=name) is not None:
+        for prompt in client.get_prompt_history(name=name):
+            others = set(prompt.environments or []) - {PROMPT_ENVIRONMENT}
+            if prompt.prompt == template and _is_own_version(prompt) and not others:
+                return prompt
+    return client.create_prompt(
+        name=name,
+        prompt=template,
+        metadata={CREATED_FOR_METADATA_KEY: PROMPT_ENVIRONMENT},
+    )
+
+
+def _seed_environment(client: opik.Opik, name: str, template: str) -> opik.Prompt:
+    """Point PROMPT_ENVIRONMENT at its own version of template.
+
+    Never in Production: its label moves only by hand or from the promotion job
+    that reads the repository's pointer file, so deployed code never writes it.
+
+    :raises PromptLabelMissingError: in Production.
+    """
+    if PROMPT_ENVIRONMENT == "production":
+        msg = f"No version of Opik prompt {name!r} is labeled production"
+        raise PromptLabelMissingError(msg)
+    _register_prompt_environment(client)
+    prompt = _own_version(client, name, template)
+    _point_environment_at(client, prompt)
+    return prompt
+
+
+def seed_prompt_environment(name: str, template: str) -> None:
+    """Point CI or QA at its own version of template, for a prompt with no label yet.
+
+    For prompts fetched through ol_llm.get_prompt, which raises LookupError when
+    the environment has no version, so CI and QA start from the code default as
+    render_prompt's prompts do.
+
+    :param name: the prompt's name.
+    :param template: the code default.
+    :raises PromptLabelMissingError: in Production, or when there is no Opik
+        client to write with.
     """
     client = get_opik_client()
-    if client is not None:
-        try:
-            prompt = client.get_prompt(name=name)
-            if prompt is None and default_template is not None:
-                prompt = client.create_prompt(name=name, prompt=default_template)
-            if prompt is not None:
-                return prompt.version or prompt.commit or LOCAL_PROMPT_VERSION
-        except Exception:
-            log.warning("Opik prompt version fetch failed for %s", name, exc_info=True)
-    return LOCAL_PROMPT_VERSION
+    if client is None:
+        msg = f"No Opik client to label prompt {name!r} for {PROMPT_ENVIRONMENT}"
+        raise PromptLabelMissingError(msg)
+    _seed_environment(client, name, template)
+
+
+def _environment_prompt(
+    client: opik.Opik, name: str, default_template: str
+) -> opik.Prompt:
+    """Return the version of name that PROMPT_ENVIRONMENT points at.
+
+    CI and QA without a version yet are pointed at their own version of
+    default_template, never at whatever version is latest, which may be another
+    environment's.
+
+    :raises PromptLabelMissingError: in Production, when no version is labeled
+        production.
+    """
+    _register_prompt_environment(client)
+    prompt = client.get_prompt(name=name, environment=PROMPT_ENVIRONMENT)
+    if prompt is not None:
+        return prompt
+    return _seed_environment(client, name, default_template)
 
 
 def publish_prompt_version(name: str, template: str) -> str:
@@ -277,16 +370,23 @@ def publish_prompt_version(name: str, template: str) -> str:
     For prompts that stay authoritative in code, where rendering an Opik edit
     would change what is sent without changing what the caller records as the
     prompt version (the courseware extractor keys every row on a hash of its code
-    prompt). Opik versions what ran instead: create_prompt adds a version only
-    when the template differs from the latest, so calling this every run is
-    idempotent. Returns LOCAL_PROMPT_VERSION when Opik is unavailable or the
-    publish fails in any way: this is provenance, never a reason to fail a run.
+    prompt). Opik versions what ran instead, in PROMPT_ENVIRONMENT's own version of
+    that text (see _own_version), reusing an earlier one rather than adding a
+    version each run. CI and QA are pointed at it; Production's label is left
+    where it is, since deployed code never moves it. Returns LOCAL_PROMPT_VERSION
+    when Opik is unavailable or the publish fails in any way: this is provenance,
+    never a reason to fail a run.
     """
     client = get_opik_client()
     if client is None:
         return LOCAL_PROMPT_VERSION
     try:
-        prompt = client.create_prompt(name=name, prompt=template)
+        _register_prompt_environment(client)
+        prompt = client.get_prompt(name=name, environment=PROMPT_ENVIRONMENT)
+        if prompt is None or prompt.prompt != template:
+            prompt = _own_version(client, name, template)
+            if PROMPT_ENVIRONMENT != "production":
+                _point_environment_at(client, prompt)
         version = prompt.version or prompt.commit
     except Exception:
         log.warning("Opik prompt publish failed for %s", name, exc_info=True)
@@ -314,20 +414,23 @@ def attach_span_prompt(template: str) -> None:
 def render_prompt(name: str, default_template: str, **variables: Any) -> str:
     """Render a Prompt Library entry (mustache {{var}} placeholders).
 
-    Seeds Opik with default_template on first use (via create_prompt) so the
-    prompt shows up in the Prompt Library ready to edit -- editing it there
-    then takes effect on the next call with no redeploy. Falls back to
-    rendering default_template locally whenever Opik is unreachable or not
-    configured for this environment.
+    In CI and QA, seeds Opik with default_template on first use so the prompt
+    shows up in the Prompt Library ready to edit. Renders the version
+    PROMPT_ENVIRONMENT points at, so an edit takes effect, with no redeploy, in
+    the environments pointed at the new version. Falls back to rendering
+    default_template locally whenever Opik is unreachable or not configured for
+    this environment.
+
+    :raises PromptLabelMissingError: in Production, when no version is labeled
+        production.
     """
     template = default_template
     client = get_opik_client()
     if client is not None:
         try:
-            prompt = client.get_prompt(name=name) or client.create_prompt(
-                name=name, prompt=default_template
-            )
-            template = prompt.prompt
+            template = _environment_prompt(client, name, default_template).prompt
+        except PromptLabelMissingError:
+            raise
         except Exception:
             log.warning(
                 "Opik prompt fetch/create failed for %s; using local default",

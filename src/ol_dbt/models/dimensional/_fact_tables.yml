@@ -254,6 +254,17 @@ models:
       when no program purchase covered it. For xPRO, this is order_id when the resolved
       order is a program purchase. For MITx Online, order_id is the $0 course run
       order, so the program order is matched in int__mitxonline__program_course_run_orders.
+  - name: program_discount_fk
+    description: Foreign key to dim_discount for the coupon redeemed on the program
+      order in program_order_id, for example a B2B code. Null when there is no program
+      order or it used no coupon.
+    tests:
+    - relationships:
+        to: ref('dim_discount')
+        field: discount_pk
+        where: "program_discount_fk is not null"
+        config:
+          severity: warn
 
 - name: tfact_order
   description: >
@@ -633,11 +644,17 @@ models:
     Grain: One row per (user × course run) grade, across MITx Online, MITx Pro,
     edX.org and Residential MITx.
     edX.org rows include MicroMasters-linked grades (micromasters_program_id IS NOT
-    NULL);
-    a separate MicroMasters platform source may be added in a future phase.
+    NULL). int__micromasters__course_grades unions three parts, and two of them
+    are already here: MITx Online DEDP run grades are mitxonline rows and non-DEDP
+    edX.org grades are edxorg rows. The third, the DEDP combined grade from
+    MicroMasters on edX.org runs (__micromasters_course_grades_dedp_from_micromasters,
+    from grades_combinedcoursegrade), includes the proctored exam and is kept only
+    for certificate holders. It is a course grade, not a course run grade, so it
+    has no row here.
+    Emeritus, Global Alumni and Bootcamps have no grade source, so they have no
+    rows.
     Note: edX.org grade timestamps are unavailable in source data; grade_date_key
-    and
-    grade_created_on are null for edX.org rows.
+    and grade_created_on are null for edX.org rows.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
@@ -724,7 +741,10 @@ models:
           glossary:
           - open-learning.platform
   - name: grade_value
-    description: Numeric grade value between 0.0 and 1.0
+    description: >
+      Numeric grade on a 0.0 to 1.0 scale, carried unchanged from the source, so a
+      row can exceed 1.0 where the source allows it. The MITx Online application
+      accepts 0.0 to 2.0 and the MITx Pro application 0.0 to 1.0.
     config:
       meta:
         openmetadata:
@@ -732,8 +752,20 @@ models:
           - open-learning.ferpa-classification.education-record
   - name: is_passing
     description: >
-      Boolean indicating whether the learner passed the course run. Residential has
-      no passing flag, so it is true when the letter grade is not empty.
+      Boolean, whether the learner passed the course run. Never null. This is the
+      one statement of the rule, which differs per platform because each source
+      records a pass differently.
+      mitxonline, mitxpro: the application's own passed flag
+      (courses_courserungrade.passed), carried unchanged. MITx Online grades are
+      kept only for runs whose courserun_platform is MITx Online; edX.org-hosted
+      runs are covered by edxorg rows.
+      edxorg: person_course.completed when person_course has a grade for the learner
+      and run and completed is not null; otherwise true when user_info_combo has a
+      certificate with a grade and a non-empty verify_uuid for the run, and false
+      when it does not. user_info_combo rows without a certificate grade are left
+      out, so a learner and run with no grade in either source has no row.
+      residential: the source has no passed flag, so true when letter_grade is not
+      empty.
     config:
       meta:
         openmetadata:
@@ -741,9 +773,8 @@ models:
           - open-learning.ferpa-classification.education-record
   - name: letter_grade
     description: >
-      Letter grade string (e.g. 'Pass', 'Fail'). Available for MITx Online, MITx
-      Pro and Residential;
-      null for edX.org.
+      Letter grade string (e.g. 'Pass', 'A'). Available for MITx Online, MITx Pro
+      and Residential; null for edX.org.
     config:
       meta:
         openmetadata:
@@ -1622,6 +1653,119 @@ unit_tests:
       enrollment_created_on: "2024-01-15T00:00:00"
       enrollment_updated_on: "2024-01-15T00:00:00"
       enrollment_is_edx_enrolled: true
+- name: test_tfact_enrollment_refreshes_stale_enrollment_state
+  description: >
+    An edX.org enrollment has no updated_on, so an unenrollment made after the 7-day
+    lookback moves no watermark. The incremental filter must re-select a stored
+    enrollment whose is_active (or mode or status) differs from the source and write
+    the source's value, and leave an enrollment whose stored state still matches alone.
+  model: tfact_enrollment
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__programenrollments')
+    rows: []
+  - input: ref('int__mitxpro__courserunenrollments')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_enrollments')
+    rows:
+    - user_id: 777
+      courserun_readable_id: "MITx/6.00x/2T2019"
+      courserunenrollment_created_on: "2019-04-01T00:00:00"
+      courserunenrollment_is_active: false
+      courserunenrollment_enrollment_mode: "audit"
+    - user_id: 778
+      courserun_readable_id: "MITx/6.00x/1T2020"
+      courserunenrollment_created_on: "2020-01-10T00:00:00"
+      courserunenrollment_is_active: true
+      courserunenrollment_enrollment_mode: "audit"
+  - input: ref('int__mitxonline__programenrollments')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_enrollments')
+    rows: []
+  - input: ref('int__bootcamps__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('int__micromasters__course_enrollments')
+    rows: []
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_PK_777"
+      edxorg_openedx_user_id: 777
+    - user_pk: "USER_PK_778"
+      edxorg_openedx_user_id: 778
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "RUN_2T2019"
+      courserun_readable_id: "MITx/6.00x/2T2019"
+      platform: "edxorg"
+      is_current: true
+    - courserun_pk: "RUN_1T2020"
+      courserun_readable_id: "MITx/6.00x/1T2020"
+      platform: "edxorg"
+      is_current: true
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_contract')
+    rows: []
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_EDXORG"
+      platform_readable_id: "edxorg"
+      # The stored rows keep their FKs, and a later-dated edX.org enrollment holds the watermark past both, so only the stored-state check can re-select the deactivated one.
+  - input: this
+    rows:
+    - enrollment_key: "b878c482a04e8138b592a50982edd96b"  # pragma: allowlist secret
+      enrollment_id: "d2c262edd935f1303dc150a525096fe5"  # pragma: allowlist secret
+      enrollment_type: "course"
+      enrollment_date_key: 20190401
+      user_fk: "USER_PK_777"
+      courserun_fk: "RUN_2T2019"
+      platform: "edxorg"
+      enrollment_is_active: true
+      enrollment_mode: "audit"
+      enrollment_created_on: "2019-04-01T00:00:00"
+      enrollment_is_edx_enrolled: true
+    - enrollment_key: "97403d1256e08932b660fd47d724e4a4"  # pragma: allowlist secret
+      enrollment_id: "f06edfd255c34d6aa0d5c991adc9b17d"  # pragma: allowlist secret
+      enrollment_type: "course"
+      enrollment_date_key: 20200110
+      user_fk: "USER_PK_778"
+      courserun_fk: "RUN_1T2020"
+      platform: "edxorg"
+      enrollment_is_active: true
+      enrollment_mode: "audit"
+      enrollment_created_on: "2020-01-10T00:00:00"
+      enrollment_is_edx_enrolled: true
+    - enrollment_key: "unrelated-later-enrollment"
+      enrollment_id: "unrelated"
+      enrollment_type: "course"
+      enrollment_date_key: 20240201
+      user_fk: "USER_PK_778"
+      courserun_fk: "RUN_1T2020"
+      platform: "edxorg"
+      enrollment_is_active: true
+      enrollment_mode: "audit"
+      enrollment_created_on: "2024-02-01T00:00:00"
+      enrollment_is_edx_enrolled: true
+  expect:
+    rows:
+    - enrollment_key: "b878c482a04e8138b592a50982edd96b"  # pragma: allowlist secret
+      enrollment_id: "d2c262edd935f1303dc150a525096fe5"  # pragma: allowlist secret
+      user_fk: "USER_PK_777"
+      courserun_fk: "RUN_2T2019"
+      platform: "edxorg"
+      enrollment_is_active: false
+      enrollment_mode: "audit"
+      enrollment_created_on: "2019-04-01T00:00:00"
 - name: test_tfact_enrollment_resolves_emeritus_global_alumni_fks
   description: >
     Emeritus learners match dim_user by student id, falling back to email; Global
@@ -2277,7 +2421,7 @@ unit_tests:
   - input: ref('tfact_order')
     rows:
     - {order_key: "OK1", order_id: 7001, line_id: "1", user_fk: "U1", product_fk: "PROD_XPRO_PROGRAM",
-      platform_fk: "P_XPRO", platform: "mitxpro", order_state: "fulfilled"}
+      platform_fk: "P_XPRO", platform: "mitxpro", order_state: "fulfilled", discount_fk: "D_B2B"}
     - {order_key: "OK2", order_id: 7002, line_id: "2", user_fk: "U2", product_fk: "PROD_XPRO_CR2",
       platform_fk: "P_XPRO", platform: "mitxpro", order_state: "fulfilled"}
     - {order_key: "OK3", order_id: 8001, line_id: "201", user_fk: "U3", product_fk: "PROD_MITXONLINE_CR3",
@@ -2289,7 +2433,7 @@ unit_tests:
     - {line_id: 201, program_order_id: 8500}
   expect:
     rows:
-    - {enrollment_key: "XPRO_PROGRAM", program_order_id: 7001}
-    - {enrollment_key: "XPRO_COURSERUN", program_order_id: null}
-    - {enrollment_key: "MITXONLINE_MATCHED", program_order_id: 8500}
-    - {enrollment_key: "MITXONLINE_UNMATCHED", program_order_id: null}
+    - {enrollment_key: "XPRO_PROGRAM", program_order_id: 7001, program_discount_fk: "D_B2B"}
+    - {enrollment_key: "XPRO_COURSERUN", program_order_id: null, program_discount_fk: null}
+    - {enrollment_key: "MITXONLINE_MATCHED", program_order_id: 8500, program_discount_fk: null}
+    - {enrollment_key: "MITXONLINE_UNMATCHED", program_order_id: null, program_discount_fk: null}

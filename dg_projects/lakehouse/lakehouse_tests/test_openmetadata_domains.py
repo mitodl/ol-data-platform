@@ -110,3 +110,13 @@ def test_a_rule_naming_an_unlisted_domain_is_rejected():
                 "rules": [{"domain": "comerce", "match": ["*order*"]}],
             }
         )
+
+
+def test_the_uploaded_rules_keep_the_shape_the_domains_job_reads():
+    # ol-infrastructure's domain_assignment.py reads each rule's domain and
+    # match from this dump, in order.
+    rules = load_domain_rules(RULES_PATH)
+
+    assert [
+        (rule["domain"], rule["match"]) for rule in rules.model_dump()["rules"]
+    ] == [(rule.domain, rule.match) for rule in rules.rules]
