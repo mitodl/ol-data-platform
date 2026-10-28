@@ -83,21 +83,16 @@ with micromasters_mitxonline_courses as (
     -- Every edX.org MITx program keeps its own memberships, also one that
     -- dim_program_report_key maps to a MITx Online program: its edX.org learners took
     -- courses that program may not list, e.g. 18.03x's 18.031x under its MITx Online key
-    -- 18.03.1x, or a capstone exam it dropped. Normalize the API course key to the MITx
-    -- Online course key when the course moved there.
+    -- 18.03.1x, or a capstone exam it dropped.
     select
         cast(program_courses.program_uuid as varchar) as program_id
         , cast(null as integer) as course_id
-        , coalesce(mitx_courses.course_readable_id, program_courses.course_readable_id) as course_readable_id
+        , program_courses.mitx_course_readable_id as course_readable_id
         , true as is_required
         , 'edxorg' as platform
         , 'edxorg' as platform_code
         , cast(null as integer) as course_order
     from {{ ref('int__edxorg__mitx_program_courses') }} as program_courses
-    left join {{ ref('int__mitx__courses') }} as mitx_courses
-        on
-            replace(program_courses.course_readable_id, 'MITx/', '')
-            = replace(mitx_courses.course_readable_id, 'course-v1:MITxT+', '')
 )
 
 , combined_requirements as (
@@ -142,9 +137,9 @@ with micromasters_mitxonline_courses as (
             or (combined_requirements.platform_code = 'micromasters'
                 and combined_requirements.course_id = dim_course.source_id
                 and dim_course.primary_platform = 'mitxonline')
-            -- Other edX.org MITx programs use API course keys normalized above. A course
-            -- in int__mitx__courses gets its MITx Online key, which dim_course holds under
-            -- mitxonline, so the key alone identifies the course.
+            -- Other edX.org MITx programs use the course key int__edxorg__mitx_program_courses
+            -- resolves: a MITx Online key dim_course holds under mitxonline, or an edX.org
+            -- key it holds under edxorg, so the key alone identifies the course.
             or (combined_requirements.platform_code = 'edxorg'
                 and combined_requirements.course_readable_id = dim_course.course_readable_id)
         )
