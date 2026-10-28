@@ -606,9 +606,10 @@ models:
       product_price * percentage / 100, dollars-off is the amount capped at product_price,
       and fixed-price is product_price minus the fixed price, or 0 when the fixed
       price is above product_price (MITx Online charges the lower of the two). product_price
-      is the product's current price, so the amount drifts when the price has changed
-      since purchase. Null for a paid-amount-off discount, whose amount is resolved
-      at checkout and not stored on the discount.
+      is the product's current price and the discount's current amount, so this is
+      not what the line was charged when either changed after purchase. Null for a
+      paid-amount-off discount, whose amount is resolved at checkout and not stored
+      on the discount.
   - name: discount_redemption_type
     description: str, one of  "one-time",  "one-time-per-user" and "unlimited"
   - name: discount_id
