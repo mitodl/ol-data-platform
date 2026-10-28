@@ -50,16 +50,14 @@ _STRAY = {
 
 
 def test_row_drops_keys_outside_the_columns() -> None:
-    row = tracking_logs._row(json.dumps({**_EVENT, **_STRAY}), _XPRO.fields)  # noqa: SLF001
+    row = tracking_logs._row(json.dumps({**_EVENT, **_STRAY}))  # noqa: SLF001
 
-    assert list(row) == list(tracking_logs.OPENEDX_FIELDS)
+    assert list(row) == list(tracking_logs.FIELDS)
 
 
 def test_row_keeps_labels_as_json_text_whether_list_or_string() -> None:
-    as_list = tracking_logs._row(json.dumps(_EVENT), _XPRO.fields)  # noqa: SLF001
-    as_string = tracking_logs._row(  # noqa: SLF001
-        json.dumps({**_EVENT, "labels": "edxapp"}), _XPRO.fields
-    )
+    as_list = tracking_logs._row(json.dumps(_EVENT))  # noqa: SLF001
+    as_string = tracking_logs._row(json.dumps({**_EVENT, "labels": "edxapp"}))  # noqa: SLF001
 
     assert as_list["labels"] == '["edxapp", "production"]'
     assert as_string["labels"] == "edxapp"
@@ -67,9 +65,7 @@ def test_row_keeps_labels_as_json_text_whether_list_or_string() -> None:
 
 def test_row_keeps_every_value_as_text() -> None:
     """event and context are JSON text already and must not be re-encoded."""
-    row = tracking_logs._row(  # noqa: SLF001
-        json.dumps({**_EVENT, "session": None, "ip": 7}), _XPRO.fields
-    )
+    row = tracking_logs._row(json.dumps({**_EVENT, "session": None, "ip": 7}))  # noqa: SLF001
 
     assert row["event"] == _EVENT["event"]
     assert row["context"] == _EVENT["context"]
@@ -84,7 +80,7 @@ def test_row_missing_a_column_loads_null() -> None:
         for key, value in _EVENT.items()
         if key not in {"labels", "log_file", "timestamp", "source_type"}
     }
-    row = tracking_logs._row(json.dumps(old), _XPRO.fields)  # noqa: SLF001
+    row = tracking_logs._row(json.dumps(old))  # noqa: SLF001
 
     assert row["labels"] is None
     assert row["timestamp"] is None
@@ -94,17 +90,7 @@ def test_row_missing_a_column_loads_null() -> None:
 @pytest.mark.parametrize("line", ['{"ip": ', '["not", "an", "object"]'])
 def test_row_that_is_not_a_json_object_fails(line: str) -> None:
     with pytest.raises(tracking_logs.TrackingLogLineError):
-        tracking_logs._row(line, _XPRO.fields)  # noqa: SLF001
-
-
-def test_edxorg_has_no_openedx_only_columns() -> None:
-    assert set(tracking_logs.OPENEDX_FIELDS) - set(tracking_logs.EDXORG_FIELDS) == {
-        "labels",
-        "log_file",
-        "timestamp",
-        "environment",
-        "source_type",
-    }
+        tracking_logs._row(line)  # noqa: SLF001
 
 
 @pytest.mark.parametrize(
@@ -140,12 +126,6 @@ def test_openedx_globs_follow_the_cursor(
     cursor: datetime | None, expected: list[str]
 ) -> None:
     assert _XPRO.file_globs(cursor, today=_TODAY) == expected
-
-
-def test_edxorg_lists_its_flat_prefix_whatever_the_cursor() -> None:
-    cursor = datetime(2026, 10, 26, tzinfo=UTC)
-    assert tracking_logs.EDXORG.file_globs(cursor, today=_TODAY) == ["*.gz"]
-    assert tracking_logs.EDXORG.file_globs(None, today=_TODAY) == ["*.gz"]
 
 
 def _land(
@@ -213,7 +193,7 @@ def test_loads_every_file_name_form_onto_the_columns(
     table = pipeline.dataset()[_XPRO.raw_table].arrow()
     assert table.num_rows == 4
     assert set(table.column_names) == {
-        *tracking_logs.OPENEDX_FIELDS,
+        *tracking_logs.FIELDS,
         "_source_file",
         "_file_modified_at",
         *config.DLT_LOAD_ID_COLUMN,
