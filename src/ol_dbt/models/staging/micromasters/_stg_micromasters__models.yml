@@ -844,12 +844,6 @@ models:
     description: int, foreign key referece to auth_user
     tests:
     - not_null
-  tests:
-  # MicromastersProgramCertificate has unique_together = ('user', 'program');
-  # int__micromasters__program_certificates relies on it to match certificates one to one
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      arguments:
-        column_list: ["user_id", "program_id"]
 - name: stg__micromasters__app__postgres__profiles_education
   columns:
   - name: user_education_id

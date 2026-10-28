@@ -17,6 +17,9 @@ select
     , mitx_programs.program_title
     , mitx_programs.mitxonline_program_id
     , {{ generate_hash_id('mitxonline_program_certificates.programcertificate_uuid') }} as program_certificate_hashed_id
+    -- MITx Online's copy of a MicroMasters certificate has the MicroMasters hash, with dashes added, as its uuid
+    , {{ generate_hash_id("replace(cast(mitxonline_program_certificates.programcertificate_uuid as varchar), '-', '')") }}
+        as micromasters_program_certificate_hashed_id
     , mitxonline_program_certificates.programcertificate_created_on as program_completion_timestamp
     , mitxonline_program_certificates.programcertificate_is_revoked
 from mitxonline_program_certificates

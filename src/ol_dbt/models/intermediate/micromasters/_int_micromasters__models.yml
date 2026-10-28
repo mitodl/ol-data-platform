@@ -233,18 +233,15 @@ models:
   description: MicroMasters program certificates, revoked ones included. Filter on
     programcertificate_is_revoked to count certificates. DEDP certificates come from
     MITx Online for every date. A certificate MicroMasters issued is kept only when
-    MITx Online has no copy of it. Only a MITx Online certificate created before 2022-10-01
-    can be a copy. It is matched by user and program, the accounts linked through
-    int__mitx__users. Certificates neither side matched that way are matched by email,
-    ignoring case, and program, preferring the exact creation time, because int__mitx__users
-    links some MicroMasters accounts to a different MITx Online account or to none.
-    A learner with a MicroMasters certificate and a MITx Online one created on or
-    after 2022-10-01 for the same program gets two rows on purpose, as before this
-    model read MITx Online for every date, because the later certificate's hash is
-    already in MIT Learn. When both rows carry the same email, the unique test on
-    user_email and program_readable_id fails. Non-DEDP certificates come from 2U's
-    program learner report. User's profile fields are chosen in the order of MITx
-    Online, MicroMasters, and edX.org, whichever is not null.
+    MITx Online has no copy of it. A copy is matched by its uuid, which MITx Online's
+    migration set to the MicroMasters certificate's hash (see __micromasters_program_certificates_dedp_from_mitxonline).
+    A learner with a MicroMasters certificate and a MITx Online certificate that is
+    not a copy, for the same program, gets two rows on purpose, as before this model
+    read MITx Online for every date, because the later certificate's hash is already
+    in MIT Learn. When both rows carry the same email, the unique test on user_email
+    and program_readable_id fails. Non-DEDP certificates come from 2U's program learner
+    report. User's profile fields are chosen in the order of MITx Online, MicroMasters,
+    and edX.org, whichever is not null.
   config:
     meta:
       qa_branches:
@@ -277,13 +274,11 @@ models:
   - name: program_certificate_hashed_id
     description: str, unique hash value used to identify the program certificate.
       MIT Learn upserts on it (integrations__learn__program_certificates.record_hash),
-      so it must not change for a certificate. A MITx Online DEDP certificate created
-      on or after 2022-10-01 is never a copy and keeps its own hash, which this model
-      has always published. A MITx Online certificate created before 2022-10-01 that
-      copies a MicroMasters certificate (see the model description) takes the MicroMasters
+      so it must not change for a certificate. A MITx Online certificate that copies
+      a MicroMasters certificate (see the model description) takes the MicroMasters
       certificate's hash, which this model published before it read DEDP from MITx
-      Online for every date. Any other MITx Online certificate created before 2022-10-01
-      keeps its own hash.
+      Online for every date. Any other MITx Online certificate keeps its own hash,
+      which this model has published since 2022-10-01.
     tests:
     - unique
     - not_null
@@ -778,16 +773,14 @@ models:
 unit_tests:
 - name: test_int__micromasters__program_certificates_reads_dedp_from_mitxonline
   description: >
-    A MITx Online DEDP certificate created before 2022-10-01 that copies a
-    MicroMasters one replaces it and keeps the MicroMasters hash, so MIT
-    Learn updates the row it has. A copy is matched by user and program, or,
-    for certificates neither side matched by user, by email ignoring case
-    and program, preferring the exact creation time even over an earlier
-    candidate. When two MicroMasters certificates want one MITx Online
-    certificate, one takes it and the other stays. Each certificate is
-    emitted once. A later MITx Online certificate keeps its own hash. A
-    MicroMasters certificate with no copy stays, and revoked certificates
-    are kept with the flag.
+    A MITx Online DEDP certificate that copies a MicroMasters one, found by
+    its uuid, replaces it and keeps the MicroMasters hash, so MIT Learn
+    updates the row it has, including when the copy is revoked. The match
+    holds when the copy is on a MITx Online account int__mitx__users does
+    not link, under another email. A MicroMasters certificate with no copy
+    stays, and a MITx Online certificate that is not a copy keeps its own
+    hash, even when the learner also holds a MicroMasters certificate for
+    the program.
   model: int__micromasters__program_certificates
   given:
   - input: ref('__micromasters_program_certificates_dedp_from_micromasters')
@@ -795,96 +788,37 @@ unit_tests:
     - {program_certificate_hashed_id: mm-copied, user_micromasters_id: 10, micromasters_program_id: 2,
       mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2020-01-01T00:00:00Z",
       programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-other-program-only, user_micromasters_id: 11,
-      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
-      program_completion_timestamp: "2021-01-01T00:00:00Z", programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-no-account, user_micromasters_id: 12, micromasters_program_id: 2,
-      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2019-01-01T00:00:00Z",
+    - {program_certificate_hashed_id: mm-copy-revoked, user_micromasters_id: 11, micromasters_program_id: 2,
+      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2020-02-01T00:00:00Z",
       programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-copied-to-unlinked-account, user_micromasters_id: 13,
+    - {program_certificate_hashed_id: mm-copied-to-unlinked-account, user_micromasters_id: 12,
       micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
       program_completion_timestamp: "2018-06-28T00:00:00Z", programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-same-email-other-time, user_micromasters_id: 14,
-      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
-      program_completion_timestamp: "2018-01-01T00:00:00Z", programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-matched-by-user-and-email, user_micromasters_id: 15,
-      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
-      program_completion_timestamp: "2019-03-01T00:00:00Z", programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-user-match-with-email-candidate, user_micromasters_id: 16,
-      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
-      program_completion_timestamp: "2019-04-01T00:00:00Z", programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-user-matched, user_micromasters_id: 17, micromasters_program_id: 2,
-      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2019-05-01T00:00:00Z",
-      programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-email-of-a-user-matched-copy, user_micromasters_id: 18,
-      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
-      program_completion_timestamp: "2019-05-01T00:00:00Z", programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-with-later-mitxonline, user_micromasters_id: 19,
-      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
-      program_completion_timestamp: "2019-06-01T00:00:00Z", programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-competing-earlier, user_micromasters_id: 40,
-      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
-      program_completion_timestamp: "2019-07-01T00:00:00Z", programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-competing-later, user_micromasters_id: 41,
-      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
-      program_completion_timestamp: "2019-08-01T00:00:00Z", programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-two-candidates, user_micromasters_id: 50,
-      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
-      program_completion_timestamp: "2019-10-01T00:00:00Z", programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-z-exact-time, user_micromasters_id: 60, micromasters_program_id: 2,
-      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2019-12-01T00:00:00Z",
-      programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-a-earlier, user_micromasters_id: 61, micromasters_program_id: 2,
-      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2019-02-01T00:00:00Z",
+    - {program_certificate_hashed_id: mm-no-copy, user_micromasters_id: 13, micromasters_program_id: 2,
+      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2019-01-01T00:00:00Z",
       programcertificate_is_revoked: null}
   - input: ref('__micromasters_program_certificates_dedp_from_mitxonline')
     rows:
-    - {program_certificate_hashed_id: mxo-copy, user_mitxonline_id: 20, micromasters_program_id: 2,
-      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2020-01-01T00:00:00Z",
+    - {program_certificate_hashed_id: mxo-copy, micromasters_program_certificate_hashed_id: mm-copied,
+      user_mitxonline_id: 20, micromasters_program_id: 2, mitxonline_program_id: 1,
+      program_title: DEDP ID, program_completion_timestamp: "2020-01-01T00:00:00Z",
       programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-public-policy, user_mitxonline_id: 21, micromasters_program_id: null,
-      mitxonline_program_id: 2, program_title: DEDP PP, program_completion_timestamp: "2023-01-01T00:00:00Z",
-      programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-revoked, user_mitxonline_id: 22, micromasters_program_id: 2,
-      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2024-01-01T00:00:00Z",
+    - {program_certificate_hashed_id: mxo-copy-revoked, micromasters_program_certificate_hashed_id: mm-copy-revoked,
+      user_mitxonline_id: 21, micromasters_program_id: 2, mitxonline_program_id: 1,
+      program_title: DEDP ID, program_completion_timestamp: "2020-02-01T00:00:00Z",
       programcertificate_is_revoked: true}
-    - {program_certificate_hashed_id: mxo-copy-on-unlinked-account, user_mitxonline_id: 24,
-      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
-      program_completion_timestamp: "2018-06-28T00:00:00Z", programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-same-email-other-time, user_mitxonline_id: 25,
-      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
-      program_completion_timestamp: "2022-01-01T00:00:00Z", programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-matched-by-user-and-email, user_mitxonline_id: 26,
-      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
-      program_completion_timestamp: "2019-03-01T00:00:00Z", programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-user-match, user_mitxonline_id: 27, micromasters_program_id: 2,
-      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2019-04-01T00:00:00Z",
+    - {program_certificate_hashed_id: mxo-copy-on-unlinked-account, micromasters_program_certificate_hashed_id: mm-copied-to-unlinked-account,
+      user_mitxonline_id: 24, micromasters_program_id: 2, mitxonline_program_id: 1,
+      program_title: DEDP ID, program_completion_timestamp: "2018-06-28T00:00:00Z",
       programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-email-candidate-of-a-user-matched-certificate,
-      user_mitxonline_id: 28, micromasters_program_id: 2, mitxonline_program_id: 1,
-      program_title: DEDP ID, program_completion_timestamp: "2019-04-01T00:00:00Z",
+    - {program_certificate_hashed_id: mxo-not-a-copy, micromasters_program_certificate_hashed_id: no-micromasters-certificate,
+      user_mitxonline_id: 23, micromasters_program_id: 2, mitxonline_program_id: 1,
+      program_title: DEDP ID, program_completion_timestamp: "2023-02-01T00:00:00Z",
       programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-user-matched-copy, user_mitxonline_id: 29,
-      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
-      program_completion_timestamp: "2019-05-01T00:00:00Z", programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-after-cutoff, user_mitxonline_id: 30, micromasters_program_id: 2,
-      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2023-02-01T00:00:00Z",
-      programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-other-time-same-email-other-case, user_mitxonline_id: 31,
-      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
-      program_completion_timestamp: "2018-07-01T00:00:00Z", programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-wanted-by-two, user_mitxonline_id: 40, micromasters_program_id: 2,
-      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2019-09-01T00:00:00Z",
-      programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-z-exact-time, user_mitxonline_id: 50, micromasters_program_id: 2,
-      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2019-10-01T00:00:00Z",
-      programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-a-earlier, user_mitxonline_id: 51, micromasters_program_id: 2,
-      mitxonline_program_id: 1, program_title: DEDP ID, program_completion_timestamp: "2019-01-01T00:00:00Z",
-      programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-wanted-by-exact-and-earlier, user_mitxonline_id: 60,
-      micromasters_program_id: 2, mitxonline_program_id: 1, program_title: DEDP ID,
-      program_completion_timestamp: "2019-12-01T00:00:00Z", programcertificate_is_revoked: false}
+    - {program_certificate_hashed_id: mxo-public-policy-revoked, micromasters_program_certificate_hashed_id: no-micromasters-certificate-either,
+      user_mitxonline_id: 25, micromasters_program_id: null, mitxonline_program_id: 2,
+      program_title: DEDP PP, program_completion_timestamp: "2024-01-01T00:00:00Z",
+      programcertificate_is_revoked: true}
   - input: ref('__micromasters_program_certificates_non_dedp')
     rows: []
   - input: ref('int__mitx__users')
@@ -893,50 +827,14 @@ unit_tests:
       user_mitxonline_email: a@mitxonline}
     - {user_micromasters_id: 11, user_mitxonline_id: 21, user_micromasters_email: b@micromasters,
       user_mitxonline_email: b@mitxonline}
-    - {user_micromasters_id: 12, user_mitxonline_id: null, user_micromasters_email: c@micromasters,
-      user_mitxonline_email: null}
-    - {user_micromasters_id: null, user_mitxonline_id: 22, user_micromasters_email: null,
-      user_mitxonline_email: d@mitxonline}
-    - {user_micromasters_id: 13, user_mitxonline_id: 23, user_micromasters_email: E@example,
-      user_mitxonline_email: e-other@mitxonline}
+    - {user_micromasters_id: 12, user_mitxonline_id: 22, user_micromasters_email: c@micromasters,
+      user_mitxonline_email: c-linked@mitxonline}
     - {user_micromasters_id: null, user_mitxonline_id: 24, user_micromasters_email: null,
-      user_mitxonline_email: e@example}
-    - {user_micromasters_id: null, user_mitxonline_id: 31, user_micromasters_email: null,
-      user_mitxonline_email: E@EXAMPLE}
-    - {user_micromasters_id: 14, user_mitxonline_id: null, user_micromasters_email: f@example,
-      user_mitxonline_email: null}
+      user_mitxonline_email: c-changed@mitxonline}
+    - {user_micromasters_id: 13, user_mitxonline_id: 23, user_micromasters_email: d@micromasters,
+      user_mitxonline_email: d@mitxonline}
     - {user_micromasters_id: null, user_mitxonline_id: 25, user_micromasters_email: null,
-      user_mitxonline_email: F@example}
-    - {user_micromasters_id: 15, user_mitxonline_id: 26, user_micromasters_email: g@example,
-      user_mitxonline_email: g@example}
-    - {user_micromasters_id: 16, user_mitxonline_id: 27, user_micromasters_email: h@example,
-      user_mitxonline_email: h-other@example}
-    - {user_micromasters_id: null, user_mitxonline_id: 28, user_micromasters_email: null,
-      user_mitxonline_email: h@example}
-    - {user_micromasters_id: 17, user_mitxonline_id: 29, user_micromasters_email: i-other@example,
-      user_mitxonline_email: i@example}
-    - {user_micromasters_id: 18, user_mitxonline_id: null, user_micromasters_email: i@example,
-      user_mitxonline_email: null}
-    - {user_micromasters_id: 19, user_mitxonline_id: 30, user_micromasters_email: j@micromasters,
-      user_mitxonline_email: j@mitxonline}
-    - {user_micromasters_id: 40, user_mitxonline_id: null, user_micromasters_email: k@example,
-      user_mitxonline_email: null}
-    - {user_micromasters_id: 41, user_mitxonline_id: null, user_micromasters_email: K@Example,
-      user_mitxonline_email: null}
-    - {user_micromasters_id: null, user_mitxonline_id: 40, user_micromasters_email: null,
-      user_mitxonline_email: k@example}
-    - {user_micromasters_id: 50, user_mitxonline_id: null, user_micromasters_email: m@example,
-      user_mitxonline_email: null}
-    - {user_micromasters_id: null, user_mitxonline_id: 50, user_micromasters_email: null,
-      user_mitxonline_email: M@example}
-    - {user_micromasters_id: null, user_mitxonline_id: 51, user_micromasters_email: null,
-      user_mitxonline_email: m@EXAMPLE}
-    - {user_micromasters_id: 60, user_mitxonline_id: null, user_micromasters_email: n@example,
-      user_mitxonline_email: null}
-    - {user_micromasters_id: 61, user_mitxonline_id: null, user_micromasters_email: N@example,
-      user_mitxonline_email: null}
-    - {user_micromasters_id: null, user_mitxonline_id: 60, user_micromasters_email: null,
-      user_mitxonline_email: n@example}
+      user_mitxonline_email: e@mitxonline}
   - input: ref('int__mitxonline__programs')
     rows:
     - {program_id: 1, program_readable_id: program-v1:MITx+DEDP-ID}
@@ -945,44 +843,13 @@ unit_tests:
     rows:
     - {program_certificate_hashed_id: mm-copied, user_email: a@mitxonline, program_completion_timestamp: "2020-01-01T00:00:00Z",
       programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mm-other-program-only, user_email: b@micromasters,
-      program_completion_timestamp: "2021-01-01T00:00:00Z", programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-no-account, user_email: c@micromasters, program_completion_timestamp: "2019-01-01T00:00:00Z",
-      programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mxo-public-policy, user_email: b@mitxonline,
-      program_completion_timestamp: "2023-01-01T00:00:00Z", programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-revoked, user_email: d@mitxonline, program_completion_timestamp: "2024-01-01T00:00:00Z",
+    - {program_certificate_hashed_id: mm-copy-revoked, user_email: b@mitxonline, program_completion_timestamp: "2020-02-01T00:00:00Z",
       programcertificate_is_revoked: true}
-    - {program_certificate_hashed_id: mm-copied-to-unlinked-account, user_email: e@example,
+    - {program_certificate_hashed_id: mm-copied-to-unlinked-account, user_email: c-changed@mitxonline,
       program_completion_timestamp: "2018-06-28T00:00:00Z", programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-other-time-same-email-other-case, user_email: E@EXAMPLE,
-      program_completion_timestamp: "2018-07-01T00:00:00Z", programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mm-same-email-other-time, user_email: F@example,
-      program_completion_timestamp: "2022-01-01T00:00:00Z", programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mm-matched-by-user-and-email, user_email: g@example,
-      program_completion_timestamp: "2019-03-01T00:00:00Z", programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mm-user-match-with-email-candidate, user_email: h-other@example,
-      program_completion_timestamp: "2019-04-01T00:00:00Z", programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-email-candidate-of-a-user-matched-certificate,
-      user_email: h@example, program_completion_timestamp: "2019-04-01T00:00:00Z",
-      programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mm-user-matched, user_email: i@example, program_completion_timestamp: "2019-05-01T00:00:00Z",
-      programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mm-email-of-a-user-matched-copy, user_email: i@example,
-      program_completion_timestamp: "2019-05-01T00:00:00Z", programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-with-later-mitxonline, user_email: j@micromasters,
-      program_completion_timestamp: "2019-06-01T00:00:00Z", programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mxo-after-cutoff, user_email: j@mitxonline,
-      program_completion_timestamp: "2023-02-01T00:00:00Z", programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mm-competing-earlier, user_email: k@example,
-      program_completion_timestamp: "2019-09-01T00:00:00Z", programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mm-competing-later, user_email: K@Example, program_completion_timestamp: "2019-08-01T00:00:00Z",
+    - {program_certificate_hashed_id: mm-no-copy, user_email: d@micromasters, program_completion_timestamp: "2019-01-01T00:00:00Z",
       programcertificate_is_revoked: null}
-    - {program_certificate_hashed_id: mm-two-candidates, user_email: M@example, program_completion_timestamp: "2019-10-01T00:00:00Z",
+    - {program_certificate_hashed_id: mxo-not-a-copy, user_email: d@mitxonline, program_completion_timestamp: "2023-02-01T00:00:00Z",
       programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mxo-a-earlier, user_email: m@EXAMPLE, program_completion_timestamp: "2019-01-01T00:00:00Z",
-      programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mm-z-exact-time, user_email: n@example, program_completion_timestamp: "2019-12-01T00:00:00Z",
-      programcertificate_is_revoked: false}
-    - {program_certificate_hashed_id: mm-a-earlier, user_email: N@example, program_completion_timestamp: "2019-02-01T00:00:00Z",
-      programcertificate_is_revoked: null}
+    - {program_certificate_hashed_id: mxo-public-policy-revoked, user_email: e@mitxonline,
+      program_completion_timestamp: "2024-01-01T00:00:00Z", programcertificate_is_revoked: true}

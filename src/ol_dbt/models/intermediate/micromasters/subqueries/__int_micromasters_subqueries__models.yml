@@ -181,6 +181,14 @@ models:
     tests:
     - unique
     - not_null
+  - name: micromasters_program_certificate_hashed_id
+    description: str, program_certificate_hashed_id of the MicroMasters certificate
+      this one copies, if any. MITx Online's migration gave each copy the MicroMasters
+      hash, with dashes added, as its uuid, so this is the hash of the uuid without
+      dashes. Matches no MicroMasters certificate for a certificate MITx Online issued.
+    tests:
+    - unique
+    - not_null
   - name: program_completion_timestamp
     description: timestamp, timestamp of the course certificate that completed the
       program
