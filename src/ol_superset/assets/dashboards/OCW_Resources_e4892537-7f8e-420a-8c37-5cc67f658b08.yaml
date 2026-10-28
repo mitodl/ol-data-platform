@@ -124,7 +124,7 @@ position:
     - ROOT_ID
     - GRID_ID
     type: ROW
-published: false
+published: true
 slug: null
 theme_uuid: null
 uuid: e4892537-7f8e-420a-8c37-5cc67f658b08
