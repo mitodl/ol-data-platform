@@ -200,15 +200,7 @@ def parse_fixture(path: Path, unit: Unit) -> UnitFixture:
             msg = f"{path}: {raw_table} is not a table of unit {unit.key}"
             raise ValueError(msg)
         columns: dict[str, str] = body["columns"]
-        if not columns:
-            msg = f"{path}: {raw_table} has no columns"
-            raise ValueError(msg)
-        for column, fixture_type in columns.items():
-            try:
-                starrocks_type(fixture_type)
-            except ValueError as error:
-                msg = f"{path}: {raw_table}.{column}: {error}"
-                raise ValueError(msg) from error
+        check_columns(columns, f"{path}: {raw_table}")
         rows = body.get("rows") or []
         table = TableFixture(raw_table=raw_table, columns=dict(columns), rows=list(rows))
         key_paths = declared[raw_table].get("primary_key") or []
@@ -223,17 +215,7 @@ def parse_fixture(path: Path, unit: Unit) -> UnitFixture:
         seen: dict[tuple[Any, ...], int] = {}
         for number, row in enumerate(rows, start=1):
             label = f"{path}: {raw_table} row {number}"
-            if unknown := sorted(set(row) - set(columns)):
-                msg = f"{label} sets {', '.join(unknown)}, which the table does not have"
-                raise ValueError(msg)
-            for column, value in row.items():
-                if value is None:
-                    continue
-                try:
-                    _stored_value(value, columns[column])
-                except (ValueError, TypeError, ArithmeticError, struct.error) as error:
-                    msg = f"{label} has {value!r} in column {column}, which is not a valid {columns[column]}"
-                    raise ValueError(msg) from error
+            check_row(row, columns, label)
             # A row with no key is NULL there, as any column it leaves out is.
             if not comparable or any(row.get(column) is None for column in key_columns):
                 continue
@@ -245,6 +227,46 @@ def parse_fixture(path: Path, unit: Unit) -> UnitFixture:
             seen[key] = number
         tables.append(table)
     return UnitFixture(path=path, tables=tables)
+
+
+def check_columns(columns: Mapping[str, str], label: str) -> None:
+    """Check that a table declares columns, and only of types the format has.
+
+    :param columns: ``{column: fixture type}``.
+    :param label: Names the table in an error.
+    :raises ValueError: If there are no columns or a type is not in the format.
+    """
+    if not columns:
+        msg = f"{label} has no columns"
+        raise ValueError(msg)
+    for column, fixture_type in columns.items():
+        try:
+            starrocks_type(fixture_type)
+        except ValueError as error:
+            msg = f"{label}.{column}: {error}"
+            raise ValueError(msg) from error
+
+
+def check_row(row: Mapping[str, Any], columns: Mapping[str, str], label: str) -> None:
+    """Check that a fixture row sets only the table's columns, each to a value its type can hold.
+
+    :param row: A hand-written row.
+    :param columns: The table's ``{column: fixture type}``.
+    :param label: Names the row in an error.
+    :raises ValueError: If the row sets a column the table does not have, or a
+        value its column cannot hold.
+    """
+    if unknown := sorted(set(row) - set(columns)):
+        msg = f"{label} sets {', '.join(unknown)}, which the table does not have"
+        raise ValueError(msg)
+    for column, value in row.items():
+        if value is None:
+            continue
+        try:
+            _stored_value(value, columns[column])
+        except (ValueError, TypeError, ArithmeticError, struct.error) as error:
+            msg = f"{label} has {value!r} in column {column}, which is not a valid {columns[column]}"
+            raise ValueError(msg) from error
 
 
 def load_fixtures(inventory_dir: Path, units: Iterable[Unit], *, selected: bool = False) -> list[UnitFixture]:

@@ -120,6 +120,52 @@ is set, and posts it to the MIT Learn of the same cluster. See "Delivering what 
 dbt build made" in
 [dg_projects/delivery/CONTRIBUTING.md](../dg_projects/delivery/CONTRIBUTING.md).
 
+## B2B views
+
+The b2b materialized views (`models/b2b_analytics`, `models/b2b_learner_records`) read
+thirteen dimensional tables, and the facts among them are built from Open edX grades and
+tracking logs that have no local source. So they are not built from raw fixtures. A
+dimensional fixture writes those tables straight into
+`ol_data_lake_local.ol_warehouse_local_dimensional`, where the views' `dimensional`
+source resolves under `--env dev`:
+
+```bash
+ol-dbt fixtures load-dimensional b2b_organization \
+    --set sso_organization_id=<Keycloak organization id> --set contract_id=<MITx Online contract id>
+ol-dbt starrocks build --env dev --target starrocks_local_b2b --select tag:starrocks
+
+# The views refresh manually, and a build leaves them empty until they do.
+for view in $(mysql -h 127.0.0.1 -P 9030 -u root -N -e \
+    "SELECT CONCAT(TABLE_SCHEMA, '.', TABLE_NAME) FROM information_schema.materialized_views
+     WHERE TABLE_SCHEMA IN ('b2b_analytics', 'b2b_learner_records')"); do
+  mysql -h 127.0.0.1 -P 9030 -u root -e "REFRESH MATERIALIZED VIEW ${view} WITH SYNC MODE"
+done
+```
+
+The two parameters are ids the local stack assigns, and the views are only useful when
+they match. ol-analytics-api authorizes a request against the Keycloak organization in
+the user's token and MITx Online's manager check, and MIT Learn's dashboard reads the
+organization and its contracts from MITx Online. So `sso_organization_id` is the
+organization's Keycloak id (MITx Online's `OrganizationPage.sso_organization_id`, which
+Keycloak picks; its admin API ignores an id in the request), and `contract_id` is the
+id of a contract MITx Online holds under that organization. A run without them lists
+what the file needs.
+
+`src/ol_dbt/fixtures/dimensional/b2b_organization.yml` holds one organization, one
+contract, two course runs in one program and eight learners: enough that every
+per-run and per-month cohort the dashboard shows is at or above ol-analytics-api's
+anonymization floor of 5, with each completion status and consent state present.
+`test_dimensional_fixtures.py` runs every b2b view over it in DuckDB and fails if a view
+comes back empty or entirely under the floor, so a view that starts reading another
+dimensional table or column needs the fixture to follow.
+
+- The format is the raw fixture format below, with a `parameters:` block. A row value
+  that is exactly `$name` takes the value given with `--set name=...`, and a parameter's
+  type has to match every column it fills.
+- Each table holds only the columns the views read, and `load-dimensional` drops and
+  recreates it. A dimensional model you built locally under the same name is replaced.
+- Reloading drops the tables the views are built on. Build and refresh again afterwards.
+
 ## Raw fixtures
 
 The lake starts with an empty raw schema. A unit with `strategies.local: fixture` in
