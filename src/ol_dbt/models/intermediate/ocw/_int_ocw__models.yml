@@ -366,6 +366,26 @@ models:
       arguments:
         column_list: ["course_uuid", "resource_uuid"]
 
+- name: int__ocw__learning_resource_types
+  description: One row per learning resource type assigned to an OCW resource.
+  columns:
+  - name: course_uuid
+    description: UUID of the course containing the resource
+    tests:
+    - not_null
+  - name: resource_uuid
+    description: UUID of the resource
+    tests:
+    - not_null
+  - name: learning_resource_type
+    description: One learning resource type assigned to the resource
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["course_uuid", "resource_uuid", "learning_resource_type"]
+
 - name: int__ocw__live_courses
   description: One row per OCW course published to the OCW live bucket, with the fields
     of its data.json that MIT Learn's OCW ETL reads. A directory left in the bucket
@@ -694,6 +714,24 @@ unit_tests:
       course_department_numbers: [], course_topics: [], course_learn_topics: [], course_image_src: null,
       course_image_alt: null, course_instructors_json: '[]', course_image_description: null,
       course_hides_download: false}
+- name: test_int__ocw__learning_resource_types_splits_types
+  description: A resource with multiple types exposes one option row for each type.
+  model: int__ocw__learning_resource_types
+  given:
+  - input: ref('int__ocw__resources')
+    rows:
+    - {course_uuid: course-1, resource_uuid: resource-1, learning_resource_types: "Lecture\
+        \ Notes, Readings"}
+    - {course_uuid: course-1, resource_uuid: resource-2, learning_resource_types: Lecture
+        Notes}
+    - {course_uuid: course-1, resource_uuid: resource-3, learning_resource_types: null}
+  expect:
+    rows:
+    - {course_uuid: course-1, resource_uuid: resource-1, learning_resource_type: Lecture
+        Notes}
+    - {course_uuid: course-1, resource_uuid: resource-1, learning_resource_type: Readings}
+    - {course_uuid: course-1, resource_uuid: resource-2, learning_resource_type: Lecture
+        Notes}
 - name: test_int__ocw__live_courses_reads_other_shapes_as_learn_does
   description: >
     A level, department_numbers or learning_resource_types object gives its
