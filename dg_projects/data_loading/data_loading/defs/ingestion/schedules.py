@@ -1,12 +1,14 @@
 """Schedules for data_loading ingest pipelines."""
 
 import json
+from collections.abc import Callable
 
 import dagster as dg
 from ol_dlt.sources import course_xml_blocks, edxorg_program_reports, ocw_content
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from data_loading.defs.ingestion.assets import (
+    XPRO_TRACKING_LOGS_TABLE,
     mitxonline_app_assets,
     xpro_app_assets,
 )
@@ -167,20 +169,31 @@ xpro_app_ingest_schedule = (
 POSTHOG_SCHEDULE_NAME = "posthog_events_ingest_hourly_schedule"
 
 
-def no_posthog_run_in_flight(context: dg.ScheduleEvaluationContext) -> bool:
-    """Skip a tick while the previous run is still loading.
+def no_run_in_flight(
+    schedule_name: str,
+) -> Callable[[dg.ScheduleEvaluationContext], bool]:
+    """Return a ``should_execute`` that skips a tick while the last run loads.
 
-    A backlog (the first run, or catching up after the schedule was off) can
-    outlast an hour. Two runs starting from the same saved cursor would both
-    load the same hours and append them twice.
+    For appending loads whose backlog can outlast the schedule's interval. Two
+    runs starting from the same saved cursor would both load the same files
+    and append them twice.
     """
-    return not context.instance.get_run_records(
-        dg.RunsFilter(
-            tags={"dagster/schedule_name": POSTHOG_SCHEDULE_NAME},
-            statuses=list(IN_FLIGHT_RUN_STATUSES),
-        ),
-        limit=1,
-    )
+
+    def should_execute(context: dg.ScheduleEvaluationContext) -> bool:
+        return not context.instance.get_run_records(
+            dg.RunsFilter(
+                tags={"dagster/schedule_name": schedule_name},
+                statuses=list(IN_FLIGHT_RUN_STATUSES),
+            ),
+            limit=1,
+        )
+
+    return should_execute
+
+
+# A backlog (the first run, or catching up after the schedule was off) can
+# outlast an hour.
+no_posthog_run_in_flight = no_run_in_flight(POSTHOG_SCHEDULE_NAME)
 
 
 posthog_events_ingest_schedule = dg.ScheduleDefinition(
@@ -289,6 +302,34 @@ edxorg_program_reports_ingest_schedule = dg.ScheduleDefinition(
     ),
 )
 
+# Every 12 hours, the cadence of the Airbyte connection it replaces (inventory
+# unit xpro/tracking_logs). The first production runs walk the 44.3 GB backlog
+# at most 200 batches of 128 MiB gzip a run, so it takes about two runs, and
+# the guard keeps a run that outlasts the interval from overlapping the next.
+# max_runtime ends a hung run before the following tick (see the PostHog
+# schedule). The default 8Gi pod covers a batch, which should peak near 4.3 GB
+# at the worst gzip ratio measured (see tracking_logs.BUDGET_BYTES), plus the
+# run's listing (474 MB for the whole bucket).
+#
+# RUNNING in production and QA, which reads the QA deployment's bucket (51,857
+# files, 0.9 GB on 2026-10-28). Stopped elsewhere, where the source would read
+# production.
+XPRO_TRACKING_LOGS_SCHEDULE_NAME = "xpro_tracking_logs_ingest_schedule"
+no_xpro_tracking_logs_run_in_flight = no_run_in_flight(XPRO_TRACKING_LOGS_SCHEDULE_NAME)
+xpro_tracking_logs_ingest_schedule = dg.ScheduleDefinition(
+    name=XPRO_TRACKING_LOGS_SCHEDULE_NAME,
+    target=dg.AssetSelection.keys(["ol_warehouse_raw_data", XPRO_TRACKING_LOGS_TABLE]),
+    cron_schedule="50 */12 * * *",
+    execution_timezone="Etc/UTC",
+    should_execute=no_xpro_tracking_logs_run_in_flight,
+    tags={"dagster/max_runtime": str(11 * 60 * 60)},
+    default_status=(
+        dg.DefaultScheduleStatus.RUNNING
+        if DAGSTER_ENV in {"qa", "production"}
+        else dg.DefaultScheduleStatus.STOPPED
+    ),
+)
+
 OCW_CONTENT_SCHEDULE_NAME = "ocw_content_ingest_daily_schedule"
 # Defined in ocw_content_sensor, named here so the schedule can wait for its runs.
 OCW_CONTENT_SENSOR_NAME = "ocw_content_publish_sensor"
@@ -385,6 +426,7 @@ defs = dg.Definitions(
         posthog_events_ingest_schedule,
         course_xml_blocks_ingest_schedule,
         edxorg_program_reports_ingest_schedule,
+        xpro_tracking_logs_ingest_schedule,
         ocw_content_ingest_schedule,
     ],
 )

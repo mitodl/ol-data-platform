@@ -111,6 +111,7 @@ class TrackingLogTable:
     :param pipeline_prefix: Destination bucket prefix.
     :param pipeline_name: dlt pipeline name, which keys the cursor.
     :param daily_prefixes: Files sit under ``<YYYY-MM-DD>/`` prefixes.
+    :param qa_bucket_url: The QA deployment's URL, where it has one.
     """
 
     raw_table: str
@@ -119,6 +120,19 @@ class TrackingLogTable:
     pipeline_prefix: str
     pipeline_name: str
     daily_prefixes: bool
+    qa_bucket_url: str | None = None
+
+    def bucket_url_for(self, profile: str) -> str:
+        """Return the URL a profile reads this table's files from.
+
+        QA reads its own deployment's bucket, where one exists, and every other
+        profile reads production. QA ingests the Open edX units rather than
+        mirroring them (their inventory units are ``qa: ingest``) because QA
+        users are not production users.
+        """
+        if profile == "qa" and self.qa_bucket_url:
+            return self.qa_bucket_url
+        return self.bucket_url
 
     @property
     def schema(self) -> pa.Schema:
@@ -155,6 +169,7 @@ def _openedx(deployment: str) -> TrackingLogTable:
         pipeline_prefix="openedx",
         pipeline_name=f"tracking_logs__{deployment}",
         daily_prefixes=True,
+        qa_bucket_url=f"s3://{deployment}-qa-edxapp-tracking/valid/",
     )
 
 
@@ -268,7 +283,8 @@ def tracking_logs_source(
     bucket once.
 
     :param raw_table: A key of ``TABLES``.
-    :param bucket_url: Overrides the table's production ``bucket_url``.
+    :param bucket_url: Overrides the table's ``bucket_url_for`` the active
+        profile.
     :param table_format: ``native`` or ``iceberg``; defaults to the active
         profile's.
     :param budget_bytes: How much gzip one load may cover.
@@ -278,7 +294,7 @@ def tracking_logs_source(
     # No explicit credentials, so s3fs refreshes IRSA credentials itself (see
     # ol_dlt.sources.edxorg_s3 for why dlt's own credentials expire mid-run).
     files = edxorg_files(
-        bucket_url=bucket_url or table.bucket_url,
+        bucket_url=bucket_url or table.bucket_url_for(config.active_profile()),
         file_globs=table.file_globs,
         credentials=s3fs.S3FileSystem(),
         budget_bytes=budget_bytes,
