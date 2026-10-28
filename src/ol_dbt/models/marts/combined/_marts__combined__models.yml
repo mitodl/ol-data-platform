@@ -677,19 +677,20 @@ models:
   - name: unique_courses_taken_in_program
     description: int, count of unique courses in the program the learner enrolled
       in, in any enrollment mode. Program courses, required and elective, come from
-      bridge_program_course. An edX.org or MicroMasters row whose program title dim_program_report_key
-      maps to a MITx Online program takes that program's courses and its own edX.org
-      or MicroMasters program's, counting a course both list once. These are the MicroMasters
-      programs, DEDP, and the XSeries programs with a MITx Online program of the same
-      title. The program's own courses add the ones the MITx Online program doesn't
-      list, e.g. 18.03x's 18.031x, which MITx Online lists as 18.03.1x, or a capstone
-      exam it dropped. Any other edX.org row takes its own edX.org program's courses.
-      Enrollments match on the row's own platform and user_id (edX.org for MicroMasters
-      rows), because user ids repeat across platforms. A course keeps one readable
-      id across platforms, so an edX.org enrollment in a course that moved to MITx
-      Online still matches. Enrollments the learner holds on another platform do not
-      count. program_enrollment_with_user_report.courses_taken_in_program counts verified
-      enrollments only, so the two differ.
+      bridge_program_course. An edX.org or MicroMasters row whose program maps to
+      a MITx Online program (a MicroMasters row through int__mitx__programs, else
+      by title through dim_program_report_key) takes that program's courses and its
+      own edX.org or MicroMasters program's, counting a course both list once. These
+      are the MicroMasters programs, DEDP, and the XSeries programs with a MITx Online
+      program of the same title. The program's own courses add the ones the MITx Online
+      program doesn't list, e.g. 18.03x's 18.031x, which MITx Online lists as 18.03.1x,
+      or a capstone exam it dropped. Any other edX.org row takes its own edX.org program's
+      courses. Enrollments match on the row's own platform and user_id (edX.org for
+      MicroMasters rows), because user ids repeat across platforms. A course keeps
+      one readable id across platforms, so an edX.org enrollment in a course that
+      moved to MITx Online still matches. Enrollments the learner holds on another
+      platform do not count. program_enrollment_with_user_report.courses_taken_in_program
+      counts verified enrollments only, so the two differ.
   - name: capstone_indicator
     description: str, Y if the learner has an enrollment, in any mode, in a program
       course with the word capstone in the title, otherwise N. Program courses and
