@@ -77,6 +77,7 @@ from dlt.sources.filesystem import FileItemDict
 
 from ol_dlt import config
 from ol_dlt.file_metadata import FILE_METADATA_COLUMNS, add_file_metadata
+from ol_dlt.json_text import as_text
 from ol_dlt.sources.edxorg_s3 import edxorg_files
 
 logger = logging.getLogger(__name__)
@@ -306,20 +307,13 @@ TABLES = {
 }
 
 
-def _text(value: Any) -> str | None:  # noqa: ANN401
-    """Return ``value`` as text, JSON-encoding anything that is not a string."""
-    if value is None or isinstance(value, str):
-        return value
-    return json.dumps(value)
-
-
 def _row(line: str, table: XmlBlocksTable = OPENEDX) -> dict[str, str | int | None]:
     """Parse one JSON line into a row, failing on a line missing a required field."""
     record = json.loads(line)
     row: dict[str, str | int | None] = {}
     for name in table.fields:
         value = record.get(name) if name in table.optional_fields else record[name]
-        row[name] = value if name in table.integer_fields else _text(value)
+        row[name] = value if name in table.integer_fields else as_text(value)
     return row
 
 
