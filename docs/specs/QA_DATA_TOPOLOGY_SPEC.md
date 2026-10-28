@@ -266,6 +266,15 @@ redacted, year of birth nulled), while MITx Online and MicroMasters are QA's own
 do not join across platforms the way they do in production. A QA rehearsal of the Learn task
 checks that it reads, maps and writes rows, not certificate counts.
 
+The four edX.org tables this view's QA build reads from are also one learner in ten
+(`user_id % 10 = 0` on the IRx `email_opt_in`, `mitx_person_course` and `mitx_user_info_combo`,
+and on `user id` in the Airbyte `raw__edxorg__program_learner_report`). The other edX.org learner
+mirrors (`edxorg/mysql`, `edxorg/tracking_logs`, the dlt `edxorg/program_reports`) copy every
+learner, so a join from them to these four is one-sided in QA. QA's Trino cluster ran each stage of these queries as one task with a 4.48GB
+per-node limit, and on 2026-10-27 the staging dedups of `mitx_user_info_combo` (15.1M rows) and
+the program learner report (15.7M) each exceeded it when run alone. On the sample they peaked at
+0.88GB and 0.93GB. The four take the same sample, so a sampled learner keeps all its rows in them.
+
 ---
 
 ## 3. Specified: per-environment strategy map (task Local-1)
@@ -581,8 +590,8 @@ plan without complaint. So a `where` wrong in that second way still fails from t
 that table's `DROP`, leaving the unit partly refreshed and the failed table absent -- as does
 any CTAS that fails while it runs. `EXPLAIN` plans the query and reads no data.
 
-The `EXPLAIN` runs for every mirrored table, not only the three that declare a `where`. For the
-other 31 what it adds over the declaration check is that the masking expressions themselves
+The `EXPLAIN` runs for every mirrored table, not only the seven that declare a `where`. For the
+other 28 what it adds over the declaration check is that the masking expressions themselves
 plan. That is one more connection and one more Vault dynamic credential per table per refresh.
 
 ### What was not built
