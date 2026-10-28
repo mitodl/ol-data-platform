@@ -250,11 +250,9 @@ def test_filter_unsummarized_reads_a_table_from_before_the_key() -> None:
     assert result["conversation_ref"].to_list() == ["2"]
 
 
-def test_filter_unsummarized_keeps_keyless_rows_with_the_same_turns_and_model() -> None:
-    """Rows summarized before the key existed are not all redone on deploy.
-
-    Their stored model id has no provider, and their prompt_version is not
-    compared.
+def test_filter_unsummarized_keeps_keyless_rows_with_the_same_turns() -> None:
+    """Rows summarized before the key existed are not all redone on deploy or on
+    a model change: neither their prompt_version nor their model is compared.
     """
     source_df = pl.DataFrame(
         [
@@ -278,7 +276,7 @@ def test_filter_unsummarized_keeps_keyless_rows_with_the_same_turns_and_model() 
         source_df, already_summarized_df, SUMMARIZER.keys
     )
 
-    assert result["conversation_ref"].to_list() == ["2", "3"]
+    assert result["conversation_ref"].to_list() == ["2"]
 
 
 def test_filter_unsummarized_keeps_a_summary_whose_text_went_missing() -> None:

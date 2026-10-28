@@ -191,13 +191,14 @@ def filter_unsummarized(
     a summary in place if its text later goes missing. A skipped row has no key
     and is re-submitted once it has text.
 
-    A row summarized before the key existed keeps the rule it was written under:
-    it is re-submitted when its turn_count or its model changed. Re-submitting
-    every one of them would rewrite every summary and, through the embeddings,
-    move every conversation's cluster assignment. Its prompt_version is not
-    compared, because it names an Opik version from before the key and the
-    deploy creates a new version of the same text. The row gets a key the next
-    time it is summarized.
+    A row summarized before the key existed is re-submitted only when its
+    turn_count changed. Re-submitting every one of them, for a deploy or a model
+    change, would rewrite every summary and, through the embeddings, move every
+    conversation's cluster assignment. Its prompt_version is not compared,
+    because it names an Opik version from before the key and the deploy creates
+    a new version of the same text, and its model is not, so a model change
+    reaches it with its next new turn. The row gets a key the next time it is
+    summarized.
 
     :param source_df: the in-scope conversations.
     :param already_summarized_df: feedback_summaries' join columns, turn_count,
@@ -221,11 +222,9 @@ def filter_unsummarized(
     current_key = pl.col("conversation_text").map_elements(
         keys.key, return_dtype=pl.String
     )
-    # Rows written before the key stored the model id without its provider.
-    keyless_changed = (
-        pl.col("_stored_model").is_null()
-        | pl.col("_stored_model").ne_missing(pl.lit(keys.model.partition(":")[2]))
-        | pl.col("turn_count").ne_missing(pl.col("_stored_turn_count"))
+    # A keyless row with no model was skipped, not summarized.
+    keyless_changed = pl.col("_stored_model").is_null() | (
+        pl.col("turn_count").ne_missing(pl.col("_stored_turn_count"))
     )
     return (
         source_df.with_columns(current_key.alias("_current_key"))
