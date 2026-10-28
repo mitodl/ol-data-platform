@@ -2954,6 +2954,7 @@ unit_tests:
     - {line_id: 4, order_id: 4, product_version_id: 100}
     - {line_id: 5, order_id: 5, product_version_id: 100}
     - {line_id: 6, order_id: 6, product_version_id: 100}
+    - {line_id: 7, order_id: 7, product_version_id: 100}
   - input: ref('stg__mitxonline__app__postgres__django_contenttype')
     rows:
     - {contenttype_id: 9, contenttype_full_name: ecommerce_product}
@@ -2968,6 +2969,7 @@ unit_tests:
     - {order_id: 4, order_state: fulfilled, order_purchaser_user_id: 7}
     - {order_id: 5, order_state: fulfilled, order_purchaser_user_id: 7}
     - {order_id: 6, order_state: fulfilled, order_purchaser_user_id: 7}
+    - {order_id: 7, order_state: fulfilled, order_purchaser_user_id: 7}
   - input: ref('int__mitxonline__users')
     rows:
     - {user_id: 7}
@@ -2981,6 +2983,7 @@ unit_tests:
     - {discount_id: 13, discount_type: dollars-off, discount_amount: 1500.00}
     - {discount_id: 14, discount_type: fixed-price, discount_amount: 300.00}
     - {discount_id: 15, discount_type: fixed-price, discount_amount: 1200.00}
+    - {discount_id: 16, discount_type: percent-off, discount_amount: 12.50000}
   - input: ref('stg__mitxonline__app__postgres__ecommerce_discountredemption')
     rows:
     - {order_id: 1, discount_id: 11, discountredemption_timestamp: '2026-01-01T00:00:00'}
@@ -2988,6 +2991,7 @@ unit_tests:
     - {order_id: 3, discount_id: 13, discountredemption_timestamp: '2026-01-01T00:00:00'}
     - {order_id: 4, discount_id: 14, discountredemption_timestamp: '2026-01-01T00:00:00'}
     - {order_id: 6, discount_id: 15, discountredemption_timestamp: '2026-01-01T00:00:00'}
+    - {order_id: 7, discount_id: 16, discountredemption_timestamp: '2026-01-01T00:00:00'}
   - input: ref('int__mitxonline__ecommerce_transaction')
     rows: []
   expect:
@@ -2998,3 +3002,4 @@ unit_tests:
     - {line_id: 4, discount_amount: 700.00}
     - {line_id: 5, discount_amount: null}
     - {line_id: 6, discount_amount: 0.00}
+    - {line_id: 7, discount_amount: 125.00}
