@@ -250,14 +250,14 @@ def extract(  # noqa: PLR0913
     :param dry_run: print the scopes and their estimated input size, call nothing
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _require_current(output_dir)
     run_scopes = _read_scopes(sources, courserun)
     scopes = [
         scope
         for scope in run_scopes
         if not scope_title or scope.scope_title in scope_title
     ]
-    output_dir.mkdir(parents=True, exist_ok=True)
-    _require_current(output_dir)
     stored = _existing(output_dir, EXTRACTION_TABLE)
     existing_keys = set(stored["extraction_key"]) if stored is not None else set()
     stored_text = _existing(output_dir, TEXT_EXTRACTION_TABLE)
