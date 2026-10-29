@@ -946,6 +946,21 @@ _SWAP = {
 }
 
 
+def _confirmed_edges(
+    direction: str, value: str, *, lenient: bool
+) -> tuple[float, float]:
+    """Return (emitted edges the consensus confirms, emitted edges) for one pair.
+
+    :param direction: the pair's edge direction, "both" for edges both ways
+    :param value: the dependency consensus
+    :param lenient: count a context_dependent consensus as confirming every edge
+    """
+    emitted = DEPENDENCY_DIRECTIONS if direction == "both" else (direction,)
+    if lenient and value == "context_dependent":
+        return float(len(emitted)), float(len(emitted))
+    return float(value in emitted), float(len(emitted))
+
+
 def score_prerequisites(
     population: pl.DataFrame,
     sample: pl.DataFrame,
@@ -960,8 +975,10 @@ def score_prerequisites(
     predicate gets its own consensus, ties and kappa. From them:
 
     - edge_precision: inferred builds_on edges whose dependency consensus is the
-      edge's direction. edge_precision_lenient also counts a context_dependent
-      consensus as confirming the edge. A practiced_with edge asserts no
+      edge's direction, counted per directed edge: a pair with edges both ways
+      emits two, and a directed consensus confirms at most one of them.
+      edge_precision_lenient also counts a context_dependent consensus as
+      confirming every edge of the pair. A practiced_with edge asserts no
       dependency (the guideline's answer for a tool and what is practiced with it
       is none), so it is left out. Pairs with a builds_on edge cross the strata
       (a pair's stratum follows its best-supported edge), so this is a
@@ -1003,22 +1020,15 @@ def score_prerequisites(
     edges = dict(population.select("item_id", "edge_direction").iter_rows())
     builds_on = dict(population.select("item_id", "builds_on_direction").iter_rows())
 
-    def found(
-        item: str,
-        value: str,
-        directions: Mapping[str, str] = edges,
-        *,
-        lenient: bool = False,
-    ) -> bool:
-        if lenient and value == "context_dependent":
-            return directions[item] != "none"
+    def found(item: str, value: str, directions: Mapping[str, str]) -> bool:
+        """Whether an edge runs the way the consensus does, for recall."""
         return value in DEPENDENCY_DIRECTIONS and directions[item] in (value, "both")
 
     def edge_precision(column: str, directions: Mapping[str, str], *, lenient: bool):
         return _strata(
             population.filter(pl.col(column) != "none"),
             {
-                item: (float(found(item, value, directions, lenient=lenient)), 1.0)
+                item: _confirmed_edges(directions[item], value, lenient=lenient)
                 for item, value in dependency.items()
             },
         )

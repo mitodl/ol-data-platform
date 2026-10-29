@@ -1513,6 +1513,39 @@ def test_prerequisites_score_hierarchy_and_dependency_separately(tmp_path):
     assert report["labelled_edges_reversed"] == 0
 
 
+def test_a_pair_with_edges_both_ways_is_two_edges_for_precision(tmp_path):
+    items = [f"a{n}||b{n}" for n in range(3)]
+    population = pl.DataFrame(
+        {
+            "item_id": items,
+            "concept_a": [f"a{n}" for n in range(3)],
+            "stratum": ["bidirectional"] * 3,
+            "edge_direction": ["both"] * 3,
+            "builds_on_direction": ["both"] * 3,
+            "pipeline_hierarchy": [False] * 3,
+        }
+    )
+    tasks = [
+        _prerequisite_task(item, [(1, "none", answer, ()), (2, "none", answer, ())])
+        for item, answer in zip(
+            items, ("b_before_a", "context_dependent", "none"), strict=True
+        )
+    ]
+    report = score.score_prerequisites(
+        population,
+        population.select("item_id", "concept_a"),
+        _export(tmp_path, tasks),
+        alpha=0.05,
+    )
+    # one of a0's two edges is right; a2's none confirms neither
+    strict = report["edge_precision"]["strata"]["bidirectional"]
+    assert strict["labeled_ratio"] == pytest.approx(1 / 6)
+    lenient = report["edge_precision_lenient"]["strata"]["bidirectional"]
+    assert lenient["labeled_ratio"] == pytest.approx(3 / 6)
+    # recall still needs only one edge the way the consensus runs
+    assert report["edge_recall"]["strata"]["bidirectional"]["labeled_ratio"] == 1.0
+
+
 def test_prerequisites_config_judges_hierarchy_and_dependency_apart():
     config = labelstudio.PREREQUISITES_CONFIG
     for name in ("hierarchy", "hierarchy_depth", "dependency", "dependency_depth"):
