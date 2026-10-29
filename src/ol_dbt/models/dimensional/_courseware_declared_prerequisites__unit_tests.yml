@@ -3,8 +3,8 @@ unit_tests:
 - name: test_bridge_courserun_concept_maps_declared_prerequisites_by_kind
   description: >
     Only a stated prerequisite is a requires edge. A corequisite and a recommended
-    background get their own relations, and "no prerequisites" (explicitly_none,
-    whose label names what is not required) gives no row.
+    background get their own relations. "No prerequisites" never reaches the bridge;
+    int__courseware__concept_mentions leaves it out.
   model: bridge_courserun_concept
   given:
   - input: ref('int__courseware__resolved_concept_mentions')
@@ -18,9 +18,6 @@ unit_tests:
     - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: c,
       scope_kind: context, scope_position: 0, claim_kind: declared_prerequisite, concept_id: jupyter,
       prerequisite_kind: recommended}
-    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: c,
-      scope_kind: context, scope_position: 0, claim_kind: declared_prerequisite, concept_id: programming,
-      prerequisite_kind: explicitly_none}
   - input: ref('dim_course_run')
     rows:
     - {courserun_pk: r1, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",

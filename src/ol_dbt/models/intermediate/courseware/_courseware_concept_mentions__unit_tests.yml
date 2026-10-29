@@ -1,0 +1,26 @@
+---
+unit_tests:
+- name: test_int__courseware__concept_mentions_leaves_out_no_prerequisites
+  description: >
+    A declared "no prerequisites" claim (explicitly_none) labels what is not
+    required, e.g. "programming experience", so it must not become a mention
+    of that concept or reach resolution. Stated prerequisites and concept claims
+    are kept.
+  model: int__courseware__concept_mentions
+  given:
+  - input: ref('int__courseware__claims')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", extraction_key: k,
+      claim_ordinal: 1, claim_kind: declared_prerequisite, label: calculus, concept_label_key: calculus,
+      prerequisite_kind: prerequisite, is_current: true, is_verified: true}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", extraction_key: k,
+      claim_ordinal: 2, claim_kind: declared_prerequisite, label: programming experience,
+      concept_label_key: programming experience, prerequisite_kind: explicitly_none,
+      is_current: true, is_verified: true}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", extraction_key: k,
+      claim_ordinal: 3, claim_kind: concept, label: pandas, concept_label_key: pandas,
+      prerequisite_kind: null, is_current: true, is_verified: true}
+  expect:
+    rows:
+    - {claim_ordinal: 1, concept_label_key: calculus}
+    - {claim_ordinal: 3, concept_label_key: pandas}

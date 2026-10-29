@@ -3,6 +3,9 @@
     label): the concept, assumed-knowledge and declared-prerequisite claims by their
     own label, and the assessments and learning outcomes by each concept label they
     list. This is what dim_concept and the concept bridges are built from.
+
+    A declared "no prerequisites" (prerequisite_kind explicitly_none) is left out: its
+    label names what is not required, so it is not a mention of that concept.
 #}
 with claims as (
     select * from {{ ref('int__courseware__claims') }}
@@ -27,7 +30,9 @@ with claims as (
         , concept_label_key
         , prerequisite_kind
     from claims
-    where concept_label_key is not null
+    where
+        concept_label_key is not null
+        and coalesce(prerequisite_kind, '') != 'explicitly_none'
 )
 
 , referenced_labels as (

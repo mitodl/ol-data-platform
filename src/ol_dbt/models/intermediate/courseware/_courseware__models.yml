@@ -474,8 +474,9 @@ models:
     tests:
     - not_null
   - name: prerequisite_kind
-    description: str, prerequisite, corequisite, recommended or explicitly_none for
-      declared prerequisites; null otherwise
+    description: str, prerequisite, corequisite or recommended for declared prerequisites;
+      null otherwise. A declared "no prerequisites" (explicitly_none) is not a mention
+      and has no row.
 
 - name: int__courseware__concept_labels
   description: One row per normalized concept label key across every course, with

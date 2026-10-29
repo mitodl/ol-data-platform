@@ -48,10 +48,7 @@ with mentions as (
         , scope_position
         , scope_id
     from mentions
-    where
-        claim_kind in ('concept', 'assessment_expectation', 'declared_prerequisite')
-        -- "no prerequisites": its label names what is not required
-        and coalesce(prerequisite_kind, '') != 'explicitly_none'
+    where claim_kind in ('concept', 'assessment_expectation', 'declared_prerequisite')
 )
 
 , first_taught as (
