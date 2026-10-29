@@ -28,16 +28,21 @@
     Declared requirements and the other relations always pass.
 
     Every relation is kept here for review whatever its claims' review status;
-    accepted_claim_count is how many of claim_count are accepted, and learner-facing
-    views take only relations with at least one.
+    accepted_claim_count is how many of claim_count are accepted (for an inferred
+    requirement, only those made before the run teaches the concept), and
+    learner-facing views take only relations with at least one.
 #}
+-- one row per (claim, concept): an assessment that lists two labels of one concept
+-- is one claim behind the relation, not two
 with mentions as (
-    select
+    select distinct
         platform
         , courserun_readable_id
         , scope_id
         , scope_kind
         , scope_position
+        , extraction_key
+        , claim_ordinal
         , claim_kind
         , teaching_status
         , concept_kind
@@ -91,6 +96,7 @@ with mentions as (
     group by platform, courserun_readable_id, concept_id
 )
 
+-- each unit that relies on the concept, with how many of its claims do
 , relied_on as (
     select
         platform
@@ -119,7 +125,17 @@ with mentions as (
         , relied_on.concept_id
         , min(relied_on.relied_position) as first_scope_position
         , sum(relied_on.claim_count) as claim_count
-        , sum(relied_on.accepted_claim_count) as accepted_claim_count
+        -- only an accepted claim that relies on the concept before any scope teaches
+        -- it supports the requirement; a later one is use of what the run taught
+        , sum(
+            case
+                when
+                    first_taught.first_taught_position is null
+                    or relied_on.relied_position < first_taught.first_taught_position
+                    then relied_on.accepted_claim_count
+                else 0
+            end
+        ) as accepted_claim_count
         , count(*) as scope_count
         , array_agg(relied_on.scope_id order by relied_on.relied_position, relied_on.scope_id) as relied_scope_ids
         , sum(
