@@ -224,6 +224,12 @@ def test_concepts_bridged_twice_merge_one_way(verdicts):
     verdicts[("n1", "l1")] = "exact"
     verdicts[("o2", "s2")] = "exact"
     verdicts[("o2", "l2")] = "exact"
+    # each new label joins both concepts whole, so it is not distinct from the other
+    # member of either
+    verdicts[("n1", "s2")] = "close"
+    verdicts[("n1", "l2")] = "close"
+    verdicts[("o2", "s1")] = "close"
+    verdicts[("o2", "l1")] = "close"
     second = run(
         labels("l1", "l2", "n1", "o2", "s1", "s2", mentions=mentions),
         state_from(first),
@@ -316,6 +322,49 @@ def test_a_label_that_drops_out_keeps_its_id_until_a_rebuild():
         row["concept_id"]: row for row in rebuilt.registry.iter_rows(named=True)
     }
     assert registry[pandas]["concept_status"] == "deprecated"
+
+
+def test_a_label_distinct_from_a_member_of_its_destination_is_not_merged(verdicts):
+    verdicts[("auc", "area under the curve")] = "exact"
+    first = run(labels("auc", "area under the curve"))
+    # exact to one member of the concept, distinct from the other
+    verdicts[("auc roc", "auc")] = "exact"
+    verdicts[("auc roc", "area under the curve")] = "distinct"
+    second = run(labels("auc", "area under the curve", "auc roc"), state_from(first))
+    assert concept_of(second, "auc roc") != concept_of(first, "auc")
+    assert second.run["rejected_components"][0] == 1
+
+
+def test_a_failed_label_is_not_brought_back_as_a_candidate():
+    components, _ = accepted_components(
+        ["auc", "pandas"], [("auc", "area under the curve", "exact")]
+    )
+    assert sorted(map(sorted, components)) == [["auc"], ["pandas"]]
+
+
+def test_incremental_run_leaves_a_failed_label_unassigned(verdicts, monkeypatch):
+    first = run(labels("auc", "pandas"))
+    verdicts[("auc roc", "auc")] = "exact"
+    verdicts[("area under the curve", "auc")] = "exact"
+
+    def adjudicate_failing_auc_roc(_client, _model_id, candidates, _rows):
+        # auc roc's own batch failed, but another query still lists it as exact
+        decided = [
+            (query, candidate, verdicts.get((query, candidate), "distinct"))
+            for query, found in candidates.items()
+            if query != "auc roc"
+            for candidate in found
+        ]
+        decided.append(("area under the curve", "auc roc", "exact"))
+        return decided, 1, {"auc roc"}
+
+    monkeypatch.setattr(resolve, "adjudicate", adjudicate_failing_auc_roc)
+    second = run(
+        labels("auc", "pandas", "area under the curve", "auc roc"), state_from(first)
+    )
+    assigned = second.assignments["concept_label_key"].to_list()
+    assert "auc roc" not in assigned
+    assert concept_of(second, "area under the curve") == concept_of(first, "auc")
 
 
 class _VerdictClient:

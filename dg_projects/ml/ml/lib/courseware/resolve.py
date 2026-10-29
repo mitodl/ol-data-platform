@@ -457,33 +457,49 @@ class _UnionFind:
 
 
 def accepted_components(
-    keys: Iterable[str], decisions: list[tuple[str, str, str]]
+    keys: Iterable[str],
+    decisions: list[tuple[str, str, str]],
+    carried: dict[str, str] | None = None,
 ) -> tuple[list[set[str]], int]:
     """Join exact verdicts into components, keeping only components that are small
     and contain no pair judged distinct; a rejected component falls apart into
     singletons for review.
 
+    A component joins the concepts its carried labels already belong to, so the
+    distinct check covers every label of those concepts, not only the component's.
+
+    :param keys: the labels to group; a decision naming any other label is ignored
+    :param decisions: (query, candidate, verdict) triples
+    :param carried: each carried label's current concept id
     :returns: the components covering every key, and how many were rejected
     """
     union_find = _UnionFind()
     keys = list(keys)
     for key in keys:
         union_find.find(key)
-    distinct = set()
+    known = set(keys)
+    distinct: dict[str, set[str]] = defaultdict(set)
     for query, candidate, verdict in decisions:
+        # a label left out of keys (its batch failed) must not come back in as
+        # another label's candidate
+        if query not in known or candidate not in known:
+            continue
         if verdict == "exact":
             union_find.union(query, candidate)
         elif verdict == "distinct":
-            distinct.add(frozenset((query, candidate)))
+            distinct[query].add(candidate)
+            distinct[candidate].add(query)
+    carried = carried or {}
+    concept_members: dict[str, set[str]] = defaultdict(set)
+    for key, concept_id in carried.items():
+        concept_members[concept_id].add(key)
     components: list[set[str]] = []
     rejected = 0
-    for component in union_find.components(union_find.parent):
-        conflicted = any(
-            frozenset((left, right)) in distinct
-            for left in component
-            for right in component
-            if left < right
+    for component in union_find.components(keys):
+        destination = component.union(
+            *(concept_members[carried[key]] for key in component if key in carried)
         )
+        conflicted = any(distinct[key] & destination for key in destination)
         if len(component) > MAX_MERGE_COMPONENT or conflicted:
             rejected += 1
             components.extend({key} for key in component)
@@ -567,7 +583,9 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     decisions, calls, failed = adjudicate(client, model_id, candidates, rows)
 
     components, rejected = accepted_components(
-        [key for key in keys if key not in failed or key in carried], decisions
+        [key for key in keys if key not in failed or key in carried],
+        decisions,
+        carried,
     )
     assignments: dict[str, tuple[str, str]] = {
         key: (concept_id, "carried") for key, concept_id in carried.items()
