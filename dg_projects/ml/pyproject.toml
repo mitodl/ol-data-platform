@@ -28,6 +28,7 @@ dependencies = [
     "ol-llm[anthropic,bedrock,google,openai]==0.0.5",
     "azure-identity>=1.25.3",
     "networkit>=11.2",
+    "ahocorasick-rs>=1.0.3",
 ]
 
 [project.entry-points]

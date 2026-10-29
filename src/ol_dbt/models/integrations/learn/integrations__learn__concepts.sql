@@ -1,8 +1,8 @@
 {#
     The concepts Learn can show to learners: one row per learner-facing concept with
     its descriptions and how many courses teach it, for concept chips, tooltips and a
-    concept page. Pairs with integrations__learn__resource_knowledge, which lists each
-    course's concepts by label.
+    concept page. Pairs with integrations__learn__resource_concepts, which lists each
+    course's concepts by id.
 
     Only accepted concepts are published, and course counts come only from relations
     an accepted claim supports; proposed rows stay in dim_concept and

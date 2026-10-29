@@ -4,7 +4,8 @@ version: 2
 models:
 - name: integrations__learn__resource_knowledge
   description: What each Learn course teaches, assesses and expects, from its most
-    recently extracted run, with a deterministic markdown context document for embedding.
+    recently extracted run, as statements and a deterministic markdown context document
+    for embedding. The course's concepts are published by id in integrations__learn__resource_concepts.
     Only accepted concepts and claims are included.
   config:
     meta:
@@ -24,19 +25,6 @@ models:
     description: str, the run the knowledge was extracted from
   - name: course_title
     description: str, the course's title
-  - name: concepts_taught
-    description: array of str, labels of concepts the run teaches, most claimed first
-  - name: concepts_reviewed
-    description: array of str, labels of concepts the run reviews
-  - name: concepts_used
-    description: array of str, labels of concepts the run uses without teaching
-  - name: concepts_assessed
-    description: array of str, labels of concepts the run's assessments name
-  - name: prerequisites_declared
-    description: array of str, labels of prerequisites the course material states
-  - name: prerequisites_inferred
-    description: array of str, labels of concepts the run relies on before or without
-      teaching them
   - name: skills
     description: array of str, skill statements
   - name: learning_outcomes
@@ -48,6 +36,47 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [etl_source, readable_id]
+
+- name: integrations__learn__resource_concepts
+  description: Which concepts each Learn course teaches, reviews, uses, assesses or
+    requires, by concept id, from its most recently extracted run. The concept id
+    is the sense the course uses, so Learn joins concepts by id and never by label.
+    Only accepted concepts and relations an accepted claim supports are included.
+  config:
+    meta:
+      # Same as integrations__learn__resource_knowledge: no QA form until the Dagster
+      # assets exist.
+      qa_buildable: false
+  columns:
+  - name: etl_source
+    description: str, Learn's etl_source for the course (mitxonline, xpro)
+    tests:
+    - not_null
+  - name: readable_id
+    description: str, the course readable_id as Learn keys it
+    tests:
+    - not_null
+  - name: extracted_courserun_readable_id
+    description: str, the run the concepts were extracted from
+  - name: concept_id
+    description: str, dim_concept.concept_pk, the sense of the concept the course
+      uses; integrations__learn__concepts has its name and descriptions
+    tests:
+    - not_null
+  - name: concept_name
+    description: str, the concept's preferred label, for display only
+  - name: relation
+    description: str, teaches, reviews, uses, mentions, assesses, requires, requires_concurrently
+      or recommends
+  - name: requirement_source
+    description: str, declared or inferred for requires relations; null otherwise
+  - name: claim_count
+    description: int, accepted claims behind the relation
+  - name: first_scope_position
+    description: int, the first scope in the run that supports the relation
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [etl_source, readable_id, concept_id, relation, requirement_source]
 
 - name: integrations__learn__concepts
   description: Learner-facing concepts with their descriptions and course counts,
