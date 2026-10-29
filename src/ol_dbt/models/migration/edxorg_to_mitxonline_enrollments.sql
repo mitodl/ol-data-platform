@@ -66,17 +66,18 @@ with combined_enrollments as (
     select
         edx_signatory.courserun_readable_id
         , array_distinct(
-            array_agg(
-                edx_signatory.signatory_normalized_name order by edx_signatory.signatory_normalized_name
-            )
-            filter (where edx_signatory.signatory_normalized_name <> '')
+            {{ array_agg_filter(
+                'edx_signatory.signatory_normalized_name'
+                , "edx_signatory.signatory_normalized_name <> ''"
+                , order_by='edx_signatory.signatory_normalized_name'
+            ) }}
           ) as signatory_names
-        , array_sort(
-            array_distinct(
-                array_agg(mitxonline_signatory.wagtail_page_id)
-                filter (where mitxonline_signatory.wagtail_page_id is not null)
-            )
-          ) AS signatory_ids
+        , {{ array_sort(
+            'array_distinct(' ~ array_agg_filter(
+                'mitxonline_signatory.wagtail_page_id'
+                , 'mitxonline_signatory.wagtail_page_id is not null'
+            ) ~ ')'
+          ) }} AS signatory_ids
     from {{ ref('stg__edxorg__s3__course_certificate_signatory') }} edx_signatory
     left join {{ ref('stg__mitxonline__app__postgres__cms_signatorypage') }} as mitxonline_signatory
         on edx_signatory.signatory_normalized_name = mitxonline_signatory.signatorypage_name
@@ -87,14 +88,12 @@ with combined_enrollments as (
     select
         revision.wagtailcore_revision_id
         , cast(revision.wagtail_page_id as bigint) as certificate_page_id
-        , array_sort(
-            -- signatories is a JSON string holding the StreamField's JSON list
-            {{ array_transform(
-                json_extract_json_array(json_query_string('wagtailcore_revision_content', "'$.signatories'"), "'$'")
-                , 'x'
-                , "cast(" ~ json_extract_scalar('x', "'$.value'") ~ " as integer)"
-            ) }}
-        ) AS signatory_ids
+        -- signatories is a JSON string holding the StreamField's JSON list
+        , {{ array_sort(array_transform(
+            json_extract_json_array(json_query_string('wagtailcore_revision_content', "'$.signatories'"), "'$'")
+            , 'x'
+            , "cast(" ~ json_extract_scalar('x', "'$.value'") ~ " as integer)"
+        )) }} AS signatory_ids
     from {{ ref('stg__mitxonline__app__postgres__cms_wagtailcore_revision') }} as revision
     inner join {{ ref('stg__mitxonline__app__postgres__django_contenttype') }} as contenttype
         on revision.contenttype_id = contenttype.contenttype_id

@@ -12,7 +12,7 @@ with source as (
         , thread_id as chatsession_thread_id
         , object_id as chatsession_object_id
         , case
-             when object_id like '%+canvas%' then split_part(object_id, '+canvas', 1)
+             when object_id like '%+canvas%' then {{ split_part_or_null('object_id', "'+canvas'", 1) }}
              when agent = 'CanvasSyllabusBot' then object_id
         end as canvas_course_id
         , dj_session_key as chatsession_django_session_key

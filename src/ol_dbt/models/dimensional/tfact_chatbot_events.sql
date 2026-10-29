@@ -161,7 +161,7 @@ with openedx_events as (
         , user_username
         , openedx_user_id
         , org_id
-        , split_part(filled_canvas_object_id,  '+', 1) as courserun_readable_id
+        , {{ split_part_or_null('filled_canvas_object_id', "'+'", 1) }} as courserun_readable_id
         , event_type
         , session_id
         , block_id

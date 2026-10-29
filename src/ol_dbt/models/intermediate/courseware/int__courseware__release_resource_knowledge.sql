@@ -17,6 +17,8 @@
     be embedded as a resource's search text (the embedding substrate's
     resource_knowledge_markdown_v1 builder) without another model call.
 #}
+{% set concept_order = 'run_bridge.claim_count desc, concepts.name ASC' %}
+
 with learn_runs as (
     select * from {{ ref('int__courseware__learn_course_runs') }}
 )
@@ -40,16 +42,20 @@ with learn_runs as (
 , concept_lists as (
     select
         run_bridge.courserun_fk
-        , array_agg(concepts.name order by run_bridge.claim_count desc, concepts.name ASC) filter (where run_bridge.relation = 'teaches') as concepts_taught
-        , array_agg(concepts.name order by run_bridge.claim_count desc, concepts.name ASC) filter (where run_bridge.relation = 'reviews') as concepts_reviewed
-        , array_agg(concepts.name order by run_bridge.claim_count desc, concepts.name ASC) filter (where run_bridge.relation = 'uses') as concepts_used
-        , array_agg(concepts.name order by run_bridge.claim_count desc, concepts.name ASC) filter (where run_bridge.relation = 'assesses') as concepts_assessed
-        , array_agg(concepts.name order by run_bridge.claim_count desc, concepts.name ASC) filter (
-            where run_bridge.relation = 'requires' and run_bridge.requirement_source = 'declared'
-        ) as prerequisites_declared
-        , array_agg(concepts.name order by run_bridge.claim_count desc, concepts.name ASC) filter (
-            where run_bridge.relation = 'requires' and run_bridge.requirement_source = 'inferred'
-        ) as prerequisites_inferred
+        , {{ array_agg_filter('concepts.name', "run_bridge.relation = 'teaches'", order_by=concept_order) }} as concepts_taught
+        , {{ array_agg_filter('concepts.name', "run_bridge.relation = 'reviews'", order_by=concept_order) }} as concepts_reviewed
+        , {{ array_agg_filter('concepts.name', "run_bridge.relation = 'uses'", order_by=concept_order) }} as concepts_used
+        , {{ array_agg_filter('concepts.name', "run_bridge.relation = 'assesses'", order_by=concept_order) }} as concepts_assessed
+        , {{ array_agg_filter(
+            'concepts.name'
+            , "run_bridge.relation = 'requires' and run_bridge.requirement_source = 'declared'"
+            , order_by=concept_order
+        ) }} as prerequisites_declared
+        , {{ array_agg_filter(
+            'concepts.name'
+            , "run_bridge.relation = 'requires' and run_bridge.requirement_source = 'inferred'"
+            , order_by=concept_order
+        ) }} as prerequisites_inferred
     from run_bridge
     inner join concepts
         on run_bridge.concept_fk = concepts.concept_id
@@ -59,9 +65,9 @@ with learn_runs as (
 , statement_lists as (
     select
         courserun_fk
-        , array_agg(distinct label order by label) filter (where claim_kind = 'skill') as skills
-        , array_agg(distinct label order by label) filter (where claim_kind = 'learning_outcome') as learning_outcomes
-        , array_agg(distinct label order by label) filter (where claim_kind = 'audience') as audience
+        , {{ array_agg_filter('label', "claim_kind = 'skill'", order_by='label', distinct=true) }} as skills
+        , {{ array_agg_filter('label', "claim_kind = 'learning_outcome'", order_by='label', distinct=true) }} as learning_outcomes
+        , {{ array_agg_filter('label', "claim_kind = 'audience'", order_by='label', distinct=true) }} as audience
     from claims
     group by courserun_fk
 )

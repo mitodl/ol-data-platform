@@ -694,7 +694,7 @@ with mitx_users as (
         -- lexicographic key below so the key names the account agg_view's ids come from.
         , case
             when combined_accounts.id_source in ('emeritus', 'global_alumni') then null
-            else try_cast(combined_accounts.id_source_user_id as bigint)
+            else {{ try_cast('combined_accounts.id_source_user_id', 'bigint') }}
         end as sort_id
         , combined_accounts.*
     from combined_accounts
