@@ -19,8 +19,10 @@
         the courses with a run that declares the concept or infers it with a
         direction_consistency over the threshold, is at least
         courseware_prerequisite_min_course_support. Courses, not runs, because two
-        runs of one course have near-identical text and would corroborate themselves;
-        and
+        runs of one course have near-identical text and would corroborate themselves.
+        A course is keyed as bridge_courserun_prerequisite_coverage keys it
+        (course_key from courseware_current_course_runs, which leaves out the
+        platform), so an edxorg and a mitxonline copy of one course count once; and
       - direction_consistency, prior_scope_count over that plus taught_scope_count
         (the scopes that teach it later, which says the run covers it itself), is at
         least courseware_prerequisite_min_direction_consistency.
@@ -70,8 +72,7 @@ with mentions as (
 )
 
 , course_runs as (
-    select * from {{ ref('dim_course_run') }}
-    where is_current
+    {{ courseware_current_course_runs() }}
 )
 
 , concepts as (
@@ -91,6 +92,24 @@ with mentions as (
     from mentions
     where concept_kind is not null
     group by platform, courserun_readable_id, concept_id
+)
+
+-- the course each run belongs to, so a course's reruns and its copies on other
+-- platforms count once. A run that is not a current dim_course_run is keyed by its
+-- run id, as courseware_current_course_runs keys a run without a course_fk.
+, run_courses as (
+    select distinct
+        mentions.platform
+        , mentions.courserun_readable_id
+        , coalesce(
+            course_runs.course_key
+            , {{ courseware_course_key('mentions.courserun_readable_id') }}
+        ) as course_key
+    from mentions
+    left join course_runs
+        on
+            mentions.platform = course_runs.platform
+            and mentions.courserun_readable_id = course_runs.courserun_readable_id
 )
 
 , direct_relations as (
@@ -234,16 +253,12 @@ with mentions as (
             and inferred_candidates.concept_id = expected_by_run.concept_id
 )
 
-, course_keys as (
-    {{ courseware_run_course_keys('mentions') }}
-)
-
 -- courses that require each concept, for cross-course support: declared, or inferred
--- by a run whose own evidence points the right way
+-- by a run whose own evidence points the right way, keyed by run_courses
 , requiring_courses as (
     select
         requiring.concept_id
-        , count(distinct course_keys.course_key) as course_support
+        , count(distinct run_courses.course_key) as course_support
     from (
         select
             platform
@@ -259,10 +274,10 @@ with mentions as (
         from direct_relations
         where relation = 'requires'
     ) as requiring
-    left join course_keys
+    inner join run_courses
         on
-            requiring.platform = course_keys.platform
-            and requiring.courserun_readable_id = course_keys.courserun_readable_id
+            requiring.platform = run_courses.platform
+            and requiring.courserun_readable_id = run_courses.courserun_readable_id
     group by requiring.concept_id
 )
 

@@ -291,6 +291,7 @@ def graph(concepts: Path, relations: Path, output_dir: Path) -> None:
         ("courseware_concept_graph_node", result.nodes),
         ("courseware_concept_graph_edge", result.edges),
         ("courseware_concept_graph_community", result.communities),
+        ("courseware_concept_graph_prerequisite_closure", result.prerequisite_closure),
         ("courseware_concept_graph_run", result.run),
     ):
         _append(output_dir, table, new_rows)

@@ -371,6 +371,19 @@ sources:
     - name: backbone_score
       description: float, local-degree sparsification score; keep edges above a threshold
         to draw a sparse backbone
+  - name: courseware_concept_graph_prerequisite_closure
+    description: Per graph run, every concept each concept builds on through approved
+      builds_on edges (review_status accepted), at the fewest hops, up to the run's
+      max_prerequisite_depth; experimental, and empty until review exists.
+    columns:
+    - name: graph_run_id
+      description: str, the run
+    - name: from_concept_id
+      description: str, the concept that builds on to_concept_id
+    - name: to_concept_id
+      description: str, the prerequisite concept
+    - name: min_depth
+      description: int, the fewest builds_on hops from from_concept_id to to_concept_id
   - name: courseware_concept_description
     description: Learner-facing descriptions of concepts (ml.lib.courseware.describe),
       one row per concept per description version and input checksum.

@@ -24,8 +24,9 @@
       reverse_courserun_support builds_on only: runs where the opposite direction
                                 was observed
       course_scope_support      builds_on only: scope_support with each course's
-                                reruns counted once (its run with the most units),
-                                since reruns of one course have near-identical text
+                                reruns and platform copies counted once (its run
+                                with the most units), since they have near-identical
+                                text; courses are keyed by courseware_current_course_runs
       reverse_scope_support     builds_on only: the same for the opposite direction;
                                 direction_consistency is course_scope_support /
                                 (course_scope_support + reverse_scope_support)
@@ -51,6 +52,10 @@
 #}
 with evidence as (
     select * from {{ ref('int__courseware__concept_relation_evidence') }}
+)
+
+, course_runs as (
+    {{ courseware_current_course_runs() }}
 )
 
 , mentions as (
@@ -106,29 +111,33 @@ with evidence as (
     group by from_concept_id, to_concept_id, relation
 )
 
-, course_keys as (
-    {{ courseware_run_course_keys('evidence') }}
-)
-
--- units per builds_on run, keyed by the run's course
+-- units per builds_on run, keyed by course as bridge_courserun_concept keys it, so a
+-- course's reruns and its copies on other platforms count once. A run that is not a
+-- current dim_course_run is keyed by its run id.
 , builds_on_course_runs as (
     select
         evidence.from_concept_id
         , evidence.to_concept_id
-        , course_keys.course_key
+        , coalesce(
+            course_runs.course_key
+            , {{ courseware_course_key('evidence.courserun_readable_id') }}
+        ) as course_key
         , evidence.platform
         , evidence.courserun_readable_id
         , sum(evidence.scope_count) as scope_count
     from evidence
-    left join course_keys
+    left join course_runs
         on
-            evidence.platform = course_keys.platform
-            and evidence.courserun_readable_id = course_keys.courserun_readable_id
+            evidence.platform = course_runs.platform
+            and evidence.courserun_readable_id = course_runs.courserun_readable_id
     where evidence.relation = 'builds_on'
     group by
         evidence.from_concept_id
         , evidence.to_concept_id
-        , course_keys.course_key
+        , coalesce(
+            course_runs.course_key
+            , {{ courseware_course_key('evidence.courserun_readable_id') }}
+        )
         , evidence.platform
         , evidence.courserun_readable_id
 )

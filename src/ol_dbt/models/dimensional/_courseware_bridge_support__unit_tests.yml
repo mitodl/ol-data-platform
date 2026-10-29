@@ -18,6 +18,8 @@ unit_tests:
     rows:
     - {courserun_pk: r1, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
       is_current: true}
+  - input: ref('dim_course')
+    rows: []
   - input: ref('dim_concept')
     rows: []
   expect:
@@ -51,6 +53,8 @@ unit_tests:
     rows:
     - {courserun_pk: r1, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
       is_current: true}
+  - input: ref('dim_course')
+    rows: []
   - input: ref('dim_concept')
     rows: []
   expect:

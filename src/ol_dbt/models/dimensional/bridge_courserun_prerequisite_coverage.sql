@@ -32,9 +32,9 @@
     covered one (0 for direct and close). That set is what the corpus happens to
     contain, not what the target needs, so it is reported as evidence and never
     turned into a share or a threshold: adding an unrelated course can add narrower
-    concepts to the missing list and the count, and nothing else in a provider's row. The walk does not
-    start from close equivalents too: on the pilot that pulled the mathematical
-    "function" tree (logistic, softmax) under "Python function".
+    concepts to the missing list and the count, and nothing else in a provider's
+    row. The walk does not start from close equivalents too: on the pilot that pulled
+    the mathematical "function" tree (logistic, softmax) under "Python function".
 
     Uncertainty stays in its own columns rather than a score: requirement_source and
     requirement_passes_support_rule for the requirement (that rule counts other
@@ -50,13 +50,9 @@
     uncovered: it has no narrower concepts, because its taught neighbours (random
     forest, grid search) are methods it implements, adjudicated related, not broader.
 
-    course_key decides which runs are the same course: dim_course.course_readable_id,
-    or, when course_fk is null (edxorg runs until edxorg courses load, and courses
-    missing from dim_course), courserun_course_readable_id, the run id less its last
-    segment. It leaves out the platform: dim_course keys a course on
-    (primary_platform, course_readable_id), so course_fk alone would let an edxorg and
-    a mitxonline copy with the same readable id cover each other. Copies whose readable
-    ids differ (e.g. by org) still do.
+    course_key (courseware_current_course_runs) decides which runs are the same
+    course, across platforms. Copies whose readable ids differ (e.g. by org) still
+    cover each other.
 
     The walk is unrolled, as in the acyclic test, because recursive CTEs are not
     portable across Trino and StarRocks; a broader cycle cannot loop it, since the
@@ -73,24 +69,8 @@ with run_concepts as (
     where passes_support_rule
 )
 
-, courses as (
-    select * from {{ ref('dim_course') }}
-    where is_current
-)
-
 , course_runs as (
-    select
-        dim_course_run.courserun_pk
-        , dim_course_run.platform
-        , dim_course_run.courserun_readable_id
-        , coalesce(
-            courses.course_readable_id
-            , {{ courserun_course_readable_id('dim_course_run.courserun_readable_id') }}
-        ) as course_key
-    from {{ ref('dim_course_run') }} as dim_course_run
-    left join courses
-        on dim_course_run.course_fk = courses.course_pk
-    where dim_course_run.is_current
+    {{ courseware_current_course_runs() }}
 )
 
 , requirements as (
@@ -138,21 +118,8 @@ with run_concepts as (
     where relation = 'broader'
 )
 
--- close is stored once per pair, so read it both ways
 , close_pairs as (
-    select
-        from_concept_fk as concept_fk
-        , to_concept_fk as close_concept_fk
-        , review_status = 'accepted' as is_reviewed
-    from concept_relations
-    where relation = 'close'
-    union
-    select
-        to_concept_fk as concept_fk
-        , from_concept_fk as close_concept_fk
-        , review_status = 'accepted' as is_reviewed
-    from concept_relations
-    where relation = 'close'
+    {{ courseware_close_concept_pairs() }}
 )
 
 , required_concepts as (
