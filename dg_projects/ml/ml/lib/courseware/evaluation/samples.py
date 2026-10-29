@@ -28,9 +28,10 @@ from typing import Any
 
 import numpy as np
 import polars as pl
-from ml.lib.courseware.evaluation.matching import LabelMatcher, concept_label_key
+from ml.lib.courseware.evaluation.matching import LabelMatcher
 from ml.lib.courseware.evaluation.metrics import MIN_LABELS_PER_STRATUM, allocate
 from ml.lib.courseware.scopes import build_scopes
+from ml.lib.courseware.tagging import label_key
 
 # Claim kinds whose label names a concept, so two models' claims can be matched.
 CONCEPT_CLAIM_KINDS = ("concept", "assumed_knowledge", "declared_prerequisite")
@@ -1442,7 +1443,7 @@ def prerequisites_population(inputs: GoldInputs) -> pl.DataFrame:
     for platform, run, label in claims.select(
         "platform", "courserun_readable_id", "label"
     ).iter_rows():
-        concept = sense.get((concept_label_key(label), platform, run))
+        concept = sense.get((label_key(label), platform, run))
         if concept is not None:
             per_run[platform, run].add(concept)
     co_occurring = {

@@ -12,44 +12,12 @@ everywhere and reported with every figure. Two labels match when, in order:
 Matches are transitive: the rule is the union of these equivalences.
 """
 
-import re
 from collections.abc import Iterable
 
 import polars as pl
+from ml.lib.courseware.tagging import label_key
 
 MATCHING_RULE = "normalized label, then resolved concept id, then supplied label map"
-# a Unicode letter or number, the macro's [\p{L}\p{N}]
-_WORD = re.compile(r"[^\W_]")
-# the courseware_label_key macro's steps, in its order
-_KEY_STEPS = (
-    # a + or # standing alone is a separator ("a + b", "# of rows")
-    (re.compile(r"^[+#]"), " "),
-    (re.compile(r"\s[+#]"), " "),
-    # any other names something: C++, C#, F#
-    (re.compile(r"[+]"), " plus "),
-    (re.compile(r"#"), " sharp "),
-    # a leading dot too: .NET, .csv
-    (re.compile(r"^[.]"), "dot "),
-    (re.compile(r"\s[.]"), " dot "),
-    # Unicode letters and numbers are kept (R², Schrödinger)
-    (re.compile(r"[\W_]+"), " "),
-)
-
-
-def concept_label_key(label: str) -> str | None:
-    """Normalize a label the way the courseware_label_key macro does.
-
-    :param label: any text
-    :returns: the key, or None for a label with no letter or number
-    :rtype: str | None
-    """
-    # checked first, as "." and ".+" would otherwise spell out to "dot" and "dot plus"
-    if not _WORD.search(label):
-        return None
-    key = label.lower()
-    for pattern, replacement in _KEY_STEPS:
-        key = pattern.sub(replacement, key)
-    return key.strip()
 
 
 class LabelMatcher:
@@ -106,6 +74,6 @@ class LabelMatcher:
 
     def canonical(self, label: str) -> str:
         """Return a label's match class; two labels match exactly when equal."""
-        key = concept_label_key(label)
+        key = label_key(label)
         # a label with no key (only symbols) matches nothing but itself
         return self._find(f"key:{key}" if key else f"label:{label.strip()}")
