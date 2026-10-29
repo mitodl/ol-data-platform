@@ -436,7 +436,7 @@ Both Learn exports and tenant responses need the release id and stable concept i
 
 ### Review and source policy gate every learner-facing projection
 
-The POC hard-codes concepts as `proposed` and its Learn-shaped views include them. #3028's `is_published` means a support rule passed, not that a person accepted the assertion. Neither field is sufficient authorization for public ingest or an anonymous graph route.
+The POC hard-codes concepts as `proposed` and its Learn-shaped views include them. #3028's `is_published` (now `passes_support_rule`) means a support rule passed, not that a person accepted the assertion. Neither field is sufficient authorization for public ingest or an anonymous graph route.
 
 Name reviewers and decision owners, measure their workload, persist decisions independently of generated rows, and apply decisions as resolver constraints. Enforce accepted-only, source-eligible publication for Learn ingest, the tenant, search context, chips, AskTIM and JSON-LD alike. Proposed rows remain review-only. Reusing an accepted concept does not automatically accept a new claim, description or dependency involving it. Any future auto-accept policy needs its own measured error bounds and audit sample.
 

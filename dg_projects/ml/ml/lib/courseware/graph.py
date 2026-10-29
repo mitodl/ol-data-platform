@@ -158,8 +158,8 @@ def _longest_chain(graph: nk.Graph, blocked: set[int]) -> dict[int, int]:
     """Longest path length from each node along out-edges, ignoring cyclic nodes.
 
     For builds_on (concept -> what it builds on) this is the depth of the
-    prerequisite chain beneath a concept; for broader it is the depth of the
-    hierarchy above it.
+    observed instructional order beneath a concept; for broader it is the depth of
+    the hierarchy above it.
     """
     if not graph.numberOfNodes():
         # topologicalSort rejects a graph with no nodes

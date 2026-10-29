@@ -1,8 +1,8 @@
 -- Each active concept's place in the newest concept graph: its community, how
 -- connected it is, how foundational (PageRank over builds_on, where rank flows to
--- what others build on), how deep its prerequisite chain and hierarchy go, and
--- whether it sits on a cycle (a data-quality finding: learning order and the
--- hierarchy should both be acyclic).
+-- what others build on), how deep its builds_on chain (observed instructional
+-- order, not prerequisites) and hierarchy go, and whether it sits on a cycle (a
+-- finding to review).
 with nodes as (
     select node.*
     from {{ source('courseware_intermediate', 'courseware_concept_graph_node') }} as node
