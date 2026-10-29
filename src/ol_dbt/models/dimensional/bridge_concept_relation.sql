@@ -3,9 +3,15 @@
     (from, to, relation). This is the graph's edge table and the input to
     ml.lib.courseware.graph.
 
+    Every row is a candidate relation aggregated from observations
+    (int__courseware__concept_relation_evidence, which keeps the course, unit,
+    source and extractor version of each), not an accepted assertion: review_status
+    stays proposed until a review workflow exists.
+
     relation_family groups relations by what they mean for a learner:
       hierarchy    broader      from is a kind or part of to
-      sequence     builds_on    from is learned on top of to
+      sequence     builds_on    units teaching from relied on to (an instructional
+                                observation, not evidence that from requires to)
       practice     practiced_with  learning from involves using the tool to
       equivalence  close        nearly interchangeable (exact matches are merged
                                 into one concept, not linked)
@@ -61,7 +67,7 @@
     score is rounded to 4 places, so the snapshot does not version an edge over a
     last-bit difference between engines or plans.
 
-    Publication (is_published, with unpublished_reason on the rest, which keep their
+    Publication (passes_support_rule, with support_rule_failure on the rest, which keep their
     rows for review). Every relation other than builds_on and broader is published,
     and its consumers apply their own thresholds to the support columns.
     - builds_on publishes when course_scope_support reaches
@@ -166,8 +172,8 @@ with evidence as (
     group by from_concept_id, to_concept_id, relation
 )
 
--- units per course relation with each course's reruns counted once, per evidence
--- source; a run with no course_fk (e.g. residential) is keyed by its course's
+-- units per course relation, run and evidence source, so each course's reruns can be
+-- counted once; a run with no course_fk (e.g. residential) is keyed by its course's
 -- readable id
 , course_relation_runs as (
     select
@@ -175,17 +181,30 @@ with evidence as (
         , evidence.to_concept_id
         , evidence.relation
         , evidence.evidence_source
-        , evidence.scope_count
         , coalesce(
             course_runs.course_fk
             , concat(evidence.platform, '|', {{ courserun_course_readable_id('evidence.courserun_readable_id') }})
         ) as course_key
+        , evidence.platform
+        , evidence.courserun_readable_id
+        , sum(evidence.scope_count) as scope_count
     from evidence
     left join course_runs
         on
             evidence.platform = course_runs.platform
             and evidence.courserun_readable_id = course_runs.courserun_readable_id
     where evidence.evidence_source != 'adjudication'
+    group by
+        evidence.from_concept_id
+        , evidence.to_concept_id
+        , evidence.relation
+        , evidence.evidence_source
+        , coalesce(
+            course_runs.course_fk
+            , concat(evidence.platform, '|', {{ courserun_course_readable_id('evidence.courserun_readable_id') }})
+        )
+        , evidence.platform
+        , evidence.courserun_readable_id
 )
 
 , course_support as (
@@ -286,7 +305,7 @@ with evidence as (
             when not has_min_support then 'insufficient_support'
             when direction_consistency < {{ var('courseware_prerequisite_min_direction_consistency') }}
                 then 'contested_direction'
-        end as unpublished_reason
+        end as support_rule_failure
     from builds_on_direction
 )
 
@@ -296,7 +315,7 @@ with evidence as (
         , course_support.course_scope_support
         , builds_on_support.reverse_scope_support
         , builds_on_support.direction_consistency
-        , builds_on_support.unpublished_reason as support_unpublished_reason
+        , builds_on_support.support_rule_failure as builds_on_rule_failure
         , adjudication_scores.verdict_support
         , adjudication_scores.contrary_verdict_support
         , adjudication_scores.verdict_consistency
@@ -379,7 +398,7 @@ with evidence as (
             and broader_edges.to_concept_id = hierarchy_cycle_edges.to_concept_id
     where
         builds_on_edges.relation = 'builds_on'
-        and builds_on_edges.support_unpublished_reason is null
+        and builds_on_edges.builds_on_rule_failure is null
         and broader_edges.relation = 'broader'
         and hierarchy_cycle_edges.from_concept_id is null
     group by builds_on_edges.from_concept_id, builds_on_edges.to_concept_id, builds_on_edges.relation_confidence
@@ -392,7 +411,7 @@ with evidence as (
         from_concept_id
         , to_concept_id
         , 'builds_on' as relation
-        , 'hierarchy_pair' as unpublished_reason
+        , 'hierarchy_pair' as support_rule_failure
     from pair_contest
     where not is_builds_on_preferred
     union all
@@ -400,7 +419,7 @@ with evidence as (
         broader_edges.from_concept_id
         , broader_edges.to_concept_id
         , 'broader' as relation
-        , 'sequence_pair' as unpublished_reason
+        , 'sequence_pair' as support_rule_failure
     from pair_contest
     inner join scored as broader_edges
         on
@@ -424,10 +443,10 @@ with evidence as (
         , scored.to_concept_id
         , scored.relation
         , coalesce(
-            scored.support_unpublished_reason
+            scored.builds_on_rule_failure
             , case when hierarchy_cycle_edges.from_concept_id is not null then 'hierarchy_cycle' end
-            , pair_exclusion.unpublished_reason
-        ) as unpublished_reason
+            , pair_exclusion.support_rule_failure
+        ) as support_rule_failure
     from scored
     left join hierarchy_cycle_edges
         on
@@ -476,8 +495,8 @@ select
     , scored.first_observed_at
     , scored.last_observed_at
     , 'proposed' as review_status
-    , publication.unpublished_reason is null as is_published
-    , publication.unpublished_reason
+    , publication.support_rule_failure is null as passes_support_rule
+    , publication.support_rule_failure
 from scored
 cross join unit_totals
 inner join publication

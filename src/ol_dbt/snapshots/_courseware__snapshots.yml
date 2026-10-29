@@ -7,7 +7,7 @@ snapshots:
     History of concept-to-concept edges, one row per version of an edge's strength
     or publishing decision. bridge_concept_relation is rebuilt from the current
     evidence on every run, so without this an edge's support, relation_confidence
-    and is_published leave no trace once they change. Read it beside
+    and passes_support_rule leave no trace once they change. Read it beside
     afact_concept_graph_run (graph runs) by time. A new version is recorded when a
     support count, the consistency, relation_confidence, review_status or the
     publishing decision changes. co_taught_lift is left out of the check, because
@@ -31,8 +31,8 @@ snapshots:
     - cross_signal_support
     - relation_confidence
     - review_status
-    - is_published
-    - unpublished_reason
+    - passes_support_rule
+    - support_rule_failure
     hard_deletes: invalidate
   columns:
   - name: concept_relation_pk
@@ -89,9 +89,9 @@ snapshots:
     description: timestamp, the latest evidence for the edge
   - name: review_status
     description: str, proposed, accepted or rejected
-  - name: is_published
+  - name: passes_support_rule
     description: boolean, whether the edge was published in this version
-  - name: unpublished_reason
+  - name: support_rule_failure
     description: str, why the edge was not published in this version, as in bridge_concept_relation
   - name: dbt_scd_id
     description: Unique id of this version of the edge.

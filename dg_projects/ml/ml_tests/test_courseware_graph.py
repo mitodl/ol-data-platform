@@ -19,7 +19,7 @@ def relation(source, target, kind, **evidence):
         "to_concept_fk": target,
         "relation": kind,
         "courserun_support": evidence.get("support", 2),
-        "is_published": evidence.get("published", True),
+        "passes_support_rule": evidence.get("passes", True),
         "co_taught_lift": evidence.get("lift"),
         "is_adjudicated": evidence.get("adjudicated", False),
         "has_co_assessed_evidence": False,
@@ -34,7 +34,7 @@ def relations(*rows):
             "to_concept_fk": pl.String,
             "relation": pl.String,
             "courserun_support": pl.Int64,
-            "is_published": pl.Boolean,
+            "passes_support_rule": pl.Boolean,
             "co_taught_lift": pl.Float64,
             "is_adjudicated": pl.Boolean,
             "has_co_assessed_evidence": pl.Boolean,
@@ -56,9 +56,9 @@ def test_sequence_levels_foundations_and_cycles():
             relation("b", "a", "broader", adjudicated=True),
             # the weakest link of a broader cycle, which dbt leaves unpublished
             relation("a", "c", "broader", adjudicated=True),
-            relation("c", "a", "broader", adjudicated=True, published=False),
+            relation("c", "a", "broader", adjudicated=True, passes=False),
             # not published by bridge_concept_relation, so it cannot close a cycle
-            relation("mean", "regression", "builds_on", published=False),
+            relation("mean", "regression", "builds_on", passes=False),
         ),
     )
     nodes = by_concept(result)

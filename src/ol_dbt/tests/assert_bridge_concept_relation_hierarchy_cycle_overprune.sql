@@ -22,7 +22,7 @@ with hierarchy_edges as (
             hierarchy_edges.from_concept_id = bridge.from_concept_fk
             and hierarchy_edges.to_concept_id = bridge.to_concept_fk
             and bridge.relation = 'broader'
-    where bridge.unpublished_reason = 'hierarchy_cycle'
+    where bridge.support_rule_failure = 'hierarchy_cycle'
 )
 
 , surviving_edges as (
