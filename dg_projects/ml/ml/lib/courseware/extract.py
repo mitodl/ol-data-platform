@@ -379,33 +379,31 @@ def stored_readings(
     """Index stored courseware_text_extraction rows for extract_scopes.
 
     :param rows: courseware_text_extraction rows
-    :param across_runs: index for reuse across runs (extract_scopes'
-        reuse_text_across_runs), not only within the run each was read for
-    :returns: the earliest reading of each key, by run unless across_runs
+    :param across_runs: also index each key's earliest reading for reuse across runs
+        (extract_scopes' reuse_text_across_runs)
+    :returns: the earliest reading of each key by run, and with across_runs of each
+        key in any run
     :rtype: dict[ReadingKey, TextReading]
     """
     readings: dict[ReadingKey, TextReading] = {}
     for row in rows.sort("extracted_at").iter_rows(named=True):
-        readings.setdefault(
-            ("", "", row["text_extraction_key"])
-            if across_runs
-            else (
-                row["platform"],
-                row["courserun_readable_id"],
-                row["text_extraction_key"],
-            ),
-            TextReading(
-                text_extraction_key=row["text_extraction_key"],
-                text_input_digest=row["text_input_digest"],
-                platform=row["platform"],
-                courserun_readable_id=row["courserun_readable_id"],
-                scope_id=row["scope_id"],
-                summary=row["summary"],
-                notes=json.loads(row["notes_json"]),
-                claims=json.loads(row["claims_json"]),
-                evidence=json.loads(row["evidence_json"]),
-            ),
+        reading = TextReading(
+            text_extraction_key=row["text_extraction_key"],
+            text_input_digest=row["text_input_digest"],
+            platform=row["platform"],
+            courserun_readable_id=row["courserun_readable_id"],
+            scope_id=row["scope_id"],
+            summary=row["summary"],
+            notes=json.loads(row["notes_json"]),
+            claims=json.loads(row["claims_json"]),
+            evidence=json.loads(row["evidence_json"]),
         )
+        readings.setdefault(
+            (row["platform"], row["courserun_readable_id"], row["text_extraction_key"]),
+            reading,
+        )
+        if across_runs:
+            readings.setdefault(("", "", row["text_extraction_key"]), reading)
     return readings
 
 
@@ -441,7 +439,11 @@ def plan_scopes(
     planned = []
     for scope in scopes:
         key = text_extraction_key(scope, model_id, effort)
-        reading = readings.get(_reading_key(scope, key, across_runs=across_runs))
+        # a run's own reading first, so turning reuse on never re-places a run
+        # whose text was already read for it
+        reading = readings.get(_reading_key(scope, key, across_runs=False))
+        if reading is None and across_runs:
+            reading = readings.get(_reading_key(scope, key, across_runs=True))
         planned.append(
             PlannedScope(
                 scope=scope,

@@ -786,3 +786,36 @@ def test_extract_and_observe_refuse_older_tables_before_calling_the_model(
     assert observed["header_version"].null_count() == observed.height // 2
     assert observed["header_version"].drop_nulls().n_unique() == 1
     capsys.readouterr()
+
+
+class VaryingModel(FakeModel):
+    """Reads the same text differently on each call, as a real model may."""
+
+    def _extraction(self, message: str) -> dict[str, Any]:
+        extraction = super()._extraction(message)
+        for concept in extraction["concepts"]:
+            concept["description"] = f"Reading {len(self.calls)}."
+        return extraction
+
+
+def test_reuse_across_runs_keeps_a_runs_own_reading():
+    run, copy = _run_and_copy()
+    model = VaryingModel()
+    original = extract_scopes(scopes.build_scopes(run), model, model_id="model")
+    own = extract_scopes(scopes.build_scopes(copy), model, model_id="model")
+    text = pl.concat([original.text_extractions, own.text_extractions])
+    stored_keys = set(own.extractions["extraction_key"])
+    model.calls.clear()
+
+    again = extract_scopes(
+        scopes.build_scopes(copy),
+        model,
+        model_id="model",
+        readings=stored_readings(text, across_runs=True),
+        existing_keys=stored_keys,
+        reuse_text_across_runs=True,
+    )
+
+    # the copy's own reading is newer than the original's, and still the one used
+    assert model.calls == []
+    assert again.extractions.height == 0
