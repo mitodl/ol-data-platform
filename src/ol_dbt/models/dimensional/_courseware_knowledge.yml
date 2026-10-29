@@ -810,7 +810,8 @@ models:
         values: [direct, close, narrower]
   - name: provider_scope_count
     description: int, the provider's scopes teaching or reviewing the concept (direct)
-      or its best close equivalent (close); null for narrower, which counts concepts
+      or its best close equivalent (close), a scope that does both counted once; null
+      for narrower, which counts concepts
   - name: narrower_taught_count
     description: int, narrower only, the required concept's narrower concepts the
       provider teaches or reviews (bridge_courserun_prerequisite_coverage)
