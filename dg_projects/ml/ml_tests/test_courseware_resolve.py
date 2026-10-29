@@ -1,4 +1,5 @@
 import itertools
+import json
 import uuid
 from contextlib import contextmanager
 from types import SimpleNamespace
@@ -553,3 +554,19 @@ def test_a_new_label_exact_to_many_labels_of_one_concept_joins_it(verdicts):
     second = run(labels(*members, "kmeans"), state_from(grown))
     assert concept_of(second, "kmeans") == concept
     assert second.run["rejected_components"][0] == 0
+
+
+def test_verdicts_sent_as_a_json_string_are_decoded():
+    rows = {
+        key: {"preferred_label": key, "concept_kind": "concept", "description": ""}
+        for key in ("auc", "area under the curve")
+    }
+    queries = [{"query_id": 0, "verdicts": [{"candidate_id": 0, "verdict": "exact"}]}]
+    client = _VerdictClient({"queries": json.dumps(queries) + "}"})
+    assert resolve._adjudicate_batch(
+        client,
+        "fake-model",
+        [("auc", ["area under the curve"])],
+        rows,
+        trace_metadata={},
+    ) == [("auc", "area under the curve", "exact")]
