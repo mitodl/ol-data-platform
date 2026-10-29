@@ -176,8 +176,28 @@ def test_file_exclusion_row_keeps_the_flag_as_text() -> None:
     assert row["excluded"] == "true"
     assert row["exclusion_reason"] == "unreferenced_static"
     assert list(row) == list(course_xml_blocks.FILE_EXCLUSION_FIELDS)
-    # Files written before the asset stamped its rows have no extracted_at.
+    # Files written before the asset stamped and dated its rows have neither.
     assert row["extracted_at"] is None
+    assert row["release_date"] is None
+
+
+def test_file_exclusion_row_keeps_the_release_date() -> None:
+    row = course_xml_blocks._row(  # noqa: SLF001
+        json.dumps(
+            {
+                "course_id": "course-v1:MITxT+7.05x+2T2026",
+                "source_system": "mitxonline",
+                "course_xml_version": "ee211fd8",
+                "file_path": "html/final.html",
+                "excluded": False,
+                "exclusion_reason": None,
+                "extracted_at": "2026-10-22T00:00:00+00:00",
+                "release_date": "2027-02-02T15:00:00.000000Z",
+            }
+        ),
+        course_xml_blocks.OPENEDX_FILE_EXCLUSIONS,
+    )
+    assert row["release_date"] == "2027-02-02T15:00:00.000000Z"
 
 
 def test_every_table_has_its_own_pipeline() -> None:

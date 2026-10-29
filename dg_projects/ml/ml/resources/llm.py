@@ -3,29 +3,21 @@
 import os
 from typing import ClassVar
 
-import boto3
 from anthropic import Anthropic, AnthropicBedrock
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-from botocore.client import BaseClient
 from dagster import ConfigurableResource
-from google import genai
-from google.genai import types as genai_types
 from openai import OpenAI
 from pydantic import Field, PrivateAttr
 
 COGNITIVE_SERVICES_SCOPE = "https://cognitiveservices.azure.com/.default"
 
-# google-genai makes one attempt unless retry_options is set. With it set, the SDK
-# retries 408, 429, 500, 502, 503 and 504 with exponential backoff from 1s. Three
-# attempts is the same two retries the OpenAI and Anthropic SDKs make by default.
-GENAI_RETRY_OPTIONS = genai_types.HttpRetryOptions(attempts=3)
-
 
 class LLMClientFactory(ConfigurableResource):
     """Factory for creating an authenticated LLM client.
 
-    Backs conversation summarization (feedback_summaries) and sentiment
-    classification (feedback_sentiment_eval); feedback_redacted does not use it.
+    Backs cluster category labels (feedback_category_proposals), sentiment
+    classification (feedback_sentiment_eval), and courseware extraction.
+    feedback_summaries and feedback_embeddings call models through ol-llm.
     """
 
     client_class: str = Field(
@@ -43,10 +35,8 @@ class LLMClientFactory(ConfigurableResource):
     )
     aws_region: str = Field(
         default="us-east-1",
-        description=(
-            "AWS region for the Bedrock endpoint; used when client_class is "
-            "'bedrock' or 'bedrock_embeddings'"
-        ),
+        description="AWS region for the Bedrock endpoint; used when client_class "
+        "is 'bedrock'",
     )
     azure_endpoint: str | None = Field(
         default=None,
@@ -58,9 +48,7 @@ class LLMClientFactory(ConfigurableResource):
         ),
     )
 
-    _client: (
-        Anthropic | OpenAI | AnthropicBedrock | genai.Client | BaseClient | None
-    ) = PrivateAttr(default=None)
+    _client: Anthropic | OpenAI | AnthropicBedrock | None = PrivateAttr(default=None)
 
     supported_client_class: ClassVar[dict[str, type]] = {
         "anthropic": Anthropic,
@@ -68,16 +56,9 @@ class LLMClientFactory(ConfigurableResource):
         "openai_compatible": OpenAI,
         "azure_openai": OpenAI,
         "bedrock": AnthropicBedrock,
-        "gemini": genai.Client,
-        # Not actually instantiated via this class (boto3.client() builds a
-        # dynamic type, not a fixed one) -- present so an unknown client_class
-        # still fails the same KeyError lookup as every other branch.
-        "bedrock_embeddings": BaseClient,
     }
 
-    def get_client(  # noqa: PLR0911 -- one early return per client_class branch
-        self,
-    ) -> Anthropic | OpenAI | AnthropicBedrock | genai.Client | BaseClient:
+    def get_client(self) -> Anthropic | OpenAI | AnthropicBedrock:
         """Create and return an authenticated LLM client."""
         if self._client is not None:
             return self._client
@@ -115,41 +96,6 @@ class LLMClientFactory(ConfigurableResource):
                     DefaultAzureCredential(), COGNITIVE_SERVICES_SCOPE
                 ),
             )
-            return self._client
-
-        if self.client_class == "bedrock_embeddings":
-            # AWS's native Titan/Cohere embedding models -- a different SDK and
-            # response shape than "bedrock" (AnthropicBedrock, Claude chat only,
-            # no embeddings API at all). Same IAM metadata credential chain as
-            # "bedrock" and S3 access; no API key.
-            self._client = boto3.client("bedrock-runtime", region_name=self.aws_region)
-            return self._client
-
-        if self.client_class == "gemini":
-            # Deployed environments set GOOGLE_GENAI_USE_VERTEXAI along with
-            # GOOGLE_CLOUD_PROJECT/LOCATION and a workload identity credential
-            # file, so the client reaches Gemini through Vertex AI with no API
-            # key. Everything is passed explicitly: left to its own environment
-            # lookup the SDK lets GOOGLE_GENAI_USE_ENTERPRISE override this
-            # variable, and falls back to a stray API key when project and
-            # location are both missing.
-            if os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in ("true", "1"):
-                self._client = genai.Client(
-                    vertexai=True,
-                    project=self._require_env("GOOGLE_CLOUD_PROJECT"),
-                    location=self._require_env("GOOGLE_CLOUD_LOCATION"),
-                    http_options=genai_types.HttpOptions(
-                        retry_options=GENAI_RETRY_OPTIONS
-                    ),
-                )
-            else:
-                self._client = genai.Client(
-                    vertexai=False,
-                    api_key=self._require_env("GEMINI_API_KEY"),
-                    http_options=genai_types.HttpOptions(
-                        retry_options=GENAI_RETRY_OPTIONS
-                    ),
-                )
             return self._client
 
         # anthropic/openai: the only two client_class values with no dedicated

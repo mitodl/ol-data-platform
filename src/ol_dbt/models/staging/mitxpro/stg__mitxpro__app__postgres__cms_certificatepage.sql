@@ -1,5 +1,12 @@
+{# The Postgres column is "CEUs". Airbyte (production) writes it as ceus, dlt (QA, and
+   production after its cutover) snake-cases it to ce_us, and reflects numeric(5,2) as a
+   decimal where Airbyte wrote a double. ce_us wins if a table ever carries both, since dlt is
+   the loader the unit is moving to. #}
+{% set raw_certificate_pages = source('ol_warehouse_raw_data', 'raw__xpro__app__postgres__cms_certificatepage') %}
+{% set ceus_column = 'ce_us' if execute and relation_has_column(raw_certificate_pages, 'ce_us') else 'ceus' %}
+
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__cms_certificatepage') }}
+    select * from {{ raw_certificate_pages }}
 )
 
 {{ deduplicate_raw_table(raw_table='raw__xpro__app__postgres__cms_certificatepage', partition_columns='page_ptr_id') }}
@@ -7,7 +14,7 @@ with source as (
     select
         page_ptr_id as wagtail_page_id
         , product_name as cms_certificate_product_name
-        , CEUs as cms_certificate_ceus --noqa
+        , cast({{ ceus_column }} as double) as cms_certificate_ceus
         , {{ json_array_field_values('signatories', 'value', 'integer') }}
             as cms_certificate_signitory_ids
         , institute_text as cms_certificate_institute_text

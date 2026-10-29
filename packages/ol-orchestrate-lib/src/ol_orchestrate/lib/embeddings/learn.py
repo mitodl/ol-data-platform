@@ -27,6 +27,9 @@ from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy, QdrantTarg
 
 CONTENT_FILE_DOC_KIND = "content_file"
 DENSE_MODEL_NAME = "text-embedding-3-large"
+# Learn's vectors are the model's at its default length. Another provider's
+# deployment of the same model, e.g. Azure OpenAI's, declares this space too.
+DENSE_VECTOR_SPACE = f"{DENSE_MODEL_NAME}@3072"
 SPARSE_MODEL_NAME = "qdrant/bm25"
 MARKDOWN_FILE_TYPE = "marketing_page"
 MARKDOWN_FILE_EXTENSION = ".md"
@@ -76,6 +79,18 @@ def vector_name(model_name: str) -> str:
     return segments[1] if len(segments) > 1 else model_name
 
 
+# Learn's live collections, ``{base}.content_files`` and ``{base}.topics``, which
+# the platform's learn_v1 vectors are compared with.
+LEARN_CONTENT_FILES_COLLECTION = QdrantTarget(
+    collection="content_files",
+    dense_vector_name=vector_name(DENSE_MODEL_NAME),
+    sparse_model=SPARSE_MODEL_NAME,
+    sparse_vector_name=vector_name(SPARSE_MODEL_NAME),
+)
+LEARN_TOPICS_COLLECTION = LEARN_CONTENT_FILES_COLLECTION.model_copy(
+    update={"collection": "topics"}
+)
+
 LEARN_V1_CONTENT_FILES = EmbeddingStrategy(
     strategy_id="learn_v1_content_files",
     doc_kind=CONTENT_FILE_DOC_KIND,
@@ -85,7 +100,9 @@ LEARN_V1_CONTENT_FILES = EmbeddingStrategy(
         chunk_overlap=51,
         markdown_header_levels=4,
     ),
-    model=EmbeddingModelSpec(model=f"openai:{DENSE_MODEL_NAME}"),
+    model=EmbeddingModelSpec(
+        model=f"openai:{DENSE_MODEL_NAME}", vector_space=DENSE_VECTOR_SPACE
+    ),
     role="serving",
     qdrant=QdrantTarget(
         collection=PLATFORM_CONTENT_FILES_COLLECTION,

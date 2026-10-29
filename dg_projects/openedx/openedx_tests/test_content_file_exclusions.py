@@ -254,3 +254,42 @@ def test_open_learning_library_keeps_the_about_page_prose(tmp_path):
     }
     assert not rows["about/overview.html"]["excluded"]
     assert rows["about/effort.html"]["exclusion_reason"] == "about_page"
+
+
+def test_rows_carry_learns_release_dates(tmp_path):
+    files = {
+        **COURSE_FILES,
+        "chapter/week1.xml": (
+            '<chapter display_name="Week 1" start="2031-02-03T04:05:06-05:00">'
+            '<sequential url_name="seq1"/></chapter>'
+        ),
+    }
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
+    rows = {
+        row["file_path"]: row["release_date"]
+        for row in build_file_rows(
+            olx_root, course_id="c", source_system="xpro", course_xml_version="abc"
+        )
+    }
+    released = "2031-02-03T09:05:06.000000Z"
+    assert rows["chapter/week1.xml"] == released
+    assert rows["html/intro.html"] == released
+    # Linked only from the dated html body.
+    assert rows["static/handout.pdf"] == released
+    # The course's own files, and an asset an undated policy names, are undated.
+    assert rows["course.xml"] is None
+    assert rows["static/textbook.pdf"] is None
+
+
+def test_static_text_pages_keep_their_bytes(tmp_path):
+    """Release dating follows links through static text pages, so they're read."""
+    files = {**COURSE_FILES, "static/reading.html": '<a href="handout.pdf">h</a>'}
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
+    assert (olx_root / "static/reading.html").read_text() == files[
+        "static/reading.html"
+    ]
+    assert (olx_root / "static/handout.pdf").stat().st_size == 0
