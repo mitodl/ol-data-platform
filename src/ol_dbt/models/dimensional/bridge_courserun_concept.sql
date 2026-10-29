@@ -151,18 +151,16 @@ with mentions as (
     from inferred_candidates
 )
 
+, course_keys as (
+    {{ courseware_run_course_keys('mentions') }}
+)
+
 -- courses that require each concept, for cross-course support: declared, or inferred
--- by a run whose own evidence points the right way. A run with no course_fk (e.g.
--- residential) is keyed by its course's readable id.
+-- by a run whose own evidence points the right way
 , requiring_courses as (
     select
         requiring.concept_id
-        , count(
-            distinct coalesce(
-                course_runs.course_fk
-                , concat(requiring.platform, '|', {{ courserun_course_readable_id('requiring.courserun_readable_id') }})
-            )
-        ) as course_support
+        , count(distinct course_keys.course_key) as course_support
     from (
         select
             platform
@@ -178,10 +176,10 @@ with mentions as (
         from direct_relations
         where relation = 'requires'
     ) as requiring
-    left join course_runs
+    left join course_keys
         on
-            requiring.platform = course_runs.platform
-            and requiring.courserun_readable_id = course_runs.courserun_readable_id
+            requiring.platform = course_keys.platform
+            and requiring.courserun_readable_id = course_keys.courserun_readable_id
     group by requiring.concept_id
 )
 
