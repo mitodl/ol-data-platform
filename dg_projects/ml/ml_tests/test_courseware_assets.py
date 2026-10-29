@@ -126,9 +126,13 @@ def _response(tool: str, tool_input: dict[str, Any] | None) -> SimpleNamespace:
 
 
 def extraction_input(message: str, *, quote: bool = True) -> dict[str, Any] | None:
-    """One taught concept per scope, quoting the first ten words of source S01."""
+    """One taught concept per scope, quoting the first ten words of source S01.
+
+    The text stage's message names no scope, so the title comes from the source
+    text sources() writes.
+    """
     text = message.split("=== SOURCE S01", 1)[1].split("===\n", 1)[1]
-    scope = re.search(r"^SCOPE: (.+) \(kind=", message, re.MULTILINE)
+    scope = re.search(r"^In (.+) we study", text, re.MULTILINE)
     assert scope is not None
     title = scope[1]
     if title == "Broken scope":
@@ -164,8 +168,9 @@ class FakeMessages:
         tool = request["tools"][0]["name"]
         self.calls.append(tool)
         content = request["messages"][0]["content"]
-        tool_input = {
+        tool_input: dict[str, Any] | None = {
             "record_extraction": lambda: extraction_input(content, quote=self.quote),
+            "record_context": lambda: {"revisions": [], "notes": []},
         }[tool]()
         stream = MagicMock()
         stream.__enter__.return_value.get_final_message.return_value = _response(
@@ -270,13 +275,15 @@ def test_extraction_writes_each_scope_once(tables, calls, catalog):
     check = check_result(first, "evidence_verification_rate")
     assert check.passed
     assert check.metadata["exact_share"].value == 1.0
-    # leftovers of an earlier attempt under the new keys are cleared first
-    assert catalog.load_table.return_value.delete.call_count == 2
+    assert tables["courseware_text_extraction"].height == 2
+    # no text reading was stored, so no earlier attempt can have written claims
+    # under these keys
+    assert catalog.load_table.return_value.delete.call_count == 0
 
     second = extract(tables)
 
     assert second.success
-    assert calls == ["record_extraction", "record_extraction"]
+    assert sorted(calls) == ["record_context"] * 2 + ["record_extraction"] * 2
     assert tables["courseware_claim_extraction"].height == 2
     # every read records its scopes' inputs, the skipped ones too
     observed = tables["courseware_scope_input"]
@@ -285,20 +292,22 @@ def test_extraction_writes_each_scope_once(tables, calls, catalog):
     assert set(observed["courserun_readable_id"]) == {COURSERUN}
 
 
-@pytest.mark.usefixtures("catalog")
-def test_extraction_skips_a_scope_stored_under_the_old_key_scheme(tables, calls):
+def test_header_edit_reruns_only_the_context_stage(tables, calls, catalog):
     tables["int__courseware__extraction_sources"] = sources("Lecture 1")
     assert extract(tables).success
-    # as stored before keys left out the course header: another key, no header
-    tables["courseware_claim_extraction"] = (
-        tables["courseware_claim_extraction"]
-        .with_columns(extraction_key=pl.lit("old-key"))
-        .drop("header_version")
+    calls.clear()
+    tables["int__courseware__extraction_sources"] = sources("Lecture 1").with_columns(
+        course_title=pl.lit("Renamed course")
     )
 
     assert extract(tables).success
 
-    assert calls == ["record_extraction"]
+    assert calls == ["record_context"]
+    extractions = tables["courseware_claim_extraction"]
+    assert extractions["header_version"].n_unique() == 2
+    assert extractions["text_extraction_key"].n_unique() == 1
+    # the new key is known from the stored reading, so its leftovers are cleared
+    assert catalog.load_table.return_value.delete.call_count == 2
 
 
 def test_extraction_writes_partitioned_iceberg_tables(calls, tmp_path, monkeypatch):
@@ -340,8 +349,12 @@ def test_extraction_writes_partitioned_iceberg_tables(calls, tmp_path, monkeypat
         )
         assert result.success
 
-    assert calls == ["record_extraction", "record_extraction"]
-    for table in ("courseware_claim_extraction", "courseware_claim"):
+    assert sorted(calls) == ["record_context"] * 2 + ["record_extraction"] * 2
+    for table in (
+        "courseware_text_extraction",
+        "courseware_claim_extraction",
+        "courseware_claim",
+    ):
         written = catalog.load_table(f"{database}.{table}")
         assert written.scan().to_arrow().num_rows == 2
         assert [field.name for field in written.spec().fields] == [
@@ -388,10 +401,12 @@ def test_extraction_stores_successes_and_fails_the_run(tables, calls):
     ]
     # the broken scope was asked for twice (one retry), the good one once
     assert calls.count("record_extraction") == 3
+    assert calls.count("record_context") == 1
 
     extract(tables)
 
     assert calls.count("record_extraction") == 5
+    assert calls.count("record_context") == 1
 
 
 def test_extraction_fails_before_any_call_when_the_catalog_fails(
@@ -408,6 +423,10 @@ def test_extraction_fails_before_any_call_when_the_catalog_fails(
 
 def test_extraction_retries_a_lost_delete_commit(tables, catalog):
     tables["int__courseware__extraction_sources"] = sources("Lecture 1")
+    assert extract(tables).success
+    # an attempt cut off after its text reading: the extraction row is missing, so
+    # claims it may have written under the known key are cleared
+    del tables["courseware_claim_extraction"]
     table = catalog.load_table.return_value
     table.delete.side_effect = [CommitFailedException("concurrent write"), None, None]
 
@@ -469,7 +488,7 @@ def test_extraction_refuses_a_run_not_approved_for_this_version(tables, calls):
         for event in result.all_events
         if event.is_step_failure
     ]
-    assert "approves courseware_claims_v1-0ld0ld0ld0ld-" in failure.description
+    assert "approves courseware_claims_v2-0ld0ld0ld0ld-" in failure.description
     assert failure.metadata["retryable"].value is False
     assert calls == []
     assert "courseware_claim_extraction" not in tables

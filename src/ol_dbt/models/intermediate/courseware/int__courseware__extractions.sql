@@ -7,15 +7,23 @@
     input_text_checksum, in order). A reading is complete when, under one extractor
     version and model, every part has an extraction whose input_text_checksum is
     that part's, whichever run wrote it: a part whose text did not change keeps its
-    extraction key, so a later run skips it rather than writing it again. The
-    current reading is the first complete one by:
+    extraction key, so a later run skips it rather than writing it again.
+
+    A two-stage (v2) extraction's key also covers the course header its context
+    stage read, so for v2 the header_version is part of the reading too: after a
+    header edit every part is placed in the new context, and the new reading is
+    complete only once all of them are. A v1 key left the header out (or hashed it
+    into the whole message without recording it), so a v1 reading spans headers.
+
+    The current reading is the first complete one by:
 
     1. the extractor version (extractor, prompt and schema) that
        int__courseware__extraction_allowlist approves for the run, so a trial run or
        a comparison under another version never becomes current by finishing last;
-    2. matching the scope's input at the extractor's latest read of the run
+    2. matching the scope's input text at the extractor's latest read of the run
        (int__courseware__latest_scope_inputs);
-    3. the newest.
+    3. matching the course header at that read (v2);
+    4. the newest.
 
     Each of its parts reads from its newest matching extraction.
 
@@ -33,9 +41,9 @@
     starts a new reading the same way, and a reading in fewer parts leaves no older
     part current.
 
-    Text that changes and then changes back writes nothing new (every key is
-    stored), but the extractor records each read's input, so the earlier reading is
-    current again. With no reading matching the latest read (the new text's parts
+    Text or a header that changes and then changes back writes nothing new (every
+    key is stored), but the extractor records each read's input, so the earlier
+    reading is current again. With no reading matching the latest read (the new text's parts
     are not all extracted yet, or the run has not been read since inputs were
     recorded), the newest complete reading is current. A reading is dated by the
     newest extraction that records it.
@@ -53,7 +61,11 @@
     stored at extraction time is kept for a scope the sources do not list.
 #}
 with extractions as (
-    select * from {{ source('courseware_intermediate', 'courseware_claim_extraction') }}
+    select
+        *
+        -- the header a reading is under, where the key covers it (v2)
+        , case when text_extraction_key is not null then header_version end as reading_header_version
+    from {{ source('courseware_intermediate', 'courseware_claim_extraction') }}
 )
 
 , current_scopes as (
@@ -112,6 +124,16 @@ with extractions as (
     select * from {{ ref('int__courseware__latest_scope_inputs') }}
 )
 
+-- one header per read: every part of a run's read records the same one
+, latest_headers as (
+    select distinct
+        platform
+        , courserun_readable_id
+        , scope_id
+        , header_version
+    from latest_scope_inputs
+)
+
 , readings as (
     select
         platform
@@ -124,6 +146,7 @@ with extractions as (
         , effort
         , scope_part_count
         , scope_part_checksums
+        , reading_header_version
         , max(extracted_at) as read_at
     from extractions
     group by
@@ -137,6 +160,7 @@ with extractions as (
         , effort
         , scope_part_count
         , scope_part_checksums
+        , reading_header_version
 )
 
 -- the splits whose every part has the input the latest read computed
@@ -186,6 +210,7 @@ with extractions as (
         , readings.effort
         , readings.scope_part_count
         , readings.scope_part_checksums
+        , readings.reading_header_version
         , readings.read_at
         , extractions.extraction_key
         , extractions.scope_part
@@ -204,6 +229,8 @@ with extractions as (
             and readings.scope_part_count = extractions.scope_part_count
             and split_part(readings.scope_part_checksums, ',', extractions.scope_part)
             = extractions.input_text_checksum
+            and coalesce(readings.reading_header_version, '')
+            = coalesce(extractions.reading_header_version, '')
 )
 
 , current_readings as (
@@ -218,6 +245,13 @@ with extractions as (
                 order by
                     case when approved_versions.courserun_readable_id is not null then 0 else 1 end
                     , case when latest_splits.scope_id is not null then 0 else 1 end
+                    , case
+                        when
+                            complete_readings.reading_header_version is null
+                            or complete_readings.reading_header_version = latest_headers.header_version
+                            then 0
+                        else 1
+                    end
                     , complete_readings.read_at desc
                     , complete_readings.scope_part_checksums asc
             ) as reading_rank
@@ -233,6 +267,7 @@ with extractions as (
                 , effort
                 , scope_part_count
                 , scope_part_checksums
+                , reading_header_version
                 , read_at
             from reading_parts
             group by
@@ -246,6 +281,7 @@ with extractions as (
                 , effort
                 , scope_part_count
                 , scope_part_checksums
+                , reading_header_version
                 , read_at
             having count(distinct scope_part) = scope_part_count
         ) as complete_readings
@@ -256,6 +292,11 @@ with extractions as (
                 and complete_readings.scope_id = latest_splits.scope_id
                 and complete_readings.scope_part_count = latest_splits.scope_part_count
                 and complete_readings.scope_part_checksums = latest_splits.scope_part_checksums
+        left join latest_headers
+            on
+                complete_readings.platform = latest_headers.platform
+                and complete_readings.courserun_readable_id = latest_headers.courserun_readable_id
+                and complete_readings.scope_id = latest_headers.scope_id
         left join approved_versions
             on
                 complete_readings.platform = approved_versions.platform
@@ -289,6 +330,8 @@ with extractions as (
                 and reading_parts.effort = current_readings.effort
                 and reading_parts.scope_part_count = current_readings.scope_part_count
                 and reading_parts.scope_part_checksums = current_readings.scope_part_checksums
+                and coalesce(reading_parts.reading_header_version, '')
+                = coalesce(current_readings.reading_header_version, '')
     ) as ranked_parts
     where part_rank = 1
 )
@@ -311,6 +354,9 @@ select
     , extractions.input_text_checksum
     , extractions.scope_part_checksums
     , extractions.header_version
+    , extractions.text_extraction_key
+    , extractions.text_input_digest
+    , extractions.context_input_digest
     , extractions.source_count
     , extractions.truncated_source_count
     , extractions.sources_json
@@ -333,6 +379,10 @@ select
     , coalesce(
         extractions.scope_part_count = latest_scope_inputs.scope_part_count
         and extractions.input_text_checksum = latest_scope_inputs.input_text_checksum
+        and (
+            extractions.reading_header_version is null
+            or extractions.reading_header_version = latest_scope_inputs.header_version
+        )
         , false
     ) as matches_current_input
     , (
