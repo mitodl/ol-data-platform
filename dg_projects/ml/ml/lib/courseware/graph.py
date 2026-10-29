@@ -1,8 +1,9 @@
 """Topology of the concept graph: communities, sequencing, hierarchy and sparsity.
 
 Reads bridge_concept_relation (edges with their evidence) and dim_concept (active
-concepts), keeps the edges that clear the support thresholds (for builds_on, the ones
-that pass dbt's support rule), and computes on three views of the graph with NetworKit:
+concepts), keeps the edges that pass dbt's support rules (for builds_on and broader)
+and clear the support thresholds here, and computes on three views of the graph with
+NetworKit:
 
 - association: undirected and weighted, every relation family. Leiden communities,
   connected components, degree, density and sparsity, and a local-degree backbone
@@ -143,11 +144,10 @@ def select_edges(relations: pl.DataFrame) -> pl.DataFrame:
     :rtype: pl.DataFrame
     """
     support = pl.col("courserun_support")
-    keep = (
-        # bridge_concept_relation owns the builds_on support and direction rule
-        pl.when(pl.col("relation") == "builds_on")
-        .then(pl.col("passes_support_rule"))
-        .when(pl.col("relation") == "practiced_with")
+    # bridge_concept_relation owns the builds_on support and direction rule and
+    # broader acyclicity, through passes_support_rule
+    keep = pl.col("passes_support_rule") & (
+        pl.when(pl.col("relation") == "practiced_with")
         .then(support >= MIN_COURSERUN_SUPPORT)
         .when(pl.col("relation") == "complements")
         .then(
@@ -157,7 +157,8 @@ def select_edges(relations: pl.DataFrame) -> pl.DataFrame:
                 | pl.col("has_co_assessed_evidence")
             )
         )
-        .otherwise(pl.col("is_adjudicated"))
+        # builds_on needs nothing beyond passes_support_rule; the rest are adjudicated
+        .otherwise(pl.col("is_adjudicated") | (pl.col("relation") == "builds_on"))
     )
     return (
         relations.filter(keep & (pl.col("from_concept_fk") != pl.col("to_concept_fk")))

@@ -772,7 +772,8 @@ models:
 
 - name: int__courseware__adjudicated_concept_relations
   description: Broader, close and related proposals from resolution adjudication,
-    as of the newest run, with when each was first proposed.
+    as of the newest run, with when each was first proposed and the verdicts behind
+    them.
   columns:
   - name: from_concept_id
     description: str, the narrower concept for broader; the lower id otherwise
@@ -787,6 +788,17 @@ models:
     description: str, the resolution run that first proposed the relation
   - name: proposed_at
     description: timestamp, when that run started
+  - name: supporting_verdict_count
+    description: int, the newest verdict per (query label, candidate label) across
+      every run, where it agrees with the relation, by the newest run's label assignments
+      (for broader, those placing from under to; for related, related or either hierarchy
+      direction)
+  - name: contrary_verdict_count
+    description: int, distinct verdicts on the pair, plus for broader those placing
+      to under from
+  - name: pair_verdict_count
+    description: int, verdicts on the pair other than exact and distinct, i.e. saying
+      the two concepts are connected; the same on every relation of the pair
 
 - name: int__courseware__concept_relation_evidence
   description: Every observation that two concepts are related, per relation, evidence

@@ -59,12 +59,15 @@ def by_concept(result):
 
 def test_sequence_levels_foundations_and_cycles():
     result = compute_graph(
-        concepts("mean", "variance", "regression", "a", "b"),
+        concepts("mean", "variance", "regression", "a", "b", "c"),
         relations(
             relation("variance", "mean", "builds_on"),
             relation("regression", "variance", "builds_on"),
             relation("a", "b", "broader", adjudicated=True),
             relation("b", "a", "broader", adjudicated=True),
+            # the weakest link of a broader cycle, which fails dbt's support rule
+            relation("a", "c", "broader", adjudicated=True),
+            relation("c", "a", "broader", adjudicated=True, passes=False),
             # fails bridge_concept_relation's support rule, so it cannot close a cycle
             relation("mean", "regression", "builds_on", passes=False),
         ),
@@ -74,6 +77,7 @@ def test_sequence_levels_foundations_and_cycles():
     assert nodes["mean"]["sequence_level"] == 0
     assert nodes["mean"]["foundation_rank"] > nodes["regression"]["foundation_rank"]
     assert nodes["a"]["in_hierarchy_cycle"]
+    assert not nodes["c"]["in_hierarchy_cycle"]
     assert not nodes["mean"]["in_sequence_cycle"]
     assert result.run["hierarchy_cycle_node_count"][0] == 2
 
