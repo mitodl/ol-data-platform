@@ -17,8 +17,10 @@ with source as (
         {% endif %}
 )
 
+{# The table is frozen (ingestion/inventory/retired.yml), so no unit declares
+   its metadata columns for the inventory to resolve. #}
 {{ deduplicate_raw_table(
-    raw_table='raw__edxorg__s3__tracking_logs'
+    order_by=['_airbyte_extracted_at', '_ab_source_file_last_modified']
     , partition_columns = 'username, context, event_source, event_type, event, "time"'
 ) }}
 , cleaned as (

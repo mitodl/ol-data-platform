@@ -696,5 +696,5 @@ class TestGeneratedMetadataMacro:
 
     def test_rendered_macro_emits_a_list_as_a_jinja_list(self) -> None:
         rendered = render_dbt_metadata_columns(load_units(REAL_INVENTORY))
-        expected = "'raw__edxorg__s3__tracking_logs': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],"
+        expected = "'raw__edxorg__program_learner_report': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],"
         assert expected in rendered

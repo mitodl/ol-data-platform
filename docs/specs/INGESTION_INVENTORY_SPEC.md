@@ -1091,7 +1091,7 @@ Local app is the directory under `ol-infrastructure/local-dev/apps/` that runs t
 | 12 | `mitxonline/tracking_logs` | none | 51 | 0 | |
 | 13 | `mitx/tracking_logs` | none | 44 | 0 | |
 | 14 | `xpro/tracking_logs` | none | 44 | 0 | |
-| 15 | `edxorg/tracking_logs` | none | 44 | 0 | |
+| 15 | `edxorg/tracking_logs` | none | 44 | 0 | Retired. Frozen as the final copy, since MIT's courses moved off edX.org and no forward load is built (`retired.yml`) |
 | 16 | `mitxonline/api` | none | 39 | 0 | Retired. Blocks load through dlt as `mitxonline/course_structure`; the whole-document table had no reader (`retired.yml`) |
 | 17 | `xpro/api` | none | 34 | 0 | Retired. Blocks load through dlt as `xpro/course_structure`; the whole-document table had no reader (`retired.yml`) |
 | 18 | `mitx/api` | none | 33 | 0 | Retired. Blocks load through dlt as `mitx/course_structure`; the whole-document table had no reader (`retired.yml`) |

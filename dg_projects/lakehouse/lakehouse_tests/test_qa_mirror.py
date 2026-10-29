@@ -258,7 +258,7 @@ def test_the_real_inventory_builds_one_unpartitioned_asset_per_mirrored_unit() -
     assets = build_qa_mirror_assets()
     keys = {key.to_user_string() for asset in assets for key in asset.keys}
     assert "qa_mirror/zendesk/api" in keys
-    assert "qa_mirror/edxorg/tracking_logs" in keys
+    assert "qa_mirror/edxorg/program_reports" in keys
     for asset in assets:
         # The refresh is the monthly schedule's job (QA_DATA_TOPOLOGY_SPEC.md
         # §1). An AutomationCondition would refresh it on some other cadence.

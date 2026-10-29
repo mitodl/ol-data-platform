@@ -1,4 +1,4 @@
-"""Open edX and edX.org tracking log ingestion via dlt.
+"""Open edX tracking log ingestion via dlt.
 
 Each Open edX deployment ships its tracking log to its own bucket as gzipped
 JSON Lines, one prefix per UTC day:
@@ -6,21 +6,19 @@ JSON Lines, one prefix per UTC day:
     s3://{mitx,mitxonline,xpro}-production-edxapp-tracking/valid/
         <YYYY-MM-DD>/<file>.{log.gz,json.gz,gz}
 
-edX.org's daily export of MITx course events lands flat in the production
-landing zone:
-
-    edxorg-raw-data/edxorg/raw_data/tracking_logs/
-        normalized_mitx-edx-events-<YYYY-MM-DD>.log.gz
-
 One Airbyte source-s3 connection per deployment appends these files into
-raw__<deployment>__openedx__tracking_logs and raw__edxorg__s3__tracking_logs.
-This source appends them into the tables in ``TABLES``, stamped with the file
-they came from. Staging dedups tracking events on their business columns, so
-the loader's own columns do not matter to it.
+raw__<deployment>__openedx__tracking_logs. This source appends them into the
+tables in ``TABLES``, stamped with the file they came from. Staging dedups
+tracking events on their business columns, so the loader's own columns do not
+matter to it.
+
+edX.org's tracking logs have no table here. MIT's courses moved off edX.org,
+and the Airbyte table raw__edxorg__s3__tracking_logs is frozen as their final
+copy (ingestion/inventory/retired.yml).
 
 On 2026-10-27 the prefixes held 473,863 files (124.5 GB) for mitx, 437,607
-(118.3 GB) for mitxonline, 264,950 (44.3 GB) for xpro and 1,608 (307.7 GB, the
-largest 526 MB) for edxorg. The gzip ratio is 13x to 22x.
+(118.3 GB) for mitxonline and 264,950 (44.3 GB) for xpro. The gzip ratio
+measured across these and the edX.org feed is 13x to 22x.
 
 Run standalone:
     DLT_PROFILE=dev python -m ol_dlt.sources.tracking_logs <raw_table>
@@ -65,7 +63,7 @@ BATCH_ROWS = 10_000
 # labels, the one list, becomes its JSON text. Older files carry keys outside
 # this list (minion_id, roles, and about 90 pipelined_beta_* in 2018 mitx), and
 # they are dropped rather than becoming columns. A key a line lacks loads null.
-OPENEDX_FIELDS = (
+FIELDS = (
     "ip",
     "host",
     "name",
@@ -86,11 +84,7 @@ OPENEDX_FIELDS = (
     "event_source",
     "accept_language",
 )
-EDXORG_FIELDS = tuple(
-    name
-    for name in OPENEDX_FIELDS
-    if name not in {"labels", "log_file", "timestamp", "environment", "source_type"}
-)
+SCHEMA = pa.schema([pa.field(name, pa.string()) for name in FIELDS])
 
 # A cursor at most this many days old lists one prefix per day from the day
 # before the cursor's, and an older one lists the whole bucket. Every file whose
@@ -107,19 +101,13 @@ class TrackingLogTable:
 
     :param raw_table: Raw warehouse table name.
     :param bucket_url: Production URL the file globs are relative to.
-    :param fields: The columns, in order.
-    :param pipeline_prefix: Destination bucket prefix.
     :param pipeline_name: dlt pipeline name, which keys the cursor.
-    :param daily_prefixes: Files sit under ``<YYYY-MM-DD>/`` prefixes.
     :param qa_bucket_url: The QA deployment's URL, where it has one.
     """
 
     raw_table: str
     bucket_url: str
-    fields: tuple[str, ...]
-    pipeline_prefix: str
     pipeline_name: str
-    daily_prefixes: bool
     qa_bucket_url: str | None = None
 
     def bucket_url_for(self, profile: str) -> str:
@@ -134,10 +122,6 @@ class TrackingLogTable:
             return self.qa_bucket_url
         return self.bucket_url
 
-    @property
-    def schema(self) -> pa.Schema:
-        return pa.schema([pa.field(name, pa.string()) for name in self.fields])
-
     def file_globs(
         self, cursor: datetime | None, today: date | None = None
     ) -> list[str]:
@@ -149,8 +133,6 @@ class TrackingLogTable:
             or one glob for the whole bucket.
         :rtype: list[str]
         """
-        if not self.daily_prefixes:
-            return ["*.gz"]
         today = today or datetime.now(UTC).date()
         if cursor is None or (today - cursor.date()).days > DAILY_PREFIX_MAX_DAYS:
             return ["**/*.gz"]
@@ -165,31 +147,14 @@ def _openedx(deployment: str) -> TrackingLogTable:
     return TrackingLogTable(
         raw_table=f"raw__{deployment}__openedx__tracking_log_events",
         bucket_url=f"s3://{deployment}-production-edxapp-tracking/valid/",
-        fields=OPENEDX_FIELDS,
-        pipeline_prefix="openedx",
         pipeline_name=f"tracking_logs__{deployment}",
-        daily_prefixes=True,
         qa_bucket_url=f"s3://{deployment}-qa-edxapp-tracking/valid/",
     )
 
 
-EDXORG = TrackingLogTable(
-    raw_table="raw__edxorg__s3__tracking_log_events",
-    bucket_url=(
-        "s3://ol-data-lake-landing-zone-production/"
-        "edxorg-raw-data/edxorg/raw_data/tracking_logs/"
-    ),
-    fields=EDXORG_FIELDS,
-    pipeline_prefix="edxorg",
-    pipeline_name="tracking_logs__edxorg",
-    daily_prefixes=False,
-)
 TABLES = {
     table.raw_table: table
-    for table in (
-        *(_openedx(deployment) for deployment in ("mitx", "mitxonline", "xpro")),
-        EDXORG,
-    )
+    for table in (_openedx(deployment) for deployment in ("mitx", "mitxonline", "xpro"))
 }
 
 
@@ -201,8 +166,8 @@ class TrackingLogUnreadableError(Exception):
     """A tracking log file could not be decompressed or decoded."""
 
 
-def _row(line: str, fields: tuple[str, ...]) -> dict[str, str | None]:
-    """Project one JSON line onto ``fields``, every value as text.
+def _row(line: str) -> dict[str, str | None]:
+    """Project one JSON line onto ``FIELDS``, every value as text.
 
     :raises TrackingLogLineError: The line is not a JSON object.
     """
@@ -213,13 +178,12 @@ def _row(line: str, fields: tuple[str, ...]) -> dict[str, str | None]:
     if not isinstance(record, dict):
         msg = f"a JSON {type(record).__name__}, not an object"
         raise TrackingLogLineError(msg)
-    return {name: as_text(record.get(name)) for name in fields}
+    return {name: as_text(record.get(name)) for name in FIELDS}
 
 
 @dlt.transformer(standalone=True)
 def read_tracking_logs(
     items: Iterable[FileItemDict],
-    table: TrackingLogTable,
     batch_rows: int = BATCH_ROWS,
 ) -> Iterator[pa.Table]:
     """Stream each gzipped JSON Lines file as Arrow tables stamped with its provenance.
@@ -244,25 +208,23 @@ def read_tracking_logs(
                     if not line.strip():
                         continue
                     try:
-                        rows.append(_row(line, table.fields))
+                        rows.append(_row(line))
                     except TrackingLogLineError as error:
                         msg = f"{item['file_url']} line {line_number}: {error}"
                         raise TrackingLogLineError(msg) from error
                     if len(rows) == batch_rows:
-                        yield _stamp(rows, item, table)
+                        yield _stamp(rows, item)
                         rows = []
         except (UnicodeDecodeError, EOFError, gzip.BadGzipFile, zlib.error) as error:
             msg = f"{item['file_url']} after line {line_number}: {error}"
             raise TrackingLogUnreadableError(msg) from error
         if rows:
-            yield _stamp(rows, item, table)
+            yield _stamp(rows, item)
 
 
-def _stamp(
-    rows: list[dict[str, str | None]], item: FileItemDict, table: TrackingLogTable
-) -> pa.Table:
+def _stamp(rows: list[dict[str, str | None]], item: FileItemDict) -> pa.Table:
     return add_file_metadata(
-        pa.Table.from_pylist(rows, schema=table.schema),
+        pa.Table.from_pylist(rows, schema=SCHEMA),
         source_file=item["file_url"],
         modified_at=item.get("modification_date"),
     )
@@ -301,7 +263,7 @@ def tracking_logs_source(
         listing=listing,
     )
     yield (
-        (files | read_tracking_logs(table=table))
+        (files | read_tracking_logs())
         .with_name(table.raw_table)
         .apply_hints(
             table_name=table.raw_table,
@@ -321,4 +283,4 @@ def tracking_logs_pipeline_for(raw_table: str) -> dlt.Pipeline:
     row again.
     """
     table = TABLES[raw_table]
-    return config.pipeline_for(table.pipeline_prefix, pipeline_name=table.pipeline_name)
+    return config.pipeline_for("openedx", pipeline_name=table.pipeline_name)

@@ -32,7 +32,6 @@
         'raw__edxorg__s3__tables__grades_persistentcoursegrade': '_file_modified_at',
         'raw__edxorg__s3__tables__student_courseaccessrole': '_file_modified_at',
         'raw__edxorg__s3__tables__student_courseenrollment': '_file_modified_at',
-        'raw__edxorg__s3__tracking_logs': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],
         'raw__emeritus__bigquery__api_enrollments': '_airbyte_extracted_at',
         'raw__global_alumni__bigquery__api_enrollments': '_airbyte_extracted_at',
         'raw__irx__edxorg__bigquery__email_opt_in': '_airbyte_extracted_at',
