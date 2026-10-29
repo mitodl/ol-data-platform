@@ -6,7 +6,7 @@
 
     A concept is here when a reviewer accepted it, it is active, and the current
     claims of at least one source-eligible run name it. Its displayed label, kind
-    and course counts come from eligible runs only, so a run under an ineligible
+    and course counts come from its own mentions in eligible runs only, so a run under an ineligible
     source changes nothing a learner sees, and course counts come only from
     relations an accepted claim supports (#3021's gate: accepting a concept does not
     accept the claims naming it) and, for an inferred requirement, that pass the
@@ -15,8 +15,9 @@
     the describer has inputs for but no such description yet is awaiting one, and
     the release asset refuses a candidate with any, or with a description written
     from inputs that have since changed (description_input_checksum). A concept with no description
-    inputs (no eligible claim describes it) is never described, so it is released
-    with null descriptions and no learner-facing view shows it.
+    inputs (no eligible claim describes it) takes no description, even one written
+    while an eligible run described it, so it is released with null descriptions
+    and no learner-facing view shows it.
 #}
 with concepts as (
     select * from {{ ref('dim_concept') }}
@@ -34,6 +35,8 @@ with concepts as (
     select
         mentions.concept_id
         , mentions.concept_label_key
+        , mentions.label
+        , mentions.concept_kind
     from {{ ref('int__courseware__resolved_concept_mentions') }} as mentions
     inner join eligible_runs
         on
@@ -41,51 +44,73 @@ with concepts as (
             and mentions.courserun_readable_id = eligible_runs.courserun_readable_id
 )
 
-, labels as (
-    select * from {{ ref('int__courseware__concept_labels') }}
+-- The label key eligible runs mention most, as dim_concept picks over every run,
+-- then that key's surface form and the concept's kind as its eligible mentions use
+-- them most. Both are counted over this concept's eligible mentions, not taken from
+-- int__courseware__concept_labels, which counts every run and every sense of a label.
+, display_keys as (
+    select
+        concept_id
+        , concept_label_key
+    from (
+        select
+            concept_id
+            , concept_label_key
+            , row_number() over (
+                partition by concept_id order by count(*) desc, concept_label_key asc
+            ) as key_rank
+        from eligible_mentions
+        group by concept_id, concept_label_key
+    ) as ranked
+    where key_rank = 1
 )
 
--- the label eligible runs mention most, as dim_concept picks over every run
 , display_labels as (
     select
         concept_id
-        , preferred_label
-        , concept_kind
+        , label as preferred_label
     from (
         select
-            label_counts.concept_id
-            , labels.preferred_label
-            , labels.concept_kind
+            eligible_mentions.concept_id
+            , eligible_mentions.label
             , row_number() over (
-                partition by label_counts.concept_id
-                order by label_counts.mention_count desc, label_counts.concept_label_key asc
+                partition by eligible_mentions.concept_id order by count(*) desc, eligible_mentions.label asc
             ) as label_rank
-        from (
-            select
-                concept_id
-                , concept_label_key
-                , count(*) as mention_count
-            from eligible_mentions
-            group by concept_id, concept_label_key
-        ) as label_counts
-        inner join labels
-            on label_counts.concept_label_key = labels.concept_label_key
+        from eligible_mentions
+        inner join display_keys
+            on
+                eligible_mentions.concept_id = display_keys.concept_id
+                and eligible_mentions.concept_label_key = display_keys.concept_label_key
+        group by eligible_mentions.concept_id, eligible_mentions.label
     ) as ranked
     where label_rank = 1
 )
 
-, description_inputs as (
-    select * from {{ ref('int__courseware__concept_description_inputs') }}
+, display_kinds as (
+    select
+        concept_id
+        , concept_kind
+    from (
+        select
+            concept_id
+            , concept_kind
+            , row_number() over (
+                partition by concept_id order by count(*) desc, concept_kind asc
+            ) as kind_rank
+        from eligible_mentions
+        where concept_kind is not null
+        group by concept_id, concept_kind
+    ) as ranked
+    where kind_rank = 1
 )
 
 , approval as (
-    select max(approved_prompt_version) as prompt_version
-    from description_inputs
+    {{ courseware_approved_description_prompt() }}
 )
 
 , described_concepts as (
     select distinct concept_id
-    from description_inputs
+    from {{ ref('int__courseware__concept_description_inputs') }}
 )
 
 , descriptions as (
@@ -106,6 +131,10 @@ with concepts as (
         from {{ source('courseware_intermediate', 'courseware_concept_description') }} as descriptions
         inner join approval
             on descriptions.prompt_version = approval.prompt_version
+        -- a concept with no current inputs keeps no description, even one written
+        -- when a run since made ineligible gave it some
+        inner join described_concepts
+            on descriptions.concept_id = described_concepts.concept_id
     ) as ranked
     where description_rank = 1
 )
@@ -141,7 +170,7 @@ with concepts as (
 select
     concepts.concept_pk as concept_id
     , display_labels.preferred_label as name
-    , display_labels.concept_kind
+    , display_kinds.concept_kind
     , descriptions.short_description
     , descriptions.description
     , descriptions.is_learner_facing
@@ -155,9 +184,12 @@ select
     ) as is_awaiting_description
     , coalesce(course_counts.teaching_course_count, 0) as teaching_course_count
     , coalesce(course_counts.course_count, 0) as course_count
+    , {{ courseware_build_id() }} as dbt_invocation_id
 from concepts
 inner join display_labels
     on concepts.concept_pk = display_labels.concept_id
+left join display_kinds
+    on concepts.concept_pk = display_kinds.concept_id
 left join descriptions
     on concepts.concept_pk = descriptions.concept_id
 left join described_concepts

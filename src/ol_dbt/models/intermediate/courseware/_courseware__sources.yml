@@ -134,6 +134,9 @@ sources:
     description: One row per scope part each time the extractor reads a course run,
       extracted or skipped, with the input it computed. int__courseware__extractions
       matches a scope's readings to the run's latest read to pick the current one.
+      The extraction asset creates it on its first v2 write, so it has no source test
+      (dbt would query a table that may not exist); int__courseware__latest_scope_inputs,
+      which is empty while it is missing, tests the latest read's parts are unique.
     columns:
     - name: platform
       description: str, mitxonline, mitxpro or residential
@@ -152,10 +155,6 @@ sources:
         before it was
     - name: observed_at
       description: timestamp, when the extractor read the run; one value per read
-    tests:
-    - dbt_expectations.expect_compound_columns_to_be_unique:
-        arguments:
-          column_list: [platform, courserun_readable_id, scope_id, scope_part, observed_at]
   - name: courseware_claim
     config:
       meta:

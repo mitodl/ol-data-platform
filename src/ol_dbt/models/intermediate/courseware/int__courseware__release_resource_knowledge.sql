@@ -102,4 +102,5 @@ select
         , {{ markdown_list_section('Preparation the material assumes', 'prerequisites_inferred') }}
         , {{ markdown_list_section('Audience', 'audience', bullets=true) }}
     ) as context_document
+    , {{ courseware_build_id() }} as dbt_invocation_id
 from knowledge

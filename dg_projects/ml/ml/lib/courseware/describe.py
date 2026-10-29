@@ -7,9 +7,10 @@ longer description that hold for any course. It also flags labels that are not
 concepts a learner would look up (a dataset, a course-specific exercise), so
 user-facing surfaces can leave them out.
 
-A concept is described again only when its inputs or the prompt or model change;
-rows are added, never replaced, like the extractions. The Dagster asset describes
-only under a prompt version courseware_description_approval approves.
+A concept is described again only when its inputs or the prompt or model differ
+from its newest description; rows are added, never replaced, like the extractions.
+The Dagster asset describes only under a prompt version
+courseware_description_approval approves.
 """
 
 import hashlib
@@ -194,10 +195,15 @@ def description_version(model_id: str, effort: str) -> str:
 def pending_concepts(
     rows: pl.DataFrame, existing: pl.DataFrame | None, version: str
 ) -> list[dict[str, Any]]:
-    """Return the concepts whose current inputs have no description at version.
+    """Return the concepts whose newest description at version is not of their
+    current inputs.
+
+    Only the newest counts, because a knowledge release takes each concept's newest
+    description: inputs that change and change back are described again, or the
+    release would carry the description of the inputs in between.
 
     :param rows: int__courseware__concept_description_inputs rows
-    :param existing: descriptions already stored
+    :param existing: descriptions already stored, with described_at
     :param version: description_version for the run's model and effort
     :returns: one entry per concept to describe, with its input_checksum
     :rtype: list[dict[str, Any]]
@@ -206,7 +212,9 @@ def pending_concepts(
     if existing is not None:
         done = set(
             existing.filter(pl.col("description_version") == version)
-            .select("concept_id", "input_checksum")
+            .sort("described_at")
+            .group_by("concept_id")
+            .agg(pl.col("input_checksum").last())
             .iter_rows()
         )
     return [

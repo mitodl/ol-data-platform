@@ -43,6 +43,14 @@ by design, and the interval is slightly wider because variances here use ddof=1.
 
 A stratum with fewer than two unlabelled items has no estimable autorater
 variance and gets lam = 0.
+
+The corrected denominator, sum_k w_k [mean(lam) mean(g_hat_u) + mean(g - lam g_hat)],
+can be zero or negative even when the labelled denominators are positive (e.g. one
+labelled g = 1 predicted g_hat = 2 beside an unlabelled g_hat = 1). Where it is, the
+estimate falls back to lam = 0 in every stratum, the classical stratified ratio,
+whose denominator is the labelled mean of g; the reported lambdas show the
+fallback. Power tuning starts from lam = 1, as ppi_py does, or from the classical
+ratio when lam = 1 has no positive denominator.
 """
 
 from collections import Counter
@@ -135,7 +143,8 @@ def _folds(count: int) -> np.ndarray:
 
 def _ratio(
     strata: Sequence[Stratum], weights: np.ndarray, lambdas: Sequence[np.ndarray]
-) -> float:
+) -> float | None:
+    """Return the rectified ratio, or None where its denominator is not positive."""
     numerator = 0.0
     denominator = 0.0
     for stratum, weight, lam in zip(strata, weights, lambdas, strict=True):
@@ -147,7 +156,7 @@ def _ratio(
             g_part += lam.mean() * g_hat_u.mean() - (lam * g_hat).mean()
         numerator += weight * y_part
         denominator += weight * g_part
-    return numerator / denominator
+    return numerator / denominator if denominator > 0 else None
 
 
 def _tuned_lambda(stratum: Stratum, theta: float, rows: np.ndarray) -> float:
@@ -192,6 +201,8 @@ def stratified_ppi(
         rate here (precision, recall, B-cubed) lies in [0, 1]
     :returns: point estimate, standard error and normal interval
     :rtype: Estimate
+    :raises ValueError: when a stratum has too few labels or no labelled
+        denominator is positive
     """
     short = [s.name for s in strata if s.n < MIN_LABELS_PER_STRATUM]
     if short:
@@ -199,14 +210,22 @@ def stratified_ppi(
         raise ValueError(msg)
     population = np.array([s.population for s in strata], dtype=float)
     weights = population / population.sum()
+    classical = [np.zeros(s.n) for s in strata]
+    classical_theta = _ratio(strata, weights, classical)
+    if classical_theta is None:
+        msg = "no labelled denominator is positive"
+        raise ValueError(msg)
     lambdas = [np.full(s.n, 1.0 if s.has_autorater else 0.0) for s in strata]
     theta = _ratio(strata, weights, lambdas)
     if power_tuning:
+        start = classical_theta if theta is None else theta
         lambdas = [
-            _cross_fitted_lambda(s, theta) if s.has_autorater else np.zeros(s.n)
+            _cross_fitted_lambda(s, start) if s.has_autorater else np.zeros(s.n)
             for s in strata
         ]
         theta = _ratio(strata, weights, lambdas)
+    if theta is None:
+        lambdas, theta = classical, classical_theta
 
     hessian = sum(
         weight * s.denominators.mean()

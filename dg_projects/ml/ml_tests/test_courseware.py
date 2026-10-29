@@ -837,3 +837,25 @@ def test_reuse_across_runs_keeps_a_runs_own_reading():
     # the copy's own reading is newer than the original's, and still the one used
     assert model.calls == []
     assert again.extractions.height == 0
+
+
+def test_extract_refuses_a_table_whose_columns_are_out_of_order(
+    tmp_path, monkeypatch, capsys
+):
+    sources = tmp_path / "sources.parquet"
+    rows = _course_rows("About it.", "Lecture 2", "some text")
+    rows.write_parquet(sources)
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    tables = extract_scopes([_lecture_one(rows)], FakeModel(), model_id="model")
+    path = output_dir / "courseware_claim.parquet"
+    # the right names and types, but the append concatenates by position
+    tables.claims.select(reversed(tables.claims.columns)).write_parquet(path)
+    model = FakeModel()
+    _use_model(monkeypatch, model)
+    with pytest.raises(ValueError, match="run `local conform` first"):
+        local.extract(sources, output_dir)
+    assert model.calls == []
+    local.conform(output_dir)
+    assert pl.read_parquet(path).schema == pl.Schema(extract.CLAIM_SCHEMA)
+    capsys.readouterr()

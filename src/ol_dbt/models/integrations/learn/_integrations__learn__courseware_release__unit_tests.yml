@@ -65,8 +65,9 @@ unit_tests:
 
 - name: test_integrations__learn__concepts_moves_with_a_promotion
   description: >
-    After r3 is promoted, the concepts are r3's. The course knowledge test below
-    uses the same published row, so both projections move together.
+    After r3 is promoted, the concepts are r3's. The course knowledge and course
+    concept tests below use the same published row, so all three views move
+    together.
   model: integrations__learn__concepts
   given:
   - input: ref('int__courseware__published_release')
