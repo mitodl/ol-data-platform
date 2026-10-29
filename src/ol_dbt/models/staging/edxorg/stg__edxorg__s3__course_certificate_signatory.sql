@@ -18,7 +18,7 @@ with source as (
         , organization as signatory_organization
         , certificate_id as signatory_certificate_id
         , trim(name) as signatory_name
-        , regexp_replace(trim(name), '^(Professor |Dr\. )', '') as signatory_normalized_name
+        , {{ regexp_replace_all('trim(name)', "'^(Professor |Dr\\. )'", "''") }} as signatory_normalized_name
         , concat('https://courses.edx.org', nullif(signature_image_path, '')) as signatory_image_url
     from most_recent_source
 )

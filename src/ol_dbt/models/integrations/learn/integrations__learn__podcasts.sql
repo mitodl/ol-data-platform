@@ -46,7 +46,7 @@ select
     -- keeps any trailing slash. The dlt source strips it, so recompute here
     -- from rss_url instead of reusing the raw readable_id -- otherwise the
     -- pull would create a second resource alongside the Celery ETL's.
-    regexp_replace(podcast_rss_url, '^.*//', '')             as readable_id
+    {{ regexp_replace_all('podcast_rss_url', "'^.*//'", "''") }} as readable_id
     , podcast_title                                          as title
     , podcast_description                                    as description
     , podcast_website                                        as url

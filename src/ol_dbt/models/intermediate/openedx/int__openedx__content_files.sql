@@ -171,7 +171,7 @@ with blocks as (
     left join file_exclusions
         on candidate_files.courserun_readable_id = file_exclusions.courserun_readable_id
         and candidate_files.source_system = file_exclusions.content_file_source_system
-        and regexp_replace(candidate_files.source_path, '^[^/]*/', '') = file_exclusions.content_file_path
+        and {{ regexp_replace_all('candidate_files.source_path', "'^[^/]*/'", "''") }} = file_exclusions.content_file_path
     where not coalesce(file_exclusions.content_file_is_excluded, false)
 )
 

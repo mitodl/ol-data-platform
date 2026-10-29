@@ -79,5 +79,5 @@ from current_episodes
 -- same way integrations__learn__podcasts derives its own readable_id, keeping
 -- the two in lockstep by construction.
 inner join podcasts
-    on regexp_replace(current_episodes.podcast_rss_url, '^.*//', '')
+    on {{ regexp_replace_all('current_episodes.podcast_rss_url', "'^.*//'", "''") }}
     = podcasts.readable_id
