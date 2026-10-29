@@ -25,13 +25,12 @@ clean-targets: # directories to be removed by `dbt clean`
 - "target"
 - "dbt_packages"
 
+# Without a search order dbt looks in this project before the package. Our
+# day_of_week macros take one argument and dbt_date's take two, so dbt_date
+# keeps its own implementations.
 dispatch:
-- macro_namespace: dbt_utils
-  search_order: ["trino_utils", "dbt_utils"]
 - macro_namespace: dbt_date
-  search_order: ["trino_utils", "dbt_date"]
-- macro_namespace: metrics
-  search_order: ["trino_utils", "metrics"]
+  search_order: ["dbt_date"]
 
 vars:
   schema_suffix: dev
