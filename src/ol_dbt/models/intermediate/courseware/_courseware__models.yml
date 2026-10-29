@@ -828,6 +828,201 @@ models:
     tests:
     - unique
     - not_null
+- name: int__courseware__concept_tagging_aliases
+  description: The newest tagging run's dictionary, one row per (phrase, concept it
+    was tagged with), with the concept as of the newest resolution run and the ambiguity
+    flags recomputed for it.
+  columns:
+  - name: tagging_run_id
+    description: str, the newest tagging run
+  - name: pattern_key
+    description: str, the normalized phrase
+    tests:
+    - not_null
+  - name: concept_id
+    description: str, the concept's UUID as of the newest resolution run
+    tests:
+    - not_null
+  - name: tagged_concept_id
+    description: str, the concept's UUID as the tagging run recorded it
+  - name: concept_label_key
+    description: str, the label the phrase comes from
+  - name: variant
+    description: str, label, full_name, abbreviation, without_qualifier or plural
+  - name: surface
+    description: str, the phrase as spelled
+  - name: match_mode
+    description: str, caseless, case_sensitive or skipped
+  - name: is_short
+    description: boolean, the phrase is shorter than the case-sensitive threshold
+  - name: is_qualified
+    description: boolean, the phrase is a label's head without its qualifier
+  - name: is_single_word
+    description: boolean, the phrase is one lowercase word
+  - name: has_multiple_concepts
+    description: boolean, the phrase belongs to more than one current concept
+  - name: is_ambiguous
+    description: boolean, any of the four flags
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [pattern_key, tagged_concept_id]
+
+- name: int__courseware__concept_tags
+  description: Every dictionary mention candidate of a known concept in courseware
+    text, from the newest tagging run, with the matched phrase's mode, ambiguity flags
+    and whether the course run's sense of the label is this concept.
+  columns:
+  - name: tagging_run_id
+    description: str, the newest tagging run
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the source's scope
+  - name: scope_kind
+    description: str, unit, context or materials
+  - name: source_ref
+    description: str, the block id, or the exported file's path
+  - name: source_kind
+    description: str, html, problem, video_transcript, document or a page kind
+  - name: concept_id
+    description: str, the concept's UUID as of the newest resolution run, following
+      the redirect of a concept merged since the tagging run
+    tests:
+    - not_null
+  - name: tagged_concept_id
+    description: str, the concept's UUID as the tagging run recorded it; the lowest
+      one when the run tagged the span for several concepts that have since merged
+  - name: pattern_key
+    description: str, the normalized phrase that matched
+  - name: concept_label_key
+    description: str, the label the phrase comes from
+  - name: variant
+    description: str, label, full_name, abbreviation, without_qualifier or plural
+    tests:
+    - accepted_values:
+        values: [label, full_name, abbreviation, without_qualifier, plural]
+  - name: match_mode
+    description: str, caseless or case_sensitive
+    tests:
+    - accepted_values:
+        values: [caseless, case_sensitive]
+  - name: is_short
+    description: boolean, the phrase is shorter than the case-sensitive threshold
+  - name: is_qualified
+    description: boolean, the phrase is a label's head without its qualifier
+  - name: is_single_word
+    description: boolean, the phrase is one lowercase word
+  - name: has_multiple_concepts
+    description: boolean, the phrase belongs to more than one concept as of the newest
+      resolution run
+  - name: is_ambiguous
+    description: boolean, any of the four flags; a review signal, not a sense decision
+  - name: sense_status
+    description: str, course_sense (the course run's sense of the label is this concept),
+      needs_review (the run's sense is in the review queue) or candidate (nothing
+      has decided the label's sense in this run)
+    tests:
+    - accepted_values:
+        values: [course_sense, needs_review, candidate]
+  - name: matched_text
+    description: str, the text as it appears in the source
+  - name: char_start
+    description: int, offset of the mention in the source's source_text
+  - name: char_end
+    description: int, end offset of the mention
+
+- name: int__courseware__cited_concept_sources
+  description: Every source a current, verified claim quotes, per concept the claim
+    names.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the claim's scope
+  - name: source_ref
+    description: str, the quoted block id or file path
+  - name: concept_id
+    description: str, the concept's UUID
+  - name: claim_count
+    description: int, claims naming the concept that quote the source
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [platform, courserun_readable_id, scope_id, source_ref, concept_id]
+
+- name: int__courseware__concept_tagging_fan_out
+  description: Per dictionary phrase and concept, how many mentions the newest tagging
+    run produced and how often the extractor agrees. The review queue for the dictionary.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: tagging_run_id
+    description: str, the newest tagging run
+  - name: pattern_key
+    description: str, the normalized phrase
+  - name: concept_id
+    description: str, the concept's UUID as of the newest resolution run, following
+      the redirect of a concept merged since the tagging run
+  - name: tagged_concept_id
+    description: str, the concept's UUID as the tagging run's dictionary recorded
+      it; the lowest one when concepts the run kept apart have since merged
+  - name: concept_label_key
+    description: str, the label the phrase comes from
+  - name: variant
+    description: str, label, full_name, abbreviation, without_qualifier or plural
+  - name: surface
+    description: str, the phrase as spelled
+  - name: match_mode
+    description: str, caseless, case_sensitive or skipped
+  - name: is_short
+    description: boolean, the phrase is shorter than the case-sensitive threshold
+  - name: is_qualified
+    description: boolean, the phrase is a label's head without its qualifier
+  - name: is_single_word
+    description: boolean, the phrase is one lowercase word
+  - name: has_multiple_concepts
+    description: boolean, the phrase belongs to more than one concept
+  - name: is_ambiguous
+    description: boolean, any of the four flags
+  - name: is_merged_label
+    description: boolean, the concept has more than one label, so resolution merged
+      labels into it
+  - name: tagged_mention_count
+    description: int, mentions the phrase produced
+  - name: tagged_source_count
+    description: int, sources it tagged
+  - name: tagged_scope_count
+    description: int, scopes it tagged
+  - name: tagged_courserun_count
+    description: int, course runs it tagged
+  - name: share_of_tagged_mentions
+    description: float, its mentions over all mentions in the run
+  - name: extractor_scope_count
+    description: int, scopes where the extractor used the phrase's label itself
+  - name: amplification
+    description: float, tagged scopes over extractor scopes; null when the extractor
+      never used the label in a current claim
+  - name: compared_source_count
+    description: int, tagged sources in scopes with a current extraction
+  - name: source_agreement_rate
+    description: float, share of compared sources that a claim naming the concept
+      quotes
+  - name: scope_agreement_rate
+    description: float, share of compared sources whose scope has a claim naming the
+      concept
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [pattern_key, concept_id]
+
 - name: int__courseware__extraction_source_checksums
   description: One row per course run in int__courseware__extraction_sources that
     int__courseware__extraction_allowlist approves, with a checksum of the text its
@@ -1493,6 +1688,7 @@ unit_tests:
     vars:
       courseware_ocw_courses:
       - c1
+
 - name: test_int__courseware__ocw_table_rows_splits_tables_and_marks_session_pages
   description: >
     Each table row on a page is one row, the header row (row_index 2) included, and

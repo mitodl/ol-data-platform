@@ -392,6 +392,113 @@ sources:
       description: str, the model that wrote the description
     - name: described_at
       description: timestamp, when the description was written
+  - name: courseware_concept_tagging_run
+    description: One row per dictionary tagging run (ml.lib.courseware.tagging), which
+      tags every extraction source with the concepts of dim_concept_alias. Each run
+      is a full snapshot.
+    columns:
+    - name: tagging_run_id
+      description: str, the run's UUID; re-running old inputs gets a new one, so the
+        newest run is always the one to read
+      tests:
+      - unique
+      - not_null
+    - name: input_key
+      description: str, sha256 of the tagger, its parameters, the dictionary and the
+        source text; a run is skipped when the newest run has the same key
+    - name: tagger_id
+      description: str, the tagger version
+    - name: parameters_json
+      description: str, JSON of the minimum and case-sensitive phrase lengths
+    - name: dictionary_checksum
+      description: str, sha256 of the alias rows the dictionary was built from
+    - name: sources_checksum
+      description: str, sha256 of the source rows tagged
+    - name: label_count
+      description: int, concept label keys in the dictionary
+    - name: tokenless_label_count
+      description: int, labels skipped because they have no letter or number, so no
+        key to match on (e.g. "∇")
+    - name: pattern_count
+      description: int, distinct phrases (labels and their variants)
+    - name: case_sensitive_pattern_count
+      description: int, phrases matched only in the alias's own case
+    - name: skipped_pattern_count
+      description: int, phrases too short to match
+    - name: ambiguous_pattern_count
+      description: int, phrases flagged ambiguous
+    - name: source_count
+      description: int, sources tagged
+    - name: char_count
+      description: int, characters of source text read
+    - name: tagged_source_count
+      description: int, sources with at least one mention
+    - name: mention_count
+      description: int, mention rows written
+    - name: match_seconds
+      description: float, wall time of the matching loop
+    - name: elapsed_seconds
+      description: float, wall time of the whole run, building the dictionary and
+        the output frames included
+    - name: tagged_at
+      description: timestamp, when the run started
+  - name: courseware_concept_mention
+    description: Every place a dictionary phrase occurs in an extraction source's
+      text, per tagging run, one row per candidate concept.
+    columns:
+    - name: tagging_run_id
+      description: str, the tagging run
+    - name: platform
+      description: str, mitxonline, mitxpro or residential
+    - name: courserun_readable_id
+      description: str, the course run
+    - name: scope_id
+      description: str, the source's scope
+    - name: scope_kind
+      description: str, unit, context or materials
+    - name: source_ref
+      description: str, the block id, or the exported file's path
+    - name: source_kind
+      description: str, html, problem, video_transcript, document or a page kind
+    - name: pattern_key
+      description: str, the normalized phrase that matched
+    - name: concept_id
+      description: str, the concept's UUID
+    - name: matched_text
+      description: str, the text as it appears in the source
+    - name: char_start
+      description: int, offset of the mention in source_text
+    - name: char_end
+      description: int, end offset of the mention in source_text
+  - name: courseware_concept_tagging_alias
+    description: The dictionary a tagging run matched, one row per (phrase, concept),
+      with each phrase's match mode and ambiguity flags.
+    columns:
+    - name: tagging_run_id
+      description: str, the tagging run
+    - name: pattern_key
+      description: str, the normalized phrase
+    - name: concept_id
+      description: str, the concept's UUID
+    - name: concept_label_key
+      description: str, the label the phrase comes from
+    - name: variant
+      description: str, label, full_name, abbreviation, without_qualifier or plural
+    - name: surface
+      description: str, the phrase as spelled, which case-sensitive phrases must match
+    - name: match_mode
+      description: str, caseless, case_sensitive or skipped
+    - name: is_short
+      description: boolean, the phrase is shorter than the case-sensitive threshold
+    - name: is_qualified
+      description: boolean, the phrase is a label's head without its qualifier, e.g.
+        entropy from "entropy (information theory)"
+    - name: is_single_word
+      description: boolean, the phrase is one lowercase word
+    - name: has_multiple_concepts
+      description: boolean, the phrase belongs to more than one concept
+    - name: is_ambiguous
+      description: boolean, any of the four flags
   - name: courseware_answer_check
     description: A small model's verdict on whether an extraction source reads as
       an answer key or worked solutions (ml.lib.courseware.answer_check), one row

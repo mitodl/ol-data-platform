@@ -33,6 +33,7 @@ from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
 from ml.lib.courseware.resolve import EMBEDDING_DIM as RESOLUTION_EMBEDDING_DIM
 from ml.lib.courseware.resolve import ResolutionState, resolve_concepts
 from ml.lib.courseware.scopes import CHARS_PER_TOKEN, build_scopes
+from ml.lib.courseware.tagging import ConceptDictionary, tag_sources, tagging_input_key
 from ml.lib.embed import resolve_embedding_model
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import OPIK_PROJECT_NAME
@@ -332,6 +333,34 @@ def describe(
     output_dir.mkdir(parents=True, exist_ok=True)
     _append(output_dir, table, new_rows)
     print(f"{new_rows.height} concepts described")  # noqa: T201
+
+
+@app.command
+def tag(sources: Path, aliases: Path, output_dir: Path) -> None:
+    """Tag every source with the known concepts its text mentions.
+
+    :param sources: int__courseware__extraction_sources exported to parquet
+    :param aliases: dim_concept_alias exported to parquet
+    :param output_dir: where the courseware_concept_tagging_* and
+        courseware_concept_mention tables are appended
+    """
+    source_rows = pl.read_parquet(sources)
+    alias_rows = pl.read_parquet(aliases)
+    runs = _existing(output_dir, "courseware_concept_tagging_run")
+    input_key = tagging_input_key(ConceptDictionary(alias_rows), source_rows)
+    # only the newest run counts: after A, B, A the warehouse must move back to A
+    if runs is not None and runs.sort("tagged_at")["input_key"][-1] == input_key:
+        print("the newest tagging run already has these inputs")  # noqa: T201
+        return
+    result = tag_sources(source_rows, alias_rows)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for table, new_rows in (
+        ("courseware_concept_mention", result.mentions),
+        ("courseware_concept_tagging_alias", result.aliases),
+        ("courseware_concept_tagging_run", result.run),
+    ):
+        _append(output_dir, table, new_rows)
+    print(result.run.to_dicts()[0])  # noqa: T201
 
 
 @app.command(name="answer-check")

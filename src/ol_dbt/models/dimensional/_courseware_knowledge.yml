@@ -540,3 +540,63 @@ models:
       only relations with at least one
   - name: scope_count
     description: int, distinct scopes behind the relation
+
+- name: bridge_course_content_concept
+  description: Which known concepts each courseware block or course document mentions,
+    from dictionary tagging, one row per (source, concept). Mentions only, not teaching
+    status.
+  config:
+    meta:
+      # It reads tables only the courseware tagger writes, which no QA run produces
+      # until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: course_content_concept_pk
+    description: str, surrogate key of (platform, courserun_readable_id, source_ref,
+      concept)
+    tests:
+    - unique
+    - not_null
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: content_block_fk
+    description: str, dim_course_content.content_block_pk of the latest retrieval;
+      null when the source is an exported file rather than a block
+  - name: concept_fk
+    description: str, dim_concept.concept_pk of the concept as of the newest resolution
+      run; a concept merged since the tagging run reads as its survivor
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
+  - name: scope_id
+    description: str, the sequential's block id, or 'context' or 'materials'
+  - name: scope_kind
+    description: str, unit, context or materials
+  - name: source_ref
+    description: str, the block id, or the exported file's path
+  - name: source_kind
+    description: str, html, problem, video_transcript, document or a page kind
+  - name: mention_count
+    description: int, mentions of the concept in the source
+  - name: phrase_count
+    description: int, distinct phrases that matched
+  - name: first_char_start
+    description: int, offset of the first mention in the source's text
+  - name: is_ambiguous
+    description: boolean, every mention came through an ambiguous phrase; a review
+      signal, not a sense decision
+  - name: is_sense_resolved
+    description: boolean, the course run's sense of the label is this concept; otherwise
+      the row is a mention candidate whose sense nothing has decided
+  - name: is_cited_by_extractor
+    description: boolean, a current verified claim naming the concept quotes this
+      source
+  - name: is_named_in_scope
+    description: boolean, a current verified claim in the source's scope names the
+      concept
+  - name: tagging_run_id
+    description: str, the tagging run the rows come from

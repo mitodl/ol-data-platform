@@ -6,7 +6,7 @@ unit_tests:
     out
     and a leading dot is "dot". A + or # standing alone is a separator, letters and
     numbers outside ASCII are kept, and a label with no letters or numbers has no
-    key.
+    key, even one whose dot or + would be spelled out.
   model: int__courseware__claims
   given:
   - input: ref('int__courseware__extractions')
@@ -23,6 +23,10 @@ unit_tests:
     - {extraction_key: k, claim_ordinal: 6, claim_kind: concept, label: adjusted R²}
     - {extraction_key: k, claim_ordinal: 7, claim_kind: concept, label: K-Means  Clustering!}
     - {extraction_key: k, claim_ordinal: 8, claim_kind: concept, label: "+"}
+    - {extraction_key: k, claim_ordinal: 9, claim_kind: concept, label: .}
+    - {extraction_key: k, claim_ordinal: 10, claim_kind: concept, label: ..}
+    - {extraction_key: k, claim_ordinal: 11, claim_kind: concept, label: .+}
+    - {extraction_key: k, claim_ordinal: 12, claim_kind: concept, label: "#."}
   - input: source('courseware_intermediate', 'courseware_claim_evidence')
     rows: []
   expect:
@@ -35,6 +39,10 @@ unit_tests:
     - {claim_ordinal: 6, concept_label_key: adjusted r²}
     - {claim_ordinal: 7, concept_label_key: k means clustering}
     - {claim_ordinal: 8, concept_label_key: null}
+    - {claim_ordinal: 9, concept_label_key: null}
+    - {claim_ordinal: 10, concept_label_key: null}
+    - {claim_ordinal: 11, concept_label_key: null}
+    - {claim_ordinal: 12, concept_label_key: null}
 
 - name: test_int__courseware__claims_no_prerequisites_has_no_label_key
   description: >
