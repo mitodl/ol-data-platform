@@ -173,7 +173,7 @@ select
     , completion_status = 'not_started' as is_not_started
     , content_units_completed
     , content_units_total
-    -- 0 to 1, like grade_value. Independent of completion_status: a learner can be
+    -- 0 to 1. Independent of completion_status: a learner can be
     -- certified without opening every block.
     , cast(content_units_completed as double) / nullif(content_units_total, 0) as content_progress
     -- A threshold date, not a flag: the consumer compares it against the current UTC date,

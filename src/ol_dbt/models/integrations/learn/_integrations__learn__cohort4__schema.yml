@@ -91,6 +91,14 @@ models:
     description: boolean, always true.
   - name: last_modified
     description: str, ISO 8601 time the file's text was extracted.
+  - name: release_date
+    description: str, ContentFile.release_date as ISO 8601 UTC (YYYY-MM-DDTHH:MM:SS.ffffffZ),
+      the latest OLX start on the path from the course down to the file (a static
+      asset takes the earliest date of the dated files that link it), as Learn's OlxArchive.release_dates
+      computes it. Null when Learn leaves the file undated (an undated learner-visible
+      path to it, or a self-paced run). Learn shows a file only while release_date
+      is null or past, so a future-dated row stays here but is hidden in Learn until
+      then.
 
 - name: integrations__learn__ocw_content_files
   description: >

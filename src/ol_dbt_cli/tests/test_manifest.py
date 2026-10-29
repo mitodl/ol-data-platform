@@ -215,3 +215,13 @@ class TestModelsForChangedMacros:
             )
         )
         assert manifest.models_for_changed_macros({"macros/shared.sql"}) == {"m_a", "m_b"}
+
+
+def test_disabled_models_are_indexed_apart_from_nodes(tmp_path: Path) -> None:
+    """A Trino manifest keeps StarRocks-only models under ``disabled``, with their tags."""
+    node = {**_model_node("mv_b2b_learner_enrollment", []), "tags": ["starrocks"]}
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps({"nodes": {}, "sources": {}, "macros": {}, "disabled": {node["unique_id"]: [node]}}))
+    registry = load_manifest(path)
+    assert registry.get_model("mv_b2b_learner_enrollment") is None
+    assert registry.disabled["mv_b2b_learner_enrollment"].tags == ["starrocks"]

@@ -178,6 +178,22 @@ def test_load_fixtures_reads_a_valid_file(tmp_path: Path) -> None:
             "fixture",
             "row 1 has 'yesterday' in column at, which is not a valid timestamp",
         ),
+        # YAML `true` and `!!binary`, which int() and str() would take.
+        (
+            _fixture({"id": "long", "n": "long"}, [{"id": 1, "n": True}]),
+            "fixture",
+            "things row 1 has True in column n, which is not a valid long",
+        ),
+        (
+            _fixture({"id": "long", "n": "double"}, [{"id": 1, "n": False}]),
+            "fixture",
+            "things row 1 has False in column n, which is not a valid double",
+        ),
+        (
+            _fixture({"id": "long", "s": "string"}, [{"id": 1, "s": b"x"}]),
+            "fixture",
+            "things row 1 has b'x' in column s, which is not a valid string",
+        ),
         (
             _fixture({"id": "long"}, [{"id": 1}, {"id": 2}, {"id": "1"}]),
             "fixture",
@@ -365,6 +381,13 @@ def test_validate_generated_compares_keys_as_the_column_holds_them(
         ("date", 20260101),
         ("date", [2026, 1, 1]),
         ("timestamp", 1767225600),
+        ("int", True),
+        ("long", False),
+        ("float", True),
+        ("double", True),
+        ("decimal(5,2)", True),
+        ("string", b"1"),
+        ("string", bytearray(b"1")),
     ],
 )
 def test_validate_generated_rejects_a_key_its_column_cannot_hold(tmp_path: Path, fixture_type: str, value: Any) -> None:
@@ -399,6 +422,17 @@ def test_validate_generated_accepts_a_key_at_the_edge_of_its_column(
     (fixture,) = load_fixtures(inventory_dir, [unit])
 
     validate_generated(fixture, unit, {RAW_TABLE: [{"id": value}]})
+
+
+def test_validate_generated_lets_an_append_table_repeat_a_key(tmp_path: Path) -> None:
+    inventory_dir = _inventory(tmp_path, _fixture({"id": "long", "name": "string"}, [{"id": 1, "name": "a"}]))
+    (unit,) = load_units(inventory_dir)
+    unit.tables[0]["sync_mode"] = "incremental_append"
+    (fixture,) = load_fixtures(inventory_dir, [unit])
+
+    validate_generated(fixture, unit, {RAW_TABLE: [{"id": 1, "name": "b"}, {"id": 1, "name": "c"}]})
+    with pytest.raises(ValueError, match="generated row 1 has no value for primary key column id"):
+        validate_generated(fixture, unit, {RAW_TABLE: [{"name": "d"}]})
 
 
 def test_validate_generated_rejects_a_nested_primary_key_path(tmp_path: Path) -> None:
@@ -596,6 +630,17 @@ def test_load_recreates_each_table_on_the_local_catalog(tmp_path: Path, monkeypa
         (f"DROP TABLE IF EXISTS {raw}.`raw__demo__s3__unread` FORCE", None),
         (f"CREATE TABLE {raw}.`raw__demo__s3__unread` (`id` BIGINT)", None),
     ]
+
+
+def test_load_inserts_a_table_in_batches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    rows = [{"id": number} for number in range(1, 8)]
+    inventory_dir, recorder = _recording(tmp_path, monkeypatch, _fixture({"id": "long"}, rows))
+    monkeypatch.setattr(fixtures_command, "INSERT_BATCH_ROWS", 3)
+
+    fixtures_command.load(inventory_dir=inventory_dir, generate=False)
+
+    batches = [parameters for statement, parameters in recorder.statements if statement.startswith("INSERT")]
+    assert batches == [[(1,), (2,), (3,)], [(4,), (5,), (6,)], [(7,)]]
 
 
 def test_load_without_fixtures_exits(tmp_path: Path) -> None:

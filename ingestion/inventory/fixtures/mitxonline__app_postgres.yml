@@ -3,7 +3,9 @@
 # the +integrations__learn__mitxonline_* models read. Loaded by
 # `ol-dbt fixtures load`. The columns are from `ol-dbt fixtures capture`, which
 # leaves out Airbyte's _airbyte_meta struct. Every row is invented: nothing here
-# is copied from a deployed MITx Online.
+# is copied from a deployed MITx Online. These rows carry the branches the Learn
+# models take; src/ol_dbt_cli/ol_dbt_cli/fixture_factories/mitxonline__app_postgres/
+# adds generated rows around them (`--no-generate` loads these alone).
 schema_version: 1
 tables:
   raw__mitxonline__app__postgres__cms_coursepage:

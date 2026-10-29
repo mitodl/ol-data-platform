@@ -99,34 +99,73 @@ def normalize(uri: str) -> str:
     return f"{bucket}/{key.strip('/')}".rstrip("/")
 
 
-def references(
-    tables: list[dict[str, str]], database_locations: dict[str, str] | None = None
-) -> set[str]:
-    """Return every ``bucket/key`` path the given Glue entries point at.
+def references(tables: list[dict[str, str]]) -> set[str]:
+    """Return every ``bucket/key`` path the given Glue tables point at.
 
-    A database location is passed for the delete path because a database whose
-    location names a real prefix claims it for tables not yet registered. A
-    database located at a bucket ROOT is left out: every deployed warehouse
-    database is located at one, and :func:`is_referenced` reads a bare bucket
-    as containing every prefix in it, so counting it skips every candidate. A
-    TABLE located at a bucket root is kept and does protect the whole bucket.
+    A table located at a bucket root protects the whole bucket.
     """
     out: set[str] = set()
     for table in tables:
         for uri in (table["location"], table["metadata_location"]):
             if path := normalize(uri):
                 out.add(path)
-    for uri in (database_locations or {}).values():
-        if "/" in (path := normalize(uri)):
-            out.add(path)
     return out
 
 
-def referenced_paths(glue: Any, *, include_databases: bool) -> set[str]:
-    """Return every ``bucket/key`` path Glue points at. See :func:`references`."""
-    return references(
-        glue_tables(glue), glue_database_locations(glue) if include_databases else None
-    )
+def referenced_paths(glue: Any) -> set[str]:
+    """Return every ``bucket/key`` path Glue tables point at. See :func:`references`."""
+    return references(glue_tables(glue))
+
+
+@dataclass(frozen=True)
+class GlueReferences:
+    """What the delete path re-checks a prefix against, fetched just before it.
+
+    A table protects its own directory, everything inside it and every
+    directory above it (:func:`is_referenced`). A database location protects its
+    own directory and every directory above it, but nothing inside it. A
+    developer schema is located at ``processed/<database>``, so protecting what's
+    inside would make every orphan in one undeletable. A table whose files are
+    written before it is registered is what the age floor is for.
+
+    In practice the database half only matters for a database located at a
+    uuid-suffixed directory: :data:`DBT_DIR` already refuses any directory
+    without the suffix, which covers every ``processed/<database>``.
+    """
+
+    tables: set[str]
+    databases: set[str]
+
+    @classmethod
+    def build(
+        cls, tables: list[dict[str, str]], database_locations: dict[str, str]
+    ) -> "GlueReferences":
+        """Collect references from Glue tables and database locations.
+
+        A database located at a bucket ROOT is left out: every deployed
+        warehouse database is located at one, and counting a bare bucket would
+        protect every prefix in it. A TABLE located at a bucket root is kept.
+        """
+        return cls(
+            tables=references(tables),
+            databases={
+                path
+                for uri in database_locations.values()
+                if "/" in (path := normalize(uri))
+            },
+        )
+
+    def claims(self, candidate: str) -> bool:
+        """Return True when a table or a database location protects ``candidate``."""
+        return is_referenced(candidate, self.tables) or any(
+            path == candidate or path.startswith(f"{candidate}/")
+            for path in self.databases
+        )
+
+
+def delete_references(glue: Any) -> GlueReferences:
+    """Return Glue's table and database references for the delete path."""
+    return GlueReferences.build(glue_tables(glue), glue_database_locations(glue))
 
 
 def is_referenced(candidate: str, referenced: set[str]) -> bool:
@@ -204,7 +243,7 @@ def delete_prefix(  # noqa: PLR0913
     s3: Any,
     bucket: str,
     prefix: str,
-    referenced: Callable[[], set[str]],
+    referenced: Callable[[], GlueReferences],
     *,
     min_age_days: int,
     now: datetime,
@@ -248,7 +287,7 @@ def delete_prefix(  # noqa: PLR0913
             "skipped",
             f"newest object {newest.isoformat()} too recent",
         )
-    if is_referenced(path, referenced()):
+    if referenced().claims(path):
         return PrefixOutcome(bucket, prefix, "skipped", "now referenced by Glue")
     if not execute:
         return PrefixOutcome(
@@ -425,11 +464,11 @@ def sweep_warehouse(  # noqa: PLR0913
     outcomes: list[PrefixOutcome] | None = None
     if delete:
 
-        def fresh_references() -> set[str]:
+        def fresh_references() -> GlueReferences:
             fresh_unreadable: list[str] = []
             fresh_tables = glue_tables(glue, unreadable=fresh_unreadable)
             refuse_to_delete_blind(fresh_unreadable)
-            return references(fresh_tables, glue_database_locations(glue))
+            return GlueReferences.build(fresh_tables, glue_database_locations(glue))
 
         outcomes = []
         for row in orphans:
