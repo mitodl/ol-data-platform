@@ -126,7 +126,7 @@ def test_runs_sharing_a_new_sense_get_one_concept(choose):
 
 
 @pytest.mark.usefixtures("verdicts")
-def test_a_run_the_model_cannot_place_goes_to_review_and_stays_there(choose):
+def test_a_run_the_model_cannot_place_goes_to_review_until_a_run_can(choose):
     choose.table[OS] = ("existing", 0)
     choose.table[ML] = ("unsure", None)
     uses = mentions(("kernel", OS), ("kernel", ML))
@@ -135,10 +135,18 @@ def test_a_run_the_model_cannot_place_goes_to_review_and_stays_there(choose):
     assert queued["sense_status"] == "needs_review"
     assert queued["concept_id"] is None
     assert first.run["sense_review_count"][0] == 1
+    # no reviewer decision is stored, so the next run asks again, and only about it
     choose.asked.clear()
     second = run(labels("kernel"), state_from(first), mentions=uses)
+    assert [unit.key[2] for query in choose.asked for unit in query.units] == [ML]
     assert sense_of(second, "kernel", ML)["sense_status"] == "needs_review"
-    assert choose.asked == []
+    choose.table[ML] = ("new", 1)
+    third = run(labels("kernel"), state_from(second), mentions=uses)
+    assert sense_of(third, "kernel", ML)["sense_status"] == "assigned"
+    assert (
+        sense_of(third, "kernel", ML)["concept_id"]
+        != (sense_of(third, "kernel", OS)["concept_id"])
+    )
 
 
 @pytest.mark.usefixtures("verdicts")
@@ -206,6 +214,47 @@ def test_a_rebuild_keeps_split_senses(choose):
     assert registry_of(rebuilt)[ml_kernel]["concept_status"] == "active"
     assert sense_of(rebuilt, "kernel", ML)["concept_id"] == ml_kernel
     assert rebuilt.run["concepts_deprecated"][0] == 0
+
+
+def test_a_rebuild_that_separates_labels_moves_their_runs_with_them(
+    choose, monkeypatch
+):
+    def merge_all(_client, _model_id, candidates, _rows):
+        return (
+            [
+                (query, found, "exact")
+                for query, items in candidates.items()
+                for found in items
+            ],
+            1,
+            set(),
+        )
+
+    monkeypatch.setattr(resolve, "adjudicate", merge_all)
+    uses = mentions(("alpha", OS), ("beta", ML), ("gamma", LINALG))
+    first = run(labels("alpha", "beta", "gamma"), mentions=uses)
+    merged = {
+        row["concept_id"] for row in first.sense_assignments.iter_rows(named=True)
+    }
+    assert len(merged) == 1
+
+    def merge_nothing(_client, _model_id, _candidates, _rows):
+        return [], 1, set()
+
+    monkeypatch.setattr(resolve, "adjudicate", merge_nothing)
+    rebuilt = run(
+        labels("alpha", "beta", "gamma"), state_from(first), mentions=uses, rebuild=True
+    )
+    primaries = {
+        row["concept_label_key"]: row["concept_id"]
+        for row in rebuilt.assignments.iter_rows(named=True)
+    }
+    assert len(set(primaries.values())) == 3
+    for key, courserun in (("alpha", OS), ("beta", ML), ("gamma", LINALG)):
+        assert sense_of(rebuilt, key, courserun)["concept_id"] == primaries[key]
+    # a label's old concept is not kept as a sense of it
+    assert rebuilt.aliases["sense_role"].to_list() == ["primary"] * 3
+    assert choose.asked == []
 
 
 @pytest.mark.usefixtures("verdicts")

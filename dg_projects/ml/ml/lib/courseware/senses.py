@@ -16,7 +16,8 @@ descriptions are the context that tells the senses apart.
 - Every other new (label, course run) goes to a model with the label's senses and
   their glosses. The model picks an existing sense, groups runs into a new sense
   (minted as a concept split from the primary one), or says it cannot tell, which
-  leaves the run unassigned in the review queue. Nothing falls back to the first
+  leaves the run unassigned in the review queue, asked again on each later run until
+  reviewer decisions have somewhere to be stored. Nothing falls back to the first
   sense.
 - An assignment is carried to later runs while its concept (after merges) is still
   one of the label's senses, so existing ids do not move.
@@ -325,16 +326,14 @@ def carried_assignments(
 ) -> dict[UnitKey, dict[str, Any]]:
     """Keep each earlier assignment whose concept is still one of the label's senses.
 
-    A run in the review queue stays there: a reviewer decides it, and asking the
-    model again would not.
+    A run in the review queue is not kept: until reviewer decisions are stored, each
+    run asks again, as the run may have new claims or the label new senses since.
+    A run whose concept is no longer one of the label's senses is decided again.
     """
     carried = {}
     for row in previous_assignments.iter_rows(named=True):
         key = (row["concept_label_key"], row["platform"], row["courserun_readable_id"])
-        if key[0] not in aliases:
-            continue
-        if row["sense_status"] == "needs_review":
-            carried[key] = dict(row, resolution_run_id=run_id)
+        if key[0] not in aliases or row["sense_status"] == "needs_review":
             continue
         current = active(row["concept_id"])
         if current in {alias.concept_id for alias in aliases[key[0]]}:
@@ -471,12 +470,25 @@ def label_aliases(
         previous[row["concept_label_key"]].append(row)
     aliases: dict[str, list[Alias]] = {}
     for label_key, primary in sorted(primaries.items()):
+        # The previous primary carries its gloss only while it is still the label's
+        # concept. When a rebuild moves the label to another concept, the old one is
+        # not kept as a sense: the label's course runs are decided again instead of
+        # staying on a concept that is now another label's.
+        carried_primary = next(
+            (
+                row
+                for row in previous[label_key]
+                if row["sense_role"] == "primary"
+                and current(row["concept_id"]) == primary
+            ),
+            None,
+        )
         kept = {
             concept_id: row
             for row in previous[label_key]
-            if (concept_id := current(row["concept_id"])) is not None
+            if row["sense_role"] == "split"
+            and (concept_id := current(row["concept_id"])) not in {None, primary}
         }
-        carried_primary = kept.pop(primary, None)
         senses = [
             Alias(
                 primary,
