@@ -57,12 +57,11 @@ SUMMARIZE_MAX_CONCURRENCY = int(os.environ.get("SUMMARIZE_MAX_CONCURRENCY", "20"
 # A model id in ol-llm's provider:model form. Dev has no Bedrock IAM role, so it
 # calls Anthropic with ANTHROPIC_API_KEY; every deployed environment uses Bedrock,
 # whose ids are inference profiles. FeedbackSummariesConfig.model overrides this
-# per run.
+# per run. The evaluation gate (ml.lib.summarize_gate) tests the deployed model.
+DEPLOYED_SUMMARY_MODEL = "bedrock:us.anthropic.claude-haiku-5-5"
 SUMMARY_MODEL = os.environ.get(
     "SUMMARY_MODEL",
-    "anthropic:claude-haiku-5-5"
-    if DAGSTER_ENV == "dev"
-    else "bedrock:us.anthropic.claude-haiku-5-5",
+    "anthropic:claude-haiku-5-5" if DAGSTER_ENV == "dev" else DEPLOYED_SUMMARY_MODEL,
 )
 
 # 200 was enough for claude-haiku-4-5 (no thinking), but claude-haiku-5-5 thinks by
