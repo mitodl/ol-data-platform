@@ -151,9 +151,14 @@ models:
   - name: latest_income_usd
     description: int, the users latest income in usd. Only populated for mitxonline.
   - name: has_program_certificate
-    description: boolean, Set to true if the user has recieved a program credential
+    description: boolean, true if any marts__combined_program_enrollment_detail row
+      with the user's email has a programcertificate_uuid, otherwise null (never false).
+      Unlike user_has_completed_program, this counts revoked MITx Online and xPRO
+      certificates.
   - name: has_dedp_program_certificate
-    description: boolean, Set to true if the user has recieved a DEDP program credential
+    description: boolean, true if any DEDP marts__combined_program_enrollment_detail
+      row with the user's email has a programcertificate_uuid, otherwise null (never
+      false). Like has_program_certificate, this counts revoked certificates.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -605,7 +610,26 @@ models:
   - name: user_full_name
     description: string, user full name on the corresponding platform
   - name: user_has_completed_program
-    description: boolean, whether the learner has completed program to earn the certificate
+    description: >-
+      boolean, whether the learner has completed the program. This column is the
+      program completion rule, and the other program completion columns
+      (marts__combined__users.has_program_certificate, program_summary_report.program_certificates,
+      learner_demographics_and_cert_info's DEDP indicators) state how they differ
+      from it. The rule depends on the platform.
+      MITx Online and xPRO (platform_name is the xPRO program's platform, xPRO or
+      Simplilearn): true when the application holds an unrevoked program certificate.
+      The rule reads programcertificate_url, which is null when the certificate
+      is revoked, so a revoked certificate gives false while programcertificate_uuid
+      stays set.
+      edX.org (MicroMasters and XSeries): true when 2U's program learner report
+      flags the learner as having completed the program. A row has a programcertificate_uuid
+      (a hash of user and program) only when that flag is true, and the report has
+      no revocation, so programcertificate_is_revoked is null.
+      DEDP: completion comes from MITx Online certificates, including the ones
+      migrated from MicroMasters. The edX.org DEDP rows are MicroMasters program
+      enrollments with no 2U report row, and none of them is complete. A few DEDP
+      certificates MicroMasters issued before 2022-10-01 have no MITx Online copy.
+      They are in int__micromasters__program_certificates and are not counted here.
     tests:
     - not_null
   - name: programenrollment_is_active
@@ -628,21 +652,39 @@ models:
   - name: programcertificate_is_revoked
     description: boolean, indicating whether the certificate is revoked and invalid
   - name: programcertificate_uuid
-    description: str, unique identifier for the program certificate
+    description: str, unique identifier for the program certificate. Set for revoked
+      certificates too, so count completions with user_has_completed_program, not
+      with this column.
   - name: programcertificate_url
     description: str, URL to the program certificate for users who earned the certificate
       on either mitxonline.mit.edu or xpro.mit.edu. Null for certificate earned on
       edX.org or certificates that have been revoked.
   - name: unique_courses_taken_in_program
-    description: int, count of unique course readable ids the learner enrolled in
-      within that program
+    description: int, count of unique courses in the program the learner enrolled
+      in, in any enrollment mode. Courses are matched on the row's program_readable_id,
+      which only MITx Online and xPRO programs share with their courses. edX.org rows
+      carry a generated program_readable_id, so the count is 0 for edX.org MicroMasters
+      and XSeries rows alike. The exception is MicroMasters learners missing from
+      2U's program report. Those rows take the MITx Online program's program_readable_id
+      and can count courses, matched to enrollments by user_id with no platform condition.
+      program_enrollment_with_user_report.courses_taken_in_program counts verified
+      enrollments only, matched through bridge_program_course, so the two differ.
   - name: capstone_indicator
-    description: str, if the learner has taken a course with the word capstone in
-      the title then it will be Y otherwise the value will be N
+    description: str, Y if the learner has an enrollment, in any mode, in a program
+      course with the word capstone in the title, otherwise N. Program courses are
+      matched as for unique_courses_taken_in_program, so most edX.org rows are N.
+      program_enrollment_with_user_report.capstone_ind counts verified enrollments
+      only.
   - name: program_completion_days
-    description: int, number of days between the first verified course enrollment's
-      start date and the program completion certificate date. Ignores unverified/audit
-      enrollments when determining the start date.
+    description: int, number of days from the start date of the earliest course run
+      the learner holds a verified enrollment in to the program certificate's creation
+      date. Ignores unverified/audit enrollments when determining the start date.
+      It is null unless both dates exist, a certificate creation date and a matched
+      verified enrollment in a course run with a start date. Program courses are matched
+      as for unique_courses_taken_in_program, so it is null on most edX.org rows.
+      A revoked certificate keeps its creation date, so it can be set on a revoked
+      MITx Online or xPRO row where user_has_completed_program is false. program_enrollment_with_user_report
+      carries the same value as program_complete_days.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
