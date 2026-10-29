@@ -2,10 +2,6 @@ with mitxpro__programenrollments as (
     select * from {{ ref('int__mitxpro__programenrollments') }}
 )
 
-, mitx_programs as (
-    select * from {{ ref('int__mitx__program_requirements') }}
-)
-
 , mitxpro__programs as (
     select * from {{ ref('int__mitxpro__programs') }}
 )
@@ -54,16 +50,29 @@ with mitxpro__programenrollments as (
     select * from {{ ref('int__micromasters__program_enrollments') }}
 )
 
-, edxorg_mitx_program_courses as (
-    select * from {{ ref('int__edxorg__mitx_program_courses') }}
+, program_report_key as (
+    select * from {{ ref('dim_program_report_key') }}
 )
 
-, mitx__courses as (
-    select * from {{ ref('int__mitx__courses') }}
+-- edX.org and MicroMasters rows name their program by title
+, program_title_to_mitxonline_program as (
+    select
+        lookup_value as program_title
+        , mitxonline_program_id
+    from program_report_key
+    where lookup_type = 'title'
 )
 
-, mitxpro__courses as (
-    select * from {{ ref('int__mitxpro__courses') }}
+, bridge_program_course as (
+    select * from {{ ref('bridge_program_course') }}
+)
+
+, dim_program as (
+    select * from {{ ref('dim_program') }}
+)
+
+, dim_course as (
+    select * from {{ ref('dim_course') }}
 )
 
 , combined_enrollments as (
@@ -99,6 +108,11 @@ with mitxpro__programenrollments as (
         , mitxpro__program_certificates.programcertificate_url
         , if(mitxpro__program_certificates.programcertificate_url is not null, true, false)
             as user_has_completed_program
+        , 'mitxpro' as course_program_platform_code
+        , cast(mitxpro__programs.program_id as varchar) as course_program_source_id
+        , 'mitxpro' as own_course_program_platform_code
+        , cast(mitxpro__programs.program_id as varchar) as own_course_program_source_id
+        , '{{ var("mitxpro") }}' as user_platform
     from mitxpro__programenrollments
     inner join mitxpro__programs
         on mitxpro__programenrollments.program_id = mitxpro__programs.program_id
@@ -135,6 +149,11 @@ with mitxpro__programenrollments as (
         , mitxonline__program_certificates.programcertificate_url
         , if(mitxonline__program_certificates.programcertificate_url is not null, true, false)
             as user_has_completed_program
+        , 'mitxonline' as course_program_platform_code
+        , cast(mitxonline__programs.program_id as varchar) as course_program_source_id
+        , 'mitxonline' as own_course_program_platform_code
+        , cast(mitxonline__programs.program_id as varchar) as own_course_program_source_id
+        , '{{ var("mitxonline") }}' as user_platform
     from mitxonline__programenrollments
     inner join mitxonline__programs
         on mitxonline__programenrollments.program_id = mitxonline__programs.program_id
@@ -173,6 +192,19 @@ with mitxpro__programenrollments as (
         , edx_program_certificates.program_certificate_hashed_id as programcertificate_uuid
         , null as programcertificate_url
         , if(edx_program_certificates.user_has_completed_program = true, true, false) as user_has_completed_program
+        -- An edX.org program that moved to MITx Online takes its courses from the MITx
+        -- Online program. Course readable ids are shared across platforms, so the
+        -- learner's edX.org enrollments still match them. It also keeps its own
+        -- edX.org program's courses, which the MITx Online program may not list.
+        , if(program_title_to_mitxonline_program.mitxonline_program_id is not null, 'mitxonline', 'edxorg')
+            as course_program_platform_code
+        , coalesce(
+            cast(program_title_to_mitxonline_program.mitxonline_program_id as varchar)
+            , replace(edx_program_enrollments.program_uuid, '-', '')
+        ) as course_program_source_id
+        , 'edxorg' as own_course_program_platform_code
+        , replace(edx_program_enrollments.program_uuid, '-', '') as own_course_program_source_id
+        , '{{ var("edxorg") }}' as user_platform
     from edx_program_enrollments
     left join edxorg__users
         on edx_program_enrollments.user_id = edxorg__users.user_id
@@ -180,6 +212,8 @@ with mitxpro__programenrollments as (
         on
             edx_program_enrollments.program_uuid = edx_program_certificates.program_uuid
             and edx_program_enrollments.user_id = edx_program_certificates.user_id
+    left join program_title_to_mitxonline_program
+        on edx_program_enrollments.program_title = program_title_to_mitxonline_program.program_title
 
     union all
 
@@ -206,11 +240,30 @@ with mitxpro__programenrollments as (
         , edx_program_certificates.program_certificate_hashed_id as programcertificate_uuid
         , null as programcertificate_url
         , if(edx_program_certificates.user_has_completed_program = true, true, false) as user_has_completed_program
+        , if(
+            coalesce(mitxonline__programs.program_id, program_title_to_mitxonline_program.mitxonline_program_id)
+            is not null
+            , 'mitxonline'
+            , 'micromasters'
+        ) as course_program_platform_code
+        , coalesce(
+            cast(
+                coalesce(mitxonline__programs.program_id, program_title_to_mitxonline_program.mitxonline_program_id)
+                as varchar
+            )
+            , cast(micromasters__program_enrollments.micromasters_program_id as varchar)
+        ) as course_program_source_id
+        , 'micromasters' as own_course_program_platform_code
+        , cast(micromasters__program_enrollments.micromasters_program_id as varchar)
+            as own_course_program_source_id
+        , '{{ var("edxorg") }}' as user_platform
     from micromasters__program_enrollments
     left join mitx__programs
         on micromasters__program_enrollments.micromasters_program_id = mitx__programs.micromasters_program_id
     left join mitxonline__programs
         on mitx__programs.mitxonline_program_id = mitxonline__programs.program_id
+    left join program_title_to_mitxonline_program
+        on micromasters__program_enrollments.program_title = program_title_to_mitxonline_program.program_title
     left join edx_program_certificates
         on
             micromasters__program_enrollments.micromasters_program_id = edx_program_certificates.micromasters_program_id
@@ -225,49 +278,91 @@ with mitxpro__programenrollments as (
         and edx_program_enrollments.micromasters_program_id is null
 )
 
-, courses_in_programs as (
+-- Every course in the program, required or elective, as bridge_program_course lists it.
+-- dim_program holds an edX.org program's uuid with hyphens and the program enrollments
+-- without, so both sides drop them.
+, program_courses as (
     select
-        mitx__courses.course_readable_id
-        , mitxonline__programs.program_readable_id
-    from mitx_programs
-    inner join mitx__courses
-        on mitx_programs.course_number = mitx__courses.course_number
-    left join mitxonline__programs
-        on mitx_programs.mitxonline_program_id = mitxonline__programs.program_id
-    where mitx__courses.is_on_mitxonline = true
-
-    union all
-
-    select
-        mitx__courses.course_readable_id
-        , null as program_readable_id
-    from mitx_programs
-    inner join mitx__courses
-        on mitx_programs.course_number = mitx__courses.course_number
-    where mitx__courses.is_on_mitxonline = false
-
-    union all
-
-    select
-        coalesce(mitx__courses.course_readable_id, edxorg_mitx_program_courses.course_readable_id) as course_readable_id
-        , null as program_readable_id
-    from edxorg_mitx_program_courses
-    left join mitx_programs
-        on edxorg_mitx_program_courses.program_name = mitx_programs.program_title
-    left join mitx__courses
+        dim_program.platform_code
+        , replace(dim_program.source_id, '-', '') as source_id
+        , dim_course.course_readable_id
+    from bridge_program_course
+    inner join dim_program
+        on bridge_program_course.program_fk = dim_program.program_pk
+    inner join dim_course
         on
-            replace(edxorg_mitx_program_courses.course_readable_id, 'MITx/', '')
-            = replace(mitx__courses.course_readable_id, 'course-v1:MITxT+', '')
-    where mitx_programs.program_title is null
+            bridge_program_course.course_fk = dim_course.course_pk
+            and dim_course.is_current = true
+)
 
-    union all
+-- A row counts the courses of the program its courses come from and of its own program,
+-- when that is another one (an edX.org or MicroMasters program that moved to MITx Online)
+, program_course_sets as (
+    select distinct
+        course_program_platform_code
+        , course_program_source_id
+        , own_course_program_platform_code
+        , own_course_program_source_id
+    from combined_programs
+)
+
+, program_course_set_members as (
+    select
+        course_program_platform_code
+        , course_program_source_id
+        , own_course_program_platform_code
+        , own_course_program_source_id
+        , course_program_platform_code as platform_code
+        , course_program_source_id as source_id
+    from program_course_sets
+
+    union
 
     select
-        mitxpro__courses.course_readable_id
-        , mitxpro__programs.program_readable_id
-    from mitxpro__courses
-    inner join mitxpro__programs
-        on mitxpro__courses.program_id = mitxpro__programs.program_id
+        course_program_platform_code
+        , course_program_source_id
+        , own_course_program_platform_code
+        , own_course_program_source_id
+        , own_course_program_platform_code as platform_code
+        , own_course_program_source_id as source_id
+    from program_course_sets
+)
+
+-- One row per program course set and learner. user_id is only unique within a platform,
+-- so the enrollment's platform is part of the key the program rows join on.
+, program_course_enrollments as (
+    select
+        program_course_set_members.course_program_platform_code
+        , program_course_set_members.course_program_source_id
+        , program_course_set_members.own_course_program_platform_code
+        , program_course_set_members.own_course_program_source_id
+        , combined_enrollments.platform
+        , combined_enrollments.user_id
+        , sum(case when upper(combined_enrollments.course_title) like '%CAPSTONE%' then 1 else 0 end)
+            as capstone_sum
+        , min(
+            case
+                when combined_enrollments.courserunenrollment_enrollment_mode = 'verified'
+                then cast(substring(combined_courseruns.courserun_start_on, 1, 10) as date)
+            end
+        ) as first_courserun_start_on_date
+        , count(distinct combined_enrollments.course_readable_id) as unique_courses_taken_in_program
+    from program_course_set_members
+    inner join program_courses
+        on
+            program_course_set_members.platform_code = program_courses.platform_code
+            and program_course_set_members.source_id = program_courses.source_id
+    inner join combined_enrollments
+        on program_courses.course_readable_id = combined_enrollments.course_readable_id
+    left join combined_courseruns
+        on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+    group by
+        program_course_set_members.course_program_platform_code
+        , program_course_set_members.course_program_source_id
+        , program_course_set_members.own_course_program_platform_code
+        , program_course_set_members.own_course_program_source_id
+        , combined_enrollments.platform
+        , combined_enrollments.user_id
 )
 
 , final_combined_programs as (
@@ -298,24 +393,20 @@ with mitxpro__programenrollments as (
         , combined_programs.programcertificate_url
         , cast(substring(combined_programs.programcertificate_created_on, 1, 10) as date)
             as programcertificate_created_on_date
-        , sum(case when upper(combined_enrollments.course_title) like '%CAPSTONE%' then 1 else 0 end)
-            as capstone_sum
-        , min(
-            case
-                when combined_enrollments.courserunenrollment_enrollment_mode = 'verified'
-                then cast(substring(combined_courseruns.courserun_start_on, 1, 10) as date)
-            end
-        ) as first_courserun_start_on_date
-        , count(distinct combined_enrollments.course_readable_id) as unique_courses_taken_in_program
+        , max(program_course_enrollments.capstone_sum) as capstone_sum
+        , min(program_course_enrollments.first_courserun_start_on_date) as first_courserun_start_on_date
+        , coalesce(max(program_course_enrollments.unique_courses_taken_in_program), 0)
+            as unique_courses_taken_in_program
     from combined_programs
-    left join courses_in_programs
-        on combined_programs.program_readable_id = courses_in_programs.program_readable_id
-    left join combined_enrollments
+    left join program_course_enrollments
         on
-            cast(combined_programs.user_id as varchar) = combined_enrollments.user_id
-            and courses_in_programs.course_readable_id = combined_enrollments.course_readable_id
-    left join combined_courseruns
-        on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+            combined_programs.course_program_platform_code = program_course_enrollments.course_program_platform_code
+            and combined_programs.course_program_source_id = program_course_enrollments.course_program_source_id
+            and combined_programs.own_course_program_platform_code
+            = program_course_enrollments.own_course_program_platform_code
+            and combined_programs.own_course_program_source_id = program_course_enrollments.own_course_program_source_id
+            and combined_programs.user_platform = program_course_enrollments.platform
+            and cast(combined_programs.user_id as varchar) = program_course_enrollments.user_id
     group by
         combined_programs.platform_name
         , combined_programs.program_id
@@ -375,4 +466,21 @@ select
         , final_combined_programs.first_courserun_start_on_date
         , final_combined_programs.programcertificate_created_on_date
     ) as program_completion_days
+    -- The program the row counts toward in program reports. A MITx Online or xPRO readable
+    -- id names it, including the MITx Online id a MicroMasters row carries; any other row
+    -- (an edX.org row's readable id is generated) is looked up by its title.
+    , coalesce(by_readable_id.program_key, by_title.program_key) as program_report_key
+    , coalesce(by_readable_id.program_readable_id, by_title.program_readable_id) as report_program_readable_id
+    , coalesce(by_readable_id.program_title, by_title.program_title) as report_program_title
+    , coalesce(by_readable_id.program_name, by_title.program_name) as report_program_name
+    , coalesce(by_readable_id.program_type, by_title.program_type) as report_program_type
 from final_combined_programs
+left join program_report_key as by_readable_id
+    on
+        by_readable_id.lookup_type = 'readable_id'
+        and final_combined_programs.program_readable_id = by_readable_id.lookup_value
+left join program_report_key as by_title
+    on
+        by_readable_id.lookup_value is null
+        and by_title.lookup_type = 'title'
+        and final_combined_programs.program_title = by_title.lookup_value

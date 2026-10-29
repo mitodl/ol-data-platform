@@ -29,6 +29,11 @@ with org_program_runs as (
         on boc.courserun_fk = cr.courserun_pk and cr.is_current = true
     join {{ source('dimensional', 'bridge_program_course') }} bpc
         on cr.course_fk = bpc.course_fk
+    -- bridge_program_course links edX.org programs to the MITx Online courses they
+    -- moved to. A contract runs on MITx Online, so only MITx Online programs apply.
+    join {{ source('dimensional', 'dim_program') }} bridge_program
+        on bpc.program_fk = bridge_program.program_pk
+        and bridge_program.platform_code = 'mitxonline'
     where org.platform = 'mitxonline'
 ),
 

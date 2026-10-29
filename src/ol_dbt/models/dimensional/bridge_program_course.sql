@@ -21,6 +21,26 @@ with micromasters_course_keys as (
     from {{ ref('int__mitxonline__program_requirements') }}
 )
 
+, mitxpro_program_courses as (
+    -- A course names its program in courses_course.program_id. The CMS program pages
+    -- list fewer programs' courses, but add courses listed under a second program and
+    -- the course order.
+    select
+        program_id
+        , course_id
+        , cast(null as bigint) as course_order
+    from {{ ref('int__mitxpro__courses') }}
+    where program_id is not null
+
+    union all
+
+    select
+        program_id
+        , course_id
+        , course_order
+    from {{ ref('int__mitxpro__coursesinprogram') }}
+)
+
 , mitxpro_program_requirements as (
     select
         cast(program_id as varchar) as program_id
@@ -30,8 +50,9 @@ with micromasters_course_keys as (
         , true as is_required
         , 'mitxpro' as platform
         , 'mitxpro' as platform_code
-        , course_order
-    from {{ ref('int__mitxpro__coursesinprogram') }}
+        , max(course_order) as course_order
+    from mitxpro_program_courses
+    group by program_id, course_id
 )
 
 , micromasters_requirements as (
@@ -54,8 +75,11 @@ with micromasters_course_keys as (
 )
 
 , edxorg_program_requirements as (
-    -- Preserve edX.org program memberships not already represented by MITx Online or
-    -- MicroMasters requirements. Normalize the API course key to the edX.org course key.
+    -- Every edX.org MITx program keeps its own memberships, also one that
+    -- dim_program_report_key maps to a MITx Online program: its edX.org learners took
+    -- courses that program may not list, e.g. 18.03x's 18.031x under its MITx Online key
+    -- 18.03.1x, or a capstone exam it dropped. Normalize the API course key to the MITx
+    -- Online course key when the course moved there.
     select
         cast(program_courses.program_uuid as varchar) as program_id
         , cast(null as integer) as course_id
@@ -65,13 +89,10 @@ with micromasters_course_keys as (
         , 'edxorg' as platform_code
         , cast(null as integer) as course_order
     from {{ ref('int__edxorg__mitx_program_courses') }} as program_courses
-    left join {{ ref('int__mitx__programs') }} as mitx_programs
-        on program_courses.program_name = mitx_programs.program_title
     left join {{ ref('int__mitx__courses') }} as mitx_courses
         on
             replace(program_courses.course_readable_id, 'MITx/', '')
             = replace(mitx_courses.course_readable_id, 'course-v1:MITxT+', '')
-    where mitx_programs.program_title is null
 )
 
 , combined_requirements as (
@@ -116,10 +137,11 @@ with micromasters_course_keys as (
             or (combined_requirements.platform_code = 'micromasters'
                 and combined_requirements.course_readable_id = dim_course.course_readable_id
                 and dim_course.primary_platform = 'edxorg')
-            -- Other edX.org MITx programs use API course keys normalized above
+            -- Other edX.org MITx programs use API course keys normalized above. A course
+            -- in int__mitx__courses gets its MITx Online key, which dim_course holds under
+            -- mitxonline, so the key alone identifies the course.
             or (combined_requirements.platform_code = 'edxorg'
-                and combined_requirements.course_readable_id = dim_course.course_readable_id
-                and dim_course.primary_platform = 'edxorg')
+                and combined_requirements.course_readable_id = dim_course.course_readable_id)
         )
 )
 
