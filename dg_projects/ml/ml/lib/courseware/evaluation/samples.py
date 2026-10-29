@@ -383,6 +383,68 @@ def _newest_run(table: pl.DataFrame, runs: pl.DataFrame) -> pl.DataFrame:
     return table.filter(pl.col("resolution_run_id") == last)
 
 
+# What one reading of a scope by one model is: a split into parts under one extractor
+# version, as int__courseware__extractions defines it.
+_READING = [
+    "platform",
+    "courserun_readable_id",
+    "scope_id",
+    "model_id",
+    "extractor_id",
+    "prompt_version",
+    "schema_version",
+    "effort",
+    "scope_part_count",
+]
+
+
+def current_extractions(extractions: pl.DataFrame) -> pl.DataFrame:
+    """Return each model's newest complete reading of each scope, one row per part.
+
+    The rule int__courseware__extractions applies, per model: a reading is a split
+    of the scope into parts (scope_part_checksums), complete when every part has an
+    extraction of that part's text, whichever run wrote it. The newest complete
+    reading is current and each of its parts reads from its newest matching
+    extraction. Taking the newest extraction of each part on its own would mix two
+    splits when a scope is split differently or a new reading is partly extracted.
+
+    :param extractions: courseware_claim_extraction rows, one per extraction_key
+    :returns: the current extractions
+    :rtype: pl.DataFrame
+    """
+    readings = extractions.group_by([*_READING, "scope_part_checksums"]).agg(
+        pl.col("extracted_at").max().alias("read_at")
+    )
+    parts = readings.join(
+        extractions.select(
+            *_READING, "scope_part", "input_text_checksum", "extraction_key"
+        ),
+        on=_READING,
+    ).filter(
+        pl.col("scope_part_checksums")
+        .str.split(",")
+        .list.get(pl.col("scope_part") - 1, null_on_oob=True)
+        == pl.col("input_text_checksum")
+    )
+    scope = ["platform", "courserun_readable_id", "scope_id", "model_id"]
+    current = (
+        parts.group_by([*_READING, "scope_part_checksums", "read_at"])
+        .agg(pl.col("scope_part").n_unique().alias("parts"))
+        .filter(pl.col("parts") == pl.col("scope_part_count"))
+        .sort(["read_at", "scope_part_checksums"], descending=[True, False])
+        .unique(scope, keep="first")
+        .select(*_READING, "scope_part_checksums")
+    )
+    keys = (
+        parts.join(current, on=[*_READING, "scope_part_checksums"])
+        .join(extractions.select("extraction_key", "extracted_at"), on="extraction_key")
+        .sort(["extracted_at", "extraction_key"], descending=True)
+        .unique([*scope, "scope_part"], keep="first")
+        .select("extraction_key")
+    )
+    return extractions.join(keys, on="extraction_key")
+
+
 def load_inputs(  # noqa: PLR0913
     extraction_dirs: list[Path],
     sources: Path,
@@ -418,11 +480,8 @@ def load_inputs(  # noqa: PLR0913
         how="diagonal_relaxed",
     ).unique("extraction_key", keep="first")
     current = (
-        extractions.sort(["extracted_at", "extraction_key"], descending=True)
-        .unique(
-            ["platform", "courserun_readable_id", "scope_id", "scope_part", "model_id"],
-            keep="first",
-        )
+        current_extractions(extractions)
+        .sort("extraction_key")
         .select(
             "extraction_key",
             "model_id",

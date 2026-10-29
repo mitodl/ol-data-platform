@@ -967,20 +967,55 @@ def test_few_labels_are_not_their_own_neighbours():
         assert row["item_id"] not in json.loads(row["neighbour_sizes_json"])
 
 
-def _extraction(key, model, scope):
+def _extraction(key, model, scope, *, part=1, checksums=None, day=17):
+    checksums = checksums or f"{scope}-text"
     return {
         "extraction_key": key,
+        "extractor_id": "x1",
         "model_id": f"us.anthropic.claude-{model}-5-5",
         "prompt_version": "v1",
+        "schema_version": "s1",
+        "effort": "high",
         "platform": "mitxonline",
         "courserun_readable_id": "course-v1:UAI_SOURCE+UAI.4+1T2026",
         "scope_id": scope,
         "scope_kind": "unit",
         "scope_title": scope,
         "scope_position": 1,
-        "scope_part": 1,
-        "extracted_at": datetime(2026, 10, 17, tzinfo=UTC),
+        "scope_part": part,
+        "scope_part_count": len(checksums.split(",")),
+        "input_text_checksum": checksums.split(",")[part - 1],
+        "scope_part_checksums": checksums,
+        "extracted_at": datetime(2026, 10, day, tzinfo=UTC),
     }
+
+
+def test_current_extractions_take_each_models_newest_complete_reading():
+    extractions = pl.DataFrame(
+        [
+            # u1: an older reading in two parts, then a complete one-part reading
+            _extraction("o1-old1", "opus", "u1", part=1, checksums="a,b", day=1),
+            _extraction("o1-old2", "opus", "u1", part=2, checksums="a,b", day=1),
+            _extraction("o1-new", "opus", "u1", checksums="c", day=2),
+            # u2: a new two-part reading with only its first part extracted
+            _extraction("o2-old", "opus", "u2", checksums="d", day=1),
+            _extraction("o2-new1", "opus", "u2", part=1, checksums="e,f", day=2),
+            # another model's reading is current on its own
+            _extraction("h1", "haiku", "u1", checksums="c", day=1),
+            # a part whose text did not change keeps its older extraction
+            _extraction("h2-1", "haiku", "u2", part=1, checksums="g,h", day=1),
+            _extraction("h2-2", "haiku", "u2", part=2, checksums="g,i", day=2),
+            _extraction("h2-2old", "haiku", "u2", part=2, checksums="g,h", day=1),
+        ]
+    )
+    current = samples.current_extractions(extractions)
+    assert sorted(current["extraction_key"]) == [
+        "h1",
+        "h2-1",
+        "h2-2",
+        "o1-new",
+        "o2-old",
+    ]
 
 
 def _write_gold_inputs(
