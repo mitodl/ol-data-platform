@@ -1,0 +1,58 @@
+---
+unit_tests:
+- name: test_integrations__learn__resource_concepts_keys_each_course_by_its_sense
+  description: >
+    Two courses that use "kernel" for two meanings point at two concepts, so Learn
+    gets each course's sense by id, not a shared label. A relation only proposed
+    claims support, a proposed concept, and a concept integrations__learn__concepts
+    leaves out (not learner-facing, merged, or no current labels) are left out.
+  model: integrations__learn__resource_concepts
+  given:
+  - input: ref('int__courseware__learn_course_runs')
+    rows:
+    - {etl_source: mitxonline, readable_id: "course-v1:MITx+6.033", courserun_fk: os,
+      courserun_readable_id: "course-v1:MITx+6.033+1T2026"}
+    - {etl_source: mitxonline, readable_id: "course-v1:MITx+6.036", courserun_fk: ml,
+      courserun_readable_id: "course-v1:MITx+6.036+1T2026"}
+  - input: ref('bridge_courserun_concept')
+    rows:
+    - {courserun_fk: os, concept_fk: os-kernel, relation: teaches, requirement_source: null,
+      claim_count: 2, accepted_claim_count: 2, first_scope_position: 3}
+    - {courserun_fk: ml, concept_fk: ml-kernel, relation: teaches, requirement_source: null,
+      claim_count: 4, accepted_claim_count: 1, first_scope_position: 7}
+    - {courserun_fk: ml, concept_fk: svm, relation: uses, requirement_source: null,
+      claim_count: 1, accepted_claim_count: 0, first_scope_position: 2}
+    - {courserun_fk: ml, concept_fk: numpy, relation: uses, requirement_source: null,
+      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1}
+    - {courserun_fk: ml, concept_fk: mnist, relation: uses, requirement_source: null,
+      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1}
+    - {courserun_fk: ml, concept_fk: gram, relation: uses, requirement_source: null,
+      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1}
+    - {courserun_fk: ml, concept_fk: rbf, relation: uses, requirement_source: null,
+      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1}
+    - {courserun_fk: ml, concept_fk: kmeans, relation: teaches, requirement_source: null,
+      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1}
+  - input: ref('dim_concept')
+    rows:
+    - {concept_pk: os-kernel, preferred_label: kernel, review_status: accepted, lifecycle_status: active,
+      is_learner_facing: true, label_count: 1}
+    - {concept_pk: ml-kernel, preferred_label: kernel, review_status: accepted, lifecycle_status: active,
+      is_learner_facing: true, label_count: 1}
+    - {concept_pk: svm, preferred_label: support vector machine, review_status: accepted,
+      lifecycle_status: active, is_learner_facing: true, label_count: 1}
+    - {concept_pk: numpy, preferred_label: numpy, review_status: proposed, lifecycle_status: active,
+      is_learner_facing: true, label_count: 1}
+    - {concept_pk: mnist, preferred_label: MNIST, review_status: accepted, lifecycle_status: active,
+      is_learner_facing: false, label_count: 1}
+    - {concept_pk: gram, preferred_label: Gram matrix, review_status: accepted, lifecycle_status: active,
+      is_learner_facing: null, label_count: 1}
+    - {concept_pk: rbf, preferred_label: radial basis function, review_status: accepted,
+      lifecycle_status: active, is_learner_facing: true, label_count: 0}
+    - {concept_pk: kmeans, preferred_label: k-means, review_status: accepted, lifecycle_status: merged,
+      is_learner_facing: true, label_count: 1}
+  expect:
+    rows:
+    - {readable_id: "course-v1:MITx+6.033", concept_id: os-kernel, concept_name: kernel,
+      relation: teaches, claim_count: 2}
+    - {readable_id: "course-v1:MITx+6.036", concept_id: ml-kernel, concept_name: kernel,
+      relation: teaches, claim_count: 1}

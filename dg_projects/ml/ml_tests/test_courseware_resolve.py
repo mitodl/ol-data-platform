@@ -68,12 +68,40 @@ def verdicts(monkeypatch):
     return table
 
 
-def run(input_labels, state=None, **kwargs):
+def mentions_of(input_labels, courserun="course-v1:X+Y+1T2026"):
+    """One mention of every label in one course run, so each has a single sense."""
+    keys = input_labels["concept_label_key"].to_list()
+    return pl.DataFrame(
+        {
+            "concept_label_key": keys,
+            "platform": ["mitxonline"] * len(keys),
+            "courserun_readable_id": [courserun] * len(keys),
+            "course_title": ["Data Analysis"] * len(keys),
+            "label": keys,
+            "concept_kind": ["concept"] * len(keys),
+            "description": [f"about {key}" for key in keys],
+            "teaching_status": ["taught"] * len(keys),
+        },
+        schema={
+            "concept_label_key": pl.String,
+            "platform": pl.String,
+            "courserun_readable_id": pl.String,
+            "course_title": pl.String,
+            "label": pl.String,
+            "concept_kind": pl.String,
+            "description": pl.String,
+            "teaching_status": pl.String,
+        },
+    )
+
+
+def run(input_labels, state=None, mentions=None, **kwargs):
     return resolve_concepts(
         input_labels,
         state or ResolutionState(),
         client=None,
         embedding_client=FakeEmbedder(),
+        mentions=mentions_of(input_labels) if mentions is None else mentions,
         model_id="fake-model",
         **kwargs,
     )
@@ -85,6 +113,8 @@ def state_from(result):
         assignments=result.assignments,
         relations=result.relations,
         embeddings=result.embeddings,
+        aliases=result.aliases,
+        sense_assignments=result.sense_assignments,
     )
 
 

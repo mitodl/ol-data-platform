@@ -64,7 +64,10 @@ def _write(frame: pl.DataFrame, output_dir: Path, table: str) -> None:
 def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
     previous = _existing(output_dir, table)
     _write(
-        new_rows if previous is None else pl.concat([previous, new_rows]),
+        # diagonal: a column added since the file was written is null in older rows
+        new_rows
+        if previous is None
+        else pl.concat([previous, new_rows], how="diagonal_relaxed"),
         output_dir,
         table,
     )
@@ -175,19 +178,23 @@ def _latest_run(
 
 
 @app.command
-def resolve(
+def resolve(  # noqa: PLR0913
     concept_labels: Path,
+    sense_inputs: Path,
     output_dir: Path,
     *,
     model_id: str = BEDROCK_DESCRIPTION_MODEL,
     aws_region: str = "us-east-1",
     rebuild: bool = False,
 ) -> None:
-    """Assign concept labels to stable concept ids, resolving only new labels.
+    """Assign concept labels to stable concept ids, resolving only new labels, then
+    assign each course run's use of a label to one of the label's senses.
 
     :param concept_labels: int__courseware__concept_labels exported to parquet
+    :param sense_inputs: int__courseware__concept_sense_inputs exported to parquet
     :param output_dir: where the resolution tables are read and appended
-    :param model_id: Bedrock model or inference profile id for adjudication
+    :param model_id: Bedrock model or inference profile id for label and sense
+        adjudication
     :param aws_region: Bedrock region for adjudication; the label embeddings go
         through ol-llm, which reads AWS_DEFAULT_REGION
     :param rebuild: re-resolve every label, carrying ids forward by overlap
@@ -222,6 +229,8 @@ def resolve(
         ("registry", "courseware_concept_registry"),
         ("assignments", "courseware_concept_assignment"),
         ("relations", "courseware_concept_relation"),
+        ("aliases", "courseware_concept_alias"),
+        ("sense_assignments", "courseware_concept_sense_assignment"),
     ):
         snapshot = _latest_run(output_dir, table, last_run)
         if snapshot is not None:
@@ -235,6 +244,7 @@ def resolve(
         state,
         client,
         embedding_client,
+        mentions=pl.read_parquet(sense_inputs),
         model_id=model_id,
         rebuild=rebuild,
     )
@@ -243,7 +253,10 @@ def resolve(
         ("courseware_concept_registry", result.registry),
         ("courseware_concept_assignment", result.assignments),
         ("courseware_concept_relation", result.relations),
+        ("courseware_concept_alias", result.aliases),
+        ("courseware_concept_sense_assignment", result.sense_assignments),
         ("courseware_resolution_decision", result.decisions),
+        ("courseware_sense_decision", result.sense_decisions),
         ("courseware_concept_label_embedding", result.embeddings),
         ("courseware_resolution_run", result.run),
     ):

@@ -1,33 +1,21 @@
 ---
 unit_tests:
-- name: test_integrations__learn__resource_knowledge_publishes_only_accepted_concepts_and_claims
+- name: test_integrations__learn__resource_knowledge_publishes_only_accepted_claims
   description: >
-    A course's concept arrays list a concept only when it is accepted and an
-    accepted claim supports the relation, and its statement arrays list only
-    accepted claims. Accepting a concept does not accept the claims naming it, so
-    scikit-learn, accepted but taught only by proposed claims, is left out. A
-    concept integrations__learn__concepts leaves out (MNIST, not learner-facing;
-    k-means, merged) is left out here too.
+    A course's statement arrays list only accepted claims; proposed ones stay in
+    tfact_courseware_claim for review. The concept gate the document shares with
+    integrations__learn__resource_concepts is tested there.
   model: integrations__learn__resource_knowledge
   given:
-  - input: ref('dim_courseware_extraction')
+  - input: ref('int__courseware__learn_course_runs')
     rows:
-    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", courserun_fk: r1,
-      extracted_at: "2026-10-17T00:00:00", is_current: true}
-  - input: ref('dim_course_run')
-    rows:
-    - {courserun_pk: r1, course_fk: c1, is_current: true}
-  - input: ref('dim_course')
-    rows:
-    - {course_pk: c1, course_readable_id: "course-v1:X+Y", course_title: Data Analysis,
-      is_current: true}
+    - {etl_source: mitxonline, readable_id: "course-v1:X+Y", course_title: Data Analysis,
+      courserun_fk: r1, courserun_readable_id: "course-v1:X+Y+1T2026"}
   - input: ref('bridge_courserun_concept')
     rows:
     - {courserun_fk: r1, concept_fk: pandas, relation: teaches, claim_count: 2, accepted_claim_count: 1}
     - {courserun_fk: r1, concept_fk: numpy, relation: teaches, claim_count: 5, accepted_claim_count: 5}
     - {courserun_fk: r1, concept_fk: sklearn, relation: teaches, claim_count: 3, accepted_claim_count: 0}
-    - {courserun_fk: r1, concept_fk: mnist, relation: uses, claim_count: 1, accepted_claim_count: 1}
-    - {courserun_fk: r1, concept_fk: kmeans, relation: teaches, claim_count: 1, accepted_claim_count: 1}
   - input: ref('dim_concept')
     rows:
     - {concept_pk: pandas, preferred_label: pandas, review_status: accepted, lifecycle_status: active,
@@ -36,10 +24,6 @@ unit_tests:
       is_learner_facing: true, label_count: 1}
     - {concept_pk: sklearn, preferred_label: scikit-learn, review_status: accepted,
       lifecycle_status: active, is_learner_facing: true, label_count: 1}
-    - {concept_pk: mnist, preferred_label: MNIST, review_status: accepted, lifecycle_status: active,
-      is_learner_facing: false, label_count: 1}
-    - {concept_pk: kmeans, preferred_label: k-means, review_status: accepted, lifecycle_status: merged,
-      is_learner_facing: true, label_count: 1}
   - input: ref('tfact_courseware_claim')
     rows:
     - {courserun_fk: r1, claim_kind: skill, label: clean a data frame, is_current: true,
@@ -48,5 +32,5 @@ unit_tests:
       is_verified: true, review_status: proposed}
   expect:
     rows:
-    - {etl_source: mitxonline, readable_id: "course-v1:X+Y", concepts_taught: [pandas],
-      concepts_used: null, skills: [clean a data frame]}
+    - {etl_source: mitxonline, readable_id: "course-v1:X+Y", skills: [clean a data
+          frame]}

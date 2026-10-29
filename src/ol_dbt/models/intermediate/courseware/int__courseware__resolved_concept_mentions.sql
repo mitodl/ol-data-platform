@@ -1,12 +1,13 @@
--- Every concept mention with the concept its label is assigned to. Mentions whose
--- label the newest resolution run has not seen yet are left out until it has.
+-- Every concept mention with the concept its course run's sense of the label is.
+-- Mentions whose (label, course run) the newest resolution run has not assigned, or
+-- has queued for review, are left out until it is assigned.
 with mentions as (
     select * from {{ ref('int__courseware__concept_mentions') }}
 )
 
-, assignments as (
-    select * from {{ ref('int__courseware__concept_assignments') }}
-    where concept_id is not null
+, sense_assignments as (
+    select * from {{ ref('int__courseware__concept_sense_assignments') }}
+    where sense_status = 'assigned'
 )
 
 select
@@ -24,9 +25,12 @@ select
     , mentions.description
     , mentions.label
     , mentions.concept_label_key
-    , assignments.concept_id
+    , sense_assignments.concept_id
     , mentions.prerequisite_kind
     , mentions.review_status
 from mentions
-inner join assignments
-    on mentions.concept_label_key = assignments.concept_label_key
+inner join sense_assignments
+    on
+        mentions.concept_label_key = sense_assignments.concept_label_key
+        and mentions.platform = sense_assignments.platform
+        and mentions.courserun_readable_id = sense_assignments.courserun_readable_id

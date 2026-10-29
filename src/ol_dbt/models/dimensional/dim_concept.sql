@@ -8,14 +8,15 @@
 -- of how a scope treats the concept (evidence, course-specific); description and
 -- short_description are written once per concept for learner-facing surfaces.
 -- The displayed label is the most-mentioned member label, chosen here at read time,
--- so it can change without the id changing.
+-- so it can change without the id changing. Members, mentions and descriptions come
+-- through sense assignment, so a concept split off a label for another meaning
+-- (split_from_concept_fk) counts only the course runs that use it in that sense.
 with registry as (
     select * from {{ ref('int__courseware__concept_registry') }}
 )
 
-, assignments as (
-    select * from {{ ref('int__courseware__concept_assignments') }}
-    where concept_id is not null
+, aliases as (
+    select * from {{ ref('int__courseware__concept_aliases') }}
 )
 
 , labels as (
@@ -23,7 +24,7 @@ with registry as (
 )
 
 , mentions as (
-    select * from {{ ref('int__courseware__concept_mentions') }}
+    select * from {{ ref('int__courseware__resolved_concept_mentions') }}
 )
 
 , descriptions as (
@@ -47,58 +48,99 @@ with registry as (
     where description_rank = 1
 )
 
-, members as (
+, member_mentions as (
     select
-        assignments.concept_id
-        , labels.concept_label_key
-        , labels.preferred_label
-        , labels.concept_kind
-        , labels.description
-        , labels.mention_count
-        , labels.taught_mention_count
-        , row_number() over (
-            partition by assignments.concept_id order by labels.mention_count desc, labels.concept_label_key asc
-        ) as member_rank
-    from assignments
-    inner join labels
-        on assignments.concept_label_key = labels.concept_label_key
+        concept_id
+        , concept_label_key
+        , count(*) as mention_count
+        , count(case when teaching_status in ('taught', 'reviewed') then 1 end) as taught_mention_count
+    from mentions
+    group by concept_id, concept_label_key
 )
 
-, concept_runs as (
+, members as (
     select
-        assignments.concept_id
-        , count(distinct concat(mentions.platform, '|', mentions.courserun_readable_id)) as courserun_count
-    from mentions
-    inner join assignments
-        on mentions.concept_label_key = assignments.concept_label_key
-    group by assignments.concept_id
+        aliases.concept_id
+        , labels.concept_label_key
+        , labels.preferred_label
+        , coalesce(member_mentions.mention_count, 0) as mention_count
+        , coalesce(member_mentions.taught_mention_count, 0) as taught_mention_count
+        , row_number() over (
+            partition by aliases.concept_id
+            order by coalesce(member_mentions.mention_count, 0) desc, labels.concept_label_key asc
+        ) as member_rank
+    from aliases
+    inner join labels
+        on aliases.concept_label_key = labels.concept_label_key
+    left join member_mentions
+        on
+            aliases.concept_id = member_mentions.concept_id
+            and aliases.concept_label_key = member_mentions.concept_label_key
 )
 
 , member_stats as (
     select
         concept_id
         , max(case when member_rank = 1 then preferred_label end) as preferred_label
-        , max(case when member_rank = 1 then concept_kind end) as concept_kind
-        , max(case when member_rank = 1 then description end) as extracted_description
-        , count(*) as label_count
+        -- a label whose current mentions all went to another sense does not count, so
+        -- a concept no current claim names has none and Learn leaves it out
+        , count(case when mention_count > 0 then 1 end) as label_count
         , sum(mention_count) as mention_count
         , sum(taught_mention_count) as taught_mention_count
     from members
     group by concept_id
 )
 
+-- the kind and claim description of the concept's own mentions, not of every sense
+-- of its labels. The kind is the most common one: assumed-knowledge claims have a
+-- description but no kind, so the kind is not taken from the description's claim.
+, mention_kinds as (
+    select
+        concept_id
+        , concept_kind
+        , row_number() over (
+            partition by concept_id
+            order by count(*) desc, concept_kind asc
+        ) as kind_rank
+    from mentions
+    where concept_kind is not null
+    group by concept_id, concept_kind
+)
+
+-- a taught description says what the concept is better than a used one
+, mention_profiles as (
+    select
+        concept_id
+        , description
+        , row_number() over (
+            partition by concept_id
+            order by case when teaching_status = 'taught' then 0 else 1 end, length(description) desc
+        ) as description_rank
+    from mentions
+    where description is not null
+)
+
+, concept_runs as (
+    select
+        concept_id
+        , count(distinct concat(platform, '|', courserun_readable_id)) as courserun_count
+    from mentions
+    group by concept_id
+)
+
 select
     registry.concept_id as concept_pk
     , coalesce(member_stats.preferred_label, registry.minted_label) as preferred_label
-    , member_stats.concept_kind
+    , mention_kinds.concept_kind
     , latest_descriptions.short_description
     , latest_descriptions.description
     , latest_descriptions.is_learner_facing
     , latest_descriptions.model_id as description_model_id
     , latest_descriptions.described_at
-    , member_stats.extracted_description
+    , mention_profiles.description as extracted_description
     , registry.concept_status as lifecycle_status
     , registry.merged_into_concept_id as merged_into_concept_fk
+    , registry.split_from_concept_id as split_from_concept_fk
     , 'proposed' as review_status
     , cast(null as varchar) as wikidata_qid
     , registry.minted_label
@@ -115,3 +157,11 @@ left join concept_runs
     on registry.concept_id = concept_runs.concept_id
 left join latest_descriptions
     on registry.concept_id = latest_descriptions.concept_id
+left join mention_kinds
+    on
+        registry.concept_id = mention_kinds.concept_id
+        and mention_kinds.kind_rank = 1
+left join mention_profiles
+    on
+        registry.concept_id = mention_profiles.concept_id
+        and mention_profiles.description_rank = 1
