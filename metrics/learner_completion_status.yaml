@@ -18,6 +18,7 @@ metric:
     learner and a course run.
   metricType: OTHER
   owners: [{type: team, name: data-platform}]
+  reviewers: [{type: team, name: b2b}]
   metricExpression:
     language: SQL
     code: >-

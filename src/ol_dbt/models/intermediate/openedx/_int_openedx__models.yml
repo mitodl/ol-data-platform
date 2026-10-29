@@ -50,6 +50,12 @@ models:
     - not_null
   - name: extracted_at
     description: str, ISO 8601 time the text was extracted
+  - name: release_date
+    description: str, ISO 8601 UTC time (YYYY-MM-DDTHH:MM:SS.ffffffZ) MIT Learn releases
+      the file to learners, from the OLX start dates on its path down from the course;
+      for a key two files share, the later of their dates. Null when Learn leaves
+      the file undated, and for a run whose exclusions were written before the asset
+      dated files.
 
 unit_tests:
 - name: test_int__openedx__content_files_matches_learn_derivations
@@ -223,3 +229,57 @@ unit_tests:
         display_name="Quiz" markdown="(x) True&#9;&#10;"><choiceresponse/></problem>'}
     - {edx_module_id: "block-v1:X+Y+R1+type@vertical+block@peer_unit", content: Assess
         & grade}
+
+- name: test_int__openedx__content_files_release_date
+  description: >
+    release_date comes from the file's exclusion row. As in Learn's key_dates, a key
+    that two files share takes the later of their dates, counting a file that is
+    dropped for having no text, and an undated twin does not clear it.
+  model: int__openedx__content_files
+  given:
+  - input: ref('stg__openedx__s3__course_xml_blocks')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: chapter,
+      coursestructure_xml_block_display_name: Week 1, coursestructure_xml_block_path: course/chapter/week_1.xml,
+      coursestructure_xml_raw_xml: '<chapter display_name="Week 1"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_archive_version: v1, coursestructure_xml_block_type: chapter,
+      coursestructure_xml_block_display_name: Week 2, coursestructure_xml_block_path: course/chapter/week_2.xml,
+      coursestructure_xml_raw_xml: '<chapter display_name="Week 2"/>', coursestructure_xml_retrieved_at: "2026-10-01T00:00:00Z"}
+  - input: ref('stg__openedx__s3__course_document_text')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_path: static/notes_1.pdf, content_file_extension: .pdf, content_file_text: Notes,
+      content_file_extraction_status: extracted}
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_path: static/notes 1.pdf, content_file_extension: .pdf, content_file_text: null,
+      content_file_extraction_status: empty}
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_path: static/slides.pdf, content_file_extension: .pdf, content_file_text: Slides,
+      content_file_extraction_status: extracted}
+  - input: ref('stg__openedx__s3__course_transcript_text')
+    rows: []
+  - input: ref('stg__openedx__s3__course_file_exclusions')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_course_xml_version: v1, content_file_path: chapter/week_1.xml,
+      content_file_is_excluded: false, content_file_release_date: "2031-01-01T00:00:00.000000Z"}
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_course_xml_version: v1, content_file_path: chapter/week_2.xml,
+      content_file_is_excluded: false, content_file_release_date: null}
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_course_xml_version: v1, content_file_path: static/notes_1.pdf,
+      content_file_is_excluded: false, content_file_release_date: "2031-01-01T00:00:00.000000Z"}
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_course_xml_version: v1, content_file_path: static/notes 1.pdf,
+      content_file_is_excluded: false, content_file_release_date: "2032-06-01T12:00:00.000000Z"}
+    - {courserun_readable_id: "course-v1:X+Y+R1", content_file_source_system: xpro,
+      content_file_course_xml_version: v1, content_file_path: static/slides.pdf, content_file_is_excluded: false,
+      content_file_release_date: null}
+  expect:
+    rows:
+    - {edx_module_id: "block-v1:X+Y+R1+type@chapter+block@week_1", release_date: "2031-01-01T00:00:00.000000Z"}
+    - {edx_module_id: "block-v1:X+Y+R1+type@chapter+block@week_2", release_date: null}
+    - {edx_module_id: "asset-v1:X+Y+R1+type@asset+block@notes_1.pdf", release_date: "2032-06-01T12:00:00.000000Z"}
+    - {edx_module_id: "asset-v1:X+Y+R1+type@asset+block@slides.pdf", release_date: null}

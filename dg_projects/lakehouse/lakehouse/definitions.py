@@ -72,12 +72,22 @@ from lakehouse.assets.lakehouse.dbt_starrocks import (
     starrocks_dbt_assets,
     starrocks_dbt_cli,
 )
-from lakehouse.assets.qa_mirror import build_qa_mirror_assets
+from lakehouse.assets.qa_mirror import (
+    build_qa_mirror_assets,
+    build_qa_mirror_checks,
+    qa_mirror_plan_schedules,
+    qa_mirror_refresh_schedules,
+)
 from lakehouse.assets.qa_observation_drift import qa_observation_drift
 from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import (
     build_superset_dataset_assets,
     superset_dataset_keys,
+)
+from lakehouse.lib.automation_targets import (
+    OCW_LEARN_MODELS,
+    dbt_automation_target,
+    ocw_learn_target,
 )
 from lakehouse.lib.contract_freshness import (
     build_freshness_checks,
@@ -578,10 +588,17 @@ airbyte_drift_schedules = (
 # role is denied production Glue. Registered in no other environment, so there
 # is nothing a QA or dev code location could run against production by mistake.
 qa_mirror_assets = build_qa_mirror_assets() if DAGSTER_ENV == "production" else []
+qa_mirror_checks = build_qa_mirror_checks() if DAGSTER_ENV == "production" else []
+qa_mirror_schedules = [
+    *(("qa_mirror_monthly", s) for s in qa_mirror_refresh_schedules(qa_mirror_assets)),
+    *(("qa_mirror_plan_daily", s) for s in qa_mirror_plan_schedules(qa_mirror_checks)),
+]
 
 # QA only: it describes ol_warehouse_qa_raw, and the QA role is the one already
 # reading those tables (iceberg_raw_orphan_files). Daily, so a load or a
-# hand-run mirror that lands a table is reported within a day.
+# hand-run mirror that lands a table is reported within a day. 05:00 so the
+# monthly mirror refresh (06:00 on the 1st), which drops each table before it
+# recreates it, has most of a day to finish before the next drift run.
 qa_observation_drift_assets = [qa_observation_drift] if DAGSTER_ENV == "qa" else []
 qa_observation_drift_schedules = (
     [
@@ -593,7 +610,7 @@ qa_observation_drift_schedules = (
                     name="qa_observation_drift_daily_job",
                     selection=AssetSelection.assets(qa_observation_drift),
                 ),
-                cron_schedule="0 12 * * *",
+                cron_schedule="0 5 * * *",
                 execution_timezone="UTC",
                 default_status=DefaultScheduleStatus.RUNNING,
             ),
@@ -641,6 +658,7 @@ posthog_staging_schedule = ScheduleDefinition(
 # program (checked 2026-09-22: 23 retired, 2 unpublished) and dlt creates no
 # table from an empty load. Building it would fail the whole job every day.
 AWAITING_RAW_TABLE = {"stg__edxorg__discovery__api__programs"}
+
 non_airbyte_staging_models = sorted(
     staging_models_reading(
         json.loads(dbt_project.manifest_path.read_text()),
@@ -648,6 +666,9 @@ non_airbyte_staging_models = sorted(
     )
     - {POSTHOG_STAGING_MODEL}
     - AWAITING_RAW_TABLE
+    # Where ocw_learn_automation_sensor builds it, a daily build here would
+    # rebuild staging and the Learn views a second time for the same load.
+    - (set(OCW_LEARN_MODELS) if DBT_AUTOMATION_ENABLED else set())
 )
 non_airbyte_staging_schedules = (
     [
@@ -678,19 +699,21 @@ non_airbyte_staging_schedules = (
 
 # MIT Learn's warehouse-pull tasks read these views, and pointing them at QA
 # (WAREHOUSE_CATALOG/WAREHOUSE_SCHEMA) is how a Cohort 1 source gets rehearsed
-# before its cutover. Production builds them through dbt_automation_sensor; QA
+# before its cutover. Production builds them through dbt_automation_sensor (the
+# OCW ones through ocw_learn_automation_sensor); QA
 # has no automation, so without this ol_warehouse_qa_integrations stays empty.
 #
 # Selects the models tagged qa_scheduled (the Learn views whose every QA raw
-# input exists, Glue 2026-09-30) with their upstream staging and intermediate
-# models. `ol-dbt validate`'s qa_branch_contract check fails any tagged model
-# that reads more than one ingestion unit, so a QA build is complete relative to
-# QA's apps rather than a silently partial union. The rest wait on raw tables QA
-# does not have: program_certificates on the edX program_learner_report and
-# email_opt_in mirrors, ocw_courses on the OCW live bucket (the ocw__s3 unit is
-# omitted in QA), and the dlt/API sources (mit_edx_courses and
-# mit_edx_programs on the edX catalog, mitpe, mit_climate, oll, podcasts) whose
-# loaders run in production only.
+# input exists) with their upstream staging and intermediate models. `ol-dbt
+# validate`'s qa_branch_contract check fails a tagged model that reads more than
+# one ingestion unit unless it declares every one of them in qa_branches and the
+# committed QA observation shows them held (program_certificates lists the
+# empty mitxonline/mysql auth_user in qa_partial_tables), so a QA build is
+# complete relative to QA's apps rather than a silently partial union. The rest
+# wait on raw tables QA does not have: ocw_courses on the OCW live bucket (the
+# ocw__s3 unit is omitted in QA), and the dlt/API sources (mit_edx_programs on
+# the edX catalog, mitpe, mit_climate, oll, podcasts) whose loaders run in
+# production only.
 learn_integrations_qa_schedule = ScheduleDefinition(
     name="learn_integrations_qa_daily",
     job=define_asset_job(
@@ -742,7 +765,7 @@ resources_dict = {
         deployment="openmetadata",
         client_class="OpenMetadataApiClient",
         mount_point="secret-data",
-        config_path="pipelines/openmetadata",
+        config_path="pipelines/openmetadata-dagster-bot",
         vault=vault,
     ),
     "starrocks": StarRocksResource(
@@ -813,7 +836,14 @@ defs = Definitions(
             *qa_observation_drift_assets,
         ]
     ),
-    asset_checks=[*dbt_layer_freshness_checks, *dimensional_schema_change_checks],
+    asset_checks=[
+        *dbt_layer_freshness_checks,
+        *dimensional_schema_change_checks,
+        # A plan check reports a broken declaration by raising, so it needs
+        # the Sentry hook the assets get. AssetChecksDefinition subclasses
+        # AssetsDefinition, so with_failure_hooks attaches it.
+        *with_failure_hooks(qa_mirror_checks),
+    ],
     resources=resources_dict,
     executor=executor_for_environment(
         DAGSTER_ENV, in_kubernetes="KUBERNETES_SERVICE_HOST" in os.environ
@@ -837,27 +867,22 @@ defs = Definitions(
                 if DBT_AUTOMATION_ENABLED
                 else DefaultSensorStatus.STOPPED
             ),
-            # exclude staging as they are already handled by the "sync_and_stage_"
-            # jobs, or by the non-Airbyte staging schedules for dlt/Dagster sources
-            #
-            # Note what that exclusion costs in production, where staging models
-            # DO carry a condition: get_default_automation_condition_sensor_target
-            # takes every conditioned key this selection does not cover and
-            # synthesizes `default_automation_condition_sensor` over
-            # AssetSelection.all() minus this one. So staging is automatable there
-            # via a sensor no one declared. Pre-existing and STOPPED unless
-            # started by hand, but the same invisible instance state
-            # DBT_AUTOMATION_ENVIRONMENTS exists to remove -- see the open
-            # question recorded beside it.
-            #
-            # Where automation is off the question does not arise: no asset
-            # carries a condition, so there is nothing to synthesize over.
-            target=(
-                AssetSelection.assets(full_dbt_project)
-                - AssetSelection.groups("staging")
-            )
-            | AssetSelection.groups("superset_dataset")
-            | AssetSelection.groups("superset_starrocks_dataset"),
+            target=dbt_automation_target(full_dbt_project),
+        ),
+        AutomationConditionSensorDefinition(
+            "ocw_learn_automation_sensor",
+            # Raw moves its data version on every ocw_content run, so staging is
+            # requested on the next tick, and the models below it on the same
+            # tick through any_deps_updated's will_be_requested: one dbt run per
+            # load. A scoped load lands within a 5-minute poll plus 2-minute
+            # settle of the publish, so a 1-minute tick adds little to that.
+            minimum_interval_seconds=60,
+            default_status=(
+                DefaultSensorStatus.RUNNING
+                if DBT_AUTOMATION_ENABLED
+                else DefaultSensorStatus.STOPPED
+            ),
+            target=ocw_learn_target(full_dbt_project),
         ),
     ],
     jobs=[
@@ -886,6 +911,7 @@ defs = Definitions(
             ("b2b_analytics_starrocks_nightly", b2b_analytics_starrocks_schedule),
             *airbyte_drift_schedules,
             *qa_observation_drift_schedules,
+            *qa_mirror_schedules,
             ("posthog_staging_hourly", posthog_staging_schedule),
             *non_airbyte_staging_schedules,
             ("learn_integrations_qa_daily", learn_integrations_qa_schedule),

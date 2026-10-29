@@ -182,6 +182,12 @@ models:
         arguments:
           values: [staff_only, non_content, unreachable_tab, about_page, unreferenced_static,
             course_settings, legacy_announcements]
+  - name: content_file_release_date
+    description: str, ISO 8601 UTC time (YYYY-MM-DDTHH:MM:SS.ffffffZ) Learn releases
+      the file to learners, from the OLX start dates on its path down from the course;
+      null when Learn leaves it undated (an undated learner-visible path to it, a
+      self-paced run, an excluded file) and for a course whose newest file predates
+      the asset dating files
   - name: content_file_checked_at
     description: timestamp, S3 modification time of the file the row came from
     data_type: timestamp

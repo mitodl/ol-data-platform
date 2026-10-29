@@ -8,10 +8,11 @@ left here is the Dagster side: where deletion may run, and what a run reports.
 from typing import Any
 
 import pytest
-from dagster import build_asset_context
+from dagster import build_asset_context, instance_for_test
 from lakehouse.assets import iceberg_orphan_files as module
 from lakehouse.assets.iceberg_orphan_files import (
     IcebergOrphanFilesConfig,
+    _run_cap_seconds,
     iceberg_raw_orphan_files,
 )
 from ol_orchestrate.lib.iceberg_orphan_files import (
@@ -22,6 +23,7 @@ from ol_orchestrate.lib.iceberg_orphan_files import (
 DATABASE = module.RAW_GLUE_DATABASE
 MIN_AGE_DAYS = 7
 DAGSTER_BUCKET = "dagster-data-qa"
+TWO_DAYS_SECONDS = 2 * 24 * 60 * 60
 
 
 def _tables(*, deleted: bool = False, errors: list[str] | None = None):
@@ -82,17 +84,23 @@ def _metadata(config: IcebergOrphanFilesConfig) -> dict[str, Any]:
     return {key: value.value for key, value in output.metadata.items()}
 
 
-def _enable_delete(monkeypatch: pytest.MonkeyPatch) -> None:
+def _enable_delete(
+    monkeypatch: pytest.MonkeyPatch, run_cap_seconds: int = TWO_DAYS_SECONDS
+) -> None:
     monkeypatch.setattr(
         module,
         "ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS",
         frozenset({module.DAGSTER_ENV}),
     )
+    monkeypatch.setattr(module, "_run_cap_seconds", lambda _instance: run_cap_seconds)
     monkeypatch.setenv("DAGSTER_BUCKET_NAME", DAGSTER_BUCKET)
 
 
-def test_only_qa_deletes():
-    assert frozenset({"qa"}) == module.ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS
+def test_deletes_in_qa_and_production_only():
+    assert (
+        frozenset({"qa", "production"})
+        == module.ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS
+    )
 
 
 def test_config_has_no_default_minimum_age():
@@ -123,6 +131,48 @@ def test_delete_is_refused_below_the_scheduled_floor(monkeypatch: pytest.MonkeyP
         )
 
     assert calls == []
+
+
+@pytest.mark.parametrize(
+    "run_cap_seconds",
+    [0, module.ICEBERG_ORPHAN_FILES_MIN_AGE_SECONDS],
+    ids=["no cap", "cap at the floor"],
+)
+def test_delete_is_refused_without_a_run_cap_below_the_floor(
+    monkeypatch: pytest.MonkeyPatch, run_cap_seconds: int
+):
+    _enable_delete(monkeypatch, run_cap_seconds=run_cap_seconds)
+    calls = _returning(monkeypatch, _result())
+
+    with pytest.raises(ValueError, match="cap runs below"):
+        iceberg_raw_orphan_files(
+            build_asset_context(),
+            IcebergOrphanFilesConfig(min_age_days=MIN_AGE_DAYS, delete=True),
+        )
+
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("run_monitoring", "expected"),
+    [
+        ({"enabled": True, "max_runtime_seconds": TWO_DAYS_SECONDS}, TWO_DAYS_SECONDS),
+        ({"enabled": False, "max_runtime_seconds": TWO_DAYS_SECONDS}, 0),
+        ({"enabled": True}, 0),
+    ],
+    ids=["enabled with a cap", "cap but monitoring off", "monitoring without a cap"],
+)
+def test_run_cap_reads_the_instance(run_monitoring: dict[str, Any], expected: int):
+    with instance_for_test(overrides={"run_monitoring": run_monitoring}) as instance:
+        assert _run_cap_seconds(instance) == expected
+
+
+def test_report_run_needs_no_run_cap(monkeypatch: pytest.MonkeyPatch):
+    _returning(monkeypatch, _result())
+
+    metadata = _metadata(IcebergOrphanFilesConfig(min_age_days=MIN_AGE_DAYS))
+
+    assert metadata["delete_status"] == "not run (report only)"
 
 
 def test_report_run_says_delete_did_not_run(monkeypatch: pytest.MonkeyPatch):

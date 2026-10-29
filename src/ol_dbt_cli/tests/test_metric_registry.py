@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 from ol_dbt_cli.lib.metric_registry import (
+    FILE_STATUSES,
     METRIC_REGISTRY_CHECK,
     SCHEMA_SNAPSHOT,
     SCHEMA_VERSION_KEY,
@@ -179,7 +180,6 @@ def test_well_formed_nested_values_pass(tmp_path: Path) -> None:
         "owners": [{"type": "team", "name": "data-engineering"}],
         "reviewers": [{"type": "user", "name": "tmacey"}],
         "tags": [{"tagFQN": "Glossary.Term", "source": "Glossary", "labelType": "Manual", "state": "Confirmed"}],
-        "lifeCycle": {"created": {"timestamp": 1790744717397}},
     }
     assert _run(tmp_path, _metric(body)) == []
 
@@ -241,6 +241,16 @@ def test_field_the_file_may_not_set_errors(tmp_path: Path, field: str) -> None:
     assert _run(tmp_path, _metric({field: "x"})) == [f"`metric.{field}` is not a field the file may set"]
 
 
+def test_lifecycle_is_rejected_since_openmetadata_keeps_it(tmp_path: Path) -> None:
+    life_cycle = {"created": {"timestamp": 1790744717397}}
+    assert _run(tmp_path, _metric({"lifeCycle": life_cycle})) == ["`metric.lifeCycle` is not a field the file may set"]
+
+
+def test_assets_is_rejected_since_a_file_cannot_know_asset_ids(tmp_path: Path) -> None:
+    assets = [{"id": "00000000-0000-0000-0000-000000000000", "type": "table"}]
+    assert _run(tmp_path, _metric({"assets": assets})) == ["`metric.assets` is not a field the file may set"]
+
+
 def test_non_string_metric_keys_are_reported(tmp_path: Path) -> None:
     assert _run(tmp_path, _metric({1: "x", "zz": "y"})) == [
         "`metric.1` is not a field the file may set",
@@ -248,15 +258,36 @@ def test_non_string_metric_keys_are_reported(tmp_path: Path) -> None:
     ]
 
 
-def test_unknown_status_errors(tmp_path: Path) -> None:
-    (message,) = _run(tmp_path, _metric(status="Live"))
-    assert message.startswith("`status`: 'Live' is not one of ")
+SNAPSHOT_STATUSES = json.loads(SCHEMA_SNAPSHOT.read_text())["properties"]["status"]["enum"]
 
 
-def test_status_is_optional(tmp_path: Path) -> None:
+@pytest.mark.parametrize("status", FILE_STATUSES)
+def test_draft_and_approved_pass(tmp_path: Path, status: str) -> None:
+    assert _run(tmp_path, _metric(status=status)) == []
+
+
+@pytest.mark.parametrize("status", [*(s for s in SNAPSHOT_STATUSES if s not in FILE_STATUSES), "Live", ["Approved"]])
+def test_status_other_than_draft_or_approved_errors(tmp_path: Path, status: Any) -> None:
+    _write(tmp_path, _metric(status=status))
+    report = ValidationReport()
+    check_metric_registry(load_metrics(tmp_path), *_project(*INTACT), report)
+    (issue,) = report.issues
+    assert issue.message == f"`status` is {status!r}; a metric file sets only Draft or Approved"
+    assert issue.detail.startswith("Approval happens on the pull request")
+
+
+def test_file_statuses_are_openmetadata_statuses() -> None:
+    assert set(FILE_STATUSES) <= set(SNAPSHOT_STATUSES)
+
+
+def test_a_file_without_status_errors(tmp_path: Path) -> None:
     data = _metric()
     del data["status"]
-    assert _run(tmp_path, data) == []
+    _write(tmp_path, data)
+    report = ValidationReport()
+    check_metric_registry(load_metrics(tmp_path), *_project(*INTACT), report)
+    (issue,) = report.issues
+    assert (issue.model, issue.message) == (f"{NAME}.yaml", "`status` is missing; a metric file sets Draft or Approved")
 
 
 @pytest.mark.parametrize(

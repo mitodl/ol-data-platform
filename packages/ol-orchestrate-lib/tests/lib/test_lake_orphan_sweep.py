@@ -8,9 +8,11 @@ import pytest
 from botocore.exceptions import ClientError
 from ol_orchestrate.lib import lake_orphan_sweep
 from ol_orchestrate.lib.lake_orphan_sweep import (
+    GlueReferences,
     PrefixOutcome,
     SweepResult,
     delete_prefix,
+    delete_references,
     glue_database_locations,
     glue_tables,
     is_referenced,
@@ -246,11 +248,48 @@ def test_is_referenced_matches_ancestors_and_descendants_only():
 
 def test_a_root_located_database_does_not_claim_its_bucket():
     glue, _ = _lake()
-    referenced = referenced_paths(glue, include_databases=True)
-    assert not is_referenced(f"lake-mart-qa/gone__dbt_tmp-{UUID_B}", referenced)
-    assert is_referenced(
-        "lake-staging-qa/processed/ol_warehouse_qa_dev_staging/new_table", referenced
+    assert not delete_references(glue).claims(f"lake-mart-qa/gone__dbt_tmp-{UUID_B}")
+
+
+def test_a_database_location_claims_itself_and_its_parents_not_its_contents():
+    """A developer schema is located at processed/<database>.
+
+    Claiming what is inside it is what kept the CLI from deleting any
+    developer-schema orphan.
+    """
+    glue, _ = _lake()
+    references = delete_references(glue)
+    dev = "lake-staging-qa/processed/ol_warehouse_qa_dev_staging"
+    assert references.claims(dev)
+    assert references.claims("lake-staging-qa/processed")
+    assert not references.claims(f"{dev}/mine-{UUID_B}")
+    assert not references.claims("lake-staging-qa/processed/ol_warehouse_qa_dev")
+
+
+def test_a_developer_schema_orphan_can_be_deleted():
+    glue, s3 = _lake()
+    prefix = f"processed/ol_warehouse_qa_dev_staging/mine-{UUID_B}"
+
+    outcome = delete_prefix(
+        s3,
+        "lake-staging-qa",
+        prefix,
+        lambda: delete_references(glue),
+        min_age_days=MIN_AGE_DAYS,
+        now=NOW,
+        execute=False,
     )
+
+    assert outcome.action == "would_delete"
+
+
+def test_a_table_in_a_developer_schema_still_protects_its_directory():
+    glue, _ = _lake()
+    mine = f"lake-staging-qa/processed/ol_warehouse_qa_dev_staging/mine-{UUID_B}"
+    glue.tables["ol_warehouse_qa_dev_staging"] = [
+        {"name": "mine", "location": f"s3://{mine}"}
+    ]
+    assert delete_references(glue).claims(mine)
 
 
 def test_a_root_located_table_claims_its_bucket():
@@ -258,7 +297,7 @@ def test_a_root_located_table_claims_its_bucket():
     glue.tables["ol_warehouse_qa_staging"] = [
         {"name": "everything", "location": "s3://lake-mart-qa/"}
     ]
-    referenced = referenced_paths(glue, include_databases=True)
+    referenced = referenced_paths(glue)
     assert is_referenced(f"lake-mart-qa/gone__dbt_tmp-{UUID_B}", referenced)
 
 
@@ -419,6 +458,21 @@ def test_sweep_leaves_a_directory_a_database_claims_for_future_tables():
     assert f"{claimed}/data/1.parquet" in s3.objects["lake-mart-qa"]
 
 
+def test_sweep_deletes_an_orphan_inside_a_database_located_at_a_target():
+    """A database location protects its own directory, not what is inside it."""
+    glue, s3 = _lake()
+    mart = "processed/ol_warehouse_qa_mart"
+    glue.databases["scratch"] = f"s3://lake-staging-qa/{mart}"
+
+    result = _sweep(glue, s3, delete=True)
+
+    assert result.outcomes is not None
+    assert {o.prefix: o.action for o in result.outcomes}[
+        f"{mart}/dropped-{UUID_B}"
+    ] == "deleted"
+    assert f"{mart}/nested-{UUID_A}/data/1.parquet" in s3.objects["lake-staging-qa"]
+
+
 @pytest.mark.parametrize("min_age_days", [0, -5])
 def test_sweep_refuses_a_minimum_age_below_one_day(min_age_days: int):
     glue, s3 = _lake()
@@ -507,7 +561,7 @@ def test_a_denied_database_raises_for_a_caller_that_did_not_ask_to_skip():
     glue, _ = _lake()
     glue.denied.add("ol_warehouse_production_mart")
     with pytest.raises(ClientError):
-        referenced_paths(glue, include_databases=True)
+        referenced_paths(glue)
 
 
 def test_delete_batches_keys(monkeypatch: pytest.MonkeyPatch):
@@ -532,7 +586,7 @@ def _delete(
         s3,
         "lake-mart-qa",
         prefix,
-        lambda: referenced,
+        lambda: GlueReferences(tables=referenced, databases=set()),
         min_age_days=min_age_days,
         now=NOW,
         execute=execute,

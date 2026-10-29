@@ -250,7 +250,8 @@ metadata:
       extraFormData: {}
       filterState: {}
       ownState: {}
-    description: Coupon code used on the program purchase in Program Order ID, such as a B2B code.
+    description: Coupon code used on the program purchase in Program Order ID, such
+      as a B2B code.
     filterType: filter_select
     id: NATIVE_FILTER-pOcC7xR4mK2vQ9nB5tYw1
     name: Program Order Coupon Code

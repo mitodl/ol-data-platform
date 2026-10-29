@@ -1,6 +1,6 @@
 """Shared Anthropic/OpenAI call plumbing for the feedback LLM adapters.
 
-summarize.py and sentiment_eval.py each wrap an LLMClientFactory client in an
+categorize.py and sentiment_eval.py each wrap an LLMClientFactory client in an
 Anthropic*Client/OpenAI*Client pair -- only the prompt, max_tokens, and response
 parsing differ between them. This module holds the shared call/usage-attach/
 dispatch logic; each caller keeps its own @traced-decorated public method for

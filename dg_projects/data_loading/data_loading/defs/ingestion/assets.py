@@ -13,14 +13,19 @@ from typing import Any
 
 from dagster import (
     AssetExecutionContext,
+    AssetKey,
     AssetsDefinition,
     Config,
+    DagsterEventType,
+    DataVersion,
     Definitions,
     MaterializeResult,
 )
+from dagster._core.definitions.data_version import DATA_VERSION_TAG
 from dagster_dlt import DagsterDltResource, dlt_assets
 from ol_dlt.sources import (
     course_xml_blocks,
+    edxorg_program_reports,
     edxorg_s3,
     keycloak,
     medium,
@@ -34,6 +39,7 @@ from ol_dlt.sources import (
     podcast_rss,
     posthog_events,
     see,
+    tracking_logs,
     xpro_app,
     youtube,
 )
@@ -230,7 +236,9 @@ def load_in_batches(
 
     for batch in range(1, _MAX_BATCHES_PER_RUN + 1):
         # A fresh source per batch: a DltSource's resources are generators,
-        # spent once the batch that consumed them ends.
+        # spent once the batch that consumed them ends. Whatever the batches
+        # of a run share, such as a listing, build_source closes over (see
+        # sources_for_run).
         results = list(
             dlt.run(
                 context=context,
@@ -261,6 +269,40 @@ def load_in_batches(
     return results, batches, rows_loaded
 
 
+def _previous_data_version(
+    context: AssetExecutionContext, asset_key: AssetKey
+) -> DataVersion | None:
+    """Return the data version the asset's latest materialization recorded.
+
+    None when an earlier attempt could have loaded rows that no
+    materialization reports: the run before this one planned the asset and did
+    not materialize it, or this step already started once in this run (a step
+    retry, or the daemon resuming a run whose pod died). Each batch commits its
+    own cursor, so this attempt starts past those rows and reads as empty.
+    """
+    step_key = context.get_step_execution_context().step.key
+    step_starts = context.instance.get_records_for_run(
+        context.run.run_id,
+        of_type={DagsterEventType.STEP_START, DagsterEventType.STEP_RESTARTED},
+    ).records
+    if sum(record.event_log_entry.step_key == step_key for record in step_starts) > 1:
+        return None
+    event = context.instance.get_latest_materialization_event(asset_key)
+    if event is None or event.asset_materialization is None:
+        return None
+    planned_runs = [
+        record.event_log_entry.run_id
+        for record in context.instance.fetch_planned_materializations(
+            asset_key, limit=2
+        ).records
+        if record.event_log_entry.run_id != context.run.run_id
+    ]
+    if planned_runs and planned_runs[0] != event.run_id:
+        return None
+    value = event.asset_materialization.tags.get(DATA_VERSION_TAG)
+    return None if value is None else DataVersion(value)
+
+
 def drain(
     *,
     context: AssetExecutionContext,
@@ -273,6 +315,13 @@ def drain(
     One, not one per batch: Dagster rejects a step that materializes the same
     asset twice. The last batch's metadata describes an empty catch-up load, so
     the counts that describe the whole run are added here.
+
+    A run that loaded no rows keeps the previous data version. Every source
+    drained here appends, so the table is unchanged, but these assets have no
+    code version and Dagster would otherwise derive a new data version from the
+    run id. The lakehouse dbt models rebuild on a parent's data version change,
+    so each empty load (e.g. an OCW course republished with identical bytes)
+    would rebuild everything below the raw table.
     """
     (resource_name,) = build_source().resources
     results, batches, rows_loaded = load_in_batches(
@@ -290,22 +339,43 @@ def drain(
                 "batches": batches,
                 "rows_loaded": rows_loaded,
             },
+            data_version=(
+                None
+                if rows_loaded
+                else _previous_data_version(context, result.asset_key)
+            ),
         )
 
 
-def build_batched_assets(
+def sources_for_run(
+    build_source: Callable[..., Any], *, list_once: bool
+) -> Callable[[], Any]:
+    """Return the per-batch source factory for one run.
+
+    With ``list_once``, every batch's source gets the same new
+    ``edxorg_s3.FileListing``, so the run lists its files once and carves each
+    batch from that listing instead of listing again per batch.
+    """
+    if list_once:
+        return partial(build_source, listing=edxorg_s3.FileListing())
+    return build_source
+
+
+def build_batched_assets(  # noqa: PLR0913
     *,
     name: str,
-    build_source: Callable[[], Any],
+    build_source: Callable[..., Any],
     pipeline: Any,
     translator: RawDataDltTranslator,
     pool: str | None = None,
+    list_once: bool = False,
 ) -> AssetsDefinition:
     """Wrap a one-table budgeted source as an ``@dlt_assets`` op that drains it.
 
     ``build_source`` is called once for the asset definition, once per run for
     the table's name and once per batch (see ``drain``). Its single resource
-    names the table.
+    names the table. With ``list_once`` it also takes a ``listing`` keyword,
+    one per run (see ``sources_for_run``).
     """
 
     @dlt_assets(
@@ -320,7 +390,10 @@ def build_batched_assets(
         context: AssetExecutionContext, dlt: DagsterDltResource
     ) -> Iterable[Any]:
         yield from drain(
-            context=context, dlt=dlt, build_source=build_source, pipeline=pipeline
+            context=context,
+            dlt=dlt,
+            build_source=sources_for_run(build_source, list_once=list_once),
+            pipeline=pipeline,
         )
 
     return _asset
@@ -365,6 +438,33 @@ course_xml_blocks_assets = [
     )
     for raw_table, table in course_xml_blocks.TABLES.items()
 ]
+
+
+# edX.org's daily program learner reports, which the edxorg code location copies
+# into the landing zone. Loads beside the Airbyte-loaded
+# raw__edxorg__program_learner_report until staging is repointed.
+edxorg_program_reports_assets = build_batched_assets(
+    name="edxorg_program_learner_report",
+    build_source=edxorg_program_reports.edxorg_program_reports_source,
+    pipeline=edxorg_program_reports.edxorg_program_reports_pipeline(),
+    translator=RawDataDltTranslator(),
+)
+
+
+# The xPro tracking log, loaded in full beside the Airbyte-loaded
+# raw__xpro__openedx__tracking_logs until staging is repointed at it. One
+# listing per run: a full listing of the production bucket (264,950 files on
+# 2026-10-27) takes about 50 s, and the first runs walk ~331 batches.
+XPRO_TRACKING_LOGS_TABLE = "raw__xpro__openedx__tracking_log_events"
+xpro_tracking_logs_assets = build_batched_assets(
+    name="xpro_tracking_logs",
+    build_source=partial(
+        tracking_logs.tracking_logs_source, raw_table=XPRO_TRACKING_LOGS_TABLE
+    ),
+    pipeline=tracking_logs.tracking_logs_pipeline_for(XPRO_TRACKING_LOGS_TABLE),
+    translator=RawDataDltTranslator(),
+    list_once=True,
+)
 
 
 # Resumes from the dlt cursor every run. A backfill is a deliberate
@@ -450,6 +550,8 @@ defs = Definitions(
             ocw_content_assets,
             *edxorg_s3_table_assets,
             *course_xml_blocks_assets,
+            edxorg_program_reports_assets,
+            xpro_tracking_logs_assets,
         ]
     ),
 )
