@@ -22,5 +22,9 @@ from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
 where
     courserun_readable_id is not null
     {% if is_incremental() %}
-        and useractivity_timestamp > (select max(this.useractivity_timestamp) from {{ this }} as this)
+        -- An empty target (e.g. a first build with no course activity) would make max() NULL
+        -- and filter out every later row, so fall back to '' which every ISO string exceeds.
+        and useractivity_timestamp > (
+            select coalesce(max(this.useractivity_timestamp), '') from {{ this }} as this
+        )
     {% endif %}
