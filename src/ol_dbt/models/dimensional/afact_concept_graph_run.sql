@@ -20,4 +20,5 @@ select
     , modularity
     , sequence_cycle_node_count
     , hierarchy_cycle_node_count
+    , prerequisite_closure_excluded_json
 from {{ source('courseware_intermediate', 'courseware_concept_graph_run') }}

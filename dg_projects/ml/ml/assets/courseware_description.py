@@ -33,6 +33,7 @@ from ml.lib.courseware.describe import (
     DESCRIPTION_MODEL,
     DESCRIPTION_PROMPT,
     DESCRIPTION_PROMPT_VERSION,
+    DESCRIPTION_SCHEMA,
     describe_concepts,
     description_version,
     pending_concepts,
@@ -79,7 +80,13 @@ def unapproved_prompt(inputs: pl.DataFrame) -> str | None:
     :returns: the reason, or None when DESCRIPTION_PROMPT_VERSION is approved
     :rtype: str | None
     """
-    approved = set(inputs["approved_prompt_version"])
+    # Absent until lakehouse rebuilds the inputs with the approval seed, which may
+    # deploy after this image; that approves nothing.
+    approved = (
+        set(inputs["approved_prompt_version"])
+        if "approved_prompt_version" in inputs.columns
+        else {None}
+    )
     if approved == {DESCRIPTION_PROMPT_VERSION}:
         return None
     named = sorted(version for version in approved if version is not None)
@@ -89,6 +96,42 @@ def unapproved_prompt(inputs: pl.DataFrame) -> str | None:
         f"{', '.join(named) or 'no version'}). Promote it in "
         "src/ol_dbt/seeds/courseware_description_approval.csv to describe every "
         "concept under it, or deploy the approved prompt."
+    )
+
+
+def unversioned_descriptions(stored: pl.LazyFrame | None, version: str) -> pl.DataFrame:
+    """Copy the descriptions written at version before rows carried a prompt_version.
+
+    description_version hashes DESCRIPTION_PROMPT with the model and effort, so a row
+    at this run's version was written under DESCRIPTION_PROMPT. pending_concepts
+    counts it as described, but a knowledge release selects descriptions by
+    prompt_version, so without a copy carrying DESCRIPTION_PROMPT_VERSION the
+    concept would never be released. A row already copied is not copied again.
+
+    :param stored: the stored descriptions, or None before the first run
+    :param version: description_version for the run's model and effort
+    :returns: the copies to append, stamped with DESCRIPTION_PROMPT_VERSION
+    :rtype: pl.DataFrame
+    """
+    columns = [*DESCRIPTION_SCHEMA, "prompt_version"]
+    if stored is None:
+        return pl.DataFrame(schema={**DESCRIPTION_SCHEMA, "prompt_version": pl.String})
+    if "prompt_version" not in stored.collect_schema():
+        stored = stored.with_columns(prompt_version=pl.lit(None, dtype=pl.String))
+    keys = ["concept_id", "input_checksum"]
+    at_version = stored.filter(pl.col("description_version") == version)
+    return (
+        at_version.filter(pl.col("prompt_version").is_null())
+        .join(
+            at_version.filter(pl.col("prompt_version").is_not_null()).select(keys),
+            on=keys,
+            how="anti",
+        )
+        .sort("described_at")
+        .unique(keys, keep="last", maintain_order=True)
+        .with_columns(prompt_version=pl.lit(DESCRIPTION_PROMPT_VERSION))
+        .select(columns)
+        .collect()
     )
 
 
@@ -120,8 +163,9 @@ def courseware_concept_description(
 
     Calls ml.lib.courseware.describe.describe_concepts against the stored
     descriptions and appends only the new rows, so an unchanged concept is never
-    sent again. Nothing reaches Opik or the model when the deployed prompt is not
-    the approved one.
+    sent again. Rows stored before descriptions carried a prompt_version are
+    appended again with it (see unversioned_descriptions). Nothing reaches Opik or
+    the model when the deployed prompt is not the approved one.
     """
     inputs = require_table("intermediate", INPUTS_KEY.path[-1]).collect()
     if not inputs.height:
@@ -139,7 +183,9 @@ def courseware_concept_description(
         raise permanent_failure(refusal)
     stored = read_table("intermediate", DESCRIPTION_KEY.path[-1])
     existing = (
-        stored.select("concept_id", "input_checksum", "description_version").collect()
+        stored.select(
+            "concept_id", "input_checksum", "description_version", "described_at"
+        ).collect()
         if stored is not None
         else None
     )
@@ -158,6 +204,7 @@ def courseware_concept_description(
     pending = {
         entry["concept_id"] for entry in pending_concepts(inputs, existing, version)
     }
+    backfilled = unversioned_descriptions(stored, version)
     # The approved version each row was written under, which a knowledge release
     # selects descriptions by.
     described = describe_concepts(
@@ -166,13 +213,18 @@ def courseware_concept_description(
     failed = len(pending - set(described["concept_id"]))
     concept_count = inputs["concept_id"].n_unique()
     context.log.info(
-        "Described %d of %d concepts", described["concept_id"].n_unique(), concept_count
+        "Described %d of %d concepts; stamped the prompt version on %d earlier rows",
+        described["concept_id"].n_unique(),
+        concept_count,
+        backfilled.height,
     )
-    if described.height:
+    written = pl.concat([backfilled, described])
+    if written.height:
         yield Output(
-            described,
+            written,
             metadata={
-                "row_count": MetadataValue.int(described.height),
+                "row_count": MetadataValue.int(written.height),
+                "backfilled_row_count": MetadataValue.int(backfilled.height),
                 "concept_count": MetadataValue.int(concept_count),
                 "model_id": MetadataValue.text(model_id),
                 "description_version": MetadataValue.text(version),

@@ -9,8 +9,10 @@ snapshots:
     evidence on every run, so without this an edge's support, support_score and
     passes_support_rule leave no trace once they change. Read it beside
     afact_concept_graph_run (graph runs) by time. A new version is recorded when a
-    support count, the consistency, support_score, review_status or the support-rule
-    outcome changes. co_taught_lift is left out of the check, because
+    support count, the consistency, support_score, the co-taught or co-assessed
+    evidence flags (ml.lib.courseware.graph keeps a co-assessed complements edge
+    whatever its lift), review_status or the support-rule outcome changes. co_taught_lift
+    is left out of the check, because
     its denominator counts every taught unit, so each extracted course would version
     every complements edge without its own evidence changing. Resolution is one
     run, and history starts at the first run. An edge whose evidence disappears has
@@ -30,6 +32,8 @@ snapshots:
     - contrary_verdict_support
     - cross_signal_support
     - support_score
+    - has_co_taught_evidence
+    - has_co_assessed_evidence
     - review_status
     - passes_support_rule
     - support_rule_failure

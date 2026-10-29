@@ -41,6 +41,7 @@ select
     , run_bridge.requirement_source
     , run_bridge.accepted_claim_count as claim_count
     , run_bridge.first_scope_position
+    , {{ courseware_build_id() }} as dbt_invocation_id
 from learn_runs
 inner join run_bridge
     on learn_runs.courserun_fk = run_bridge.courserun_fk

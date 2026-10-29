@@ -86,7 +86,9 @@ LEXICAL_MIN_JACCARD = 0.3
 # ten items per decision (LLM-CER, SIGMOD 2026); each label here brings up to twelve
 # candidates, so a call stays at a few dozen short lines.
 QUERIES_PER_CALL = 8
-# An exact-match component larger than this is not merged automatically.
+# An exact-match component that joins more than this many concepts and new labels
+# is not merged automatically. An existing concept counts once, however many of its
+# labels the component holds.
 MAX_MERGE_COMPONENT = 6
 CARRY_FORWARD_MIN_JACCARD = 0.5
 ADJUDICATION_MAX_TOKENS = 16_000
@@ -454,15 +456,25 @@ def _adjudicate_batch(
     except ValidationError as error:
         msg = f"invalid verdicts: {error}"
         raise ValueError(msg) from error
+    # An omitted comparison would leave a label a singleton that incremental runs
+    # never retry, so anything but one verdict per pair fails the batch.
+    returned = sorted(query.query_id for query in verdicts.queries)
+    if returned != list(range(len(batch))):
+        msg = f"verdicts for queries {returned}, expected 0 to {len(batch) - 1}"
+        raise ValueError(msg)
     decided: list[tuple[str, str, str]] = []
     for query in verdicts.queries:
-        if not 0 <= query.query_id < len(batch):
-            continue
         query_key, candidates = batch[query.query_id]
+        judged = sorted(item.candidate_id for item in query.verdicts)
+        if judged != list(range(len(candidates))):
+            msg = (
+                f"Q{query.query_id} verdicts for candidates {judged}, "
+                f"expected 0 to {len(candidates) - 1}"
+            )
+            raise ValueError(msg)
         decided.extend(
             (query_key, candidates[item.candidate_id], item.verdict)
             for item in query.verdicts
-            if 0 <= item.candidate_id < len(candidates)
         )
     return decided
 
@@ -537,39 +549,85 @@ class _UnionFind:
 
 
 def accepted_components(
-    keys: Iterable[str], decisions: list[tuple[str, str, str]]
+    keys: Iterable[str],
+    decisions: list[tuple[str, str, str]],
+    carried: dict[str, str] | None = None,
 ) -> tuple[list[set[str]], int]:
     """Join exact verdicts into components, keeping only components that are small
     and contain no pair judged distinct; a rejected component falls apart into
     singletons for review.
 
+    A component joins the concepts its carried labels already belong to, so the
+    distinct check covers every label that ends up in those concepts: their carried
+    labels and every other component that joins one of them.
+
+    :param keys: the labels to group; a decision naming any other label is ignored
+    :param decisions: (query, candidate, verdict) triples
+    :param carried: each carried label's current concept id
     :returns: the components covering every key, and how many were rejected
     """
     union_find = _UnionFind()
     keys = list(keys)
     for key in keys:
         union_find.find(key)
-    distinct = set()
+    known = set(keys)
+    distinct: dict[str, set[str]] = defaultdict(set)
     for query, candidate, verdict in decisions:
+        # a label left out of keys (its batch failed) must not come back in as
+        # another label's candidate
+        if query not in known or candidate not in known:
+            continue
         if verdict == "exact":
             union_find.union(query, candidate)
         elif verdict == "distinct":
-            distinct.add(frozenset((query, candidate)))
+            distinct[query].add(candidate)
+            distinct[candidate].add(query)
+    carried = carried or {}
+    found = union_find.components(keys)
     components: list[set[str]] = []
     rejected = 0
-    for component in union_find.components(union_find.parent):
-        conflicted = any(
-            frozenset((left, right)) in distinct
-            for left in component
-            for right in component
-            if left < right
+    for component, destination in zip(
+        found, _destinations(found, carried), strict=True
+    ):
+        # a single label has nothing to merge, whatever its destination holds
+        conflicted = len(component) > 1 and any(
+            distinct[key] & destination for key in destination
         )
-        if len(component) > MAX_MERGE_COMPONENT or conflicted:
+        # labels of one existing concept are one unit, not a chain of merges
+        size = len({carried.get(key, key) for key in component})
+        if size > MAX_MERGE_COMPONENT or conflicted:
             rejected += 1
             components.extend({key} for key in component)
         else:
             components.append(component)
     return components, rejected
+
+
+def _destinations(
+    components: list[set[str]], carried: dict[str, str]
+) -> list[set[str]]:
+    """Every label each component's concept will hold once all components are
+    assigned: a component that joins concepts X and Y merges them, so it shares a
+    destination with every component joining X or Y.
+    """
+    concept_groups = _UnionFind()
+    joined = [
+        [carried[key] for key in component if key in carried]
+        for component in components
+    ]
+    for concepts in joined:
+        for concept_id in concepts:
+            concept_groups.union(concept_id, concepts[0])
+    labels: dict[str, set[str]] = defaultdict(set)
+    for key, concept_id in carried.items():
+        labels[concept_groups.find(concept_id)].add(key)
+    for component, concepts in zip(components, joined, strict=True):
+        if concepts:
+            labels[concept_groups.find(concepts[0])] |= component
+    return [
+        labels[concept_groups.find(concepts[0])] if concepts else component
+        for component, concepts in zip(components, joined, strict=True)
+    ]
 
 
 def _resolve_redirects(registry: dict[str, dict[str, Any]]) -> None:
@@ -658,7 +716,9 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     failed = {key for batch in failed_batches for key in batch}
 
     components, rejected = accepted_components(
-        [key for key in keys if key not in failed or key in carried], decisions
+        [key for key in keys if key not in failed or key in carried],
+        decisions,
+        carried,
     )
     assignments: dict[str, tuple[str, str]] = {
         key: (concept_id, "carried") for key, concept_id in carried.items()
@@ -860,7 +920,10 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
             continue
         if query not in assignments or candidate not in assignments:
             continue
-        left, right = assignments[query][0], assignments[candidate][0]
+        # an assignment made before a later component merged its concept still
+        # holds the losing id
+        left = resolved(assignments[query][0])
+        right = resolved(assignments[candidate][0])
         if left == right:
             continue
         if verdict == "broader":

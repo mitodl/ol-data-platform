@@ -10,9 +10,12 @@
     whose graph was not computed over its resolution run (is_graph_current), as when
     a resolution run merged concepts and the graph build after it failed.
 
-    It reads every candidate projection and counts its rows, so dbt builds it only
-    after all of them built in the same run, and the release asset, which runs on
-    this model alone, checks the projections it copies still have those counts.
+    It reads every candidate projection, so dbt builds it only after all of them,
+    and records each one's row count and dbt_invocation_id, the dbt invocation that
+    built it. The release asset, which runs on this model alone, refuses projections
+    whose rows another invocation built since, as when a projection is rebuilt
+    alone after this model, so it never copies projections this manifest did not
+    read.
 
     extraction_selection_checksum hashes the current extraction keys. A
     courseware_claims_v2 key hashes the text stage's key (its exact text input) and
@@ -78,25 +81,32 @@ with registry as (
         and eligibility.is_source_eligible
 )
 
+-- from the seed, not the description inputs, which a policy excluding every
+-- described run empties while the seed still approves a prompt
 , descriptions as (
-    select max(approved_prompt_version) as description_prompt_version
-    from {{ ref('int__courseware__concept_description_inputs') }}
+    select approval.prompt_version as description_prompt_version
+    from ({{ courseware_approved_description_prompt() }}) as approval
 )
 
 , concepts as (
     select
         count(*) as concept_count
         , count(case when is_awaiting_description then 1 end) as undescribed_concept_count
+        , max(dbt_invocation_id) as concepts_invocation_id
     from {{ ref('int__courseware__release_concepts') }}
 )
 
 , resources as (
-    select count(*) as resource_count
+    select
+        count(*) as resource_count
+        , max(dbt_invocation_id) as resources_invocation_id
     from {{ ref('int__courseware__release_resource_knowledge') }}
 )
 
 , resource_concepts as (
-    select count(*) as resource_concept_count
+    select
+        count(*) as resource_concept_count
+        , max(dbt_invocation_id) as resource_concepts_invocation_id
     from {{ ref('int__courseware__release_resource_concepts') }}
 )
 
@@ -114,6 +124,9 @@ select
     , concepts.concept_count
     , resources.resource_count
     , resource_concepts.resource_concept_count
+    , concepts.concepts_invocation_id
+    , resources.resources_invocation_id
+    , resource_concepts.resource_concepts_invocation_id
     , extractions.extraction_selection_checksum
     , extractions.extraction_count
     , eligibility.source_policy_version
