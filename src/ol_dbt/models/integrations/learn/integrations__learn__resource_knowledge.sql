@@ -27,7 +27,7 @@ with learn_runs as (
 
 , concepts as (
     select * from {{ ref('dim_concept') }}
-    where review_status = 'accepted'
+    where {{ learn_publishable_concept() }}
 )
 
 , claims as (
