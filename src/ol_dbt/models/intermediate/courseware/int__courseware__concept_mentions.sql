@@ -26,6 +26,7 @@ with claims as (
         , label
         , concept_label_key
         , prerequisite_kind
+        , review_status
     from claims
     where concept_label_key is not null
 )
@@ -46,6 +47,7 @@ with claims as (
         , cast(null as varchar) as description
         , {{ json_extract_scalar('referenced.concept_label', "'$'") }} as label
         , cast(null as varchar) as prerequisite_kind
+        , claims.review_status
     from claims
     cross join {{ unnest_json_array('claims.related_concept_labels_json', 'referenced', 'concept_label') }} -- noqa
     where claims.claim_kind in ('assessment_expectation', 'learning_outcome')
@@ -67,6 +69,7 @@ select
     , label
     , concept_label_key
     , prerequisite_kind
+    , review_status
 from own_labels
 
 union all
@@ -87,6 +90,7 @@ select
     , label
     , {{ courseware_label_key('label') }} as concept_label_key
     , prerequisite_kind
+    , review_status
 from referenced_labels
 -- a label of only symbols has no key, like the own labels above
 where {{ courseware_label_key('label') }} is not null

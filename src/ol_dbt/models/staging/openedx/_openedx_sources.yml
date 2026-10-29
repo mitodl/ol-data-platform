@@ -111,7 +111,9 @@ sources:
     description: >
       Every file in each Open edX course run's export, flagged with whether MIT
       Learn leaves it out of its ContentFiles, written by the openedx location's
-      extract_course_file_exclusions asset (a port of Learn's excluded_olx_paths).
+      extract_course_file_exclusions asset (a port of Learn's OlxArchive exclusion
+      and
+      release date rules).
       Appended one file per course version; staging keeps each course's newest file.
     columns:
     - name: course_id
@@ -133,6 +135,11 @@ sources:
     - name: extracted_at
       description: str, ISO 8601 UTC time the asset ran the rules, one value per landed
         file; null in files written before the asset stamped it
+    - name: release_date
+      description: str, ISO 8601 UTC time (YYYY-MM-DDTHH:MM:SS.ffffffZ) Learn's OlxArchive.release_dates
+        gives the file, from the OLX start dates on its path down from the course;
+        null when Learn leaves it undated, and in files written before the asset dated
+        files
     - name: _source_file
       description: str, the landing-zone file the row was read from
     - name: _file_modified_at

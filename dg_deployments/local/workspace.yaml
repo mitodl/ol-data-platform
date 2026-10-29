@@ -3,10 +3,6 @@
 # See our documentation overview on Workspaces: https://docs.dagster.io/overview/repositories-workspaces/workspaces
 load_from:
 - grpc_server:
-    host: dagster_canvas
-    port: 4000
-    location_name: 'canvas'
-- grpc_server:
     host: dagster_edxorg
     port: 4002
     location_name: 'edxorg'

@@ -6,7 +6,7 @@ Each file defines one metric and names the columns that carry it:
       name: learner_completion_status
       description: ...
       metricType: OTHER
-    status: Approved              # entityStatus; sync applies it by PATCH
+    status: Approved              # required: Draft or Approved; sync applies it by PATCH
     implemented_by:
       - dbt_model: afact_learner_courserun_progress
         columns: [completion_status]
@@ -59,7 +59,27 @@ SCHEMA_SNAPSHOT = Path(__file__).with_name("openmetadata_metric_schema.json")
 SCHEMA_VERSION_KEY = "x-openmetadata-version"
 _SCHEMA_REF_PREFIX = "#/components/schemas/"
 _CREATE_METRIC = "CreateMetric"
-SYNC_OWNED_FIELDS = frozenset({"id", "fullyQualifiedName"})
+_SYNC_OWNED = "`ol-dbt metrics sync` resolves it; remove it."
+# A bot's PUT keeps existing domains and data products and ignores extension
+# changes (EntityUpdater.updateDomains, updateDataProducts, updateExtension in
+# 2.0.5), and sync PATCHes none of them.
+_BOT_PUT_KEEPS = "A bot's PUT does not change it on an existing metric, so a change to it in a file would never land."
+# Fields a file may not set, and why. `assets` is a CreateMetric field, but it
+# takes entity ids, which only exist in the live catalog.
+EXCLUDED_FIELDS = {
+    "id": _SYNC_OWNED,
+    "fullyQualifiedName": _SYNC_OWNED,
+    "assets": "It takes catalog ids a file cannot know. List the tables under `implemented_by`; sync links them "
+    "by lineage.",
+    "domains": _BOT_PUT_KEEPS,
+    "dataProducts": _BOT_PUT_KEEPS,
+    "extension": _BOT_PUT_KEEPS,
+    # A PUT keeps each live lifeCycle timestamp newer than the body's
+    # (EntityUpdater.updateLifeCycle in 2.0.5), so a file's would stop matching
+    # and be PUT on every sync.
+    "lifeCycle": "It records when the metric was created, updated and accessed, which OpenMetadata keeps up to "
+    "date itself; remove it.",
+}
 
 # OpenMetadata references an owner or reviewer by id, which only exists in the
 # live catalog. The file names them and sync resolves the names, as it does for
@@ -74,6 +94,36 @@ _NAMED_REFERENCES = {
     },
 }
 _NAMED_REFERENCE_FIELDS = ("owners", "reviewers")
+
+# The pull request that changes a file is the approval, so a file says only
+# whether its metric is approved. The sync bot is not a reviewer: when a metric
+# has reviewers, OpenMetadata 2.0.5 lets only one of them move it from In Review
+# to Approved or Rejected (EntityUpdater.updateEntityStatus), and reviewers are
+# all users or exactly one team (validateReviewers), so the bot cannot sit
+# beside a team.
+FILE_STATUSES = ("Draft", "Approved")
+
+
+def file_status_problem(status: Any) -> tuple[str, str] | None:
+    """Say why a file may not set *status*.
+
+    :returns: the problem and how to fix it, or ``None`` when the file may set it.
+    :rtype: tuple[str, str] | None
+    """
+    if status in FILE_STATUSES:
+        return None
+    if status is None:
+        return (
+            f"`status` is missing; a metric file sets {' or '.join(FILE_STATUSES)}",
+            "Add `status: Draft`, or `status: Approved` once the definition is approved. Every PUT resets the "
+            "status in OpenMetadata, and sync restores it only from the file.",
+        )
+    return (
+        f"`status` is {status!r}; a metric file sets only {' or '.join(FILE_STATUSES)}",
+        "Approval happens on the pull request that changes this file. In Review, Rejected, Deprecated and "
+        "OpenMetadata's other statuses are not set from files: the sync bot is not a metric reviewer, and when "
+        "a metric has reviewers OpenMetadata lets only one of them approve or reject it while it is In Review.",
+    )
 
 
 _TOP_LEVEL_KEYS = frozenset({"metric", "status", "implemented_by"})
@@ -259,19 +309,23 @@ def _check_body(metric: MetricDefinition, report: ValidationReport) -> None:
     version = schema[SCHEMA_VERSION_KEY]
     # The OpenAPI document does not mark CreateMetric as closed, but the server
     # rejects a field it does not know, so the schema alone would let one through.
-    known = set(schema["components"]["schemas"][_CREATE_METRIC]["properties"])
+    known = set(schema["components"]["schemas"][_CREATE_METRIC]["properties"]) - EXCLUDED_FIELDS.keys()
+    unknown_hint = (
+        f"OpenMetadata {version}'s CreateMetric has no such field. A glossary term is a `tags` entry "
+        "with `source: Glossary`."
+    )
     for key in sorted(str(k) for k in set(metric.body) - known):
         report.add(
             METRIC_REGISTRY_CHECK,
             Severity.ERROR,
             label,
             f"`metric.{key}` is not a field the file may set",
-            "`ol-dbt metrics sync` resolves it; remove it."
-            if key in SYNC_OWNED_FIELDS
-            else f"OpenMetadata {version}'s CreateMetric has no such field. A glossary term is a `tags` entry "
-            "with `source: Glossary`.",
+            EXCLUDED_FIELDS.get(key, unknown_hint),
         )
-    document = {"metric": metric.body} | ({} if metric.status is None else {"status": metric.status})
+    status_problem = file_status_problem(metric.status)
+    if status_problem is not None:
+        report.add(METRIC_REGISTRY_CHECK, Severity.ERROR, label, *status_problem)
+    document = {"metric": metric.body}
     # Draft 4 is the JSON Schema dialect an OpenAPI 3.0 schema object is closest to.
     # A value of the wrong type fails several keywords at once; one finding per value says enough.
     errors: dict[str, str] = {}

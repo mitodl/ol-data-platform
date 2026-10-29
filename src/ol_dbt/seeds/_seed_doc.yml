@@ -40,6 +40,24 @@ seeds:
     tests:
     - not_null
 
+- name: edxorg_to_mitxonline_program_mapping
+  description: Maps each edX.org MicroMasters program title, at the track level for
+    Statistics and Data Science, to the MITx Online program it moved to. Keyed on
+    the title because int__micromasters__program_certificates has no other column
+    that tells SDS tracks apart, and mapped to the readable id, not the database id,
+    so the seed does not depend on one environment's id sequence.
+  columns:
+  - name: edxorg_program_title
+    description: string, program title on an edX.org MicroMasters program certificate,
+      or the MicroMasters program title on an override certificate
+    tests:
+    - not_null
+    - unique
+  - name: mitxonline_program_readable_id
+    description: string, readable id of the MITx Online program, formatted as program-v1:{org}+{code}
+    tests:
+    - not_null
+
 - name: legacy_edx_certificate_revision_mapping
   description: Mapping edX certificates to MITx Online certificate revisions for legacy
     edX courses that were missing signatory information from edX course export.These

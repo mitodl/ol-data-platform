@@ -40,6 +40,7 @@ import boto3
 from cyclopts import App
 from ol_orchestrate.lib.lake_orphan_sweep import (
     delete_prefix,
+    delete_references,
     glue_tables,
     is_referenced,
     measure,
@@ -92,7 +93,7 @@ def report(
     ]
     (out_dir / "stuck_glue_tables.json").write_text(json.dumps(stuck, indent=1))
 
-    referenced = referenced_paths(glue(), include_databases=False)
+    referenced = referenced_paths(glue())
     candidates: list[tuple[str, str]] = []
     for bucket in buckets:
         found = prefixes_at_depth(s3(), bucket, under, depth)
@@ -156,7 +157,7 @@ def delete(manifest: Path, *, min_age_days: int = 7, execute: bool = False) -> N
             s3(),
             row["bucket"],
             row["prefix"],
-            lambda: referenced_paths(glue(), include_databases=True),
+            lambda: delete_references(glue()),
             min_age_days=min_age_days,
             now=now,
             execute=execute,
