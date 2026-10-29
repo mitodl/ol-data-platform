@@ -134,67 +134,75 @@ SOURCE_COLUMNS = (
 )
 # int__courseware__extraction_sources is unique on these
 SOURCE_KEY = ("platform", "courserun_readable_id", "scope_id", "source_ref")
-MENTION_SCHEMA = {
-    "tagging_run_id": pl.String,
-    "platform": pl.String,
-    "courserun_readable_id": pl.String,
-    "scope_id": pl.String,
-    "scope_kind": pl.String,
-    "source_ref": pl.String,
-    "source_kind": pl.String,
-    "pattern_key": pl.String,
-    "concept_id": pl.String,
-    "matched_text": pl.String,
-    "char_start": pl.Int64,
-    "char_end": pl.Int64,
-}
-ALIAS_SCHEMA = {
-    "tagging_run_id": pl.String,
-    "pattern_key": pl.String,
-    "concept_id": pl.String,
-    "concept_label_key": pl.String,
-    "variant": pl.String,
-    "surface": pl.String,
-    "match_mode": pl.String,
-    "is_short": pl.Boolean,
-    "is_qualified": pl.Boolean,
-    "is_single_word": pl.Boolean,
-    "has_multiple_concepts": pl.Boolean,
-    "is_ambiguous": pl.Boolean,
-}
+MENTION_SCHEMA = pl.Schema(
+    {
+        "tagging_run_id": pl.String,
+        "platform": pl.String,
+        "courserun_readable_id": pl.String,
+        "scope_id": pl.String,
+        "scope_kind": pl.String,
+        "source_ref": pl.String,
+        "source_kind": pl.String,
+        "pattern_key": pl.String,
+        "concept_id": pl.String,
+        "matched_text": pl.String,
+        "char_start": pl.Int64,
+        "char_end": pl.Int64,
+    }
+)
+ALIAS_SCHEMA = pl.Schema(
+    {
+        "tagging_run_id": pl.String,
+        "pattern_key": pl.String,
+        "concept_id": pl.String,
+        "concept_label_key": pl.String,
+        "variant": pl.String,
+        "surface": pl.String,
+        "match_mode": pl.String,
+        "is_short": pl.Boolean,
+        "is_qualified": pl.Boolean,
+        "is_single_word": pl.Boolean,
+        "has_multiple_concepts": pl.Boolean,
+        "is_ambiguous": pl.Boolean,
+    }
+)
 # One row per run and current source: which run's mention rows hold its mentions
-SOURCE_SCHEMA = {
-    "tagging_run_id": pl.String,
-    "platform": pl.String,
-    "courserun_readable_id": pl.String,
-    "scope_id": pl.String,
-    "source_ref": pl.String,
-    "source_checksum": pl.String,
-    "mention_run_id": pl.String,
-}
-RUN_SCHEMA = {
-    "tagging_run_id": pl.String,
-    "previous_tagging_run_id": pl.String,
-    "input_key": pl.String,
-    "tagger_id": pl.String,
-    "parameters_json": pl.String,
-    "dictionary_checksum": pl.String,
-    "sources_checksum": pl.String,
-    "label_count": pl.Int64,
-    "tokenless_label_count": pl.Int64,
-    "pattern_count": pl.Int64,
-    "case_sensitive_pattern_count": pl.Int64,
-    "skipped_pattern_count": pl.Int64,
-    "ambiguous_pattern_count": pl.Int64,
-    "source_count": pl.Int64,
-    "retagged_source_count": pl.Int64,
-    "char_count": pl.Int64,
-    "tagged_source_count": pl.Int64,
-    "mention_count": pl.Int64,
-    "match_seconds": pl.Float64,
-    "elapsed_seconds": pl.Float64,
-    "tagged_at": pl.Datetime(time_zone="UTC"),
-}
+SOURCE_SCHEMA = pl.Schema(
+    {
+        "tagging_run_id": pl.String,
+        "platform": pl.String,
+        "courserun_readable_id": pl.String,
+        "scope_id": pl.String,
+        "source_ref": pl.String,
+        "source_checksum": pl.String,
+        "mention_run_id": pl.String,
+    }
+)
+RUN_SCHEMA = pl.Schema(
+    {
+        "tagging_run_id": pl.String(),
+        "previous_tagging_run_id": pl.String(),
+        "input_key": pl.String(),
+        "tagger_id": pl.String(),
+        "parameters_json": pl.String(),
+        "dictionary_checksum": pl.String(),
+        "sources_checksum": pl.String(),
+        "label_count": pl.Int64(),
+        "tokenless_label_count": pl.Int64(),
+        "pattern_count": pl.Int64(),
+        "case_sensitive_pattern_count": pl.Int64(),
+        "skipped_pattern_count": pl.Int64(),
+        "ambiguous_pattern_count": pl.Int64(),
+        "source_count": pl.Int64(),
+        "retagged_source_count": pl.Int64(),
+        "char_count": pl.Int64(),
+        "tagged_source_count": pl.Int64(),
+        "mention_count": pl.Int64(),
+        "match_seconds": pl.Float64(),
+        "elapsed_seconds": pl.Float64(),
+        "tagged_at": pl.Datetime(time_zone="UTC"),
+    }
+)
 
 
 def label_key(label: str) -> str | None:
