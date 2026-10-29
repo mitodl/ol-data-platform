@@ -76,4 +76,4 @@ If the contract turns out to end 2027-01-31, M3 and M4 move earlier. The ADR
 has both columns.
 
 After M4 the Trino profiles in `profiles.yml` (`qa`, `production`, `dev_qa`,
-`dev_production`) and the `trino_utils` cleanup run-operations stop working.
+`dev_production`) and `ol-dbt local cleanup` stop working.
