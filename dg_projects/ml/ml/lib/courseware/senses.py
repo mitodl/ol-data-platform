@@ -13,9 +13,9 @@ descriptions are the context that tells the senses apart.
 
 - A label seen in one course run only, with one sense, takes that sense without a
   model call, unless a run of the label is queued for review or that sense is the
-  primary of another label with split senses: label resolution matched it against
-  that label's description across all of its senses, so it may mean one of the
-  splits.
+  primary of another label that has split senses or is adjudicated in the same run:
+  label resolution matched it against that label's description across all of its
+  senses, so it may mean one of the splits.
 - Every other new (label, course run) goes to a model with the label's senses and
   their glosses. The model picks an existing sense, groups runs into a new sense
   (minted as a concept split from the primary one), or says it cannot tell, which
@@ -355,6 +355,51 @@ def carried_assignments(
     return carried
 
 
+def _single_sense_labels(
+    pending: dict[str, list[Unit]],
+    aliases: dict[str, list[Alias]],
+    assignments: dict[UnitKey, dict[str, Any]],
+    previous_assignments: pl.DataFrame,
+) -> list[str]:
+    """Return the labels whose one new course run takes their one sense without a
+    call: the label's first and only course run, where there is nothing to tell apart.
+
+    A label with a run queued for review is excluded: the queued run is not
+    carried, but the model could not tell the label's runs apart, so a run that
+    survives is asked about again.
+
+    So is a label whose sense is the primary of another label that has split senses
+    or is adjudicated in this run (and may split one). Label resolution matched it
+    against that label's description across all of its senses, so it may mean one
+    of the splits.
+    """
+    seen_runs = Counter(key[0] for key in assignments)
+    queued = set(
+        previous_assignments.filter(pl.col("sense_status") == "needs_review")[
+            "concept_label_key"
+        ]
+    )
+    eligible = [
+        label_key
+        for label_key, label_units in pending.items()
+        if len(aliases[label_key]) == 1
+        and not seen_runs[label_key]
+        and label_key not in queued
+        and len(label_units) == 1
+    ]
+    adjudicated = pending.keys() - set(eligible)
+    ambiguous = {
+        senses[0].concept_id
+        for label_key, senses in aliases.items()
+        if len(senses) > 1 or label_key in adjudicated
+    }
+    return [
+        label_key
+        for label_key in eligible
+        if aliases[label_key][0].concept_id not in ambiguous
+    ]
+
+
 def assign_senses(  # noqa: PLR0913
     units: dict[UnitKey, Unit],
     aliases: dict[str, list[Alias]],
@@ -380,36 +425,17 @@ def assign_senses(  # noqa: PLR0913
         key and the primary concept it is split from, and returns its id
     """
     assignments = carried_assignments(previous_assignments, aliases, run_id, active)
-    seen_runs = Counter(key[0] for key in assignments)
-    # a queued run is not carried, but its label had runs the model could not tell
-    # apart, so a run that survives is asked about again, not shortcut
-    queued = set(
-        previous_assignments.filter(pl.col("sense_status") == "needs_review")[
-            "concept_label_key"
-        ]
-    )
-    # Label resolution matched a new label against a known label's description
-    # across all of its senses, so a label resolved onto the primary sense of a label
-    # that has split senses may mean one of the splits.
-    ambiguous = {senses[0].concept_id for senses in aliases.values() if len(senses) > 1}
     pending: dict[str, list[Unit]] = defaultdict(list)
     for key, unit in units.items():
         if key[0] in aliases and key not in assignments:
             pending[key[0]].append(unit)
-    for label_key, label_units in list(pending.items()):
-        # the label's first and only course run: there is nothing to tell apart
-        if (
-            len(aliases[label_key]) == 1
-            and not seen_runs[label_key]
-            and label_key not in queued
-            and len(label_units) == 1
-            and aliases[label_key][0].concept_id not in ambiguous
-        ):
-            key = label_units[0].key
-            assignments[key] = _assignment(
-                key, aliases[label_key][0].concept_id, "single_sense", run_id
-            )
-            del pending[label_key]
+    for label_key in _single_sense_labels(
+        pending, aliases, assignments, previous_assignments
+    ):
+        key = pending.pop(label_key)[0].key
+        assignments[key] = _assignment(
+            key, aliases[label_key][0].concept_id, "single_sense", run_id
+        )
 
     decision_rows: list[dict[str, Any]] = []
     calls = minted = 0

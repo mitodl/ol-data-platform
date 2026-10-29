@@ -452,3 +452,31 @@ def test_the_batch_parser_rejects_two_decisions_for_one_run():
     )
     with pytest.raises(ValueError, match="more than one sense decision"):
         _adjudicate_senses_batch(client, "fake-model", [query])
+
+
+def test_a_synonym_of_a_label_adjudicated_in_the_same_run_is_not_shortcut(
+    choose, monkeypatch
+):
+    # "kernel function" resolves onto "kernel" in the run where kernel's two course
+    # runs are adjudicated and may split it
+    monkeypatch.setattr(
+        resolve,
+        "adjudicate",
+        lambda _client, _model_id, _candidates, _rows: (
+            [("kernel function", "kernel", "exact")],
+            1,
+            set(),
+        ),
+    )
+    choose.table[OS] = ("existing", 0)
+    choose.table[ML] = ("new", 1)
+    choose.table[LINALG] = ("new", 1)
+    result = run(
+        labels("kernel", "kernel function"),
+        mentions=mentions(("kernel", OS), ("kernel", ML), ("kernel function", LINALG)),
+    )
+    asked = {query.label_key for query in choose.asked}
+    assert asked == {"kernel", "kernel function"}
+    assert (
+        sense_of(result, "kernel function", LINALG)["assignment_source"] == "new_sense"
+    )
