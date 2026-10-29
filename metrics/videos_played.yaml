@@ -1,0 +1,46 @@
+---
+metric:
+  name: videos_played
+  displayName: Videos played
+  description: >-
+    Distinct videos a learner played in a course run on a day: play_video events
+    in tfact_video_events, counted once per video_block_fk, per learner (user_fk)
+    per day (activity_date_key, the event's date in the source's timezone). Load,
+    seek, pause and complete events do not count. Over a longer period it is the
+    sum of the daily counts, so a video replayed on the same day counts once and
+    one played on two days counts twice. MITx Online, xPRO, Residential and
+    edX.org.
+
+    The b2b_analytics engagement views publish the monthly and all-time sums as
+    total_videos_watched, and mv_b2b_learner_enrollment publishes the all-time
+    sum per enrollment as videos_played. Both cover MITx Online enrollments under
+    a contract; the views count activity in active enrollments only, the
+    enrollment view every enrollment. organization_administration_report's
+    videos_watched uses the same events and distinct key but keys learners on
+    email and days on cast(event_timestamp as date). The other models that count
+    video plays (num_video_played, video_played_count, videos_user_watched,
+    user_watched_video_count, video_watched_count) are different measures.
+  metricType: COUNT
+  unitOfMeasurement: COUNT
+  granularity: DAY
+  owners: [{type: team, name: data-platform}]
+  reviewers: [{type: team, name: b2b}]
+  metricExpression:
+    language: SQL
+    code: >-
+      count(distinct video_block_fk) filter (where event_type = 'play_video'),
+      grouped by platform, user_fk, courserun_readable_id, date_fk
+status: Draft
+implemented_by:
+- dbt_model: afact_learner_courserun_daily_activity
+  columns: [videos_played]
+- dbt_model: mv_b2b_learner_enrollment
+  columns: [videos_played]
+- dbt_model: mv_b2b_monthly_engagement_trend
+  columns: [total_videos_watched]
+- dbt_model: mv_b2b_contract_monthly_engagement_trend
+  columns: [total_videos_watched]
+- dbt_model: mv_b2b_content_engagement_depth
+  columns: [total_videos_watched]
+- dbt_model: mv_b2b_contract_content_engagement_depth
+  columns: [total_videos_watched]

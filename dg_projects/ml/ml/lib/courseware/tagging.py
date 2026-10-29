@@ -43,8 +43,9 @@ Each distinct phrase gets a match mode:
   can tell apart from a variable or an initial.
 
 and ambiguity flags: short, qualified (a head without its qualifier), single_word
-(one lowercase word, e.g. "recall", "kernel", "data") and multiple_concepts (the
-phrase belongs to more than one concept, which emits one mention per candidate).
+(one word of everyday English, in any case but all capitals: "recall", "kernel",
+"data", "None", but not "pandas" or "CART"; see COMMON_WORDS) and multiple_concepts
+(the phrase belongs to more than one concept, which emits one mention per candidate).
 Ambiguous mentions are emitted with the flag rather than dropped. Many single words
 are what these courses teach (variance, recall, regression), so dropping them would
 cost more recall than the flag costs a consumer. The flags are review signals: which
@@ -52,6 +53,14 @@ of a label's concepts a mention means is decided in dbt by the course run's sens
 the label (int__courseware__concept_tags), not here.
 
 These are mentions only. Whether a block teaches a concept is the extractor's call.
+
+A run re-tags only what changed. Tagging a source depends on nothing but its own
+text and the dictionary, so while the dictionary, TAGGER_ID and the parameters stay
+the same, a run tags only the sources whose text is new or changed, and every other
+source keeps the mentions an earlier run wrote. Each run records, per current
+source, which run's mention rows hold its mentions (courseware_concept_tagging_source),
+and readers take the newest run's records. A run with any other dictionary, tagger
+or parameters re-tags every source.
 """
 
 import hashlib
@@ -63,17 +72,30 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import cached_property
-from typing import Literal
+from importlib.resources import files
+from typing import Any, Literal
 
 import ahocorasick_rs
 import numpy as np
 import polars as pl
 
-TAGGER_ID = "courseware_dictionary_tagger_v4"
+TAGGER_ID = "courseware_dictionary_tagger_v5"
 MIN_ALIAS_CHARS = 2
 CASE_SENSITIVE_BELOW_CHARS = 4
 # a plural variant is only added for a last word at least this long
 PLURAL_MIN_WORD_CHARS = 3
+# Words of everyday English, whose concept may not be what the text means by them:
+# the most frequent English words in wordfreq (see the file's header for its
+# provenance and license). A one-word phrase is single_word when it, or for a
+# plural the word it is the plural of, is one of these.
+COMMON_WORDS = frozenset(
+    line
+    for line in files(__package__)
+    .joinpath("common_words.txt")
+    .read_text(encoding="utf-8")
+    .splitlines()
+    if line and not line.startswith("#")
+)
 
 MatchMode = Literal["caseless", "case_sensitive", "skipped"]
 Variant = Literal["label", "full_name", "abbreviation", "without_qualifier", "plural"]
@@ -110,55 +132,77 @@ SOURCE_COLUMNS = (
     "source_kind",
     "source_text",
 )
-MENTION_SCHEMA = {
-    "tagging_run_id": pl.String,
-    "platform": pl.String,
-    "courserun_readable_id": pl.String,
-    "scope_id": pl.String,
-    "scope_kind": pl.String,
-    "source_ref": pl.String,
-    "source_kind": pl.String,
-    "pattern_key": pl.String,
-    "concept_id": pl.String,
-    "matched_text": pl.String,
-    "char_start": pl.Int64,
-    "char_end": pl.Int64,
-}
-ALIAS_SCHEMA = {
-    "tagging_run_id": pl.String,
-    "pattern_key": pl.String,
-    "concept_id": pl.String,
-    "concept_label_key": pl.String,
-    "variant": pl.String,
-    "surface": pl.String,
-    "match_mode": pl.String,
-    "is_short": pl.Boolean,
-    "is_qualified": pl.Boolean,
-    "is_single_word": pl.Boolean,
-    "has_multiple_concepts": pl.Boolean,
-    "is_ambiguous": pl.Boolean,
-}
-RUN_SCHEMA = {
-    "tagging_run_id": pl.String,
-    "input_key": pl.String,
-    "tagger_id": pl.String,
-    "parameters_json": pl.String,
-    "dictionary_checksum": pl.String,
-    "sources_checksum": pl.String,
-    "label_count": pl.Int64,
-    "tokenless_label_count": pl.Int64,
-    "pattern_count": pl.Int64,
-    "case_sensitive_pattern_count": pl.Int64,
-    "skipped_pattern_count": pl.Int64,
-    "ambiguous_pattern_count": pl.Int64,
-    "source_count": pl.Int64,
-    "char_count": pl.Int64,
-    "tagged_source_count": pl.Int64,
-    "mention_count": pl.Int64,
-    "match_seconds": pl.Float64,
-    "elapsed_seconds": pl.Float64,
-    "tagged_at": pl.Datetime(time_zone="UTC"),
-}
+# int__courseware__extraction_sources is unique on these
+SOURCE_KEY = ("platform", "courserun_readable_id", "scope_id", "source_ref")
+MENTION_SCHEMA = pl.Schema(
+    {
+        "tagging_run_id": pl.String,
+        "platform": pl.String,
+        "courserun_readable_id": pl.String,
+        "scope_id": pl.String,
+        "scope_kind": pl.String,
+        "source_ref": pl.String,
+        "source_kind": pl.String,
+        "pattern_key": pl.String,
+        "concept_id": pl.String,
+        "matched_text": pl.String,
+        "char_start": pl.Int64,
+        "char_end": pl.Int64,
+    }
+)
+ALIAS_SCHEMA = pl.Schema(
+    {
+        "tagging_run_id": pl.String,
+        "pattern_key": pl.String,
+        "concept_id": pl.String,
+        "concept_label_key": pl.String,
+        "variant": pl.String,
+        "surface": pl.String,
+        "match_mode": pl.String,
+        "is_short": pl.Boolean,
+        "is_qualified": pl.Boolean,
+        "is_single_word": pl.Boolean,
+        "has_multiple_concepts": pl.Boolean,
+        "is_ambiguous": pl.Boolean,
+    }
+)
+# One row per run and current source: which run's mention rows hold its mentions
+SOURCE_SCHEMA = pl.Schema(
+    {
+        "tagging_run_id": pl.String,
+        "platform": pl.String,
+        "courserun_readable_id": pl.String,
+        "scope_id": pl.String,
+        "source_ref": pl.String,
+        "source_checksum": pl.String,
+        "mention_run_id": pl.String,
+    }
+)
+RUN_SCHEMA = pl.Schema(
+    {
+        "tagging_run_id": pl.String(),
+        "previous_tagging_run_id": pl.String(),
+        "input_key": pl.String(),
+        "tagger_id": pl.String(),
+        "parameters_json": pl.String(),
+        "dictionary_checksum": pl.String(),
+        "sources_checksum": pl.String(),
+        "label_count": pl.Int64(),
+        "tokenless_label_count": pl.Int64(),
+        "pattern_count": pl.Int64(),
+        "case_sensitive_pattern_count": pl.Int64(),
+        "skipped_pattern_count": pl.Int64(),
+        "ambiguous_pattern_count": pl.Int64(),
+        "source_count": pl.Int64(),
+        "retagged_source_count": pl.Int64(),
+        "char_count": pl.Int64(),
+        "tagged_source_count": pl.Int64(),
+        "mention_count": pl.Int64(),
+        "match_seconds": pl.Float64(),
+        "elapsed_seconds": pl.Float64(),
+        "tagged_at": pl.Datetime(time_zone="UTC"),
+    }
+)
 
 
 def label_key(label: str) -> str | None:
@@ -350,10 +394,19 @@ class Pattern:
 
     @property
     def is_single_word(self) -> bool:
+        """The phrase is one common word, or the plural of one, in any case.
+
+        A plural counts when either it or its base is common, so "species" from
+        "specie" is flagged. An acronym matches only as spelled, so "CART" never
+        reads as "cart".
+        """
         return (
             self.token_count == 1
-            and self.key.isalpha()
-            and all(entry.surface == entry.surface.lower() for entry in self.entries)
+            and not self.is_acronym
+            and (
+                self.key in COMMON_WORDS
+                or any(entry.base_key in COMMON_WORDS for entry in self.entries)
+            )
         )
 
     @cached_property
@@ -583,13 +636,34 @@ def _entry_order(entry: Entry) -> tuple[str, int, str, str]:
 
 @dataclass(frozen=True)
 class TaggingResult:
-    """A full snapshot of one tagging run: its mentions, the dictionary as matched
-    (one row per phrase and concept, with its mode and flags), and the run record.
+    """One tagging run: the mentions of the sources it tagged, which run holds each
+    current source's mentions, the dictionary as matched (one row per phrase and
+    concept, with its mode and flags), and the run record.
     """
 
     mentions: pl.DataFrame
+    sources: pl.DataFrame
     aliases: pl.DataFrame
     run: pl.DataFrame
+
+
+@dataclass(frozen=True)
+class PreviousRun:
+    """The newest stored run, and its courseware_concept_tagging_source rows."""
+
+    run: dict[str, Any]
+    sources: pl.DataFrame
+
+
+def newest_run(runs: pl.DataFrame | None) -> dict[str, Any] | None:
+    """Return the newest courseware_concept_tagging_run row, or None for no run.
+
+    :param runs: the stored runs, or None before the first
+    :rtype: dict[str, Any] | None
+    """
+    if runs is None or runs.is_empty():
+        return None
+    return runs.sort("tagged_at").row(-1, named=True)
 
 
 def _parameters() -> str:
@@ -600,6 +674,26 @@ def _parameters() -> str:
             "plural_min_word_chars": PLURAL_MIN_WORD_CHARS,
         },
         sort_keys=True,
+    )
+
+
+def _source_checksums(sources: pl.DataFrame) -> pl.Series:
+    return pl.Series(
+        "source_checksum",
+        [
+            hashlib.sha256(json.dumps(row).encode()).hexdigest()
+            for row in sources.select(SOURCE_COLUMNS).iter_rows()
+        ],
+        dtype=pl.String,
+    )
+
+
+def _same_tagger(run: dict[str, Any], dictionary: ConceptDictionary) -> bool:
+    """Whether a run would tag any text exactly as this code and dictionary do."""
+    return (
+        run["tagger_id"] == TAGGER_ID
+        and run["parameters_json"] == _parameters()
+        and run["dictionary_checksum"] == dictionary.checksum
     )
 
 
@@ -632,12 +726,22 @@ def _input_key(dictionary_checksum: str, sources_checksum: str) -> str:
     ).hexdigest()
 
 
-def tag_sources(sources: pl.DataFrame, aliases: pl.DataFrame) -> TaggingResult:
-    """Tag every source with the concepts its text mentions.
+def tag_sources(
+    sources: pl.DataFrame,
+    aliases: pl.DataFrame,
+    previous: PreviousRun | None = None,
+) -> TaggingResult:
+    """Tag the sources no stored run holds current mentions for.
+
+    A source keeps the mention run its record in the previous run names when its
+    checksum is unchanged and the previous run had this dictionary, TAGGER_ID and
+    parameters; every other source is tagged. Without a previous run every source
+    is tagged.
 
     :param sources: int__courseware__extraction_sources rows (SOURCE_COLUMNS)
     :param aliases: dim_concept_alias rows (concept_label_key, concept_fk, alias)
-    :returns: the run's mentions, alias table and run record
+    :param previous: the newest stored run and its source records
+    :returns: the run's mentions, source records, alias table and run record
     :rtype: TaggingResult
     """
     tagged_at = datetime.now(tz=UTC)
@@ -645,12 +749,29 @@ def tag_sources(sources: pl.DataFrame, aliases: pl.DataFrame) -> TaggingResult:
     dictionary = ConceptDictionary(aliases)
     run_id = str(uuid.uuid4())
     sources_checksum = _sources_checksum(sources)
+    checked = sources.select(SOURCE_COLUMNS).with_columns(_source_checksums(sources))
+    if previous is not None and _same_tagger(previous.run, dictionary):
+        checked = checked.join(
+            previous.sources.select(*SOURCE_KEY, "source_checksum", "mention_run_id"),
+            on=[*SOURCE_KEY, "source_checksum"],
+            how="left",
+        )
+    else:
+        checked = checked.with_columns(mention_run_id=pl.lit(None, dtype=pl.String))
+    to_tag = checked.filter(pl.col("mention_run_id").is_null())
+    carried = checked.height - to_tag.height
+    source_records = checked.select(
+        pl.lit(run_id).alias("tagging_run_id"),
+        *SOURCE_KEY,
+        "source_checksum",
+        pl.col("mention_run_id").fill_null(run_id),
+    )
 
     mentions: list[dict[str, object]] = []
     tagged_sources = 0
     char_count = 0
     started = time.perf_counter()
-    for row in sources.select(SOURCE_COLUMNS).iter_rows(named=True):
+    for row in to_tag.select(SOURCE_COLUMNS).iter_rows(named=True):
         text = row["source_text"]
         char_count += len(text)
         found = dictionary.find(text)
@@ -698,6 +819,10 @@ def tag_sources(sources: pl.DataFrame, aliases: pl.DataFrame) -> TaggingResult:
     alias_frame = pl.DataFrame(alias_rows, schema=ALIAS_SCHEMA)
     run = {
         "tagging_run_id": run_id,
+        # None when no source's mentions were carried forward
+        "previous_tagging_run_id": previous.run["tagging_run_id"]
+        if previous is not None and carried
+        else None,
         "input_key": _input_key(dictionary.checksum, sources_checksum),
         "tagger_id": TAGGER_ID,
         "parameters_json": _parameters(),
@@ -710,6 +835,7 @@ def tag_sources(sources: pl.DataFrame, aliases: pl.DataFrame) -> TaggingResult:
         "skipped_pattern_count": modes.count("skipped"),
         "ambiguous_pattern_count": sum(p.is_ambiguous for p in dictionary.patterns),
         "source_count": sources.height,
+        "retagged_source_count": to_tag.height,
         "char_count": char_count,
         "tagged_source_count": tagged_sources,
         "mention_count": len(mentions),
@@ -719,6 +845,7 @@ def tag_sources(sources: pl.DataFrame, aliases: pl.DataFrame) -> TaggingResult:
     }
     return TaggingResult(
         mentions=mention_frame,
+        sources=source_records.cast(SOURCE_SCHEMA),
         aliases=alias_frame,
         run=pl.DataFrame([run], schema=RUN_SCHEMA),
     )

@@ -37,6 +37,7 @@ from ml.lib.courseware.schemas import (
     ScopeExtraction,
 )
 from ml.lib.courseware.verify import verify_passage
+from pydantic import ValidationError
 
 SOURCE = (
     "INSTRUCTOR: K-means follows a completely different methodology than "
@@ -382,6 +383,19 @@ def test_context_stage_revises_status_and_sense_but_keeps_the_text_evidence():
     assert json.loads(extraction["notes_json"]) == ["placed"]
 
 
+def test_context_revisions_sent_as_a_json_string_are_decoded():
+    scope = _lecture_one(_course_rows("About it.", "Lecture 2", "some text"))
+    revision = {"claim_id": "C01", "teaching_status": "reviewed", "sense_hint": "ml"}
+    model = FakeModel(
+        context=[{"revisions": json.dumps([revision]) + "}", "notes": "[]"}]
+    )
+
+    tables = extract_scopes([scope], model, model_id="model")
+
+    assert model.calls == ["record_extraction", "record_context"]
+    assert tables.claims["sense_hint"].to_list() == ["ml"]
+
+
 def test_context_stage_retries_a_revision_of_a_claim_it_was_not_given():
     scope = _lecture_one(_course_rows("About it.", "Lecture 2", "some text"))
     unknown = {"claim_id": "C09", "teaching_status": None, "sense_hint": "x"}
@@ -662,6 +676,34 @@ def test_string_fields_keep_text_that_parses_as_json():
     )
     assert claim.label == '{"a": 1}'
     assert claim.evidence == [Evidence(source_id="S01", passage="a b c")]
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        '[{"source_id": "S01", "passage": "a b c"}]',
+        '  [{"source_id": "S01", "passage": "a b c"}]]} ',
+        ['{"source_id": "S01", "passage": "a b c"}'],
+    ],
+)
+def test_json_encoded_containers_are_decoded(evidence):
+    claim = AudienceClaim.model_validate({"statement": "s", "evidence": evidence})
+    assert claim.evidence == [Evidence(source_id="S01", passage="a b c")]
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        # an object where the field takes a list
+        '{"source_id": "S01", "passage": "a b c"}',
+        # text after the array that is not a closing bracket
+        '[{"source_id": "S01", "passage": "a b c"}] and more',
+        '[{"source_id": "S01", "passage": "a b c"',
+    ],
+)
+def test_strings_that_do_not_encode_the_field_s_container_still_fail(evidence):
+    with pytest.raises(ValidationError, match="list_type"):
+        AudienceClaim.model_validate({"statement": "s", "evidence": evidence})
 
 
 def test_local_extract_replaces_claims_a_cut_off_run_left_behind(tmp_path, monkeypatch):

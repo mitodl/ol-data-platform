@@ -175,10 +175,19 @@ jobs:
 
             body += '<details><summary>Details</summary>\n\n';
             for (const a of alerts) {
-              const cols = (a.column_changes || []).map(c => c.column).filter(Boolean).join(', ');
+              // Only removed/renamed columns are traced downstream: an added column breaks
+              // no reader, so listing it beside the count would read as "nothing uses it".
+              const changes = a.column_changes || [];
+              const added = changes.filter(c => c.change_type === 'added').map(c => c.column);
+              const traced = changes.filter(c => !['added', 'renamed_to'].includes(c.change_type)).map(c => c.column).filter(Boolean);
               const ds = (a.downstream || []).length;
-              body += `- ${emoji[a.level] || ''} **${a.changed_model}**` +
-                      `${cols ? ` — \`${cols}\`` : ''} → ${ds} downstream model(s)\n`;
+              body += `- ${emoji[a.level] || ''} **${a.changed_model}**`;
+              if (traced.length > 0 || added.length === 0) {
+                body += `${traced.length ? ` — \`${traced.join(', ')}\`` : ''} → ${ds} downstream model(s)`;
+                if (added.length) body += ';';
+              }
+              if (added.length) body += ` added \`${added.join(', ')}\` (readers are not traced)`;
+              body += '\n';
             }
             body += '\n</details>';
           }

@@ -51,6 +51,29 @@ rules:
   - "*wagtailimages_*"
   - "*wagtail_page"
 
+  # Courseware knowledge: concepts, claims and the concept graph extracted from
+  # course content, with the Learn views that publish them. It sits ahead of the
+  # broad patterns because "concept" matches none of them and a courseware name
+  # can carry a word that one routes elsewhere (e.g. "assessment"). The prefixes
+  # are explicit because "*courseware_*" would also take the Open edX
+  # courseware_studentmodule tables, which are learner activity.
+- domain: courses-content
+  match:
+  - int__courseware__*
+  - courseware_*
+  - dim_courseware_*
+  - tfact_courseware_*
+  - dim_concept*
+  - bridge_concept_*
+  - bridge_course_content_concept
+  - bridge_courserun_concept
+  - bridge_courserun_prerequisite_*
+  - afact_concept_graph_*
+  - snapshot_bridge_concept_*
+  - integrations__learn__concepts
+  - integrations__learn__resource_concepts
+  - integrations__learn__resource_knowledge
+
   # Names that the broader patterns below would misfile.
 - domain: courses-content
   match:

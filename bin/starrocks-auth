@@ -110,7 +110,12 @@ import hvac
 # server (vault_addr below), not the mount path, is what scopes the environment.
 _VAULT_MOUNT = "database-starrocks"
 
-ENVS: dict[str, dict[str, str]] = {
+# `issuer` is None where StarRocks has no Keycloak security integration, so only
+# --mode vault can log in there. `tls` is whether the FE's MySQL port speaks TLS;
+# a client that demands TLS cannot connect to one that doesn't. Both follow
+# starrocks:oidc_enabled and starrocks:ssl_enabled in ol-infrastructure's
+# applications/starrocks Pulumi.lakehouse.<env>.yaml.
+ENVS: dict[str, dict[str, Any]] = {
     "qa": {
         "issuer": "https://sso-qa.ol.mit.edu/realms/ol-data-platform",
         "host": "lakehouse.qa.starrocks.ol.mit.edu",
@@ -119,6 +124,7 @@ ENVS: dict[str, dict[str, str]] = {
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-qa.odl.mit.edu",
         "vault_mount": _VAULT_MOUNT,
+        "tls": True,
     },
     "production": {
         "issuer": "https://sso.ol.mit.edu/realms/ol-data-platform",
@@ -128,15 +134,17 @@ ENVS: dict[str, dict[str, str]] = {
         "fe_service": "lakehouse-starrocks-fe-service",
         "vault_addr": "https://vault-production.odl.mit.edu",
         "vault_mount": _VAULT_MOUNT,
+        "tls": True,
     },
     "ci": {
-        "issuer": "https://sso-ci.ol.mit.edu/realms/ol-data-platform",
+        "issuer": None,
         "host": "lakehouse.ci.starrocks.ol.mit.edu",
         "eks_context": "data-ci",
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
-        "vault_addr": "https://vault-qa.odl.mit.edu",
+        "vault_addr": "https://vault-ci.odl.mit.edu",
         "vault_mount": _VAULT_MOUNT,
+        "tls": False,
     },
 }
 
@@ -666,15 +674,18 @@ def _output_exec(
     sys.exit(result.returncode)
 
 
-def _mysql_supports_openid_connect() -> bool:
-    """Return True if the installed mysql binary is MySQL 9.2+ (not MariaDB)."""
+def _mysql_version() -> str:
     result = subprocess.run(
         ["mysql", "--version"],  # noqa: S607
         capture_output=True,
         text=True,
         check=False,
     )
-    ver_str = (result.stdout + result.stderr).strip()
+    return (result.stdout + result.stderr).strip()
+
+
+def _mysql_supports_openid_connect(ver_str: str) -> bool:
+    """Return True if *ver_str* is MySQL 9.2+ (not MariaDB)."""
     if "MariaDB" in ver_str:
         return False
     m = re.search(r"(\d+)\.(\d+)", ver_str)
@@ -683,7 +694,28 @@ def _mysql_supports_openid_connect() -> bool:
     return (int(m.group(1)), int(m.group(2))) >= (9, 2)
 
 
-def _output_mysql(username: str, token: str, host: str, env_name: str, **_) -> None:
+def _mysql_tls_args(ver_str: str, *, tls: bool) -> list[str]:
+    """Return the client's TLS flags for an FE that does or does not speak TLS.
+
+    The two clients share no spelling. MariaDB's client turns TLS on by default
+    and takes --ssl/--skip-ssl; MySQL 8.0+ removed those and takes --ssl-mode.
+    Neither verifies the FE's certificate, which is internal to the cluster.
+    """
+    if "MariaDB" in ver_str:
+        return ["--ssl", "--ssl-verify-server-cert=OFF"] if tls else ["--skip-ssl"]
+    return ["--ssl-mode=REQUIRED" if tls else "--ssl-mode=DISABLED"]
+
+
+def _output_mysql(  # noqa: PLR0913
+    username: str,
+    token: str,
+    host: str,
+    env_name: str,
+    *,
+    mode: str,
+    tls: bool,
+    **_,
+) -> None:
     """Connect to StarRocks via mysql CLI.
 
     OIDC users: uses authentication_openid_connect_client (MySQL 9.2+ only).
@@ -691,20 +723,18 @@ def _output_mysql(username: str, token: str, host: str, env_name: str, **_) -> N
       via --authentication-openid-connect-client-id-token-file. StarRocks
       verifies it against the keycloak_jwt Security Integration.
 
-    Native users / CI mode: falls back to -p<access_token> (native password).
+    Native users (--mode vault, --mode ci): logs in with the Vault password or
+    the service account's access token as a native password.
     """
-    cached = _load_cache(env_name)
+    ver_str = _mysql_version()
+    # Only the browser flow's own user may log in with its cached id_token. In
+    # vault or ci mode that would be a JWT login under another user's name.
+    cached = _load_cache(env_name) if mode == "browser" else None
     id_token = cached.get("id_token") if cached else None
 
     if id_token:
-        if not _mysql_supports_openid_connect():
-            result = subprocess.run(
-                ["mysql", "--version"],  # noqa: S607
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            ver_str = (result.stdout + result.stderr).strip().splitlines()[0]
+        if not _mysql_supports_openid_connect(ver_str):
+            ver_str = ver_str.splitlines()[0]
             sys.exit(
                 f"JWT auth requires MySQL 9.2+ community client (found: {ver_str})\n"
                 "MariaDB does not implement authentication_openid_connect_client.\n"
@@ -737,7 +767,6 @@ def _output_mysql(username: str, token: str, host: str, env_name: str, **_) -> N
         finally:
             Path(tf_path).unlink()
     else:
-        # Native-password or service-account login (--mode ci / no id_token cached).
         # Password goes via MYSQL_PWD, not `-p<token>` argv, so it isn't visible
         # to other local users via `ps`/`/proc/<pid>/cmdline` for the process lifetime.
         subprocess.run(  # noqa: S603
@@ -746,8 +775,7 @@ def _output_mysql(username: str, token: str, host: str, env_name: str, **_) -> N
                 f"-h{host}",
                 f"-P{_STARROCKS_PORT}",
                 f"-u{username}",
-                "--ssl",
-                "--ssl-verify-server-cert=OFF",
+                *_mysql_tls_args(ver_str, tls=tls),
             ],
             env={**os.environ, "MYSQL_PWD": token},
             check=False,
@@ -828,6 +856,12 @@ def main() -> None:
 
     env_cfg = ENVS[args.env]
     issuer = env_cfg["issuer"]
+    if issuer is None and args.mode != "vault":
+        sys.exit(
+            f"StarRocks in {args.env} has no OIDC login (starrocks:oidc_enabled is "
+            f"off in its lakehouse stack), so --mode {args.mode} cannot work there. "
+            "Use --mode vault."
+        )
 
     # Resolve the effective host: localhost when port-forwarding, remote NLB otherwise
     if args.port_forward:
@@ -867,6 +901,8 @@ def main() -> None:
         host=host,
         cmd=cmd,
         env_name=args.env,
+        mode=args.mode,
+        tls=env_cfg["tls"],
         password=password,
     )
 
