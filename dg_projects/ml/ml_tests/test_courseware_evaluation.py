@@ -1178,6 +1178,19 @@ def _write_gold_inputs(
     )
 
 
+def test_a_claim_with_no_located_passage_shows_the_whole_source():
+    text = "x" * 5_000 + "the supporting sentence"
+    texts = {("run1", "s1"): ("Lecture", text)}
+    claim = {"courserun_readable_id": "run1"}
+    unlocated = {"source_ref": "s1", "char_start": None, "char_end": None}
+    window, regions = samples._claim_window(claim, [unlocated], texts)
+    assert window == f"=== Lecture ===\n{text}\n\n"
+    assert regions == []
+    located = {"source_ref": "s1", "char_start": 10, "char_end": 20}
+    window, _ = samples._claim_window(claim, [located], texts)
+    assert "the supporting sentence" not in window
+
+
 def test_matcher_follows_merged_concepts_to_their_survivor(tmp_path):
     inputs = _write_gold_inputs(
         tmp_path,

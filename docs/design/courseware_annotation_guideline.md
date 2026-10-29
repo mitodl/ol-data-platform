@@ -61,7 +61,7 @@ Three distinctions cause most of the disagreement:
 
 ## 1. Claim verification
 
-Each task shows one claim the extractor emitted and the window of source text it quoted from, with the quoted evidence highlighted. The claim text gives its kind, label, teaching status (for concepts), description and quoted evidence with its match tier.
+Each task shows one claim the extractor emitted and the window of source text it quoted from, with the quoted evidence highlighted. When none of a claim's quotes from a source could be found in it (match tier unverified), the task shows that whole source, since the support could be anywhere in it. The claim text gives its kind, label, teaching status (for concepts), description and quoted evidence with its match tier.
 
 Answer three questions.
 

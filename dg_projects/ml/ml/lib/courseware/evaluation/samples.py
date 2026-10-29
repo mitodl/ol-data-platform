@@ -688,7 +688,11 @@ def _claim_window(
     evidence: list[dict[str, Any]],
     texts: dict[tuple[str, str], tuple[str, str]],
 ) -> tuple[str, list[dict[str, Any]]]:
-    """Source excerpts around a claim's evidence, with the evidence spans in them."""
+    """Source excerpts around a claim's evidence, with the evidence spans in them.
+
+    A source none of whose passages could be located (null offsets) is shown whole,
+    since there is no span to centre a window on and the support may be anywhere.
+    """
     by_source: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in evidence:
         if row["source_ref"] is not None:
@@ -699,16 +703,15 @@ def _claim_window(
     for source_ref, rows in by_source.items():
         title, text = texts[claim["courserun_readable_id"], source_ref]
         located = [row for row in rows if row["char_start"] is not None]
-        start = max(
-            0,
-            min((row["char_start"] for row in located), default=0)
-            - EVIDENCE_CONTEXT_CHARS,
-        )
-        end = min(
-            len(text),
-            max((row["char_end"] for row in located), default=0)
-            + EVIDENCE_CONTEXT_CHARS,
-        )
+        start, end = 0, len(text)
+        if located:
+            start = max(
+                0, min(row["char_start"] for row in located) - EVIDENCE_CONTEXT_CHARS
+            )
+            end = min(
+                len(text),
+                max(row["char_end"] for row in located) + EVIDENCE_CONTEXT_CHARS,
+            )
         header = f"=== {title} ===\n"
         excerpt = (
             ("..." if start else "")
