@@ -82,7 +82,9 @@ with registry as (
     select
         concept_id
         , max(case when member_rank = 1 then preferred_label end) as preferred_label
-        , count(*) as label_count
+        -- a label whose current mentions all went to another sense does not count, so
+        -- a concept no current claim names has none and Learn leaves it out
+        , count(case when mention_count > 0 then 1 end) as label_count
         , sum(mention_count) as mention_count
         , sum(taught_mention_count) as taught_mention_count
     from members

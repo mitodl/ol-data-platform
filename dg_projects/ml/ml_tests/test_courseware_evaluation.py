@@ -7,7 +7,7 @@ import numpy as np
 import polars as pl
 import pytest
 from ml.lib.courseware.evaluation import cli, labelstudio, samples, score
-from ml.lib.courseware.evaluation.matching import LabelMatcher, concept_label_key
+from ml.lib.courseware.evaluation.matching import LabelMatcher
 from ml.lib.courseware.evaluation.metrics import (
     Stratum,
     allocate,
@@ -18,6 +18,7 @@ from ml.lib.courseware.evaluation.metrics import (
     mean_pairwise_cohen_kappa,
     stratified_ppi,
 )
+from ml.lib.courseware.tagging import label_key
 
 # Three strata where the autorater's quality differs, the case StratPPI targets.
 TRUE_PRECISION = (0.9, 0.7, 0.5)
@@ -249,7 +250,15 @@ def test_mean_pairwise_cohen_matches_two_rater_kappa():
     ],
 )
 def test_concept_label_key_matches_the_sql_macro(label, key):
-    assert concept_label_key(label) == key
+    assert label_key(label) == key
+
+
+def test_the_matcher_keys_a_label_as_the_sql_macro_does():
+    # a no-break space is not \s to the SQL engines (ASCII only), so the + after it
+    # is spelled out rather than taken as a separator
+    matcher = LabelMatcher()
+    assert matcher.canonical("a\u00a0+ b") == matcher.canonical("a plus b")
+    assert matcher.canonical("a\u00a0+ b") != matcher.canonical("a b")
 
 
 def test_labels_without_a_key_match_only_themselves():
@@ -270,7 +279,7 @@ def test_label_matcher_rule():
         )
     )
     matcher.add_mapping([("shap values", "shap")])
-    assert concept_label_key("K-Means  Clustering!") == "k means clustering"
+    assert label_key("K-Means  Clustering!") == "k means clustering"
     assert matcher.canonical("Recall") == matcher.canonical("true-positive rate")
     assert matcher.canonical("SHAP") == matcher.canonical("SHAP values")
     assert matcher.canonical("recall") != matcher.canonical("precision")
