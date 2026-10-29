@@ -93,6 +93,77 @@ unit_tests:
     - {courserun_fk: r1, concept_fk: y, course_support: 2, passes_support_rule: true}
     - {courserun_fk: r3, concept_fk: y, course_support: 2, passes_support_rule: true}
 
+- name: test_bridge_concept_relation_keys_reruns_with_a_missing_course_fk_together
+  description: >
+    r1 and r2 are reruns of course X, but only r2 carries course X's course_fk
+    (r1's dim_course_run row predates the course). courseware_course_key keys r2
+    by course X's readable id and r1 by its run id less the run segment, which is
+    the same, so a builds_on b in one unit of each is one course of support and
+    fails the support rule.
+  model: bridge_concept_relation
+  given:
+  - input: ref('int__courseware__concept_relation_evidence')
+    rows:
+    - {from_concept_id: a, to_concept_id: b, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2025", scope_count: 1}
+    - {from_concept_id: a, to_concept_id: b, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2026", scope_count: 1}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: r1, course_fk: null, platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2025",
+      is_current: true}
+    - {courserun_pk: r2, course_fk: cx, platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2026",
+      is_current: true}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: cx, course_readable_id: "course-v1:MITx+X", is_current: true}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows: []
+  - input: ref('int__courseware__adjudicated_concept_relations')
+    rows: []
+  expect:
+    rows:
+    - {from_concept_fk: a, to_concept_fk: b, scope_support: 2, course_scope_support: 1,
+      passes_support_rule: false, support_rule_failure: insufficient_support}
+
+- name: test_bridge_courserun_concept_keys_reruns_with_a_missing_course_fk_together
+  description: >
+    r1 and r2 are reruns of course X, but only r2 carries course X's course_fk.
+    courseware_course_key keys both as course-v1:MITx+X, so x, assumed in one
+    unit of each, has one course and fails the support rule in both runs. y is
+    assumed in r1 and in Emeritus run r3, which the catalog files under a
+    different course, so it has two courses and passes.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2025", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: x}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: x}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2025", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: assumed_knowledge, concept_id: y}
+    - {platform: emeritus, courserun_readable_id: "MIT-EM-Y-2026", scope_id: u1, scope_kind: unit,
+      scope_position: 1, claim_kind: assumed_knowledge, concept_id: y}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: r1, course_fk: null, platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2025",
+      is_current: true}
+    - {courserun_pk: r2, course_fk: cx, platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2026",
+      is_current: true}
+    - {courserun_pk: r3, course_fk: cy, platform: emeritus, courserun_readable_id: "MIT-EM-Y-2026",
+      is_current: true}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: cx, course_readable_id: "course-v1:MITx+X", is_current: true}
+    - {course_pk: cy, course_readable_id: "MIT-EM-Y", is_current: true}
+  expect:
+    rows:
+    - {courserun_fk: r1, concept_fk: x, course_support: 1, passes_support_rule: false}
+    - {courserun_fk: r2, concept_fk: x, course_support: 1, passes_support_rule: false}
+    - {courserun_fk: r1, concept_fk: y, course_support: 2, passes_support_rule: true}
+    - {courserun_fk: r3, concept_fk: y, course_support: 2, passes_support_rule: true}
+
 - name: test_concept_relation_evidence_keeps_unit_and_extractor_lineage
   description: >
     Units u1 and u2 of one run each teach a while using b, so builds_on a -> b is
