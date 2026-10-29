@@ -116,6 +116,24 @@ def test_untuned_ppi_point_is_imputed_mean_plus_rectifier():
     assert estimate.point == pytest.approx(unlabeled.mean() + (y - y_hat).mean())
 
 
+def test_ppi_with_no_positive_corrected_denominator_is_classical():
+    # lam = 1 gives 1 + (1 - 2) = 0 for the denominator; the labels give 1
+    stratum = Stratum(
+        "s",
+        4,
+        np.ones(2),
+        g=np.ones(2),
+        y_hat=np.full(2, 2.0),
+        g_hat=np.full(2, 2.0),
+        y_hat_unlabeled=np.ones(2),
+        g_hat_unlabeled=np.ones(2),
+    )
+    for tuning in (True, False):
+        estimate = stratified_ppi([stratum], power_tuning=tuning)
+        assert estimate.point == 1.0
+        assert estimate.lambdas == {"s": 0.0}
+
+
 def test_ppi_rejects_a_stratum_with_one_label():
     with pytest.raises(ValueError, match="fewer than 2"):
         stratified_ppi([Stratum("thin", 50, np.array([1.0]))])
