@@ -17,10 +17,10 @@ with discussion_events as (
         , discussion_events.openedx_user_id
         , discussion_events.commentable_id
         , discussion_events.post_id
-        , arbitrary(discussion_events.user_username) as user_username
-        , arbitrary(discussion_events.platform) as platform
-        , arbitrary(discussion_events.user_fk) as user_fk
-        , arbitrary(discussion_events.post_title) as post_title
+        , {{ arbitrary('discussion_events.user_username') }} as user_username
+        , {{ arbitrary('discussion_events.platform') }} as platform
+        , {{ arbitrary('discussion_events.user_fk') }} as user_fk
+        , {{ arbitrary('discussion_events.post_title') }} as post_title
         , count_if(discussion_events.event_type = 'edx.forum.thread.created') as post_created
         , count_if(discussion_events.event_type = 'edx.forum.thread.viewed') as post_viewed
         , count_if(discussion_events.event_type = 'edx.forum.thread.voted') as post_voted

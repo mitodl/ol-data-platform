@@ -132,15 +132,15 @@ with problem_events as (
             case
                 when
                     prev_event_timestamp is not null
-                    and date_diff('second', prev_event_timestamp, event_timestamp) < 600
-                    then date_diff('second', prev_event_timestamp, event_timestamp)
+                    and {{ date_diff("'second'", 'prev_event_timestamp', 'event_timestamp') }} < 600
+                    then {{ date_diff("'second'", 'prev_event_timestamp', 'event_timestamp') }}
             end
         ) as time_spent_on_problem
         , min(
             case
                 when
                     prev_event_timestamp is not null
-                    then date_diff('second', prev_event_timestamp, event_timestamp)
+                    then {{ date_diff("'second'", 'prev_event_timestamp', 'event_timestamp') }}
             end
         ) as time_spent_on_problem_nolimit
         , max(courserungrade_grade) as courserungrade_grade
@@ -163,7 +163,7 @@ with problem_events as (
         platform
         , courserun_readable_id
         , problem_block_fk
-        , approx_percentile(time_spent_on_problem, 0.1) as time_spent_percentile_10
+        , {{ approx_percentile('time_spent_on_problem', '0.1') }} as time_spent_percentile_10
     from final
     group by
         platform
@@ -197,7 +197,7 @@ with problem_events as (
         , openedx_user_id
         , avg(cast(max_learner_grade as decimal(12,2)))
             as user_avg_hw_grade
-        , approx_percentile(time_spent_on_problem, 0.5)
+        , {{ approx_percentile('time_spent_on_problem', '0.5') }}
             as user_hw_median_solving_time
         , sum(cast(attempts_on_problem as integer))
             as user_hw_attempts_on_problem
@@ -216,7 +216,7 @@ with problem_events as (
         , openedx_user_id
         , avg(cast(max_learner_grade as decimal(12,2)))
             as user_avg_exam_grade
-        , approx_percentile(time_spent_on_problem, 0.5)
+        , {{ approx_percentile('time_spent_on_problem', '0.5') }}
             as user_exam_median_solving_time
         , sum(case when time_spent_on_problem < time_spent_percentile_10
             then 1 else 0 end) as user_exam_time_flags

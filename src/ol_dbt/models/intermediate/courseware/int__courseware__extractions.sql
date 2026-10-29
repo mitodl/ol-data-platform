@@ -274,7 +274,7 @@ with stored_extractions as (
             and readings.model_id = extractions.model_id
             and readings.effort = extractions.effort
             and readings.scope_part_count = extractions.scope_part_count
-            and split_part(readings.scope_part_checksums, ',', extractions.scope_part)
+            and {{ split_part_or_null('readings.scope_part_checksums', "','", 'extractions.scope_part') }}
             = extractions.input_text_checksum
             and coalesce(readings.reading_header_version, '')
             = coalesce(extractions.reading_header_version, '')

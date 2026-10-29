@@ -1521,3 +1521,154 @@
         {%- endfor %}
     ) as varchar)
 {%- endmacro %}
+
+
+{#
+    arbitrary: some non-null value of `expr` in the group, or NULL when every value is
+    NULL. StarRocks has no arbitrary(). Its any_value() skips NULLs as Trino's arbitrary()
+    does (checked on 4.1.6), and DuckDB's arbitrary() is first(), which can return NULL.
+#}
+{% macro arbitrary(expr) -%}
+    {{ adapter.dispatch('arbitrary', 'open_learning')(expr) }}
+{%- endmacro %}
+
+{% macro default__arbitrary(expr) -%}
+    arbitrary({{ expr }})
+{%- endmacro %}
+
+{% macro duckdb__arbitrary(expr) -%}
+    any_value({{ expr }})
+{%- endmacro %}
+
+{% macro starrocks__arbitrary(expr) -%}
+    any_value({{ expr }})
+{%- endmacro %}
+
+
+{#
+    approx_percentile: the approximate `percentage` percentile of `expr`. StarRocks has
+    no approx_percentile(). Its percentile_approx() interpolates and returns a double,
+    where Trino returns a value of `expr`'s type, so the two engines can disagree on the
+    value and on the column type.
+#}
+{% macro approx_percentile(expr, percentage) -%}
+    {{ adapter.dispatch('approx_percentile', 'open_learning')(expr, percentage) }}
+{%- endmacro %}
+
+{% macro default__approx_percentile(expr, percentage) -%}
+    approx_percentile({{ expr }}, {{ percentage }})
+{%- endmacro %}
+
+{% macro duckdb__approx_percentile(expr, percentage) -%}
+    approx_quantile({{ expr }}, {{ percentage }})
+{%- endmacro %}
+
+{% macro starrocks__approx_percentile(expr, percentage) -%}
+    percentile_approx({{ expr }}, {{ percentage }})
+{%- endmacro %}
+
+
+{#
+    split_part_or_null: field `index` (1-based) of `string` split on `delimiter`, or NULL
+    when `string` or `index` is NULL or `string` has fewer fields than `index`, as Trino's
+    split_part() does.
+    StarRocks' split_part() returns '' for both (checked on 4.1.6) and DuckDB's returns ''
+    past the last field, so both count the fields first.
+#}
+{% macro split_part_or_null(string, delimiter, index) -%}
+    {{ adapter.dispatch('split_part_or_null', 'open_learning')(string, delimiter, index) }}
+{%- endmacro %}
+
+{% macro default__split_part_or_null(string, delimiter, index) -%}
+    split_part({{ string }}, {{ delimiter }}, {{ index }})
+{%- endmacro %}
+
+{% macro duckdb__split_part_or_null(string, delimiter, index) -%}
+    {{ starrocks__split_part_or_null(string, delimiter, index) }}
+{%- endmacro %}
+
+{% macro starrocks__split_part_or_null(string, delimiter, index) -%}
+    case
+        when
+            ({{ string }}) is null
+            or ({{ index }}) is null
+            or ({{ index }}) > (length({{ string }}) - length(replace({{ string }}, {{ delimiter }}, '')))
+            / length({{ delimiter }}) + 1
+            then null
+        else split_part({{ string }}, {{ delimiter }}, {{ index }})
+    end
+{%- endmacro %}
+
+
+{#
+    array_sort: `array_expr` in ascending order with NULL elements last, as Trino's
+    array_sort() orders them. StarRocks' array_sort() puts NULLs first (checked on 4.1.6).
+#}
+{% macro array_sort(array_expr) -%}
+    {{ adapter.dispatch('array_sort', 'open_learning')(array_expr) }}
+{%- endmacro %}
+
+{% macro default__array_sort(array_expr) -%}
+    array_sort({{ array_expr }})
+{%- endmacro %}
+
+{% macro starrocks__array_sort(array_expr) -%}
+    array_concat(
+        array_sort(array_filter(sort_elem -> sort_elem is not null, {{ array_expr }}))
+        , array_filter(sort_elem -> sort_elem is null, {{ array_expr }})
+    )
+{%- endmacro %}
+
+
+{#
+    array_agg_filter: array_agg([distinct] expr [order by order_by]) filter (where condition).
+    NULL when no row meets `condition`, and NULL elements are kept, as in Trino.
+
+    StarRocks rewrites an aggregate FILTER into array_agg_if(), which on 4.1.6 puts a NULL in
+    the array for every row that fails the condition, and rejects it outright with an
+    ORDER BY. So StarRocks aggregates (condition, expr) pairs in order and drops the pairs
+    whose condition is not true.
+
+    `order_by` is passed through, so its NULL ordering is the engine's: an ascending key
+    sorts NULLs last on Trino and first on StarRocks unless it says `nulls last`.
+
+    With `distinct`, Trino only accepts `expr` itself as the ORDER BY, so `order_by` must be
+    `expr` (ascending). StarRocks then sorts after array_distinct() with array_sort(), NULLs
+    last as in Trino, rather than relying on array_distinct() to keep the aggregated order:
+    its planner rewrites array_distinct(array_agg(x)) into array_agg_distinct(x), which
+    does not keep it.
+#}
+{% macro array_agg_filter(expr, condition, order_by=none, distinct=false) -%}
+    {{ adapter.dispatch('array_agg_filter', 'open_learning')(expr, condition, order_by, distinct) }}
+{%- endmacro %}
+
+{% macro default__array_agg_filter(expr, condition, order_by=none, distinct=false) -%}
+    array_agg({% if distinct %}distinct {% endif %}{{ expr }}{% if order_by %} order by {{ order_by }}{% endif %}) filter (where {{ condition }})
+{%- endmacro %}
+
+{% macro starrocks__array_agg_filter(expr, condition, order_by=none, distinct=false) -%}
+    {%- if distinct and order_by and (order_by | trim | lower) not in [expr | trim | lower, (expr | trim | lower) ~ ' asc'] -%}
+        {{ exceptions.raise_compiler_error(
+            "array_agg_filter: with distinct=true, order_by must be the aggregated expression in "
+            ~ "ascending order ('" ~ expr ~ "'), got '" ~ order_by ~ "'"
+        ) }}
+    {%- endif -%}
+    {%- set kept -%}
+        array_map(
+            agg_elem -> agg_elem.v
+            , array_filter(
+                agg_elem -> agg_elem.k
+                , array_agg(
+                    named_struct('k', coalesce({{ condition }}, false), 'v', {{ expr }})
+                    {%- if order_by %} order by {{ order_by }}{% endif %}
+                )
+            )
+        )
+    {%- endset -%}
+    case
+        when count(case when {{ condition }} then 1 end) > 0
+            then {% if distinct and order_by %}{{ starrocks__array_sort('array_distinct(' ~ kept ~ ')') }}
+            {%- elif distinct %}array_distinct({{ kept }})
+            {%- else %}{{ kept }}{% endif %}
+    end
+{%- endmacro %}

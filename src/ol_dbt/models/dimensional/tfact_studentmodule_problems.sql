@@ -94,21 +94,21 @@ with mitxonline_studentmodule_problems as (
 -- Per-platform deduped lookups prevent fan-out when the same openedx_user_id
 -- appears in multiple dim_user rows (merged identities).
 , mitxonline_users as (
-    select min(user_pk) as user_pk, mitxonline_openedx_user_id, arbitrary(user_mitxonline_username) as user_username
+    select min(user_pk) as user_pk, mitxonline_openedx_user_id, {{ arbitrary('user_mitxonline_username') }} as user_username
     from users
     where mitxonline_openedx_user_id is not null
     group by mitxonline_openedx_user_id
 )
 
 , mitxpro_users as (
-    select min(user_pk) as user_pk, mitxpro_openedx_user_id, arbitrary(user_mitxpro_username) as user_username
+    select min(user_pk) as user_pk, mitxpro_openedx_user_id, {{ arbitrary('user_mitxpro_username') }} as user_username
     from users
     where mitxpro_openedx_user_id is not null
     group by mitxpro_openedx_user_id
 )
 
 , residential_users as (
-    select min(user_pk) as user_pk, residential_openedx_user_id, arbitrary(user_residential_username) as user_username
+    select min(user_pk) as user_pk, residential_openedx_user_id, {{ arbitrary('user_residential_username') }} as user_username
     from users
     where residential_openedx_user_id is not null
     group by residential_openedx_user_id

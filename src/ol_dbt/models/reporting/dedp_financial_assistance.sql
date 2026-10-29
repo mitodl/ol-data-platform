@@ -31,7 +31,7 @@ with fp as (
         , course_enrollments.mitxonline_program_id
         , runs.courserun_start_on
         , runs.courserun_end_on
-        , try_cast(fp.flexiblepriceapplication_income_usd as decimal(38, 2)) < 10000 as income_less_than_10000
+        , {{ try_cast('fp.flexiblepriceapplication_income_usd', 'decimal(38, 2)') }} < 10000 as income_less_than_10000
         from fp
     inner join users
         on fp.user_id = users.user_id
