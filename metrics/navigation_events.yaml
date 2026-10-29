@@ -1,0 +1,26 @@
+---
+metric:
+  name: navigation_events
+  displayName: Course navigation events
+  description: >-
+    Course navigation events by a learner in a course run on a day: every row of
+    tfact_course_navigation_events (edx.ui.lms.jump_nav.selected,
+    edx.ui.lms.link_clicked, edx.ui.lms.outline.selected and the
+    edx.ui.lms.sequence next_selected, previous_selected and tab_selected
+    events), per learner (user_fk) per day (activity_date_key, the event's date
+    in the source's timezone). A count of events, not of distinct pages, and
+    events with no block count. MITx Online, xPRO, Residential and edX.org.
+
+    No view publishes it yet. afact_course_page_engagement counts the same
+    events only where the event names a block.
+  metricType: COUNT
+  unitOfMeasurement: EVENTS
+  granularity: DAY
+  owners: [{type: team, name: data-platform}]
+  metricExpression:
+    language: SQL
+    code: count(*), grouped by platform, user_fk, courserun_readable_id, date_fk
+status: Draft
+implemented_by:
+- dbt_model: afact_learner_courserun_daily_activity
+  columns: [navigation_events]

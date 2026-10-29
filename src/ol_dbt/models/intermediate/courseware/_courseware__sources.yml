@@ -559,6 +559,8 @@ sources:
       description: timestamp, when the description was written
   - name: courseware_concept_tagging_run
     config:
+      enabled: "{{ var('courseware_tagging_in_warehouse') or target.type == 'duckdb'\
+        \ }}"
       meta:
         dagster:
           asset_key: [intermediate, courseware_concept_tagging_run]
@@ -621,6 +623,8 @@ sources:
       description: timestamp, when the run started
   - name: courseware_concept_tagging_source
     config:
+      enabled: "{{ var('courseware_tagging_in_warehouse') or target.type == 'duckdb'\
+        \ }}"
       meta:
         dagster:
           asset_key: [intermediate, courseware_concept_tagging_source]
@@ -646,6 +650,8 @@ sources:
         run when it tagged the source
   - name: courseware_concept_mention
     config:
+      enabled: "{{ var('courseware_tagging_in_warehouse') or target.type == 'duckdb'\
+        \ }}"
       meta:
         dagster:
           asset_key: [intermediate, courseware_concept_mention]
@@ -679,6 +685,8 @@ sources:
       description: int, end offset of the mention in source_text
   - name: courseware_concept_tagging_alias
     config:
+      enabled: "{{ var('courseware_tagging_in_warehouse') or target.type == 'duckdb'\
+        \ }}"
       meta:
         dagster:
           asset_key: [intermediate, courseware_concept_tagging_alias]
@@ -716,6 +724,9 @@ sources:
       an answer key or worked solutions (ml.lib.courseware.answer_check), one row
       per source per check version and source text. A copy of a text already checked
       reuses its verdict.
+    config:
+      enabled: "{{ var('courseware_answer_check_in_warehouse') or target.type == 'duckdb'\
+        \ }}"
     columns:
     - name: platform
       description: str, mitxonline, mitxpro, residential or ocw

@@ -1,3 +1,5 @@
+{{ config(enabled=courseware_local_tables_enabled('courseware_tagging_in_warehouse')) }}
+
 {#
     Which known concepts each courseware block or course document mentions, one row
     per (source, concept), from dictionary tagging of int__courseware__extraction_sources
