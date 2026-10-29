@@ -1,5 +1,3 @@
-{{ config(materialized='view') }}
-
 with mitx_certificates as (
     --revoked certificates are already filtered
     select
