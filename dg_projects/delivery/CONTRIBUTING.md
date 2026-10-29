@@ -324,7 +324,7 @@ def my_item_metadata(context: AssetExecutionContext, ...):
 
 ---
 
-## Pattern 3: Adding a Trino-Pull Asset (new — OCW/OpenEdX migration)
+## Pattern 3: Warehouse-pull sources (no asset here)
 
 For large, batch-oriented sources that are materialized as Iceberg tables via
 dbt models, MIT Learn reads the StarRocks surface directly over the MySQL
