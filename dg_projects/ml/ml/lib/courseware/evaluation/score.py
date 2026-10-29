@@ -946,11 +946,17 @@ def score_prerequisites(
     uncertain outcomes and, for a directed answer, the depths it holds at. Each
     predicate gets its own consensus, ties and kappa. From them:
 
-    - edge_precision: inferred builds_on/practiced_with edges whose dependency
-      consensus is the edge's direction. edge_precision_lenient also counts a
-      context_dependent consensus as confirming the edge.
-    - edge_recall: pairs with a directed dependency consensus that have an edge
-      that way.
+    - edge_precision: inferred builds_on edges whose dependency consensus is the
+      edge's direction. edge_precision_lenient also counts a context_dependent
+      consensus as confirming the edge. A practiced_with edge asserts no
+      dependency (the guideline's answer for a tool and what is practiced with it
+      is none), so it is left out. Pairs with a builds_on edge cross the strata
+      (a pair's stratum follows its best-supported edge), so this is a
+      subpopulation estimate.
+    - sequence_edge_precision: the same over builds_on and practiced_with edges,
+      each stratum reported on its own, which is how practiced_with is read.
+    - edge_recall: pairs with a directed dependency consensus that have a
+      builds_on or practiced_with edge that way.
     - dependency_given_hierarchy: of the pairs annotators call a kind or part of
       one another, the share that also have a directed dependency. A hierarchy
       relation does not rule a dependency out, which this measures.
@@ -981,24 +987,31 @@ def score_prerequisites(
     hierarchy, hierarchy_ties = _consensus(items, answer("hierarchy"))
     dependency, dependency_ties = _consensus(items, answer("dependency"))
     edges = dict(population.select("item_id", "edge_direction").iter_rows())
+    builds_on = dict(population.select("item_id", "builds_on_direction").iter_rows())
 
-    def found(item: str, value: str, *, lenient: bool = False) -> bool:
+    def found(
+        item: str,
+        value: str,
+        directions: Mapping[str, str] = edges,
+        *,
+        lenient: bool = False,
+    ) -> bool:
         if lenient and value == "context_dependent":
-            return edges[item] != "none"
-        return value in DEPENDENCY_DIRECTIONS and edges[item] in (value, "both")
+            return directions[item] != "none"
+        return value in DEPENDENCY_DIRECTIONS and directions[item] in (value, "both")
 
-    edge_population = population.filter(pl.col("edge_direction") != "none")
-    precision = _strata(
-        edge_population,
-        {item: (float(found(item, value)), 1.0) for item, value in dependency.items()},
-    )
-    lenient = _strata(
-        edge_population,
-        {
-            item: (float(found(item, value, lenient=True)), 1.0)
-            for item, value in dependency.items()
-        },
-    )
+    def edge_precision(column: str, directions: Mapping[str, str], *, lenient: bool):
+        return _strata(
+            population.filter(pl.col(column) != "none"),
+            {
+                item: (float(found(item, value, directions, lenient=lenient)), 1.0)
+                for item, value in dependency.items()
+            },
+        )
+
+    precision = edge_precision("builds_on_direction", builds_on, lenient=False)
+    lenient = edge_precision("builds_on_direction", builds_on, lenient=True)
+    sequence_precision = edge_precision("edge_direction", edges, lenient=False)
     recall = _strata(
         population,
         {
@@ -1048,6 +1061,7 @@ def score_prerequisites(
     return {
         "edge_precision": _estimate(precision, alpha=alpha),
         "edge_precision_lenient": _estimate(lenient, alpha=alpha),
+        "sequence_edge_precision": _estimate(sequence_precision, alpha=alpha),
         "edge_recall": _estimate(recall, alpha=alpha),
         "dependency_given_hierarchy": _estimate(given_hierarchy, alpha=alpha),
         "pipeline_hierarchy_precision": _estimate(pipeline_hierarchy, alpha=alpha),

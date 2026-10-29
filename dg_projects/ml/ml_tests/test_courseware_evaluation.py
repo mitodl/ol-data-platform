@@ -1277,14 +1277,17 @@ def _prerequisite_task(item_id, answers):
 
 
 def test_prerequisites_score_hierarchy_and_dependency_separately(tmp_path):
-    items = [f"a{n}||b{n}" for n in range(6)]
+    items = [f"a{n}||b{n}" for n in range(8)]
     population = pl.DataFrame(
         {
             "item_id": items,
-            "concept_a": [f"a{n}" for n in range(6)],
-            "stratum": ["builds_on|support1"] * 3 + ["non_edge|hierarchy"] * 3,
-            "edge_direction": ["b_before_a"] * 3 + ["none"] * 3,
-            "pipeline_hierarchy": [True, False, False, True, True, False],
+            "concept_a": [f"a{n}" for n in range(8)],
+            "stratum": ["builds_on|support1"] * 3
+            + ["non_edge|hierarchy"] * 3
+            + ["practiced_with|support1"] * 2,
+            "edge_direction": ["b_before_a"] * 3 + ["none"] * 3 + ["a_before_b"] * 2,
+            "builds_on_direction": ["b_before_a"] * 3 + ["none"] * 5,
+            "pipeline_hierarchy": [True, False, False, True, True, False] + [False] * 2,
         }
     )
     # item 1 is shown flipped: the annotator's B is the population's a1
@@ -1328,11 +1331,22 @@ def test_prerequisites_score_hierarchy_and_dependency_separately(tmp_path):
             [(1, "none", "a_before_b", intro), (2, "none", "a_before_b", intro)],
         ),
     ]
+    # a tool and what is practiced with it: no dependency, as the guideline says
+    tasks += [
+        _prerequisite_task(item, [(1, "none", "none", ()), (2, "none", "none", ())])
+        for item in ("a6||b6", "a7||b7")
+    ]
     report = score.score_prerequisites(
         population, sample, _export(tmp_path, tasks), alpha=0.05
     )
+    # the headline is builds_on edges only; practiced_with is its own stratum of
+    # the mixed sequence-edge figure
+    assert set(report["edge_precision"]["strata"]) == {"builds_on|support1"}
     edges = report["edge_precision"]["strata"]["builds_on|support1"]
     assert edges["labeled_ratio"] == pytest.approx(2 / 3)
+    sequence = report["sequence_edge_precision"]["strata"]
+    assert sequence["practiced_with|support1"]["labeled_ratio"] == 0.0
+    assert sequence["builds_on|support1"]["labeled_ratio"] == pytest.approx(2 / 3)
     lenient = report["edge_precision_lenient"]["strata"]["builds_on|support1"]
     assert lenient["labeled_ratio"] == 1.0
     # a0 is both a kind of b0 and dependent on it; a3 is a part, not dependent
@@ -1346,8 +1360,8 @@ def test_prerequisites_score_hierarchy_and_dependency_separately(tmp_path):
         "advanced": 1,
         "unset": 1,
     }
-    assert report["kappa"]["hierarchy"]["items"] == 6
-    assert report["kappa"]["dependency"]["items"] == 6
+    assert report["kappa"]["hierarchy"]["items"] == 8
+    assert report["kappa"]["dependency"]["items"] == 8
     assert report["labelled_edges_reversed"] == 0
 
 
@@ -1687,6 +1701,8 @@ def test_prerequisite_population_flags_pipeline_hierarchy():
     flags = dict(population.select("item_id", "pipeline_hierarchy").iter_rows())
     # a kind of b with no sequence edge, and a builds on c with no hierarchy
     assert flags == {"a||b": True, "a||c": False, "b||c": False}
+    builds_on = dict(population.select("item_id", "builds_on_direction").iter_rows())
+    assert builds_on == {"a||b": "none", "a||c": "b_before_a", "b||c": "none"}
 
 
 def test_claim_fallback_with_disciplines_keeps_the_autorater_strata_apart():

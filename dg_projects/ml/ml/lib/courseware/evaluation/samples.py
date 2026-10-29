@@ -1216,8 +1216,10 @@ def prerequisites_population(inputs: GoldInputs) -> pl.DataFrame:
     support band, and a non-edge pair's stratum says whether another relation links
     it (hierarchy, association) or none does. Pairs are unordered (concept_a <
     concept_b); edge_direction says which comes first, as the edges have it.
-    pipeline_hierarchy says whether a hierarchy relation links the pair, edge or
-    not, so scoring can test whether hierarchy and dependency coexist.
+    builds_on_direction is the same from builds_on edges alone, since a
+    practiced_with edge asserts no dependency. pipeline_hierarchy says whether a
+    hierarchy relation links the pair, edge or not, so scoring can test whether
+    hierarchy and dependency coexist.
 
     :param inputs: loaded gold-set inputs
     :returns: one row per unordered concept pair
@@ -1255,6 +1257,15 @@ def prerequisites_population(inputs: GoldInputs) -> pl.DataFrame:
         for pair in combinations(sorted(concepts), 2)
     }
 
+    def builds_on_direction(pair: tuple[str, str], edges: list[dict[str, Any]]) -> str:
+        # from builds on to: to comes first
+        firsts = {
+            "b_before_a" if edge["from_concept_fk"] == pair[0] else "a_before_b"
+            for edge in edges
+            if edge["relation"] == "builds_on"
+        }
+        return "both" if len(firsts) > 1 else next(iter(firsts), "none")
+
     rows = []
     for pair in sorted(co_occurring | set(sequence)):
         edges = sequence.get(pair, [])
@@ -1289,6 +1300,7 @@ def prerequisites_population(inputs: GoldInputs) -> pl.DataFrame:
                 "concept_b": pair[1],
                 "stratum": stratum,
                 "edge_direction": direction,
+                "builds_on_direction": builds_on_direction(pair, edges),
                 "pipeline_hierarchy": pair in hierarchical,
                 "autorater": 0.0 if direction == "none" else 1.0,
             }
