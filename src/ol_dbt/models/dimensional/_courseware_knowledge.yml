@@ -410,9 +410,9 @@ models:
   - name: cross_signal_support
     description: int, evidence for the pair from the other source. For an adjudicated
       relation, unit observations of the pair in course evidence (co-taught, co-assessed
-      or sequenced, either direction, each course's reruns counted once); for a course
-      relation, verdicts saying the pair is connected (close, related, broader or
-      narrower)
+      or sequenced, either direction and relation, summed within a run, then each
+      course's largest run, so its reruns count once); for a course relation, verdicts
+      saying the pair is connected (close, related, broader or narrower)
   - name: support_score
     description: >-
       float in [0, 1], an uncalibrated ranking heuristic, not a probability that the
@@ -1137,6 +1137,58 @@ unit_tests:
       passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: y, to_concept_fk: z, relation: broader, support_score: 0.875,
       passes_support_rule: true, support_rule_failure: null}
+- name: test_bridge_concept_relation_counts_a_courses_pair_evidence_once_across_reruns
+  description: >
+    a < b and c < d are adjudicated broader with one verdict each. run1 and run3
+    are reruns of course1. run1 shows a builds_on b in one unit and run3 b builds_on
+    a in one; run1 shows c builds_on d in one unit and run3 co-teaches c and d in
+    one. Each course counts its largest run, so each broader edge has one unit of
+    cross-signal support (support_score 0.6), not one per direction or relation.
+  model: bridge_concept_relation
+  given:
+  - input: ref('int__courseware__concept_relation_evidence')
+    rows:
+    - {from_concept_id: a, to_concept_id: b, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: c, to_concept_id: d, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: a, to_concept_id: b, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: run1, scope_count: 1, observed_at: '2026-10-01'}
+    - {from_concept_id: b, to_concept_id: a, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: run3, scope_count: 1, observed_at: '2026-10-01'}
+    - {from_concept_id: c, to_concept_id: d, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: run1, scope_count: 1, observed_at: '2026-10-01'}
+    - {from_concept_id: c, to_concept_id: d, relation: complements, evidence_source: co_taught,
+      platform: mitxonline, courserun_readable_id: run3, scope_count: 1, observed_at: '2026-10-01'}
+  - input: ref('dim_course_run')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run1, course_fk: course1, is_current: true}
+    - {platform: mitxonline, courserun_readable_id: run3, course_fk: course1, is_current: true}
+  - input: ref('int__courseware__adjudicated_concept_relations')
+    rows:
+    - {from_concept_id: a, to_concept_id: b, relation: broader, supporting_verdict_count: 1,
+      contrary_verdict_count: 0, pair_verdict_count: 1}
+    - {from_concept_id: c, to_concept_id: d, relation: broader, supporting_verdict_count: 1,
+      contrary_verdict_count: 0, pair_verdict_count: 1}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: course1, course_readable_id: "course-v1:MITx+C1", is_current: true}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows: []
+  expect:
+    rows:
+    - {from_concept_fk: a, to_concept_fk: b, relation: broader, cross_signal_support: 1,
+      support_score: 0.6}
+    - {from_concept_fk: a, to_concept_fk: b, relation: builds_on, cross_signal_support: 1,
+      support_score: 0.22}
+    - {from_concept_fk: b, to_concept_fk: a, relation: builds_on, cross_signal_support: 1,
+      support_score: 0.22}
+    - {from_concept_fk: c, to_concept_fk: d, relation: broader, cross_signal_support: 1,
+      support_score: 0.6}
+    - {from_concept_fk: c, to_concept_fk: d, relation: builds_on, cross_signal_support: 1,
+      support_score: 0.44}
+    - {from_concept_fk: c, to_concept_fk: d, relation: complements, cross_signal_support: 1,
+      support_score: 0.44}
 - name: test_bridge_concept_relation_counts_a_courses_largest_run_across_sources
   description: >
     c1 and c2 are complements in two reruns of course1: run1 co-teaches them in

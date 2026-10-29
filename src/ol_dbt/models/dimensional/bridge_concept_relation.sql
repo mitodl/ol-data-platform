@@ -41,7 +41,8 @@
       cross_signal_support      evidence for the pair from the other source: for
                                 an adjudicated relation, course evidence (units
                                 co-teaching, co-assessing or sequencing the pair,
-                                either direction, reruns counted once); for a
+                                either direction, summed within a run, then each
+                                course's largest run); for a
                                 course relation,
                                 verdicts saying the pair is connected
     first_observed_at and last_observed_at show how the edge has evolved; an edge
@@ -237,13 +238,39 @@ with evidence as (
     where relation = 'builds_on'
 )
 
+-- course units for the unordered pair, over every relation and direction: summed
+-- within a run first, so a course whose reruns split the pair's evidence across
+-- directions or relations still counts its one largest run
 , pair_course_support as (
     select
-        least(from_concept_id, to_concept_id) as low_concept_id
-        , greatest(from_concept_id, to_concept_id) as high_concept_id
-        , sum(course_scope_support) as course_unit_count
-    from course_support
-    group by least(from_concept_id, to_concept_id), greatest(from_concept_id, to_concept_id)
+        low_concept_id
+        , high_concept_id
+        , sum(scope_count) as course_unit_count
+    from (
+        select
+            low_concept_id
+            , high_concept_id
+            , course_key
+            , max(scope_count) as scope_count
+        from (
+            select
+                least(from_concept_id, to_concept_id) as low_concept_id
+                , greatest(from_concept_id, to_concept_id) as high_concept_id
+                , course_key
+                , platform
+                , courserun_readable_id
+                , sum(scope_count) as scope_count
+            from course_relation_runs
+            group by
+                least(from_concept_id, to_concept_id)
+                , greatest(from_concept_id, to_concept_id)
+                , course_key
+                , platform
+                , courserun_readable_id
+        ) as per_run
+        group by low_concept_id, high_concept_id, course_key
+    ) as per_course
+    group by low_concept_id, high_concept_id
 )
 
 , pair_verdict_support as (
