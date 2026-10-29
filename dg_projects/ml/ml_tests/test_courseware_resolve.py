@@ -1,5 +1,7 @@
 import itertools
 import uuid
+from contextlib import contextmanager
+from types import SimpleNamespace
 
 import numpy as np
 import polars as pl
@@ -314,3 +316,83 @@ def test_a_label_that_drops_out_keeps_its_id_until_a_rebuild():
         row["concept_id"]: row for row in rebuilt.registry.iter_rows(named=True)
     }
     assert registry[pandas]["concept_status"] == "deprecated"
+
+
+class _VerdictClient:
+    """Stands in for an Anthropic client, returning one fixed record_verdicts call."""
+
+    def __init__(self, tool_input):
+        self.messages = self
+        self.tool_input = tool_input
+
+    @contextmanager
+    def stream(self, **_kwargs):
+        response = SimpleNamespace(
+            stop_reason="tool_use",
+            content=[
+                SimpleNamespace(
+                    type="tool_use", name="record_verdicts", input=self.tool_input
+                )
+            ],
+        )
+        yield SimpleNamespace(get_final_message=lambda: response)
+
+
+@pytest.mark.parametrize(
+    "tool_input",
+    [
+        {"queries": []},
+        {"queries": [{"query_id": 0, "verdicts": []}]},
+        {
+            "queries": [
+                {"query_id": 0, "verdicts": [{"candidate_id": 0, "verdict": "exact"}]}
+            ]
+            * 2
+        },
+        {
+            "queries": [
+                {"query_id": 1, "verdicts": [{"candidate_id": 0, "verdict": "exact"}]}
+            ]
+        },
+        {
+            "queries": [
+                {
+                    "query_id": 0,
+                    "verdicts": [
+                        {"candidate_id": 0, "verdict": "exact"},
+                        {"candidate_id": 0, "verdict": "close"},
+                    ],
+                }
+            ]
+        },
+    ],
+)
+def test_an_incomplete_adjudication_fails_the_batch(tool_input):
+    rows = {
+        key: {"preferred_label": key, "concept_kind": "concept", "description": ""}
+        for key in ("auc", "area under the curve")
+    }
+    with pytest.raises(ValueError, match="verdicts for"):
+        resolve._adjudicate_batch(
+            _VerdictClient(tool_input),
+            "fake-model",
+            [("auc", ["area under the curve"])],
+            rows,
+        )
+
+
+def test_a_complete_adjudication_is_returned():
+    rows = {
+        key: {"preferred_label": key, "concept_kind": "concept", "description": ""}
+        for key in ("auc", "area under the curve")
+    }
+    client = _VerdictClient(
+        {
+            "queries": [
+                {"query_id": 0, "verdicts": [{"candidate_id": 0, "verdict": "exact"}]}
+            ]
+        }
+    )
+    assert resolve._adjudicate_batch(
+        client, "fake-model", [("auc", ["area under the curve"])], rows
+    ) == [("auc", "area under the curve", "exact")]

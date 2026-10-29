@@ -381,15 +381,25 @@ def _adjudicate_batch(
     except ValidationError as error:
         msg = f"invalid verdicts: {error}"
         raise ValueError(msg) from error
+    # An omitted comparison would leave a label a singleton that incremental runs
+    # never retry, so anything but one verdict per pair fails the batch.
+    returned = sorted(query.query_id for query in verdicts.queries)
+    if returned != list(range(len(batch))):
+        msg = f"verdicts for queries {returned}, expected 0 to {len(batch) - 1}"
+        raise ValueError(msg)
     decided: list[tuple[str, str, str]] = []
     for query in verdicts.queries:
-        if not 0 <= query.query_id < len(batch):
-            continue
         query_key, candidates = batch[query.query_id]
+        judged = sorted(item.candidate_id for item in query.verdicts)
+        if judged != list(range(len(candidates))):
+            msg = (
+                f"Q{query.query_id} verdicts for candidates {judged}, "
+                f"expected 0 to {len(candidates) - 1}"
+            )
+            raise ValueError(msg)
         decided.extend(
             (query_key, candidates[item.candidate_id], item.verdict)
             for item in query.verdicts
-            if 0 <= item.candidate_id < len(candidates)
         )
     return decided
 
