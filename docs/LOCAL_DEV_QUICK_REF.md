@@ -88,6 +88,9 @@ ol-dbt local setup --layers all
 
 ## Cleanup Trino Dev Schemas
 
+These run through Galaxy and stop working once Galaxy access is revoked (M4 in
+[ol-infrastructure ADR 0012](https://github.com/mitodl/ol-infrastructure/blob/main/docs/adr/0012-trino-to-starrocks-cutover.md)).
+
 **Using dbt run-operation (Recommended)**:
 ```bash
 cd src/ol_dbt
@@ -127,7 +130,6 @@ ol-dbt local cleanup --target dev_production --execute
 | Setup | 2-3 hours | 15 minutes | 88% |
 | Build time | 5-15 min | 10-30 sec | 95% |
 | Storage | 100+ GB | 1-10 GB | 90% |
-| Monthly cost | $250-500 | $0 | 100% |
 
 ---
 **Remember**: Use `--target dev_local` for all local development!

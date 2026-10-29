@@ -4,6 +4,8 @@
 
 This guide describes the improved local development workflow that eliminates cloud costs and reduces iteration time by 80%+ compared to the traditional Trino-based approach.
 
+Trino on Starburst Galaxy still builds the production warehouse, and StarRocks will replace it as the only query engine before the Galaxy contract ends. [STARROCKS_MIGRATION.md](STARROCKS_MIGRATION.md) covers what that changes for dbt authors. To build models on the local-dev StarRocks cluster instead of DuckDB, see [LOCAL_LAKE.md](LOCAL_LAKE.md).
+
 **Key Benefits:**
 - ✅ Zero S3 storage duplication (reads Iceberg directly)
 - ✅ Zero Trino compute costs for local development
@@ -100,7 +102,7 @@ uv run dbt compile --select my_model --target dev_local
 
 ## Target Configuration
 
-The project supports three dbt targets:
+`profiles.yml` defines more targets than these (the StarRocks ones are covered in [LOCAL_LAKE.md](LOCAL_LAKE.md)). The ones this guide uses:
 
 ### `dev_local` (DuckDB - Recommended for Local)
 ```yaml
@@ -113,20 +115,21 @@ uv run dbt run --target dev_local
 - **Pros**: Fast, zero cloud costs, minimal storage
 - **Cons**: S3 read latency (acceptable for dev)
 
-### `dev` (Trino with Suffixed Schema)
+### `dev_qa` / `dev_production` (Trino with Suffixed Schema)
 ```yaml
-# Legacy approach, still available
-uv run dbt run --target dev
+# Legacy approach, available until Galaxy access is revoked (M4 in ADR 0012)
+uv run dbt run --target dev_qa --vars '{schema_suffix: your_username}'
 ```
-- **Storage**: S3 in `ol_warehouse_qa_{username}` schema
+- **Storage**: S3 in `ol_warehouse_qa_{suffix}_<layer>` (or `ol_warehouse_production_{suffix}_<layer>`) schemas
+- **Auth**: Galaxy OAuth in the browser
 - **Sources**: Trino queries against shared raw layer
 - **Transforms**: Written to S3
 - **Pros**: Full Trino compatibility
-- **Cons**: Slow, expensive, storage duplication
+- **Cons**: Slow, billed Galaxy compute, storage duplication
 
 ### `production` (Trino Production)
 ```yaml
-# CI/CD and production deployments only
+# Dagster's production builds only
 uv run dbt run --target production
 ```
 - **Storage**: S3 in production schemas
@@ -143,7 +146,7 @@ Developer 2: 115 GB in ol_warehouse_qa_bob
 Developer 3: 118 GB in ol_warehouse_qa_charlie
 ───────────────────────────────────────────────
 Total:       353 GB duplicated across 3 devs
-Cost:        ~$300/month S3 + $600/month Trino compute
+Cost:        S3 storage for every copy, plus Galaxy compute for every build
 ```
 
 ### New Workflow (DuckDB + Direct Iceberg)
@@ -153,26 +156,17 @@ Developer 2: ~/.ol-dbt/local.duckdb (3 GB - staging + marts)
 Developer 3: ~/.ol-dbt/local.duckdb (5 GB - several layers)
 ───────────────────────────────────────────────
 Total:       10 GB local storage, 0 GB S3 duplication
-Cost:        $0/month
-Savings:     ~$900/month (~100% reduction)
+Cost:        No S3 copies and no Galaxy compute
 ```
 
 ## SQL Compatibility
 
-Most models "just work" with DuckDB. Trino-specific functions use adapter dispatch:
-
-| Trino Function | DuckDB Equivalent | Status |
-|----------------|-------------------|--------|
-| `to_iso8601(timestamp)` | `strftime(...)` | ✅ Implemented |
-| `from_iso8601_timestamp()` | `strptime(...)` | ✅ Implemented |
-| `to_iso8601(date)` | `strftime(...)` | ✅ Implemented |
-| `approx_distinct()` | `approx_count_distinct()` | ⚠️ May need macro |
-| `regexp_extract()` | `regexp_extract()` | ✅ Compatible |
+Most models "just work" with DuckDB. Functions that differ between Trino, StarRocks and DuckDB go through adapter-dispatch macros in `src/ol_dbt/macros/` (e.g. `cast_timestamp_to_iso8601`, `from_iso8601_timestamp`). [DBT_DIALECT_COMPATIBILITY.md](DBT_DIALECT_COMPATIBILITY.md) describes the rule and the known gaps.
 
 If you encounter a compatibility issue:
-1. Check if a macro exists in `macros/` with adapter dispatch
-2. If not, add a new macro following the pattern in `cast_timestamp_to_iso8601.sql`
-3. Models automatically work on both DuckDB and Trino
+1. Check if a macro exists in `macros/` with adapter dispatch (most are in `cross_db_functions.sql`)
+2. If not, add a new macro following the pattern in `cast_timestamp_to_iso8601.sql`, with Trino, DuckDB and StarRocks implementations
+3. Models using the macro are then portable across the three dialects (StarRocks has other, non-dialect gaps; see [STARROCKS_MIGRATION.md](STARROCKS_MIGRATION.md))
 
 ## Troubleshooting
 
@@ -204,11 +198,10 @@ ol-dbt local register --database ol_warehouse_production_staging
 **Expected**: First query ~10-30s, subsequent queries faster due to DuckDB caching
 
 ### "Out of memory" errors
-**Cause**: DuckDB memory limit (default 8GB)
-**Fix**: Increase in `profiles.yml`:
-```yaml
-settings:
-  memory_limit: '16GB'  # Adjust based on your machine
+**Cause**: DuckDB memory limit (`dev_local` defaults to 28GB)
+**Fix**: Set `DBT_DUCKDB_MEMORY_LIMIT` to suit your machine:
+```bash
+export DBT_DUCKDB_MEMORY_LIMIT=16GB
 ```
 
 ## Re-registering Sources
@@ -233,7 +226,6 @@ This is idempotent - existing registrations are updated, new tables are added.
 | First model build | 5-15 minutes | 10-30 seconds | 10-45x faster |
 | Subsequent builds | 3-10 minutes | 5-15 seconds | 20-40x faster |
 | Full test run | 30-60 minutes | 5-10 minutes | 3-6x faster |
-| Cost per dev/month | $250-500 | $0 | 100% savings |
 
 ## Best Practices
 
@@ -251,10 +243,10 @@ This is idempotent - existing registrations are updated, new tables are added.
 
 ## Comparison with Other Approaches
 
-### vs. Trino with Suffixed Schemas (Current)
+### vs. Trino with Suffixed Schemas
 | Aspect | Trino | DuckDB Local |
 |--------|-------|-------------|
-| **Cost** | High (compute + storage) | Zero |
+| **Cost** | Galaxy compute + S3 storage | Zero |
 | **Speed** | Slow (network latency) | Fast (local + S3) |
 | **Storage** | 100+ GB per dev | 1-10 GB per dev |
 | **Setup** | Complex | Simple script |
@@ -283,7 +275,7 @@ rm ~/.ol-dbt/local.duckdb
 ol-dbt local setup --layers all
 
 # Option 2: Remove specific materialized tables
-sqlite3 ~/.ol-dbt/local.duckdb "DROP TABLE IF EXISTS my_model_name"
+duckdb ~/.ol-dbt/local.duckdb "DROP TABLE IF EXISTS my_model_name"
 ```
 
 **Disk space check**:
@@ -294,7 +286,7 @@ du -sh ~/.ol-dbt/temp/
 
 ### Cleaning Up Trino Development Schemas
 
-If you've been using the legacy `--target dev` or `--target dev_qa` workflow with suffixed schemas, you can clean up old data:
+If you've been using the legacy `--target dev_qa` or `--target dev_production` workflow with suffixed schemas, you can clean up old data. Everything in this section runs through Galaxy, so it stops working once Galaxy access is revoked (M4 in [ADR 0012](https://github.com/mitodl/ol-infrastructure/blob/main/docs/adr/0012-trino-to-starrocks-cutover.md)). Clean up before then.
 
 **Option 1: Using dbt run-operation (Recommended)**
 
@@ -354,7 +346,7 @@ ol-dbt local cleanup --target dev_production --suffix myname --execute
 **When to clean up**:
 - After switching to local DuckDB workflow (one-time cleanup)
 - Before leaving the project (good citizenship)
-- When approaching Trino storage quotas
+- Before Galaxy access is revoked
 - Periodically (e.g., monthly) if actively using suffixed schemas
 
 ### Refreshing Iceberg Sources
@@ -376,7 +368,7 @@ ol-dbt local list-sources
 ## FAQs
 
 **Q: Can I still use Trino for testing?**
-A: Yes! Use `--target dev` for the legacy workflow. Both are supported.
+A: Yes, until Galaxy access is revoked. Use `--target dev_qa` or `--target dev_production` for the legacy workflow.
 
 **Q: What if I need to test with production-scale data?**
 A: Use CI/CD with `--target production` or create a PR for preview environment.
@@ -385,10 +377,10 @@ A: Use CI/CD with `--target production` or create a PR for preview environment.
 A: Yes, DuckDB works on macOS, Linux, and Windows.
 
 **Q: How much RAM do I need?**
-A: 16 GB recommended, 8 GB minimum. DuckDB is configured for 8 GB memory limit.
+A: 16 GB recommended, 8 GB minimum. `dev_local` defaults to a 28GB DuckDB memory limit, so on a smaller machine set `DBT_DUCKDB_MEMORY_LIMIT` below your RAM or large models will run out of memory.
 
 **Q: What if a model fails with a DuckDB error?**
-A: Check SQL compatibility. Add an adapter dispatch macro if needed. Fallback to `--target dev` if urgent.
+A: Check SQL compatibility. Add an adapter dispatch macro if needed. Fallback to `--target dev_qa` if urgent.
 
 **Q: Can I use this in CI/CD?**
 A: Yes! You could use dev_local target for PR preview builds to save costs.
@@ -412,8 +404,8 @@ A: Yes! You could use dev_local target for PR preview builds to save costs.
 If you need to go back to the Trino-based workflow:
 
 ```bash
-# Use legacy target
-uv run dbt run --target dev
+# Use legacy target (Trino, until Galaxy access is revoked)
+uv run dbt run --target dev_qa
 
 # Or clean up local environment
 rm -rf ~/.ol-dbt/
