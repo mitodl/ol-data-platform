@@ -21,6 +21,7 @@ from ml.lib.courseware.answer_check import (
     pending_sources,
 )
 from ml.lib.courseware.describe import describe_concepts
+from ml.lib.courseware.evaluation.cli import gold
 from ml.lib.courseware.extract import (
     BEDROCK_DEFAULT_MODEL,
     DEFAULT_EFFORT,
@@ -41,6 +42,7 @@ from ol_llm import Attribution, UseCase
 from ol_orchestrate.lib.embeddings.models import OlLlmEmbedder
 
 app = cyclopts.App(help=__doc__)
+app.command(gold)
 # Descriptions are short, batched and many; the small model is the default.
 BEDROCK_DESCRIPTION_MODEL = "us.anthropic.claude-haiku-5-5"
 # Answer checks are short and many; the small model is the default.
