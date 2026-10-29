@@ -604,6 +604,89 @@ models:
     - accepted_values:
         values: [insufficient_support, contested_direction]
 
+- name: bridge_courserun_prerequisite_coverage
+  description: Experimental preparation evidence, not a readiness verdict. Which other
+    course runs teach or review each concept a course run requires, directly, through
+    a close equivalent, or through some of its narrower concepts (an umbrella requirement
+    such as Python programming), one row per requirement and providing run, with match
+    type, depth, covered and missing narrower concepts and the sources of uncertainty
+    as separate columns.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: courserun_prerequisite_coverage_pk
+    description: str, surrogate key of (courserun_concept_fk, provider_courserun_fk)
+    tests:
+    - unique
+    - not_null
+  - name: courserun_concept_fk
+    description: str, the requires row, bridge_courserun_concept.courserun_concept_pk
+    tests:
+    - not_null
+    - relationships:
+        to: ref('bridge_courserun_concept')
+        field: courserun_concept_pk
+  - name: platform
+    description: str, the requiring run's platform
+  - name: courserun_readable_id
+    description: str, the requiring run
+  - name: courserun_fk
+    description: str, dim_course_run.courserun_pk of the requiring run
+  - name: concept_fk
+    description: str, dim_concept.concept_pk, the required concept
+  - name: requirement_source
+    description: str, declared or inferred
+  - name: requirement_passes_support_rule
+    description: boolean, bridge_courserun_concept.passes_support_rule of the requirement;
+      its rule counts other courses requiring the concept, so adding a course can
+      change it
+  - name: provider_platform
+    description: str, the providing run's platform
+  - name: provider_courserun_readable_id
+    description: str, a current run of another course that covers the concept. Runs
+      are the same course when they share dim_course.course_readable_id across platforms,
+      or, without a course_fk, the run id less its run tag; edxorg and mitxonline
+      copies whose readable ids differ (e.g. by org) still count as different courses
+  - name: provider_courserun_fk
+    description: str, dim_course_run.courserun_pk of the providing run
+    tests:
+    - not_null
+  - name: match_type
+    description: str, direct (teaches or reviews the concept), close (teaches or reviews
+      a close equivalent) or narrower (teaches or reviews some of its narrower concepts),
+      the closest that applies
+    tests:
+    - not_null
+    - accepted_values:
+        values: [direct, close, narrower]
+  - name: provider_relation
+    description: str, direct and close only, teaches when the provider teaches the
+      matched concept, reviews when it only reviews it (which can assume it is known)
+  - name: match_depth
+    description: int, broader hops from the required concept to the nearest concept
+      the provider covers; 0 for direct and close
+    tests:
+    - not_null
+  - name: relies_on_unreviewed_relation
+    description: boolean, whether no covered close or narrower concept is reached
+      over accepted bridge_concept_relation edges only; false for direct
+    tests:
+    - not_null
+  - name: narrower_concept_count
+    description: int, narrower concepts of the required concept, within courseware_prerequisite_max_narrower_hops
+      passing broader edges, that appear in any current course run. This depends on
+      the corpus, not on what the requiring course needs, so it is not a denominator
+      for a verdict
+  - name: narrower_taught_count
+    description: int, of those, the ones the providing run teaches or reviews
+  - name: covered_narrower_concept_fks
+    description: array of str, the narrower concepts the providing run teaches or
+      reviews; null when none
+  - name: missing_narrower_concept_fks
+    description: array of str, the narrower concepts it does not; null when none
+
 - name: bridge_course_content_concept
   description: Which known concepts each courseware block or course document mentions,
     from dictionary tagging, one row per (source, concept). Mentions only, not teaching
