@@ -1631,6 +1631,12 @@
 
     `order_by` is passed through, so its NULL ordering is the engine's: an ascending key
     sorts NULLs last on Trino and first on StarRocks unless it says `nulls last`.
+
+    With `distinct`, Trino only accepts `expr` itself as the ORDER BY, so `order_by` must be
+    `expr` (ascending). StarRocks then sorts after array_distinct() with array_sort(), NULLs
+    last as in Trino, rather than relying on array_distinct() to keep the aggregated order:
+    its planner rewrites array_distinct(array_agg(x)) into array_agg_distinct(x), which
+    does not keep it.
 #}
 {% macro array_agg_filter(expr, condition, order_by=none, distinct=false) -%}
     {{ adapter.dispatch('array_agg_filter', 'open_learning')(expr, condition, order_by, distinct) }}
@@ -1641,6 +1647,12 @@
 {%- endmacro %}
 
 {% macro starrocks__array_agg_filter(expr, condition, order_by=none, distinct=false) -%}
+    {%- if distinct and order_by and (order_by | trim | lower) not in [expr | trim | lower, (expr | trim | lower) ~ ' asc'] -%}
+        {{ exceptions.raise_compiler_error(
+            "array_agg_filter: with distinct=true, order_by must be the aggregated expression in "
+            ~ "ascending order ('" ~ expr ~ "'), got '" ~ order_by ~ "'"
+        ) }}
+    {%- endif -%}
     {%- set kept -%}
         array_map(
             agg_elem -> agg_elem.v
@@ -1655,6 +1667,8 @@
     {%- endset -%}
     case
         when count(case when {{ condition }} then 1 end) > 0
-            then {% if distinct %}array_distinct({{ kept }}){% else %}{{ kept }}{% endif %}
+            then {% if distinct and order_by %}{{ starrocks__array_sort('array_distinct(' ~ kept ~ ')') }}
+            {%- elif distinct %}array_distinct({{ kept }})
+            {%- else %}{{ kept }}{% endif %}
     end
 {%- endmacro %}

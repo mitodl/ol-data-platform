@@ -39,3 +39,42 @@ unit_tests:
     rows:
     - {etl_source: mitxonline, readable_id: "course-v1:X+Y", concepts_taught: [pandas],
       prerequisites_inferred: null, skills: [clean a data frame]}
+- name: test_int__courseware__release_resource_knowledge_statement_lists_sorted_and_distinct
+  description: >
+    Each statement array holds every distinct accepted label of its kind once, in
+    ascending order, whatever order the claims arrive in and however often a label
+    repeats. context_document renders these arrays, so the order has to be the same
+    on every engine.
+  model: int__courseware__release_resource_knowledge
+  given:
+  - input: ref('int__courseware__learn_course_runs')
+    rows:
+    - {etl_source: mitxonline, readable_id: "course-v1:X+Y", course_title: Data Analysis,
+      courserun_fk: r1, courserun_readable_id: "course-v1:X+Y+1T2026"}
+  - input: ref('bridge_courserun_concept')
+    rows: []
+  - input: ref('int__courseware__release_concepts')
+    rows: []
+  - input: ref('tfact_courseware_claim')
+    rows:
+    - {courserun_fk: r1, claim_kind: skill, label: write a query, is_current: true,
+      is_verified: true, review_status: accepted}
+    - {courserun_fk: r1, claim_kind: skill, label: clean a data frame, is_current: true,
+      is_verified: true, review_status: accepted}
+    - {courserun_fk: r1, claim_kind: skill, label: plot a histogram, is_current: true,
+      is_verified: true, review_status: accepted}
+    - {courserun_fk: r1, claim_kind: skill, label: write a query, is_current: true,
+      is_verified: true, review_status: accepted}
+    - {courserun_fk: r1, claim_kind: skill, label: clean a data frame, is_current: true,
+      is_verified: true, review_status: accepted}
+    - {courserun_fk: r1, claim_kind: audience, label: novices, is_current: true, is_verified: true,
+      review_status: accepted}
+    - {courserun_fk: r1, claim_kind: audience, label: analysts, is_current: true,
+      is_verified: true, review_status: accepted}
+    - {courserun_fk: r1, claim_kind: audience, label: novices, is_current: true, is_verified: true,
+      review_status: accepted}
+  expect:
+    rows:
+    - {etl_source: mitxonline, readable_id: "course-v1:X+Y", skills: [clean a data
+          frame, plot a histogram, write a query], learning_outcomes: null, audience: [
+        analysts, novices]}
