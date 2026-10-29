@@ -293,6 +293,15 @@ def test_label_matcher_round_trips_and_takes_more_mappings(tmp_path):
     assert restored.canonical("sensitivity") == restored.canonical("true positive rate")
 
 
+_NO_RELATIONS = pl.DataFrame(
+    schema={
+        "from_concept_id": pl.String,
+        "to_concept_id": pl.String,
+        "relation": pl.String,
+    }
+)
+
+
 def _inputs(claims: pl.DataFrame) -> samples.GoldInputs:
     empty = pl.DataFrame()
     return samples.GoldInputs(
@@ -309,6 +318,7 @@ def _inputs(claims: pl.DataFrame) -> samples.GoldInputs:
         sources=empty,
         assignments=empty,
         registry=empty,
+        concept_relations=_NO_RELATIONS,
         decisions=empty,
         labels=empty,
         embeddings=empty,
@@ -678,23 +688,35 @@ def test_pairs_population_uses_the_final_clustering():
         sources=pl.DataFrame(),
         assignments=pl.DataFrame(
             {
-                "concept_label_key": ["a", "b", "c", "d", "e"],
-                "concept_id": ["k1", "k1", "k2", "k3", "k1"],
+                "concept_label_key": ["a", "b", "c", "d", "e", "f"],
+                "concept_id": ["k1", "k1", "k2", "k3", "k1", "k5"],
             }
         ),
         registry=pl.DataFrame(
-            {"concept_id": ["k1", "k2", "k3"], "merged_into_concept_id": [None] * 3},
+            {
+                "concept_id": ["k1", "k2", "k3", "k4", "k5"],
+                "merged_into_concept_id": [None, None, None, "k5", None],
+            },
             schema={"concept_id": pl.String, "merged_into_concept_id": pl.String},
+        ),
+        # the resolver's output: k1 narrower than k2; k4 (since merged into k5)
+        # related to k1, as two opposing narrower verdicts leave a pair
+        concept_relations=pl.DataFrame(
+            {
+                "from_concept_id": ["k1", "k1", "k4"],
+                "to_concept_id": ["k2", "k2", "k1"],
+                "relation": ["broader", "related", "related"],
+            }
         ),
         decisions=pl.DataFrame(
             {
-                "key_a": ["a", "c", "a"],
-                "key_b": ["b", "d", "c"],
-                "query_label_key": ["a", "c", "a"],
-                "verdict": ["close", "exact", "narrower"],
+                "key_a": ["a", "c", "a", "a"],
+                "key_b": ["b", "d", "c", "f"],
+                "query_label_key": ["a", "c", "a", "a"],
+                "verdict": ["close", "exact", "narrower", "narrower"],
             }
         ),
-        labels=_labels("a", "b", "c", "d", "e"),
+        labels=_labels("a", "b", "c", "d", "e", "f"),
         embeddings=pl.DataFrame(
             {
                 "concept_label_key": ["a", "b", "c", "d"],
@@ -715,6 +737,8 @@ def test_pairs_population_uses_the_final_clustering():
     # judged exact but not merged (e.g. a rejected component): nothing links them
     assert by_pair["c||d"] == ("exact", "distinct", 0.0)
     assert by_pair["a||c"] == ("narrower", "a_narrower", 0.0)
+    # the retained verdict says narrower, the resolver kept related
+    assert by_pair["a||f"] == ("narrower", "related", 0.0)
     # co-assigned but neither adjudicated nor embedded
     assert by_pair["a||e"] == ("merged", "exact", 1.0)
 
@@ -874,6 +898,7 @@ def test_pairs_leave_out_labels_no_current_claim_uses():
             {"concept_id": ["k1", "k2", "k3"], "merged_into_concept_id": [None] * 3},
             schema={"concept_id": pl.String, "merged_into_concept_id": pl.String},
         ),
+        concept_relations=_NO_RELATIONS,
         decisions=pl.DataFrame(
             {
                 "key_a": ["a", "c", "a", "a", "c"],
@@ -929,6 +954,7 @@ def test_clusters_leave_out_labels_no_current_claim_uses():
             },
             schema={"concept_id": pl.String, "merged_into_concept_id": pl.String},
         ),
+        concept_relations=_NO_RELATIONS,
         decisions=pl.DataFrame(),
         labels=_labels(*keys),
         embeddings=pl.DataFrame(
@@ -1035,6 +1061,7 @@ def test_few_labels_are_not_their_own_neighbours():
             {"concept_id": ["k1", "k2", "k3"], "merged_into_concept_id": [None] * 3},
             schema={"concept_id": pl.String, "merged_into_concept_id": pl.String},
         ),
+        concept_relations=_NO_RELATIONS,
         decisions=pl.DataFrame(
             schema={
                 "key_a": pl.String,
@@ -1129,6 +1156,7 @@ def _write_gold_inputs(
     extractions=None,
     claims=None,
     sources=None,
+    concept_relations=_NO_RELATIONS,
 ):
     """Write the parquet files load_inputs reads; one run, by default one claim."""
     extraction = directory / "extraction"
@@ -1151,6 +1179,7 @@ def _write_gold_inputs(
     for table, frame in (
         ("courseware_concept_assignment", assignments),
         ("courseware_concept_registry", registry),
+        ("courseware_concept_relation", concept_relations),
         ("courseware_resolution_decision", decisions),
     ):
         frame.with_columns(pl.lit(run).alias("resolution_run_id")).write_parquet(

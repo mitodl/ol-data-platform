@@ -20,6 +20,7 @@ import json
 import math
 import re
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
@@ -276,6 +277,9 @@ class GoldInputs:
     :param sources: int__courseware__extraction_sources rows
     :param assignments: concept assignment of every label key, newest run
     :param registry: concept registry, newest run
+    :param concept_relations: the resolver's relations between concepts
+        (from_concept_id, to_concept_id, relation), newest run; broader runs from
+        the narrower concept to the broader one
     :param decisions: resolver verdicts, newest per label pair across runs
     :param labels: int__courseware__concept_labels rows
     :param embeddings: one embedding per label key
@@ -292,6 +296,7 @@ class GoldInputs:
     sources: pl.DataFrame
     assignments: pl.DataFrame
     registry: pl.DataFrame
+    concept_relations: pl.DataFrame
     decisions: pl.DataFrame
     labels: pl.DataFrame
     embeddings: pl.DataFrame
@@ -360,8 +365,8 @@ def with_discipline(
     return frame
 
 
-def _follow_merges(assignments: pl.DataFrame, registry: pl.DataFrame) -> pl.DataFrame:
-    """Replace each assigned concept id merged into another by its survivor."""
+def _survivor(registry: pl.DataFrame) -> Callable[[str], str]:
+    """Return a function from a concept id to the concept it was merged into."""
     redirects = {
         row["concept_id"]: row["merged_into_concept_id"]
         for row in registry.iter_rows(named=True)
@@ -373,8 +378,13 @@ def _follow_merges(assignments: pl.DataFrame, registry: pl.DataFrame) -> pl.Data
             concept_id = redirects[concept_id]
         return concept_id
 
+    return survivor
+
+
+def _follow_merges(assignments: pl.DataFrame, registry: pl.DataFrame) -> pl.DataFrame:
+    """Replace each assigned concept id merged into another by its survivor."""
     return assignments.with_columns(
-        pl.col("concept_id").map_elements(survivor, return_dtype=pl.String)
+        pl.col("concept_id").map_elements(_survivor(registry), return_dtype=pl.String)
     )
 
 
@@ -524,6 +534,9 @@ def load_inputs(  # noqa: PLR0913
     registry = _newest_run(
         pl.read_parquet(identity_dir / "courseware_concept_registry.parquet"), runs
     )
+    concept_relations = _newest_run(
+        pl.read_parquet(identity_dir / "courseware_concept_relation.parquet"), runs
+    )
     run_order = runs.select(
         "resolution_run_id", pl.col("started_at").alias("run_started_at")
     )
@@ -563,6 +576,7 @@ def load_inputs(  # noqa: PLR0913
         sources=pl.read_parquet(sources),
         assignments=assignments,
         registry=registry,
+        concept_relations=concept_relations,
         decisions=decisions,
         labels=pl.read_parquet(concept_labels),
         embeddings=embeddings,
@@ -1057,8 +1071,11 @@ def pairs_population(inputs: GoldInputs) -> pl.DataFrame:
     earlier runs count too. Merged pairs are their own stratum, and every other
     pair is stratified by its verdict ("unblocked" if never adjudicated). autorater
     is 1 for merged pairs. resolver_relation is the resolver's final relation of
-    key_a to key_b: exact when merged, the verdict's relation otherwise, and
-    distinct where nothing links the two (an unmerged exact verdict included).
+    key_a to key_b: exact when merged, otherwise the relation the newest run keeps
+    between their concepts (a_broader or a_narrower, close, related), and distinct
+    where none does. That is the resolver's output, not the retained verdict: two
+    opposing narrower verdicts leave the pair related, and a relation another pair
+    of labels gave the two concepts counts too.
 
     Only current labels (inputs.labels) pair up. The decision and embedding tables
     accumulate over runs and keep labels no current claim uses, which the samplers
@@ -1084,6 +1101,7 @@ def pairs_population(inputs: GoldInputs) -> pl.DataFrame:
             decided,
         )
     )
+    related = _concept_relations(inputs)
     members: dict[str, list[str]] = defaultdict(list)
     for key, concept in concept_of.items():
         members[concept].append(key)
@@ -1103,14 +1121,11 @@ def pairs_population(inputs: GoldInputs) -> pl.DataFrame:
     for pair in pl.concat([decided_rows, extra]).iter_rows(named=True):
         concept_a = concept_of.get(pair["key_a"])
         merged = concept_a is not None and concept_a == concept_of.get(pair["key_b"])
-        if merged:
-            relation = "exact"
-        elif pair["verdict"] in ("exact", "unblocked", "unadjudicated"):
-            relation = "distinct"
-        else:
-            relation = pair_relation(
-                pair["verdict"], query_is_a=pair["query_label_key"] == pair["key_a"]
-            )
+        relation = (
+            "exact"
+            if merged
+            else related.get((concept_a, concept_of.get(pair["key_b"])), "distinct")
+        )
         rows.append(
             {
                 **pair,
@@ -1125,12 +1140,39 @@ def pairs_population(inputs: GoldInputs) -> pl.DataFrame:
 
 
 _FLIPPED_RELATION = {"a_broader": "a_narrower", "a_narrower": "a_broader"}
+# When the resolver keeps more than one relation between two concepts, the pair
+# reads as the first of these.
+_RELATION_PRECEDENCE = ("broader", "close", "related")
 
 
-def pair_relation(verdict: str, *, query_is_a: bool) -> str:
-    """Return the resolver verdict as a relation of A to B."""
-    relation = {"broader": "a_broader", "narrower": "a_narrower"}.get(verdict, verdict)
-    return relation if query_is_a else _FLIPPED_RELATION.get(relation, relation)
+def _concept_relations(
+    inputs: GoldInputs,
+) -> dict[tuple[str | None, str | None], str]:
+    """Return the resolver's relation of concept a to concept b, both orders."""
+    survivor = _survivor(inputs.registry)
+    relations: dict[tuple[str | None, str | None], str] = {}
+    rows = inputs.concept_relations.filter(
+        pl.col("relation").is_in(_RELATION_PRECEDENCE)
+    ).with_columns(
+        pl.col("relation")
+        .replace_strict(
+            {name: rank for rank, name in enumerate(_RELATION_PRECEDENCE)},
+            return_dtype=pl.Int64,
+        )
+        .alias("rank")
+    )
+    for narrower, broader, relation in (
+        rows.sort("rank", descending=True)
+        .select("from_concept_id", "to_concept_id", "relation")
+        .iter_rows()
+    ):
+        left, right = survivor(narrower), survivor(broader)
+        if relation == "broader":
+            relations[left, right] = "a_narrower"
+            relations[right, left] = "a_broader"
+        else:
+            relations[left, right] = relations[right, left] = relation
+    return relations
 
 
 def _label_text(info: dict[str, Any]) -> str:
