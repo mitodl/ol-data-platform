@@ -80,6 +80,8 @@ unit_tests:
       is_current: true}
     - {courserun_pk: r3, course_fk: null, platform: residential, courserun_readable_id: "course-v1:MITx+6.2+2025_Spring",
       is_current: true}
+  - input: ref('dim_concept')
+    rows: []
   expect:
     rows:
     - {courserun_fk: r1, concept_fk: x, course_support: 1, passes_support_rule: false}
@@ -140,6 +142,8 @@ unit_tests:
       is_current: true}
     - {courserun_pk: r3, course_fk: cy, platform: emeritus, courserun_readable_id: "MIT-EM-Y-2026",
       is_current: true}
+  - input: ref('dim_concept')
+    rows: []
   expect:
     rows:
     - {courserun_fk: r1, concept_fk: x, course_support: 1, passes_support_rule: false}
@@ -190,3 +194,204 @@ unit_tests:
     - {from_concept_id: a, to_concept_id: c, relation: broader, evidence_source: adjudication,
       platform: null, courserun_readable_id: null, scope_id: null, extractor_id: null,
       prompt_version: null, model_id: null, scope_count: 0}
+
+- name: test_bridge_courserun_concept_takes_tool_status_from_the_run_alone
+  description: >
+    Run ra uses scikit-learn and XGBoost in two units each, calls both tools, and
+    never
+    says learners should know them, so both requirements pass the support rule and
+    stay unresolved. Course B teaches scikit-learn (and its claims call it a concept,
+    not a tool), and no course teaches XGBoost; neither fact changes ra's rows, which
+    match the next test, where B, C and D are absent. rc assumes Seaborn, so it is
+    assumed. rd uses matplotlib in three units and teaches it in the fourth, so it
+    is
+    introduced (and passes, at 3 of 4). regression is not a tool, so it has no tool
+    status.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, concept_id: sklearn,
+      teaching_status: used, concept_kind: tool}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, concept_id: sklearn,
+      teaching_status: used, concept_kind: tool}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, concept_id: xgboost,
+      teaching_status: used, concept_kind: tool}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, concept_id: xgboost,
+      teaching_status: used, concept_kind: tool}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, concept_id: regression,
+      teaching_status: used, concept_kind: concept}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, concept_id: regression,
+      teaching_status: used, concept_kind: concept}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+B.1+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, concept_id: sklearn,
+      teaching_status: taught, concept_kind: concept}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+B.1+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, concept_id: sklearn,
+      teaching_status: taught, concept_kind: concept}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+B.1+1T2026", scope_id: u3,
+      scope_kind: unit, scope_position: 3, claim_kind: concept, concept_id: sklearn,
+      teaching_status: taught, concept_kind: concept}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: seaborn}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, concept_id: seaborn,
+      teaching_status: used, concept_kind: tool}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+D.1+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, concept_id: matplotlib,
+      teaching_status: used, concept_kind: tool}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+D.1+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, concept_id: matplotlib,
+      teaching_status: used, concept_kind: tool}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+D.1+1T2026", scope_id: u3,
+      scope_kind: unit, scope_position: 3, claim_kind: concept, concept_id: matplotlib,
+      teaching_status: used, concept_kind: tool}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+D.1+1T2026", scope_id: u4,
+      scope_kind: unit, scope_position: 4, claim_kind: concept, concept_id: matplotlib,
+      teaching_status: taught, concept_kind: tool}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: ra, platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026",
+      is_current: true}
+    - {courserun_pk: rb, platform: mitxonline, courserun_readable_id: "course-v1:ORG+B.1+1T2026",
+      is_current: true}
+    - {courserun_pk: rc, platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026",
+      is_current: true}
+    - {courserun_pk: rd, platform: mitxonline, courserun_readable_id: "course-v1:ORG+D.1+1T2026",
+      is_current: true}
+  - input: ref('dim_concept')
+    rows: []
+  expect:
+    rows:
+    - {courserun_fk: ra, concept_fk: sklearn, relation: requires, tool_status: unresolved,
+      passes_support_rule: true}
+    - {courserun_fk: ra, concept_fk: xgboost, relation: requires, tool_status: unresolved,
+      passes_support_rule: true}
+    - {courserun_fk: ra, concept_fk: regression, relation: requires, tool_status: null,
+      passes_support_rule: true}
+    - {courserun_fk: ra, concept_fk: sklearn, relation: uses, tool_status: null, passes_support_rule: true}
+    - {courserun_fk: ra, concept_fk: xgboost, relation: uses, tool_status: null, passes_support_rule: true}
+    - {courserun_fk: ra, concept_fk: regression, relation: uses, tool_status: null,
+      passes_support_rule: true}
+    - {courserun_fk: rb, concept_fk: sklearn, relation: teaches, tool_status: null,
+      passes_support_rule: true}
+    - {courserun_fk: rc, concept_fk: seaborn, relation: requires, tool_status: assumed,
+      passes_support_rule: true}
+    - {courserun_fk: rc, concept_fk: seaborn, relation: uses, tool_status: null, passes_support_rule: true}
+    - {courserun_fk: rd, concept_fk: matplotlib, relation: uses, tool_status: null,
+      passes_support_rule: true}
+    - {courserun_fk: rd, concept_fk: matplotlib, relation: teaches, tool_status: null,
+      passes_support_rule: true}
+    - {courserun_fk: rd, concept_fk: matplotlib, relation: requires, tool_status: introduced,
+      passes_support_rule: true}
+
+- name: test_bridge_courserun_concept_tool_status_without_other_courses
+  description: >
+    ra alone, as in the previous test: with no other course in the corpus its tool
+    rows are the same, so adding an unrelated course that teaches scikit-learn leaves
+    ra's tool status unchanged.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, concept_id: sklearn,
+      teaching_status: used, concept_kind: tool}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, concept_id: sklearn,
+      teaching_status: used, concept_kind: tool}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, concept_id: xgboost,
+      teaching_status: used, concept_kind: tool}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, concept_id: xgboost,
+      teaching_status: used, concept_kind: tool}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, concept_id: regression,
+      teaching_status: used, concept_kind: concept}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: concept, concept_id: regression,
+      teaching_status: used, concept_kind: concept}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: ra, platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026",
+      is_current: true}
+  - input: ref('dim_concept')
+    rows: []
+  expect:
+    rows:
+    - {courserun_fk: ra, concept_fk: sklearn, relation: requires, tool_status: unresolved,
+      passes_support_rule: true}
+    - {courserun_fk: ra, concept_fk: xgboost, relation: requires, tool_status: unresolved,
+      passes_support_rule: true}
+    - {courserun_fk: ra, concept_fk: regression, relation: requires, tool_status: null,
+      passes_support_rule: true}
+    - {courserun_fk: ra, concept_fk: sklearn, relation: uses, tool_status: null, passes_support_rule: true}
+    - {courserun_fk: ra, concept_fk: xgboost, relation: uses, tool_status: null, passes_support_rule: true}
+    - {courserun_fk: ra, concept_fk: regression, relation: uses, tool_status: null,
+      passes_support_rule: true}
+
+- name: test_bridge_courserun_concept_takes_a_tool_kind_from_dim_concept_for_assumed_only_mentions
+  description: >
+    Run re names pandas only in assumed_knowledge claims, which carry no kind, so
+    its
+    own claims don't say whether pandas is a tool and dim_concept.concept_kind (tool)
+    does. Its requirement is a tool requirement, assumed from re's claims. Course
+    F
+    teaches pandas; the next test, without F, gives re the same row.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+E.1+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: pandas}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+E.1+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: assumed_knowledge, concept_id: pandas}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+F.1+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, concept_id: pandas,
+      teaching_status: taught, concept_kind: tool}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: re, platform: mitxonline, courserun_readable_id: "course-v1:ORG+E.1+1T2026",
+      is_current: true}
+    - {courserun_pk: rf, platform: mitxonline, courserun_readable_id: "course-v1:ORG+F.1+1T2026",
+      is_current: true}
+  - input: ref('dim_concept')
+    rows:
+    - {concept_pk: pandas, concept_kind: tool}
+  expect:
+    rows:
+    - {courserun_fk: re, concept_fk: pandas, relation: requires, tool_status: assumed,
+      passes_support_rule: true}
+    - {courserun_fk: rf, concept_fk: pandas, relation: teaches, tool_status: null,
+      passes_support_rule: true}
+
+- name: test_bridge_courserun_concept_assumed_only_tool_without_other_courses
+  description: >
+    re alone, as in the previous test: without course F teaching pandas its row is
+    the same.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+E.1+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: pandas}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+E.1+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: assumed_knowledge, concept_id: pandas}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: re, platform: mitxonline, courserun_readable_id: "course-v1:ORG+E.1+1T2026",
+      is_current: true}
+  - input: ref('dim_concept')
+    rows:
+    - {concept_pk: pandas, concept_kind: tool}
+  expect:
+    rows:
+    - {courserun_fk: re, concept_fk: pandas, relation: requires, tool_status: assumed,
+      passes_support_rule: true}
