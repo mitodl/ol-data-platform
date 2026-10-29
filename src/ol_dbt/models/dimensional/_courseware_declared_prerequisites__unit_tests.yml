@@ -24,6 +24,8 @@ unit_tests:
       is_current: true}
   - input: ref('dim_course')
     rows: []
+  - input: ref('dim_concept')
+    rows: []
   expect:
     rows:
     - {courserun_fk: r1, concept_fk: calculus, relation: requires, requirement_source: declared}
