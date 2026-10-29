@@ -10,9 +10,11 @@
     source changes nothing a learner sees, and course counts come only from
     relations an accepted claim supports (#3021's gate: accepting a concept does not
     accept the claims naming it). The description is the newest one written
-    under the prompt version courseware_description_approval approves; a concept
-    with none yet has null description columns, and the release asset refuses a
-    candidate that has any.
+    under the prompt version courseware_description_approval approves. A concept
+    the describer has inputs for but no such description yet is awaiting one, and
+    the release asset refuses a candidate with any. A concept with no description
+    inputs (no eligible claim describes it) is never described, so it is released
+    with null descriptions and no learner-facing view shows it.
 #}
 with concepts as (
     select * from {{ ref('dim_concept') }}
@@ -70,9 +72,18 @@ with concepts as (
     where label_rank = 1
 )
 
+, description_inputs as (
+    select * from {{ ref('int__courseware__concept_description_inputs') }}
+)
+
 , approval as (
     select max(approved_prompt_version) as prompt_version
-    from {{ ref('int__courseware__concept_description_inputs') }}
+    from description_inputs
+)
+
+, described_concepts as (
+    select distinct concept_id
+    from description_inputs
 )
 
 , descriptions as (
@@ -133,6 +144,10 @@ select
     , concepts.review_status
     , descriptions.model_id as description_model_id
     , descriptions.prompt_version as description_prompt_version
+    , (
+        described_concepts.concept_id is not null
+        and descriptions.concept_id is null
+    ) as is_awaiting_description
     , coalesce(course_counts.teaching_course_count, 0) as teaching_course_count
     , coalesce(course_counts.course_count, 0) as course_count
 from concepts
@@ -140,5 +155,7 @@ inner join display_labels
     on concepts.concept_pk = display_labels.concept_id
 left join descriptions
     on concepts.concept_pk = descriptions.concept_id
+left join described_concepts
+    on concepts.concept_pk = described_concepts.concept_id
 left join course_counts
     on concepts.concept_pk = course_counts.concept_fk

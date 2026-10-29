@@ -1,11 +1,9 @@
-{{ config(materialized='view') }}
 {#
     The published knowledge release: the release courseware_release_publication
     pointed to most recently, with its manifest. Every learner-facing projection
-    selects its rows through this one row, so a promotion or a rollback switches
-    them all at once, and a candidate that was never published (its graph build
-    failed, say) is never read. A view, so the switch happens when the publication
-    row is committed, not when dbt next builds.
+    selects its rows through this one row, so a promotion or a rollback moves
+    them all to the same release, and a candidate that was never published (its graph build
+    failed, say) is never read.
 #}
 with publications as (
     select

@@ -63,7 +63,7 @@ with registry as (
 )
 
 , concepts as (
-    select count(case when description_prompt_version is null then 1 end) as undescribed_concept_count
+    select count(case when is_awaiting_description then 1 end) as undescribed_concept_count
     from {{ ref('int__courseware__release_concepts') }}
 )
 

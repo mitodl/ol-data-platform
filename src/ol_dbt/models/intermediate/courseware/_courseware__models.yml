@@ -797,6 +797,10 @@ models:
   - name: description_prompt_version
     description: str, the approved prompt version it was written under; null when
       undescribed
+  - name: is_awaiting_description
+    description: boolean, true when the describer has inputs for the concept but no
+      description under the approved prompt yet; the release asset refuses a candidate
+      with any
   - name: teaching_course_count
     description: int, courses whose source-eligible run teaches the concept
   - name: course_count
@@ -881,7 +885,7 @@ models:
     description: str, the description prompt version courseware_description_approval
       approves
   - name: undescribed_concept_count
-    description: int, released concepts with no description under that version
+    description: int, candidate concepts awaiting a description under that version
   - name: extraction_selection_checksum
     description: str, md5 of the current extraction keys of source-eligible runs
   - name: extraction_count

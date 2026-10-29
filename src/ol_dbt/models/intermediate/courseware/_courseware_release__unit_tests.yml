@@ -96,7 +96,9 @@ unit_tests:
   description: >
     A concept takes the newest description written under the approved prompt
     version, even when a newer one under another version exists, and a concept
-    with none yet keeps null description columns for the release asset to refuse.
+    the describer has inputs for but no description yet is awaiting one, which the
+    release asset refuses, and one with no inputs (c3) is never described and is
+    not awaiting one.
     A concept no current claim names (it stays active after its labels drop out)
     is not released.
   model: int__courseware__release_concepts
@@ -106,6 +108,7 @@ unit_tests:
     - {concept_pk: c1, lifecycle_status: active, review_status: accepted}
     - {concept_pk: c2, lifecycle_status: active, review_status: accepted}
     - {concept_pk: gone, lifecycle_status: active, review_status: accepted}
+    - {concept_pk: c3, lifecycle_status: active, review_status: accepted}
   - input: ref('int__courseware__source_eligibility')
     rows:
     - {platform: mitxonline, courserun_readable_id: a1, is_source_eligible: true}
@@ -113,10 +116,12 @@ unit_tests:
     rows:
     - {concept_id: c1, concept_label_key: auc, platform: mitxonline, courserun_readable_id: a1}
     - {concept_id: c2, concept_label_key: pandas, platform: mitxonline, courserun_readable_id: a1}
+    - {concept_id: c3, concept_label_key: numpy, platform: mitxonline, courserun_readable_id: a1}
   - input: ref('int__courseware__concept_labels')
     rows:
     - {concept_label_key: auc, preferred_label: AUC, concept_kind: concept}
     - {concept_label_key: pandas, preferred_label: pandas, concept_kind: tool}
+    - {concept_label_key: numpy, preferred_label: numpy, concept_kind: tool}
   - input: ref('int__courseware__concept_description_inputs')
     rows:
     - {concept_id: c1, approved_prompt_version: v1}
@@ -137,8 +142,12 @@ unit_tests:
     rows: []
   expect:
     rows:
-    - {concept_id: c1, short_description: approved, description_prompt_version: v1}
-    - {concept_id: c2, short_description: null, description_prompt_version: null}
+    - {concept_id: c1, short_description: approved, description_prompt_version: v1,
+      is_awaiting_description: false}
+    - {concept_id: c2, short_description: null, description_prompt_version: null,
+      is_awaiting_description: true}
+    - {concept_id: c3, short_description: null, description_prompt_version: null,
+      is_awaiting_description: false}
 
 - name: test_int__courseware__release_resource_knowledge_only_eligible_runs
   description: >
@@ -234,8 +243,9 @@ unit_tests:
     - {concept_id: c1, approved_prompt_version: v1}
   - input: ref('int__courseware__release_concepts')
     rows:
-    - {concept_id: c1, description_prompt_version: v1}
-    - {concept_id: c2, description_prompt_version: null}
+    - {concept_id: c1, is_awaiting_description: false}
+    - {concept_id: c2, is_awaiting_description: true}
+    - {concept_id: c3, is_awaiting_description: false}
   expect:
     rows:
     - {resolution_run_id: res2, graph_run_id: g1, graph_resolution_run_id: res1, is_graph_current: false,

@@ -1317,7 +1317,7 @@ def test_a_failed_graph_build_leaves_the_last_release_published(tables):
     [
         ({"description_prompt_version": None}, ("AUC",), "approves no description"),
         ({"undescribed_concept_count": 2}, ("AUC",), "2 concepts have no description"),
-        ({}, (), "no accepted concept"),
+        ({}, (), "would empty the published release"),
         ({"resolution_run_id": None}, ("AUC",), "no resolution run"),
     ],
 )
@@ -1327,6 +1327,28 @@ def test_validation_refuses_an_incomplete_candidate(overrides, names, error):
     )
 
     assert any(error in reason for reason in errors), errors
+
+
+def test_an_empty_candidate_writes_nothing_until_a_release_is_published(tables):
+    candidate(tables)
+
+    built, published = release(tables)
+
+    assert check_result(built, "release_candidate_valid").passed
+    assert published.success
+    assert "courseware_release" not in tables
+
+    candidate(tables, "AUC")
+    release(tables)
+    candidate(tables)
+    built, _ = release(tables)
+
+    # once a release is published, an empty candidate would empty it
+    assert not check_result(built, "release_candidate_valid").passed
+    assert tables["courseware_release"]["is_valid"].to_list() == [True, False]
+    assert published_rows(tables, "courseware_release_concept")["name"].to_list() == [
+        "AUC"
+    ]
 
 
 def test_validation_refuses_a_concept_that_is_not_accepted():

@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {#
     What each Learn course teaches, assesses and expects, from the published
     knowledge release, keyed as Learn keys the course (etl_source, readable_id).
@@ -9,7 +8,8 @@
     most recently extracted source-eligible run, accepted concepts only) and copied
     into the release by ml.assets.courseware_release. context_document is the
     deterministic markdown the embedding substrate's resource_knowledge_markdown_v1
-    builder embeds. A view, so it switches release with the publication pointer.
+    builder embeds. A table, as integrations__learn__concepts is, and from the
+    same published release.
 #}
 with published as (
     select release_id from {{ ref('int__courseware__published_release') }}

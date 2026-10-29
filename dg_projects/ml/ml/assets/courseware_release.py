@@ -125,7 +125,10 @@ def validate_candidate(manifest: dict[str, Any], concepts: pl.DataFrame) -> list
     if not concepts.height:
         # Most likely a policy or review mistake; publishing it would empty every
         # learner-facing projection.
-        errors.append("no accepted concept from a source-eligible run")
+        errors.append(
+            "no accepted concept from a source-eligible run, which would empty the "
+            "published release"
+        )
     unaccepted = concepts.filter(pl.col("review_status") != "accepted").height
     if unaccepted:
         errors.append(f"{unaccepted} concepts are not accepted")
@@ -210,8 +213,9 @@ def courseware_knowledge_release(context: AssetExecutionContext):
     """Write the candidate projections and manifest as a new release, and validate it.
 
     A candidate whose manifest and rows match the newest release is not written
-    again. An invalid candidate is still written, for review, but its check fails
-    and courseware_release_publication never publishes it.
+    again, and nor is an empty one while nothing is published. An invalid
+    candidate is still written, for review, but its check fails and
+    courseware_release_publication never publishes it.
     """
     manifest_rows = require_table("intermediate", MANIFEST_KEY.path[-1]).collect()
     if manifest_rows.height != 1:
@@ -222,6 +226,19 @@ def courseware_knowledge_release(context: AssetExecutionContext):
         table: require_table("intermediate", key.path[-1]).collect()
         for table, (key, _) in PROJECTIONS.items()
     }
+    if not projections["courseware_release_concept"].height and not newest(
+        read_table("intermediate", PUBLICATION_KEY.path[-1]), "published_at"
+    ):
+        # Until a reviewer accepts a concept every candidate is empty, and failing
+        # each automation request for it would only add noise.
+        context.log.info("No accepted concept yet and nothing published; no release")
+        yield AssetCheckResult(
+            asset_key=RELEASE_KEY,
+            check_name="release_candidate_valid",
+            passed=True,
+            metadata={"note": MetadataValue.text("nothing to release yet")},
+        )
+        return
     checksum = candidate_checksum(manifest, projections)
     last = newest(read_table("intermediate", RELEASE_KEY.path[-1]), "built_at")
     if last and last["candidate_checksum"] == checksum:
@@ -332,7 +349,11 @@ def courseware_release_publication(
     Appends one row naming the release; int__courseware__published_release reads
     the newest, and every learner-facing projection selects through it.
     """
-    releases = require_table("intermediate", RELEASE_KEY.path[-1]).collect()
+    stored = read_table("intermediate", RELEASE_KEY.path[-1])
+    if stored is None:
+        context.log.info("No release has been built yet")
+        return
+    releases = stored.collect()
     current = newest(
         read_table("intermediate", PUBLICATION_KEY.path[-1]), "published_at"
     )

@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 {#
     The concepts Learn can show to learners, from the published knowledge release:
     one row per learner-facing concept with its descriptions and how many courses
@@ -8,8 +7,10 @@
 
     The rows were built by int__courseware__release_concepts (accepted concepts,
     source-eligible runs only) and copied into the release by
-    ml.assets.courseware_release. A view, so it switches release with the
-    publication pointer, together with the other learner-facing projections.
+    ml.assets.courseware_release. A table like the other Learn views, because
+    delivery reads them from Iceberg; the publication pointer rebuilds this and
+    integrations__learn__resource_knowledge in the same dbt run, and a reader of
+    both checks their release_id matches.
 #}
 with published as (
     select release_id from {{ ref('int__courseware__published_release') }}

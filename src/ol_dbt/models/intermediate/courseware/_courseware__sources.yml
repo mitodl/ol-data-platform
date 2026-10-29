@@ -499,6 +499,8 @@ sources:
       description: str, the model that wrote the description
     - name: description_prompt_version
       description: str, the approved prompt version it was written under
+    - name: is_awaiting_description
+      description: boolean, false in a valid release
     - name: teaching_course_count
       description: int, courses whose source-eligible run teaches the concept
     - name: course_count
