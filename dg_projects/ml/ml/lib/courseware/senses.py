@@ -254,6 +254,17 @@ def _adjudicate_senses_batch(
     except ValidationError as error:
         msg = f"invalid sense decisions: {error}"
         raise ValueError(msg) from error
+    # Two decisions for one run would mint two senses from the same context, so a
+    # repeated query or run fails the batch and the next run retries it.
+    query_ids = [query.query_id for query in decided.queries]
+    run_ids = [
+        (query.query_id, item.run_id)
+        for query in decided.queries
+        for item in query.runs
+    ]
+    if len(set(query_ids)) < len(query_ids) or len(set(run_ids)) < len(run_ids):
+        msg = "a query or course run has more than one sense decision"
+        raise ValueError(msg)
     results: list[tuple[UnitKey, SenseDecision, int | None]] = []
     for query in decided.queries:
         if not 0 <= query.query_id < len(batch):

@@ -379,3 +379,26 @@ def test_default_state_has_empty_sense_tables():
     state = ResolutionState()
     assert state.aliases.is_empty()
     assert state.sense_assignments.is_empty()
+
+
+def test_the_batch_parser_rejects_two_decisions_for_one_run():
+    query = SenseQuery(
+        "kernel",
+        [Alias("k-os", "primary", "kernel: the core of an operating system", "r")],
+        [Unit(("kernel", "mitxonline", ML), "kernel", TITLES[ML], ("a similarity",))],
+    )
+    client = FakeClient(
+        {
+            "queries": [
+                {
+                    "query_id": 0,
+                    "runs": [
+                        {"run_id": 0, "decision": "new", "sense": 1},
+                        {"run_id": 0, "decision": "new", "sense": 2},
+                    ],
+                }
+            ]
+        }
+    )
+    with pytest.raises(ValueError, match="more than one sense decision"):
+        _adjudicate_senses_batch(client, "fake-model", [query])
