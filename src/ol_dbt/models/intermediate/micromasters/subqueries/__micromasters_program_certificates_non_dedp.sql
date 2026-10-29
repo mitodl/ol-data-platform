@@ -1,5 +1,3 @@
-{{ config(materialized='view') }}
-
 with program_mapping as (
     select * from {{ ref('edxorg_to_mitxonline_program_mapping') }}
 )

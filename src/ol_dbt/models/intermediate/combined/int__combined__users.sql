@@ -3,7 +3,6 @@
 --  user_full_name) -- platforms with no user_username (emeritus, global_alumni) would
 --  otherwise collapse every user in that platform into one row, since PARTITION BY
 --  treats all NULLs as one group.
-{{ config(materialized='view') }}
 
 with mitxonline_users as (
     select * from {{ ref('int__mitxonline__users') }}

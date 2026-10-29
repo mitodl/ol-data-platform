@@ -2,8 +2,6 @@
 --- For DEDP courses, verified enrollments are already handled in MITx Online
 --  and edX.org enrollment intermediate models
 
-{{ config(materialized='view') }}
-
 with mitxonline_enrollments as (
     select *
     from {{ ref('int__mitxonline__courserunenrollments') }}

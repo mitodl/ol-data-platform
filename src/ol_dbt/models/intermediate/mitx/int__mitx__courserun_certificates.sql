@@ -4,8 +4,6 @@
 ---- MicroMasters program courses certificate (combined DEDP and other MM program courses)
 ---- course certificates from edx.org, excluding DEDP and other MM program course certificates
 
-{{ config(materialized='view') }}
-
 with mitxonline_certificates as (
     select *
     from {{ ref('int__mitxonline__courserun_certificates') }}
