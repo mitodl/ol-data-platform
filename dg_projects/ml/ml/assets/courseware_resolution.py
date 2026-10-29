@@ -9,8 +9,12 @@ from dagster import (
     AssetKey,
     AssetOut,
     Config,
+    DagsterInstance,
+    DagsterRunStatus,
+    Failure,
     MetadataValue,
     Output,
+    RunsFilter,
     multi_asset,
 )
 from ml.lib.courseware.resolve import (
@@ -56,6 +60,12 @@ APPEND_TABLES = (
     "courseware_concept_label_embedding",
     RUN_KEY.path[-1],
 )
+# Statuses of a run that may still write resolution snapshots.
+_WRITING_STATUSES = [
+    DagsterRunStatus.STARTING,
+    DagsterRunStatus.STARTED,
+    DagsterRunStatus.CANCELING,
+]
 _OUTPUT_METADATA = {
     "schema": warehouse_database("intermediate"),
     "write_mode": "append",
@@ -88,6 +98,32 @@ class CoursewareResolutionConfig(Config):
             "previous run assigned now belong to a different concept."
         ),
     )
+
+
+def overlapping_resolution_runs(instance: DagsterInstance, run_id: str) -> list[str]:
+    """Ids of other runs that are writing resolution snapshots now.
+
+    Each run reads the newest run's snapshots and writes a full new set, so two at
+    once would mint different ids for the same new labels and the later snapshot
+    would drop the other's concepts. Automation never overlaps them
+    (upstream_or_code_changes is gated on ~in_progress), but a launch from the UI
+    can, and the courseware_resolution pool has no limit: Dagster sets pool limits
+    only in its database, not in code. Both runs are already starting or started
+    when either checks, so at worst both refuse.
+
+    :param instance: the Dagster instance
+    :param run_id: this run, excluded
+    :returns: the overlapping run ids
+    :rtype: list[str]
+    """
+    return [
+        record.dagster_run.run_id
+        for record in instance.get_run_records(
+            filters=RunsFilter(statuses=_WRITING_STATUSES)
+        )
+        if record.dagster_run.run_id != run_id
+        and RUN_KEY in (record.dagster_run.asset_selection or ())
+    ]
 
 
 class AdjudicationFailure(PermanentFailure):
@@ -211,6 +247,10 @@ def courseware_resolution(
     label embedding cache, then appends this run's snapshots, decisions, new
     embeddings and run row.
     """
+    if overlapping := overlapping_resolution_runs(context.instance, context.run.run_id):
+        # retryable: the retry reads the snapshot the other run writes
+        msg = f"Resolution runs {overlapping} are in progress; one writer at a time"
+        raise Failure(msg)
     labels = require_table("intermediate", LABELS_KEY.path[-1]).collect()
     sense_inputs = require_table("intermediate", SENSE_INPUTS_KEY.path[-1]).collect()
 

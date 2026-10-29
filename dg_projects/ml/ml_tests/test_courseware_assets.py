@@ -17,6 +17,8 @@ import pytest
 from anthropic import Anthropic
 from dagster import (
     DagsterInstance,
+    DagsterRun,
+    DagsterRunStatus,
     Definitions,
     IOManager,
     MultiPartitionKey,
@@ -39,6 +41,7 @@ from ml.assets.courseware_extraction import (
 )
 from ml.assets.courseware_graph import courseware_concept_graph
 from ml.assets.courseware_resolution import (
+    RUN_KEY,
     assignment_churn,
     courseware_resolution,
 )
@@ -788,6 +791,38 @@ def test_resolution_resolves_only_new_labels(tables, calls):
     assert churn.passed
     assert churn.metadata["labels_in_both_runs"].value == 3
     assert churn.metadata["labels_with_changed_id"].value == 0
+
+
+@pytest.mark.usefixtures("embedder")
+def test_resolution_refuses_to_overlap_another_resolution_run(tables, calls):
+    tables["int__courseware__concept_labels"] = labels("auc", "accuracy")
+    instance = DagsterInstance.ephemeral()
+    for run_id, status, selection in (
+        ("other-resolution", DagsterRunStatus.STARTED, frozenset({RUN_KEY})),
+        ("finished-resolution", DagsterRunStatus.SUCCESS, frozenset({RUN_KEY})),
+        ("other-asset", DagsterRunStatus.STARTED, None),
+    ):
+        instance.add_run(
+            DagsterRun(
+                job_name="__ASSET_JOB",
+                run_id=run_id,
+                status=status,
+                asset_selection=selection,
+            )
+        )
+
+    result = resolve(tables, instance=instance)
+
+    assert not result.success
+    error = next(e for e in result.all_events if e.is_step_failure)
+    message = error.step_failure_data.error.message
+    assert "other-resolution" in message
+    assert "finished-resolution" not in message
+    assert calls == []
+    assert "courseware_resolution_run" not in tables
+
+    instance.delete_run("other-resolution")
+    assert resolve(tables, instance=instance).success
 
 
 @pytest.mark.usefixtures("embedder")
