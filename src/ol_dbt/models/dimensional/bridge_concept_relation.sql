@@ -41,7 +41,8 @@
       cross_signal_support      evidence for the pair from the other source: for
                                 an adjudicated relation, course evidence (units
                                 co-teaching, co-assessing or sequencing the pair,
-                                either direction, reruns counted once); for a
+                                either direction, summed within a run, then each
+                                course's largest run); for a
                                 course relation,
                                 verdicts saying the pair is connected
     first_observed_at and last_observed_at show how the edge has evolved; an edge
@@ -101,6 +102,11 @@
       broke (z < x for z < x < y < z, when x < y is cut for x < y < w < x).
       assert_bridge_concept_relation_hierarchy_cycle_overprune counts the cut
       edges a second pass over the survivors would keep, an upper bound on that.
+      The walk is bounded at max_cycle_length edges and fails closed: an edge
+      whose walk could go on past the bound without having closed a cycle fails
+      too (hierarchy_cycle_unresolved), so the passing broader edges are acyclic
+      whatever the length of a cycle, and the acyclic test on them, bounded the
+      same way, holds.
     - broader and builds_on are judged independently. A pair can be both (a
       private method is a kind of method and builds on understanding methods), so
       neither predicate's score is used to fail the other.
@@ -237,13 +243,39 @@ with evidence as (
     where relation = 'builds_on'
 )
 
+-- course units for the unordered pair, over every relation and direction: summed
+-- within a run first, so a course whose reruns split the pair's evidence across
+-- directions or relations still counts its one largest run
 , pair_course_support as (
     select
-        least(from_concept_id, to_concept_id) as low_concept_id
-        , greatest(from_concept_id, to_concept_id) as high_concept_id
-        , sum(course_scope_support) as course_unit_count
-    from course_support
-    group by least(from_concept_id, to_concept_id), greatest(from_concept_id, to_concept_id)
+        low_concept_id
+        , high_concept_id
+        , sum(scope_count) as course_unit_count
+    from (
+        select
+            low_concept_id
+            , high_concept_id
+            , course_key
+            , max(scope_count) as scope_count
+        from (
+            select
+                least(from_concept_id, to_concept_id) as low_concept_id
+                , greatest(from_concept_id, to_concept_id) as high_concept_id
+                , course_key
+                , platform
+                , courserun_readable_id
+                , sum(scope_count) as scope_count
+            from course_relation_runs
+            group by
+                least(from_concept_id, to_concept_id)
+                , greatest(from_concept_id, to_concept_id)
+                , course_key
+                , platform
+                , courserun_readable_id
+        ) as per_run
+        group by low_concept_id, high_concept_id, course_key
+    ) as per_course
+    group by low_concept_id, high_concept_id
 )
 
 , pair_verdict_support as (
@@ -386,7 +418,10 @@ with evidence as (
         , scored.relation
         , coalesce(
             scored.builds_on_rule_failure
-            , case when hierarchy_cycle_edges.from_concept_id is not null then 'hierarchy_cycle' end
+            , case hierarchy_cycle_edges.cut_reason
+                when 'cycle' then 'hierarchy_cycle'
+                when 'unresolved' then 'hierarchy_cycle_unresolved'
+            end
         ) as support_rule_failure
     from scored
     left join hierarchy_cycle_edges

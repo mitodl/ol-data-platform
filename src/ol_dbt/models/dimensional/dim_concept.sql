@@ -90,11 +90,25 @@ with registry as (
 )
 
 -- the kind and claim description of the concept's own mentions, not of every sense
--- of its labels; a taught description says what the concept is better than a used one
-, mention_profiles as (
+-- of its labels. The kind is the most common one: assumed-knowledge claims have a
+-- description but no kind, so the kind is not taken from the description's claim.
+, mention_kinds as (
     select
         concept_id
         , concept_kind
+        , row_number() over (
+            partition by concept_id
+            order by count(*) desc, concept_kind asc
+        ) as kind_rank
+    from mentions
+    where concept_kind is not null
+    group by concept_id, concept_kind
+)
+
+-- a taught description says what the concept is better than a used one
+, mention_profiles as (
+    select
+        concept_id
         , description
         , row_number() over (
             partition by concept_id
@@ -115,7 +129,7 @@ with registry as (
 select
     registry.concept_id as concept_pk
     , coalesce(member_stats.preferred_label, registry.minted_label) as preferred_label
-    , mention_profiles.concept_kind
+    , mention_kinds.concept_kind
     , latest_descriptions.short_description
     , latest_descriptions.description
     , latest_descriptions.is_learner_facing
@@ -141,6 +155,10 @@ left join concept_runs
     on registry.concept_id = concept_runs.concept_id
 left join latest_descriptions
     on registry.concept_id = latest_descriptions.concept_id
+left join mention_kinds
+    on
+        registry.concept_id = mention_kinds.concept_id
+        and mention_kinds.kind_rank = 1
 left join mention_profiles
     on
         registry.concept_id = mention_profiles.concept_id

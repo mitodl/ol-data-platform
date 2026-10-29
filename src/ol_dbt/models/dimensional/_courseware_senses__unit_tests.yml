@@ -73,3 +73,33 @@ unit_tests:
     - {concept_pk: ml-kernel, split_from_concept_fk: os-kernel, mention_count: 1,
       courserun_count: 1, label_count: 1, concept_kind: method, extracted_description: a
         similarity function between inputs}
+
+- name: test_dim_concept_takes_its_kind_from_the_mentions_that_have_one
+  description: >
+    The longest description of calculus comes from an assumed-knowledge claim, which
+    has no kind; the concept's kind still comes from the concept claim that has one.
+  model: dim_concept
+  given:
+  - input: ref('int__courseware__concept_registry')
+    rows:
+    - {concept_id: calc, concept_status: active, minted_label: calculus, split_from_concept_id: null}
+  - input: ref('int__courseware__concept_aliases')
+    rows:
+    - {concept_label_key: calculus, concept_id: calc, sense_role: primary}
+  - input: ref('int__courseware__concept_labels')
+    rows:
+    - {concept_label_key: calculus, preferred_label: calculus}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {concept_id: calc, concept_label_key: calculus, platform: mitxonline, courserun_readable_id: ml,
+      claim_kind: assumed_knowledge, teaching_status: null, concept_kind: null, description: derivatives
+        and integrals of functions of one variable}
+    - {concept_id: calc, concept_label_key: calculus, platform: mitxonline, courserun_readable_id: ml,
+      claim_kind: concept, teaching_status: used, concept_kind: concept, description: used
+        to fit models}
+  - input: source('courseware_intermediate', 'courseware_concept_description')
+    rows: []
+  expect:
+    rows:
+    - {concept_pk: calc, concept_kind: concept, extracted_description: derivatives
+        and integrals of functions of one variable}

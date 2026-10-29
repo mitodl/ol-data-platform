@@ -1160,6 +1160,10 @@ def test_graph_writes_the_closure_of_approved_edges_and_fails_on_an_approved_cyc
     ) == [("a", "b", 1), ("a", "c", 2), ("b", "c", 1)]
     run_id = tables["courseware_concept_graph_run"]["graph_run_id"][0]
     assert closure["graph_run_id"].unique().to_list() == [run_id]
+    # every approved edge joins active concepts, so the run excludes none
+    assert tables["courseware_concept_graph_run"][
+        "prerequisite_closure_excluded_json"
+    ].to_list() == ["[]"]
 
     # approving c -> a closes a cycle: the run fails permanently and writes nothing,
     # so the previous closure stays the newest

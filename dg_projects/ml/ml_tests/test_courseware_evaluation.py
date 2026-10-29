@@ -116,6 +116,24 @@ def test_untuned_ppi_point_is_imputed_mean_plus_rectifier():
     assert estimate.point == pytest.approx(unlabeled.mean() + (y - y_hat).mean())
 
 
+def test_ppi_with_no_positive_corrected_denominator_is_classical():
+    # lam = 1 gives 1 + (1 - 2) = 0 for the denominator; the labels give 1
+    stratum = Stratum(
+        "s",
+        4,
+        np.ones(2),
+        g=np.ones(2),
+        y_hat=np.full(2, 2.0),
+        g_hat=np.full(2, 2.0),
+        y_hat_unlabeled=np.ones(2),
+        g_hat_unlabeled=np.ones(2),
+    )
+    for tuning in (True, False):
+        estimate = stratified_ppi([stratum], power_tuning=tuning)
+        assert estimate.point == 1.0
+        assert estimate.lambdas == {"s": 0.0}
+
+
 def test_ppi_rejects_a_stratum_with_one_label():
     with pytest.raises(ValueError, match="fewer than 2"):
         stratified_ppi([Stratum("thin", 50, np.array([1.0]))])
@@ -258,6 +276,51 @@ def test_label_matcher_rule():
     assert matcher.canonical("recall") != matcher.canonical("precision")
 
 
+def test_label_matcher_round_trips_and_takes_more_mappings(tmp_path):
+    matcher = LabelMatcher().add_assignments(
+        pl.DataFrame(
+            {
+                "concept_label_key": ["recall", "true positive rate"],
+                "concept_id": ["c1", "c1"],
+            }
+        )
+    )
+    matcher.to_frame().write_parquet(tmp_path / "matcher.parquet")
+    restored = LabelMatcher.from_frame(pl.read_parquet(tmp_path / "matcher.parquet"))
+    assert restored.canonical("Recall") == matcher.canonical("true-positive rate")
+    # a reviewer's label map joins an annotator's name to the stored class
+    restored.add_mapping([("sensitivity", "recall")])
+    assert restored.canonical("sensitivity") == restored.canonical("true positive rate")
+
+
+_NO_RELATIONS = pl.DataFrame(
+    schema={
+        "from_concept_id": pl.String,
+        "to_concept_id": pl.String,
+        "relation": pl.String,
+    }
+)
+
+
+_UAI4 = "course-v1:UAI_SOURCE+UAI.4+1T2026"
+
+
+def _senses(assignments, run=_UAI4, status="assigned"):
+    """Sense assignments of every label in one run, each to its given concept."""
+    return assignments.select(
+        "concept_label_key",
+        pl.lit("mitxonline").alias("platform"),
+        pl.lit(run).alias("courserun_readable_id"),
+        "concept_id",
+        pl.lit(status).alias("sense_status"),
+    )
+
+
+_NO_SENSES = _senses(
+    pl.DataFrame(schema={"concept_label_key": pl.String, "concept_id": pl.String})
+)
+
+
 def _inputs(claims: pl.DataFrame) -> samples.GoldInputs:
     empty = pl.DataFrame()
     return samples.GoldInputs(
@@ -274,6 +337,8 @@ def _inputs(claims: pl.DataFrame) -> samples.GoldInputs:
         sources=empty,
         assignments=empty,
         registry=empty,
+        concept_relations=_NO_RELATIONS,
+        sense_assignments=_NO_SENSES,
         decisions=empty,
         labels=empty,
         embeddings=empty,
@@ -643,23 +708,36 @@ def test_pairs_population_uses_the_final_clustering():
         sources=pl.DataFrame(),
         assignments=pl.DataFrame(
             {
-                "concept_label_key": ["a", "b", "c", "d", "e"],
-                "concept_id": ["k1", "k1", "k2", "k3", "k1"],
+                "concept_label_key": ["a", "b", "c", "d", "e", "f"],
+                "concept_id": ["k1", "k1", "k2", "k3", "k1", "k5"],
             }
         ),
         registry=pl.DataFrame(
-            {"concept_id": ["k1", "k2", "k3"], "merged_into_concept_id": [None] * 3},
+            {
+                "concept_id": ["k1", "k2", "k3", "k4", "k5"],
+                "merged_into_concept_id": [None, None, None, "k5", None],
+            },
             schema={"concept_id": pl.String, "merged_into_concept_id": pl.String},
         ),
-        decisions=pl.DataFrame(
+        # the resolver's output: k1 narrower than k2; k4 (since merged into k5)
+        # related to k1, as two opposing narrower verdicts leave a pair
+        concept_relations=pl.DataFrame(
             {
-                "key_a": ["a", "c", "a"],
-                "key_b": ["b", "d", "c"],
-                "query_label_key": ["a", "c", "a"],
-                "verdict": ["close", "exact", "narrower"],
+                "from_concept_id": ["k1", "k1", "k4"],
+                "to_concept_id": ["k2", "k2", "k1"],
+                "relation": ["broader", "related", "related"],
             }
         ),
-        labels=_labels("a", "b", "c", "d", "e"),
+        sense_assignments=_NO_SENSES,
+        decisions=pl.DataFrame(
+            {
+                "key_a": ["a", "c", "a", "a"],
+                "key_b": ["b", "d", "c", "f"],
+                "query_label_key": ["a", "c", "a", "a"],
+                "verdict": ["close", "exact", "narrower", "narrower"],
+            }
+        ),
+        labels=_labels("a", "b", "c", "d", "e", "f"),
         embeddings=pl.DataFrame(
             {
                 "concept_label_key": ["a", "b", "c", "d"],
@@ -680,6 +758,8 @@ def test_pairs_population_uses_the_final_clustering():
     # judged exact but not merged (e.g. a rejected component): nothing links them
     assert by_pair["c||d"] == ("exact", "distinct", 0.0)
     assert by_pair["a||c"] == ("narrower", "a_narrower", 0.0)
+    # the retained verdict says narrower, the resolver kept related
+    assert by_pair["a||f"] == ("narrower", "related", 0.0)
     # co-assigned but neither adjudicated nor embedded
     assert by_pair["a||e"] == ("merged", "exact", 1.0)
 
@@ -719,11 +799,16 @@ def _span_task(item_id, concepts):
     }
 
 
+# the course run of the subsection-scoring fixtures, a column per frame
+_RUN = {"platform": "mitxonline", "courserun_readable_id": "run1"}
+
+
 def test_score_subsections_reports_blind_recall_separately(tmp_path):
     items = [f"u{n}" for n in range(4)]
     population = pl.DataFrame(
         {
             "item_id": items,
+            **_RUN,
             "scope_id": items,
             "stratum": ["s"] * 4,
             "models": ["haiku"] * 4,
@@ -734,6 +819,7 @@ def test_score_subsections_reports_blind_recall_separately(tmp_path):
     sample = pl.DataFrame({"item_id": items, "blind": [True, True, False, False]})
     model_concepts = pl.DataFrame(
         {
+            **_RUN,
             "scope_id": items,
             "model": ["haiku"] * 4,
             "canonical": [LabelMatcher().canonical("pandas")] * 4,
@@ -762,6 +848,60 @@ def test_score_subsections_reports_blind_recall_separately(tmp_path):
     assert sorted(unmatched["item_id"]) == ["u0", "u1"]
 
 
+def test_subsections_in_two_runs_with_one_scope_id_stay_apart(tmp_path):
+    # OCW runs reuse scope ids; each run's model concepts score only its own scope
+    runs = ["run1", "run1", "run2", "run2"]
+    scopes = ["u0", "u1", "u0", "u1"]
+    population = pl.DataFrame(
+        {
+            "platform": ["ocw"] * 4,
+            "courserun_readable_id": runs,
+            "scope_id": scopes,
+            "stratum": ["s"] * 4,
+            "models": ["haiku"] * 4,
+            "found_hat_haiku": [1] * 4,
+            "gold_hat": [1] * 4,
+        }
+    ).with_columns(
+        pl.format("{}|{}|{}", "platform", "courserun_readable_id", "scope_id").alias(
+            "item_id"
+        )
+    )
+    items = population["item_id"].to_list()
+    sample = pl.DataFrame({"item_id": items, "blind": [True] * 4})
+    model_concepts = pl.DataFrame(
+        {
+            "platform": ["ocw"] * 2,
+            "courserun_readable_id": ["run1"] * 2,
+            "scope_id": ["u0", "u1"],
+            "model": ["haiku"] * 2,
+            "canonical": [LabelMatcher().canonical("pandas")] * 2,
+            "status": ["taught"] * 2,
+        }
+    )
+    tasks = [_span_task(item, [("pandas", "taught")]) for item in items]
+    exported = _export(tmp_path, tasks)
+    report, unmatched = score.score_subsections(
+        population, sample, exported, model_concepts, LabelMatcher(), alpha=0.05
+    )
+    recall = report["models"]["haiku"]["concept_recall"]["strata"]["s"]
+    assert recall["labeled_ratio"] == 0.5
+    assert sorted(unmatched["item_id"]) == items[2:]
+    roles = model_concepts.select(
+        *score.SCOPE, "model", "canonical", pl.lit("objective").alias("role")
+    )
+    # a scope the population does not hold (a context scope, say) is counted only
+    outside = roles.head(1).with_columns(pl.lit("overview").alias("scope_id"))
+    objectives = score.score_objectives(
+        population,
+        exported,
+        LabelMatcher(),
+        alpha=0.05,
+        model_roles=pl.concat([roles, outside]),
+    )
+    assert objectives["models"]["haiku"]["scopes_outside_population"] == 1
+
+
 def test_pairs_leave_out_labels_no_current_claim_uses():
     # x was a label in an earlier run: its decisions and embedding remain
     inputs = samples.GoldInputs(
@@ -779,6 +919,8 @@ def test_pairs_leave_out_labels_no_current_claim_uses():
             {"concept_id": ["k1", "k2", "k3"], "merged_into_concept_id": [None] * 3},
             schema={"concept_id": pl.String, "merged_into_concept_id": pl.String},
         ),
+        concept_relations=_NO_RELATIONS,
+        sense_assignments=_NO_SENSES,
         decisions=pl.DataFrame(
             {
                 "key_a": ["a", "c", "a", "a", "c"],
@@ -813,27 +955,54 @@ def test_pairs_leave_out_labels_no_current_claim_uses():
     assert sample.height == population.height
 
 
-def test_clusters_leave_out_labels_no_current_claim_uses():
+def _course_titles(*runs):
+    return pl.DataFrame(
+        {"courserun_readable_id": list(runs), "course_title": [f"T {r}" for r in runs]}
+    )
+
+
+def test_clusters_are_built_from_course_run_senses():
     # x was a label of k1 in an earlier extraction; k3 has no current label at all
-    keys = ["a", "b", "c", "d", "e", "f"]
+    keys = ["a", "b", "c", "d", "e", "f", "g"]
+    assignments = pl.DataFrame(
+        {
+            "concept_label_key": [*keys, "x", "y"],
+            "concept_id": ["k1", "k1", "k2", "k4", "k5", "k5", "k6", "k1", "k3"],
+        }
+    )
+    senses = pl.concat(
+        [
+            _senses(assignments),
+            # run2 uses a in k2's sense, and d in a sense not yet decided
+            _senses(
+                pl.DataFrame({"concept_label_key": ["a"], "concept_id": ["k2"]}),
+                run="run2",
+            ),
+            _senses(
+                pl.DataFrame(
+                    {"concept_label_key": ["d"], "concept_id": [None]},
+                    schema={"concept_label_key": pl.String, "concept_id": pl.String},
+                ),
+                run="run2",
+                status="needs_review",
+            ),
+        ]
+    )
     inputs = samples.GoldInputs(
         extractions=pl.DataFrame(),
         claims=pl.DataFrame(),
         evidence=pl.DataFrame(),
-        sources=pl.DataFrame(),
-        assignments=pl.DataFrame(
-            {
-                "concept_label_key": [*keys, "x", "y"],
-                "concept_id": ["k1", "k1", "k2", "k4", "k5", "k5", "k1", "k3"],
-            }
-        ),
+        sources=_course_titles(_UAI4, "run2"),
+        assignments=assignments,
         registry=pl.DataFrame(
             {
-                "concept_id": ["k1", "k2", "k3", "k4", "k5"],
-                "merged_into_concept_id": [None] * 5,
+                "concept_id": ["k1", "k2", "k3", "k4", "k5", "k6"],
+                "merged_into_concept_id": [None] * 6,
             },
             schema={"concept_id": pl.String, "merged_into_concept_id": pl.String},
         ),
+        concept_relations=_NO_RELATIONS,
+        sense_assignments=senses,
         decisions=pl.DataFrame(),
         labels=_labels(*keys),
         embeddings=pl.DataFrame(
@@ -843,7 +1012,10 @@ def test_clusters_leave_out_labels_no_current_claim_uses():
             }
         ),
         concepts=pl.DataFrame(
-            {"concept_pk": ["k1", "k2", "k4", "k5"], "preferred_label": list("ACDE")}
+            {
+                "concept_pk": ["k1", "k2", "k4", "k5", "k6"],
+                "preferred_label": list("ACDEG"),
+            }
         ),
         relations=pl.DataFrame(),
         matcher=LabelMatcher(),
@@ -851,12 +1023,17 @@ def test_clusters_leave_out_labels_no_current_claim_uses():
     population = samples.clusters_population(inputs)
     assert population.select("item_id", "members", "stratum").to_dicts() == [
         {"item_id": "k1", "members": ["a", "b"], "stratum": "multi"},
-        {"item_id": "k2", "members": ["c"], "stratum": "singleton"},
+        {"item_id": "k2", "members": ["a", "c"], "stratum": "multi"},
         {"item_id": "k4", "members": ["d"], "stratum": "singleton"},
         {"item_id": "k5", "members": ["e", "f"], "stratum": "multi"},
+        {"item_id": "k6", "members": ["g"], "stratum": "singleton"},
     ]
     sample = samples.sample_clusters(inputs, population, size=10, seed=1)
-    assert sorted(sample["item_id"]) == ["k1", "k2", "k4", "k5"]
+    assert sorted(sample["item_id"]) == ["k1", "k2", "k4", "k5", "k6"]
+    [k2] = sample.filter(pl.col("item_id") == "k2")["items_json"]
+    bodies = {item["id"]: item["body"] for item in json.loads(k2)}
+    assert bodies["m:a"].endswith("used in: T run2")
+    assert bodies["m:c"].endswith(f"used in: T {_UAI4}")
 
 
 def test_subsections_population_with_a_model_that_named_no_concept():
@@ -881,6 +1058,11 @@ def test_subsections_population_with_a_model_that_named_no_concept():
     [row] = samples.subsections_population(inputs).to_dicts()
     assert (row["found_hat_haiku"], row["found_hat_opus"], row["gold_hat"]) == (0, 1, 1)
     assert row["models"] == "haiku+opus"
+    # what the sample step writes for scoring: the skill is not a concept
+    concepts = samples.scope_concepts(samples.concept_claims(inputs), inputs.matcher)
+    assert concepts.select("scope_id", "model", "status").to_dicts() == [
+        {"scope_id": "u1", "model": "opus", "status": "taught"}
+    ]
 
 
 def test_score_subsections_scores_a_model_that_named_nothing(tmp_path):
@@ -888,6 +1070,7 @@ def test_score_subsections_scores_a_model_that_named_nothing(tmp_path):
     population = pl.DataFrame(
         {
             "item_id": items,
+            **_RUN,
             "scope_id": items,
             "stratum": ["s"] * 4,
             "models": ["haiku+opus"] * 4,
@@ -899,6 +1082,7 @@ def test_score_subsections_scores_a_model_that_named_nothing(tmp_path):
     sample = pl.DataFrame({"item_id": items, "blind": [True, True, False, False]})
     model_concepts = pl.DataFrame(
         {
+            **_RUN,
             "scope_id": items,
             "model": ["haiku"] * 4,
             "canonical": [LabelMatcher().canonical("pandas")] * 4,
@@ -921,18 +1105,21 @@ def test_score_subsections_scores_a_model_that_named_nothing(tmp_path):
 def test_few_labels_are_not_their_own_neighbours():
     # with no more labels than the neighbour count, the top ranks hold the query too
     keys = ["a", "b", "c", "d"]
+    assignments = pl.DataFrame(
+        {"concept_label_key": keys, "concept_id": ["k1", "k2", "k3", "k3"]}
+    )
     inputs = samples.GoldInputs(
         extractions=pl.DataFrame(),
         claims=pl.DataFrame(),
         evidence=pl.DataFrame(),
-        sources=pl.DataFrame(),
-        assignments=pl.DataFrame(
-            {"concept_label_key": keys, "concept_id": ["k1", "k2", "k3", "k3"]}
-        ),
+        sources=_course_titles(_UAI4),
+        assignments=assignments,
         registry=pl.DataFrame(
             {"concept_id": ["k1", "k2", "k3"], "merged_into_concept_id": [None] * 3},
             schema={"concept_id": pl.String, "merged_into_concept_id": pl.String},
         ),
+        concept_relations=_NO_RELATIONS,
+        sense_assignments=_senses(assignments),
         decisions=pl.DataFrame(
             schema={
                 "key_a": pl.String,
@@ -967,20 +1154,55 @@ def test_few_labels_are_not_their_own_neighbours():
         assert row["item_id"] not in json.loads(row["neighbour_sizes_json"])
 
 
-def _extraction(key, model, scope):
+def _extraction(key, model, scope, *, part=1, checksums=None, day=17):
+    checksums = checksums or f"{scope}-text"
     return {
         "extraction_key": key,
+        "extractor_id": "x1",
         "model_id": f"us.anthropic.claude-{model}-5-5",
         "prompt_version": "v1",
+        "schema_version": "s1",
+        "effort": "high",
         "platform": "mitxonline",
         "courserun_readable_id": "course-v1:UAI_SOURCE+UAI.4+1T2026",
         "scope_id": scope,
         "scope_kind": "unit",
         "scope_title": scope,
         "scope_position": 1,
-        "scope_part": 1,
-        "extracted_at": datetime(2026, 10, 17, tzinfo=UTC),
+        "scope_part": part,
+        "scope_part_count": len(checksums.split(",")),
+        "input_text_checksum": checksums.split(",")[part - 1],
+        "scope_part_checksums": checksums,
+        "extracted_at": datetime(2026, 10, day, tzinfo=UTC),
     }
+
+
+def test_current_extractions_take_each_models_newest_complete_reading():
+    extractions = pl.DataFrame(
+        [
+            # u1: an older reading in two parts, then a complete one-part reading
+            _extraction("o1-old1", "opus", "u1", part=1, checksums="a,b", day=1),
+            _extraction("o1-old2", "opus", "u1", part=2, checksums="a,b", day=1),
+            _extraction("o1-new", "opus", "u1", checksums="c", day=2),
+            # u2: a new two-part reading with only its first part extracted
+            _extraction("o2-old", "opus", "u2", checksums="d", day=1),
+            _extraction("o2-new1", "opus", "u2", part=1, checksums="e,f", day=2),
+            # another model's reading is current on its own
+            _extraction("h1", "haiku", "u1", checksums="c", day=1),
+            # a part whose text did not change keeps its older extraction
+            _extraction("h2-1", "haiku", "u2", part=1, checksums="g,h", day=1),
+            _extraction("h2-2", "haiku", "u2", part=2, checksums="g,i", day=2),
+            _extraction("h2-2old", "haiku", "u2", part=2, checksums="g,h", day=1),
+        ]
+    )
+    current = samples.current_extractions(extractions)
+    assert sorted(current["extraction_key"]) == [
+        "h1",
+        "h2-1",
+        "h2-2",
+        "o1-new",
+        "o2-old",
+    ]
 
 
 def _write_gold_inputs(
@@ -992,6 +1214,8 @@ def _write_gold_inputs(
     extractions=None,
     claims=None,
     sources=None,
+    concept_relations=_NO_RELATIONS,
+    sense_assignments=None,
 ):
     """Write the parquet files load_inputs reads; one run, by default one claim."""
     extraction = directory / "extraction"
@@ -1014,6 +1238,11 @@ def _write_gold_inputs(
     for table, frame in (
         ("courseware_concept_assignment", assignments),
         ("courseware_concept_registry", registry),
+        ("courseware_concept_relation", concept_relations),
+        (
+            "courseware_concept_sense_assignment",
+            _senses(assignments) if sense_assignments is None else sense_assignments,
+        ),
         ("courseware_resolution_decision", decisions),
     ):
         frame.with_columns(pl.lit(run).alias("resolution_run_id")).write_parquet(
@@ -1039,6 +1268,19 @@ def _write_gold_inputs(
         directory / "concepts.parquet",
         directory / "relations.parquet",
     )
+
+
+def test_a_claim_with_no_located_passage_shows_the_whole_source():
+    text = "x" * 5_000 + "the supporting sentence"
+    texts = {("run1", "s1"): ("Lecture", text)}
+    claim = {"courserun_readable_id": "run1"}
+    unlocated = {"source_ref": "s1", "char_start": None, "char_end": None}
+    window, regions = samples._claim_window(claim, [unlocated], texts)
+    assert window == f"=== Lecture ===\n{text}\n\n"
+    assert regions == []
+    located = {"source_ref": "s1", "char_start": 10, "char_end": 20}
+    window, _ = samples._claim_window(claim, [located], texts)
+    assert "the supporting sentence" not in window
 
 
 def test_matcher_follows_merged_concepts_to_their_survivor(tmp_path):
@@ -1376,6 +1618,39 @@ def test_prerequisites_score_hierarchy_and_dependency_separately(tmp_path):
     assert report["labelled_edges_reversed"] == 0
 
 
+def test_a_pair_with_edges_both_ways_is_two_edges_for_precision(tmp_path):
+    items = [f"a{n}||b{n}" for n in range(3)]
+    population = pl.DataFrame(
+        {
+            "item_id": items,
+            "concept_a": [f"a{n}" for n in range(3)],
+            "stratum": ["bidirectional"] * 3,
+            "edge_direction": ["both"] * 3,
+            "builds_on_direction": ["both"] * 3,
+            "pipeline_hierarchy": [False] * 3,
+        }
+    )
+    tasks = [
+        _prerequisite_task(item, [(1, "none", answer, ()), (2, "none", answer, ())])
+        for item, answer in zip(
+            items, ("b_before_a", "context_dependent", "none"), strict=True
+        )
+    ]
+    report = score.score_prerequisites(
+        population,
+        population.select("item_id", "concept_a"),
+        _export(tmp_path, tasks),
+        alpha=0.05,
+    )
+    # one of a0's two edges is right; a2's none confirms neither
+    strict = report["edge_precision"]["strata"]["bidirectional"]
+    assert strict["labeled_ratio"] == pytest.approx(1 / 6)
+    lenient = report["edge_precision_lenient"]["strata"]["bidirectional"]
+    assert lenient["labeled_ratio"] == pytest.approx(3 / 6)
+    # recall still needs only one edge the way the consensus runs
+    assert report["edge_recall"]["strata"]["bidirectional"]["labeled_ratio"] == 1.0
+
+
 def test_prerequisites_config_judges_hierarchy_and_dependency_apart():
     config = labelstudio.PREREQUISITES_CONFIG
     for name in ("hierarchy", "hierarchy_depth", "dependency", "dependency_depth"):
@@ -1471,6 +1746,7 @@ def test_subsections_score_salience_and_central_recall(tmp_path):
     population = pl.DataFrame(
         {
             "item_id": items,
+            **_RUN,
             "scope_id": items,
             "stratum": ["s"] * 2,
             "models": ["haiku"] * 2,
@@ -1482,6 +1758,7 @@ def test_subsections_score_salience_and_central_recall(tmp_path):
     matcher = LabelMatcher()
     model_concepts = pl.DataFrame(
         {
+            **_RUN,
             "scope_id": items,
             "model": ["haiku"] * 2,
             "canonical": [matcher.canonical("interpretable clustering")] * 2,
@@ -1519,7 +1796,7 @@ def test_subsections_score_salience_and_central_recall(tmp_path):
 def test_objectives_agreement_conflicts_and_model_hooks(tmp_path):
     items = ["u0", "u1", "u2"]
     population = pl.DataFrame(
-        {"item_id": items, "scope_id": items, "stratum": ["s"] * 3}
+        {"item_id": items, **_RUN, "scope_id": items, "stratum": ["s"] * 3}
     )
     assignment = [("pivot table", "used", "central", None)]
     tasks = [
@@ -1538,6 +1815,8 @@ def test_objectives_agreement_conflicts_and_model_hooks(tmp_path):
     canonical = matcher.canonical
     model_roles = pl.DataFrame(
         {
+            "platform": ["mitxonline"] * 5,
+            "courserun_readable_id": ["run1"] * 5,
             "scope_id": ["u0", "u0", "u0", "u1", "u2"],
             "model": ["variant"] * 5,
             "canonical": [
@@ -1695,13 +1974,15 @@ def test_prerequisite_population_flags_pipeline_hierarchy():
     claims = pl.DataFrame(
         [_claim("opus", "u1", n, label) for n, label in enumerate("xyz")]
     )
+    assignments = pl.DataFrame(
+        {"concept_label_key": list("xyz"), "concept_id": list("abc")}
+    )
     inputs = dataclasses.replace(
         _inputs(claims),
         relations=relations,
         concepts=concepts,
-        assignments=pl.DataFrame(
-            {"concept_label_key": list("xyz"), "concept_id": list("abc")}
-        ),
+        assignments=assignments,
+        sense_assignments=_senses(assignments),
         registry=pl.DataFrame(
             {"concept_id": list("abc"), "merged_into_concept_id": [None] * 3},
             schema_overrides={"merged_into_concept_id": pl.String},
@@ -1714,6 +1995,52 @@ def test_prerequisite_population_flags_pipeline_hierarchy():
     assert flags == {"a||b": True, "a||c": False, "b||c": False}
     builds_on = dict(population.select("item_id", "builds_on_direction").iter_rows())
     assert builds_on == {"a||b": "none", "a||c": "b_before_a", "b||c": "none"}
+
+
+def test_prerequisite_pairs_co_occur_as_each_runs_sense():
+    # run2 uses x in a sense split off its primary concept a
+    claims = pl.DataFrame(
+        [_claim("opus", "u1", n, label) for n, label in enumerate("xy")]
+        + [
+            {**_claim("opus", "u1", n, label), "courserun_readable_id": "run2"}
+            for n, label in enumerate("xy")
+        ]
+    )
+    assignments = pl.DataFrame(
+        {"concept_label_key": ["x", "y"], "concept_id": ["a", "b"]}
+    )
+    senses = pl.concat(
+        [
+            _senses(assignments),
+            _senses(
+                pl.DataFrame(
+                    {"concept_label_key": ["x", "y"], "concept_id": ["c", "b"]}
+                ),
+                run="run2",
+            ),
+        ]
+    )
+    inputs = dataclasses.replace(
+        _inputs(claims),
+        relations=pl.DataFrame(
+            schema={
+                "from_concept_fk": pl.String,
+                "to_concept_fk": pl.String,
+                "relation": pl.String,
+                "relation_family": pl.String,
+                "courserun_support": pl.Int64,
+            }
+        ),
+        assignments=assignments,
+        sense_assignments=senses,
+        registry=pl.DataFrame(
+            {"concept_id": list("abc"), "merged_into_concept_id": [None] * 3},
+            schema_overrides={"merged_into_concept_id": pl.String},
+        ),
+        labels=pl.DataFrame({"concept_label_key": ["x", "y"]}),
+    )
+    population = samples.prerequisites_population(inputs)
+    assert sorted(population["item_id"]) == ["a||b", "b||c"]
 
 
 def test_claim_fallback_with_disciplines_keeps_the_autorater_strata_apart():
