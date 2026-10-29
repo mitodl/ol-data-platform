@@ -218,7 +218,11 @@ models:
         update: []
         delete: []
         all privileges: []
-      +properties: {}
+      # Clears the root Iceberg `format` property, which StarRocks native tables
+      # and materialized views reject. The empty value is null, not {}:
+      # dbt-starrocks 1.12.2 renders {} as an empty PROPERTIES () block that
+      # fails to parse (https://github.com/StarRocks/dbt-starrocks/issues/128).
+      +properties:
       +meta:
         required_docs: true
         iceberg_maintenance:
@@ -238,7 +242,7 @@ models:
         update: []
         delete: []
         all privileges: []
-      +properties: {}
+      +properties:
       +meta:
         required_docs: true
         iceberg_maintenance:
