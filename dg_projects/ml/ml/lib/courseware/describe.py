@@ -8,7 +8,8 @@ concepts a learner would look up (a dataset, a course-specific exercise), so
 user-facing surfaces can leave them out.
 
 A concept is described again only when its inputs or the prompt or model change;
-rows are added, never replaced, like the extractions.
+rows are added, never replaced, like the extractions. The Dagster asset describes
+only under a prompt version courseware_description_approval approves.
 """
 
 import hashlib
@@ -22,6 +23,8 @@ from typing import Any
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock, APIError
 from ml.lib.courseware.schemas import Strict
+from ml.lib.courseware.tracing import TRACE_TAGS, attach_call
+from ml.resources.opik_auth import traced
 from pydantic import Field, ValidationError
 
 log = logging.getLogger(__name__)
@@ -50,6 +53,14 @@ not the notes. Do not state facts the notes and general knowledge do not support
 Call record_descriptions once with one entry per id.
 """
 
+# What courseware_description_approval names to approve this prompt.
+DESCRIPTION_PROMPT_VERSION = hashlib.sha256(DESCRIPTION_PROMPT.encode()).hexdigest()[
+    :12
+]
+
+# Descriptions are short, batched and many; the small model is the default.
+DESCRIPTION_MODEL = "claude-haiku-5-5"
+BEDROCK_DESCRIPTION_MODEL = "us.anthropic.claude-haiku-5-5"
 DESCRIPTION_BATCH_SIZE = 40
 DESCRIPTION_MAX_TOKENS = 32_000
 
@@ -109,11 +120,18 @@ def _concept_inputs(rows: pl.DataFrame) -> list[dict[str, Any]]:
     return concepts
 
 
+@traced(
+    "courseware_describe_batch",
+    tags=TRACE_TAGS,
+    ignore_arguments=["client", "trace_metadata"],
+)
 def _describe_batch(
     client: Anthropic | AnthropicBedrock,
     model_id: str,
     effort: str,
     batch: list[dict[str, Any]],
+    *,
+    trace_metadata: dict[str, Any],
 ) -> list[ConceptDescription]:
     listing = "\n\n".join(
         f"{index} | labels: {' / '.join(entry['labels'])} | kind: {entry['kind']}\n"
@@ -130,6 +148,13 @@ def _describe_batch(
         output_config={"effort": effort},
     ) as stream:
         response = stream.get_final_message()
+    attach_call(
+        client,
+        model_id,
+        [response.usage],
+        template=DESCRIPTION_PROMPT,
+        metadata=trace_metadata,
+    )
     tool_input = next(
         (
             block.input
@@ -146,6 +171,49 @@ def _describe_batch(
     except ValidationError as error:
         msg = f"invalid descriptions: {error}"
         raise ValueError(msg) from error
+
+
+def current_input_checksums(rows: pl.DataFrame) -> dict[str, str]:
+    """Return each concept's input_checksum as describe_concepts would compute it.
+
+    :param rows: int__courseware__concept_description_inputs rows
+    :rtype: dict[str, str]
+    """
+    return {
+        entry["concept_id"]: entry["input_checksum"] for entry in _concept_inputs(rows)
+    }
+
+
+def description_version(model_id: str, effort: str) -> str:
+    """Hash of the prompt, model and effort; a change describes every concept again."""
+    return hashlib.sha256(
+        json.dumps([DESCRIPTION_PROMPT, model_id, effort]).encode()
+    ).hexdigest()[:12]
+
+
+def pending_concepts(
+    rows: pl.DataFrame, existing: pl.DataFrame | None, version: str
+) -> list[dict[str, Any]]:
+    """Return the concepts whose current inputs have no description at version.
+
+    :param rows: int__courseware__concept_description_inputs rows
+    :param existing: descriptions already stored
+    :param version: description_version for the run's model and effort
+    :returns: one entry per concept to describe, with its input_checksum
+    :rtype: list[dict[str, Any]]
+    """
+    done: set[tuple[str, str]] = set()
+    if existing is not None:
+        done = set(
+            existing.filter(pl.col("description_version") == version)
+            .select("concept_id", "input_checksum")
+            .iter_rows()
+        )
+    return [
+        entry
+        for entry in _concept_inputs(rows)
+        if (entry["concept_id"], entry["input_checksum"]) not in done
+    ]
 
 
 def describe_concepts(  # noqa: PLR0913
@@ -168,28 +236,27 @@ def describe_concepts(  # noqa: PLR0913
     :returns: the new description rows
     :rtype: pl.DataFrame
     """
-    version = hashlib.sha256(
-        json.dumps([DESCRIPTION_PROMPT, model_id, effort]).encode()
-    ).hexdigest()[:12]
-    done: set[tuple[str, str]] = set()
-    if existing is not None:
-        done = set(
-            existing.filter(pl.col("description_version") == version)
-            .select("concept_id", "input_checksum")
-            .iter_rows()
-        )
-    pending = [
-        entry
-        for entry in _concept_inputs(rows)
-        if (entry["concept_id"], entry["input_checksum"]) not in done
-    ]
+    version = description_version(model_id, effort)
+    pending = pending_concepts(rows, existing, version)
     batches = [list(batch) for batch in batched(pending, DESCRIPTION_BATCH_SIZE)]
     described_at = datetime.now(tz=UTC)
     output: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [
-            pool.submit(_describe_batch, client, model_id, effort, batch)
-            for batch in batches
+            pool.submit(
+                _describe_batch,
+                client,
+                model_id,
+                effort,
+                batch,
+                trace_metadata={
+                    "description_version": version,
+                    "batch_ordinal": ordinal,
+                    "concept_count": len(batch),
+                    "effort": effort,
+                },
+            )
+            for ordinal, batch in enumerate(batches)
         ]
         for batch, future in zip(batches, futures, strict=True):
             # a failed batch is left out; the next run describes only what is missing
