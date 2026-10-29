@@ -164,6 +164,10 @@ sources:
   # rows are full snapshots per resolution run; the newest run in
   # courseware_resolution_run is current, and earlier runs are history.
   - name: courseware_resolution_run
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_resolution_run]
     description: One row per resolution run, with its mode, models and churn counts.
     columns:
     - name: resolution_run_id
@@ -187,6 +191,11 @@ sources:
       description: int, labels the run adjudicated
     - name: adjudication_calls
       description: int, model calls made
+    - name: failed_batch_count
+      description: int, adjudication calls that failed; their labels are retried by
+        the next run (a rebuild keeps their previous concept)
+    - name: failed_label_count
+      description: int, labels in the failed calls
     - name: concepts_minted
       description: int, new concept ids
     - name: concepts_merged
@@ -209,6 +218,10 @@ sources:
     - name: sense_review_count
       description: int, (label, course run) units in the review queue
   - name: courseware_concept_registry
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_registry]
     description: Every concept id ever minted, per resolution run.
     columns:
     - name: resolution_run_id
@@ -230,6 +243,10 @@ sources:
       description: str, for a concept minted as another sense of a label, the label's
         primary concept it was split from; null in snapshots written before senses
   - name: courseware_concept_assignment
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_assignment]
     description: Which concept each normalized label belongs to (its primary sense),
       per resolution run.
     columns:
@@ -244,6 +261,10 @@ sources:
     - name: assigned_run_id
       description: str, the run that first made this assignment
   - name: courseware_concept_alias
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_alias]
     description: Every sense of every normalized label, per resolution run (ml.lib.courseware.senses).
       A label has its primary concept and any concepts split off it for another meaning.
     columns:
@@ -261,6 +282,10 @@ sources:
     - name: added_run_id
       description: str, the run that first gave the label this sense
   - name: courseware_concept_sense_assignment
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_sense_assignment]
     description: Which sense of its label each course run uses, per resolution run,
       one row per (concept_label_key, platform, courserun_readable_id).
     columns:
@@ -283,6 +308,10 @@ sources:
     - name: assigned_run_id
       description: str, the run that made the assignment
   - name: courseware_sense_decision
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_sense_decision]
     description: Every sense adjudication decision, append-only, for review and evaluation.
     columns:
     - name: resolution_run_id
@@ -300,6 +329,10 @@ sources:
     - name: model_id
       description: str, the sense adjudication model
   - name: courseware_concept_relation
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_relation]
     description: Concept-to-concept relations proposed by adjudication, per run, carried
       forward and redirect-resolved.
     columns:
@@ -314,6 +347,10 @@ sources:
     - name: proposed_run_id
       description: str, the run that first proposed the relation
   - name: courseware_resolution_decision
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_resolution_decision]
     description: Every adjudication verdict, append-only, for review and evaluation.
     columns:
     - name: resolution_run_id
@@ -329,6 +366,10 @@ sources:
       description: str, the adjudication model
   # Concept graph topology (ml.lib.courseware.graph), one set of rows per graph run.
   - name: courseware_concept_graph_run
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_graph_run]
     description: One row per graph run with the graph's size, density, sparsity, components,
       communities, modularity and cycle counts.
     columns:
@@ -344,6 +385,10 @@ sources:
     - name: parameters_json
       description: str, the thresholds and weights the run used
   - name: courseware_concept_graph_node
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_graph_node]
     description: Each active concept's position in a graph run.
     columns:
     - name: graph_run_id
@@ -353,6 +398,10 @@ sources:
     - name: community_id
       description: str, the concept's Leiden community, carried across runs
   - name: courseware_concept_graph_community
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_graph_community]
     description: Communities found in a graph run, with stable ids carried forward
       by member overlap.
     columns:
@@ -363,6 +412,10 @@ sources:
     - name: first_seen_run_id
       description: str, the graph run the community first appeared in
   - name: courseware_concept_graph_edge
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_graph_edge]
     description: The edges a graph run kept after thresholds, with weight and backbone
       score.
     columns:
@@ -372,6 +425,10 @@ sources:
       description: float, local-degree sparsification score; keep edges above a threshold
         to draw a sparse backbone
   - name: courseware_concept_graph_prerequisite_closure
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_graph_prerequisite_closure]
     description: Per graph run, every concept each concept builds on through approved
       builds_on edges (review_status accepted), at the fewest hops, up to the run's
       max_prerequisite_depth; experimental, and empty until review exists.
@@ -385,6 +442,10 @@ sources:
     - name: min_depth
       description: int, the fewest builds_on hops from from_concept_id to to_concept_id
   - name: courseware_concept_description
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_description]
     description: Learner-facing descriptions of concepts (ml.lib.courseware.describe),
       one row per concept per description version and input checksum.
     columns:

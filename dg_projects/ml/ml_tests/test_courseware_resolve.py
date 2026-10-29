@@ -56,13 +56,13 @@ def verdicts(monkeypatch):
         reverse = table.get((candidate, query), "distinct")
         return inverse.get(reverse, reverse)
 
-    def fake_adjudicate(_client, _model_id, candidates, _rows):
+    def fake_adjudicate(_client, _model_id, candidates, _rows, **_kwargs):
         decided = [
             (query, candidate, verdict(query, candidate))
             for query, found in candidates.items()
             for candidate in found
         ]
-        return decided, 1, set()
+        return decided, 1, []
 
     monkeypatch.setattr(resolve, "adjudicate", fake_adjudicate)
     return table
@@ -221,14 +221,14 @@ def test_rebuild_keeps_a_failed_label_on_its_previous_concept(verdicts, monkeypa
     verdicts[("auc", "area under the curve")] = "exact"
     first = run(labels("auc", "area under the curve", "pandas"))
 
-    def adjudicate_failing_pandas(_client, _model_id, candidates, _rows):
+    def adjudicate_failing_pandas(_client, _model_id, candidates, _rows, **_kwargs):
         decided = [
             (query, candidate, verdicts.get((query, candidate), "distinct"))
             for query, found in candidates.items()
             if query != "pandas"
             for candidate in found
         ]
-        return decided, 1, {"pandas"}
+        return decided, 1, [["pandas"]]
 
     monkeypatch.setattr(resolve, "adjudicate", adjudicate_failing_pandas)
     rebuilt = run(
@@ -241,6 +241,8 @@ def test_rebuild_keeps_a_failed_label_on_its_previous_concept(verdicts, monkeypa
     }
     assert registry[pandas]["concept_status"] == "active"
     assert rebuilt.run["concepts_deprecated"][0] == 0
+    assert rebuilt.run["failed_batch_count"][0] == 1
+    assert rebuilt.run["failed_label_count"][0] == 1
 
 
 def test_concepts_bridged_twice_merge_one_way(verdicts):
@@ -378,7 +380,7 @@ def test_incremental_run_leaves_a_failed_label_unassigned(verdicts, monkeypatch)
     verdicts[("auc roc", "auc")] = "exact"
     verdicts[("area under the curve", "auc")] = "exact"
 
-    def adjudicate_failing_auc_roc(_client, _model_id, candidates, _rows):
+    def adjudicate_failing_auc_roc(_client, _model_id, candidates, _rows, **_kwargs):
         # auc roc's own batch failed, but another query still lists it as exact
         decided = [
             (query, candidate, verdicts.get((query, candidate), "distinct"))
@@ -387,7 +389,7 @@ def test_incremental_run_leaves_a_failed_label_unassigned(verdicts, monkeypatch)
             for candidate in found
         ]
         decided.append(("area under the curve", "auc roc", "exact"))
-        return decided, 1, {"auc roc"}
+        return decided, 1, [["auc roc"]]
 
     monkeypatch.setattr(resolve, "adjudicate", adjudicate_failing_auc_roc)
     second = run(
@@ -440,6 +442,12 @@ class _VerdictClient:
                     type="tool_use", name="record_verdicts", input=self.tool_input
                 )
             ],
+            usage=SimpleNamespace(
+                input_tokens=100,
+                output_tokens=20,
+                cache_read_input_tokens=0,
+                cache_creation_input_tokens=0,
+            ),
         )
         yield SimpleNamespace(get_final_message=lambda: response)
 
@@ -484,6 +492,7 @@ def test_an_incomplete_adjudication_fails_the_batch(tool_input):
             "fake-model",
             [("auc", ["area under the curve"])],
             rows,
+            trace_metadata={},
         )
 
 
@@ -500,7 +509,11 @@ def test_a_complete_adjudication_is_returned():
         }
     )
     assert resolve._adjudicate_batch(
-        client, "fake-model", [("auc", ["area under the curve"])], rows
+        client,
+        "fake-model",
+        [("auc", ["area under the curve"])],
+        rows,
+        trace_metadata={},
     ) == [("auc", "area under the curve", "exact")]
 
 

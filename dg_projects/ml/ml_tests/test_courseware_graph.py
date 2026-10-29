@@ -114,6 +114,23 @@ def test_communities_keep_their_ids_across_runs():
     assert 0 < second.run["density"][0] < 1
 
 
+def test_a_relabelled_concept_changes_the_input_checksum():
+    edges = relations(relation("pandas", "numpy", "complements", lift=5.0))
+    before = compute_graph(concepts("pandas", "numpy"), edges)
+    same = compute_graph(concepts("pandas", "numpy"), edges)
+    relabelled = compute_graph(
+        concepts("pandas", "numpy").with_columns(
+            preferred_label=pl.when(pl.col("concept_pk") == "numpy")
+            .then(pl.lit("NumPy"))
+            .otherwise(pl.col("preferred_label"))
+        ),
+        edges,
+    )
+    assert same.run["input_checksum"][0] == before.run["input_checksum"][0]
+    assert relabelled.run["input_checksum"][0] != before.run["input_checksum"][0]
+    assert "NumPy" in relabelled.communities["top_concepts_json"].str.join("")[0]
+
+
 def test_a_graph_with_no_active_concepts_is_empty():
     no_concepts = pl.DataFrame(
         schema={

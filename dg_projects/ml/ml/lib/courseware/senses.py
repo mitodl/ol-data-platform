@@ -39,6 +39,8 @@ from typing import Any, Literal
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock, APIError
 from ml.lib.courseware.schemas import Strict
+from ml.lib.courseware.tracing import TRACE_TAGS, attach_call
+from ml.resources.opik_auth import traced
 from pydantic import ValidationError
 
 log = logging.getLogger(__name__)
@@ -212,10 +214,17 @@ class SenseQuery:
     units: list[Unit]
 
 
+@traced(
+    "courseware_sense_batch",
+    tags=TRACE_TAGS,
+    ignore_arguments=["client", "batch", "trace_metadata"],
+)
 def _adjudicate_senses_batch(
     client: Anthropic | AnthropicBedrock,
     model_id: str,
     batch: list[SenseQuery],
+    *,
+    trace_metadata: dict[str, Any],
 ) -> list[tuple[UnitKey, SenseDecision, int | None]]:
     """Return (unit key, decision, sense number) for every run the model decided."""
     listing = "\n\n".join(
@@ -241,6 +250,13 @@ def _adjudicate_senses_batch(
         output_config={"effort": "medium"},
     ) as stream:
         response = stream.get_final_message()
+    attach_call(
+        client,
+        model_id,
+        [response.usage],
+        template=SENSE_PROMPT,
+        metadata=trace_metadata,
+    )
     tool_input = next(
         (
             block.input
@@ -307,20 +323,34 @@ def adjudicate_senses(
     model_id: str,
     queries: list[SenseQuery],
     max_workers: int = 6,
+    *,
+    run_id: str,
 ) -> tuple[list[tuple[UnitKey, SenseDecision, int | None]], int]:
     """Decide the sense of every query's runs, in small batches of labels.
 
     A failed batch's runs get no decision, so they stay unassigned and the next run
     retries them.
 
+    :param run_id: the resolution run, recorded on each call's Opik span
     :returns: the decisions and how many calls were made
     """
     batches = [list(batch) for batch in batched(queries, SENSE_LABELS_PER_CALL)]
     decisions: list[tuple[UnitKey, SenseDecision, int | None]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [
-            pool.submit(_adjudicate_senses_batch, client, model_id, batch)
-            for batch in batches
+            pool.submit(
+                _adjudicate_senses_batch,
+                client,
+                model_id,
+                batch,
+                trace_metadata={
+                    "resolution_run_id": run_id,
+                    "batch_ordinal": ordinal,
+                    "label_count": len(batch),
+                    "sense_prompt_version": SENSE_PROMPT_VERSION,
+                },
+            )
+            for ordinal, batch in enumerate(batches)
         ]
         for batch, future in zip(batches, futures, strict=True):
             try:
@@ -465,7 +495,9 @@ def assign_senses(  # noqa: PLR0913
             for label_key, label_chunks in chunks.items()
             if round_index < len(label_chunks)
         ]
-        decided, round_calls = adjudicate_senses(client, model_id, queries)
+        decided, round_calls = adjudicate_senses(
+            client, model_id, queries, run_id=run_id
+        )
         calls += round_calls
         # new-sense numbers are per call, and a call holds one chunk of a label
         new_senses: dict[tuple[str, int], str] = {}

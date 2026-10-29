@@ -20,7 +20,7 @@ from ml.lib.courseware.answer_check import (
     check_version,
     pending_sources,
 )
-from ml.lib.courseware.describe import describe_concepts
+from ml.lib.courseware.describe import BEDROCK_DESCRIPTION_MODEL, describe_concepts
 from ml.lib.courseware.evaluation.cli import gold
 from ml.lib.courseware.extract import (
     BEDROCK_DEFAULT_MODEL,
@@ -31,24 +31,21 @@ from ml.lib.courseware.extract import (
 )
 from ml.lib.courseware.graph import compute_graph, previous_membership
 from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
-from ml.lib.courseware.resolve import EMBEDDING_DIM as RESOLUTION_EMBEDDING_DIM
-from ml.lib.courseware.resolve import ResolutionState, resolve_concepts
+from ml.lib.courseware.resolve import (
+    BEDROCK_ADJUDICATION_MODEL,
+    ResolutionState,
+    label_embedder,
+    resolve_concepts,
+)
 from ml.lib.courseware.scopes import CHARS_PER_TOKEN, build_scopes
 from ml.lib.courseware.tagging import ConceptDictionary, tag_sources, tagging_input_key
-from ml.lib.embed import resolve_embedding_model
 from ml.resources.llm import LLMClientFactory
-from ml.resources.opik_auth import OPIK_PROJECT_NAME
-from ol_llm import Attribution, UseCase
-from ol_orchestrate.lib.embeddings.models import OlLlmEmbedder
 
 app = cyclopts.App(help=__doc__)
 app.command(gold)
-# Descriptions are short, batched and many; the small model is the default.
-BEDROCK_DESCRIPTION_MODEL = "us.anthropic.claude-haiku-5-5"
 # Answer checks are short and many; the small model is the default.
 BEDROCK_ANSWER_CHECK_MODEL = "us.anthropic.claude-haiku-5-5"
 EXTRACTION_TABLE = "courseware_claim_extraction"
-RESOLUTION_EMBEDDING_MODEL = "bedrock:amazon.titan-embed-text-v2:0"
 
 
 def _existing(output_dir: Path, table: str) -> pl.DataFrame | None:
@@ -66,8 +63,8 @@ def _write(frame: pl.DataFrame, output_dir: Path, table: str) -> None:
 
 def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
     previous = _existing(output_dir, table)
+    # diagonal: a column added since the file was written is null in older rows
     _write(
-        # diagonal: a column added since the file was written is null in older rows
         new_rows
         if previous is None
         else pl.concat([previous, new_rows], how="diagonal_relaxed"),
@@ -186,7 +183,7 @@ def resolve(  # noqa: PLR0913
     sense_inputs: Path,
     output_dir: Path,
     *,
-    model_id: str = BEDROCK_DESCRIPTION_MODEL,
+    model_id: str = BEDROCK_ADJUDICATION_MODEL,
     aws_region: str = "us-east-1",
     rebuild: bool = False,
 ) -> None:
@@ -209,19 +206,7 @@ def resolve(  # noqa: PLR0913
     if not isinstance(client, AnthropicBedrock):
         msg = f"bedrock client_class built a {type(client).__name__}"
         raise TypeError(msg)
-    embedding_model = resolve_embedding_model(
-        RESOLUTION_EMBEDDING_MODEL, dim=RESOLUTION_EMBEDDING_DIM
-    )
-    embedding_client = OlLlmEmbedder(
-        embedding_model.spec,
-        UseCase(
-            app=OPIK_PROJECT_NAME,
-            name="courseware-concept-embedding",
-            profile="batch",
-            model=embedding_model.model,
-        ),
-        Attribution(),
-    )
+    embedding_client = label_embedder()
 
     runs = _existing(output_dir, "courseware_resolution_run")
     last_run = (

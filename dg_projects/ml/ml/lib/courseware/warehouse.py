@@ -1,5 +1,6 @@
-"""Partitions and model clients shared by the courseware assets."""
+"""Partitions, run snapshots and model clients shared by the courseware assets."""
 
+import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
 from dagster import (
     DynamicPartitionsDefinition,
@@ -7,6 +8,7 @@ from dagster import (
     MultiPartitionsDefinition,
     StaticPartitionsDefinition,
 )
+from ml.lib.warehouse import read_table
 from ml.resources.llm import LLMClientFactory
 
 # The platforms int__courseware__extraction_sources reads.
@@ -26,6 +28,16 @@ EXTRACTION_PARTITION_EXPR = {
     "platform": "platform",
     "courserun": "courserun_readable_id",
 }
+
+
+def latest_run_rows(
+    layer: str, table: str, run_column: str, run_id: str | None
+) -> pl.DataFrame | None:
+    """Return one run's rows of a per-run snapshot table, or None for no run."""
+    rows = read_table(layer, table)
+    if rows is None or run_id is None:
+        return None
+    return rows.filter(pl.col(run_column) == run_id).collect()
 
 
 def partition_courserun(key: MultiPartitionKey) -> tuple[str, str]:

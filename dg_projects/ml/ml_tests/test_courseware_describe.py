@@ -38,6 +38,12 @@ class _Client:
                     type="tool_use", name="record_descriptions", input=tool_input
                 )
             ],
+            usage=SimpleNamespace(
+                input_tokens=100,
+                output_tokens=20,
+                cache_read_input_tokens=0,
+                cache_creation_input_tokens=0,
+            ),
         )
         yield SimpleNamespace(get_final_message=lambda: response)
 

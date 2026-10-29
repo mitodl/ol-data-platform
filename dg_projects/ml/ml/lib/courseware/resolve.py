@@ -62,13 +62,21 @@ from ml.lib.courseware.senses import (
     label_aliases,
     sense_units,
 )
-from ol_orchestrate.lib.embeddings.models import Embedder
+from ml.lib.courseware.tracing import TRACE_TAGS, attach_call
+from ml.lib.embed import resolve_embedding_model
+from ml.resources.opik_auth import OPIK_PROJECT_NAME, traced
+from ol_llm import Attribution, UseCase
+from ol_orchestrate.lib.embeddings.models import Embedder, OlLlmEmbedder
 from pydantic import ValidationError
 
 log = logging.getLogger(__name__)
 
 RESOLVER_ID = "courseware_resolution_v2"
+# Adjudication batches are short and many, so the small model is the default.
+ADJUDICATION_MODEL = "claude-haiku-5-5"
+BEDROCK_ADJUDICATION_MODEL = "us.anthropic.claude-haiku-5-5"
 EMBEDDING_DIM = 512
+EMBEDDING_MODEL = "bedrock:amazon.titan-embed-text-v2:0"
 # Candidates per new label from each blocker; the union goes to the model.
 EMBEDDING_NEIGHBOURS = 8
 LEXICAL_NEIGHBOURS = 4
@@ -84,6 +92,7 @@ QUERIES_PER_CALL = 8
 MAX_MERGE_COMPONENT = 6
 CARRY_FORWARD_MIN_JACCARD = 0.5
 ADJUDICATION_MAX_TOKENS = 16_000
+ADJUDICATION_EFFORT = "medium"
 
 Verdict = Literal["exact", "close", "broader", "narrower", "related", "distinct"]
 
@@ -185,6 +194,8 @@ RUN_SCHEMA = {
     "label_count": pl.Int64,
     "resolved_label_count": pl.Int64,
     "adjudication_calls": pl.Int64,
+    "failed_batch_count": pl.Int64,
+    "failed_label_count": pl.Int64,
     "concepts_minted": pl.Int64,
     "concepts_merged": pl.Int64,
     "concepts_deprecated": pl.Int64,
@@ -303,6 +314,25 @@ def embedding_neighbours(
     return neighbours
 
 
+def label_embedder(run_id: str | None = None) -> OlLlmEmbedder:
+    """Return the ol-llm embedder for concept labels (Titan v2 at EMBEDDING_DIM).
+
+    :param run_id: the Dagster run, for the traces; None off the asset path
+    :rtype: OlLlmEmbedder
+    """
+    model = resolve_embedding_model(EMBEDDING_MODEL, dim=EMBEDDING_DIM)
+    return OlLlmEmbedder(
+        model.spec,
+        UseCase(
+            app=OPIK_PROJECT_NAME,
+            name="courseware-concept-embedding",
+            profile="batch",
+            model=model.model,
+        ),
+        Attribution(run_id=run_id),
+    )
+
+
 def embed_labels(
     labels: pl.DataFrame,
     cached: pl.DataFrame,
@@ -364,11 +394,18 @@ def embed_labels(
 
 
 # --------------------------------------------------------------------- adjudication
+@traced(
+    "courseware_adjudicate_batch",
+    tags=TRACE_TAGS,
+    ignore_arguments=["client", "rows", "trace_metadata"],
+)
 def _adjudicate_batch(
     client: Anthropic | AnthropicBedrock,
     model_id: str,
     batch: list[tuple[str, list[str]]],
     rows: dict[str, dict[str, Any]],
+    *,
+    trace_metadata: dict[str, Any],
 ) -> list[tuple[str, str, str]]:
     """Return (query_key, candidate_key, verdict) for one batch of queries."""
 
@@ -393,9 +430,16 @@ def _adjudicate_batch(
         tools=[ADJUDICATION_TOOL],
         tool_choice={"type": "auto"},
         messages=[{"role": "user", "content": listing}],
-        output_config={"effort": "medium"},
+        output_config={"effort": ADJUDICATION_EFFORT},
     ) as stream:
         response = stream.get_final_message()
+    attach_call(
+        client,
+        model_id,
+        [response.usage],
+        template=ADJUDICATION_PROMPT,
+        metadata=trace_metadata,
+    )
     tool_input = next(
         (
             block.input
@@ -435,33 +479,50 @@ def _adjudicate_batch(
     return decided
 
 
-def adjudicate(
+def adjudicate(  # noqa: PLR0913
     client: Anthropic | AnthropicBedrock,
     model_id: str,
     candidates: dict[str, list[str]],
     rows: dict[str, dict[str, Any]],
     max_workers: int = 6,
-) -> tuple[list[tuple[str, str, str]], int, set[str]]:
+    *,
+    run_id: str,
+) -> tuple[list[tuple[str, str, str]], int, list[list[str]]]:
     """Adjudicate every query's candidates in small batches.
 
-    :returns: the decisions, how many calls were made, and the query keys whose
-        batch failed (left unassigned, so the next run retries them)
+    :param run_id: the resolution run, recorded on each call's Opik span
+    :returns: the decisions, how many calls were made, and the query keys of each
+        batch that failed (left unassigned, so the next run retries them; a
+        rebuild keeps their previous concept)
     """
     work = [(query, found) for query, found in candidates.items() if found]
     batches = [list(batch) for batch in batched(work, QUERIES_PER_CALL)]
     decisions: list[tuple[str, str, str]] = []
-    failed: set[str] = set()
+    failed: list[list[str]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [
-            pool.submit(_adjudicate_batch, client, model_id, batch, rows)
-            for batch in batches
+            pool.submit(
+                _adjudicate_batch,
+                client,
+                model_id,
+                batch,
+                rows,
+                trace_metadata={
+                    "resolution_run_id": run_id,
+                    "batch_ordinal": ordinal,
+                    "query_count": len(batch),
+                    "prompt_version": PROMPT_VERSION,
+                    "effort": ADJUDICATION_EFFORT,
+                },
+            )
+            for ordinal, batch in enumerate(batches)
         ]
         for batch, future in zip(batches, futures, strict=True):
             try:
                 decisions.extend(future.result())
             except (ValueError, APIError):
                 log.exception("Adjudication batch of %d labels failed", len(batch))
-                failed.update(query for query, _ in batch)
+                failed.append([query for query, _ in batch])
     return decisions, len(batches), failed
 
 
@@ -649,7 +710,10 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     candidates = {
         key: list(dict.fromkeys(by_embedding[key] + by_trigram[key])) for key in pending
     }
-    decisions, calls, failed = adjudicate(client, model_id, candidates, rows)
+    decisions, calls, failed_batches = adjudicate(
+        client, model_id, candidates, rows, run_id=run_id
+    )
+    failed = {key for batch in failed_batches for key in batch}
 
     components, rejected = accepted_components(
         [key for key in keys if key not in failed or key in carried],
@@ -946,6 +1010,8 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
                     "label_count": len(keys),
                     "resolved_label_count": len(pending),
                     "adjudication_calls": calls,
+                    "failed_batch_count": len(failed_batches),
+                    "failed_label_count": len(failed),
                     "concepts_minted": minted,
                     "concepts_merged": merged,
                     "concepts_deprecated": deprecated,

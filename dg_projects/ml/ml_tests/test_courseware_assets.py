@@ -17,6 +17,8 @@ import pytest
 from anthropic import Anthropic
 from dagster import (
     DagsterInstance,
+    DagsterRun,
+    DagsterRunStatus,
     Definitions,
     IOManager,
     MultiPartitionKey,
@@ -26,7 +28,10 @@ from dagster import (
 )
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
+from ml.assets import courseware_description as description_module
 from ml.assets import courseware_extraction as extraction_module
+from ml.assets import courseware_resolution as resolution_module
+from ml.assets.courseware_description import courseware_concept_description
 from ml.assets.courseware_extraction import (
     EXTRACTION_TEXT_KEY,
     EXTRACTOR_VERSION,
@@ -34,7 +39,14 @@ from ml.assets.courseware_extraction import (
     courseware_extraction_text,
     extraction_text_version,
 )
+from ml.assets.courseware_graph import courseware_concept_graph
+from ml.assets.courseware_resolution import (
+    RUN_KEY,
+    assignment_churn,
+    courseware_resolution,
+)
 from ml.lib import warehouse
+from ml.lib.courseware import graph
 from ml.resources import opik_auth
 from ml.resources.llm import LLMClientFactory
 from ml.sensors import courseware as sensor_module
@@ -47,6 +59,8 @@ from ol_orchestrate.lib.failures import (
 from ol_orchestrate.lib.glue_helper import FIXTURE_DIR_VARIABLE
 from pyiceberg.catalog.sql import SqlCatalog
 from pyiceberg.exceptions import CommitFailedException, NoSuchTableError
+
+from .test_courseware_resolve import FakeEmbedder
 
 PLATFORM = "mitxonline"
 COURSERUN = "course-v1:MITx+UAI.4+1T2026"
@@ -155,10 +169,73 @@ def extraction_input(message: str, *, quote: bool = True) -> dict[str, Any] | No
     }
 
 
+def verdicts_input(listing: str, fail_label: str | None) -> dict[str, Any] | None:
+    """Every candidate distinct, so each label becomes its own concept.
+
+    A batch with fail_label among its queries gets no tool call, so it fails.
+    """
+    if fail_label and re.search(rf"^Q\d+: {fail_label} \|", listing, re.MULTILINE):
+        return None
+    queries: list[dict[str, Any]] = []
+    for line in listing.splitlines():
+        if line.startswith("Q"):
+            queries.append({"query_id": len(queries), "verdicts": []})
+        elif line.startswith("  c"):
+            candidate = int(line.split(":", 1)[0].strip()[1:])
+            queries[-1]["verdicts"].append(
+                {"candidate_id": candidate, "verdict": "distinct"}
+            )
+    return {"queries": queries}
+
+
+def senses_input(listing: str, fail_label: str | None) -> dict[str, Any] | None:
+    """Every course run takes the label's first sense.
+
+    A batch with fail_label among its labels gets no tool call, so it fails.
+    """
+    if fail_label and re.search(rf"^Q\d+: {fail_label}$", listing, re.MULTILINE):
+        return None
+    queries: list[dict[str, Any]] = []
+    for line in listing.splitlines():
+        if line.startswith("Q"):
+            queries.append({"query_id": len(queries), "runs": []})
+        elif line.startswith("  r"):
+            run = int(line.split(":", 1)[0].strip()[1:])
+            queries[-1]["runs"].append(
+                {"run_id": run, "decision": "existing", "sense": 0}
+            )
+    return {"queries": queries}
+
+
+def descriptions_input(listing: str, fail_label: str | None) -> dict[str, Any]:
+    """Describe every entry except the one labelled fail_label."""
+    ids = [
+        int(index)
+        for index, labels in re.findall(
+            r"^(\d+) \| labels: (.+?) \|", listing, re.MULTILINE
+        )
+        if labels != fail_label
+    ]
+    return {
+        "descriptions": [
+            {
+                "concept_id": concept_id,
+                "short_description": "a thing to learn",
+                "description": "A thing learners study.",
+                "is_learner_facing": True,
+            }
+            for concept_id in ids
+        ]
+    }
+
+
 class FakeMessages:
-    def __init__(self, calls: list[str], *, quote: bool) -> None:
+    def __init__(
+        self, calls: list[str], *, quote: bool, fail_label: str | None
+    ) -> None:
         self.calls = calls
         self.quote = quote
+        self.fail_label = fail_label
 
     def stream(self, **request: Any) -> Iterator[SimpleNamespace]:
         tool = request["tools"][0]["name"]
@@ -166,6 +243,9 @@ class FakeMessages:
         content = request["messages"][0]["content"]
         tool_input = {
             "record_extraction": lambda: extraction_input(content, quote=self.quote),
+            "record_verdicts": lambda: verdicts_input(content, self.fail_label),
+            "record_senses": lambda: senses_input(content, self.fail_label),
+            "record_descriptions": lambda: descriptions_input(content, self.fail_label),
         }[tool]()
         stream = MagicMock()
         stream.__enter__.return_value.get_final_message.return_value = _response(
@@ -179,10 +259,13 @@ CALLS: list[str] = []
 
 class FakeLLM(LLMClientFactory):
     quote: bool = True
+    fail_label: str | None = None
 
     def get_client(self) -> Anthropic:
         client = Anthropic(api_key="test")  # pragma: allowlist secret
-        client.messages = FakeMessages(CALLS, quote=self.quote)
+        client.messages = FakeMessages(
+            CALLS, quote=self.quote, fail_label=self.fail_label
+        )
         return client
 
 
@@ -414,6 +497,29 @@ def test_extraction_publishes_its_prompt_before_any_call(tables, calls, monkeypa
     assert "courseware_claim" not in tables
 
 
+def test_description_publishes_its_prompt_before_any_call(tables, calls, monkeypatch):
+    tables["int__courseware__concept_description_inputs"] = pl.DataFrame(
+        {
+            "concept_id": ["c1"],
+            "label": ["auc"],
+            "concept_kind": ["concept"],
+            "description": ["used to rank models"],
+            "course_title": ["Supervised Learning"],
+            "context_rank": [1],
+        }
+    )
+    monkeypatch.setattr(description_module, "publish_prompt_version", _fail_publish)
+
+    result = materialize(
+        [courseware_concept_description],
+        resources={"io_manager": Warehouse(tables), "llm": FakeLLM()},
+        raise_on_error=False,
+    )
+
+    assert not result.success
+    assert calls == []
+
+
 def test_publish_prompt_version_never_raises(monkeypatch):
     # a Prompt without the attributes this SDK version has
     client = SimpleNamespace(create_prompt=lambda **_: object())
@@ -567,11 +673,526 @@ def test_sensor_registers_only_approved_runs(tables):
     assert result.dynamic_partitions_requests[0].partition_keys == [COURSERUN]
 
 
+def labels(*keys: str) -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "concept_label_key": list(keys),
+            "preferred_label": list(keys),
+            "concept_kind": ["concept"] * len(keys),
+            "description": [f"about {key}" for key in keys],
+            "mention_count": [1] * len(keys),
+            "courserun_count": [1] * len(keys),
+            "taught_mention_count": [1] * len(keys),
+        }
+    )
+
+
+def sense_inputs(
+    keys: list[str], courseruns: tuple[str, ...] = (COURSERUN,)
+) -> pl.DataFrame:
+    return pl.DataFrame(
+        [
+            {
+                "concept_label_key": key,
+                "platform": PLATFORM,
+                "courserun_readable_id": courserun,
+                "course_title": f"Course {courserun}",
+                "label": key,
+                "concept_kind": "concept",
+                "description": f"about {key}",
+                "teaching_status": "taught",
+            }
+            for key in keys
+            for courserun in courseruns
+        ]
+    )
+
+
+def resolve(
+    tables,
+    *,
+    llm: LLMClientFactory | None = None,
+    rebuild: bool = False,
+    instance: DagsterInstance | None = None,
+    courseruns: tuple[str, ...] = (COURSERUN,),
+):
+    """Materialize resolution; every current label is used by courseruns."""
+    tables["int__courseware__concept_sense_inputs"] = sense_inputs(
+        tables["int__courseware__concept_labels"]["concept_label_key"].to_list(),
+        courseruns,
+    )
+    (hooked,) = with_failure_hooks([courseware_resolution])
+    return materialize(
+        [hooked],
+        instance=instance,
+        resources={
+            "io_manager": Warehouse(tables),
+            "llm": llm or FakeLLM(),
+        },
+        run_config={"ops": {"courseware_resolution": {"config": {"rebuild": rebuild}}}},
+        raise_on_error=False,
+    )
+
+
+def failure_class(result) -> str:
+    error = next(
+        event.step_failure_data.error
+        for event in result.all_events
+        if event.is_step_failure
+    )
+    assert error is not None
+    return error.cls_name
+
+
+@pytest.fixture
+def embedder(monkeypatch) -> None:
+    monkeypatch.setattr(resolution_module, "label_embedder", lambda **_: FakeEmbedder())
+
+
+@pytest.mark.usefixtures("embedder")
+def test_resolution_resolves_only_new_labels(tables, calls):
+    tables["int__courseware__concept_labels"] = labels("auc", "accuracy", "bias")
+
+    first = resolve(tables)
+
+    assert check_result(first, "resolution_churn").passed
+    assert tables["courseware_resolution_run"].height == 1
+    assert tables["courseware_concept_assignment"].height == 3
+    first_ids = dict(
+        tables["courseware_concept_assignment"]
+        .select("concept_label_key", "concept_id")
+        .iter_rows()
+    )
+
+    # nothing new: no adjudication and no new run
+    calls.clear()
+    resolve(tables)
+    assert calls == []
+    assert tables["courseware_resolution_run"].height == 1
+
+    tables["int__courseware__concept_labels"] = labels(
+        "auc", "accuracy", "bias", "boosting"
+    )
+    third = resolve(tables)
+
+    runs = tables["courseware_resolution_run"].sort("started_at")
+    assert runs["resolved_label_count"].to_list() == [3, 1]
+    latest = tables["courseware_concept_assignment"].filter(
+        pl.col("resolution_run_id") == runs["resolution_run_id"][-1]
+    )
+    assert {
+        key: concept_id
+        for key, concept_id in latest.select(
+            "concept_label_key", "concept_id"
+        ).iter_rows()
+        if key in first_ids
+    } == first_ids
+    churn = check_result(third, "resolution_churn")
+    assert churn.passed
+    assert churn.metadata["labels_in_both_runs"].value == 3
+    assert churn.metadata["labels_with_changed_id"].value == 0
+
+
+@pytest.mark.usefixtures("embedder")
+def test_resolution_refuses_to_overlap_another_resolution_run(tables, calls):
+    tables["int__courseware__concept_labels"] = labels("auc", "accuracy")
+    instance = DagsterInstance.ephemeral()
+    for run_id, status, selection in (
+        ("other-resolution", DagsterRunStatus.STARTED, frozenset({RUN_KEY})),
+        ("finished-resolution", DagsterRunStatus.SUCCESS, frozenset({RUN_KEY})),
+        ("other-asset", DagsterRunStatus.STARTED, None),
+    ):
+        instance.add_run(
+            DagsterRun(
+                job_name="__ASSET_JOB",
+                run_id=run_id,
+                status=status,
+                asset_selection=selection,
+            )
+        )
+
+    result = resolve(tables, instance=instance)
+
+    assert not result.success
+    error = next(e for e in result.all_events if e.is_step_failure)
+    message = error.step_failure_data.error.message
+    assert "other-resolution" in message
+    assert "finished-resolution" not in message
+    assert calls == []
+    assert "courseware_resolution_run" not in tables
+
+    instance.delete_run("other-resolution")
+    assert resolve(tables, instance=instance).success
+
+
+@pytest.mark.usefixtures("embedder")
+def test_resolution_stores_what_succeeded_and_fails_on_a_failed_batch(tables, calls):
+    tables["int__courseware__concept_labels"] = labels("auc", "accuracy", "bias")
+    resolve(tables)
+    tables["int__courseware__concept_labels"] = labels(
+        "auc", "accuracy", "bias", "boosting"
+    )
+    instance = DagsterInstance.ephemeral()
+
+    failed = resolve(tables, llm=FakeLLM(fail_label="boosting"), instance=instance)
+
+    assert not failed.success
+    assert failure_class(failed) == "AdjudicationFailure"
+    run = instance.get_run_by_id(failed.run_id)
+    assert run is not None
+    assert run.tags[RETRY_ON_ASSET_OR_OP_FAILURE_TAG] == "false"
+    latest = tables["courseware_resolution_run"].sort("started_at").row(-1, named=True)
+    assert (latest["failed_batch_count"], latest["failed_label_count"]) == (1, 1)
+    assert "boosting" not in set(
+        tables["courseware_concept_assignment"].filter(
+            pl.col("resolution_run_id") == latest["resolution_run_id"]
+        )["concept_label_key"]
+    )
+    materialization = next(
+        event
+        for event in failed.get_asset_materialization_events()
+        if event.asset_key.path[-1] == "courseware_resolution_run"
+    )
+    assert materialization.materialization.metadata["unassigned_label_count"].value == 1
+
+    # the retry asks only for the label still without a concept
+    calls.clear()
+    retried = resolve(tables)
+
+    assert retried.success
+    assert calls == ["record_verdicts"]
+    latest = tables["courseware_resolution_run"].sort("started_at").row(-1, named=True)
+    assert latest["resolved_label_count"] == 1
+
+
+@pytest.mark.usefixtures("embedder")
+def test_a_failed_rebuild_batch_keeps_concepts_and_leaves_none_unassigned(tables):
+    tables["int__courseware__concept_labels"] = labels("auc", "accuracy", "bias")
+    resolve(tables)
+
+    rebuilt = resolve(tables, llm=FakeLLM(fail_label="auc"), rebuild=True)
+
+    assert failure_class(rebuilt) == "AdjudicationFailure"
+    materialization = next(
+        event
+        for event in rebuilt.get_asset_materialization_events()
+        if event.asset_key.path[-1] == "courseware_resolution_run"
+    )
+    metadata = materialization.materialization.metadata
+    assert metadata["failed_label_count"].value == 3
+    # the failed labels kept their concepts, so nothing is left for a retry
+    assert metadata["unassigned_label_count"].value == 0
+    assert (
+        check_result(rebuilt, "resolution_churn")
+        .metadata["labels_with_changed_id"]
+        .value
+        == 0
+    )
+
+
+@pytest.mark.usefixtures("embedder")
+def test_resolution_assigns_senses_for_new_course_runs_of_known_labels(tables, calls):
+    tables["int__courseware__concept_labels"] = labels("kernel", "bias")
+    resolve(tables)
+    # one course run per label: each takes its only sense without a model call
+    assert calls == ["record_verdicts"]
+    assert tables["courseware_concept_sense_assignment"][
+        "assignment_source"
+    ].to_list() == ["single_sense", "single_sense"]
+    assert tables["courseware_concept_alias"].height == 2
+    concept_of = dict(
+        tables["courseware_concept_assignment"]
+        .select("concept_label_key", "concept_id")
+        .iter_rows()
+    )
+
+    # no new label, but a second course run uses both: the run is not skipped,
+    # and a failed sense batch (both labels share it) fails it with the new runs
+    # left undecided
+    calls.clear()
+    other = "course-v1:MITx+6.036+1T2026"
+    failed = resolve(
+        tables, llm=FakeLLM(fail_label="kernel"), courseruns=(COURSERUN, other)
+    )
+
+    assert failure_class(failed) == "AdjudicationFailure"
+    assert calls == ["record_senses"]
+    materialization = next(
+        event
+        for event in failed.get_asset_materialization_events()
+        if event.asset_key.path[-1] == "courseware_resolution_run"
+    )
+    assert (
+        materialization.materialization.metadata["undecided_sense_unit_count"].value
+        == 2
+    )
+
+    # the next run asks again about the runs still undecided
+    calls.clear()
+    retried = resolve(tables, courseruns=(COURSERUN, other))
+
+    assert retried.success
+    assert calls == ["record_senses"]
+    latest = tables["courseware_resolution_run"].sort("started_at")[
+        "resolution_run_id"
+    ][-1]
+    senses = tables["courseware_concept_sense_assignment"].filter(
+        pl.col("resolution_run_id") == latest
+    )
+    assert {
+        (key, courserun): concept_id
+        for key, courserun, concept_id in senses.select(
+            "concept_label_key", "courserun_readable_id", "concept_id"
+        ).iter_rows()
+    } == {
+        (key, courserun): concept_of[key]
+        for key in ("kernel", "bias")
+        for courserun in (COURSERUN, other)
+    }
+
+    # every unit is decided now, so nothing runs
+    calls.clear()
+    resolve(tables, courseruns=(COURSERUN, other))
+    assert calls == []
+    assert tables["courseware_resolution_run"]["resolution_run_id"].n_unique() == 3
+
+
+def test_assignment_churn_counts_changed_ids():
+    previous = pl.DataFrame(
+        {"concept_label_key": ["a", "b", "c"], "concept_id": ["1", "2", "3"]}
+    )
+    current = pl.DataFrame(
+        {"concept_label_key": ["a", "b", "d"], "concept_id": ["1", "1", "4"]}
+    )
+    assert assignment_churn(previous, current, {"a", "b", "c", "d"}) == (2, 1)
+    # a carried label that is no longer current is left out of both counts
+    assert assignment_churn(previous, current, {"a", "d"}) == (1, 0)
+
+
+@pytest.mark.usefixtures("embedder")
+def test_resolution_ignores_carried_labels_that_dropped_out(tables, calls):
+    tables["int__courseware__concept_labels"] = labels("auc", "accuracy", "bias")
+    resolve(tables)
+    # bias drops out; the next run carries its assignment
+    tables["int__courseware__concept_labels"] = labels("auc", "accuracy", "boosting")
+    resolve(tables)
+    runs = tables["courseware_resolution_run"]
+    assert runs.height == 2
+    latest_id = runs.sort("started_at")["resolution_run_id"][-1]
+    assert "bias" in set(
+        tables["courseware_concept_assignment"].filter(
+            pl.col("resolution_run_id") == latest_id
+        )["concept_label_key"]
+    )
+
+    # every current label is assigned, so nothing runs despite the carried bias row
+    calls.clear()
+    skipped = resolve(tables)
+
+    assert calls == []
+    assert tables["courseware_resolution_run"].height == 2
+    churn = check_result(skipped, "resolution_churn")
+    assert churn.metadata["labels_in_both_runs"].value == 3
+
+    # a failed batch leaves the new label unassigned, whatever bias carries
+    tables["int__courseware__concept_labels"] = labels(
+        "auc", "accuracy", "boosting", "cnn"
+    )
+    failed = resolve(tables, llm=FakeLLM(fail_label="cnn"))
+
+    materialization = next(
+        event
+        for event in failed.get_asset_materialization_events()
+        if event.asset_key.path[-1] == "courseware_resolution_run"
+    )
+    assert materialization.materialization.metadata["unassigned_label_count"].value == 1
+    churn = check_result(failed, "resolution_churn")
+    assert churn.metadata["labels_in_both_runs"].value == 3
+
+
+# ------------------------------------------------------------------- description
+def test_description_describes_each_concept_once(tables, calls):
+    tables["int__courseware__concept_description_inputs"] = pl.DataFrame(
+        {
+            "concept_id": ["c1", "c2"],
+            "label": ["auc", "bias"],
+            "concept_kind": ["concept", "concept"],
+            "description": ["used to rank models", "what a model gets wrong"],
+            "course_title": ["Supervised Learning", "Supervised Learning"],
+            "context_rank": [1, 1],
+        }
+    )
+    resources = {"io_manager": Warehouse(tables), "llm": FakeLLM()}
+
+    materialize([courseware_concept_description], resources=resources)
+    second = materialize([courseware_concept_description], resources=resources)
+
+    assert calls == ["record_descriptions"]
+    # nothing new, so no output and no empty snapshot
+    assert second.get_asset_materialization_events() == []
+    assert tables["courseware_concept_description"]["concept_id"].to_list() == [
+        "c1",
+        "c2",
+    ]
+
+
+def test_description_stores_what_succeeded_and_fails_on_missing_ones(tables, calls):
+    tables["int__courseware__concept_description_inputs"] = pl.DataFrame(
+        {
+            "concept_id": ["c1", "c2"],
+            "label": ["auc", "bias"],
+            "concept_kind": ["concept", "concept"],
+            "description": ["used to rank models", "what a model gets wrong"],
+            "course_title": ["Supervised Learning", "Supervised Learning"],
+            "context_rank": [1, 1],
+        }
+    )
+    instance = DagsterInstance.ephemeral()
+    (hooked,) = with_failure_hooks([courseware_concept_description])
+
+    failed = materialize(
+        [hooked],
+        instance=instance,
+        resources={
+            "io_manager": Warehouse(tables),
+            "llm": FakeLLM(fail_label="bias"),
+        },
+        raise_on_error=False,
+    )
+
+    assert failure_class(failed) == "DescriptionFailure"
+    run = instance.get_run_by_id(failed.run_id)
+    assert run is not None
+    assert run.tags[RETRY_ON_ASSET_OR_OP_FAILURE_TAG] == "false"
+    assert tables["courseware_concept_description"]["concept_id"].to_list() == ["c1"]
+
+    calls.clear()
+    materialize(
+        [courseware_concept_description],
+        resources={"io_manager": Warehouse(tables), "llm": FakeLLM()},
+    )
+
+    assert calls == ["record_descriptions"]
+    assert tables["courseware_concept_description"]["concept_id"].to_list() == [
+        "c1",
+        "c2",
+    ]
+
+
+# ------------------------------------------------------------------------- graph
+def graph_input(tables, edges: dict[tuple[str, str], str]) -> None:
+    """dim_concept a, b, c and passing builds_on edges with their review_status."""
+    names = ["a", "b", "c"]
+    tables["dim_concept"] = pl.DataFrame(
+        {
+            "concept_pk": names,
+            "preferred_label": names,
+            "lifecycle_status": ["active"] * 3,
+            "label_count": [1] * 3,
+        }
+    )
+    tables["bridge_concept_relation"] = pl.DataFrame(
+        [
+            {
+                "from_concept_fk": source,
+                "to_concept_fk": target,
+                "relation": "builds_on",
+                "courserun_support": 2,
+                "direction_consistency": 1.0,
+                "co_taught_lift": None,
+                "is_adjudicated": False,
+                "has_co_assessed_evidence": False,
+                "passes_support_rule": True,
+                "review_status": review_status,
+            }
+            for (source, target), review_status in edges.items()
+        ],
+        schema_overrides={"co_taught_lift": pl.Float64},
+    )
+
+
+def test_graph_reports_cycles_and_skips_unchanged_input(tables, monkeypatch):
+    graph_input(
+        tables,
+        {("a", "b"): "proposed", ("b", "a"): "proposed", ("b", "c"): "proposed"},
+    )
+    resources = {"io_manager": Warehouse(tables)}
+
+    first = materialize([courseware_concept_graph], resources=resources)
+
+    check = check_result(first, "graph_cycles")
+    assert not check.passed
+    assert check.metadata["sequence_cycle_concepts"].value == ["a", "b"]
+    assert tables["courseware_concept_graph_run"].height == 1
+    # a cycle among observed edges is a finding; nothing is approved, so the
+    # closure is written empty
+    assert tables["courseware_concept_graph_prerequisite_closure"].is_empty()
+
+    second = materialize([courseware_concept_graph], resources=resources)
+
+    assert tables["courseware_concept_graph_run"].height == 1
+    assert not check_result(second, "graph_cycles").passed
+
+    # a new algorithm version over the same input is a new run
+    monkeypatch.setattr(graph, "GRAPH_VERSION", "courseware_concept_graph_test")
+    materialize([courseware_concept_graph], resources=resources)
+
+    assert tables["courseware_concept_graph_run"]["graph_version"].to_list() == [
+        "courseware_concept_graph_v1",
+        "courseware_concept_graph_test",
+    ]
+
+
+def test_graph_writes_the_closure_of_approved_edges_and_fails_on_an_approved_cycle(
+    tables,
+):
+    graph_input(
+        tables,
+        {("a", "b"): "accepted", ("b", "c"): "accepted", ("c", "a"): "proposed"},
+    )
+    resources = {"io_manager": Warehouse(tables)}
+
+    materialize([courseware_concept_graph], resources=resources)
+
+    closure = tables["courseware_concept_graph_prerequisite_closure"]
+    assert sorted(
+        closure.select("from_concept_id", "to_concept_id", "min_depth").rows()
+    ) == [("a", "b", 1), ("a", "c", 2), ("b", "c", 1)]
+    run_id = tables["courseware_concept_graph_run"]["graph_run_id"][0]
+    assert closure["graph_run_id"].unique().to_list() == [run_id]
+    # every approved edge joins active concepts, so the run excludes none
+    assert tables["courseware_concept_graph_run"][
+        "prerequisite_closure_excluded_json"
+    ].to_list() == ["[]"]
+
+    # approving c -> a closes a cycle: the run fails permanently and writes nothing,
+    # so the previous closure stays the newest
+    graph_input(
+        tables,
+        {("a", "b"): "accepted", ("b", "c"): "accepted", ("c", "a"): "accepted"},
+    )
+    instance = DagsterInstance.ephemeral()
+    (hooked,) = with_failure_hooks([courseware_concept_graph])
+    failed = materialize(
+        [hooked], resources=resources, instance=instance, raise_on_error=False
+    )
+
+    assert failure_class(failed) == "ApprovedPrerequisiteCycle"
+    run = instance.get_run_by_id(failed.run_id)
+    assert run is not None
+    assert run.tags[RETRY_ON_ASSET_OR_OP_FAILURE_TAG] == "false"
+    assert tables["courseware_concept_graph_run"].height == 1
+    assert tables["courseware_concept_graph_prerequisite_closure"].height == 3
+
+
 def test_courseware_definitions_load():
     Definitions(
         assets=[
             courseware_extraction_text,
             courseware_extraction,
+            courseware_resolution,
+            courseware_concept_description,
+            courseware_concept_graph,
         ],
         sensors=[courseware_extraction_text_sensor],
         resources={

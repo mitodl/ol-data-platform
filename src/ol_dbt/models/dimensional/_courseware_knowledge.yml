@@ -549,7 +549,8 @@ models:
   - name: computed_at
     description: timestamp, when the run computed
   - name: input_checksum
-    description: str, sha256 of the nodes, selected edges and parameters
+    description: str, sha256 of the nodes with their preferred labels, the selected
+      edges and the parameters
   - name: parameters_json
     description: str, the thresholds and weights the run used
   - name: node_count

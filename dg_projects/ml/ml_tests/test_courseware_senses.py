@@ -40,7 +40,7 @@ def mentions(*uses):
 def verdicts(monkeypatch):
     """Label adjudication finds no exact matches, so each label is its own concept."""
 
-    def fake_adjudicate(_client, _model_id, _candidates, _rows):
+    def fake_adjudicate(_client, _model_id, _candidates, _rows, **_kwargs):
         return [], 1, set()
 
     monkeypatch.setattr(resolve, "adjudicate", fake_adjudicate)
@@ -55,7 +55,7 @@ def choose(monkeypatch):
     table: dict[str, tuple[str, int | None]] = {}
     asked: list[SenseQuery] = []
 
-    def fake_adjudicate_senses(_client, _model_id, queries):
+    def fake_adjudicate_senses(_client, _model_id, queries, **_kwargs):
         asked.extend(queries)
         decided = [
             (unit.key, *table[unit.key[2]])
@@ -220,7 +220,7 @@ def test_a_rebuild_keeps_split_senses(choose):
 def test_a_rebuild_that_separates_labels_moves_their_runs_with_them(
     choose, monkeypatch
 ):
-    def merge_all(_client, _model_id, candidates, _rows):
+    def merge_all(_client, _model_id, candidates, _rows, **_kwargs):
         return (
             [
                 (query, found, "exact")
@@ -239,7 +239,7 @@ def test_a_rebuild_that_separates_labels_moves_their_runs_with_them(
     }
     assert len(merged) == 1
 
-    def merge_nothing(_client, _model_id, _candidates, _rows):
+    def merge_nothing(_client, _model_id, _candidates, _rows, **_kwargs):
         return [], 1, set()
 
     monkeypatch.setattr(resolve, "adjudicate", merge_nothing)
@@ -267,7 +267,7 @@ def test_sense_assignments_follow_a_label_merge(choose, monkeypatch):
     survivor = sense_of(first, "auc", OS)["concept_id"]
     loser = sense_of(first, "area under the curve", ML)["concept_id"]
 
-    def merge_new_label(_client, _model_id, _candidates, _rows):
+    def merge_new_label(_client, _model_id, _candidates, _rows, **_kwargs):
         return (
             [("auc roc", "auc", "exact"), ("auc roc", "area under the curve", "exact")],
             1,
@@ -315,7 +315,16 @@ class FakeClient:
 
     def __init__(self, tool_input):
         block = SimpleNamespace(type="tool_use", name="record_senses", input=tool_input)
-        self.response = SimpleNamespace(content=[block], stop_reason="tool_use")
+        self.response = SimpleNamespace(
+            content=[block],
+            stop_reason="tool_use",
+            usage=SimpleNamespace(
+                input_tokens=100,
+                output_tokens=20,
+                cache_read_input_tokens=0,
+                cache_creation_input_tokens=0,
+            ),
+        )
         self.calls = []
         self.messages = self
 
@@ -349,7 +358,7 @@ def test_the_batch_parser_maps_decisions_and_rejects_unlisted_senses():
             ]
         }
     )
-    decided = _adjudicate_senses_batch(client, "fake-model", [query])
+    decided = _adjudicate_senses_batch(client, "fake-model", [query], trace_metadata={})
     assert decided == [
         (("kernel", "mitxonline", OS), "existing", 0),
         (("kernel", "mitxonline", ML), "new", 1),
@@ -370,7 +379,7 @@ def test_the_batch_parser_raises_when_the_model_records_nothing():
         [Unit(("kernel", "mitxonline", OS), "kernel", TITLES[OS], ())],
     )
     with pytest.raises(ValueError, match="no sense decisions"):
-        _adjudicate_senses_batch(client, "fake-model", [query])
+        _adjudicate_senses_batch(client, "fake-model", [query], trace_metadata={})
 
 
 def test_default_state_has_empty_sense_tables():
@@ -398,7 +407,7 @@ def test_a_synonym_of_an_ambiguous_label_is_judged_against_its_saved_sense(
     monkeypatch.setattr(
         resolve,
         "adjudicate",
-        lambda _client, _model_id, _candidates, _rows: ([], 1, set()),
+        lambda _client, _model_id, _candidates, _rows, **_kwargs: ([], 1, set()),
     )
     choose.table[OS] = ("existing", 0)
     choose.table[ML] = ("new", 1)
@@ -410,7 +419,7 @@ def test_a_synonym_of_an_ambiguous_label_is_judged_against_its_saved_sense(
     monkeypatch.setattr(
         resolve,
         "adjudicate",
-        lambda _client, _model_id, _candidates, _rows: (
+        lambda _client, _model_id, _candidates, _rows, **_kwargs: (
             [("kernel function", "kernel", "exact")],
             1,
             set(),
@@ -449,7 +458,7 @@ def test_the_batch_parser_rejects_two_decisions_for_one_run():
         }
     )
     with pytest.raises(ValueError, match="more than one sense decision"):
-        _adjudicate_senses_batch(client, "fake-model", [query])
+        _adjudicate_senses_batch(client, "fake-model", [query], trace_metadata={})
 
 
 @pytest.mark.parametrize(
@@ -496,7 +505,7 @@ def test_the_batch_parser_rejects_an_omitted_or_unlisted_run(queries, error):
     )
     with pytest.raises(ValueError, match=error):
         _adjudicate_senses_batch(
-            FakeClient({"queries": queries}), "fake-model", [query]
+            FakeClient({"queries": queries}), "fake-model", [query], trace_metadata={}
         )
 
 
@@ -508,7 +517,7 @@ def test_a_synonym_of_a_label_adjudicated_in_the_same_run_is_not_shortcut(
     monkeypatch.setattr(
         resolve,
         "adjudicate",
-        lambda _client, _model_id, _candidates, _rows: (
+        lambda _client, _model_id, _candidates, _rows, **_kwargs: (
             [("kernel function", "kernel", "exact")],
             1,
             set(),

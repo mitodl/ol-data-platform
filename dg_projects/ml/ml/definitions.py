@@ -10,10 +10,13 @@ from dagster import (
 from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
+from ml.assets.courseware_description import courseware_concept_description
 from ml.assets.courseware_extraction import (
     courseware_extraction,
     courseware_extraction_text,
 )
+from ml.assets.courseware_graph import courseware_concept_graph
+from ml.assets.courseware_resolution import courseware_resolution
 from ml.assets.feedback_category_proposals import feedback_category_proposals
 from ml.assets.feedback_cluster_assignment import feedback_cluster_assignment
 from ml.assets.feedback_cluster_identity import feedback_cluster_identity
@@ -118,7 +121,8 @@ feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
     default_status=DefaultSensorStatus.STOPPED,
 )
 
-# Claim extraction, one run per course run. It runs only for the course runs
+# Claim extraction, one run per course run, and the corpus-wide resolution,
+# description and graph steps after it. Extraction runs only for the course runs
 # courseware_extraction_allowlist approves for the deployed extractor version, so
 # the allowlist bounds what a first observation or a promotion launches. Stopped
 # by default, and enabled after courseware_extraction_text_sensor has observed the
@@ -132,7 +136,12 @@ feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
 COURSEWARE_MODEL_CALLS_TAG = "courseware/model_calls"
 courseware_automation_sensor = AutomationConditionSensorDefinition(
     name="courseware_automation_sensor",
-    target=AssetSelection.assets(courseware_extraction),
+    target=AssetSelection.assets(
+        courseware_extraction,
+        courseware_resolution,
+        courseware_concept_description,
+        courseware_concept_graph,
+    ),
     run_tags={COURSEWARE_MODEL_CALLS_TAG: "true"},
     default_status=DefaultSensorStatus.STOPPED,
 )
@@ -256,6 +265,9 @@ defs = Definitions(
             feedback_sentiment_eval,
             courseware_extraction_text,
             courseware_extraction,
+            courseware_resolution,
+            courseware_concept_description,
+            courseware_concept_graph,
             learn_content_file_text,
             content_file_embedding_chunks,
             content_file_embedding_vectors,

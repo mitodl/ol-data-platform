@@ -481,9 +481,16 @@ def compute_graph(  # noqa: PLR0915
         ),
         "seed": SEED,
     }
+    # The labels are input too: top_concepts_json shows them, so a relabelled
+    # concept with unchanged topology must still write a run.
     input_checksum = hashlib.sha256(
         json.dumps(
-            [concept_ids, edges.sort(pl.all()).rows(), approved.rows(), parameters],
+            [
+                [(concept_id, labels[concept_id]) for concept_id in concept_ids],
+                edges.sort(pl.all()).rows(),
+                approved.rows(),
+                parameters,
+            ],
             default=str,
         ).encode()
     ).hexdigest()
