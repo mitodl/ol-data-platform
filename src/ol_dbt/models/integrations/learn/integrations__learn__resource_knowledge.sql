@@ -7,7 +7,8 @@
     resource_knowledge_markdown_v1 builder) without another model call.
 
     Only accepted concepts and accepted claims are published: a concept appears in a
-    course's arrays only when it is accepted and an accepted claim supports the
+    course's arrays only when integrations__learn__concepts publishes it (accepted,
+    active, learner-facing, with current labels) and an accepted claim supports the
     relation, since accepting a concept does not accept the claims naming it.
     Proposed rows stay in dim_concept, bridge_courserun_concept and
     tfact_courseware_claim for review. No review workflow exists
@@ -35,7 +36,7 @@ with extractions as (
 
 , concepts as (
     select * from {{ ref('dim_concept') }}
-    where review_status = 'accepted'
+    where {{ learn_publishable_concept() }}
 )
 
 , claims as (
