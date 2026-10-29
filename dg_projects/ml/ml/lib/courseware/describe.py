@@ -174,6 +174,17 @@ def _describe_batch(
         raise ValueError(msg) from error
 
 
+def current_input_checksums(rows: pl.DataFrame) -> dict[str, str]:
+    """Return each concept's input_checksum as describe_concepts would compute it.
+
+    :param rows: int__courseware__concept_description_inputs rows
+    :rtype: dict[str, str]
+    """
+    return {
+        entry["concept_id"]: entry["input_checksum"] for entry in _concept_inputs(rows)
+    }
+
+
 def description_version(model_id: str, effort: str) -> str:
     """Hash of the prompt, model and effort; a change describes every concept again."""
     return hashlib.sha256(
@@ -184,24 +195,26 @@ def description_version(model_id: str, effort: str) -> str:
 def pending_concepts(
     rows: pl.DataFrame, existing: pl.DataFrame | None, version: str
 ) -> list[dict[str, Any]]:
-    """Return the concepts whose current inputs have no description at version.
+    """Return the concepts whose newest description at version is not of their
+    current inputs.
+
+    Only the newest counts, because a knowledge release takes each concept's newest
+    description: inputs that change and change back are described again, or the
+    release would carry the description of the inputs in between.
 
     :param rows: int__courseware__concept_description_inputs rows
-    :param existing: descriptions already stored
+    :param existing: descriptions already stored, with described_at
     :param version: description_version for the run's model and effort
     :returns: one entry per concept to describe, with its input_checksum
     :rtype: list[dict[str, Any]]
     """
     done: set[tuple[str, str]] = set()
     if existing is not None:
-        # only a concept's newest row is what dim_concept shows, so an older row that
-        # matches (inputs changed A, B, then back to A) is described again
         done = set(
-            existing.sort("described_at")
+            existing.filter(pl.col("description_version") == version)
+            .sort("described_at")
             .group_by("concept_id")
-            .last()
-            .filter(pl.col("description_version") == version)
-            .select("concept_id", "input_checksum")
+            .agg(pl.col("input_checksum").last())
             .iter_rows()
         )
     return [

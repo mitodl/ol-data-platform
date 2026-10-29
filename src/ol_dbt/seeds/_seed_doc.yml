@@ -323,3 +323,43 @@ seeds:
       a failed description run names the deployed one)
     tests:
     - not_null
+
+- name: courseware_source_eligibility
+  description: >
+    Which course runs' material may reach a learner-facing courseware projection
+    (Learn's concept and course knowledge views, and any tenant or JSON-LD view
+    built on a knowledge release). A run takes its own row, else its platform's row
+    (courserun_readable_id empty), and a run neither names is not eligible. Having
+    no learner PII does not make course material public, so a platform is eligible
+    only by a row here, and a run can be excluded under an eligible platform (e.g.
+    a B2B copy) by a row of its own. Changing a row changes
+    int__courseware__source_eligibility.source_policy_version, which builds a new
+    knowledge release and re-describes the concepts whose description inputs change.
+  config:
+    column_types:
+      platform: varchar
+      courserun_readable_id: varchar
+      is_eligible: boolean
+  # Two rows for one run or platform would repeat its runs in
+  # int__courseware__source_eligibility, so one bad row is the failure.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - platform
+        - courserun_readable_id
+      config:
+        error_if: ">0"
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro, residential or ocw
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the run this row decides; empty for a platform row
+  - name: is_eligible
+    description: boolean, whether the run's or platform's material may reach learners
+    tests:
+    - not_null:
+        config:
+          error_if: ">0"

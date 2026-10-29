@@ -1,50 +1,36 @@
 {#
     Which concepts each Learn course teaches, reviews, uses, assesses or requires,
-    one row per (course, concept, relation), from the run
-    int__courseware__learn_course_runs selects. concept_id is dim_concept's UUID and
-    is already the sense the course uses: two courses that use "kernel" for two
-    meanings point at two concepts, so Learn joins its copy to the concept graph by
-    id and never resolves labels again. integrations__learn__concepts has each
-    concept's name and descriptions.
+    one row per (course, concept, relation), from the published knowledge release.
+    concept_id is dim_concept's UUID and is already the sense the course uses, so
+    Learn joins its copy to the concept graph by id and never resolves labels again.
+    integrations__learn__concepts has each concept's name and descriptions under the
+    same release_id.
 
-    Only concepts integrations__learn__concepts publishes (accepted, active,
-    learner-facing, with current labels), and relations at least one accepted claim
-    supports, are published, so every concept_id here has a row there. An inferred
-    requirement must also pass the support rule, which filters noise and does not
-    make it a reviewed prerequisite. No review workflow exists yet, so this is empty
-    until one does.
-
-    The release manifest will add a release id to every row, binding this to the
-    resolution run, sense assignments and graph run it was built from; until then
-    the rows are the newest resolution run's.
+    The rows were built by int__courseware__release_resource_concepts (the course's
+    most recently extracted source-eligible run, learner-facing accepted concepts,
+    relations an accepted claim supports) and copied into the release by
+    ml.assets.courseware_release. A table, as integrations__learn__concepts is, and
+    from the same published release.
 #}
-with learn_runs as (
-    select * from {{ ref('int__courseware__learn_course_runs') }}
+with published as (
+    select release_id from {{ ref('int__courseware__published_release') }}
 )
 
-, run_bridge as (
-    select * from {{ ref('bridge_courserun_concept') }}
-    -- accepted claims only, and for inferred requires the support rule as well
-    where accepted_claim_count > 0 and passes_support_rule
-)
-
-, concepts as (
-    select * from {{ ref('dim_concept') }}
-    where {{ learn_publishable_concept() }}
+, resource_concepts as (
+    select * from {{ source('courseware_intermediate', 'courseware_release_resource_concept') }}
 )
 
 select
-    learn_runs.etl_source
-    , learn_runs.readable_id
-    , learn_runs.courserun_readable_id as extracted_courserun_readable_id
-    , concepts.concept_pk as concept_id
-    , concepts.preferred_label as concept_name
-    , run_bridge.relation
-    , run_bridge.requirement_source
-    , run_bridge.accepted_claim_count as claim_count
-    , run_bridge.first_scope_position
-from learn_runs
-inner join run_bridge
-    on learn_runs.courserun_fk = run_bridge.courserun_fk
-inner join concepts
-    on run_bridge.concept_fk = concepts.concept_pk
+    resource_concepts.release_id
+    , resource_concepts.etl_source
+    , resource_concepts.readable_id
+    , resource_concepts.extracted_courserun_readable_id
+    , resource_concepts.concept_id
+    , resource_concepts.concept_name
+    , resource_concepts.relation
+    , resource_concepts.requirement_source
+    , resource_concepts.claim_count
+    , resource_concepts.first_scope_position
+from resource_concepts
+inner join published
+    on resource_concepts.release_id = published.release_id

@@ -1,13 +1,14 @@
 ---
 unit_tests:
-- name: test_integrations__learn__resource_concepts_keys_each_course_by_its_sense
+- name: test_int__courseware__release_resource_concepts_keys_each_course_by_its_sense
   description: >
     Two courses that use "kernel" for two meanings point at two concepts, so Learn
     gets each course's sense by id, not a shared label. A relation only proposed
-    claims support, a proposed concept, a concept integrations__learn__concepts
-    leaves out (not learner-facing, merged, or no current labels), and an inferred
+    claims support, a concept the release does not publish as learner-facing (numpy
+    is proposed, so it is not a release concept; MNIST's description says it is not
+    learner-facing, and Gram matrix has no description yet), and an inferred
     requirement failing the support rule are left out.
-  model: integrations__learn__resource_concepts
+  model: int__courseware__release_resource_concepts
   given:
   - input: ref('int__courseware__learn_course_runs')
     rows:
@@ -31,31 +32,45 @@ unit_tests:
       claim_count: 1, accepted_claim_count: 1, first_scope_position: 1, passes_support_rule: true}
     - {courserun_fk: ml, concept_fk: gram, relation: uses, requirement_source: null,
       claim_count: 1, accepted_claim_count: 1, first_scope_position: 1, passes_support_rule: true}
-    - {courserun_fk: ml, concept_fk: rbf, relation: uses, requirement_source: null,
-      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1, passes_support_rule: true}
-    - {courserun_fk: ml, concept_fk: kmeans, relation: teaches, requirement_source: null,
-      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1, passes_support_rule: true}
-  - input: ref('dim_concept')
+  - input: ref('int__courseware__release_concepts')
     rows:
-    - {concept_pk: os-kernel, preferred_label: kernel, review_status: accepted, lifecycle_status: active,
-      is_learner_facing: true, label_count: 1}
-    - {concept_pk: ml-kernel, preferred_label: kernel, review_status: accepted, lifecycle_status: active,
-      is_learner_facing: true, label_count: 1}
-    - {concept_pk: svm, preferred_label: support vector machine, review_status: accepted,
-      lifecycle_status: active, is_learner_facing: true, label_count: 1}
-    - {concept_pk: numpy, preferred_label: numpy, review_status: proposed, lifecycle_status: active,
-      is_learner_facing: true, label_count: 1}
-    - {concept_pk: mnist, preferred_label: MNIST, review_status: accepted, lifecycle_status: active,
-      is_learner_facing: false, label_count: 1}
-    - {concept_pk: gram, preferred_label: Gram matrix, review_status: accepted, lifecycle_status: active,
-      is_learner_facing: null, label_count: 1}
-    - {concept_pk: rbf, preferred_label: radial basis function, review_status: accepted,
-      lifecycle_status: active, is_learner_facing: true, label_count: 0}
-    - {concept_pk: kmeans, preferred_label: k-means, review_status: accepted, lifecycle_status: merged,
-      is_learner_facing: true, label_count: 1}
+    - {concept_id: os-kernel, name: kernel, is_learner_facing: true}
+    - {concept_id: ml-kernel, name: kernel, is_learner_facing: true}
+    - {concept_id: svm, name: support vector machine, is_learner_facing: true}
+    - {concept_id: mnist, name: MNIST, is_learner_facing: false}
+    - {concept_id: gram, name: Gram matrix, is_learner_facing: null}
   expect:
     rows:
     - {readable_id: "course-v1:MITx+6.033", concept_id: os-kernel, concept_name: kernel,
       relation: teaches, claim_count: 2}
     - {readable_id: "course-v1:MITx+6.036", concept_id: ml-kernel, concept_name: kernel,
       relation: teaches, claim_count: 1}
+
+- name: test_int__courseware__learn_course_runs_takes_the_newest_eligible_run
+  description: >
+    A course's newest extraction is from a run the source policy excludes, so the
+    release publishes its older eligible run, and both resource projections read
+    that one.
+  model: int__courseware__learn_course_runs
+  given:
+  - input: ref('int__courseware__source_eligibility')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", is_source_eligible: true}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+2T2026", is_source_eligible: false}
+  - input: ref('dim_courseware_extraction')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", courserun_fk: r1,
+      extracted_at: "2026-10-01T00:00:00", is_current: true}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+2T2026", courserun_fk: r2,
+      extracted_at: "2026-10-17T00:00:00", is_current: true}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: r1, course_fk: c1, is_current: true}
+    - {courserun_pk: r2, course_fk: c1, is_current: true}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: c1, course_readable_id: "course-v1:X+Y", course_title: Data Analysis,
+      is_current: true}
+  expect:
+    rows:
+    - {etl_source: mitxonline, readable_id: "course-v1:X+Y", courserun_fk: r1, courserun_readable_id: "course-v1:X+Y+1T2026"}

@@ -382,8 +382,14 @@ sources:
       description: timestamp, when the run computed
     - name: input_checksum
       description: str, sha256 of the nodes, selected edges and parameters
+    - name: graph_version
+      description: str, the graph algorithm's version (ml.lib.courseware.graph.GRAPH_VERSION)
     - name: parameters_json
       description: str, the thresholds and weights the run used
+    - name: resolution_run_id
+      description: str, the resolution run dim_concept was built from when the graph
+        was computed; a knowledge release publishes a graph run only beside that resolution
+        run
   - name: courseware_concept_graph_node
     config:
       meta:
@@ -609,3 +615,203 @@ sources:
     - name: checked_at
       description: timestamp, when the verdict was recorded for this source; a copy
         that reuses a verdict gets the time it was recorded, not the time of the call
+  # Knowledge releases (ml.assets.courseware_release). A release copies the
+  # int__courseware__release_* candidates under a manifest; the publication table
+  # says which release learner-facing projections read. Rows are never updated.
+  - name: courseware_release
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_release]
+    description: One row per knowledge release candidate, written after its projection
+      rows, with the manifest it was built from and whether it passed validation.
+    columns:
+    - name: release_id
+      description: str, UUID of the release
+      tests:
+      - unique
+      - not_null
+    - name: built_at
+      description: timestamp, when the candidate was written
+    - name: candidate_checksum
+      description: str, sha256 of the manifest and every projection row; an unchanged
+        candidate is not written again
+    - name: output_schema_version
+      description: str, hash of the projections' column names and types
+    - name: resolution_run_id
+      description: str, the resolution run the release's concepts come from
+    - name: resolver_id
+      description: str, that run's resolver version
+    - name: resolution_prompt_version
+      description: str, that run's adjudication prompt version
+    - name: sense_assignment_version
+      description: str, the sense_prompt_version of the resolution run whose sense
+        assignment snapshot the release's concept ids come from; null for a run written
+        before sense assignment, which fails validation
+    - name: graph_run_id
+      description: str, the graph run bound to the release
+    - name: graph_version
+      description: str, that run's algorithm version
+    - name: graph_resolution_run_id
+      description: str, the resolution run that graph was computed over
+    - name: is_graph_current
+      description: boolean, whether graph_resolution_run_id is resolution_run_id
+    - name: description_prompt_version
+      description: str, the approved description prompt version the release's descriptions
+        were written under
+    - name: undescribed_concept_count
+      description: int, accepted concepts with no description at that version
+    - name: extraction_selection_checksum
+      description: str, md5 of the current extraction keys of source-eligible runs
+    - name: extraction_count
+      description: int, how many such extractions
+    - name: source_policy_version
+      description: str, int__courseware__source_eligibility.source_policy_version
+    - name: concept_count
+      description: int, rows in courseware_release_concept for the release
+    - name: resource_count
+      description: int, rows in courseware_release_resource_knowledge for the release
+    - name: resource_concept_count
+      description: int, rows in courseware_release_resource_concept for the release
+    - name: is_valid
+      description: boolean, true when the candidate passed validation; only a valid
+        release can be published
+    - name: validation_errors_json
+      description: str, JSON list of the reasons a candidate failed validation
+  - name: courseware_release_concept
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_release_concept]
+    description: int__courseware__release_concepts as each release copied it.
+    columns:
+    - name: release_id
+      description: str, the release
+      tests:
+      - not_null
+    - name: concept_id
+      description: str, the concept's UUID
+    - name: name
+      description: str, the label source-eligible runs mention most
+    - name: concept_kind
+      description: str, that label's kind
+    - name: short_description
+      description: str, at most 12 words
+    - name: description
+      description: str, one or two course-agnostic sentences
+    - name: is_learner_facing
+      description: boolean, the describer's flag; Learn shows only true
+    - name: review_status
+      description: str, accepted
+    - name: description_model_id
+      description: str, the model that wrote the description
+    - name: description_prompt_version
+      description: str, the approved prompt version it was written under
+    - name: description_input_checksum
+      description: str, the input_checksum the description was written from
+    - name: is_awaiting_description
+      description: boolean, false in a valid release
+    - name: teaching_course_count
+      description: int, courses whose source-eligible run teaches the concept
+    - name: course_count
+      description: int, courses whose source-eligible run relates to the concept
+    tests:
+    - dbt_expectations.expect_compound_columns_to_be_unique:
+        column_list: [release_id, concept_id]
+  - name: courseware_release_resource_knowledge
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_release_resource_knowledge]
+    description: int__courseware__release_resource_knowledge as each release copied
+      it.
+    columns:
+    - name: release_id
+      description: str, the release
+      tests:
+      - not_null
+    - name: etl_source
+      description: str, Learn's etl_source for the course
+    - name: readable_id
+      description: str, the course readable_id as Learn keys it
+    - name: extracted_courserun_readable_id
+      description: str, the run the knowledge was extracted from
+    - name: course_title
+      description: str, the course's title
+    - name: concepts_taught
+      description: array of str, released concepts the run teaches
+    - name: concepts_reviewed
+      description: array of str, released concepts the run reviews
+    - name: concepts_used
+      description: array of str, released concepts the run uses
+    - name: concepts_assessed
+      description: array of str, released concepts its assessments name
+    - name: prerequisites_declared
+      description: array of str, released concepts the material states as prerequisites
+    - name: prerequisites_inferred
+      description: array of str, released concepts the run relies on before teaching
+        them
+    - name: skills
+      description: array of str, skill statements
+    - name: learning_outcomes
+      description: array of str, stated learning outcomes
+    - name: audience
+      description: array of str, who the material says the course is for
+    - name: context_document
+      description: str, markdown rendered from the arrays in this row
+    tests:
+    - dbt_expectations.expect_compound_columns_to_be_unique:
+        column_list: [release_id, etl_source, readable_id]
+  - name: courseware_release_resource_concept
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_release_resource_concept]
+    description: int__courseware__release_resource_concepts as each release copied
+      it.
+    columns:
+    - name: release_id
+      description: str, the release
+      tests:
+      - not_null
+    - name: etl_source
+      description: str, Learn's etl_source for the course
+    - name: readable_id
+      description: str, the course readable_id as Learn keys it
+    - name: extracted_courserun_readable_id
+      description: str, the run the concepts were extracted from
+    - name: concept_id
+      description: str, the concept's UUID, the sense the course uses
+    - name: concept_name
+      description: str, the concept's name in the same release
+    - name: relation
+      description: str, teaches, reviews, uses, mentions, assesses, requires, requires_concurrently
+        or recommends
+    - name: requirement_source
+      description: str, declared or inferred for requires relations; null otherwise
+    - name: claim_count
+      description: int, accepted claims behind the relation
+    - name: first_scope_position
+      description: int, the first scope in the run that supports the relation
+    tests:
+    - dbt_expectations.expect_compound_columns_to_be_unique:
+        column_list: [release_id, etl_source, readable_id, concept_id, relation, requirement_source]
+  - name: courseware_release_publication
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_release_publication]
+    description: One row each time the published pointer moved; the newest row names
+      the published release.
+    columns:
+    - name: release_id
+      description: str, the release published
+      tests:
+      - not_null
+    - name: published_at
+      description: timestamp, when it was published
+    - name: previous_release_id
+      description: str, the release it replaced, for rollback
+    - name: publication_kind
+      description: str, automatic (the newest valid release) or requested (a release
+        named in the run config, e.g. a rollback)

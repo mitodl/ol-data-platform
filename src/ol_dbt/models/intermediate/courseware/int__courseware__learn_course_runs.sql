@@ -1,12 +1,23 @@
 {#
-    For each course Learn lists, the run whose extraction the Learn views publish:
-    the run with the newest extraction, keyed as Learn keys the course (etl_source,
-    readable_id). Shared by integrations__learn__resource_knowledge and
-    integrations__learn__resource_concepts so the two describe the same run.
+    For each course Learn lists, the run whose extraction a knowledge release
+    publishes: the source-eligible run with the newest extraction, keyed as Learn
+    keys the course (etl_source, readable_id). Shared by
+    int__courseware__release_resource_knowledge and
+    int__courseware__release_resource_concepts so the two describe the same run.
 #}
-with extractions as (
-    select * from {{ ref('dim_courseware_extraction') }}
-    where is_current
+with eligible_runs as (
+    select * from {{ ref('int__courseware__source_eligibility') }}
+    where is_source_eligible
+)
+
+, extractions as (
+    select extractions.*
+    from {{ ref('dim_courseware_extraction') }} as extractions
+    inner join eligible_runs
+        on
+            extractions.platform = eligible_runs.platform
+            and extractions.courserun_readable_id = eligible_runs.courserun_readable_id
+    where extractions.is_current
 )
 
 , course_runs as (

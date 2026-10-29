@@ -1,0 +1,300 @@
+---
+unit_tests:
+- name: test_int__courseware__source_eligibility_run_row_then_platform_row
+  description: >
+    A run takes its own policy row over its platform's, and a run whose platform
+    has no row is not eligible.
+  model: int__courseware__source_eligibility
+  given:
+  - input: ref('courseware_source_eligibility')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: null, is_eligible: true}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:B2B+A+1T", is_eligible: false}
+  - input: ref('int__courseware__extractions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T"}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T"}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:B2B+A+1T"}
+    - {platform: residential, courserun_readable_id: "course-v1:MITx+R+1T"}
+  expect:
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", is_source_eligible: true,
+      eligibility_level: platform}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:B2B+A+1T", is_source_eligible: false,
+      eligibility_level: courserun}
+    - {platform: residential, courserun_readable_id: "course-v1:MITx+R+1T", is_source_eligible: false,
+      eligibility_level: null}
+
+- name: test_int__courseware__release_concepts_only_accepted_and_eligible
+  description: >
+    Only accepted, active concepts that a source-eligible run names are released,
+    and an ineligible run changes nothing about them: c1's label and kind are the
+    ones the eligible run uses even though the residential run mentions another
+    label and kind more often,
+    and its course counts leave the residential course out, and course a2, whose
+    relation no accepted claim supports. c2 only a residential run names, c3 is
+    still proposed, c4 rejected and c5 merged into another concept, so none of them
+    is released.
+  model: int__courseware__release_concepts
+  given:
+  - input: ref('dim_concept')
+    rows:
+    - {concept_pk: c1, lifecycle_status: active, review_status: accepted}
+    - {concept_pk: c2, lifecycle_status: active, review_status: accepted}
+    - {concept_pk: c3, lifecycle_status: active, review_status: proposed}
+    - {concept_pk: c4, lifecycle_status: active, review_status: rejected}
+    - {concept_pk: c5, lifecycle_status: merged, review_status: accepted}
+  - input: ref('int__courseware__source_eligibility')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: a1, is_source_eligible: true}
+    - {platform: mitxonline, courserun_readable_id: a2, is_source_eligible: true}
+    - {platform: residential, courserun_readable_id: r1, is_source_eligible: false}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {concept_id: c1, concept_label_key: auc, label: AUC, concept_kind: metric, platform: mitxonline,
+      courserun_readable_id: a1}
+    - {concept_id: c1, concept_label_key: area under curve, label: area under the
+        curve, concept_kind: concept, platform: residential, courserun_readable_id: r1}
+    - {concept_id: c1, concept_label_key: area under curve, label: area under the
+        curve, concept_kind: concept, platform: residential, courserun_readable_id: r1}
+    - {concept_id: c2, concept_label_key: lab kit, label: lab kit, concept_kind: tool,
+      platform: residential, courserun_readable_id: r1}
+    - {concept_id: c3, concept_label_key: pandas, label: pandas, concept_kind: tool,
+      platform: mitxonline, courserun_readable_id: a1}
+    - {concept_id: c4, concept_label_key: pandas, label: pandas, concept_kind: tool,
+      platform: mitxonline, courserun_readable_id: a1}
+    - {concept_id: c5, concept_label_key: k-means, label: k-means, concept_kind: concept,
+      platform: mitxonline, courserun_readable_id: a1}
+  - input: ref('courseware_description_approval')
+    rows:
+    - {prompt_version: v1}
+  - input: ref('int__courseware__concept_description_inputs')
+    rows:
+    - {concept_id: c1}
+  - input: source('courseware_intermediate', 'courseware_concept_description')
+    rows:
+    - {concept_id: c1, short_description: a ranking measure, is_learner_facing: true,
+      prompt_version: v1, model_id: m, described_at: "2026-10-01 00:00:00"}
+    - {concept_id: c2, short_description: a lab tool, is_learner_facing: true, prompt_version: v1,
+      model_id: m, described_at: "2026-10-01 00:00:00"}
+  - input: ref('bridge_courserun_concept')
+    rows:
+    - {concept_fk: c1, platform: mitxonline, courserun_readable_id: a1, courserun_fk: ra,
+      relation: teaches, accepted_claim_count: 1, passes_support_rule: true}
+    - {concept_fk: c1, platform: mitxonline, courserun_readable_id: a2, courserun_fk: ra2,
+      relation: uses, accepted_claim_count: 0, passes_support_rule: true}
+    - {concept_fk: c1, platform: residential, courserun_readable_id: r1, courserun_fk: rr,
+      relation: teaches, accepted_claim_count: 1, passes_support_rule: true}
+    - {concept_fk: c2, platform: residential, courserun_readable_id: r1, courserun_fk: rr,
+      relation: uses, accepted_claim_count: 1, passes_support_rule: true}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: ra, course_fk: a, is_current: true}
+    - {courserun_pk: ra2, course_fk: a2, is_current: true}
+    - {courserun_pk: rr, course_fk: r, is_current: true}
+  expect:
+    rows:
+    - {concept_id: c1, name: AUC, concept_kind: metric, short_description: a ranking
+        measure, review_status: accepted, teaching_course_count: 1, course_count: 1}
+
+- name: test_int__courseware__release_concepts_takes_descriptions_at_the_approved_version
+  description: >
+    A concept takes the newest description written under the approved prompt
+    version, even when a newer one under another version exists, and a concept
+    the describer has inputs for but no description yet is awaiting one, which the
+    release asset refuses. c3 has no inputs, because the run whose claim described
+    it is no longer eligible, so it takes no description, not even the one that run
+    produced, and is not awaiting one.
+    A concept no current claim names (it stays active after its labels drop out)
+    is not released.
+  model: int__courseware__release_concepts
+  given:
+  - input: ref('dim_concept')
+    rows:
+    - {concept_pk: c1, lifecycle_status: active, review_status: accepted}
+    - {concept_pk: c2, lifecycle_status: active, review_status: accepted}
+    - {concept_pk: gone, lifecycle_status: active, review_status: accepted}
+    - {concept_pk: c3, lifecycle_status: active, review_status: accepted}
+  - input: ref('int__courseware__source_eligibility')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: a1, is_source_eligible: true}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {concept_id: c1, concept_label_key: auc, label: AUC, platform: mitxonline, courserun_readable_id: a1}
+    - {concept_id: c2, concept_label_key: pandas, label: pandas, platform: mitxonline,
+      courserun_readable_id: a1}
+    - {concept_id: c3, concept_label_key: numpy, label: numpy, platform: mitxonline,
+      courserun_readable_id: a1}
+  - input: ref('courseware_description_approval')
+    rows:
+    - {prompt_version: v1}
+  - input: ref('int__courseware__concept_description_inputs')
+    rows:
+    - {concept_id: c1}
+    - {concept_id: c2}
+  - input: source('courseware_intermediate', 'courseware_concept_description')
+    rows:
+    - {concept_id: c3, short_description: from an excluded run, is_learner_facing: true,
+      prompt_version: v1, model_id: m, described_at: "2026-10-01 00:00:00"}
+    - {concept_id: c1, short_description: old approved, is_learner_facing: true, prompt_version: v1,
+      model_id: m, described_at: "2026-10-01 00:00:00"}
+    - {concept_id: c1, short_description: approved, is_learner_facing: true, prompt_version: v1,
+      model_id: m, described_at: "2026-10-02 00:00:00"}
+    - {concept_id: c1, short_description: unapproved, is_learner_facing: true, prompt_version: v2,
+      model_id: m, described_at: "2026-10-03 00:00:00"}
+    - {concept_id: c2, short_description: unapproved, is_learner_facing: true, prompt_version: v2,
+      model_id: m, described_at: "2026-10-03 00:00:00"}
+  - input: ref('bridge_courserun_concept')
+    rows: []
+  - input: ref('dim_course_run')
+    rows: []
+  expect:
+    rows:
+    - {concept_id: c1, short_description: approved, is_learner_facing: true, description_prompt_version: v1,
+      is_awaiting_description: false}
+    - {concept_id: c2, short_description: null, is_learner_facing: null, description_prompt_version: null,
+      is_awaiting_description: true}
+    - {concept_id: c3, short_description: null, is_learner_facing: null, description_prompt_version: null,
+      is_awaiting_description: false}
+
+- name: test_int__courseware__release_resource_knowledge_names_only_released_concepts
+  description: >
+    A course's concept lists name only concepts the release publishes as
+    learner-facing, so a concept that is not in the release, or not learner-facing,
+    never appears in a course's list or its context document. Which run a course
+    takes, and that an ineligible one is left out, is
+    int__courseware__learn_course_runs' (tested there).
+  model: int__courseware__release_resource_knowledge
+  overrides:
+    macros:
+      courseware_build_id: "'build1'"
+  given:
+  - input: ref('int__courseware__learn_course_runs')
+    rows:
+    - {etl_source: mitxonline, readable_id: "course-v1:X+A", course_title: Course
+        A, courserun_fk: ra, courserun_readable_id: a1}
+  - input: ref('bridge_courserun_concept')
+    rows:
+    - {courserun_fk: ra, concept_fk: c1, relation: teaches, claim_count: 2, accepted_claim_count: 1,
+      passes_support_rule: true}
+    - {courserun_fk: ra, concept_fk: proposed, relation: teaches, claim_count: 5,
+      accepted_claim_count: 1, passes_support_rule: true}
+    - {courserun_fk: ra, concept_fk: dataset, relation: uses, claim_count: 1, accepted_claim_count: 1,
+      passes_support_rule: true}
+  - input: ref('int__courseware__release_concepts')
+    rows:
+    - {concept_id: c1, name: AUC, is_learner_facing: true}
+    - {concept_id: dataset, name: wine prices, is_learner_facing: false}
+  - input: ref('tfact_courseware_claim')
+    rows: []
+  # SQL, because a dict fixture's string loses the document's trailing newline.
+  expect:
+    format: sql
+    rows: |
+      select
+          'mitxonline' as etl_source
+          , 'course-v1:X+A' as readable_id
+          , 'a1' as extracted_courserun_readable_id
+          , 'Course A' as course_title
+          , ['AUC'] as concepts_taught
+          , cast(null as varchar []) as concepts_reviewed
+          , cast(null as varchar []) as concepts_used
+          , cast(null as varchar []) as concepts_assessed
+          , cast(null as varchar []) as prerequisites_declared
+          , cast(null as varchar []) as prerequisites_inferred
+          , cast(null as varchar []) as skills
+          , cast(null as varchar []) as learning_outcomes
+          , cast(null as varchar []) as audience
+          , concat('# Course A', chr(10), '## Teaches', chr(10), 'AUC', chr(10)) as context_document
+          , 'build1' as dbt_invocation_id
+
+- name: test_int__courseware__release_manifest_flags_a_graph_from_an_older_resolution_run
+  description: >
+    A resolution run merged concepts and the graph build after it failed, so the
+    newest graph run was computed over the previous resolution run. The manifest
+    binds both and is_graph_current is false, which the release asset refuses, so
+    the published release stays where it was.
+  model: int__courseware__release_manifest
+  given:
+  - input: ref('int__courseware__concept_registry')
+    rows:
+    - {resolution_run_id: res2}
+  - input: source('courseware_intermediate', 'courseware_resolution_run')
+    rows:
+    - {resolution_run_id: res1, resolver_id: r, prompt_version: p, sense_prompt_version: s1}
+    - {resolution_run_id: res2, resolver_id: r, prompt_version: p, sense_prompt_version: s2}
+  - input: source('courseware_intermediate', 'courseware_concept_graph_run')
+    rows:
+    - {graph_run_id: g1, graph_version: v, resolution_run_id: res1}
+  - input: ref('int__courseware__latest_concept_graph_run')
+    rows:
+    - {graph_run_id: g1}
+  - input: ref('int__courseware__source_eligibility')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: a1, is_source_eligible: true,
+      source_policy_version: pol}
+  - input: ref('dim_courseware_extraction')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: a1, extraction_key: k1, is_current: true}
+  - input: ref('courseware_description_approval')
+    rows:
+    - {prompt_version: v1}
+  - input: ref('int__courseware__release_concepts')
+    rows:
+    - {concept_id: c1, is_awaiting_description: false, dbt_invocation_id: i1}
+    - {concept_id: c2, is_awaiting_description: true, dbt_invocation_id: i1}
+    - {concept_id: c3, is_awaiting_description: false, dbt_invocation_id: i1}
+  - input: ref('int__courseware__release_resource_knowledge')
+    rows:
+    - {etl_source: mitxonline, readable_id: "course-v1:X+A", dbt_invocation_id: i0}
+  - input: ref('int__courseware__release_resource_concepts')
+    rows:
+    - {etl_source: mitxonline, readable_id: "course-v1:X+A", concept_id: c1, dbt_invocation_id: i1}
+    - {etl_source: mitxonline, readable_id: "course-v1:X+A", concept_id: c3, dbt_invocation_id: i1}
+  expect:
+    rows:
+    - {resolution_run_id: res2, sense_assignment_version: s2, graph_run_id: g1, graph_resolution_run_id: res1,
+      is_graph_current: false, description_prompt_version: v1, undescribed_concept_count: 1,
+      concept_count: 3, resource_count: 1, resource_concept_count: 2, extraction_count: 1,
+      source_policy_version: pol, concepts_invocation_id: i1, resources_invocation_id: i0,
+      resource_concepts_invocation_id: i1}
+
+- name: test_int__courseware__release_manifest_binds_a_graph_over_its_resolution_run
+  description: >
+    Once the graph is computed over the resolution run dim_concept was built from,
+    is_graph_current is true. A policy that excludes every described run leaves no
+    description inputs and an empty candidate, and the manifest still names the
+    prompt the seed approves, so the release that retracts everything can publish.
+  model: int__courseware__release_manifest
+  given:
+  - input: ref('int__courseware__concept_registry')
+    rows:
+    - {resolution_run_id: res2}
+  - input: source('courseware_intermediate', 'courseware_resolution_run')
+    rows:
+    - {resolution_run_id: res2, resolver_id: r, prompt_version: p, sense_prompt_version: s2}
+  - input: source('courseware_intermediate', 'courseware_concept_graph_run')
+    rows:
+    - {graph_run_id: g1, graph_version: v, resolution_run_id: res1}
+    - {graph_run_id: g2, graph_version: v, resolution_run_id: res2}
+  - input: ref('int__courseware__latest_concept_graph_run')
+    rows:
+    - {graph_run_id: g2}
+  - input: ref('int__courseware__source_eligibility')
+    rows: []
+  - input: ref('dim_courseware_extraction')
+    rows: []
+  - input: ref('courseware_description_approval')
+    rows:
+    - {prompt_version: v1}
+  - input: ref('int__courseware__release_concepts')
+    rows: []
+  - input: ref('int__courseware__release_resource_knowledge')
+    rows: []
+  - input: ref('int__courseware__release_resource_concepts')
+    rows: []
+  expect:
+    rows:
+    - {resolution_run_id: res2, sense_assignment_version: s2, graph_run_id: g2, is_graph_current: true,
+      description_prompt_version: v1, undescribed_concept_count: 0, resource_concept_count: 0,
+      extraction_count: 0, concepts_invocation_id: null}

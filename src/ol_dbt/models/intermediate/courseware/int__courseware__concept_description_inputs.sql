@@ -3,7 +3,9 @@
     claim descriptions from different course runs (taught ones first) with the
     course each came from. The claim descriptions say how one scope treats the
     concept; the describer turns them into one course-agnostic description, and the
-    course titles let it disambiguate labels like "kernel".
+    course titles let it disambiguate labels like "kernel". Only runs
+    int__courseware__source_eligibility marks eligible are read, because the
+    description is learner-facing.
 
     Every row carries the description prompt version courseware_description_approval
     approves, so the describer refuses any other prompt, and this model's first build
@@ -11,14 +13,23 @@
     approves nothing rather than repeating every row, which would change every
     concept's input checksum and describe the corpus again.
 #}
-with mentions as (
-    select * from {{ ref('int__courseware__resolved_concept_mentions') }}
-    where description is not null
+with eligible_runs as (
+    select * from {{ ref('int__courseware__source_eligibility') }}
+    where is_source_eligible
+)
+
+, mentions as (
+    select resolved.*
+    from {{ ref('int__courseware__resolved_concept_mentions') }} as resolved
+    inner join eligible_runs
+        on
+            resolved.platform = eligible_runs.platform
+            and resolved.courserun_readable_id = eligible_runs.courserun_readable_id
+    where resolved.description is not null
 )
 
 , approval as (
-    select case when count(*) = 1 then max(prompt_version) end as prompt_version
-    from {{ ref('courseware_description_approval') }}
+    {{ courseware_approved_description_prompt() }}
 )
 
 , course_runs as (

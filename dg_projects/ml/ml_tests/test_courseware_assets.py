@@ -36,6 +36,7 @@ from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
 from ml.assets import courseware_description as description_module
 from ml.assets import courseware_extraction as extraction_module
+from ml.assets import courseware_release as release_module
 from ml.assets import courseware_resolution as resolution_module
 from ml.assets.courseware_description import courseware_concept_description
 from ml.assets.courseware_extraction import (
@@ -46,6 +47,10 @@ from ml.assets.courseware_extraction import (
     extraction_text_version,
 )
 from ml.assets.courseware_graph import courseware_concept_graph
+from ml.assets.courseware_release import (
+    courseware_knowledge_release,
+    courseware_release_publication,
+)
 from ml.assets.courseware_resolution import (
     RUN_KEY,
     assignment_churn,
@@ -53,7 +58,10 @@ from ml.assets.courseware_resolution import (
 )
 from ml.lib import warehouse
 from ml.lib.courseware import graph
-from ml.lib.courseware.describe import DESCRIPTION_PROMPT_VERSION
+from ml.lib.courseware.describe import (
+    DESCRIPTION_PROMPT_VERSION,
+    current_input_checksums,
+)
 from ml.resources import opik_auth
 from ml.resources.llm import LLMClientFactory
 from ml.sensors import courseware as sensor_module
@@ -1238,6 +1246,19 @@ def test_description_describes_only_concepts_new_at_the_approved_version(tables,
     ]
 
 
+def test_description_describes_inputs_that_changed_back_again(tables, calls):
+    # a release takes the newest description, which is of the inputs in between
+    for label in ("auc", "area under the curve", "auc"):
+        tables[DESCRIPTION_INPUTS] = description_inputs(concepts={"c1": label})
+        assert describe(tables).success
+
+    assert calls == ["record_descriptions"] * 3
+    newest = tables["courseware_concept_description"].sort("described_at")[-1]
+    assert newest["input_checksum"].item() == next(
+        iter(current_input_checksums(tables[DESCRIPTION_INPUTS]).values())
+    )
+
+
 def test_description_describes_each_concept_once(tables, calls):
     tables[DESCRIPTION_INPUTS] = description_inputs()
     resources = {"io_manager": Warehouse(tables), "llm": FakeLLM()}
@@ -1298,6 +1319,7 @@ def graph_input(tables, edges: dict[tuple[str, str], str]) -> None:
             "preferred_label": names,
             "lifecycle_status": ["active"] * 3,
             "label_count": [1] * 3,
+            "resolution_run_id": ["res1"] * 3,
         }
     )
     tables["bridge_concept_relation"] = pl.DataFrame(
@@ -1351,6 +1373,490 @@ def test_graph_reports_cycles_and_skips_unchanged_input(tables, monkeypatch):
         "courseware_concept_graph_test",
     ]
 
+    # a new resolution run over the same graph input is a new run, bound to it
+    tables["dim_concept"] = tables["dim_concept"].with_columns(
+        resolution_run_id=pl.lit("res2")
+    )
+    materialize([courseware_concept_graph], resources=resources)
+
+    assert tables["courseware_concept_graph_run"]["resolution_run_id"].to_list() == [
+        "res1",
+        "res1",
+        "res2",
+    ]
+
+
+# ----------------------------------------------------------------------- release
+def manifest(
+    concept_count: int = 1,
+    resource_count: int = 1,
+    resource_concept_count: int = 1,
+    **overrides: Any,
+):
+    """Return a coherent int__courseware__release_manifest row, with overrides."""
+    row = {
+        "resolution_run_id": "res1",
+        "resolver_id": "courseware_resolution_v2",
+        "resolution_prompt_version": "p",
+        "sense_assignment_version": "s1",
+        "graph_run_id": "g1",
+        "graph_version": "courseware_concept_graph_v1",
+        "graph_resolution_run_id": "res1",
+        "is_graph_current": True,
+        "description_prompt_version": "d1",
+        "undescribed_concept_count": 0,
+        "extraction_selection_checksum": "x",
+        "extraction_count": 3,
+        "source_policy_version": "pol",
+        **overrides,
+    }
+    return pl.DataFrame([row], schema=release_module.MANIFEST_SCHEMA).with_columns(
+        concept_count=pl.lit(concept_count, dtype=pl.Int64),
+        resource_count=pl.lit(resource_count, dtype=pl.Int64),
+        resource_concept_count=pl.lit(resource_concept_count, dtype=pl.Int64),
+    )
+
+
+def description_inputs_for(*names: str) -> pl.DataFrame:
+    """int__courseware__concept_description_inputs rows, one per release concept."""
+    return pl.DataFrame(
+        {
+            "concept_id": [f"id-{name}" for name in names],
+            "label": list(names),
+            "concept_kind": ["concept"] * len(names),
+            "description": [f"about {name}" for name in names],
+            "course_title": ["Course A"] * len(names),
+            "context_rank": [1] * len(names),
+        },
+        schema_overrides={"concept_id": pl.String, "label": pl.String},
+    )
+
+
+def release_concepts(
+    *names: str, review_status: str = "accepted", stale: tuple[str, ...] = ()
+) -> pl.DataFrame:
+    """int__courseware__release_concepts rows, described from their current inputs.
+
+    :param stale: names whose description was written from inputs since changed
+    """
+    checksums = current_input_checksums(description_inputs_for(*names))
+    return pl.DataFrame(
+        {
+            "concept_id": [f"id-{name}" for name in names],
+            "name": list(names),
+            "is_learner_facing": [True] * len(names),
+            "review_status": [review_status] * len(names),
+            "description_prompt_version": ["d1"] * len(names),
+            "description_input_checksum": [
+                "old" if name in stale else checksums[f"id-{name}"] for name in names
+            ],
+        },
+        schema_overrides={
+            "concept_id": pl.String,
+            "name": pl.String,
+            "description_input_checksum": pl.String,
+        },
+    )
+
+
+def release_resources(*concepts: str) -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "etl_source": ["mitxonline"],
+            "readable_id": ["course-v1:X+A"],
+            "concepts_taught": [list(concepts)],
+            "context_document": [f"# Course A {' '.join(concepts)}"],
+        }
+    )
+
+
+def release_resource_concepts(*names: str) -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "etl_source": ["mitxonline"] * len(names),
+            "readable_id": ["course-v1:X+A"] * len(names),
+            "concept_id": [f"id-{name}" for name in names],
+            "concept_name": list(names),
+            "relation": ["teaches"] * len(names),
+            "requirement_source": [None] * len(names),
+        },
+        schema_overrides={
+            "concept_id": pl.String,
+            "concept_name": pl.String,
+            "requirement_source": pl.String,
+        },
+    )
+
+
+def built_by(frame: pl.DataFrame, build: str) -> pl.DataFrame:
+    """Return a candidate projection as dbt invocation build would write it."""
+    return frame.with_columns(
+        pl.lit(build, dtype=pl.String).alias(release_module.BUILD_COLUMN)
+    )
+
+
+def candidate(
+    tables: dict[str, pl.DataFrame],
+    *names: str,
+    stale: tuple[str, ...] = (),
+    build: str = "build1",
+    **overrides,
+) -> None:
+    """Stage what one dbt invocation would build for the next release candidate.
+
+    :param stale: names whose description inputs changed since they were described
+    :param build: the dbt invocation id
+    """
+    tables["int__courseware__concept_description_inputs"] = description_inputs_for(
+        *names
+    )
+    projections = {
+        "int__courseware__release_concepts": release_concepts(*names, stale=stale),
+        "int__courseware__release_resource_knowledge": release_resources(*names),
+        "int__courseware__release_resource_concepts": release_resource_concepts(*names),
+    }
+    for table, frame in projections.items():
+        tables[table] = built_by(frame, build)
+    tables["int__courseware__release_manifest"] = manifest(
+        concept_count=len(names),
+        **{"resource_count": 1, "resource_concept_count": len(names), **overrides},
+    ).with_columns(
+        **{
+            column: pl.lit(build if count else None, dtype=pl.String)
+            for column, count in (
+                ("concepts_invocation_id", len(names)),
+                ("resources_invocation_id", 1),
+                ("resource_concepts_invocation_id", len(names)),
+            )
+        }
+    )
+
+
+def release(tables: dict[str, pl.DataFrame], **publication) -> tuple[Any, Any]:
+    """Build a release candidate, then run publication, as automation would."""
+    resources = {"io_manager": Warehouse(tables)}
+    built = materialize(
+        [courseware_knowledge_release], resources=resources, raise_on_error=False
+    )
+    published = materialize(
+        [courseware_release_publication],
+        resources=resources,
+        run_config={
+            "ops": {
+                "intermediate__courseware_release_publication": {"config": publication}
+            }
+        },
+        raise_on_error=False,
+    )
+    return built, published
+
+
+def published_rows(tables: dict[str, pl.DataFrame], table: str) -> pl.DataFrame:
+    """Return what a Learn view selects: the rows of the published release."""
+    pointer = tables["courseware_release_publication"].sort("published_at")
+    return tables[table].filter(pl.col("release_id") == pointer["release_id"][-1])
+
+
+def test_release_publishes_a_valid_candidate_and_skips_an_unchanged_one(tables):
+    candidate(tables, "AUC")
+
+    built, published = release(tables)
+
+    assert check_result(built, "release_candidate_valid").passed
+    assert published.success
+    first = tables["courseware_release"].row(0, named=True)
+    assert first["is_valid"]
+    assert first["resolution_run_id"] == "res1"
+    assert first["graph_run_id"] == "g1"
+    assert published_rows(tables, "courseware_release_concept")["name"].to_list() == [
+        "AUC"
+    ]
+
+    built, published = release(tables)
+
+    assert check_result(built, "release_candidate_valid").passed
+    assert tables["courseware_release"].height == 1
+    assert tables["courseware_release_publication"].height == 1
+
+
+def test_a_failed_graph_build_leaves_the_last_release_published(tables):
+    candidate(tables, "AUC")
+    release(tables)
+
+    # A resolution run merged AUC into "area under the curve", and the graph build
+    # after it failed, so the newest graph run is still over res1.
+    candidate(
+        tables,
+        "area under the curve",
+        resolution_run_id="res2",
+        is_graph_current=False,
+    )
+    built, published = release(tables)
+
+    check = check_result(built, "release_candidate_valid")
+    assert not check.passed
+    assert (
+        "computed over resolution run res1, not res2"
+        in (check.metadata["validation_errors"].value[0])
+    )
+    assert published.success
+    assert tables["courseware_release"]["is_valid"].to_list() == [True, False]
+    assert tables["courseware_release_publication"].height == 1
+    for table, column, value in (
+        ("courseware_release_concept", "name", "AUC"),
+        ("courseware_release_resource_knowledge", "concepts_taught", ["AUC"]),
+        ("courseware_release_resource_concept", "concept_id", "id-AUC"),
+    ):
+        assert published_rows(tables, table)[column].to_list() == [value]
+
+    # The graph build succeeds: the next candidate moves all three projections.
+    candidate(
+        tables,
+        "area under the curve",
+        resolution_run_id="res2",
+        graph_resolution_run_id="res2",
+        graph_run_id="g2",
+    )
+    release(tables)
+
+    pointer = tables["courseware_release_publication"]
+    assert pointer.height == 2
+    assert pointer["previous_release_id"][-1] == pointer["release_id"][0]
+    for table, column, value in (
+        ("courseware_release_concept", "name", "area under the curve"),
+        (
+            "courseware_release_resource_knowledge",
+            "concepts_taught",
+            ["area under the curve"],
+        ),
+        (
+            "courseware_release_resource_concept",
+            "concept_id",
+            "id-area under the curve",
+        ),
+    ):
+        assert published_rows(tables, table)[column].to_list() == [value]
+
+
+@pytest.mark.parametrize(
+    ("overrides", "names", "error"),
+    [
+        ({"description_prompt_version": None}, ("AUC",), "approves no description"),
+        ({"undescribed_concept_count": 2}, ("AUC",), "2 concepts have no description"),
+        ({}, (), "would empty the published release"),
+        ({"resolution_run_id": None}, ("AUC",), "no resolution run"),
+        (
+            {"sense_assignment_version": None},
+            ("AUC",),
+            "resolution run res1 has no sense assignment",
+        ),
+    ],
+)
+def test_validation_refuses_an_incomplete_candidate(overrides, names, error):
+    errors = release_module.validate_candidate(
+        manifest(**overrides).row(0, named=True),
+        release_concepts(*names),
+        current_input_checksums(description_inputs_for(*names)),
+        "pol",
+    )
+
+    assert any(error in reason for reason in errors), errors
+
+
+def test_an_empty_candidate_writes_nothing_until_a_release_is_published(tables):
+    candidate(tables)
+
+    built, published = release(tables)
+
+    assert check_result(built, "release_candidate_valid").passed
+    assert published.success
+    assert "courseware_release" not in tables
+
+    candidate(tables, "AUC")
+    release(tables)
+    candidate(tables)
+    built, _ = release(tables)
+
+    # once a release is published, an empty candidate would empty it
+    assert not check_result(built, "release_candidate_valid").passed
+    assert tables["courseware_release"]["is_valid"].to_list() == [True, False]
+    assert published_rows(tables, "courseware_release_concept")["name"].to_list() == [
+        "AUC"
+    ]
+
+
+def test_validation_refuses_a_concept_that_is_not_accepted():
+    errors = release_module.validate_candidate(
+        manifest().row(0, named=True),
+        release_concepts("AUC", review_status="proposed"),
+        current_input_checksums(description_inputs_for("AUC")),
+        "pol",
+    )
+
+    assert errors == ["1 concepts are not accepted"]
+
+
+def test_a_rollback_holds_until_a_new_release_is_built(tables):
+    candidate(tables, "AUC")
+    release(tables)
+    candidate(tables, "AUC", "pandas", extraction_count=4)
+    release(tables)
+    first, second = tables["courseware_release"]["release_id"].to_list()
+    assert tables["courseware_release_publication"]["release_id"].to_list() == [
+        first,
+        second,
+    ]
+
+    _, published = release(tables, release_id=first)
+
+    assert published.success
+    pointer = tables["courseware_release_publication"]
+    assert pointer["release_id"][-1] == first
+    assert pointer["publication_kind"][-1] == "requested"
+
+    # automation does not undo the rollback by republishing the newer release
+    release(tables)
+    assert tables["courseware_release_publication"]["release_id"][-1] == first
+
+    candidate(tables, "AUC", "pandas", "numpy", extraction_count=5)
+    release(tables)
+    third = tables["courseware_release"]["release_id"][-1]
+    assert tables["courseware_release_publication"]["release_id"][-1] == third
+
+
+def test_a_rollback_does_not_publish_a_release_it_skipped(tables):
+    candidate(tables, "AUC")
+    release(tables)
+    first = tables["courseware_release"]["release_id"][0]
+    # r2 and r3 are built before publication runs again, which takes r3
+    candidate(tables, "AUC", "pandas", extraction_count=4)
+    materialize(
+        [courseware_knowledge_release], resources={"io_manager": Warehouse(tables)}
+    )
+    candidate(tables, "AUC", "pandas", "numpy", extraction_count=5)
+    release(tables)
+    _, skipped, third = tables["courseware_release"]["release_id"].to_list()
+    assert tables["courseware_release_publication"]["release_id"].to_list() == [
+        first,
+        third,
+    ]
+
+    release(tables, release_id=first)
+    release(tables)
+
+    # r2 was never published, but it is older than r3, so it does not undo the
+    # rollback
+    published = tables["courseware_release_publication"]["release_id"].to_list()
+    assert published == [first, third, first]
+    assert skipped not in published
+
+
+def test_publication_refuses_an_invalid_release(tables):
+    candidate(tables, "AUC", is_graph_current=False)
+    release(tables)
+    invalid = tables["courseware_release"]["release_id"][0]
+    assert "courseware_release_publication" not in tables
+
+    _, published = release(tables, release_id=invalid)
+
+    assert not published.success
+    assert failure_class(published) == "PermanentFailure"
+    assert "courseware_release_publication" not in tables
+
+
+def test_a_description_from_changed_inputs_is_refused(tables):
+    candidate(tables, "AUC")
+    release(tables)
+
+    # a run AUC's description read was made ineligible, so its inputs changed
+    candidate(tables, "AUC", "pandas", stale=("AUC",), source_policy_version="pol2")
+    built, _ = release(tables)
+
+    check = check_result(built, "release_candidate_valid")
+    assert not check.passed
+    assert check.metadata["validation_errors"].value == [
+        "1 concepts' descriptions predate their current inputs or have none"
+    ]
+    assert published_rows(tables, "courseware_release_concept")["name"].to_list() == [
+        "AUC"
+    ]
+
+
+def test_a_policy_change_may_empty_the_release_and_blocks_older_rollbacks(tables):
+    candidate(tables, "AUC")
+    release(tables)
+    first = tables["courseware_release"]["release_id"][0]
+
+    # the only run naming AUC is made ineligible: the empty candidate retracts it
+    candidate(tables, source_policy_version="pol2", resource_count=0)
+    tables["int__courseware__release_resource_knowledge"] = built_by(
+        release_resources().head(0), "build1"
+    )
+    tables["int__courseware__release_manifest"] = tables[
+        "int__courseware__release_manifest"
+    ].with_columns(resources_invocation_id=pl.lit(None, dtype=pl.String))
+    built, _ = release(tables)
+
+    assert check_result(built, "release_candidate_valid").passed
+    assert published_rows(tables, "courseware_release_concept").height == 0
+
+    # rolling back to the release built under the old policy is refused
+    _, published = release(tables, release_id=first)
+
+    assert not published.success
+    assert failure_class(published) == "PermanentFailure"
+
+
+@pytest.mark.parametrize(
+    "rebuilt",
+    [
+        # the concepts were rebuilt after the manifest, the resource model failed
+        ("AUC", "pandas"),
+        # the same count: AUC was merged into another concept, and the resource
+        # projections still name AUC
+        ("area under the curve",),
+    ],
+)
+def test_a_projection_from_another_dbt_build_is_not_released(tables, rebuilt):
+    candidate(tables, "AUC")
+    tables["int__courseware__release_concepts"] = built_by(
+        release_concepts(*rebuilt), "build2"
+    )
+
+    built, _ = release(tables)
+
+    assert not built.success
+    assert "not the dbt build the manifest read" in str(
+        next(e for e in built.all_events if e.is_step_failure).step_failure_data.error
+    )
+    assert "courseware_release" not in tables
+
+
+def test_a_release_carries_no_dbt_invocation(tables):
+    candidate(tables, "AUC")
+    release(tables)
+    candidate(tables, "AUC", build="build2")
+
+    release(tables)
+
+    # a rebuild with the same rows is the same candidate
+    assert tables["courseware_release"].height == 1
+    for table in release_module.PROJECTIONS:
+        assert release_module.BUILD_COLUMN not in tables[table].columns
+
+
+def test_validation_refuses_a_description_of_a_concept_without_inputs():
+    errors = release_module.validate_candidate(
+        manifest().row(0, named=True),
+        release_concepts("AUC"),
+        current_input_checksums(description_inputs_for()),
+        "pol",
+    )
+
+    assert errors == [
+        "1 concepts' descriptions predate their current inputs or have none"
+    ]
+
 
 def test_graph_writes_the_closure_of_approved_edges_and_fails_on_an_approved_cycle(
     tables,
@@ -1402,6 +1908,8 @@ def test_courseware_definitions_load():
             courseware_resolution,
             courseware_concept_description,
             courseware_concept_graph,
+            courseware_knowledge_release,
+            courseware_release_publication,
         ],
         sensors=[courseware_extraction_text_sensor],
         resources={

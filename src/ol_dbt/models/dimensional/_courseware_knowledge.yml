@@ -283,6 +283,10 @@ models:
     description: str, the resolution run that minted the id
   - name: minted_at
     description: timestamp, when the id was minted
+  - name: resolution_run_id
+    description: str, the resolution run this table was built from, the same on every
+      row; the graph asset records it on its run so a knowledge release can check
+      the graph matches its concepts
   - name: label_count
     description: int, normalized labels with mentions assigned to the concept
   - name: mention_count

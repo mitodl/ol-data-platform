@@ -146,6 +146,7 @@ select
     , registry.minted_label
     , registry.minted_run_id
     , registry.minted_at
+    , registry.resolution_run_id
     , coalesce(member_stats.label_count, 0) as label_count
     , coalesce(member_stats.mention_count, 0) as mention_count
     , coalesce(concept_runs.courserun_count, 0) as courserun_count
