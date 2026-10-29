@@ -175,15 +175,14 @@ with evidence as (
     group by from_concept_id, to_concept_id, relation
 )
 
--- units per course relation, run and evidence source, so each course's reruns can be
--- counted once; a run with no course_fk (e.g. residential) is keyed by its course's
--- readable id
+-- units per course relation and run, over every evidence source, so each course's
+-- reruns can be counted once (its run with the most units); a run with no course_fk
+-- (e.g. residential) is keyed by its course's readable id
 , course_relation_runs as (
     select
         evidence.from_concept_id
         , evidence.to_concept_id
         , evidence.relation
-        , evidence.evidence_source
         , coalesce(
             course_runs.course_fk
             , concat(evidence.platform, '|', {{ courserun_course_readable_id('evidence.courserun_readable_id') }})
@@ -201,7 +200,6 @@ with evidence as (
         evidence.from_concept_id
         , evidence.to_concept_id
         , evidence.relation
-        , evidence.evidence_source
         , coalesce(
             course_runs.course_fk
             , concat(evidence.platform, '|', {{ courserun_course_readable_id('evidence.courserun_readable_id') }})
@@ -221,11 +219,10 @@ with evidence as (
             from_concept_id
             , to_concept_id
             , relation
-            , evidence_source
             , course_key
             , max(scope_count) as scope_count
         from course_relation_runs
-        group by from_concept_id, to_concept_id, relation, evidence_source, course_key
+        group by from_concept_id, to_concept_id, relation, course_key
     ) as per_course
     group by from_concept_id, to_concept_id, relation
 )

@@ -59,9 +59,10 @@ snapshots:
   - name: reverse_courserun_support
     description: int, builds_on only, course runs showing the opposite direction
   - name: reverse_scope_support
-    description: int, builds_on only, units showing the opposite direction
+    description: int, builds_on only, course_scope_support of the opposite direction
   - name: direction_consistency
-    description: float, builds_on only, scope_support / (scope_support + reverse_scope_support)
+    description: float, builds_on only, course_scope_support / (course_scope_support
+      + reverse_scope_support)
   - name: co_taught_lift
     description: float, complements only, co-taught unit count over the count expected
       by chance; carried along but not checked for changes

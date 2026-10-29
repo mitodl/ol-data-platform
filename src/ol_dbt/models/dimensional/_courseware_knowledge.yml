@@ -828,3 +828,34 @@ unit_tests:
       passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: y, to_concept_fk: z, relation: broader, support_score: 0.875,
       passes_support_rule: true, support_rule_failure: null}
+- name: test_bridge_concept_relation_counts_a_courses_largest_run_across_sources
+  description: >
+    c1 and c2 are complements in two reruns of course1: run1 co-teaches them in
+    three units and co-assesses them in one, run3 co-teaches them in two and
+    co-assesses them in three. The course counts its larger run, 4 units in run1
+    and 5 in run3, so course_scope_support is 5, not the 3 + 3 a per-source maximum
+    would give.
+  model: bridge_concept_relation
+  given:
+  - input: ref('int__courseware__concept_relation_evidence')
+    rows:
+    - {from_concept_id: c1, to_concept_id: c2, relation: complements, evidence_source: co_taught,
+      platform: mitxonline, courserun_readable_id: run1, scope_count: 3, observed_at: '2026-10-01'}
+    - {from_concept_id: c1, to_concept_id: c2, relation: complements, evidence_source: co_assessed,
+      platform: mitxonline, courserun_readable_id: run1, scope_count: 1, observed_at: '2026-10-01'}
+    - {from_concept_id: c1, to_concept_id: c2, relation: complements, evidence_source: co_taught,
+      platform: mitxonline, courserun_readable_id: run3, scope_count: 2, observed_at: '2026-10-01'}
+    - {from_concept_id: c1, to_concept_id: c2, relation: complements, evidence_source: co_assessed,
+      platform: mitxonline, courserun_readable_id: run3, scope_count: 3, observed_at: '2026-10-01'}
+  - input: ref('dim_course_run')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run1, course_fk: course1, is_current: true}
+    - {platform: mitxonline, courserun_readable_id: run3, course_fk: course1, is_current: true}
+  - input: ref('int__courseware__adjudicated_concept_relations')
+    rows: []
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows: []
+  expect:
+    rows:
+    - {from_concept_fk: c1, to_concept_fk: c2, relation: complements, scope_support: 9,
+      course_scope_support: 5}
