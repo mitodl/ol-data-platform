@@ -713,6 +713,10 @@ def impact(
       ⚠️  WARNING   — column changed but downstream impact cannot be fully determined
       ℹ️  INFO      — only additive changes (new columns), no downstream breakage
 
+    Downstream models are traced for removed and renamed columns only. An added
+    column cannot break a reader, so an INFO alert lists no downstream models
+    even when other models (e.g. ones changed in the same PR) read the new column.
+
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     lineage. Falls back to sqlglot-based ref() parsing otherwise.
 
