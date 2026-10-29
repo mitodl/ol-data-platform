@@ -14,10 +14,12 @@ from typing import Any, Protocol
 import numpy as np
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
+from ml.lib.courseware.extract import Effort
 from ml.lib.llm_client_adapters import (
     build_llm_client,
     call_anthropic,
     call_openai,
+    message_text,
     raise_if_claude_model_on_openai,
 )
 from ml.resources.llm import LLMClientFactory
@@ -37,12 +39,14 @@ SENTIMENT_LABELS = ("positive", "negative")
 # a binary label) -- this is a bake-off, not the tuned production value.
 EMBEDDING_KNN_NEIGHBORS = int(os.environ.get("EMBEDDING_KNN_NEIGHBORS", "5"))
 
-SENTIMENT_MODEL_VERSION = os.environ.get("SENTIMENT_MODEL_VERSION", "claude-haiku-4-5")
+SENTIMENT_MODEL_VERSION = os.environ.get("SENTIMENT_MODEL_VERSION", "claude-haiku-5-5")
 BEDROCK_SENTIMENT_MODEL_VERSION = os.environ.get(
-    "BEDROCK_SENTIMENT_MODEL_VERSION",
-    "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "BEDROCK_SENTIMENT_MODEL_VERSION", "us.anthropic.claude-haiku-5-5"
 )
-SENTIMENT_MAX_TOKENS = int(os.environ.get("SENTIMENT_MAX_TOKENS", "16"))
+# The answer is one word, but thinking counts toward max_tokens: 16 was enough
+# for claude-haiku-4-5, and claude-haiku-5-5 thinks first by default.
+SENTIMENT_MAX_TOKENS = int(os.environ.get("SENTIMENT_MAX_TOKENS", "1024"))
+SENTIMENT_EFFORT: Effort = "low"
 
 SENTIMENT_PROMPT = (
     "Classify the sentiment of this support conversation from the requester's "
@@ -179,11 +183,12 @@ class AnthropicSentimentClient:
             self._client,
             self.model_version,
             max_tokens=SENTIMENT_MAX_TOKENS,
+            effort=SENTIMENT_EFFORT,
             prompt=_sentiment_prompt(conversation_text),
         )
-        if not message.content:
+        if (text := message_text(message)) is None:
             return None
-        return _extract_sentiment_word(message.content[0].text)
+        return _extract_sentiment_word(text)
 
 
 class OpenAISentimentClient:

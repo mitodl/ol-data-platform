@@ -44,6 +44,8 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["ml_tests"]
+# Lets the tests import shared helpers as ml_tests.<module>.
+pythonpath = ["."]
 
 [build-system]
 requires = ["setuptools"]
