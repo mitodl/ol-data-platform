@@ -59,16 +59,15 @@ models:
     description: str, sha256 of the source text the call read
   - name: header_version
     description: str, hash of the course header the call read; null for extractions
-      recorded before it was. A 'reused' row has its original's, the header its claims
-      were made under
-  - name: current_header_version
-    description: str, header_version of the run's course header at the extractor's
-      latest read (int__courseware__latest_scope_inputs); null when the run was never
-      read, or last read before reads recorded it
-  - name: is_header_stale
-    description: boolean, whether the course header changed since the call read it.
-      The key leaves the header out, so a stale extraction stays current until the
-      run is re-extracted with key_on_header. Null when either version is unknown
+      recorded before it was
+  - name: text_extraction_key
+    description: str, the text-stage reading the claims came from (v2); null for v1
+  - name: text_input_digest
+    description: str, sha256 of the text stage's exact input (v2). Extractions sharing
+      it read identical text, so their claims are one source's, not independent corroboration
+  - name: context_input_digest
+    description: str, sha256 of the context stage's exact input, the course header
+      and the text claims (v2)
   - name: source_count
     description: int, sources the call read
   - name: truncated_source_count
@@ -78,9 +77,7 @@ models:
   - name: notes_json
     description: str, JSON list of the model's notes plus truncation notes
   - name: stop_reason
-    description: str, the response's stop_reason, or 'reused' when the rows were copied
-      from an extraction of the same text (content_key) with no model call and zero
-      tokens
+    description: str, the response's stop_reason
   - name: input_tokens
     description: int, uncached input tokens billed
   - name: output_tokens

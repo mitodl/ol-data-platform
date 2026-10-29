@@ -1,0 +1,37 @@
+---
+unit_tests:
+- name: test_int__courseware__claims_current_follows_the_extraction
+  description: >
+    Restores the claims-current test 5d01978fa dropped, in the form promotion needs:
+    which part is current is decided in int__courseware__extractions (its
+    newest-complete-reading tests cover a scope re-read in fewer parts), and a claim
+    takes its extraction's is_current. Scope s was read in two parts, then in one,
+    so
+    only the one-part extraction's claim is current. The claim carries the
+    extraction's text_input_digest and its context-stage status and sense.
+  model: int__courseware__claims
+  given:
+  - input: ref('int__courseware__extractions')
+    rows:
+    - {extraction_key: s1, platform: mitxonline, courserun_readable_id: r, scope_id: s,
+      scope_part: 1, text_input_digest: d1, is_current: false}
+    - {extraction_key: s2, platform: mitxonline, courserun_readable_id: r, scope_id: s,
+      scope_part: 2, text_input_digest: d2, is_current: false}
+    - {extraction_key: s3, platform: mitxonline, courserun_readable_id: r, scope_id: s,
+      scope_part: 1, text_input_digest: d3, is_current: true}
+  - input: source('courseware_intermediate', 'courseware_claim')
+    rows:
+    - {extraction_key: s1, claim_ordinal: 1, claim_kind: concept, label: a}
+    - {extraction_key: s2, claim_ordinal: 1, claim_kind: concept, label: b}
+    - {extraction_key: s3, claim_ordinal: 1, claim_kind: concept, label: c, teaching_status: reviewed,
+      text_teaching_status: taught, sense_hint: statistics}
+  - input: source('courseware_intermediate', 'courseware_claim_evidence')
+    rows: []
+  expect:
+    rows:
+    - {extraction_key: s1, is_current: false, text_input_digest: d1, teaching_status: null,
+      text_teaching_status: null, sense_hint: null}
+    - {extraction_key: s2, is_current: false, text_input_digest: d2, teaching_status: null,
+      text_teaching_status: null, sense_hint: null}
+    - {extraction_key: s3, is_current: true, text_input_digest: d3, teaching_status: reviewed,
+      text_teaching_status: taught, sense_hint: statistics}

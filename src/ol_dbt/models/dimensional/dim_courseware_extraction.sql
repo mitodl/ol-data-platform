@@ -2,22 +2,9 @@
 -- version and model, and what it cost. Versions are rows, never overwrites, so two
 -- extractors or models can be compared on the same scopes; is_current marks the ones
 -- the rollups read and is_approved_version the ones of the run's allowlisted version
--- (int__courseware__extractions). The extraction key leaves the course header out,
--- so is_header_stale flags a run whose header changed since its extraction (the
--- extractor records the header on every read), for a deliberate re-extraction under
--- key_on_header.
+-- (int__courseware__extractions).
 with extractions as (
     select * from {{ ref('int__courseware__extractions') }}
-)
-
-, run_headers as (
-    -- one header per read, so one per run
-    select
-        platform
-        , courserun_readable_id
-        , max(header_version) as header_version
-    from {{ ref('int__courseware__latest_scope_inputs') }}
-    group by platform, courserun_readable_id
 )
 
 , course_runs as (
@@ -50,8 +37,9 @@ select
     , extractions.effort
     , extractions.input_text_checksum
     , extractions.header_version
-    , run_headers.header_version as current_header_version
-    , extractions.header_version != run_headers.header_version as is_header_stale
+    , extractions.text_extraction_key
+    , extractions.text_input_digest
+    , extractions.context_input_digest
     , extractions.source_count
     , extractions.truncated_source_count
     , extractions.summary
@@ -65,10 +53,6 @@ select
     , extractions.is_approved_version
     , extractions.is_current
 from extractions
-left join run_headers
-    on
-        extractions.platform = run_headers.platform
-        and extractions.courserun_readable_id = run_headers.courserun_readable_id
 left join course_runs
     on
         extractions.platform = course_runs.platform
