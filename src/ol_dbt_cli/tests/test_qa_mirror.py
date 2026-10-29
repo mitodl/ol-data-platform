@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +14,9 @@ from ol_dbt_cli.lib.qa_mirror import (
     MirrorTable,
     mirror_tables,
     render_mirror,
+    stale_copies,
 )
+from ol_dbt_cli.lib.qa_observation import Observation, TableState
 
 REAL_INVENTORY = Path(__file__).resolve().parents[3] / "ingestion" / "inventory"
 
@@ -149,3 +152,44 @@ class TestMirrorTables:
             for table in tables:
                 types = dict.fromkeys(table.columns, "varchar(65533)")
                 assert render_mirror(table, types).dropped == []
+
+
+class TestStaleCopies:
+    NOW = datetime(2026, 10, 22, tzinfo=UTC)
+
+    def _observe(self, **snapshots: datetime | None) -> Observation:
+        return Observation(
+            glue_database="ol_warehouse_qa_raw",
+            observed_at=self.NOW,
+            tables={
+                name: TableState(present=True, iceberg=True, rows=1 if at else None, snapshot_at=at)
+                for name, at in snapshots.items()
+            },
+        )
+
+    def _units(self) -> list[Unit]:
+        declared = {"raw_table": "raw__edxorg__a", "mirror": {"columns": {"id": "copy"}}}
+        undeclared = {"raw_table": "raw__edxorg__b"}
+        unit = _unit("mirror", [declared, undeclared])
+        unit.data["mirror_max_age_days"] = 30
+        return [unit]
+
+    def test_a_copy_past_its_max_age_is_reported(self) -> None:
+        old = self.NOW - timedelta(days=31)
+        assert stale_copies(self._units(), self._observe(raw__edxorg__a=old)) == [
+            "raw__edxorg__a: copied 2026-09-21, 31 days ago, past edxorg/s3's mirror_max_age_days of 30"
+        ]
+
+    def test_a_copy_inside_its_max_age_is_not(self) -> None:
+        recent = self.NOW - timedelta(days=29)
+        assert stale_copies(self._units(), self._observe(raw__edxorg__a=recent)) == []
+
+    def test_only_tables_the_mirror_copies_are_aged(self) -> None:
+        # raw__edxorg__b has no mirror block, so nothing refreshes it and its
+        # age says nothing about whether the mirror is running.
+        old = self.NOW - timedelta(days=365)
+        assert stale_copies(self._units(), self._observe(raw__edxorg__b=old)) == []
+
+    def test_a_table_with_no_copy_is_left_to_the_contract(self) -> None:
+        assert stale_copies(self._units(), self._observe(raw__edxorg__a=None)) == []
+        assert stale_copies(self._units(), self._observe()) == []

@@ -111,17 +111,18 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     "iceberg_raw_maintenance_nightly": frozenset({"qa", "production"}),
     # Deletes table directories no Glue table references, or only reports them
     # where the asset's LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS leaves the
-    # environment out. It deletes in QA. QA only until QA deletes have run
-    # clean; production follows.
+    # environment out. It deletes in QA, where its first delete (2026-10-18)
+    # verified clean, and in production since its first report there
+    # (2026-10-25) was read.
     # Never dev: it resolves to the production warehouse.
-    "lake_orphan_sweep_weekly": frozenset({"qa"}),
+    "lake_orphan_sweep_weekly": frozenset({"qa", "production"}),
     # Lists every raw Iceberg table's directory and compares it with what the
-    # table's metadata still reaches. It only reports unless the asset's
-    # ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS names the environment, which
-    # today is QA. Production from the start, unlike the sweep: raw
-    # snapshot expiry ran there first, so that is where most of the files it
-    # strands are, and a report reads Glue and S3 and writes nothing. Never dev: it
-    # resolves to the production warehouse.
+    # table's metadata still reaches. This entry only decides where the
+    # schedule runs. Whether a run deletes is decided separately, by
+    # ICEBERG_ORPHAN_FILES_DELETE_ENVIRONMENTS in iceberg_orphan_files.py
+    # (today QA and production). Production from the start, unlike the sweep:
+    # raw snapshot expiry ran there first, so that is where most of the files
+    # it strands are. Never dev: it resolves to the production warehouse.
     "iceberg_raw_orphan_files_weekly": frozenset({"qa", "production"}),
     # `dbt docs generate` for OpenMetadata. Its JOB is the one that demonstrably
     # ran from QA against production -- by hand, not on this cron (see above).
@@ -178,17 +179,24 @@ SCHEDULE_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # every raw input for), plus their upstream. QA only: production builds
     # them through the automation sensor. The one dbt schedule QA runs, and an
     # exception to "QA does not build" that holds only because none of its
-    # models is a cross-source union, which ol-dbt validate enforces on the tag.
+    # models is a cross-source union QA is not shown to hold, which ol-dbt
+    # validate enforces on the tag against the committed QA observation.
     "learn_integrations_qa_daily": frozenset({"qa"}),
     # A sensor, not a schedule, gated here for the same reason. It writes check
     # results to OpenMetadata on tables named from the image's manifest, which
-    # is compiled for production, and only the production stack copies the bot
-    # token to secret-data/pipelines/openmetadata.
+    # is compiled for production.
     "asset_check_openmetadata": frozenset({"production"}),
     # Compares QA raw with the committed qa_observation.json and fails when
     # the file is wrong about which tables hold rows. QA only: it reads
     # ol_warehouse_qa_raw, and its asset is registered nowhere else.
     "qa_observation_drift_daily": frozenset({"qa"}),
+    # Refresh every QA mirror, and plan every mirror's copy without running it.
+    # Production only: the mirror reads production and writes QA, and its
+    # assets are registered nowhere else. Monthly sits well inside every unit's
+    # mirror_max_age_days, and the daily plan catches a production schema
+    # change between refreshes (QA_DATA_TOPOLOGY_SPEC.md §1).
+    "qa_mirror_monthly": frozenset({"production"}),
+    "qa_mirror_plan_daily": frozenset({"production"}),
 }
 
 _UNDECLARED_ENVIRONMENTS = {

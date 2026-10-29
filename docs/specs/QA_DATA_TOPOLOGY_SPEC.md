@@ -24,8 +24,10 @@ It does not revisit the Option 3 decision.
 > that changes only on explicit refresh? A moving mirror makes QA results irreproducible; a
 > pinned one goes stale in the same way the current lake did.*
 
-**Decision: the mirror is a materialized copy, refreshed only on explicit request, with a
-declared maximum age that the union-completeness check asserts.**
+**Decision (revised 2026-10-22): the mirror is a materialized copy, refreshed monthly on a
+schedule and by hand when QA needs a newer one, with a declared maximum age asserted against the
+current time.** The first version refreshed only on explicit request; see "Scheduled monthly"
+below for why that changed.
 
 ### The RFC's dichotomy is false
 
@@ -42,48 +44,60 @@ A physical CTAS copy into `ol_data_lake_qa` — which is what RFC step 6 already
 the pin, and it is the only durable one. So the real question is not "pinned or moving" but
 "what refreshes the copy, and what makes its age visible".
 
-### Refresh on request, not on a schedule
+### Scheduled monthly, not only on request
 
-Three reasons, in priority order:
+The first version of this decision refreshed only on explicit request. It gave three reasons:
+a moving mirror makes a QA result impossible to re-derive, every refresh is another copy of
+production PII into QA that should be attributable to a person, and the singleton sources change
+slowly enough that tracking them buys nothing. It was reversed on 2026-10-22 because two
+failures followed from it.
 
-1. **Reproducibility.** A scheduled mirror means a QA result cannot be re-derived after the
-   fact — the same query against the same declared topology returns different rows next week
-   with nothing recording why. This is the failure the RFC names, and it is the more damaging
-   one because it undermines the reason QA exists.
-2. **PII surface.** Every refresh is another wholesale copy of production PII into a cluster
-   with broader access. The RFC already calls the column allowlist "load-bearing for that risk,
-   not optional"; minimizing copy *events* is the same argument applied to time. An
-   on-request refresh is attributable to a person and a reason. A cron refresh is attributable
-   to nobody.
-3. **Nothing is bought.** The `singleton` set is precisely the slow-changing sources —
-   `edxorg` (frozen), `emeritus` and `global_alumni` (quarterly-ish BigQuery drops),
-   `salesforce`, `zendesk`. Production ingests them daily at best: every Airbyte
-   connection group gets a schedule whose interval defaults to 24 hours
-   (`dg_projects/lakehouse/lakehouse/definitions.py:258`), and only app-database and
-   Open edX groups are given a faster override (`definitions.py:213-246` — `emeritus`
-   and `ol_salesforce` appear there at 24h; `zendesk` and `global_alumni` are not
-   listed at all and so take the default). A QA mirror tracking them hourly, or even
-   daily, tracks noise.
+1. The copy logic was never exercised. A mirror selects a fixed column allowlist from
+   production, so a production column dropped or renamed out from under it breaks the CTAS, and
+   an on-request mirror finds out only when someone needs fresh data. #3004's studentmodule
+   mirror merged on 2026-10-16, and the 2026-10-21 observation shows no QA copy of it.
+2. The staleness backstop below never fired by itself. The contract check measures a copy's age
+   at the committed observation's `observed_at`, that observation is refreshed by hand, and
+   `qa_observation_drift` fails only when a table's emptiness changes. A copy that only gets
+   older prompted nothing.
 
-### Staleness is answered by declaration, not by a schedule
+The original reasons hold up less well than they looked. Most of QA is loaded daily from QA's
+own deployments, so QA results were not reproducible anyway. Only a model reading nothing but
+mirrors gained from a fixed copy, and each copy's Iceberg snapshot time still records which copy
+a result read. The PII reason holds in part: the copy sits in QA continuously either way, and
+what a schedule adds is new production rows (masked by the allowlist) arriving without a person
+deciding it.
 
-The counter-risk is real — undetected staleness is exactly how the current QA lake died. But
-the RFC's own thesis is that the fix for silent staleness is *declaring* the expectation and
-*asserting* it, not adding a cron job that hides it. Applying that thesis to the mirror itself:
+What runs now, all from production:
+
+- `qa_mirror_monthly_schedule` (06:00 UTC on the 1st) materializes every `qa_mirror` asset, at
+  most 3 at a time within that run (a refresh by hand alongside it is not counted). Monthly sits
+  inside every unit's `mirror_max_age_days` (90 for all twelve mirror units as of 2026-10-22).
+- Each mirror asset carries a `copy_plans_against_production` check that renders and `EXPLAIN`s
+  every table's copy without running it. `qa_mirror_plan_daily_schedule` runs the checks at
+  11:00 UTC, so an allowlisted column production no longer has, or a `where` naming a column or
+  function it cannot resolve, fails within a day. A `where` wrong only through an implicit cast
+  still plans (§8) and fails first in the monthly CTAS. The check raises rather than returning a
+  failed result, so it reaches Sentry through the failure hook.
+
+A refresh by hand is still there for when QA needs a newer copy than the last tick.
+
+### Staleness is declared and asserted
+
+Undetected staleness is how the previous QA lake died, so the schedule is not the only guard.
+The expectation is declared and asserted:
 
 - The inventory entry for a `mirror` unit carries **`mirror_max_age_days`** (required; no default,
   so it is a decision per unit rather than an inherited accident).
-- The mirror asset records copy-completion time as table metadata on the QA copy.
-- The union-completeness check (§2) reads that stamp and reports a mirror older than its
-  declared maximum as a **stale-mirror** finding, at the same severity as an empty branch.
+- The copy's Iceberg snapshot time is its copy-completion time.
+- The union-completeness check (§2) reads that time from the committed observation and reports a
+  mirror older than its declared maximum as a **stale-mirror** finding, at the same severity as
+  an empty branch.
+- `qa_observation_drift`, daily in QA, fails when a copy is older than its unit's maximum
+  measured from now. This is the half that fires without anyone refreshing the observation.
 
-A stale mirror thus fails the same way a missing branch fails — loudly, at build time, naming
-the unit — rather than silently, which is the whole point of the RFC.
-
-**Consequence for step 6:** the mirror asset is a plain manually-triggered Dagster asset. It
-takes no partition definition and no schedule. `ol_data_lake_production` → `ol_data_lake_qa`
-CTAS with the per-unit column allowlist, then a metadata stamp. Do not add
-`AutomationCondition` to it.
+**Consequence for step 6:** the mirror asset is an unpartitioned Dagster asset with no
+`AutomationCondition`. The schedules above are what refresh and exercise it.
 
 ---
 
@@ -205,6 +219,62 @@ a mirror branch. That changes once step 6 lands mirrors and models start declari
 
 The observation is refreshed by hand for now. A refresh that shows a table has emptied fails the
 refresh PR, which is where the lapse should surface.
+
+### Scheduled unions (2026-10-22)
+
+`learn_integrations_qa_daily` builds `+tag:qa_scheduled` in QA unattended. Until now the check
+refused the tag on any model reading more than one unit, because the baseline that lets a QA
+build run past a lapsed branch is exactly what makes an unattended union come out partial.
+MIT Learn's `SyncProgramCertificatesTask` needs `integrations__learn__program_certificates`,
+which reads five units, so a tagged union is now accepted on three conditions:
+
+- `qa_branches` names every unit the model reads, singletons included. Only a declared branch
+  is compared with the observation, so a unit left out would be the silent one.
+- Every table the model reads from those branches holds rows in the committed observation, and
+  every mirror is within `mirror_max_age_days`. The baseline does not count here.
+- An empty table may be listed in `qa_partial_tables` when the model's QA form can go without
+  its rows. Each entry must be a table the model reads from a declared branch. The key is only
+  valid on a tagged model (one reading a single unit is checked once it declares the key), and
+  an entry QA holds again is an ERROR, so the next lapse of that table fails the check rather
+  than building. It names tables rather than branches because the reason a lapse is harmless is
+  specific to how the model reads that table: an upstream edit that starts reading another
+  empty table of the same branch still fails.
+- An entry waives only the missing rows. The table must still be observed as a present Iceberg
+  table (no snapshot, or zero rows), because the model's staging parent selects from it and an
+  absent relation fails the build. A mirror past `mirror_max_age_days` still fails too.
+
+`ingest` units carry no age limit, so an ingested branch that stopped loading still passes; the
+union is then consistent as of that branch's last load rather than missing it. A table that
+empties after the observation is caught by `qa_observation_drift_daily` (12:00 UTC, after the
+03:00 build), not by the build itself.
+
+`integrations__learn__program_certificates` declares all five of its units and lists
+`raw__mitxonline__openedx__mysql__auth_user` as partial. QA's whole MITx Online Open edX unit is empty Iceberg shells from
+the 2026-09-08 conversion, with no snapshot (read from the table metadata on 2026-10-22). The
+view reads only `auth_user` from it, through a left join in `int__mitxonline__users` that
+falls back to the MITx Online app username, so the empty branch changes that column and not
+the row set. Its other inputs held rows on 2026-10-21: `mitxonline/app_postgres` loaded that
+day, `micromasters/app_postgres` last on 2026-09-14, and the `edxorg/s3` and `irx/bigquery`
+mirrors copied 2026-10-07, so they are inside their 90-day limit until 2027-01-05. Mirror age is
+measured at observation time (§2), so nothing fails on that date by itself: the first observation
+refreshed after it fails this model until the mirrors are refreshed. Without a refresh the
+observation-age WARNING (30 days) is the signal.
+
+QA's copy of this view is not production's in kind, not only in size. The edX.org and IRx
+inputs are masked mirrors of production (§8: usernames and emails hashed, names and addresses
+redacted, year of birth nulled), while MITx Online and MicroMasters are QA's own apps. Learners
+do not join across platforms the way they do in production. A QA rehearsal of the Learn task
+checks that it reads, maps and writes rows, not certificate counts.
+
+The edX.org tables this view's QA build reads from are also one learner in ten
+(`user_id % 10 = 0` on the IRx `email_opt_in`, `mitx_person_course` and `mitx_user_info_combo`
+and on the dlt `raw__edxorg__s3__program_learner_report`, and on `user id` in the Airbyte
+`raw__edxorg__program_learner_report`). The other edX.org learner mirrors (`edxorg/mysql`,
+`edxorg/tracking_logs`) copy every learner, so a join from them to these five is one-sided in QA.
+QA's Trino cluster ran each stage of these queries as one task with a 4.48GB per-node limit,
+and on 2026-10-27 the staging dedups of `mitx_user_info_combo` (15.1M rows) and
+the program learner report (15.7M) each exceeded it when run alone. On the sample they peaked at
+0.88GB and 0.93GB. The five take the same sample, so a sampled learner keeps all its rows in them.
 
 ---
 
@@ -521,8 +591,8 @@ plan without complaint. So a `where` wrong in that second way still fails from t
 that table's `DROP`, leaving the unit partly refreshed and the failed table absent -- as does
 any CTAS that fails while it runs. `EXPLAIN` plans the query and reads no data.
 
-The `EXPLAIN` runs for every mirrored table, not only the three that declare a `where`. For the
-other 31 what it adds over the declaration check is that the masking expressions themselves
+The `EXPLAIN` runs for every mirrored table, not only the seven that declare a `where`. For the
+other 28 what it adds over the declaration check is that the masking expressions themselves
 plan. That is one more connection and one more Vault dynamic credential per table per refresh.
 
 ### What was not built
@@ -629,14 +699,15 @@ model read them, since both order by `systemmodstamp`.
 
 ### Refresh and staleness
 
-Each unit is one asset, `qa_mirror/<deployment>/<layer>`, materialized by hand. There is no
-schedule, no partitions and no `AutomationCondition` (§1). A refresh drops each QA table with
+Each unit is one asset, `qa_mirror/<deployment>/<layer>`, refreshed by
+`qa_mirror_monthly_schedule` and by hand. There are no partitions and no
+`AutomationCondition` (§1). A refresh drops each QA table with
 `FORCE`, which deletes its data files, then runs the CTAS. StarRocks cannot rename an Iceberg
 table, so there is no swap. A CTAS that fails inside StarRocks drops the table it created
 (`StmtExecutor.handleCreateTableAsSelectStmt` on branch-4.1), and the next QA observation
 reports it as empty. The CTAS is never retried by the StarRocks
 resource: an FE lost mid-statement can leave the table behind, and a retry would fail on
-"already exists" and hide the real error. The next manual run's `DROP` clears it.
+"already exists" and hide the real error. The next run's `DROP` clears it.
 
 Because that sequence drops before it creates, two runs of one unit must not overlap: the second
 `DROP` can take the table out from under the first CTAS, and the row count either run reports can

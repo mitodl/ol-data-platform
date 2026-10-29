@@ -26,6 +26,10 @@
         least courseware_prerequisite_min_direction_consistency.
     Candidates that fail keep their rows, with support_rule_failure, for review.
     Declared requirements and the other relations always pass.
+
+    Every relation is kept here for review whatever its claims' review status;
+    accepted_claim_count is how many of claim_count are accepted, and learner-facing
+    views take only relations with at least one.
 #}
 with mentions as (
     select
@@ -39,6 +43,7 @@ with mentions as (
         , concept_kind
         , concept_id
         , prerequisite_kind
+        , review_status
     from {{ ref('int__courseware__resolved_concept_mentions') }}
 )
 
@@ -66,11 +71,9 @@ with mentions as (
         , case when claim_kind = 'declared_prerequisite' then 'declared' end as requirement_source
         , scope_position
         , scope_id
+        , review_status
     from mentions
-    where
-        claim_kind in ('concept', 'assessment_expectation', 'declared_prerequisite')
-        -- "no prerequisites": its label names what is not required
-        and coalesce(prerequisite_kind, '') != 'explicitly_none'
+    where claim_kind in ('concept', 'assessment_expectation', 'declared_prerequisite')
 )
 
 , first_taught as (
@@ -96,6 +99,7 @@ with mentions as (
         , scope_id
         , min(scope_position) as relied_position
         , count(*) as claim_count
+        , count(case when review_status = 'accepted' then 1 end) as accepted_claim_count
     from mentions
     where
         scope_kind = 'unit'
@@ -115,6 +119,7 @@ with mentions as (
         , relied_on.concept_id
         , min(relied_on.relied_position) as first_scope_position
         , sum(relied_on.claim_count) as claim_count
+        , sum(relied_on.accepted_claim_count) as accepted_claim_count
         , count(*) as scope_count
         , array_agg(relied_on.scope_id order by relied_on.relied_position, relied_on.scope_id) as relied_scope_ids
         , sum(
@@ -189,6 +194,7 @@ with mentions as (
         , 'inferred' as requirement_source
         , inferred_directions.first_scope_position
         , inferred_directions.claim_count
+        , inferred_directions.accepted_claim_count
         , inferred_directions.scope_count
         , inferred_directions.relied_scope_ids
         , inferred_directions.prior_scope_count
@@ -209,6 +215,7 @@ with mentions as (
         , requirement_source
         , min(scope_position) as first_scope_position
         , count(*) as claim_count
+        , count(case when review_status = 'accepted' then 1 end) as accepted_claim_count
         , count(distinct scope_id) as scope_count
         , {{ null_varchar_array() }} as relied_scope_ids
         , cast(null as bigint) as prior_scope_count
@@ -253,6 +260,7 @@ select
     , judged.requirement_source
     , judged.first_scope_position
     , judged.claim_count
+    , judged.accepted_claim_count
     , judged.scope_count
     , judged.relied_scope_ids
     , judged.prior_scope_count
