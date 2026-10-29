@@ -1036,6 +1036,54 @@ def test_description_refuses_a_prompt_that_is_not_approved(
     assert "courseware_concept_description" not in tables
 
 
+def test_description_refuses_inputs_built_before_the_approval_column(tables, calls):
+    # The ml image deployed before lakehouse rebuilt the inputs with the seed.
+    tables[DESCRIPTION_INPUTS] = description_inputs().drop("approved_prompt_version")
+
+    result = describe(tables)
+
+    assert not result.success
+    assert "approves no version" in step_failure(result).description
+    assert calls == []
+    skipped = describe(tables, tags={AUTOMATION_CONDITION_TAG: "true"})
+    assert skipped.success
+    assert skipped.get_asset_materialization_events() == []
+    assert "courseware_concept_description" not in tables
+
+
+def test_description_stamps_the_prompt_version_on_rows_written_before_it(tables, calls):
+    tables[DESCRIPTION_INPUTS] = description_inputs()
+    assert describe(tables).success
+    stored = tables["courseware_concept_description"]
+    # c1 as written before rows carried a prompt_version, and c2 under an older
+    # prompt, which this prompt's version cannot vouch for
+    tables["courseware_concept_description"] = pl.concat(
+        [
+            stored.filter(pl.col("concept_id") == "c1"),
+            stored.filter(pl.col("concept_id") == "c2").with_columns(
+                description_version=pl.lit("0ld0ld0ld0ld")
+            ),
+        ]
+    ).drop("prompt_version")
+    calls.clear()
+
+    assert describe(tables).success
+    assert describe(tables).success
+
+    # c2 is described again, c1 only copied, and neither twice
+    assert calls == ["record_descriptions"]
+    rows = tables["courseware_concept_description"]
+    assert rows.select("concept_id", "prompt_version").rows() == [
+        ("c1", None),
+        ("c2", None),
+        ("c1", DESCRIPTION_PROMPT_VERSION),
+        ("c2", DESCRIPTION_PROMPT_VERSION),
+    ]
+    c1 = rows.filter(pl.col("concept_id") == "c1")
+    assert c1["description"].n_unique() == 1
+    assert c1["described_at"].n_unique() == 1
+
+
 def test_automation_skips_a_description_prompt_that_is_not_approved(
     tables, calls, monkeypatch
 ):
