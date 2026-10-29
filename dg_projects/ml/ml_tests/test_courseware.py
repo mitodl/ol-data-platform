@@ -721,3 +721,25 @@ def test_extract_and_observe_refuse_older_tables_before_calling_the_model(
     assert observed["header_version"].null_count() == observed.height // 2
     assert observed["header_version"].drop_nulls().n_unique() == 1
     capsys.readouterr()
+
+
+def test_extract_refuses_a_table_whose_columns_are_out_of_order(
+    tmp_path, monkeypatch, capsys
+):
+    sources = tmp_path / "sources.parquet"
+    rows = _course_rows("About it.", "Lecture 2", "some text")
+    rows.write_parquet(sources)
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    tables = extract_scopes([_lecture_one(rows)], FakeModel(), model_id="model")
+    path = output_dir / "courseware_claim.parquet"
+    # the right names and types, but the append concatenates by position
+    tables.claims.select(reversed(tables.claims.columns)).write_parquet(path)
+    model = FakeModel()
+    _use_model(monkeypatch, model)
+    with pytest.raises(ValueError, match="run `local conform` first"):
+        local.extract(sources, output_dir)
+    assert model.calls == []
+    local.conform(output_dir)
+    assert pl.read_parquet(path).schema == pl.Schema(extract.CLAIM_SCHEMA)
+    capsys.readouterr()
