@@ -587,10 +587,11 @@ models:
     description: float, inferred requires only, prior_scope_count / (prior_scope_count
       + taught_scope_count)
   - name: tool_status
-    description: str, inferred requires of a tool only, from the run's own claims;
-      assumed (an assumed_knowledge claim, or a declared prerequisite or recommended
-      background), introduced (the run teaches it in some scope) or unresolved (the
-      run only uses it). Whether another course teaches the tool never changes it
+    description: str, inferred requires of a tool (most of the run's own claims that
+      give the concept a kind say tool) only, from the run's own claims; assumed (an
+      assumed_knowledge claim, or a declared prerequisite or recommended background),
+      introduced (the run teaches it in some scope) or unresolved (the run only uses
+      it). Whether another course teaches the tool never changes it
     tests:
     - accepted_values:
         values: [assumed, introduced, unresolved]
