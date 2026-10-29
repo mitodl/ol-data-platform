@@ -155,17 +155,20 @@ def _read_scopes(sources: Path, courserun: list[str] | None) -> list[Scope]:
     ]
 
 
-def _print_plan(
+def _print_plan(  # noqa: PLR0913
     scopes: list[Scope],
     model_id: str,
     effort: Effort,
     readings: Mapping[ReadingKey, TextReading],
     existing_keys: set[str],
+    *,
+    across_runs: bool,
 ) -> None:
     """Print what extract would send for each scope part, and the input it would cost.
 
     A part marked "stored" is skipped. One marked "context" has a stored text
-    reading, so only the context stage runs, at the size shown. An unmarked part
+    reading, so only the context stage runs, at the size shown; "reused" is the
+    same with a reading made for another run. An unmarked part
     runs both stages; only its text stage's input is counted, since the context
     stage's depends on the claims the text stage returns.
     """
@@ -173,14 +176,24 @@ def _print_plan(
     context_tokens = len(CONTEXT_SYSTEM_PROMPT) // CHARS_PER_TOKEN
     total = 0
     for planned in plan_scopes(
-        scopes, model_id=model_id, effort=effort, readings=readings
+        scopes,
+        model_id=model_id,
+        effort=effort,
+        readings=readings,
+        across_runs=across_runs,
     ):
         scope, reading = planned.scope, planned.reading
         if planned.extraction_key in existing_keys:
             marker, tokens = "stored", 0
         elif reading is not None:
             message = context_message(scope, reading.claims, reading.evidence)
-            marker, tokens = "context", context_tokens + len(message) // CHARS_PER_TOKEN
+            marker = (
+                "context"
+                if (reading.platform, reading.courserun_readable_id)
+                == (scope.course.platform, scope.course.courserun_readable_id)
+                else "reused"
+            )
+            tokens = context_tokens + len(message) // CHARS_PER_TOKEN
         else:
             marker = ""
             tokens = text_tokens + len(text_message(scope)) // CHARS_PER_TOKEN
@@ -223,6 +236,7 @@ def extract(  # noqa: PLR0913
     effort: Effort = DEFAULT_EFFORT,
     aws_region: str = "us-east-1",
     max_workers: int = 6,
+    reuse_text_across_runs: bool = False,
     dry_run: bool = False,
 ) -> None:
     """Extract claims for every scope of the runs in a sources parquet file.
@@ -235,6 +249,8 @@ def extract(  # noqa: PLR0913
     :param effort: output_config.effort
     :param aws_region: Bedrock region
     :param max_workers: concurrent model calls
+    :param reuse_text_across_runs: let a run use another run's stored text reading of
+        identical text (extract_scopes); off until the comparison in the design doc
     :param dry_run: print the scopes and their estimated input size, call nothing
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -249,10 +265,21 @@ def extract(  # noqa: PLR0913
     stored = _existing(output_dir, EXTRACTION_TABLE)
     existing_keys = set(stored["extraction_key"]) if stored is not None else set()
     stored_text = _existing(output_dir, TEXT_EXTRACTION_TABLE)
-    readings = stored_readings(stored_text) if stored_text is not None else {}
+    readings = (
+        stored_readings(stored_text, across_runs=reuse_text_across_runs)
+        if stored_text is not None
+        else {}
+    )
 
     if dry_run:
-        _print_plan(scopes, model_id, effort, readings, existing_keys)
+        _print_plan(
+            scopes,
+            model_id,
+            effort,
+            readings,
+            existing_keys,
+            across_runs=reuse_text_across_runs,
+        )
         return
 
     # every scope of the runs read, not only the scope_title selection
@@ -271,6 +298,7 @@ def extract(  # noqa: PLR0913
         existing_keys=existing_keys,
         readings=readings,
         max_workers=max_workers,
+        reuse_text_across_runs=reuse_text_across_runs,
     )
     # Text readings first: a stored one is reused, so a run cut off later pays only
     # for the context stage again.

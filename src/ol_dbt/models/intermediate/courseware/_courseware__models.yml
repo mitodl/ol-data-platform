@@ -246,6 +246,13 @@ models:
   - name: text_input_digest
     description: str, sha256 of the text stage's exact input; extractions sharing
       it read identical text, so their claims are one source's; null for v1
+  - name: text_platform
+    description: str, the platform of the run the text reading was made for (v2)
+  - name: text_courserun_readable_id
+    description: str, the run the text reading was made for; another run's when the
+      reading was reused across runs (v2)
+  - name: text_scope_id
+    description: str, the scope the text reading was made for (v2)
   - name: context_input_digest
     description: str, sha256 of the context stage's exact input; null for v1
   - name: source_count

@@ -270,6 +270,9 @@ def _reading() -> TextReading:
     return TextReading(
         text_extraction_key="t",
         text_input_digest="d",
+        platform="mitxonline",
+        courserun_readable_id="course-v1:X+Y+Z",
+        scope_id="seq-1",
         summary="s",
         notes=[],
         claims=[
@@ -443,6 +446,86 @@ def test_text_stage_reads_each_distinct_text_once_per_run():
     # every extraction of the text groups under one digest, so its claims are not
     # counted as independent corroboration
     assert tables.extractions["text_input_digest"].n_unique() == 1
+
+
+def _run_and_copy(
+    column: str = "courserun_readable_id", value: str = "course-v1:X+Y+COPY"
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Return a run and a copy of it under another run, with its own block ids."""
+    run = _rows(["shared text"]).with_columns(source_title=pl.lit("Intro"))
+    return run, run.with_columns(
+        pl.lit(value).alias(column), source_ref=pl.lit("copy-block-0")
+    )
+
+
+def test_text_readings_cross_runs_only_when_asked():
+    run, copy = _run_and_copy()
+    built = [*scopes.build_scopes(run), *scopes.build_scopes(copy)]
+    model = FakeModel()
+
+    tables = extract_scopes(
+        built, model, model_id="model", max_workers=1, reuse_text_across_runs=True
+    )
+
+    assert model.calls.count("record_extraction") == 1
+    # each run still places the claims in its own course
+    assert model.calls.count("record_context") == 2
+    (text,) = tables.text_extractions.iter_rows(named=True)
+    copied = tables.extractions.filter(
+        pl.col("courserun_readable_id") == "course-v1:X+Y+COPY"
+    ).row(0, named=True)
+    # the copy keeps the run its reading was made for, and the text's digest
+    assert (copied["text_courserun_readable_id"], copied["text_scope_id"]) == (
+        text["courserun_readable_id"],
+        text["scope_id"],
+    )
+    assert copied["text_courserun_readable_id"] != copied["courserun_readable_id"]
+    assert tables.extractions["text_input_digest"].n_unique() == 1
+    # each run's evidence names its own blocks, the copy's included
+    refs = tables.evidence.join(
+        tables.extractions.select("extraction_key", "courserun_readable_id"),
+        on="extraction_key",
+    )
+    assert dict(
+        refs.group_by("courserun_readable_id")
+        .agg(pl.col("source_ref").unique().sort())
+        .iter_rows()
+    ) == {"course-v1:X+Y+Z": ["block-0"], "course-v1:X+Y+COPY": ["copy-block-0"]}
+
+
+@pytest.mark.parametrize(("across_runs", "text_calls"), [(False, 1), (True, 0)])
+# a run is its platform and readable id, so a copy can differ in either
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [("courserun_readable_id", "course-v1:X+Y+COPY"), ("platform", "mitxpro")],
+)
+def test_local_extract_reuses_another_runs_reading_only_with_the_flag(
+    tmp_path, monkeypatch, capsys, across_runs, text_calls, column, value
+):
+    run, copy = _run_and_copy(column, value)
+    model = FakeModel()
+    _use_model(monkeypatch, model)
+    sources = tmp_path / "sources.parquet"
+    output_dir = tmp_path / "out"
+    run.write_parquet(sources)
+    local.extract(sources, output_dir)
+    copy.write_parquet(sources)
+    model.calls.clear()
+    capsys.readouterr()
+
+    local.extract(
+        sources,
+        output_dir,
+        reuse_text_across_runs=across_runs,
+        dry_run=True,
+    )
+    marks = capsys.readouterr().out.splitlines()[0].split()[-1]
+    local.extract(sources, output_dir, reuse_text_across_runs=across_runs)
+
+    assert marks == ("reused" if across_runs else "tokens")
+    assert model.calls.count("record_extraction") == text_calls
+    assert model.calls.count("record_context") == 1
+    capsys.readouterr()
 
 
 def test_stored_readings_give_the_same_keys_without_a_text_call():
@@ -721,6 +804,39 @@ def test_extract_and_observe_refuse_older_tables_before_calling_the_model(
     assert observed["header_version"].null_count() == observed.height // 2
     assert observed["header_version"].drop_nulls().n_unique() == 1
     capsys.readouterr()
+
+
+class VaryingModel(FakeModel):
+    """Reads the same text differently on each call, as a real model may."""
+
+    def _extraction(self, message: str) -> dict[str, Any]:
+        extraction = super()._extraction(message)
+        for concept in extraction["concepts"]:
+            concept["description"] = f"Reading {len(self.calls)}."
+        return extraction
+
+
+def test_reuse_across_runs_keeps_a_runs_own_reading():
+    run, copy = _run_and_copy()
+    model = VaryingModel()
+    original = extract_scopes(scopes.build_scopes(run), model, model_id="model")
+    own = extract_scopes(scopes.build_scopes(copy), model, model_id="model")
+    text = pl.concat([original.text_extractions, own.text_extractions])
+    stored_keys = set(own.extractions["extraction_key"])
+    model.calls.clear()
+
+    again = extract_scopes(
+        scopes.build_scopes(copy),
+        model,
+        model_id="model",
+        readings=stored_readings(text, across_runs=True),
+        existing_keys=stored_keys,
+        reuse_text_across_runs=True,
+    )
+
+    # the copy's own reading is newer than the original's, and still the one used
+    assert model.calls == []
+    assert again.extractions.height == 0
 
 
 def test_extract_refuses_a_table_whose_columns_are_out_of_order(

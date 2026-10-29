@@ -72,6 +72,9 @@ with stored_extractions as (
             'header_version': dbt.type_string(),
             'text_extraction_key': dbt.type_string(),
             'text_input_digest': dbt.type_string(),
+            'text_platform': dbt.type_string(),
+            'text_courserun_readable_id': dbt.type_string(),
+            'text_scope_id': dbt.type_string(),
             'context_input_digest': dbt.type_string(),
         }) }}
     from {{ stored }}
@@ -400,6 +403,9 @@ select
     , extractions.header_version
     , extractions.text_extraction_key
     , extractions.text_input_digest
+    , extractions.text_platform
+    , extractions.text_courserun_readable_id
+    , extractions.text_scope_id
     , extractions.context_input_digest
     , extractions.source_count
     , extractions.truncated_source_count

@@ -177,6 +177,11 @@ EXTRACTION_SCHEMA = {
     # are one source's, not independent corroboration
     "text_extraction_key": pl.String,
     "text_input_digest": pl.String,
+    # the run and scope the text reading was made for: another run's when the
+    # reading was reused across runs
+    "text_platform": pl.String,
+    "text_courserun_readable_id": pl.String,
+    "text_scope_id": pl.String,
     # SHA-256 of the context stage's exact message (header and text claims)
     "context_input_digest": pl.String,
     "source_count": pl.Int64,
@@ -277,6 +282,10 @@ class TextReading:
 
     text_extraction_key: str
     text_input_digest: str
+    # the run and scope it was read for, which another run's copy keeps as lineage
+    platform: str
+    courserun_readable_id: str
+    scope_id: str
     summary: str
     notes: list[str]
     # claim rows in _TEXT_CLAIM_COLUMNS, evidence rows in _TEXT_EVIDENCE_COLUMNS
@@ -284,8 +293,9 @@ class TextReading:
     evidence: list[dict[str, Any]]
 
 
-# (platform, courserun_readable_id, text_extraction_key): a reading is reused only
-# within the run whose scope it was read for
+# (platform, courserun_readable_id, text_extraction_key): by default a reading is
+# reused only within the run whose scope it was read for. With reuse across runs
+# the run is left blank, so any run with the same text shares the reading.
 ReadingKey = tuple[str, str, str]
 
 
@@ -360,30 +370,43 @@ def extraction_key(
     return _context(scope, model_id, effort, reading)[2]
 
 
-def _reading_key(scope: Scope, key: str) -> ReadingKey:
+def _reading_key(scope: Scope, key: str, *, across_runs: bool) -> ReadingKey:
+    if across_runs:
+        return ("", "", key)
     return (scope.course.platform, scope.course.courserun_readable_id, key)
 
 
-def stored_readings(rows: pl.DataFrame) -> dict[ReadingKey, TextReading]:
+def stored_readings(
+    rows: pl.DataFrame, *, across_runs: bool = False
+) -> dict[ReadingKey, TextReading]:
     """Index stored courseware_text_extraction rows for extract_scopes.
 
     :param rows: courseware_text_extraction rows
-    :returns: the earliest reading of each key, by run
+    :param across_runs: also index each key's earliest reading for reuse across runs
+        (extract_scopes' reuse_text_across_runs)
+    :returns: the earliest reading of each key by run, and with across_runs of each
+        key in any run
     :rtype: dict[ReadingKey, TextReading]
     """
     readings: dict[ReadingKey, TextReading] = {}
     for row in rows.sort("extracted_at").iter_rows(named=True):
+        reading = TextReading(
+            text_extraction_key=row["text_extraction_key"],
+            text_input_digest=row["text_input_digest"],
+            platform=row["platform"],
+            courserun_readable_id=row["courserun_readable_id"],
+            scope_id=row["scope_id"],
+            summary=row["summary"],
+            notes=json.loads(row["notes_json"]),
+            claims=json.loads(row["claims_json"]),
+            evidence=json.loads(row["evidence_json"]),
+        )
         readings.setdefault(
             (row["platform"], row["courserun_readable_id"], row["text_extraction_key"]),
-            TextReading(
-                text_extraction_key=row["text_extraction_key"],
-                text_input_digest=row["text_input_digest"],
-                summary=row["summary"],
-                notes=json.loads(row["notes_json"]),
-                claims=json.loads(row["claims_json"]),
-                evidence=json.loads(row["evidence_json"]),
-            ),
+            reading,
         )
+        if across_runs:
+            readings.setdefault(("", "", row["text_extraction_key"]), reading)
     return readings
 
 
@@ -403,20 +426,27 @@ def plan_scopes(
     model_id: str,
     effort: str,
     readings: Mapping[ReadingKey, TextReading],
+    across_runs: bool = False,
 ) -> list[PlannedScope]:
     """Work out which stored reading and extraction key each scope part has.
 
     :param scopes: the scope parts
     :param model_id: the model id the client expects
     :param effort: output_config.effort
-    :param readings: stored text readings (stored_readings)
+    :param readings: stored text readings (stored_readings, with the same
+        across_runs)
+    :param across_runs: look readings up by text alone, not by run and text
     :returns: one PlannedScope per scope part
     :rtype: list[PlannedScope]
     """
     planned = []
     for scope in scopes:
         key = text_extraction_key(scope, model_id, effort)
-        reading = readings.get(_reading_key(scope, key))
+        # a run's own reading first, so turning reuse on never re-places a run
+        # whose text was already read for it
+        reading = readings.get(_reading_key(scope, key, across_runs=False))
+        if reading is None and across_runs:
+            reading = readings.get(_reading_key(scope, key, across_runs=True))
         planned.append(
             PlannedScope(
                 scope=scope,
@@ -674,6 +704,9 @@ def _text_reading(
     reading = TextReading(
         text_extraction_key=key,
         text_input_digest=_sha256(text_message(scope)),
+        platform=scope.course.platform,
+        courserun_readable_id=scope.course.courserun_readable_id,
+        scope_id=scope.scope_id,
         summary=extraction.summary,
         notes=list(extraction.notes),
         claims=claims,
@@ -823,6 +856,9 @@ def _context_rows(  # noqa: PLR0913
         "header_version": header_version(scope.course),
         "text_extraction_key": reading.text_extraction_key,
         "text_input_digest": reading.text_input_digest,
+        "text_platform": reading.platform,
+        "text_courserun_readable_id": reading.courserun_readable_id,
+        "text_scope_id": reading.scope_id,
         "context_input_digest": item.digest,
         "source_count": len(scope.sources),
         "truncated_source_count": sum(source.truncated for source in scope.sources),
@@ -983,11 +1019,13 @@ def extract_scopes(  # noqa: PLR0913
     existing_keys: set[str] | frozenset[str] = frozenset(),
     readings: Mapping[ReadingKey, TextReading] | None = None,
     max_workers: int = 8,
+    reuse_text_across_runs: bool = False,
 ) -> ExtractionTables:
     """Extract every scope part whose extraction key is not already stored.
 
     A scope part with a stored reading of its text in its run skips the text stage.
-    The text stage runs once per distinct text in a run. A scope part whose text
+    The text stage runs once per distinct text in a run, or in the whole batch with
+    reuse_text_across_runs. A scope part whose text
     stage fails gets no extraction; one whose context stage fails keeps its new
     text reading. Either is logged and left out, so the next run retries only it.
 
@@ -998,18 +1036,30 @@ def extract_scopes(  # noqa: PLR0913
     :param existing_keys: extraction keys already stored, which are skipped
     :param readings: stored text readings (stored_readings)
     :param max_workers: concurrent model calls
+    :param reuse_text_across_runs: let a run use a reading of the same text made for
+        another run (e.g. a B2B copy of a course). Off until identical passages in
+        different courses have been compared (see the design doc); every extraction
+        records the run its reading was made for either way.
     :returns: the new rows
     :rtype: ExtractionTables
     """
+    across_runs = reuse_text_across_runs
     plan = plan_scopes(
-        scopes, model_id=model_id, effort=effort, readings=readings or {}
+        scopes,
+        model_id=model_id,
+        effort=effort,
+        readings=readings or {},
+        across_runs=across_runs,
     )
     pending = [item for item in plan if item.extraction_key not in existing_keys]
     to_read: dict[ReadingKey, Scope] = {}
     for item in pending:
         if item.reading is None:
             to_read.setdefault(
-                _reading_key(item.scope, item.text_extraction_key), item.scope
+                _reading_key(
+                    item.scope, item.text_extraction_key, across_runs=across_runs
+                ),
+                item.scope,
             )
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -1017,7 +1067,9 @@ def extract_scopes(  # noqa: PLR0913
         contexts = []
         for item in pending:
             reading = item.reading or new_readings.get(
-                _reading_key(item.scope, item.text_extraction_key)
+                _reading_key(
+                    item.scope, item.text_extraction_key, across_runs=across_runs
+                )
             )
             if reading is not None:
                 message, digest, key = _context(item.scope, model_id, effort, reading)

@@ -42,6 +42,7 @@ from ml.lib.courseware.extract import (
     plan_scopes,
     scope_inputs,
     stored_readings,
+    text_extraction_key,
 )
 from ml.lib.courseware.prompts import CONTEXT_SYSTEM_PROMPT, TEXT_SYSTEM_PROMPT
 from ml.lib.courseware.scopes import build_scopes
@@ -194,6 +195,15 @@ class CoursewareExtractionConfig(Config):
         default=DEFAULT_EFFORT, description="output_config.effort for every call"
     )
     max_workers: int = Field(default=6, ge=1, description="Concurrent model calls")
+    reuse_text_across_runs: bool = Field(
+        default=False,
+        description=(
+            "Let this run use another run's stored text reading of identical scope "
+            "text (e.g. a B2B copy of a course) instead of calling the text stage. "
+            "Off until identical passages in different courses have been compared "
+            "(docs/design/courseware_knowledge_extraction.md)."
+        ),
+    )
     min_exact_evidence_share: float = Field(
         default=DEFAULT_MIN_EXACT_EVIDENCE_SHARE,
         ge=0,
@@ -335,18 +345,31 @@ def courseware_extraction(
         if stored is not None
         else set()
     )
-    stored_text = read_table("intermediate", TEXT_EXTRACTION_KEY.path[-1])
-    readings = (
-        stored_readings(stored_text.filter(in_run).collect())
-        if stored_text is not None
-        else {}
-    )
-
     client, model_id = anthropic_client(
         llm,
         config.model_id,
         default_model=DEFAULT_MODEL,
         default_bedrock_model=BEDROCK_DEFAULT_MODEL,
+    )
+    across_runs = config.reuse_text_across_runs
+    stored_text = read_table("intermediate", TEXT_EXTRACTION_KEY.path[-1])
+    readings = (
+        stored_readings(
+            stored_text.filter(
+                # any run's reading of these scopes' text, or this run's own
+                pl.col("text_extraction_key").is_in(
+                    [
+                        text_extraction_key(scope, model_id, config.effort)
+                        for scope in scopes
+                    ]
+                )
+                if across_runs
+                else in_run
+            ).collect(),
+            across_runs=across_runs,
+        )
+        if stored_text is not None
+        else {}
     )
     # Before any model call, so nothing Opik does can fail the run after outputs
     # start being written.
@@ -359,7 +382,11 @@ def courseware_extraction(
     pending = [
         planned
         for planned in plan_scopes(
-            scopes, model_id=model_id, effort=config.effort, readings=readings
+            scopes,
+            model_id=model_id,
+            effort=config.effort,
+            readings=readings,
+            across_runs=across_runs,
         )
         if planned.extraction_key not in existing_keys
     ]
@@ -388,6 +415,7 @@ def courseware_extraction(
         existing_keys=existing_keys,
         readings=readings,
         max_workers=config.max_workers,
+        reuse_text_across_runs=across_runs,
     )
     failed = len(pending) - tables.extractions.height
     context.log.info(
