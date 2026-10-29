@@ -27,6 +27,19 @@
     Candidates that fail keep their rows, with support_rule_failure, for review.
     Declared requirements and the other relations always pass.
 
+    tool_status describes an inferred requirement of a tool (dim_concept.concept_kind
+    tool) from this run's own claims only:
+      assumed     the run says learners should already know it: an assumed_knowledge
+                  claim in any scope, or a declared prerequisite or recommended
+                  background
+      introduced  otherwise, the run teaches it in some scope (after first using it)
+      unresolved  the run only uses it, which can mean it demonstrates the tool as it
+                  goes or that it expects learners to know it; the claims don't say
+    Whether another course teaches the tool is left to
+    bridge_courserun_prerequisite_coverage, where it can rank possible preparation.
+    It never changes this status, so adding an unrelated course leaves an unchanged
+    run's tool status as it was. tool_status does not change the support rule.
+
     Every relation is kept here for review whatever its claims' review status;
     accepted_claim_count is how many of claim_count are accepted, and learner-facing
     views take only relations with at least one.
@@ -50,6 +63,10 @@ with mentions as (
 , course_runs as (
     select * from {{ ref('dim_course_run') }}
     where is_current
+)
+
+, concepts as (
+    select * from {{ ref('dim_concept') }}
 )
 
 , direct_relations as (
@@ -144,11 +161,37 @@ with mentions as (
         or max(first_taught.first_taught_position) > min(relied_on.relied_position)
 )
 
+-- concepts a run says learners should already know, in any scope
+, expected_by_run as (
+    select distinct
+        platform
+        , courserun_readable_id
+        , concept_id
+    from mentions
+    where
+        claim_kind = 'assumed_knowledge'
+        or (claim_kind = 'declared_prerequisite' and prerequisite_kind in ('prerequisite', 'recommended'))
+)
+
 , inferred_directions as (
     select
-        *
-        , cast(prior_scope_count as double) / (prior_scope_count + taught_scope_count) as direction_consistency
+        inferred_candidates.*
+        , cast(inferred_candidates.prior_scope_count as double)
+        / (inferred_candidates.prior_scope_count + inferred_candidates.taught_scope_count) as direction_consistency
+        , case
+            when concepts.concept_kind != 'tool' or concepts.concept_kind is null then cast(null as varchar)
+            when expected_by_run.concept_id is not null then 'assumed'
+            when inferred_candidates.taught_scope_count > 0 then 'introduced'
+            else 'unresolved'
+        end as tool_status
     from inferred_candidates
+    left join concepts
+        on inferred_candidates.concept_id = concepts.concept_pk
+    left join expected_by_run
+        on
+            inferred_candidates.platform = expected_by_run.platform
+            and inferred_candidates.courserun_readable_id = expected_by_run.courserun_readable_id
+            and inferred_candidates.concept_id = expected_by_run.concept_id
 )
 
 -- courses that require each concept, for cross-course support: declared, or inferred
@@ -201,6 +244,7 @@ with mentions as (
         , inferred_directions.taught_scope_count
         , coalesce(requiring_courses.course_support, 0) as course_support
         , inferred_directions.direction_consistency
+        , inferred_directions.tool_status
     from inferred_directions
     left join requiring_courses
         on inferred_directions.concept_id = requiring_courses.concept_id
@@ -222,6 +266,7 @@ with mentions as (
         , cast(null as bigint) as taught_scope_count
         , cast(null as bigint) as course_support
         , cast(null as double) as direction_consistency
+        , cast(null as varchar) as tool_status
     from direct_relations
     group by platform, courserun_readable_id, concept_id, relation, requirement_source
 
@@ -267,6 +312,7 @@ select
     , judged.taught_scope_count
     , judged.course_support
     , judged.direction_consistency
+    , judged.tool_status
     , judged.support_rule_failure is null as passes_support_rule
     , judged.support_rule_failure
 from judged
