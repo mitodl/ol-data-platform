@@ -16,6 +16,9 @@ import polars as pl
 import pytest
 from anthropic import Anthropic
 from dagster import (
+    AssetMaterialization,
+    AssetSelection,
+    AssetSpec,
     DagsterInstance,
     DagsterRun,
     DagsterRunStatus,
@@ -24,8 +27,11 @@ from dagster import (
     MultiPartitionKey,
     build_sensor_context,
     define_asset_job,
+    evaluate_automation_conditions,
     materialize,
 )
+from dagster._core.definitions.data_version import DATA_VERSION_TAG
+from dagster._core.storage.tags import AUTOMATION_CONDITION_TAG
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
 from ml.assets import courseware_description as description_module
@@ -47,6 +53,7 @@ from ml.assets.courseware_resolution import (
 )
 from ml.lib import warehouse
 from ml.lib.courseware import graph
+from ml.lib.courseware.describe import DESCRIPTION_PROMPT_VERSION
 from ml.resources import opik_auth
 from ml.resources.llm import LLMClientFactory
 from ml.sensors import courseware as sensor_module
@@ -498,16 +505,7 @@ def test_extraction_publishes_its_prompt_before_any_call(tables, calls, monkeypa
 
 
 def test_description_publishes_its_prompt_before_any_call(tables, calls, monkeypatch):
-    tables["int__courseware__concept_description_inputs"] = pl.DataFrame(
-        {
-            "concept_id": ["c1"],
-            "label": ["auc"],
-            "concept_kind": ["concept"],
-            "description": ["used to rank models"],
-            "course_title": ["Supervised Learning"],
-            "context_rank": [1],
-        }
-    )
+    tables[DESCRIPTION_INPUTS] = description_inputs(concepts={"c1": "auc"})
     monkeypatch.setattr(description_module, "publish_prompt_version", _fail_publish)
 
     result = materialize(
@@ -1011,17 +1009,237 @@ def test_resolution_ignores_carried_labels_that_dropped_out(tables, calls):
 
 
 # ------------------------------------------------------------------- description
-def test_description_describes_each_concept_once(tables, calls):
-    tables["int__courseware__concept_description_inputs"] = pl.DataFrame(
+DESCRIPTION_INPUTS = "int__courseware__concept_description_inputs"
+
+
+def description_inputs(
+    concepts: dict[str, str] | None = None,
+    approved_prompt_version: str | None = DESCRIPTION_PROMPT_VERSION,
+) -> pl.DataFrame:
+    """int__courseware__concept_description_inputs, one context row per concept."""
+    concepts = concepts or {"c1": "auc", "c2": "bias"}
+    return pl.DataFrame(
         {
-            "concept_id": ["c1", "c2"],
-            "label": ["auc", "bias"],
-            "concept_kind": ["concept", "concept"],
-            "description": ["used to rank models", "what a model gets wrong"],
-            "course_title": ["Supervised Learning", "Supervised Learning"],
-            "context_rank": [1, 1],
-        }
+            "concept_id": list(concepts),
+            "label": list(concepts.values()),
+            "concept_kind": ["concept"] * len(concepts),
+            "description": [f"what {label} means" for label in concepts.values()],
+            "course_title": ["Supervised Learning"] * len(concepts),
+            "context_rank": [1] * len(concepts),
+            "approved_prompt_version": [approved_prompt_version] * len(concepts),
+        },
+        schema_overrides={"approved_prompt_version": pl.String},
     )
+
+
+def describe(
+    tables, llm: LLMClientFactory | None = None, tags: dict[str, str] | None = None
+):
+    (hooked,) = with_failure_hooks([courseware_concept_description])
+    return materialize(
+        [hooked],
+        resources={"io_manager": Warehouse(tables), "llm": llm or FakeLLM()},
+        raise_on_error=False,
+        tags=tags,
+    )
+
+
+def step_failure(result):
+    (failure,) = [
+        event.step_failure_data.user_failure_data
+        for event in result.all_events
+        if event.is_step_failure
+    ]
+    return failure
+
+
+@pytest.mark.parametrize("approved", ["0ld0ld0ld0ld", None])
+def test_description_refuses_a_prompt_that_is_not_approved(
+    tables, calls, monkeypatch, approved
+):
+    tables[DESCRIPTION_INPUTS] = description_inputs(approved_prompt_version=approved)
+    monkeypatch.setattr(description_module, "publish_prompt_version", _fail_publish)
+
+    result = describe(tables)
+
+    assert not result.success
+    failure = step_failure(result)
+    assert f"approves {approved or 'no version'}" in failure.description
+    assert failure.metadata["retryable"].value is False
+    # before Opik or the model
+    assert calls == []
+    assert "courseware_concept_description" not in tables
+
+
+def test_description_refuses_inputs_built_before_the_approval_column(tables, calls):
+    # The ml image deployed before lakehouse rebuilt the inputs with the seed.
+    tables[DESCRIPTION_INPUTS] = description_inputs().drop("approved_prompt_version")
+
+    result = describe(tables)
+
+    assert not result.success
+    assert "approves no version" in step_failure(result).description
+    assert calls == []
+    skipped = describe(tables, tags={AUTOMATION_CONDITION_TAG: "true"})
+    assert skipped.success
+    assert skipped.get_asset_materialization_events() == []
+    assert "courseware_concept_description" not in tables
+
+
+def test_description_stamps_the_prompt_version_on_rows_written_before_it(tables, calls):
+    tables[DESCRIPTION_INPUTS] = description_inputs()
+    assert describe(tables).success
+    stored = tables["courseware_concept_description"]
+    # c1 as written before rows carried a prompt_version, and c2 under an older
+    # prompt, which this prompt's version cannot vouch for
+    tables["courseware_concept_description"] = pl.concat(
+        [
+            stored.filter(pl.col("concept_id") == "c1"),
+            stored.filter(pl.col("concept_id") == "c2").with_columns(
+                description_version=pl.lit("0ld0ld0ld0ld")
+            ),
+        ]
+    ).drop("prompt_version")
+    calls.clear()
+
+    assert describe(tables).success
+    assert describe(tables).success
+
+    # c2 is described again, c1 only copied, and neither twice
+    assert calls == ["record_descriptions"]
+    rows = tables["courseware_concept_description"]
+    assert rows.select("concept_id", "prompt_version").rows() == [
+        ("c1", None),
+        ("c2", None),
+        ("c1", DESCRIPTION_PROMPT_VERSION),
+        ("c2", DESCRIPTION_PROMPT_VERSION),
+    ]
+    c1 = rows.filter(pl.col("concept_id") == "c1")
+    assert c1["description"].n_unique() == 1
+    assert c1["described_at"].n_unique() == 1
+
+
+def test_automation_skips_a_description_prompt_that_is_not_approved(
+    tables, calls, monkeypatch
+):
+    tables[DESCRIPTION_INPUTS] = description_inputs(
+        approved_prompt_version="0ld0ld0ld0ld"
+    )
+    monkeypatch.setattr(description_module, "publish_prompt_version", _fail_publish)
+
+    result = describe(tables, tags={AUTOMATION_CONDITION_TAG: "true"})
+
+    # Succeeds without output, so automation neither retries it nor reports it.
+    assert result.success
+    assert result.get_asset_materialization_events() == []
+    assert calls == []
+    assert "courseware_concept_description" not in tables
+
+
+def test_description_prompt_change_waits_for_promotion(tables, calls, monkeypatch):
+    tables[DESCRIPTION_INPUTS] = description_inputs()
+    assert describe(tables).success
+    assert calls == ["record_descriptions"]
+
+    edited = "e0e0e0e0e0e0"
+    monkeypatch.setattr(description_module, "DESCRIPTION_PROMPT_VERSION", edited)
+    monkeypatch.setattr(
+        "ml.lib.courseware.describe.DESCRIPTION_PROMPT", "A different prompt."
+    )
+    calls.clear()
+
+    assert not describe(tables).success
+    assert calls == []
+    assert tables["courseware_concept_description"].height == 2
+
+    # Promoted: every concept is described under the new prompt, once.
+    tables[DESCRIPTION_INPUTS] = description_inputs(approved_prompt_version=edited)
+    assert describe(tables).success
+    assert describe(tables).success
+    assert calls == ["record_descriptions"]
+    assert tables["courseware_concept_description"]["prompt_version"].to_list() == [
+        DESCRIPTION_PROMPT_VERSION,
+        DESCRIPTION_PROMPT_VERSION,
+        edited,
+        edited,
+    ]
+
+
+def automation_requests(
+    instance: DagsterInstance, prompt_version: str, cursor=None
+) -> tuple[int, Any]:
+    """Run one automation tick with the description prompt at prompt_version.
+
+    :returns: how many description runs the tick requested, and its cursor
+    """
+    # The asset as deployed with DESCRIPTION_PROMPT_VERSION at prompt_version. One
+    # without a code version keeps none.
+    deployed = courseware_concept_description.map_asset_specs(
+        lambda spec: spec.replace_attributes(
+            code_version=spec.code_version and prompt_version
+        )
+    )
+    result = evaluate_automation_conditions(
+        defs=Definitions(
+            assets=[deployed, AssetSpec(description_module.INPUTS_KEY)],
+            resources={"io_manager": Warehouse({}), "llm": FakeLLM()},
+        ),
+        instance=instance,
+        asset_selection=AssetSelection.assets(courseware_concept_description),
+        cursor=cursor,
+    )
+    return result.get_num_requested(courseware_concept_description.key), result.cursor
+
+
+def build_inputs(instance: DagsterInstance, data_version: str) -> None:
+    instance.report_runless_asset_event(
+        AssetMaterialization(
+            description_module.INPUTS_KEY, tags={DATA_VERSION_TAG: data_version}
+        )
+    )
+
+
+@pytest.mark.parametrize("seed_first", [True, False])
+def test_a_promotion_requests_a_run_whichever_image_deploys_last(seed_first):
+    # The seed promotes in the lakehouse image and the prompt changes in the ml
+    # image. The first deploy's run stops as unapproved and writes nothing, so the
+    # second deploy has to request another run.
+    instance = DagsterInstance.ephemeral()
+    build_inputs(instance, "approves-old")
+    instance.report_runless_asset_event(
+        AssetMaterialization(courseware_concept_description.key)
+    )
+    prompt_version = "0ld0ld0ld0ld"
+    _, cursor = automation_requests(instance, prompt_version)
+
+    for deploy in ["seed", "ml"] if seed_first else ["ml", "seed"]:
+        if deploy == "seed":
+            build_inputs(instance, "approves-new")
+        else:
+            prompt_version = "e0e0e0e0e0e0"
+        requested, cursor = automation_requests(instance, prompt_version, cursor)
+        assert requested == 1, deploy
+        requested, cursor = automation_requests(instance, prompt_version, cursor)
+        assert requested == 0, deploy
+
+
+def test_description_describes_only_concepts_new_at_the_approved_version(tables, calls):
+    tables[DESCRIPTION_INPUTS] = description_inputs(concepts={"c1": "auc"})
+    assert describe(tables).success
+    tables[DESCRIPTION_INPUTS] = description_inputs()
+    calls.clear()
+
+    assert describe(tables).success
+
+    assert calls == ["record_descriptions"]
+    assert tables["courseware_concept_description"]["concept_id"].to_list() == [
+        "c1",
+        "c2",
+    ]
+
+
+def test_description_describes_each_concept_once(tables, calls):
+    tables[DESCRIPTION_INPUTS] = description_inputs()
     resources = {"io_manager": Warehouse(tables), "llm": FakeLLM()}
 
     materialize([courseware_concept_description], resources=resources)
@@ -1037,16 +1255,7 @@ def test_description_describes_each_concept_once(tables, calls):
 
 
 def test_description_stores_what_succeeded_and_fails_on_missing_ones(tables, calls):
-    tables["int__courseware__concept_description_inputs"] = pl.DataFrame(
-        {
-            "concept_id": ["c1", "c2"],
-            "label": ["auc", "bias"],
-            "concept_kind": ["concept", "concept"],
-            "description": ["used to rank models", "what a model gets wrong"],
-            "course_title": ["Supervised Learning", "Supervised Learning"],
-            "context_rank": [1, 1],
-        }
-    )
+    tables[DESCRIPTION_INPUTS] = description_inputs()
     instance = DagsterInstance.ephemeral()
     (hooked,) = with_failure_hooks([courseware_concept_description])
 

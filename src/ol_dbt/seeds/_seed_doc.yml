@@ -248,6 +248,9 @@ seeds:
       extractor_id: varchar
       prompt_version: varchar
       schema_version: varchar
+  # Duplicates tie on match_rank in int__courseware__extraction_source_checksums,
+  # and the build would pick one of their versions arbitrarily, so one bad row is
+  # the failure and the project's >10 does not apply.
   tests:
   - dbt_utils.unique_combination_of_columns:
       arguments:
@@ -255,10 +258,13 @@ seeds:
         - platform
         - course_readable_id
         - courserun_readable_id
-  # A row naming both would tie with the run's own row, and the build would pick
-  # one of the two arbitrarily.
+      config:
+        error_if: ">0"
+  # A row naming both would tie with the run's own row the same way.
   - dbt_utils.expression_is_true:
       expression: course_readable_id is null or courserun_readable_id is null
+      config:
+        error_if: ">0"
   columns:
   - name: platform
     description: str, mitxonline, mitxpro or residential
@@ -290,3 +296,30 @@ seeds:
     - not_null:
         config:
           error_if: ">0"
+
+- name: courseware_description_approval
+  description: >
+    The courseware concept description prompt version the description asset may
+    describe under. The asset makes no model call when the deployed
+    DESCRIPTION_PROMPT's version is not the one named here (a run automation
+    requested logs why, any other run fails), so a prompt edit describes nothing
+    until this row is promoted to it, and then describes every concept under it
+    once. The promotion may deploy before or after the ml image carrying the
+    prompt; whichever lands second requests the run that describes. At most one
+    row; an empty file, or more than one row, approves nothing.
+  config:
+    column_types:
+      prompt_version: varchar
+  tests:
+  - dbt_expectations.expect_table_row_count_to_be_between:
+      arguments:
+        max_value: 1
+      config:
+        # One extra row is the failure, so the project's >10 does not apply.
+        error_if: ">0"
+  columns:
+  - name: prompt_version
+    description: str, the first 12 hex digits of DESCRIPTION_PROMPT's sha256 (ml.lib.courseware.describe.DESCRIPTION_PROMPT_VERSION;
+      a failed description run names the deployed one)
+    tests:
+    - not_null

@@ -1,0 +1,56 @@
+---
+unit_tests:
+- name: test_int__courseware__concept_description_inputs_carries_the_approved_version
+  description: >
+    Every row carries the prompt version courseware_description_approval approves.
+  model: int__courseware__concept_description_inputs
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {concept_id: c1, label: auc, concept_kind: concept, description: ranks models,
+      platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", teaching_status: taught}
+    - {concept_id: c1, label: auc, concept_kind: concept, description: compares models,
+      platform: mitxonline, courserun_readable_id: "course-v1:X+B+1T", teaching_status: taught}
+  - input: ref('dim_course_run')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", course_fk: a,
+      is_current: true}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+B+1T", course_fk: b,
+      is_current: true}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: a, course_title: Course A, is_current: true}
+    - {course_pk: b, course_title: Course B, is_current: true}
+  - input: ref('courseware_description_approval')
+    rows:
+    - {prompt_version: v1}
+  expect:
+    rows:
+    - {concept_id: c1, course_title: Course A, context_rank: 1, approved_prompt_version: v1}
+    - {concept_id: c1, course_title: Course B, context_rank: 2, approved_prompt_version: v1}
+
+- name: test_int__courseware__concept_description_inputs_two_approvals_approve_nothing
+  description: >
+    A seed with two rows, even of the same version, approves nothing and does not
+    repeat the inputs, which would change every concept's input checksum and
+    describe the corpus again.
+  model: int__courseware__concept_description_inputs
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {concept_id: c1, label: auc, concept_kind: concept, description: ranks models,
+      platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", teaching_status: taught}
+  - input: ref('dim_course_run')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", course_fk: a,
+      is_current: true}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: a, course_title: Course A, is_current: true}
+  - input: ref('courseware_description_approval')
+    rows:
+    - {prompt_version: v1}
+    - {prompt_version: v1}
+  expect:
+    rows:
+    - {concept_id: c1, context_rank: 1, approved_prompt_version: null}

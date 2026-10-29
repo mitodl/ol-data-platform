@@ -462,6 +462,10 @@ sources:
       description: str, sha256 of the labels and claim descriptions the model read
     - name: description_version
       description: str, hash of the description prompt, model and effort
+    - name: prompt_version
+      description: str, DESCRIPTION_PROMPT_VERSION, the prompt version courseware_description_approval
+        approved when the row was written; a release takes only descriptions at the
+        version approved when it is built
     - name: model_id
       description: str, the model that wrote the description
     - name: described_at

@@ -535,6 +535,10 @@ models:
   - name: course_title
     description: str, the course the claim came from, for telling senses of a label
       apart
+  - name: approved_prompt_version
+    description: str, the description prompt version courseware_description_approval
+      approves, the same on every row; null when it approves none or holds more than
+      one row, and then the describer refuses to run
 
 - name: int__courseware__concept_assignments
   description: Which concept each normalized label belongs to, from the newest resolution
