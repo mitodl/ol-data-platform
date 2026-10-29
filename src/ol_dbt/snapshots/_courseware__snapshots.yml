@@ -4,13 +4,13 @@ snapshots:
 - name: snapshot_bridge_concept_relation
   relation: ref('bridge_concept_relation')
   description: >
-    History of concept-to-concept edges, one row per version of an edge's strength
-    or publishing decision. bridge_concept_relation is rebuilt from the current
-    evidence on every run, so without this an edge's support, relation_confidence
-    and passes_support_rule leave no trace once they change. Read it beside
+    History of concept-to-concept edges, one row per version of an edge's support
+    or support-rule outcome. bridge_concept_relation is rebuilt from the current
+    evidence on every run, so without this an edge's support, support_score and
+    passes_support_rule leave no trace once they change. Read it beside
     afact_concept_graph_run (graph runs) by time. A new version is recorded when a
-    support count, the consistency, relation_confidence, review_status or the
-    publishing decision changes. co_taught_lift is left out of the check, because
+    support count, the consistency, support_score, review_status or the support-rule
+    outcome changes. co_taught_lift is left out of the check, because
     its denominator counts every taught unit, so each extracted course would version
     every complements edge without its own evidence changing. Resolution is one
     run, and history starts at the first run. An edge whose evidence disappears has
@@ -29,7 +29,7 @@ snapshots:
     - verdict_support
     - contrary_verdict_support
     - cross_signal_support
-    - relation_confidence
+    - support_score
     - review_status
     - passes_support_rule
     - support_rule_failure
@@ -73,8 +73,8 @@ snapshots:
   - name: cross_signal_support
     description: int, evidence for the pair from the other source (course units for
       an adjudicated relation, connecting verdicts for a course relation)
-  - name: relation_confidence
-    description: float in [0, 1], the edge's relation_confidence in this version
+  - name: support_score
+    description: float in [0, 1], the edge's uncalibrated support_score in this version
   - name: is_adjudicated
     description: boolean, whether resolution adjudication proposed the edge
   - name: has_sequence_evidence
@@ -90,9 +90,10 @@ snapshots:
   - name: review_status
     description: str, proposed, accepted or rejected
   - name: passes_support_rule
-    description: boolean, whether the edge was published in this version
+    description: boolean, whether the edge passed bridge_concept_relation's support
+      rules in this version (a noise filter, not acceptance)
   - name: support_rule_failure
-    description: str, why the edge was not published in this version, as in bridge_concept_relation
+    description: str, why the edge failed them in this version, as in bridge_concept_relation
   - name: dbt_scd_id
     description: Unique id of this version of the edge.
   - name: dbt_updated_at

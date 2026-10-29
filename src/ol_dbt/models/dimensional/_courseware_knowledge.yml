@@ -306,11 +306,12 @@ models:
     description: str, the resolution run that first assigned the label to the concept
 
 - name: bridge_concept_relation
-  description: Concept-to-concept edges with their accumulated evidence, a combined
-    relation_confidence and a publishing decision, one row per (from, to, relation).
-    Hierarchy (broader), sequence (builds_on), practice (practiced_with), equivalence
-    (close) and association (complements, related). snapshot_bridge_concept_relation
-    keeps each edge's history.
+  description: Concept-to-concept candidate edges with their accumulated evidence,
+    an uncalibrated support_score and support-rule outcome, one row per (from, to,
+    relation); review_status stays proposed until a review workflow exists. Hierarchy
+    (broader), sequence (builds_on), practice (practiced_with), equivalence (close)
+    and association (complements, related). snapshot_bridge_concept_relation keeps
+    each edge's history.
   config:
     meta:
       # Reads dim_course_run for course keys; no QA form until the Dagster assets
@@ -334,10 +335,11 @@ models:
     - acyclic:
         to_column: to_concept_fk
         config:
+          severity: warn
           where: relation = 'builds_on' and passes_support_rule
-    # and so is the hierarchy
+    # a hierarchy is a strict partial order; the cycle rule holds broader to one
     - acyclic:
-        name: bridge_concept_relation_published_broader_acyclic
+        name: bridge_concept_relation_broader_acyclic
         to_column: to_concept_fk
         config:
           where: relation = 'broader' and passes_support_rule
@@ -364,9 +366,8 @@ models:
   - name: course_scope_support
     description: int, course relations only, scope_support with each course's reruns
       counted once (the run with the most units; a run without a course_fk is keyed
-      by the run id less its run segment); the support the builds_on publishing rule
-      and relation_confidence read, since reruns of one course have near-identical
-      text
+      by the run id less its run segment); the support the builds_on support rule
+      and support_score read, since reruns of one course have near-identical text
   - name: reverse_scope_support
     description: int, builds_on only, course_scope_support of the opposite direction
   - name: direction_consistency
@@ -390,9 +391,14 @@ models:
       or sequenced, either direction, each course's reruns counted once); for a course
       relation, verdicts saying the pair is connected (close, related, broader or
       narrower)
-  - name: relation_confidence
+  - name: support_score
     description: >-
-      float in [0, 1], noisy-OR of the edge's evidence scaled by its consistency:
+      float in [0, 1], an uncalibrated ranking heuristic, not a probability that the
+      relation holds: units of one course share source material and adjudication and
+      extraction are related model judgements, so the evidence is not the independent
+      votes the formula assumes, and cross-signal support says the pair is connected,
+      not that this relation holds. Noisy-OR of the edge's evidence scaled by its
+      consistency:
       consistency * (1 - (1 - r) ^ own_support * 0.8 ^ cross_signal_support), where
       own_support is verdict_support with r = 0.5 for adjudicated relations and
       course_scope_support with r = 0.3 for course relations, and consistency is
@@ -401,8 +407,9 @@ models:
       evidence never lowers it and contrary evidence never raises it. One unit gives
       0.3, two units 0.51, one verdict 0.5; a co-taught pair adjudicated related once
       gets 0.44 on complements. Rounded to 4 places so the snapshot does not version
-      an edge over a last-bit float difference. The reliabilities are priors until
-      the gold set calibrates them, and it is not a probability yet.
+      an edge over a last-bit float difference. The reliabilities are priors. No
+      support rule fails one predicate because another scored higher on the same
+      pair.
     tests:
     - not_null
     - dbt_expectations.expect_column_values_to_be_between:
@@ -423,25 +430,24 @@ models:
   - name: review_status
     description: str, proposed, accepted or rejected
   - name: passes_support_rule
-    description: boolean, whether the edge clears the publishing rule. builds_on needs
+    description: boolean, whether the edge passes the support rules, which filter
+      noise and do not accept the edge (review_status does that). builds_on needs
       course_scope_support of courseware_prerequisite_min_scope_support and direction_consistency
       of courseware_prerequisite_min_direction_consistency (no course-count clause,
       since every supporting course adds at least one unit). Each broader cycle loses
       its lowest-ranked edge (by adjudication score, then the number of broader edges
-      into its broader concept, then concept ids). Then broader and builds_on are
-      exclusive per pair among the edges left (the higher relation_confidence publishes,
-      broader on a tie). Every other relation is published
+      into its broader concept, then concept ids). Every other relation passes. A
+      pair can pass as both broader and builds_on, and a passing builds_on edge is
+      still a course observation, not a prerequisite
     tests:
     - not_null
   - name: support_rule_failure
-    description: str, why the edge is not published. builds_on, insufficient_support
-      or contested_direction, or hierarchy_pair when it lost its pair to a broader
-      edge; broader, hierarchy_cycle when it is the lowest-ranked edge of a broader
-      cycle, or sequence_pair when it lost its pair to a builds_on edge
+    description: str, why the edge fails the support rules. builds_on, insufficient_support
+      or contested_direction; broader, hierarchy_cycle when it is the lowest-ranked
+      edge of a broader cycle
     tests:
     - accepted_values:
-        values: [insufficient_support, contested_direction, hierarchy_pair, sequence_pair,
-          hierarchy_cycle]
+        values: [insufficient_support, contested_direction, hierarchy_cycle]
 
 - name: dim_concept_community
   description: Neighbourhoods of related concepts from the newest graph run, with
@@ -621,23 +627,24 @@ models:
         values: [insufficient_support, contested_direction]
 
 unit_tests:
-- name: test_bridge_concept_relation_publishes_one_edge_per_hierarchy_pair_and_no_hierarchy_cycle
+- name: test_bridge_concept_relation_keeps_hierarchy_beside_dependency_and_cuts_hierarchy_cycles
   description: >
     a < b < c < a is a broader cycle, and c < a has the fewest verdicts, so it is
-    the one left unpublished. j < k < l < j ties j < k and k < l on verdicts; more
-    broader edges point at k (j and z sit under it) than at l, so k < l ranks lower
-    and is the only edge cut. g < h < i < g is a cycle whose weakest edge g < h
-    would beat its pair's builds_on edge h -> g on confidence; the cycle rule runs
-    first, so g < h is cut and h -> g publishes instead of neither. x < y and p <
-    q
-    are broader pairs that also have a builds_on edge clearing its own support
-    rule: on x, y the builds_on edge has the higher relation_confidence (four units
-    against one verdict) and publishes instead of broader; on p, q broader (two
-    verdicts) beats a two-unit builds_on in the opposite direction. m and n are
-    co-taught and adjudicated related, so each edge carries the other source as
-    cross-signal support. s and t are related with no verdict left to count, so the
-    proposal counts as one. u and v are co-taught in run1 and in run3, a rerun of
-    the same course, which counts once, so complements scores one unit's 0.3.
+    the one that fails the support rule. j < k < l < j ties j < k and k < l on
+    verdicts; more broader edges point at k (j and z sit under it) than at l, so k
+    <
+    l ranks lower and is the only edge cut. g < h < i < g is a cycle whose weakest
+    edge g < h is cut; h -> g builds_on passes on its own support. x < y and p < q
+    are broader pairs that also have a builds_on edge passing its own support rule
+    (x -> y the same way, q -> p the opposite way); both predicates pass on each
+    pair, whichever scores higher, because a concept can be a kind or part of
+    another and still build on it. m and n are co-taught and adjudicated related,
+    so
+    each edge carries the other source as cross-signal support. s and t are related
+    with no verdict left to count, so the proposal counts as one. u and v are
+    co-taught in run1 and in run3, a rerun of the same course, which counts once,
+    so
+    complements scores one unit's 0.3.
   model: bridge_concept_relation
   given:
   - input: ref('int__courseware__concept_relation_evidence')
@@ -728,62 +735,43 @@ unit_tests:
   expect:
     rows:
     - {from_concept_fk: a, to_concept_fk: b, relation: broader, verdict_support: 2,
-      cross_signal_support: 0, relation_confidence: 0.75, passes_support_rule: true,
-      support_rule_failure: null}
+      cross_signal_support: 0, support_score: 0.75, passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: b, to_concept_fk: c, relation: broader, verdict_support: 2,
-      cross_signal_support: 0, relation_confidence: 0.75, passes_support_rule: true,
-      support_rule_failure: null}
+      cross_signal_support: 0, support_score: 0.75, passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: c, to_concept_fk: a, relation: broader, verdict_support: 1,
-      cross_signal_support: 0, relation_confidence: 0.5, passes_support_rule: false,
-      support_rule_failure: hierarchy_cycle}
+      cross_signal_support: 0, support_score: 0.5, passes_support_rule: false, support_rule_failure: hierarchy_cycle}
     - {from_concept_fk: x, to_concept_fk: y, relation: broader, verdict_support: 1,
-      cross_signal_support: 4, relation_confidence: 0.7952, passes_support_rule: false,
-      support_rule_failure: sequence_pair}
+      cross_signal_support: 4, support_score: 0.7952, passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: x, to_concept_fk: y, relation: builds_on, verdict_support: null,
-      cross_signal_support: 1, relation_confidence: 0.8079, passes_support_rule: true,
-      support_rule_failure: null}
+      cross_signal_support: 1, support_score: 0.8079, passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: p, to_concept_fk: q, relation: broader, verdict_support: 2,
-      cross_signal_support: 2, relation_confidence: 0.84, passes_support_rule: true,
-      support_rule_failure: null}
+      cross_signal_support: 2, support_score: 0.84, passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: q, to_concept_fk: p, relation: builds_on, verdict_support: null,
-      cross_signal_support: 2, relation_confidence: 0.6864, passes_support_rule: false,
-      support_rule_failure: hierarchy_pair}
+      cross_signal_support: 2, support_score: 0.6864, passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: g, to_concept_fk: h, relation: broader, verdict_support: 1,
-      cross_signal_support: 2, relation_confidence: 0.68, passes_support_rule: false,
-      support_rule_failure: hierarchy_cycle}
+      cross_signal_support: 2, support_score: 0.68, passes_support_rule: false, support_rule_failure: hierarchy_cycle}
     - {from_concept_fk: h, to_concept_fk: i, relation: broader, verdict_support: 2,
-      cross_signal_support: 0, relation_confidence: 0.75, passes_support_rule: true,
-      support_rule_failure: null}
+      cross_signal_support: 0, support_score: 0.75, passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: i, to_concept_fk: g, relation: broader, verdict_support: 2,
-      cross_signal_support: 0, relation_confidence: 0.75, passes_support_rule: true,
-      support_rule_failure: null}
+      cross_signal_support: 0, support_score: 0.75, passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: h, to_concept_fk: g, relation: builds_on, verdict_support: null,
-      cross_signal_support: 1, relation_confidence: 0.608, passes_support_rule: true,
-      support_rule_failure: null}
+      cross_signal_support: 1, support_score: 0.608, passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: j, to_concept_fk: k, relation: broader, verdict_support: 1,
-      cross_signal_support: 0, relation_confidence: 0.5, passes_support_rule: true,
-      support_rule_failure: null}
+      cross_signal_support: 0, support_score: 0.5, passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: k, to_concept_fk: l, relation: broader, verdict_support: 1,
-      cross_signal_support: 0, relation_confidence: 0.5, passes_support_rule: false,
-      support_rule_failure: hierarchy_cycle}
+      cross_signal_support: 0, support_score: 0.5, passes_support_rule: false, support_rule_failure: hierarchy_cycle}
     - {from_concept_fk: l, to_concept_fk: j, relation: broader, verdict_support: 2,
-      cross_signal_support: 0, relation_confidence: 0.75, passes_support_rule: true,
-      support_rule_failure: null}
+      cross_signal_support: 0, support_score: 0.75, passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: z, to_concept_fk: k, relation: broader, verdict_support: 1,
-      cross_signal_support: 0, relation_confidence: 0.5, passes_support_rule: true,
-      support_rule_failure: null}
+      cross_signal_support: 0, support_score: 0.5, passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: m, to_concept_fk: n, relation: related, verdict_support: 1,
-      cross_signal_support: 1, relation_confidence: 0.6, passes_support_rule: true,
-      support_rule_failure: null}
+      cross_signal_support: 1, support_score: 0.6, passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: m, to_concept_fk: n, relation: complements, verdict_support: null,
-      cross_signal_support: 1, relation_confidence: 0.44, passes_support_rule: true,
-      support_rule_failure: null}
+      cross_signal_support: 1, support_score: 0.44, passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: s, to_concept_fk: t, relation: related, verdict_support: 1,
-      cross_signal_support: 0, relation_confidence: 0.5, passes_support_rule: true,
-      support_rule_failure: null}
+      cross_signal_support: 0, support_score: 0.5, passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: u, to_concept_fk: v, relation: complements, verdict_support: null,
-      cross_signal_support: 0, relation_confidence: 0.3, passes_support_rule: true,
-      support_rule_failure: null}
+      cross_signal_support: 0, support_score: 0.3, passes_support_rule: true, support_rule_failure: null}
 - name: test_bridge_concept_relation_cuts_every_cycle_lowest_edge_in_one_pass
   description: >
     z < x < y < z and x < y < w < x overlap on x < y. x < y is the lowest edge of
@@ -825,13 +813,13 @@ unit_tests:
     rows: []
   expect:
     rows:
-    - {from_concept_fk: z, to_concept_fk: x, relation: broader, relation_confidence: 0.5,
+    - {from_concept_fk: z, to_concept_fk: x, relation: broader, support_score: 0.5,
       passes_support_rule: false, support_rule_failure: hierarchy_cycle}
-    - {from_concept_fk: x, to_concept_fk: y, relation: broader, relation_confidence: 0.75,
+    - {from_concept_fk: x, to_concept_fk: y, relation: broader, support_score: 0.75,
       passes_support_rule: false, support_rule_failure: hierarchy_cycle}
-    - {from_concept_fk: y, to_concept_fk: w, relation: broader, relation_confidence: 0.875,
+    - {from_concept_fk: y, to_concept_fk: w, relation: broader, support_score: 0.875,
       passes_support_rule: true, support_rule_failure: null}
-    - {from_concept_fk: w, to_concept_fk: x, relation: broader, relation_confidence: 0.875,
+    - {from_concept_fk: w, to_concept_fk: x, relation: broader, support_score: 0.875,
       passes_support_rule: true, support_rule_failure: null}
-    - {from_concept_fk: y, to_concept_fk: z, relation: broader, relation_confidence: 0.875,
+    - {from_concept_fk: y, to_concept_fk: z, relation: broader, support_score: 0.875,
       passes_support_rule: true, support_rule_failure: null}

@@ -54,10 +54,10 @@ def test_sequence_levels_foundations_and_cycles():
             relation("regression", "variance", "builds_on"),
             relation("a", "b", "broader", adjudicated=True),
             relation("b", "a", "broader", adjudicated=True),
-            # the weakest link of a broader cycle, which dbt leaves unpublished
+            # the weakest link of a broader cycle, which fails dbt's support rule
             relation("a", "c", "broader", adjudicated=True),
             relation("c", "a", "broader", adjudicated=True, passes=False),
-            # not published by bridge_concept_relation, so it cannot close a cycle
+            # fails bridge_concept_relation's support rule, so it cannot close a cycle
             relation("mean", "regression", "builds_on", passes=False),
         ),
     )

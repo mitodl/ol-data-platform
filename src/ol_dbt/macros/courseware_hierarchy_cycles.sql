@@ -8,7 +8,7 @@
     courseware_hierarchy_edges: broader edges in cycle-breaking order, lowest first.
     edges is a relation of adjudicated broader edges with from_concept_id,
     to_concept_id, verdict_support (at least 1) and contrary_verdict_support. Edges are
-    ranked by adjudication score (relation_confidence without the cross-signal term),
+    ranked by adjudication score (support_score without the cross-signal term),
     then by how many broader edges point at the broader concept, then by concept ids,
     so the order is total.
 #}

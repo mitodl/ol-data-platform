@@ -9,7 +9,8 @@
     stays proposed until a review workflow exists.
 
     relation_family groups relations by what they mean for a learner:
-      hierarchy    broader      from is a kind or part of to
+      hierarchy    broader      from is a kind or part of to; the resolver's verdicts
+                                do not say which, so the two are not separated yet
       sequence     builds_on    units teaching from relied on to (an instructional
                                 observation, not evidence that from requires to)
       practice     practiced_with  learning from involves using the tool to
@@ -46,60 +47,62 @@
     whose evidence disappears (an extraction version replaced) drops out on the
     next build.
 
-    relation_confidence combines those signals in [0, 1]. Each observation is
-    treated as an independent, noisy vote that the edge holds (noisy-OR), scaled by
-    the share of same-source evidence that agrees:
-      relation_confidence = consistency
+    support_score combines those signals in [0, 1]. It is an uncalibrated ranking
+    heuristic, not a probability that the relation holds: it treats each observation
+    as an independent, noisy vote (noisy-OR), scaled by the share of same-source
+    evidence that agrees, but units of one course share source material and
+    authors, and adjudication and extraction are related model judgements, so the
+    votes are not independent. Cross-signal evidence says the pair is connected, not
+    that this relation or direction holds. The raw components above stay beside it
+    for calibration against independently annotated relations.
+      support_score = consistency
         * (1 - (1 - own_reliability) ^ own_support
              * (1 - cross_signal_reliability) ^ cross_signal_support)
     own_support is verdict_support for adjudicated relations (reliability 0.5 each,
     a direct pairwise judgement) and course_scope_support for course relations (0.3
     each, one extraction call implying the edge; a rerun of a course adds nothing,
-    as for publication). Cross-signal evidence counts 0.2 each,
-    because it says the pair is connected, not that this relation holds. consistency
+    as for the support rule). Cross-signal evidence counts 0.2 each. consistency
     is direction_consistency for builds_on, verdict_support / (verdict_support +
     contrary_verdict_support) for adjudicated relations, and 1 otherwise. Adding
     agreeing evidence never lowers the score and adding contrary evidence never
-    raises it. The reliabilities are priors until the gold set calibrates them.
+    raises it. The reliabilities are priors, not fitted values.
     verdict_support is at least 1: the relation is in the resolver's snapshot
     because a verdict, or a carried edge's vote, proposed it, even when none of the
     labels that voted is still assigned, so the proposal counts as one verdict. The
     score is rounded to 4 places, so the snapshot does not version an edge over a
     last-bit difference between engines or plans.
 
-    Publication (passes_support_rule, with support_rule_failure on the rest, which keep their
-    rows for review). Every relation other than builds_on and broader is published,
-    and its consumers apply their own thresholds to the support columns.
-    - builds_on publishes when course_scope_support reaches
+    Support rules (passes_support_rule, with support_rule_failure on the rest, which
+    keep their rows). They filter noise; they do not accept a relation. Every
+    relation other than builds_on and broader passes, and its consumers apply their
+    own thresholds to the support columns.
+    - builds_on passes when course_scope_support reaches
       courseware_prerequisite_min_scope_support and direction_consistency reaches
       courseware_prerequisite_min_direction_consistency, because one unit's
-      extraction is one model call and LLMs over-predict prerequisites
+      extraction is one model call and LLMs over-predict reliance
       (insufficient_support, contested_direction). Every supporting course
-      contributes at least one unit, so a course count could never publish an edge
-      this misses. Cross-signal agreement raises its
-      confidence but never publishes it: a broader verdict says the two concepts
-      are a kind or part of one another, which runs either way in learning order.
-    - broader is held to a strict partial order, first. Broader edges are ranked by
-      adjudication score (relation_confidence without the cross-signal term), then
-      by how many broader edges point at the broader concept (an edge into a concept
-      many others sit under is the likelier one), then by concept ids, so the order
-      is total. The ranking reads only the adjudicated table, so the walk does not
-      recompute the whole pipeline once per step on engines that inline CTEs. An
-      edge whose broader concept leads back to its narrower one through edges ranked
-      above it is the lowest-ranked edge of that cycle and is not published
-      (hierarchy_cycle). Every cycle loses its lowest-ranked edge, in one pass over
-      all broader edges, so where cycles overlap an edge can be cut for a cycle a cut
-      above it already broke (z < x for z < x < y < z, when x < y is cut for x < y <
-      w < x). assert_bridge_concept_relation_hierarchy_cycle_overprune counts the cut
+      contributes at least one unit, so a course count could never pass an edge
+      this misses. Cross-signal agreement raises its score but never passes it: a
+      broader verdict says the two concepts are a kind or part of one another,
+      which runs either way in learning order.
+    - broader is held to a strict partial order, since a kind-of or part-of cycle
+      cannot all be true. Broader edges are ranked by adjudication score
+      (support_score without the cross-signal term), then by how many broader edges
+      point at the broader concept (an edge into a concept many others sit under is
+      the likelier one), then by concept ids, so the order is total. This ranking
+      is a heuristic for which edge of a contradiction to send to review. The
+      ranking reads only the adjudicated table, so the walk does not recompute the
+      whole pipeline once per step on engines that inline CTEs. An edge whose
+      broader concept leads back to its narrower one through edges ranked above it
+      is the lowest-ranked edge of that cycle and fails (hierarchy_cycle). Every
+      cycle loses its lowest-ranked edge, in one pass over all broader edges, so
+      where cycles overlap an edge can be cut for a cycle a cut above it already
+      broke (z < x for z < x < y < z, when x < y is cut for x < y < w < x).
+      assert_bridge_concept_relation_hierarchy_cycle_overprune counts the cut
       edges a second pass over the survivors would keep, an upper bound on that.
-    - then broader and builds_on are exclusive per pair, in either direction. Of the
-      broader edges left and a builds_on edge that would publish, the one with the
-      higher relation_confidence publishes, broader on a tie (hierarchy_pair on the
-      builds_on edge, sequence_pair on the broader one). A broader edge cut by the
-      cycle rule does not contest, so its pair's builds_on edge can publish. Cycles
-      are decided first because a broader edge that loses its pair still counts in
-      the walk: at worst that unpublishes a weaker edge of a cycle that would
-      otherwise not publish, and it never publishes a cycle.
+    - broader and builds_on are judged independently. A pair can be both (a
+      private method is a kind of method and builds on understanding methods), so
+      neither predicate's score is used to fail the other.
 #}
 {%- set verdict_reliability = courseware_verdict_reliability() -%}
 {%- set unit_reliability = 0.3 -%}
@@ -254,7 +257,7 @@ with evidence as (
     group by least(from_concept_id, to_concept_id), greatest(from_concept_id, to_concept_id)
 )
 
--- the adjudication terms of relation_confidence: the share of verdicts that agree,
+-- the adjudication terms of support_score: the share of verdicts that agree,
 -- and the chance that every agreeing verdict is wrong; the proposal itself is the
 -- floor of one supporting verdict
 , adjudication_scores as (
@@ -367,7 +370,7 @@ with evidence as (
                 * power(1.0 - {{ cross_signal_reliability }}, signals.cross_signal_support)
             )
             , 4
-        ) as relation_confidence
+        ) as support_score
     from signals
 )
 
@@ -378,66 +381,7 @@ with evidence as (
 
 {{ courseware_hierarchy_cycle_cuts('hierarchy_cycle_edges', 'hierarchy_edges', 'hierarchy_edges', max_cycle_length) }}
 
--- each builds_on edge that clears its own support rule, against the strongest broader
--- edge left on its pair (either direction)
-, pair_contest as (
-    select
-        builds_on_edges.from_concept_id
-        , builds_on_edges.to_concept_id
-        , builds_on_edges.relation_confidence > max(broader_edges.relation_confidence) as is_builds_on_preferred
-    from scored as builds_on_edges
-    inner join scored as broader_edges
-        on
-            least(builds_on_edges.from_concept_id, builds_on_edges.to_concept_id)
-            = least(broader_edges.from_concept_id, broader_edges.to_concept_id)
-            and greatest(builds_on_edges.from_concept_id, builds_on_edges.to_concept_id)
-            = greatest(broader_edges.from_concept_id, broader_edges.to_concept_id)
-    left join hierarchy_cycle_edges
-        on
-            broader_edges.from_concept_id = hierarchy_cycle_edges.from_concept_id
-            and broader_edges.to_concept_id = hierarchy_cycle_edges.to_concept_id
-    where
-        builds_on_edges.relation = 'builds_on'
-        and builds_on_edges.builds_on_rule_failure is null
-        and broader_edges.relation = 'broader'
-        and hierarchy_cycle_edges.from_concept_id is null
-    group by builds_on_edges.from_concept_id, builds_on_edges.to_concept_id, builds_on_edges.relation_confidence
-)
-
--- one row per losing edge: a builds_on edge appears once in pair_contest, and a
--- broader edge loses once however many builds_on edges beat it
-, pair_exclusion as (
-    select
-        from_concept_id
-        , to_concept_id
-        , 'builds_on' as relation
-        , 'hierarchy_pair' as support_rule_failure
-    from pair_contest
-    where not is_builds_on_preferred
-    union all
-    select distinct
-        broader_edges.from_concept_id
-        , broader_edges.to_concept_id
-        , 'broader' as relation
-        , 'sequence_pair' as support_rule_failure
-    from pair_contest
-    inner join scored as broader_edges
-        on
-            least(pair_contest.from_concept_id, pair_contest.to_concept_id)
-            = least(broader_edges.from_concept_id, broader_edges.to_concept_id)
-            and greatest(pair_contest.from_concept_id, pair_contest.to_concept_id)
-            = greatest(broader_edges.from_concept_id, broader_edges.to_concept_id)
-    left join hierarchy_cycle_edges
-        on
-            broader_edges.from_concept_id = hierarchy_cycle_edges.from_concept_id
-            and broader_edges.to_concept_id = hierarchy_cycle_edges.to_concept_id
-    where
-        pair_contest.is_builds_on_preferred
-        and broader_edges.relation = 'broader'
-        and hierarchy_cycle_edges.from_concept_id is null
-)
-
-, publication as (
+, support_rules as (
     select
         scored.from_concept_id
         , scored.to_concept_id
@@ -445,7 +389,6 @@ with evidence as (
         , coalesce(
             scored.builds_on_rule_failure
             , case when hierarchy_cycle_edges.from_concept_id is not null then 'hierarchy_cycle' end
-            , pair_exclusion.support_rule_failure
         ) as support_rule_failure
     from scored
     left join hierarchy_cycle_edges
@@ -453,11 +396,6 @@ with evidence as (
             scored.relation = 'broader'
             and scored.from_concept_id = hierarchy_cycle_edges.from_concept_id
             and scored.to_concept_id = hierarchy_cycle_edges.to_concept_id
-    left join pair_exclusion
-        on
-            scored.from_concept_id = pair_exclusion.from_concept_id
-            and scored.to_concept_id = pair_exclusion.to_concept_id
-            and scored.relation = pair_exclusion.relation
 )
 
 select
@@ -487,7 +425,7 @@ select
     , scored.verdict_support
     , scored.contrary_verdict_support
     , scored.cross_signal_support
-    , scored.relation_confidence
+    , scored.support_score
     , scored.is_adjudicated
     , scored.has_sequence_evidence
     , scored.has_co_taught_evidence
@@ -495,15 +433,15 @@ select
     , scored.first_observed_at
     , scored.last_observed_at
     , 'proposed' as review_status
-    , publication.support_rule_failure is null as passes_support_rule
-    , publication.support_rule_failure
+    , support_rules.support_rule_failure is null as passes_support_rule
+    , support_rules.support_rule_failure
 from scored
 cross join unit_totals
-inner join publication
+inner join support_rules
     on
-        scored.from_concept_id = publication.from_concept_id
-        and scored.to_concept_id = publication.to_concept_id
-        and scored.relation = publication.relation
+        scored.from_concept_id = support_rules.from_concept_id
+        and scored.to_concept_id = support_rules.to_concept_id
+        and scored.relation = support_rules.relation
 left join edges as reverse_edges
     on
         scored.relation = 'builds_on'

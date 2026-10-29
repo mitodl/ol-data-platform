@@ -1,8 +1,8 @@
 """Topology of the concept graph: communities, sequencing, hierarchy and sparsity.
 
 Reads bridge_concept_relation (edges with their evidence) and dim_concept (active
-concepts), keeps the published edges that clear the support thresholds (dbt decides
-publication for builds_on and broader), and computes on three views of the graph with
+concepts), keeps the edges that pass dbt's support rules (for builds_on and broader)
+and clear the support thresholds here, and computes on three views of the graph with
 NetworKit:
 
 - association: undirected and weighted, every relation family. Leiden communities,
@@ -116,8 +116,8 @@ def select_edges(relations: pl.DataFrame) -> pl.DataFrame:
     :rtype: pl.DataFrame
     """
     support = pl.col("courserun_support")
-    # bridge_concept_relation owns the builds_on support and direction rule, the
-    # broader/builds_on exclusivity and broader acyclicity, through passes_support_rule
+    # bridge_concept_relation owns the builds_on support and direction rule and
+    # broader acyclicity, through passes_support_rule
     keep = pl.col("passes_support_rule") & (
         pl.when(pl.col("relation") == "practiced_with")
         .then(support >= MIN_COURSERUN_SUPPORT)
