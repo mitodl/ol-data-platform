@@ -17,11 +17,22 @@
     alone after this model, so it never copies projections this manifest did not
     read.
 
+    extraction_selection_checksum hashes the current extraction keys. A
+    courseware_claims_v2 key hashes the text stage's key (its exact text input) and
+    the context stage's input digest, so the checksum moves when either stage's
+    input changes, a header edit included.
+
     The concept ids come from the sense assignment snapshot of the same resolution
     run (int__courseware__concept_sense_assignments), so resolution_run_id pins it;
     sense_assignment_version is that run's sense_prompt_version, the version of the
     sense step that wrote it. A run written before sense assignment has none, and the
     release asset refuses it.
+
+    Deploy order: dim_concept and everything built from it, this model included,
+    fail until the courseware_resolution asset has run with sense assignment.
+    That run creates courseware_concept_alias and courseware_concept_sense_assignment
+    and adds split_from_concept_id to the registry and sense_prompt_version to
+    courseware_resolution_run, so this model reads sense_prompt_version directly.
 #}
 with registry as (
     select max(resolution_run_id) as resolution_run_id

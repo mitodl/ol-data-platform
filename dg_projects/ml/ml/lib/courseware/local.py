@@ -1,14 +1,17 @@
 """Run courseware claim extraction outside Dagster, from and to local parquet files.
 
 For proof-of-concept runs against the local DuckDB lake: export
-int__courseware__extraction_sources to parquet, run this, then expose the three
-output files to dbt as the courseware_intermediate sources. Re-running skips every
-scope whose extraction key is already in the output directory.
+int__courseware__extraction_sources to parquet, run this, then expose the output
+files (the extraction, claim, evidence and courseware_scope_input tables) to dbt as
+the courseware_intermediate sources. Re-running skips every scope whose extraction
+key is already in the output directory, and reuses a run's stored text readings
+(courseware_text_extraction).
 
     python -m ml.lib.courseware.local extract sources.parquet out/ --dry-run
 """
 
 import logging
+from collections.abc import Mapping
 from pathlib import Path
 
 import cyclopts
@@ -26,18 +29,27 @@ from ml.lib.courseware.extract import (
     BEDROCK_DEFAULT_MODEL,
     DEFAULT_EFFORT,
     Effort,
+    ReadingKey,
+    TextReading,
     extract_scopes,
-    extraction_key,
+    plan_scopes,
+    scope_inputs,
+    stored_readings,
 )
 from ml.lib.courseware.graph import compute_graph, previous_membership
-from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
+from ml.lib.courseware.prompts import (
+    CONTEXT_SYSTEM_PROMPT,
+    TEXT_SYSTEM_PROMPT,
+    context_message,
+    text_message,
+)
 from ml.lib.courseware.resolve import (
     BEDROCK_ADJUDICATION_MODEL,
     ResolutionState,
     label_embedder,
     resolve_concepts,
 )
-from ml.lib.courseware.scopes import CHARS_PER_TOKEN, build_scopes
+from ml.lib.courseware.scopes import CHARS_PER_TOKEN, Scope, build_scopes
 from ml.lib.courseware.tagging import ConceptDictionary, tag_sources, tagging_input_key
 from ml.resources.llm import LLMClientFactory
 
@@ -46,6 +58,7 @@ app.command(gold)
 # Answer checks are short and many; the small model is the default.
 BEDROCK_ANSWER_CHECK_MODEL = "us.anthropic.claude-haiku-5-5"
 EXTRACTION_TABLE = "courseware_claim_extraction"
+TEXT_EXTRACTION_TABLE = "courseware_text_extraction"
 
 
 def _existing(output_dir: Path, table: str) -> pl.DataFrame | None:
@@ -71,6 +84,73 @@ def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
         output_dir,
         table,
     )
+
+
+def _read_scopes(sources: Path, courserun: list[str] | None) -> list[Scope]:
+    rows = pl.read_parquet(sources)
+    if courserun:
+        rows = rows.filter(pl.col("courserun_readable_id").is_in(courserun))
+    return [
+        scope
+        for _, run_rows in rows.group_by("platform", "courserun_readable_id")
+        for scope in build_scopes(run_rows)
+    ]
+
+
+def _print_plan(
+    scopes: list[Scope],
+    model_id: str,
+    effort: Effort,
+    readings: Mapping[ReadingKey, TextReading],
+    existing_keys: set[str],
+) -> None:
+    """Print what extract would send for each scope part, and the input it would cost.
+
+    A part marked "stored" is skipped. One marked "context" has a stored text
+    reading, so only the context stage runs, at the size shown. An unmarked part
+    runs both stages; only its text stage's input is counted, since the context
+    stage's depends on the claims the text stage returns.
+    """
+    text_tokens = len(TEXT_SYSTEM_PROMPT) // CHARS_PER_TOKEN
+    context_tokens = len(CONTEXT_SYSTEM_PROMPT) // CHARS_PER_TOKEN
+    total = 0
+    for planned in plan_scopes(
+        scopes, model_id=model_id, effort=effort, readings=readings
+    ):
+        scope, reading = planned.scope, planned.reading
+        if planned.extraction_key in existing_keys:
+            marker, tokens = "stored", 0
+        elif reading is not None:
+            message = context_message(scope, reading.claims, reading.evidence)
+            marker, tokens = "context", context_tokens + len(message) // CHARS_PER_TOKEN
+        else:
+            marker = ""
+            tokens = text_tokens + len(text_message(scope)) // CHARS_PER_TOKEN
+        total += tokens
+        print(  # noqa: T201
+            f"{scope.course.courserun_readable_id} {scope.scope_key:<70.70} "
+            f"{len(scope.sources):>3} sources ~{tokens:>7,} tokens {marker}"
+        )
+    print(f"{len(scopes)} scopes, ~{total:,} input tokens to send")  # noqa: T201
+
+
+@app.command
+def observe(
+    sources: Path, output_dir: Path, *, courserun: list[str] | None = None
+) -> None:
+    """Record every scope part's current input without extracting anything.
+
+    extract records it too; this is for a directory whose extractions are all
+    stored.
+
+    :param sources: int__courseware__extraction_sources exported to parquet
+    :param output_dir: where courseware_scope_input is appended
+    :param courserun: limit to these courserun_readable_ids
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    observed = scope_inputs(_read_scopes(sources, courserun))
+    _append(output_dir, "courseware_scope_input", observed)
+    print(f"{observed.height} scope parts observed")  # noqa: T201
 
 
 @app.command
@@ -99,37 +179,24 @@ def extract(  # noqa: PLR0913
     :param dry_run: print the scopes and their estimated input size, call nothing
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
-    rows = pl.read_parquet(sources)
-    if courserun:
-        rows = rows.filter(pl.col("courserun_readable_id").is_in(courserun))
+    run_scopes = _read_scopes(sources, courserun)
     scopes = [
         scope
-        for _, run_rows in rows.group_by("platform", "courserun_readable_id")
-        for scope in build_scopes(run_rows)
+        for scope in run_scopes
         if not scope_title or scope.scope_title in scope_title
     ]
     output_dir.mkdir(parents=True, exist_ok=True)
     stored = _existing(output_dir, EXTRACTION_TABLE)
     existing_keys = set(stored["extraction_key"]) if stored is not None else set()
+    stored_text = _existing(output_dir, TEXT_EXTRACTION_TABLE)
+    readings = stored_readings(stored_text) if stored_text is not None else {}
 
     if dry_run:
-        system_tokens = len(SYSTEM_PROMPT) // CHARS_PER_TOKEN
-        total = 0
-        for scope in scopes:
-            tokens = system_tokens + len(scope_message(scope)) // CHARS_PER_TOKEN
-            stored_marker = (
-                "stored"
-                if extraction_key(scope, model_id, effort) in existing_keys
-                else ""
-            )
-            total += 0 if stored_marker else tokens
-            print(  # noqa: T201
-                f"{scope.course.courserun_readable_id} {scope.scope_key:<70.70} "
-                f"{len(scope.sources):>3} sources ~{tokens:>7,} tokens {stored_marker}"
-            )
-        print(f"{len(scopes)} scopes, ~{total:,} input tokens to send")  # noqa: T201
+        _print_plan(scopes, model_id, effort, readings, existing_keys)
         return
 
+    # every scope of the runs read, not only the scope_title selection
+    _append(output_dir, "courseware_scope_input", scope_inputs(run_scopes))
     client = LLMClientFactory(
         client_class="bedrock", aws_region=aws_region
     ).get_client()
@@ -142,8 +209,12 @@ def extract(  # noqa: PLR0913
         model_id=model_id,
         effort=effort,
         existing_keys=existing_keys,
+        readings=readings,
         max_workers=max_workers,
     )
+    # Text readings first: a stored one is reused, so a run cut off later pays only
+    # for the context stage again.
+    _append(output_dir, TEXT_EXTRACTION_TABLE, tables.text_extractions)
     # A stored extraction key is what makes a re-run skip a scope, so the extraction
     # table is written last. A run cut off before it leaves claim and evidence rows
     # with no extraction, which are dropped here and written again.
@@ -161,10 +232,13 @@ def extract(  # noqa: PLR0913
             table,
         )
     print(  # noqa: T201
+        f"{tables.text_extractions.height} text readings, "
         f"{tables.extractions.height} extractions, {tables.claims.height} claims, "
         f"{tables.evidence.height} evidence rows; "
+        f"{tables.text_extractions['input_tokens'].sum():,} + "
         f"{tables.extractions['input_tokens'].sum():,} in / "
-        f"{tables.extractions['output_tokens'].sum():,} out tokens"
+        f"{tables.text_extractions['output_tokens'].sum():,} + "
+        f"{tables.extractions['output_tokens'].sum():,} out tokens (text + context)"
     )
 
 

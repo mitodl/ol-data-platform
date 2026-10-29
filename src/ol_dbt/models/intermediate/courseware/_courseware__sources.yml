@@ -6,8 +6,10 @@ sources:
 # the intermediate schema through the Iceberg IO manager, the same way the feedback
 # assets write theirs; database/schema resolve to what ml.lib.courseware.warehouse
 # writes. dev_local reads them as the glue__ views `ol-dbt local register` creates.
-# Rows are never updated: a new prompt, schema, model or input text adds rows under
-# a new extraction_key.
+# Rows are never updated: a new prompt, schema, model, input text or course header
+# adds rows under a new extraction_key. ml.lib.courseware.extract also writes
+# courseware_text_extraction (the context-free text stage's readings, which the
+# extractor reuses), which no model reads.
 - name: courseware_intermediate
   loader: dagster
   database: '{{ target.database | default(none) }}'
@@ -18,21 +20,27 @@ sources:
       meta:
         dagster:
           asset_key: [intermediate, courseware_claim_extraction]
-    description: One row per model call, i.e. one scope part of a course run read
-      by one extractor version and model.
+    description: One row per scope part of a course run read by one extractor version
+      and model under one course header. Extractions of courseware_claims_v2 come
+      from two stages, a text stage that reads only the scope part's sources and a
+      context stage that places its claims in the course; v1 extractions are one call
+      over both.
     columns:
     - name: extraction_key
-      description: str, sha256 of everything the call depended on (extractor, prompt
-        and schema versions, model, effort, run, scope and the full message text)
+      description: str, sha256 of what the extraction read. v2, the extractor version
+        (extractor, both stages' prompt and schema versions, model, effort), the run,
+        scope and part, text_extraction_key and context_input_digest; v1, the version,
+        run, scope and a hash of the whole message
       tests:
       - unique
       - not_null
     - name: extractor_id
       description: str, the extractor, e.g. courseware_claims_v1
     - name: prompt_version
-      description: str, hash of the system prompt
+      description: str, hash of the system prompt (v2, of both stages' prompt versions)
     - name: schema_version
-      description: str, hash of the output JSON schema
+      description: str, hash of the output JSON schema (v2, of both stages' schema
+        versions)
     - name: model_id
       description: str, the model id as sent to the provider
     - name: effort
@@ -59,6 +67,20 @@ sources:
     - name: scope_part_checksums
       description: str, every part's input_text_checksum, in order and comma-separated,
         as the run that made this call split the scope
+    - name: header_version
+      description: str, hash of the course header the extraction read (title, outline,
+        description); null for extractions recorded before it was
+    - name: text_extraction_key
+      description: str, the text-stage reading the claims came from (v2; null for
+        v1), a hash of the extractor version and text_input_digest
+    - name: text_input_digest
+      description: str, sha256 of the text stage's exact message (the scope part's
+        kind and sources, nothing of the course). Extractions with one digest read
+        the same text, so their claims share one source and are not independent corroboration
+        of each other; null for v1
+    - name: context_input_digest
+      description: str, sha256 of the context stage's exact message (course header,
+        scope title and the text stage's claims); null for v1
     - name: source_count
       description: int, number of sources the call read
     - name: truncated_source_count
@@ -70,17 +92,62 @@ sources:
     - name: notes_json
       description: str, JSON list of the model's notes plus truncation notes
     - name: stop_reason
-      description: str, the response's stop_reason
+      description: str, the response's stop_reason; no_claims for a v2 extraction
+        whose text reading had no claims, so no context call was made
     - name: input_tokens
-      description: int, uncached input tokens billed
+      description: int, uncached input tokens; a per-call diagnostic for one stage
+        only (v2, the context stage's call, 0 when no call was made; the text stage's
+        are on courseware_text_extraction). Cost is tracked in Opik, project dagster-ml,
+        tags courseware:text and courseware:context, not summed here
     - name: output_tokens
-      description: int, output tokens billed, thinking included
+      description: int, output tokens, thinking included; a per-call diagnostic for
+        one stage only (v2, the context stage's call, 0 when no call was made; the
+        text stage's are on courseware_text_extraction). Cost is tracked in Opik,
+        project dagster-ml, tags courseware:text and courseware:context, not summed
+        here
     - name: cache_read_input_tokens
-      description: int, input tokens read from the prompt cache
+      description: int, input tokens read from the prompt cache; a per-call diagnostic
+        for one stage only (v2, the context stage's call, 0 when no call was made;
+        the text stage's are on courseware_text_extraction). Cost is tracked in Opik,
+        project dagster-ml, tags courseware:text and courseware:context, not summed
+        here
     - name: cache_creation_input_tokens
-      description: int, input tokens written to the prompt cache
+      description: int, input tokens written to the prompt cache; a per-call diagnostic
+        for one stage only (v2, the context stage's call, 0 when no call was made;
+        the text stage's are on courseware_text_extraction). Cost is tracked in Opik,
+        project dagster-ml, tags courseware:text and courseware:context, not summed
+        here
     - name: extracted_at
       description: timestamp, when the call returned
+  - name: courseware_scope_input
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_scope_input]
+    description: One row per scope part each time the extractor reads a course run,
+      extracted or skipped, with the input it computed. int__courseware__extractions
+      matches a scope's readings to the run's latest read to pick the current one.
+      The extraction asset creates it on its first v2 write, so it has no source test
+      (dbt would query a table that may not exist); int__courseware__latest_scope_inputs,
+      which is empty while it is missing, tests the latest read's parts are unique.
+    columns:
+    - name: platform
+      description: str, mitxonline, mitxpro or residential
+    - name: courserun_readable_id
+      description: str, the run
+    - name: scope_id
+      description: str, the sequential block id, or 'context' or 'materials'
+    - name: scope_part
+      description: int, which part of the scope, from 1
+    - name: scope_part_count
+      description: int, how many parts the scope was split into
+    - name: input_text_checksum
+      description: str, sha256 of the source text the part's call would read
+    - name: header_version
+      description: str, hash of the course header at the read; null for reads recorded
+        before it was
+    - name: observed_at
+      description: timestamp, when the extractor read the run; one value per read
   - name: courseware_claim
     config:
       meta:
@@ -109,7 +176,14 @@ sources:
     - name: concept_kind
       description: str, concept, method, tool, dataset or application (concepts only)
     - name: teaching_status
-      description: str, taught, reviewed, used or mentioned (concepts and skills)
+      description: str, taught, reviewed, used or mentioned (concepts and skills);
+        for v2, after the context stage's revision
+    - name: text_teaching_status
+      description: str, the status the v2 text stage read from the text alone, before
+        the course context; null for v1
+    - name: sense_hint
+      description: str, the field or sense the course means when the label is ambiguous
+        across fields, from the v2 context stage; null when unambiguous and for v1
     - name: how_used
       description: str, where the material relies on assumed knowledge
     - name: flagged_as_prior

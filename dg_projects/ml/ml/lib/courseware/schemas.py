@@ -174,3 +174,28 @@ class ScopeExtraction(Strict):
     notes: list[str] = Field(
         description="Material you could not use, gaps, and ambiguities"
     )
+
+
+class ClaimRevision(Strict):
+    claim_id: str = Field(description="The claim's id exactly as listed, e.g. C03")
+    teaching_status: TeachingStatus | None = Field(
+        description=(
+            "The status in this course when the course context changes it; null "
+            "keeps the status read from the text. Only for concept and skill claims."
+        )
+    )
+    sense_hint: str | None = Field(
+        description=(
+            "The field or sense this course means when the label names different "
+            "things in different fields, e.g. 'statistics'; else null"
+        )
+    )
+
+
+class ContextJudgment(Strict):
+    revisions: list[ClaimRevision] = Field(
+        description="Only the claims the course context changes; leave out the rest"
+    )
+    notes: list[str] = Field(
+        description="Context you could not use, and claims the course leaves unclear"
+    )

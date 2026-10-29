@@ -1,4 +1,8 @@
+import hashlib
+import json
+from contextlib import nullcontext
 from types import SimpleNamespace
+from typing import Any
 
 import httpx2
 import polars as pl
@@ -9,14 +13,26 @@ from ml.lib.courseware.extract import (
     CLAIM_SCHEMA,
     EVIDENCE_SCHEMA,
     EXTRACTION_SCHEMA,
+    NO_CLAIMS_STOP_REASON,
+    TEXT_EXTRACTION_SCHEMA,
     ExtractionTables,
+    TextReading,
     _claim_row,
     _ModelResult,
+    check_revisions,
+    extract_scopes,
     extraction_key,
+    header_version,
+    scope_inputs,
+    stored_readings,
+    text_extraction_key,
 )
+from ml.lib.courseware.prompts import context_message, text_message
 from ml.lib.courseware.schemas import (
     AudienceClaim,
+    ClaimRevision,
     ConceptClaim,
+    ContextJudgment,
     Evidence,
     ScopeExtraction,
 )
@@ -153,29 +169,344 @@ def test_course_description_from_about_page_or_ocw_description():
     assert scopes.build_scopes(ocw)[0].course.description == "An OCW course."
 
 
-def test_extraction_key_changes_with_input_text():
-    first = scopes.build_scopes(_rows(["some text"]))[0]
-    second = scopes.build_scopes(_rows(["other text"]))[0]
-    assert extraction_key(first, "model", "medium") == extraction_key(
-        first, "model", "medium"
+def _course_rows(description: str, second_title: str, text: str) -> pl.DataFrame:
+    units = pl.concat(
+        [
+            _rows([text]),
+            _rows(["second lecture"]).with_columns(
+                scope_id=pl.lit("seq-2"),
+                scope_title=pl.lit(second_title),
+                scope_position=pl.lit(2),
+            ),
+        ]
     )
-    assert extraction_key(first, "model", "medium") != extraction_key(
-        second, "model", "medium"
+    context = _rows([description], scope_kind="context").with_columns(
+        scope_id=pl.lit("context"),
+        scope_title=pl.lit("Course context"),
+        scope_position=pl.lit(0),
+        source_ref=pl.lit("about/overview.html"),
     )
-    assert extraction_key(first, "model", "medium") != extraction_key(
-        first, "model", "high"
+    return pl.concat([context, units])
+
+
+def _lecture_one(rows: pl.DataFrame) -> scopes.Scope:
+    return next(
+        scope for scope in scopes.build_scopes(rows) if scope.scope_id == "seq-1"
     )
+
+
+class FakeModel:
+    """A client whose messages.stream answers each extraction stage's tool.
+
+    The text stage records one taught concept quoting source S01 (none with
+    concepts=False); the context stage answers from the queue it was given, then
+    with no revisions.
+    """
+
+    def __init__(
+        self, *, context: list[dict[str, Any]] | None = None, concepts: bool = True
+    ) -> None:
+        self.calls: list[str] = []
+        self.context = list(context or [])
+        self.concepts = concepts
+        self.messages = self
+
+    def _extraction(self, message: str) -> dict[str, Any]:
+        text = message.split("=== SOURCE S01", 1)[1].split("===\n", 1)[1]
+        passage = text.split("\n=== END", 1)[0]
+        concept = {
+            "label": "k-means clustering",
+            "description": "Partitions points.",
+            "concept_kind": "method",
+            "teaching_status": "taught",
+            "evidence": [{"source_id": "S01", "passage": passage}],
+        }
+        return {
+            "summary": "s",
+            "concepts": [concept] if self.concepts else [],
+            "skills": [],
+            "assumed_knowledge": [],
+            "assessment_expectations": [],
+            "learning_outcomes": [],
+            "declared_prerequisites": [],
+            "audience": [],
+            "notes": [],
+        }
+
+    def stream(self, **request: Any) -> Any:
+        tool = request["tools"][0]["name"]
+        self.calls.append(tool)
+        if tool == "record_extraction":
+            tool_input = self._extraction(request["messages"][0]["content"])
+        else:
+            tool_input = (
+                self.context.pop(0) if self.context else {"revisions": [], "notes": []}
+            )
+        response = SimpleNamespace(
+            stop_reason="tool_use",
+            stop_details=None,
+            content=[SimpleNamespace(type="tool_use", name=tool, input=tool_input)],
+            usage=SimpleNamespace(
+                input_tokens=10,
+                output_tokens=5,
+                cache_read_input_tokens=0,
+                cache_creation_input_tokens=0,
+            ),
+        )
+        return nullcontext(SimpleNamespace(get_final_message=lambda: response))
+
+
+def _use_model(monkeypatch: pytest.MonkeyPatch, model: FakeModel) -> None:
+    monkeypatch.setattr(local, "AnthropicBedrock", FakeModel)
+    monkeypatch.setattr(
+        local,
+        "LLMClientFactory",
+        lambda **_: SimpleNamespace(get_client=lambda: model),
+    )
+
+
+def _reading() -> TextReading:
+    evidence = [Evidence(source_id="S01", passage="some text")]
+    return TextReading(
+        text_extraction_key="t",
+        text_input_digest="d",
+        summary="s",
+        notes=[],
+        claims=[
+            _claim_row(
+                1,
+                "concept",
+                ConceptClaim(
+                    label="regression",
+                    description="Fits a line.",
+                    concept_kind="method",
+                    teaching_status="taught",
+                    evidence=evidence,
+                ),
+            ),
+            _claim_row(
+                2, "audience", AudienceClaim(statement="Beginners", evidence=evidence)
+            ),
+        ],
+        evidence=[],
+    )
+
+
+def test_text_key_leaves_out_the_course_header_and_extraction_key_does_not():
+    base = _lecture_one(_course_rows("About it.", "Lecture 2", "some text"))
+    new_description = _lecture_one(_course_rows("Edited.", "Lecture 2", "some text"))
+    renamed_other = _lecture_one(_course_rows("About it.", "Renamed", "some text"))
+    edited_text = _lecture_one(_course_rows("About it.", "Lecture 2", "new text"))
+    # the text stage reads nothing of the course, its own title included
+    assert "Lecture 1" not in text_message(base)
+    key = text_extraction_key(base, "model", "medium")
+    assert text_extraction_key(new_description, "model", "medium") == key
+    assert text_extraction_key(renamed_other, "model", "medium") == key
+    assert text_extraction_key(edited_text, "model", "medium") != key
+    assert text_extraction_key(base, "model", "high") != key
+    # the context stage reads the header, so its key covers it
+    reading = _reading()
+    extraction = extraction_key(base, "model", "medium", reading)
+    assert extraction_key(new_description, "model", "medium", reading) != extraction
+    assert extraction_key(renamed_other, "model", "medium", reading) != extraction
+    assert header_version(new_description.course) != header_version(base.course)
+
+
+def test_header_edit_reruns_only_the_context_stage(tmp_path, monkeypatch, capsys):
+    model = FakeModel()
+    _use_model(monkeypatch, model)
+    sources = tmp_path / "sources.parquet"
+    output_dir = tmp_path / "out"
+
+    def run(description: str, second_title: str) -> list[str]:
+        model.calls.clear()
+        _course_rows(description, second_title, "some text").write_parquet(sources)
+        local.extract(sources, output_dir)
+        return sorted(model.calls)
+
+    # three scopes: the course context, seq-1 and seq-2
+    assert (
+        run("About it.", "Lecture 2")
+        == ["record_context"] * 3 + ["record_extraction"] * 3
+    )
+    assert run("About it.", "Lecture 2") == []
+    # a renamed unit changes every scope's outline, and no scope's text
+    assert run("About it.", "Renamed") == ["record_context"] * 3
+    # the description is the context scope's own text, so only it is read again
+    assert run("Edited.", "Renamed") == ["record_context"] * 3 + ["record_extraction"]
+    extractions = pl.read_parquet(output_dir / "courseware_claim_extraction.parquet")
+    assert extractions.height == 9
+    assert extractions["header_version"].n_unique() == 3
+    lecture = extractions.filter(pl.col("scope_id") == "seq-1")
+    assert lecture["text_extraction_key"].n_unique() == 1
+    assert lecture["context_input_digest"].n_unique() == 3
+    text = pl.read_parquet(output_dir / "courseware_text_extraction.parquet")
+    assert text.height == 4
+    capsys.readouterr()
+
+
+def test_context_stage_revises_status_and_sense_but_keeps_the_text_evidence():
+    scope = _lecture_one(_course_rows("About it.", "Lecture 2", "some text"))
+    revision = {"claim_id": "C01", "teaching_status": "reviewed", "sense_hint": "ml"}
+    model = FakeModel(context=[{"revisions": [revision], "notes": ["placed"]}])
+
+    tables = extract_scopes([scope], model, model_id="model")
+
+    claim = tables.claims.row(0, named=True)
+    assert (
+        claim["teaching_status"],
+        claim["text_teaching_status"],
+        claim["sense_hint"],
+    ) == ("reviewed", "taught", "ml")
+    assert tables.evidence.select("source_ref", "verification_status").rows() == [
+        ("block-0", "exact")
+    ]
+    extraction = tables.extractions.row(0, named=True)
+    text = tables.text_extractions.row(0, named=True)
+    assert extraction["text_extraction_key"] == text["text_extraction_key"]
+    assert extraction["text_input_digest"] == text["text_input_digest"]
+    assert (
+        extraction["text_input_digest"]
+        == hashlib.sha256(text_message(scope).encode()).hexdigest()
+    )
+    (reading,) = stored_readings(tables.text_extractions).values()
+    assert (
+        extraction["context_input_digest"]
+        == hashlib.sha256(
+            context_message(scope, reading.claims, reading.evidence).encode()
+        ).hexdigest()
+    )
+    assert json.loads(extraction["notes_json"]) == ["placed"]
+
+
+def test_context_stage_retries_a_revision_of_a_claim_it_was_not_given():
+    scope = _lecture_one(_course_rows("About it.", "Lecture 2", "some text"))
+    unknown = {"claim_id": "C09", "teaching_status": None, "sense_hint": "x"}
+    model = FakeModel(context=[{"revisions": [unknown], "notes": []}])
+
+    tables = extract_scopes([scope], model, model_id="model")
+
+    assert model.calls == ["record_extraction", "record_context", "record_context"]
+    assert tables.extractions.height == 1
+    assert tables.claims["sense_hint"].to_list() == [None]
+
+
+@pytest.mark.parametrize(
+    "revisions",
+    [
+        [ClaimRevision(claim_id="C03", teaching_status=None, sense_hint="x")],
+        [
+            ClaimRevision(claim_id="C01", teaching_status=None, sense_hint="x"),
+            ClaimRevision(claim_id="C01", teaching_status=None, sense_hint="y"),
+        ],
+        # an audience claim has no teaching status to revise
+        [ClaimRevision(claim_id="C02", teaching_status="taught", sense_hint=None)],
+    ],
+)
+def test_check_revisions_refuses_what_the_text_stage_did_not_record(revisions):
+    with pytest.raises(ValueError, match="C0"):
+        check_revisions(_reading(), ContextJudgment(revisions=revisions, notes=[]))
+
+
+def test_a_reading_without_claims_needs_no_context_call():
+    scope = _lecture_one(_course_rows("About it.", "Lecture 2", "some text"))
+    model = FakeModel(concepts=False)
+
+    tables = extract_scopes([scope], model, model_id="model")
+
+    assert model.calls == ["record_extraction"]
+    assert tables.extractions["stop_reason"].to_list() == [NO_CLAIMS_STOP_REASON]
+    assert tables.extractions["input_tokens"].to_list() == [0]
+
+
+def test_text_stage_reads_each_distinct_text_once_per_run():
+    # two scopes with identical sources in one run, and a copy of the run
+    run = pl.concat(
+        [
+            _rows(["shared text"]),
+            _rows(["shared text"]).with_columns(scope_id=pl.lit("b")),
+        ]
+    ).with_columns(source_title=pl.lit("Intro"), source_ref=pl.lit("block"))
+    copy = run.with_columns(courserun_readable_id=pl.lit("course-v1:X+Y+COPY"))
+    built = [
+        *scopes.build_scopes(run),
+        *scopes.build_scopes(copy),
+    ]
+    model = FakeModel()
+
+    tables = extract_scopes(built, model, model_id="model", max_workers=1)
+
+    # a reading is reused within its run only, until cross-run reuse is evaluated
+    assert model.calls.count("record_extraction") == 2
+    assert model.calls.count("record_context") == 4
+    assert tables.text_extractions.height == 2
+    # every extraction of the text groups under one digest, so its claims are not
+    # counted as independent corroboration
+    assert tables.extractions["text_input_digest"].n_unique() == 1
+
+
+def test_stored_readings_give_the_same_keys_without_a_text_call():
+    scope = _lecture_one(_course_rows("About it.", "Lecture 2", "some text"))
+    first = extract_scopes([scope], FakeModel(), model_id="model")
+    readings = stored_readings(first.text_extractions)
+    stored_keys = set(first.extractions["extraction_key"])
+    model = FakeModel()
+
+    assert (
+        extract_scopes(
+            [scope],
+            model,
+            model_id="model",
+            readings=readings,
+            existing_keys=stored_keys,
+        ).extractions.height
+        == 0
+    )
+    assert model.calls == []
+    # with the extraction lost but its reading stored, only the context stage runs,
+    # and the same inputs give the same key
+    again = extract_scopes([scope], model, model_id="model", readings=readings)
+    assert model.calls == ["record_context"]
+    assert set(again.extractions["extraction_key"]) == stored_keys
+
+
+def test_scope_inputs_match_what_an_extraction_of_the_part_stores(tmp_path, capsys):
+    rows = _course_rows("About it.", "Lecture 2", "some text")
+    built = scopes.build_scopes(rows)
+    scope = _lecture_one(rows)
+    extraction = extract_scopes([scope], FakeModel(), model_id="model").extractions
+    observed = (
+        scope_inputs(built).filter(pl.col("scope_id") == "seq-1").row(0, named=True)
+    )
+    columns = (
+        "scope_part",
+        "scope_part_count",
+        "input_text_checksum",
+        "header_version",
+    )
+    assert {c: observed[c] for c in columns} == {
+        c: extraction.row(0, named=True)[c] for c in columns
+    }
+    assert scope_inputs(built)["observed_at"].n_unique() == 1
+    # observe records every scope of the run, and a dry run records nothing
+    sources = tmp_path / "sources.parquet"
+    rows.write_parquet(sources)
+    local.extract(sources, tmp_path / "dry", dry_run=True)
+    assert not (tmp_path / "dry" / "courseware_scope_input.parquet").exists()
+    local.observe(sources, tmp_path / "out")
+    stored = pl.read_parquet(tmp_path / "out" / "courseware_scope_input.parquet")
+    assert sorted(stored["scope_id"]) == ["context", "seq-1", "seq-2"]
+    capsys.readouterr()
 
 
 def test_claim_rows_use_statement_as_label():
     evidence = [Evidence(source_id="S01", passage="for people new to Python")]
     audience = _claim_row(
-        "key", 1, "audience", AudienceClaim(statement="Beginners", evidence=evidence)
+        1, "audience", AudienceClaim(statement="Beginners", evidence=evidence)
     )
     assert audience["label"] == "Beginners"
     assert audience["description"] is None
     concept = _claim_row(
-        "key",
         2,
         "concept",
         ConceptClaim(
@@ -262,6 +593,7 @@ def test_local_extract_replaces_claims_a_cut_off_run_left_behind(tmp_path, monke
     )
     orphan.write_parquet(output_dir / "courseware_claim.parquet")
     tables = ExtractionTables(
+        text_extractions=pl.DataFrame(schema=TEXT_EXTRACTION_SCHEMA),
         extractions=pl.DataFrame([{"extraction_key": "k1"}], schema=EXTRACTION_SCHEMA),
         claims=pl.DataFrame(
             [{"extraction_key": "k1", "label": "new"}], schema=CLAIM_SCHEMA

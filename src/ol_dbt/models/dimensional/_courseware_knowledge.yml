@@ -57,6 +57,17 @@ models:
     description: str, the effort setting for the call
   - name: input_text_checksum
     description: str, sha256 of the source text the call read
+  - name: header_version
+    description: str, hash of the course header the call read; null for extractions
+      recorded before it was
+  - name: text_extraction_key
+    description: str, the text-stage reading the claims came from (v2); null for v1
+  - name: text_input_digest
+    description: str, sha256 of the text stage's exact input (v2). Extractions sharing
+      it read identical text, so their claims are one source's, not independent corroboration
+  - name: context_input_digest
+    description: str, sha256 of the context stage's exact input, the course header
+      and the text claims (v2)
   - name: source_count
     description: int, sources the call read
   - name: truncated_source_count
@@ -68,15 +79,30 @@ models:
   - name: stop_reason
     description: str, the response's stop_reason
   - name: input_tokens
-    description: int, uncached input tokens billed
+    description: int, uncached input tokens; a per-call diagnostic for one stage only
+      (v2, the context stage's call, 0 when no call was made; the text stage's are
+      on courseware_text_extraction). Cost is tracked in Opik, project dagster-ml,
+      tags courseware:text and courseware:context, not summed here
   - name: output_tokens
-    description: int, output tokens billed, thinking included
+    description: int, output tokens, thinking included; a per-call diagnostic for
+      one stage only (v2, the context stage's call, 0 when no call was made; the text
+      stage's are on courseware_text_extraction). Cost is tracked in Opik, project
+      dagster-ml, tags courseware:text and courseware:context, not summed here
   - name: cache_read_input_tokens
-    description: int, input tokens read from the prompt cache
+    description: int, input tokens read from the prompt cache; a per-call diagnostic
+      for one stage only (v2, the context stage's call, 0 when no call was made; the
+      text stage's are on courseware_text_extraction). Cost is tracked in Opik, project
+      dagster-ml, tags courseware:text and courseware:context, not summed here
   - name: cache_creation_input_tokens
-    description: int, input tokens written to the prompt cache
+    description: int, input tokens written to the prompt cache; a per-call diagnostic
+      for one stage only (v2, the context stage's call, 0 when no call was made; the
+      text stage's are on courseware_text_extraction). Cost is tracked in Opik, project
+      dagster-ml, tags courseware:text and courseware:context, not summed here
   - name: extracted_at
     description: timestamp, when the call returned
+  - name: is_approved_version
+    description: boolean, whether the call ran the extractor version int__courseware__extraction_allowlist
+      approves for the run; null when the allowlist does not cover the run
   - name: is_current
     description: boolean, whether this is the extraction its scope part is read from
       now (int__courseware__extractions)
@@ -217,6 +243,9 @@ models:
 - name: dim_concept
   description: Every concept id the resolver has minted, active or retired, with its
     display label, descriptions and lifecycle. review_status is 'proposed' until reviewed.
+    It and every model built from it fail until the courseware_resolution asset has
+    run with sense assignment, which creates courseware_concept_alias and courseware_concept_sense_assignment
+    and adds the registry's split_from_concept_id.
   config:
     meta:
       # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.

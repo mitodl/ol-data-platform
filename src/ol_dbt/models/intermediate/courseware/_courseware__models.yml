@@ -190,22 +190,24 @@ models:
 
 - name: int__courseware__extractions
   description: Every claim extraction, and whether it is current, the one its scope
-    part is read from now. A scope's newest complete reading is current, so a run
-    that extracts only some parts of a new reading changes nothing until the rest
-    succeed. A scope the run's extraction sources no longer have has no current extraction.
+    part is read from now. A scope's current reading is its first complete one by
+    the run's allowlist-approved extractor version, then matching the extractor's
+    latest read of the run (its text, then for v2 its course header), then newest,
+    so a run that extracts only some parts of a new reading changes nothing until
+    the rest succeed. A scope the run's extraction sources no longer have has no current
+    extraction.
   config:
     meta:
       # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
       qa_buildable: false
   columns:
   - name: extraction_key
-    description: str, sha256 of everything the call depended on (extractor, prompt
-      and schema versions, model, effort, run, scope and the full message text)
+    description: str, sha256 of what the extraction read (see the source's description)
     tests:
     - not_null
     - unique
   - name: extractor_id
-    description: str, the extractor, e.g. courseware_claims_v1
+    description: str, the extractor, e.g. courseware_claims_v2
   - name: prompt_version
     description: str, hash of the system prompt
   - name: schema_version
@@ -225,7 +227,8 @@ models:
   - name: scope_title
     description: str, the sequential title or the scope name
   - name: scope_position
-    description: int, the scope's order in the course; 0 for context, 9999 for materials
+    description: int, the scope's order in the course as it is now (as extracted for
+      a scope the sources do not list); 0 for context, 9999 for materials
   - name: scope_part
     description: int, which part of a scope split to fit the input budget, from 1
   - name: scope_part_count
@@ -235,6 +238,16 @@ models:
   - name: scope_part_checksums
     description: str, every part's input_text_checksum, in order and comma-separated,
       as the run that made this call split the scope
+  - name: header_version
+    description: str, hash of the course header the call read; null for extractions
+      recorded before it was
+  - name: text_extraction_key
+    description: str, the text-stage reading the claims came from; null for v1
+  - name: text_input_digest
+    description: str, sha256 of the text stage's exact input; extractions sharing
+      it read identical text, so their claims are one source's; null for v1
+  - name: context_input_digest
+    description: str, sha256 of the context stage's exact input; null for v1
   - name: source_count
     description: int, number of sources the call read
   - name: truncated_source_count
@@ -248,20 +261,108 @@ models:
   - name: stop_reason
     description: str, the response's stop_reason
   - name: input_tokens
-    description: int, uncached input tokens billed
+    description: int, uncached input tokens; a per-call diagnostic for one stage only
+      (v2, the context stage's call, 0 when no call was made; the text stage's are
+      on courseware_text_extraction). Cost is tracked in Opik, project dagster-ml,
+      tags courseware:text and courseware:context, not summed here
   - name: output_tokens
-    description: int, output tokens billed, thinking included
+    description: int, output tokens, thinking included; a per-call diagnostic for
+      one stage only (v2, the context stage's call, 0 when no call was made; the text
+      stage's are on courseware_text_extraction). Cost is tracked in Opik, project
+      dagster-ml, tags courseware:text and courseware:context, not summed here
   - name: cache_read_input_tokens
-    description: int, input tokens read from the prompt cache
+    description: int, input tokens read from the prompt cache; a per-call diagnostic
+      for one stage only (v2, the context stage's call, 0 when no call was made; the
+      text stage's are on courseware_text_extraction). Cost is tracked in Opik, project
+      dagster-ml, tags courseware:text and courseware:context, not summed here
   - name: cache_creation_input_tokens
-    description: int, input tokens written to the prompt cache
+    description: int, input tokens written to the prompt cache; a per-call diagnostic
+      for one stage only (v2, the context stage's call, 0 when no call was made; the
+      text stage's are on courseware_text_extraction). Cost is tracked in Opik, project
+      dagster-ml, tags courseware:text and courseware:context, not summed here
   - name: extracted_at
     description: timestamp, when the call returned
+  - name: is_approved_version
+    description: boolean, whether the call ran the extractor version (extractor, prompt
+      and schema) int__courseware__extraction_allowlist approves for the run; null
+      when the allowlist does not cover the run
+  - name: matches_current_input
+    description: boolean, whether the part's split and input text, and for v2 the
+      course header, are the ones the extractor's latest read of the run computed
+    tests:
+    - not_null
   - name: is_current
     description: boolean, whether this is the extraction its scope part is read from
       now
     tests:
     - not_null
+
+- name: int__courseware__scope_part_coverage
+  description: One row per scope part the extractor's latest read of a run expects,
+    with whether an extraction covers it. A part with no extraction has no row in
+    int__courseware__extractions, so a scope that grew to two parts whose part 2 failed
+    shows up only here.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the sequential block id, or 'context' or 'materials'
+  - name: scope_part
+    description: int, which part of the scope, from 1
+  - name: scope_part_count
+    description: int, how many parts the latest read split the scope into
+  - name: observed_at
+    description: timestamp, when the extractor read the run
+  - name: extraction_count
+    description: int, extractions of this scope part under any version or input
+  - name: has_approved_extraction
+    description: boolean, whether an extraction of the run's allowlist-approved version
+      covers the part (under any version when the allowlist does not cover the run)
+  - name: has_current_input_extraction
+    description: boolean, whether one of those has the part's current split and input
+      text (for v2, also the current course header); false for a part whose new text
+      or header failed to extract, whose older extraction may still be current
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [platform, courserun_readable_id, scope_id, scope_part]
+
+- name: int__courseware__latest_scope_inputs
+  description: Each course run's latest read by the courseware extractor, one row
+    per scope part it read (extracted or skipped), with the split and input text checksum
+    it computed.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the sequential block id, or 'context' or 'materials'
+  - name: scope_part
+    description: int, which part of the scope, from 1
+  - name: scope_part_count
+    description: int, how many parts the latest read split the scope into
+  - name: input_text_checksum
+    description: str, sha256 of the source text the part's call would read
+  - name: header_version
+    description: str, hash of the course header at the read; null for reads recorded
+      before it was
+  - name: observed_at
+    description: timestamp, when the extractor read the run
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [platform, courserun_readable_id, scope_id, scope_part]
 
 - name: int__courseware__answer_document_review
   description: The course documents to review for answer keys, one row per document
@@ -349,6 +450,9 @@ models:
     description: str, the model that made the claim
   - name: extracted_at
     description: timestamp, when the extraction returned
+  - name: text_input_digest
+    description: str, sha256 of the text the claim was read from; claims sharing it
+      are one source's and not independent corroboration; null for v1
   - name: is_current
     description: boolean, whether the claim's extraction is the one its scope part
       is read from now (int__courseware__extractions)
@@ -363,7 +467,14 @@ models:
   - name: concept_kind
     description: str, concept, method, tool, dataset or application (concepts only)
   - name: teaching_status
-    description: str, taught, reviewed, used or mentioned (concepts and skills)
+    description: str, taught, reviewed, used or mentioned (concepts and skills), in
+      the course's context
+  - name: text_teaching_status
+    description: str, the status read from the text alone, before the course context
+      (v2); null for v1
+  - name: sense_hint
+    description: str, the field or sense the course means when the label is ambiguous
+      across fields (v2); null otherwise
   - name: how_used
     description: str, where the material relies on assumed knowledge
   - name: flagged_as_prior
@@ -1316,7 +1427,8 @@ models:
     description: str, the dbt_invocation_id of int__courseware__release_resource_concepts
       when this was built; null when it was empty
   - name: extraction_selection_checksum
-    description: str, md5 of the current extraction keys of source-eligible runs
+    description: str, md5 of the current extraction keys of source-eligible runs;
+      a courseware_claims_v2 key covers both stages' exact inputs
   - name: extraction_count
     description: int, how many such extractions
   - name: source_policy_version

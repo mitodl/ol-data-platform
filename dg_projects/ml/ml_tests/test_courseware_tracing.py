@@ -12,14 +12,18 @@ from typing import Any
 import polars as pl
 import pytest
 from anthropic import Anthropic, AnthropicBedrock
-from ml.lib.courseware import scopes
+from ml.lib.courseware import extract, scopes
 from ml.lib.courseware.describe import (
     DESCRIPTION_PROMPT,
     describe_concepts,
     description_version,
 )
-from ml.lib.courseware.extract import PROMPT_VERSION, extract_scopes
-from ml.lib.courseware.prompts import SYSTEM_PROMPT
+from ml.lib.courseware.extract import (
+    TEXT_PROMPT_VERSION,
+    extract_scopes,
+    stored_readings,
+)
+from ml.lib.courseware.prompts import TEXT_SYSTEM_PROMPT
 from ml.lib.courseware.resolve import ADJUDICATION_PROMPT, adjudicate
 from ml.lib.courseware.tracing import attach_call
 from ml.resources import opik_auth
@@ -109,7 +113,7 @@ def span(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         opik_auth,
         "_published_prompts",
         {
-            SYSTEM_PROMPT: PROMPT,
+            TEXT_SYSTEM_PROMPT: PROMPT,
             ADJUDICATION_PROMPT: PROMPT,
             DESCRIPTION_PROMPT: PROMPT,
         },
@@ -135,9 +139,11 @@ def test_extraction_span_carries_its_key_and_the_usage_of_every_attempt(span):
 
     tables = extract_scopes([_scope()], client, model_id=MODEL, effort="low")
 
+    # the reading has no claims, so the text stage's is the only call
     assert span["metadata"] == {
-        "extraction_key": tables.extractions["extraction_key"][0],
-        "prompt_version": PROMPT_VERSION,
+        "stage": "text",
+        "key": tables.text_extractions["text_extraction_key"][0],
+        "prompt_version": TEXT_PROMPT_VERSION,
         "effort": "low",
         "platform": "mitxonline",
         "courserun_readable_id": "course-v1:X+Y+Z",
@@ -223,7 +229,7 @@ def test_bedrock_usage_is_attached_in_bedrock_keys(span):
         client,
         "us.anthropic.claude-haiku-5-5",
         [_usage(10, 5, 7)],
-        template=SYSTEM_PROMPT,
+        template=TEXT_SYSTEM_PROMPT,
         metadata={},
     )
 
@@ -238,7 +244,7 @@ def test_bedrock_usage_is_attached_in_bedrock_keys(span):
 
 def test_nothing_is_attached_when_opik_is_not_configured(monkeypatch):
     monkeypatch.delenv("OPIK_URL_OVERRIDE", raising=False)
-    monkeypatch.setattr(opik_auth, "_published_prompts", {SYSTEM_PROMPT: PROMPT})
+    monkeypatch.setattr(opik_auth, "_published_prompts", {TEXT_SYSTEM_PROMPT: PROMPT})
 
     def update_current_span(**_kwargs: Any) -> None:
         msg = "no span is open without Opik"
@@ -252,3 +258,66 @@ def test_nothing_is_attached_when_opik_is_not_configured(monkeypatch):
     tables = extract_scopes([_scope()], client, model_id=MODEL, effort="low")
 
     assert tables.extractions.height == 1
+
+
+def test_each_stage_is_its_own_span_tagged_by_stage(monkeypatch):
+    decorated: list[tuple[str, list[str]]] = []
+
+    def traced(name: str, tags: list[str], **_: Any) -> Any:
+        decorated.append((name, tags))
+        return lambda func: func
+
+    monkeypatch.setattr(extract, "traced", traced)
+    for stage in (extract.TEXT_STAGE, extract.CONTEXT_STAGE):
+        extract._traced_stage(stage)
+
+    # Opik splits cost by these tags; the warehouse keeps no cost rollup
+    assert decorated == [
+        ("courseware_extract_text", ["courseware", "courseware:text"]),
+        ("courseware_extract_context", ["courseware", "courseware:context"]),
+    ]
+
+
+CONCEPT = {
+    "label": "lecture",
+    "description": "What the scope covers.",
+    "concept_kind": "concept",
+    "teaching_status": "taught",
+    "evidence": [{"source_id": "S01", "passage": "Some lecture text."}],
+}
+
+
+def test_a_reused_text_reading_makes_no_text_call(span):
+    first = extract_scopes(
+        [_scope()],
+        _client(
+            _response(
+                "record_extraction",
+                {**EXTRACTION, "concepts": [CONCEPT]},
+                _usage(50, 30, 0),
+            ),
+            _response(
+                "record_context", {"revisions": [], "notes": []}, _usage(5, 2, 0)
+            ),
+        ),
+        model_id=MODEL,
+        effort="low",
+    )
+    span.clear()
+    span["metadata"] = {}
+    client = _client(
+        _response("record_context", {"revisions": [], "notes": []}, _usage(7, 3, 0))
+    )
+
+    again = extract_scopes(
+        [_scope()],
+        client,
+        model_id=MODEL,
+        effort="low",
+        readings=stored_readings(first.text_extractions),
+    )
+
+    assert again.text_extractions.height == 0
+    # the only span is the context stage's, priced for its one call
+    assert span["metadata"]["stage"] == "context"
+    assert span["usage"]["input_tokens"] == 7

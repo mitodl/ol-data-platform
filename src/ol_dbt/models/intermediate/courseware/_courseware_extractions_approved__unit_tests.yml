@@ -1,0 +1,144 @@
+---
+unit_tests:
+- name: test_int__courseware__extractions_approved_version_ranks_first
+  description: >
+    The allowlist approves prompt p2 for run r. Scope a has complete readings under
+    p, p2 and a later trial p3: p2's is current. Scope b's p2 reading lacks part 2,
+    so the complete p reading stays current until it is extracted. Run q is not on
+    the allowlist, so its newest complete reading is current and
+    is_approved_version is null.
+  model: int__courseware__extractions
+  given:
+  - input: source('courseware_intermediate', 'courseware_claim_extraction')
+    rows:
+    - {extraction_key: a1, platform: mitxonline, courserun_readable_id: r, scope_id: a,
+      scope_part: 1, scope_part_count: 1, extractor_id: v1, prompt_version: p, schema_version: c,
+      model_id: m, effort: medium, input_text_checksum: x, scope_part_checksums: 'x',
+      extracted_at: "2026-10-17T00:00:00"}
+    - {extraction_key: a2, platform: mitxonline, courserun_readable_id: r, scope_id: a,
+      scope_part: 1, scope_part_count: 1, extractor_id: v1, prompt_version: p2, schema_version: c,
+      model_id: m, effort: medium, input_text_checksum: x, scope_part_checksums: 'x',
+      extracted_at: "2026-10-18T00:00:00"}
+    - {extraction_key: a3, platform: mitxonline, courserun_readable_id: r, scope_id: a,
+      scope_part: 1, scope_part_count: 1, extractor_id: v1, prompt_version: p3, schema_version: c,
+      model_id: m, effort: medium, input_text_checksum: x, scope_part_checksums: 'x',
+      extracted_at: "2026-10-19T00:00:00"}
+    - {extraction_key: b1, platform: mitxonline, courserun_readable_id: r, scope_id: b,
+      scope_part: 1, scope_part_count: 2, extractor_id: v1, prompt_version: p, schema_version: c,
+      model_id: m, effort: medium, input_text_checksum: y1, scope_part_checksums: 'y1,y2',
+      extracted_at: "2026-10-17T00:00:00"}
+    - {extraction_key: b2, platform: mitxonline, courserun_readable_id: r, scope_id: b,
+      scope_part: 2, scope_part_count: 2, extractor_id: v1, prompt_version: p, schema_version: c,
+      model_id: m, effort: medium, input_text_checksum: y2, scope_part_checksums: 'y1,y2',
+      extracted_at: "2026-10-17T00:00:00"}
+    - {extraction_key: b3, platform: mitxonline, courserun_readable_id: r, scope_id: b,
+      scope_part: 1, scope_part_count: 2, extractor_id: v1, prompt_version: p2, schema_version: c,
+      model_id: m, effort: medium, input_text_checksum: y1, scope_part_checksums: 'y1,y2',
+      extracted_at: "2026-10-18T00:00:00"}
+    - {extraction_key: q1, platform: mitxonline, courserun_readable_id: q, scope_id: a,
+      scope_part: 1, scope_part_count: 1, extractor_id: v1, prompt_version: p, schema_version: c,
+      model_id: m, effort: medium, input_text_checksum: z, scope_part_checksums: 'z',
+      extracted_at: "2026-10-17T00:00:00"}
+    - {extraction_key: q2, platform: mitxonline, courserun_readable_id: q, scope_id: a,
+      scope_part: 1, scope_part_count: 1, extractor_id: v1, prompt_version: p3, schema_version: c,
+      model_id: m, effort: medium, input_text_checksum: z, scope_part_checksums: 'z',
+      extracted_at: "2026-10-18T00:00:00"}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: r, extractor_id: v1, prompt_version: p2,
+      schema_version: c}
+  - input: ref('dim_course_content')
+    rows: []
+  - input: ref('int__courseware__latest_scope_inputs')
+    rows: []
+  - input: ref('int__courseware__extraction_sources')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: r, scope_id: a}
+    - {platform: mitxonline, courserun_readable_id: r, scope_id: b}
+    - {platform: mitxonline, courserun_readable_id: q, scope_id: a}
+  expect:
+    rows:
+    - {extraction_key: a1, is_approved_version: false, is_current: false}
+    - {extraction_key: a2, is_approved_version: true, is_current: true}
+    - {extraction_key: a3, is_approved_version: false, is_current: false}
+    - {extraction_key: b1, is_approved_version: false, is_current: true}
+    - {extraction_key: b2, is_approved_version: false, is_current: true}
+    - {extraction_key: b3, is_approved_version: true, is_current: false}
+    - {extraction_key: q1, is_approved_version: null, is_current: false}
+    - {extraction_key: q2, is_approved_version: null, is_current: true}
+
+- name: test_int__courseware__extractions_keeps_runs_without_sources_by_structure
+  description: >
+    Run r2 has no sources in this build, so its scopes are judged by the course
+    structure: unit g's sequential is still there and stays current, unit h's is
+    gone and is not, and its context scope stays current. Run r has sources, which
+    list scope k at position 5 although it was extracted at position 1.
+  model: int__courseware__extractions
+  given:
+  - input: source('courseware_intermediate', 'courseware_claim_extraction')
+    rows:
+    - {extraction_key: g1, platform: mitxonline, courserun_readable_id: r2, scope_id: g,
+      scope_kind: unit, scope_position: 1, scope_part: 1, scope_part_count: 1, extractor_id: v1,
+      prompt_version: p, schema_version: c, model_id: m, effort: medium, input_text_checksum: g,
+      scope_part_checksums: 'g', extracted_at: "2026-10-17T00:00:00"}
+    - {extraction_key: h1, platform: mitxonline, courserun_readable_id: r2, scope_id: h,
+      scope_kind: unit, scope_position: 2, scope_part: 1, scope_part_count: 1, extractor_id: v1,
+      prompt_version: p, schema_version: c, model_id: m, effort: medium, input_text_checksum: h,
+      scope_part_checksums: 'h', extracted_at: "2026-10-17T00:00:00"}
+    - {extraction_key: c1, platform: mitxonline, courserun_readable_id: r2, scope_id: context,
+      scope_kind: context, scope_position: 0, scope_part: 1, scope_part_count: 1,
+      extractor_id: v1, prompt_version: p, schema_version: c, model_id: m, effort: medium,
+      input_text_checksum: c, scope_part_checksums: 'c', extracted_at: "2026-10-17T00:00:00"}
+    - {extraction_key: k1, platform: mitxonline, courserun_readable_id: r, scope_id: k,
+      scope_kind: unit, scope_position: 1, scope_part: 1, scope_part_count: 1, extractor_id: v1,
+      prompt_version: p, schema_version: c, model_id: m, effort: medium, input_text_checksum: k,
+      scope_part_checksums: 'k', extracted_at: "2026-10-17T00:00:00"}
+  - input: ref('int__courseware__extraction_allowlist')
+    rows: []
+  - input: ref('dim_course_content')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: r2, block_id: g, block_category: sequential,
+      is_latest: true}
+    - {platform: mitxonline, courserun_readable_id: r2, block_id: ch, block_category: chapter,
+      is_latest: true}
+  - input: ref('int__courseware__latest_scope_inputs')
+    rows: []
+  - input: ref('int__courseware__extraction_sources')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: r, scope_id: k, scope_position: 5}
+  expect:
+    rows:
+    - {extraction_key: g1, scope_position: 1, is_current: true}
+    - {extraction_key: h1, scope_position: 2, is_current: false}
+    - {extraction_key: c1, scope_position: 0, is_current: true}
+    - {extraction_key: k1, scope_position: 5, is_current: true}
+
+- name: test_int__courseware__scope_part_coverage_flags_parts_nothing_covers
+  description: >
+    The latest read split scope s in two. Part 1 has an extraction of the approved
+    version with this input. Part 2 has none at all, and scope t's only extraction
+    is of an unapproved version.
+  model: int__courseware__scope_part_coverage
+  given:
+  - input: ref('int__courseware__latest_scope_inputs')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: r, scope_id: s, scope_part: 1,
+      scope_part_count: 2, observed_at: "2026-10-18T00:00:00"}
+    - {platform: mitxonline, courserun_readable_id: r, scope_id: s, scope_part: 2,
+      scope_part_count: 2, observed_at: "2026-10-18T00:00:00"}
+    - {platform: mitxonline, courserun_readable_id: r, scope_id: t, scope_part: 1,
+      scope_part_count: 1, observed_at: "2026-10-18T00:00:00"}
+  - input: ref('int__courseware__extractions')
+    rows:
+    - {extraction_key: s1, platform: mitxonline, courserun_readable_id: r, scope_id: s,
+      scope_part: 1, is_approved_version: true, matches_current_input: true}
+    - {extraction_key: t1, platform: mitxonline, courserun_readable_id: r, scope_id: t,
+      scope_part: 1, is_approved_version: false, matches_current_input: true}
+  expect:
+    rows:
+    - {scope_id: s, scope_part: 1, extraction_count: 1, has_approved_extraction: true,
+      has_current_input_extraction: true}
+    - {scope_id: s, scope_part: 2, extraction_count: 0, has_approved_extraction: false,
+      has_current_input_extraction: false}
+    - {scope_id: t, scope_part: 1, extraction_count: 1, has_approved_extraction: false,
+      has_current_input_extraction: false}
