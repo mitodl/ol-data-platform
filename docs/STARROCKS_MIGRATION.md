@@ -50,10 +50,13 @@ In most of these macros the Trino body is `default__`. A few (e.g.
 `json_query_string`, `date_parse`) define `trino__` and have `default__` call it.
 [DBT_DIALECT_COMPATIBILITY.md](DBT_DIALECT_COMPATIBILITY.md) has the details.
 
-Incremental models need a strategy StarRocks supports. dbt-starrocks has no `merge`
-or `delete+insert`, and `INSERT OVERWRITE` on Iceberg replaces only the partitions
-it writes. The existing `delete+insert` models are being ported (the ADR tracks
-it). Don't add a new one.
+`delete+insert` incremental models build only on Trino for now. dbt-starrocks
+1.12 ships no `delete+insert` (or `merge`) strategy for external catalogs. DELETE
+itself works on Glue Iceberg through StarRocks, so a project-side `delete+insert`
+implementation is being added
+(`tk-port-the-21-delete-insert-incremental-models-11--c9c109`). `INSERT OVERWRITE`
+on Iceberg replaces only the partitions it writes and never truncates the table,
+so don't use `insert_overwrite` expecting a full replace.
 
 ## Trino stays the production engine until M3
 
