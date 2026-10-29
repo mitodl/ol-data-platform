@@ -1,5 +1,5 @@
 {#
-    Every place a known concept's label appears in courseware text, from the newest
+    Every place a known concept's label appears in courseware text, as of the newest
     dictionary tagging run (ml.lib.courseware.tagging over int__courseware__extraction_sources
     and dim_concept_alias), with the matched phrase's mode and ambiguity flags. These
     are mention candidates only. Whether a source teaches the concept is the
@@ -30,11 +30,26 @@
     is among the phrase's candidates, so one sense is not spread to every course
     that uses the label. Ambiguity flags are review signals and decide nothing.
 #}
-with mentions as (
+-- A run tags only the sources whose text changed since the run before it, so the
+-- newest run's source records name, per current source, the run whose mention rows
+-- hold its mentions.
+with tagged_sources as (
+    select tagged_source.*
+    from {{ source('courseware_intermediate', 'courseware_concept_tagging_source') }} as tagged_source
+    inner join (select distinct tagging_run_id from {{ ref('int__courseware__concept_tagging_aliases') }}) as latest_run
+        on tagged_source.tagging_run_id = latest_run.tagging_run_id
+)
+
+, mentions as (
     select mention.*
     from {{ source('courseware_intermediate', 'courseware_concept_mention') }} as mention
-    inner join (select distinct tagging_run_id from {{ ref('int__courseware__concept_tagging_aliases') }}) as latest_run
-        on mention.tagging_run_id = latest_run.tagging_run_id
+    inner join tagged_sources
+        on
+            mention.tagging_run_id = tagged_sources.mention_run_id
+            and mention.platform = tagged_sources.platform
+            and mention.courserun_readable_id = tagged_sources.courserun_readable_id
+            and mention.scope_id = tagged_sources.scope_id
+            and mention.source_ref = tagged_sources.source_ref
 )
 
 , aliases as (

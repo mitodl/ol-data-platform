@@ -3,8 +3,12 @@ import re
 
 import polars as pl
 import pytest
+from ml.lib.courseware import local, tagging
 from ml.lib.courseware.tagging import (
+    SOURCE_KEY,
+    SOURCE_SCHEMA,
     ConceptDictionary,
+    PreviousRun,
     _plural,
     _tokenize,
     _tokens,
@@ -157,13 +161,126 @@ def test_phrase_shared_by_concepts_is_ambiguous_and_tags_each():
     assert csv["has_multiple_concepts"].to_list() == [True, True]
 
 
-def test_single_lowercase_words_are_flagged_not_dropped():
+def test_common_words_are_flagged_not_dropped():
     result = tag_sources(
         sources("The data and Python."), aliases(("data", "c1"), ("Python", "c2"))
     )
     flags = dict(result.aliases.select("pattern_key", "is_single_word").iter_rows())
-    assert flags == {"data": True, "datas": True, "python": False, "pythons": False}
+    assert flags == {"data": True, "datas": True, "python": True, "pythons": True}
     assert result.mentions["matched_text"].to_list() == ["data", "Python"]
+
+
+@pytest.mark.parametrize(
+    ("alias", "pattern_key", "single_word"),
+    [
+        # a common word in any case, so "None" is flagged like "none"
+        ("None (special object)", "none", True),
+        ("none", "none", True),
+        # a library's name that is not an everyday word
+        ("pandas", "pandas", False),
+        ("NumPy", "numpy", False),
+        # the plural of a common word, though the plural itself is rarer
+        ("kernel", "kernels", True),
+        ("decision tree", "decision tree", False),
+    ],
+)
+def test_single_word_means_a_common_word(alias, pattern_key, single_word):
+    result = tag_sources(sources("x"), aliases((alias, "c1")))
+    flags = dict(result.aliases.select("pattern_key", "is_single_word").iter_rows())
+    assert flags[pattern_key] is single_word
+
+
+def previous_run(result):
+    return PreviousRun(result.run.row(0, named=True), result.sources)
+
+
+def current_mentions(*results):
+    """Return the mentions the newest run's source records point at, as dbt does."""
+    records = results[-1].sources
+    mentions = pl.concat([result.mentions for result in results])
+    return sorted(
+        mentions.join(
+            records.select(*SOURCE_KEY, tagging_run_id="mention_run_id"),
+            on=["tagging_run_id", *SOURCE_KEY],
+        )
+        .select("source_ref", "matched_text")
+        .iter_rows()
+    )
+
+
+def test_a_run_tags_only_new_and_changed_sources():
+    rows = aliases(("decision tree", "c1"), ("random forest", "c2"))
+    first = tag_sources(
+        sources("a decision tree", "a random forest", "a decision tree again"), rows
+    )
+    # block1 changes to mention nothing, block2 is removed, block3 is new
+    changed = sources("a decision tree", "nothing now", "", "a random forest").filter(
+        pl.col("source_ref") != "block2"
+    )
+    second = tag_sources(changed, rows, previous_run(first))
+
+    run = second.run.row(0, named=True)
+    first_id = first.run["tagging_run_id"].item()
+    assert run["previous_tagging_run_id"] == first_id
+    assert (run["source_count"], run["retagged_source_count"]) == (3, 2)
+    assert second.mentions["source_ref"].to_list() == ["block3"]
+    pointers = dict(second.sources.select("source_ref", "mention_run_id").iter_rows())
+    assert pointers == {
+        "block0": first_id,
+        "block1": run["tagging_run_id"],
+        "block3": run["tagging_run_id"],
+    }
+    assert current_mentions(first, second) == [
+        ("block0", "decision tree"),
+        ("block3", "random forest"),
+    ]
+    # a third run builds on the second, so block0 still reads from the first
+    third = tag_sources(changed, rows, previous_run(second))
+    assert third.run["retagged_source_count"].item() == 0
+    assert third.mentions.is_empty()
+    assert current_mentions(first, second, third) == current_mentions(first, second)
+
+
+def test_a_new_dictionary_retags_every_source():
+    texts = sources("a decision tree", "a random forest")
+    first = tag_sources(texts, aliases(("decision tree", "c1")))
+    second = tag_sources(
+        texts,
+        aliases(("decision tree", "c1"), ("random forest", "c2")),
+        previous_run(first),
+    )
+    run = second.run.row(0, named=True)
+    assert run["previous_tagging_run_id"] is None
+    assert run["retagged_source_count"] == 2
+    assert set(second.sources["mention_run_id"]) == {run["tagging_run_id"]}
+    assert current_mentions(first, second) == [
+        ("block0", "decision tree"),
+        ("block1", "random forest"),
+    ]
+
+
+def test_a_new_tagger_retags_every_source(monkeypatch):
+    texts = sources("a decision tree", "a random forest")
+    rows = aliases(("decision tree", "c1"))
+    first = tag_sources(texts, rows)
+    monkeypatch.setattr(tagging, "TAGGER_ID", "courseware_dictionary_tagger_test")
+    second = tag_sources(texts, rows, previous_run(first))
+    assert second.run["retagged_source_count"].item() == 2
+    assert second.run["previous_tagging_run_id"].item() is None
+    assert second.mentions["source_ref"].to_list() == ["block0"]
+
+
+def test_a_run_without_source_records_retags_every_source():
+    texts = sources("a decision tree")
+    rows = aliases(("decision tree", "c1"))
+    first = tag_sources(texts, rows)
+    second = tag_sources(
+        texts,
+        rows,
+        PreviousRun(first.run.row(0, named=True), pl.DataFrame(schema=SOURCE_SCHEMA)),
+    )
+    assert second.run["retagged_source_count"].item() == 1
+    assert second.run["previous_tagging_run_id"].item() is None
 
 
 def test_run_record_and_input_key():
@@ -454,3 +571,22 @@ def test_offsets_hold_when_casefolding_changes_a_letters_length(label, text, sur
     [mention] = result.mentions.iter_rows(named=True)
     assert text[mention["char_start"] : mention["char_end"]] == surface
     assert mention["matched_text"] == surface
+
+
+def test_local_tag_skips_same_inputs_and_retags_only_what_changed(tmp_path):
+    source_path, alias_path = tmp_path / "sources.parquet", tmp_path / "aliases.parquet"
+    output = tmp_path / "out"
+    aliases(("decision tree", "c1")).write_parquet(alias_path)
+    sources("a decision tree", "a tree").write_parquet(source_path)
+    local.tag(source_path, alias_path, output)
+    local.tag(source_path, alias_path, output)
+    assert (
+        pl.read_parquet(output / "courseware_concept_tagging_run.parquet").height == 1
+    )
+
+    sources("a decision tree", "a decision tree too").write_parquet(source_path)
+    local.tag(source_path, alias_path, output)
+    runs = pl.read_parquet(output / "courseware_concept_tagging_run.parquet")
+    assert runs.sort("tagged_at")["retagged_source_count"].to_list() == [2, 1]
+    records = pl.read_parquet(output / "courseware_concept_tagging_source.parquet")
+    assert records.height == 4

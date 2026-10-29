@@ -11,7 +11,7 @@
     Where the concept must be right, require is_sense_resolved.
 
     is_ambiguous is true when every mention came through an ambiguous phrase (short, a
-    head without its qualifier, a single lowercase word such as "data", or shared by
+    head without its qualifier, a single common word such as "data", or shared by
     several concepts). It is a review signal for the dictionary, not a sense decision.
 #}
 with tags as (
