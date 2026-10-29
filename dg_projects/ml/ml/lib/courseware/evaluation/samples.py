@@ -803,14 +803,48 @@ def _scope_concepts(claims: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def scope_concepts(inputs: GoldInputs) -> pl.DataFrame:
-    """Return each model's distinct concepts per scope, with the strongest status.
+def concept_claims(inputs: GoldInputs) -> pl.DataFrame:
+    """Return every model's concept claims, the input subsection recall scores.
+
+    The sample step writes these so scoring reads what was sampled, not whatever
+    the extraction directories hold by the time annotation is done.
 
     :param inputs: loaded gold-set inputs
+    :returns: platform, courserun_readable_id, scope_id, model, claim_kind, label
+        and status
+    :rtype: pl.DataFrame
+    """
+    return (
+        _with_canonical(inputs)
+        .filter(pl.col("claim_kind").is_in(("concept", "assumed_knowledge")))
+        .select(
+            "platform",
+            "courserun_readable_id",
+            "scope_id",
+            "model",
+            "claim_kind",
+            "label",
+            "status",
+        )
+        .sort(pl.all())
+    )
+
+
+def scope_concepts(claims: pl.DataFrame, matcher: LabelMatcher) -> pl.DataFrame:
+    """Return each model's distinct concepts per scope, with the strongest status.
+
+    :param claims: concept_claims output
+    :param matcher: the matching rule, with any reviewer label map added
     :returns: platform, courserun_readable_id, scope_id, model, canonical, status
     :rtype: pl.DataFrame
     """
-    return _scope_concepts(_with_canonical(inputs))
+    return _scope_concepts(
+        claims.with_columns(
+            pl.col("label")
+            .map_elements(matcher.canonical, return_dtype=pl.String)
+            .alias("canonical")
+        )
+    )
 
 
 def subsections_population(inputs: GoldInputs) -> pl.DataFrame:

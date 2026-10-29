@@ -17,12 +17,20 @@ from typing import Any
 import cyclopts
 import polars as pl
 from ml.lib.courseware.evaluation import labelstudio, samples, score
-from ml.lib.courseware.evaluation.matching import MATCHING_RULE, concept_label_key
+from ml.lib.courseware.evaluation.matching import (
+    MATCHING_RULE,
+    LabelMatcher,
+    concept_label_key,
+)
 from ml.lib.courseware.evaluation.metrics import MIN_LABELS_PER_STRATUM
 
 gold = cyclopts.App(name="gold", help=__doc__)
 SETS = ("claims", "subsections", "pairs", "clusters", "prerequisites")
 MANIFEST = "manifest.json"
+# What subsection scoring compares the gold with, as it stood when the sample was
+# drawn: the models' concept claims and the label matching classes.
+SUBSECTION_CLAIMS = "subsections_model_claims.parquet"
+MATCHER = "label_matcher.parquet"
 
 
 def _skipped(report: Any, path: str = "") -> list[str]:
@@ -171,6 +179,8 @@ def sample(  # noqa: PLR0913
         keep_discipline=declared,
     )
     drawn = samples.sample_subsections(inputs, population, size=subsections, seed=seed)
+    samples.concept_claims(inputs).write_parquet(output_dir / SUBSECTION_CLAIMS)
+    inputs.matcher.to_frame().write_parquet(output_dir / MATCHER)
     built.append(
         _write_set(
             output_dir,
@@ -319,17 +329,7 @@ def score_gold(  # noqa: PLR0913
             autorater=pl.read_parquet(autorater) if autorater else None,
         )
     if subsections_export:
-        paths = manifest["inputs"]
-        inputs = samples.load_inputs(
-            [Path(path) for path in paths["extraction"]],
-            Path(paths["sources"]),
-            Path(paths["identity"]),
-            Path(paths["concept_labels"]),
-            Path(paths["concepts"]),
-            Path(paths["relations"]),
-            [Path(path) for path in paths["label_map"]],
-            Path(paths["disciplines"]) if paths.get("disciplines") else None,
-        )
+        matcher = LabelMatcher.from_frame(pl.read_parquet(sample_dir / MATCHER))
         if gold_label_map:
             keys = [
                 (concept_label_key(label), concept_label_key(model_label))
@@ -338,10 +338,12 @@ def score_gold(  # noqa: PLR0913
                 .iter_rows()
             ]
             # a label of only symbols has no key to map
-            inputs.matcher.add_mapping(
+            matcher.add_mapping(
                 (key, model_key) for key, model_key in keys if key and model_key
             )
-        model_concepts = samples.scope_concepts(inputs)
+        model_concepts = samples.scope_concepts(
+            pl.read_parquet(sample_dir / SUBSECTION_CLAIMS), matcher
+        )
         population = read("subsections", "population")
         exported = labelstudio.read_export(subsections_export)
         report["subsections"], unmatched = score.score_subsections(
@@ -349,22 +351,22 @@ def score_gold(  # noqa: PLR0913
             read("subsections", "sample"),
             exported,
             model_concepts,
-            inputs.matcher,
+            matcher,
             alpha=alpha,
         )
         roles = None
         if model_roles:
             roles = pl.read_parquet(model_roles).with_columns(
                 pl.col("label")
-                .map_elements(inputs.matcher.canonical, return_dtype=pl.String)
+                .map_elements(matcher.canonical, return_dtype=pl.String)
                 .alias("canonical")
             )
         report["subsections"]["objectives"] = score.score_objectives(
-            population, exported, inputs.matcher, alpha=alpha, model_roles=roles
+            population, exported, matcher, alpha=alpha, model_roles=roles
         )
         unmatched.write_csv(sample_dir / "unmatched_gold_concepts.csv")
         score.gold_subsection_concepts(
-            score.subsection_gold(exported, inputs.matcher)
+            score.subsection_gold(exported, matcher)
         ).write_csv(sample_dir / "gold_subsection_concepts.csv")
     for name, export, scorer in (
         ("pairs", pairs_export, score.score_pairs),

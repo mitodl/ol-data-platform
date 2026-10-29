@@ -258,6 +258,23 @@ def test_label_matcher_rule():
     assert matcher.canonical("recall") != matcher.canonical("precision")
 
 
+def test_label_matcher_round_trips_and_takes_more_mappings(tmp_path):
+    matcher = LabelMatcher().add_assignments(
+        pl.DataFrame(
+            {
+                "concept_label_key": ["recall", "true positive rate"],
+                "concept_id": ["c1", "c1"],
+            }
+        )
+    )
+    matcher.to_frame().write_parquet(tmp_path / "matcher.parquet")
+    restored = LabelMatcher.from_frame(pl.read_parquet(tmp_path / "matcher.parquet"))
+    assert restored.canonical("Recall") == matcher.canonical("true-positive rate")
+    # a reviewer's label map joins an annotator's name to the stored class
+    restored.add_mapping([("sensitivity", "recall")])
+    assert restored.canonical("sensitivity") == restored.canonical("true positive rate")
+
+
 def _inputs(claims: pl.DataFrame) -> samples.GoldInputs:
     empty = pl.DataFrame()
     return samples.GoldInputs(
@@ -941,6 +958,11 @@ def test_subsections_population_with_a_model_that_named_no_concept():
     [row] = samples.subsections_population(inputs).to_dicts()
     assert (row["found_hat_haiku"], row["found_hat_opus"], row["gold_hat"]) == (0, 1, 1)
     assert row["models"] == "haiku+opus"
+    # what the sample step writes for scoring: the skill is not a concept
+    concepts = samples.scope_concepts(samples.concept_claims(inputs), inputs.matcher)
+    assert concepts.select("scope_id", "model", "status").to_dicts() == [
+        {"scope_id": "u1", "model": "opus", "status": "taught"}
+    ]
 
 
 def test_score_subsections_scores_a_model_that_named_nothing(tmp_path):

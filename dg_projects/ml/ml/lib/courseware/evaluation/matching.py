@@ -87,6 +87,23 @@ class LabelMatcher:
             self._union(f"key:{key}", f"key:{canonical}")
         return self
 
+    def to_frame(self) -> pl.DataFrame:
+        """Return every node with its class root, which from_frame restores."""
+        nodes = sorted(self._parent)
+        return pl.DataFrame(
+            {"node": nodes, "root": [self._find(node) for node in nodes]},
+            schema={"node": pl.String, "root": pl.String},
+        )
+
+    @classmethod
+    def from_frame(cls, frame: pl.DataFrame) -> "LabelMatcher":
+        """Rebuild a matcher from to_frame output."""
+        matcher = cls()
+        for node, root in frame.select("node", "root").iter_rows():
+            matcher._parent[node] = root
+            matcher._parent.setdefault(root, root)
+        return matcher
+
     def canonical(self, label: str) -> str:
         """Return a label's match class; two labels match exactly when equal."""
         key = concept_label_key(label)
