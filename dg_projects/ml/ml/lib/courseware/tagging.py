@@ -388,13 +388,16 @@ class Pattern:
     def is_single_word(self) -> bool:
         """The phrase is one common word, or the plural of one, in any case.
 
-        An acronym matches only as spelled, so "CART" never reads as "cart".
+        A plural counts when either it or its base is common, so "species" from
+        "specie" is flagged. An acronym matches only as spelled, so "CART" never
+        reads as "cart".
         """
         return (
             self.token_count == 1
             and not self.is_acronym
-            and any(
-                (entry.base_key or self.key) in COMMON_WORDS for entry in self.entries
+            and (
+                self.key in COMMON_WORDS
+                or any(entry.base_key in COMMON_WORDS for entry in self.entries)
             )
         )
 

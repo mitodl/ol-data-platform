@@ -184,6 +184,9 @@ def test_common_words_are_flagged_not_dropped():
         ("CART", "carts", False),
         # the plural of a common word, though the plural itself is rarer
         ("kernel", "kernels", True),
+        # a common plural of a rarer word, as an explicit alias would be
+        ("specie", "specie", False),
+        ("specie", "species", True),
         ("decision tree", "decision tree", False),
     ],
 )
