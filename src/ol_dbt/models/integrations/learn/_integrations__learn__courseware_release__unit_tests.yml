@@ -104,3 +104,24 @@ unit_tests:
         \ r3"}
     - {release_id: r3, readable_id: "course-v1:xPRO+B", context_document: "# Course\
         \ B r3"}
+
+- name: test_integrations__learn__resource_concepts_moves_with_a_promotion
+  description: >
+    The course concepts by id follow the same published row: r3's after the
+    promotion, never the unpublished r2's.
+  model: integrations__learn__resource_concepts
+  given:
+  - input: ref('int__courseware__published_release')
+    rows:
+    - {release_id: r3}
+  - input: source('courseware_intermediate', 'courseware_release_resource_concept')
+    rows:
+    - {release_id: r1, etl_source: mitxonline, readable_id: "course-v1:X+A", concept_id: c1,
+      relation: teaches}
+    - {release_id: r2, etl_source: mitxonline, readable_id: "course-v1:X+A", concept_id: c2,
+      relation: teaches}
+    - {release_id: r3, etl_source: mitxonline, readable_id: "course-v1:X+A", concept_id: c1,
+      relation: teaches}
+  expect:
+    rows:
+    - {release_id: r3, readable_id: "course-v1:X+A", concept_id: c1, relation: teaches}

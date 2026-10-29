@@ -9,7 +9,8 @@
     and course counts come from eligible runs only, so a run under an ineligible
     source changes nothing a learner sees, and course counts come only from
     relations an accepted claim supports (#3021's gate: accepting a concept does not
-    accept the claims naming it). The description is the newest one written
+    accept the claims naming it) and, for an inferred requirement, that pass the
+    support rule (#3028). The description is the newest one written
     under the prompt version courseware_description_approval approves. A concept
     the describer has inputs for but no such description yet is awaiting one, and
     the release asset refuses a candidate with any, or with a description written
@@ -116,7 +117,8 @@ with concepts as (
         on
             bridge.platform = eligible_runs.platform
             and bridge.courserun_readable_id = eligible_runs.courserun_readable_id
-    where bridge.accepted_claim_count > 0
+    -- accepted claims only, and for inferred requires the support rule as well
+    where bridge.accepted_claim_count > 0 and bridge.passes_support_rule
 )
 
 , course_runs as (

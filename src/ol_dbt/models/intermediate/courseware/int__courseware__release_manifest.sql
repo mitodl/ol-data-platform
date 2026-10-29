@@ -4,16 +4,21 @@
     resolution run that graph was computed over, the approved description prompt,
     the current extractions of source-eligible runs and the source policy. The
     courseware_knowledge_release asset writes this row onto the release with the
-    projections int__courseware__release_concepts and
-    int__courseware__release_resource_knowledge, and refuses to publish a candidate
+    projections int__courseware__release_concepts,
+    int__courseware__release_resource_knowledge and
+    int__courseware__release_resource_concepts, and refuses to publish a candidate
     whose graph was not computed over its resolution run (is_graph_current), as when
     a resolution run merged concepts and the graph build after it failed.
 
-    It reads both candidate projections and counts their rows, so dbt builds it only
-    after both built in the same run, and the release asset, which runs on this
-    model alone, checks the projections it copies still have those counts.
+    It reads every candidate projection and counts its rows, so dbt builds it only
+    after all of them built in the same run, and the release asset, which runs on
+    this model alone, checks the projections it copies still have those counts.
 
-    sense_assignment_version stays null until claim-level sense assignment exists.
+    The concept ids come from the sense assignment snapshot of the same resolution
+    run (int__courseware__concept_sense_assignments), so resolution_run_id pins it;
+    sense_assignment_version is that run's sense_prompt_version, the version of the
+    sense step that wrote it. A run written before sense assignment has none, and the
+    release asset refuses it.
 #}
 with registry as (
     select max(resolution_run_id) as resolution_run_id
@@ -25,6 +30,7 @@ with registry as (
         runs.resolution_run_id
         , runs.resolver_id
         , runs.prompt_version as resolution_prompt_version
+        , runs.sense_prompt_version as sense_assignment_version
     from {{ source('courseware_intermediate', 'courseware_resolution_run') }} as runs
     inner join registry
         on runs.resolution_run_id = registry.resolution_run_id
@@ -78,11 +84,16 @@ with registry as (
     from {{ ref('int__courseware__release_resource_knowledge') }}
 )
 
+, resource_concepts as (
+    select count(*) as resource_concept_count
+    from {{ ref('int__courseware__release_resource_concepts') }}
+)
+
 select
     registry.resolution_run_id
     , resolution.resolver_id
     , resolution.resolution_prompt_version
-    , cast(null as varchar) as sense_assignment_version
+    , resolution.sense_assignment_version
     , graph.graph_run_id
     , graph.graph_version
     , graph.graph_resolution_run_id
@@ -91,6 +102,7 @@ select
     , concepts.undescribed_concept_count
     , concepts.concept_count
     , resources.resource_count
+    , resource_concepts.resource_concept_count
     , extractions.extraction_selection_checksum
     , extractions.extraction_count
     , eligibility.source_policy_version
@@ -100,6 +112,7 @@ cross join extractions
 cross join descriptions
 cross join concepts
 cross join resources
+cross join resource_concepts
 left join resolution
     on registry.resolution_run_id = resolution.resolution_run_id
 left join graph

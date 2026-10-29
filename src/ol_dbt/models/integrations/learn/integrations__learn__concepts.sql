@@ -2,15 +2,16 @@
     The concepts Learn can show to learners, from the published knowledge release:
     one row per learner-facing concept with its descriptions and how many courses
     teach it, for concept chips, tooltips and a concept page. Pairs with
-    integrations__learn__resource_knowledge, which lists each course's concepts by
-    label from the same release; release_id says which.
+    integrations__learn__resource_concepts, which lists each course's concepts by id
+    from the same release; release_id says which.
 
     The rows were built by int__courseware__release_concepts (accepted concepts,
     source-eligible runs only) and copied into the release by
     ml.assets.courseware_release. A table like the other Learn views, because
-    delivery reads them from Iceberg; the publication pointer rebuilds this and
-    integrations__learn__resource_knowledge in the same dbt run, and a reader of
-    both checks their release_id matches.
+    delivery reads them from Iceberg; the publication pointer rebuilds this,
+    integrations__learn__resource_knowledge and integrations__learn__resource_concepts
+    in the same dbt run, and a reader of more than one checks their release_id
+    matches.
 #}
 with published as (
     select release_id from {{ ref('int__courseware__published_release') }}

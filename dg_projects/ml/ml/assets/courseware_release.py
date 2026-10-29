@@ -61,6 +61,16 @@ PROJECTIONS = {
         AssetKey(["intermediate", "int__courseware__release_resource_knowledge"]),
         ("etl_source", "readable_id"),
     ),
+    "courseware_release_resource_concept": (
+        AssetKey(["intermediate", "int__courseware__release_resource_concepts"]),
+        ("etl_source", "readable_id", "concept_id", "relation", "requirement_source"),
+    ),
+}
+# The manifest column counting each projection's candidate rows.
+PROJECTION_COUNTS = {
+    "courseware_release_concept": "concept_count",
+    "courseware_release_resource_knowledge": "resource_count",
+    "courseware_release_resource_concept": "resource_concept_count",
 }
 RELEASE_TABLES = (*PROJECTIONS, RELEASE_KEY.path[-1])
 # The manifest columns copied onto the release row.
@@ -87,6 +97,7 @@ RELEASE_SCHEMA = {
     **MANIFEST_SCHEMA,
     "concept_count": pl.Int64,
     "resource_count": pl.Int64,
+    "resource_concept_count": pl.Int64,
     "is_valid": pl.Boolean,
     "validation_errors_json": pl.String,
 }
@@ -123,6 +134,11 @@ def validate_candidate(
     errors = []
     if manifest["resolution_run_id"] is None:
         errors.append("no resolution run")
+    elif manifest["sense_assignment_version"] is None:
+        # concept ids from a run before sense assignment conflate a label's senses
+        errors.append(
+            f"resolution run {manifest['resolution_run_id']} has no sense assignment"
+        )
     if not manifest["is_graph_current"]:
         errors.append(
             f"graph run {manifest['graph_run_id']} was computed over resolution run "
@@ -276,8 +292,7 @@ def courseware_knowledge_release(context: AssetExecutionContext):
         for table, (key, _) in PROJECTIONS.items()
     }
     counts = {
-        "courseware_release_concept": manifest_rows["concept_count"][0],
-        "courseware_release_resource_knowledge": manifest_rows["resource_count"][0],
+        table: manifest_rows[column][0] for table, column in PROJECTION_COUNTS.items()
     }
     if any(projections[table].height != count for table, count in counts.items()):
         msg = (
@@ -330,10 +345,10 @@ def courseware_knowledge_release(context: AssetExecutionContext):
                 "candidate_checksum": checksum,
                 "output_schema_version": output_schema_version(projections),
                 **manifest,
-                "concept_count": projections["courseware_release_concept"].height,
-                "resource_count": projections[
-                    "courseware_release_resource_knowledge"
-                ].height,
+                **{
+                    column: projections[table].height
+                    for table, column in PROJECTION_COUNTS.items()
+                },
                 "is_valid": not errors,
                 "validation_errors_json": json.dumps(errors),
             }

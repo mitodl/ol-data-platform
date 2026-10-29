@@ -200,6 +200,25 @@ def verdicts_input(listing: str, fail_label: str | None) -> dict[str, Any] | Non
     return {"queries": queries}
 
 
+def senses_input(listing: str, fail_label: str | None) -> dict[str, Any] | None:
+    """Every course run takes the label's first sense.
+
+    A batch with fail_label among its labels gets no tool call, so it fails.
+    """
+    if fail_label and re.search(rf"^Q\d+: {fail_label}$", listing, re.MULTILINE):
+        return None
+    queries: list[dict[str, Any]] = []
+    for line in listing.splitlines():
+        if line.startswith("Q"):
+            queries.append({"query_id": len(queries), "runs": []})
+        elif line.startswith("  r"):
+            run = int(line.split(":", 1)[0].strip()[1:])
+            queries[-1]["runs"].append(
+                {"run_id": run, "decision": "existing", "sense": 0}
+            )
+    return {"queries": queries}
+
+
 def descriptions_input(listing: str, fail_label: str | None) -> dict[str, Any]:
     """Describe every entry except the one labelled fail_label."""
     ids = [
@@ -237,6 +256,7 @@ class FakeMessages:
         tool_input = {
             "record_extraction": lambda: extraction_input(content, quote=self.quote),
             "record_verdicts": lambda: verdicts_input(content, self.fail_label),
+            "record_senses": lambda: senses_input(content, self.fail_label),
             "record_descriptions": lambda: descriptions_input(content, self.fail_label),
         }[tool]()
         stream = MagicMock()
@@ -670,13 +690,40 @@ def labels(*keys: str) -> pl.DataFrame:
     )
 
 
+def sense_inputs(
+    keys: list[str], courseruns: tuple[str, ...] = (COURSERUN,)
+) -> pl.DataFrame:
+    return pl.DataFrame(
+        [
+            {
+                "concept_label_key": key,
+                "platform": PLATFORM,
+                "courserun_readable_id": courserun,
+                "course_title": f"Course {courserun}",
+                "label": key,
+                "concept_kind": "concept",
+                "description": f"about {key}",
+                "teaching_status": "taught",
+            }
+            for key in keys
+            for courserun in courseruns
+        ]
+    )
+
+
 def resolve(
     tables,
     *,
     llm: LLMClientFactory | None = None,
     rebuild: bool = False,
     instance: DagsterInstance | None = None,
+    courseruns: tuple[str, ...] = (COURSERUN,),
 ):
+    """Materialize resolution; every current label is used by courseruns."""
+    tables["int__courseware__concept_sense_inputs"] = sense_inputs(
+        tables["int__courseware__concept_labels"]["concept_label_key"].to_list(),
+        courseruns,
+    )
     (hooked,) = with_failure_hooks([courseware_resolution])
     return materialize(
         [hooked],
@@ -812,6 +859,73 @@ def test_a_failed_rebuild_batch_keeps_concepts_and_leaves_none_unassigned(tables
         .value
         == 0
     )
+
+
+@pytest.mark.usefixtures("embedder")
+def test_resolution_assigns_senses_for_new_course_runs_of_known_labels(tables, calls):
+    tables["int__courseware__concept_labels"] = labels("kernel", "bias")
+    resolve(tables)
+    # one course run per label: each takes its only sense without a model call
+    assert calls == ["record_verdicts"]
+    assert tables["courseware_concept_sense_assignment"][
+        "assignment_source"
+    ].to_list() == ["single_sense", "single_sense"]
+    assert tables["courseware_concept_alias"].height == 2
+    concept_of = dict(
+        tables["courseware_concept_assignment"]
+        .select("concept_label_key", "concept_id")
+        .iter_rows()
+    )
+
+    # no new label, but a second course run uses both: the run is not skipped,
+    # and a failed sense batch (both labels share it) fails it with the new runs
+    # left undecided
+    calls.clear()
+    other = "course-v1:MITx+6.036+1T2026"
+    failed = resolve(
+        tables, llm=FakeLLM(fail_label="kernel"), courseruns=(COURSERUN, other)
+    )
+
+    assert failure_class(failed) == "AdjudicationFailure"
+    assert calls == ["record_senses"]
+    materialization = next(
+        event
+        for event in failed.get_asset_materialization_events()
+        if event.asset_key.path[-1] == "courseware_resolution_run"
+    )
+    assert (
+        materialization.materialization.metadata["undecided_sense_unit_count"].value
+        == 2
+    )
+
+    # the next run asks again about the runs still undecided
+    calls.clear()
+    retried = resolve(tables, courseruns=(COURSERUN, other))
+
+    assert retried.success
+    assert calls == ["record_senses"]
+    latest = tables["courseware_resolution_run"].sort("started_at")[
+        "resolution_run_id"
+    ][-1]
+    senses = tables["courseware_concept_sense_assignment"].filter(
+        pl.col("resolution_run_id") == latest
+    )
+    assert {
+        (key, courserun): concept_id
+        for key, courserun, concept_id in senses.select(
+            "concept_label_key", "courserun_readable_id", "concept_id"
+        ).iter_rows()
+    } == {
+        (key, courserun): concept_of[key]
+        for key in ("kernel", "bias")
+        for courserun in (COURSERUN, other)
+    }
+
+    # every unit is decided now, so nothing runs
+    calls.clear()
+    resolve(tables, courseruns=(COURSERUN, other))
+    assert calls == []
+    assert tables["courseware_resolution_run"]["resolution_run_id"].n_unique() == 3
 
 
 def test_assignment_churn_counts_changed_ids():
@@ -1100,7 +1214,8 @@ def test_description_stores_what_succeeded_and_fails_on_missing_ones(tables, cal
 
 
 # ------------------------------------------------------------------------- graph
-def test_graph_reports_cycles_and_skips_unchanged_input(tables, monkeypatch):
+def graph_input(tables, edges: dict[tuple[str, str], str]) -> None:
+    """dim_concept a, b, c and passing builds_on edges with their review_status."""
     names = ["a", "b", "c"]
     tables["dim_concept"] = pl.DataFrame(
         {
@@ -1122,11 +1237,19 @@ def test_graph_reports_cycles_and_skips_unchanged_input(tables, monkeypatch):
                 "co_taught_lift": None,
                 "is_adjudicated": False,
                 "has_co_assessed_evidence": False,
-                "is_published": True,
+                "passes_support_rule": True,
+                "review_status": review_status,
             }
-            for source, target in (("a", "b"), ("b", "a"), ("b", "c"))
+            for (source, target), review_status in edges.items()
         ],
         schema_overrides={"co_taught_lift": pl.Float64},
+    )
+
+
+def test_graph_reports_cycles_and_skips_unchanged_input(tables, monkeypatch):
+    graph_input(
+        tables,
+        {("a", "b"): "proposed", ("b", "a"): "proposed", ("b", "c"): "proposed"},
     )
     resources = {"io_manager": Warehouse(tables)}
 
@@ -1136,6 +1259,9 @@ def test_graph_reports_cycles_and_skips_unchanged_input(tables, monkeypatch):
     assert not check.passed
     assert check.metadata["sequence_cycle_concepts"].value == ["a", "b"]
     assert tables["courseware_concept_graph_run"].height == 1
+    # a cycle among observed edges is a finding; nothing is approved, so the
+    # closure is written empty
+    assert tables["courseware_concept_graph_prerequisite_closure"].is_empty()
 
     second = materialize([courseware_concept_graph], resources=resources)
 
@@ -1165,13 +1291,18 @@ def test_graph_reports_cycles_and_skips_unchanged_input(tables, monkeypatch):
 
 
 # ----------------------------------------------------------------------- release
-def manifest(concept_count: int = 1, resource_count: int = 1, **overrides: Any):
+def manifest(
+    concept_count: int = 1,
+    resource_count: int = 1,
+    resource_concept_count: int = 1,
+    **overrides: Any,
+):
     """Return a coherent int__courseware__release_manifest row, with overrides."""
     row = {
         "resolution_run_id": "res1",
         "resolver_id": "courseware_resolution_v2",
         "resolution_prompt_version": "p",
-        "sense_assignment_version": None,
+        "sense_assignment_version": "s1",
         "graph_run_id": "g1",
         "graph_version": "courseware_concept_graph_v1",
         "graph_resolution_run_id": "res1",
@@ -1186,6 +1317,7 @@ def manifest(concept_count: int = 1, resource_count: int = 1, **overrides: Any):
     return pl.DataFrame([row], schema=release_module.MANIFEST_SCHEMA).with_columns(
         concept_count=pl.lit(concept_count, dtype=pl.Int64),
         resource_count=pl.lit(resource_count, dtype=pl.Int64),
+        resource_concept_count=pl.lit(resource_concept_count, dtype=pl.Int64),
     )
 
 
@@ -1242,6 +1374,24 @@ def release_resources(*concepts: str) -> pl.DataFrame:
     )
 
 
+def release_resource_concepts(*names: str) -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "etl_source": ["mitxonline"] * len(names),
+            "readable_id": ["course-v1:X+A"] * len(names),
+            "concept_id": [f"id-{name}" for name in names],
+            "concept_name": list(names),
+            "relation": ["teaches"] * len(names),
+            "requirement_source": [None] * len(names),
+        },
+        schema_overrides={
+            "concept_id": pl.String,
+            "concept_name": pl.String,
+            "requirement_source": pl.String,
+        },
+    )
+
+
 def candidate(
     tables: dict[str, pl.DataFrame],
     *names: str,
@@ -1253,13 +1403,17 @@ def candidate(
     :param stale: names whose description inputs changed since they were described
     """
     tables["int__courseware__release_manifest"] = manifest(
-        concept_count=len(names), **{"resource_count": 1, **overrides}
+        concept_count=len(names),
+        **{"resource_count": 1, "resource_concept_count": len(names), **overrides},
     )
     tables["int__courseware__concept_description_inputs"] = description_inputs_for(
         *names
     )
     tables["int__courseware__release_concepts"] = release_concepts(*names, stale=stale)
     tables["int__courseware__release_resource_knowledge"] = release_resources(*names)
+    tables["int__courseware__release_resource_concepts"] = release_resource_concepts(
+        *names
+    )
 
 
 def release(tables: dict[str, pl.DataFrame], **publication) -> tuple[Any, Any]:
@@ -1335,6 +1489,7 @@ def test_a_failed_graph_build_leaves_the_last_release_published(tables):
     for table, column, value in (
         ("courseware_release_concept", "name", "AUC"),
         ("courseware_release_resource_knowledge", "concepts_taught", ["AUC"]),
+        ("courseware_release_resource_concept", "concept_id", "id-AUC"),
     ):
         assert published_rows(tables, table)[column].to_list() == [value]
 
@@ -1358,6 +1513,11 @@ def test_a_failed_graph_build_leaves_the_last_release_published(tables):
             "concepts_taught",
             ["area under the curve"],
         ),
+        (
+            "courseware_release_resource_concept",
+            "concept_id",
+            "id-area under the curve",
+        ),
     ):
         assert published_rows(tables, table)[column].to_list() == [value]
 
@@ -1369,6 +1529,11 @@ def test_a_failed_graph_build_leaves_the_last_release_published(tables):
         ({"undescribed_concept_count": 2}, ("AUC",), "2 concepts have no description"),
         ({}, (), "would empty the published release"),
         ({"resolution_run_id": None}, ("AUC",), "no resolution run"),
+        (
+            {"sense_assignment_version": None},
+            ("AUC",),
+            "resolution run res1 has no sense assignment",
+        ),
     ],
 )
 def test_validation_refuses_an_incomplete_candidate(overrides, names, error):
@@ -1503,6 +1668,44 @@ def test_a_projection_from_another_dbt_build_is_not_released(tables):
 
     assert not built.success
     assert "courseware_release" not in tables
+
+
+def test_graph_writes_the_closure_of_approved_edges_and_fails_on_an_approved_cycle(
+    tables,
+):
+    graph_input(
+        tables,
+        {("a", "b"): "accepted", ("b", "c"): "accepted", ("c", "a"): "proposed"},
+    )
+    resources = {"io_manager": Warehouse(tables)}
+
+    materialize([courseware_concept_graph], resources=resources)
+
+    closure = tables["courseware_concept_graph_prerequisite_closure"]
+    assert sorted(
+        closure.select("from_concept_id", "to_concept_id", "min_depth").rows()
+    ) == [("a", "b", 1), ("a", "c", 2), ("b", "c", 1)]
+    run_id = tables["courseware_concept_graph_run"]["graph_run_id"][0]
+    assert closure["graph_run_id"].unique().to_list() == [run_id]
+
+    # approving c -> a closes a cycle: the run fails permanently and writes nothing,
+    # so the previous closure stays the newest
+    graph_input(
+        tables,
+        {("a", "b"): "accepted", ("b", "c"): "accepted", ("c", "a"): "accepted"},
+    )
+    instance = DagsterInstance.ephemeral()
+    (hooked,) = with_failure_hooks([courseware_concept_graph])
+    failed = materialize(
+        [hooked], resources=resources, instance=instance, raise_on_error=False
+    )
+
+    assert failure_class(failed) == "ApprovedPrerequisiteCycle"
+    run = instance.get_run_by_id(failed.run_id)
+    assert run is not None
+    assert run.tags[RETRY_ON_ASSET_OR_OP_FAILURE_TAG] == "false"
+    assert tables["courseware_concept_graph_run"].height == 1
+    assert tables["courseware_concept_graph_prerequisite_closure"].height == 3
 
 
 def test_courseware_definitions_load():

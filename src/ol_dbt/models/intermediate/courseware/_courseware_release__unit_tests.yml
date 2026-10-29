@@ -75,13 +75,13 @@ unit_tests:
   - input: ref('bridge_courserun_concept')
     rows:
     - {concept_fk: c1, platform: mitxonline, courserun_readable_id: a1, courserun_fk: ra,
-      relation: teaches, accepted_claim_count: 1}
+      relation: teaches, accepted_claim_count: 1, passes_support_rule: true}
     - {concept_fk: c1, platform: mitxonline, courserun_readable_id: a2, courserun_fk: ra2,
-      relation: uses, accepted_claim_count: 0}
+      relation: uses, accepted_claim_count: 0, passes_support_rule: true}
     - {concept_fk: c1, platform: residential, courserun_readable_id: r1, courserun_fk: rr,
-      relation: teaches, accepted_claim_count: 1}
+      relation: teaches, accepted_claim_count: 1, passes_support_rule: true}
     - {concept_fk: c2, platform: residential, courserun_readable_id: r1, courserun_fk: rr,
-      relation: uses, accepted_claim_count: 1}
+      relation: uses, accepted_claim_count: 1, passes_support_rule: true}
   - input: ref('dim_course_run')
     rows:
     - {courserun_pk: ra, course_fk: a, is_current: true}
@@ -149,41 +149,27 @@ unit_tests:
     - {concept_id: c3, short_description: null, description_prompt_version: null,
       is_awaiting_description: false}
 
-- name: test_int__courseware__release_resource_knowledge_only_eligible_runs
+- name: test_int__courseware__release_resource_knowledge_names_only_released_concepts
   description: >
-    A course whose only extracted run is ineligible (a B2B copy here) is left out,
-    and a course's concept lists name only concepts the release publishes as
+    A course's concept lists name only concepts the release publishes as
     learner-facing, so a concept that is not in the release, or not learner-facing,
-    never appears in a course's list or its context document.
+    never appears in a course's list or its context document. Which run a course
+    takes, and that an ineligible one is left out, is
+    int__courseware__learn_course_runs' (tested there).
   model: int__courseware__release_resource_knowledge
   given:
-  - input: ref('int__courseware__source_eligibility')
+  - input: ref('int__courseware__learn_course_runs')
     rows:
-    - {platform: mitxonline, courserun_readable_id: a1, is_source_eligible: true}
-    - {platform: mitxonline, courserun_readable_id: b1, is_source_eligible: false}
-  - input: ref('dim_courseware_extraction')
-    rows:
-    - {platform: mitxonline, courserun_readable_id: a1, courserun_fk: ra, is_current: true,
-      extracted_at: "2026-10-01 00:00:00"}
-    - {platform: mitxonline, courserun_readable_id: b1, courserun_fk: rb, is_current: true,
-      extracted_at: "2026-10-01 00:00:00"}
-  - input: ref('dim_course_run')
-    rows:
-    - {courserun_pk: ra, course_fk: a, is_current: true}
-    - {courserun_pk: rb, course_fk: b, is_current: true}
-  - input: ref('dim_course')
-    rows:
-    - {course_pk: a, course_readable_id: "course-v1:X+A", course_title: Course A,
-      is_current: true}
-    - {course_pk: b, course_readable_id: "course-v1:B2B+B", course_title: Course B,
-      is_current: true}
+    - {etl_source: mitxonline, readable_id: "course-v1:X+A", course_title: Course
+        A, courserun_fk: ra, courserun_readable_id: a1}
   - input: ref('bridge_courserun_concept')
     rows:
-    - {courserun_fk: ra, concept_fk: c1, relation: teaches, claim_count: 2, accepted_claim_count: 1}
+    - {courserun_fk: ra, concept_fk: c1, relation: teaches, claim_count: 2, accepted_claim_count: 1,
+      passes_support_rule: true}
     - {courserun_fk: ra, concept_fk: proposed, relation: teaches, claim_count: 5,
-      accepted_claim_count: 1}
-    - {courserun_fk: ra, concept_fk: dataset, relation: uses, claim_count: 1, accepted_claim_count: 1}
-    - {courserun_fk: rb, concept_fk: c1, relation: teaches, claim_count: 2, accepted_claim_count: 1}
+      accepted_claim_count: 1, passes_support_rule: true}
+    - {courserun_fk: ra, concept_fk: dataset, relation: uses, claim_count: 1, accepted_claim_count: 1,
+      passes_support_rule: true}
   - input: ref('int__courseware__release_concepts')
     rows:
     - {concept_id: c1, name: AUC, is_learner_facing: true}
@@ -223,8 +209,8 @@ unit_tests:
     - {resolution_run_id: res2}
   - input: source('courseware_intermediate', 'courseware_resolution_run')
     rows:
-    - {resolution_run_id: res1, resolver_id: r, prompt_version: p}
-    - {resolution_run_id: res2, resolver_id: r, prompt_version: p}
+    - {resolution_run_id: res1, resolver_id: r, prompt_version: p, sense_prompt_version: s1}
+    - {resolution_run_id: res2, resolver_id: r, prompt_version: p, sense_prompt_version: s2}
   - input: source('courseware_intermediate', 'courseware_concept_graph_run')
     rows:
     - {graph_run_id: g1, graph_version: v, resolution_run_id: res1}
@@ -249,11 +235,16 @@ unit_tests:
   - input: ref('int__courseware__release_resource_knowledge')
     rows:
     - {etl_source: mitxonline, readable_id: "course-v1:X+A"}
+  - input: ref('int__courseware__release_resource_concepts')
+    rows:
+    - {etl_source: mitxonline, readable_id: "course-v1:X+A", concept_id: c1}
+    - {etl_source: mitxonline, readable_id: "course-v1:X+A", concept_id: c3}
   expect:
     rows:
-    - {resolution_run_id: res2, graph_run_id: g1, graph_resolution_run_id: res1, is_graph_current: false,
-      description_prompt_version: v1, undescribed_concept_count: 1, concept_count: 3,
-      resource_count: 1, extraction_count: 1, source_policy_version: pol}
+    - {resolution_run_id: res2, sense_assignment_version: s2, graph_run_id: g1, graph_resolution_run_id: res1,
+      is_graph_current: false, description_prompt_version: v1, undescribed_concept_count: 1,
+      concept_count: 3, resource_count: 1, resource_concept_count: 2, extraction_count: 1,
+      source_policy_version: pol}
 
 - name: test_int__courseware__release_manifest_binds_a_graph_over_its_resolution_run
   description: >
@@ -266,7 +257,7 @@ unit_tests:
     - {resolution_run_id: res2}
   - input: source('courseware_intermediate', 'courseware_resolution_run')
     rows:
-    - {resolution_run_id: res2, resolver_id: r, prompt_version: p}
+    - {resolution_run_id: res2, resolver_id: r, prompt_version: p, sense_prompt_version: s2}
   - input: source('courseware_intermediate', 'courseware_concept_graph_run')
     rows:
     - {graph_run_id: g1, graph_version: v, resolution_run_id: res1}
@@ -284,7 +275,9 @@ unit_tests:
     rows: []
   - input: ref('int__courseware__release_resource_knowledge')
     rows: []
+  - input: ref('int__courseware__release_resource_concepts')
+    rows: []
   expect:
     rows:
-    - {resolution_run_id: res2, graph_run_id: g2, is_graph_current: true, undescribed_concept_count: 0,
-      extraction_count: 0}
+    - {resolution_run_id: res2, sense_assignment_version: s2, graph_run_id: g2, is_graph_current: true,
+      undescribed_concept_count: 0, resource_concept_count: 0, extraction_count: 0}

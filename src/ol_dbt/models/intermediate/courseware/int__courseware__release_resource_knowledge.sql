@@ -1,48 +1,30 @@
 {#
     What each Learn course teaches, assesses and expects, as the next knowledge
-    release would publish it, from the course's most recently extracted
-    source-eligible run, keyed as Learn keys the course (etl_source, readable_id).
-    The courseware_knowledge_release asset copies these rows into a release, and
-    integrations__learn__resource_knowledge reads them from the published one.
+    release would publish it, from the course's run in int__courseware__learn_course_runs
+    (its most recently extracted source-eligible run), keyed as Learn keys the course
+    (etl_source, readable_id). The courseware_knowledge_release asset copies these
+    rows into a release, and integrations__learn__resource_knowledge reads them from
+    the published one.
 
     The concept lists name only concepts int__courseware__release_concepts would
-    publish as learner-facing, by the same label, so every concept a course lists is
-    in the same release's concept list, and only relations an accepted claim
-    supports. The statement lists take only accepted claims. Accepting a concept
-    does not accept the claims naming it.
+    publish as learner-facing, by the same label, and only relations an accepted
+    claim supports (an inferred requirement must also pass the support rule), the
+    same rows int__courseware__release_resource_concepts publishes by id. They render
+    context_document and are not published as columns. The statement lists take only
+    accepted claims. Accepting a concept does not accept the claims naming it.
 
     context_document renders the same arrays as markdown, deterministically, so it can
     be embedded as a resource's search text (the embedding substrate's
     resource_knowledge_markdown_v1 builder) without another model call.
 #}
-with eligible_runs as (
-    select * from {{ ref('int__courseware__source_eligibility') }}
-    where is_source_eligible
-)
-
-, extractions as (
-    select extractions.*
-    from {{ ref('dim_courseware_extraction') }} as extractions
-    inner join eligible_runs
-        on
-            extractions.platform = eligible_runs.platform
-            and extractions.courserun_readable_id = eligible_runs.courserun_readable_id
-    where extractions.is_current
-)
-
-, course_runs as (
-    select * from {{ ref('dim_course_run') }}
-    where is_current
-)
-
-, courses as (
-    select * from {{ ref('dim_course') }}
-    where is_current
+with learn_runs as (
+    select * from {{ ref('int__courseware__learn_course_runs') }}
 )
 
 , run_bridge as (
     select * from {{ ref('bridge_courserun_concept') }}
-    where accepted_claim_count > 0
+    -- accepted claims only, and for inferred requires the support rule as well
+    where accepted_claim_count > 0 and passes_support_rule
 )
 
 , concepts as (
@@ -53,33 +35,6 @@ with eligible_runs as (
 , claims as (
     select * from {{ ref('tfact_courseware_claim') }}
     where is_current and is_verified and review_status = 'accepted'
-)
-
--- the course's run with the newest extraction
-, extracted_runs as (
-    select
-        platform
-        , courserun_readable_id
-        , courserun_fk
-        , row_number() over (
-            partition by course_fk order by last_extracted_at desc
-        ) as run_rank
-    from (
-        select
-            extractions.platform
-            , extractions.courserun_readable_id
-            , extractions.courserun_fk
-            , course_runs.course_fk
-            , max(extractions.extracted_at) as last_extracted_at
-        from extractions
-        inner join course_runs
-            on extractions.courserun_fk = course_runs.courserun_pk
-        group by
-            extractions.platform
-            , extractions.courserun_readable_id
-            , extractions.courserun_fk
-            , course_runs.course_fk
-    ) as runs
 )
 
 , concept_lists as (
@@ -113,13 +68,10 @@ with eligible_runs as (
 
 , knowledge as (
     select
-        case extracted_runs.platform
-            when 'mitxonline' then 'mitxonline'
-            when 'mitxpro' then 'xpro'
-        end as etl_source
-        , courses.course_readable_id as readable_id
-        , extracted_runs.courserun_readable_id as extracted_courserun_readable_id
-        , courses.course_title
+        learn_runs.etl_source
+        , learn_runs.readable_id
+        , learn_runs.courserun_readable_id as extracted_courserun_readable_id
+        , learn_runs.course_title
         , concept_lists.concepts_taught
         , concept_lists.concepts_reviewed
         , concept_lists.concepts_used
@@ -129,16 +81,11 @@ with eligible_runs as (
         , statement_lists.skills
         , statement_lists.learning_outcomes
         , statement_lists.audience
-    from extracted_runs
-    inner join course_runs
-        on extracted_runs.courserun_fk = course_runs.courserun_pk
-    inner join courses
-        on course_runs.course_fk = courses.course_pk
+    from learn_runs
     left join concept_lists
-        on extracted_runs.courserun_fk = concept_lists.courserun_fk
+        on learn_runs.courserun_fk = concept_lists.courserun_fk
     left join statement_lists
-        on extracted_runs.courserun_fk = statement_lists.courserun_fk
-    where extracted_runs.run_rank = 1
+        on learn_runs.courserun_fk = statement_lists.courserun_fk
 )
 
 select
@@ -156,4 +103,3 @@ select
         , {{ markdown_list_section('Audience', 'audience', bullets=true) }}
     ) as context_document
 from knowledge
-where etl_source is not null

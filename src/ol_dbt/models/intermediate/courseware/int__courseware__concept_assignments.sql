@@ -1,5 +1,9 @@
 {#
-    Which concept each normalized label belongs to, from the newest resolution run.
+    Which concept each normalized label belongs to, from the newest resolution run:
+    the label's primary sense. Claims do not join to concepts through this; a label
+    can have several senses, and int__courseware__concept_sense_assignments says
+    which one each course run uses.
+
     concept_id is an opaque UUID minted once by ml.lib.courseware.resolve and never
     derived from a label, so renaming a concept or re-running resolution keeps every
     join that uses it. Assignments always point at an active concept: the resolver
@@ -10,25 +14,10 @@ with labels as (
     select * from {{ ref('int__courseware__concept_labels') }}
 )
 
-, runs as (
-    select * from {{ source('courseware_intermediate', 'courseware_resolution_run') }}
-)
-
-, latest_run as (
-    select resolution_run_id
-    from (
-        select
-            resolution_run_id
-            , row_number() over (order by started_at desc) as run_rank
-        from runs
-    ) as ranked
-    where run_rank = 1
-)
-
 , assignments as (
     select assignment.*
     from {{ source('courseware_intermediate', 'courseware_concept_assignment') }} as assignment
-    inner join latest_run
+    inner join {{ ref('int__courseware__latest_resolution_run') }} as latest_run
         on assignment.resolution_run_id = latest_run.resolution_run_id
 )
 
