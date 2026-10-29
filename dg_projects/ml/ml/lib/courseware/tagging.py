@@ -43,9 +43,9 @@ Each distinct phrase gets a match mode:
   can tell apart from a variable or an initial.
 
 and ambiguity flags: short, qualified (a head without its qualifier), single_word
-(one word of everyday English, in any case: "recall", "kernel", "data", "None", but
-not "pandas"; see COMMON_WORDS) and multiple_concepts (the phrase belongs to more
-than one concept, which emits one mention per candidate).
+(one word of everyday English, in any case but all capitals: "recall", "kernel",
+"data", "None", but not "pandas" or "CART"; see COMMON_WORDS) and multiple_concepts
+(the phrase belongs to more than one concept, which emits one mention per candidate).
 Ambiguous mentions are emitted with the flag rather than dropped. Many single words
 are what these courses teach (variance, recall, regression), so dropping them would
 cost more recall than the flag costs a consumer. The flags are review signals: which
@@ -386,9 +386,16 @@ class Pattern:
 
     @property
     def is_single_word(self) -> bool:
-        """The phrase is one common word, or the plural of one, in any case."""
-        return self.token_count == 1 and any(
-            (entry.base_key or self.key) in COMMON_WORDS for entry in self.entries
+        """The phrase is one common word, or the plural of one, in any case.
+
+        An acronym matches only as spelled, so "CART" never reads as "cart".
+        """
+        return (
+            self.token_count == 1
+            and not self.is_acronym
+            and any(
+                (entry.base_key or self.key) in COMMON_WORDS for entry in self.entries
+            )
         )
 
     @cached_property

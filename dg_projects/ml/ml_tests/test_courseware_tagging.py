@@ -133,7 +133,7 @@ def test_parentheticals_give_full_name_abbreviation_and_qualified_head():
     assert variants["mean squared error"] == ("full_name", "caseless", False)
     assert variants["mse"] == ("abbreviation", "case_sensitive", True)
     assert variants["none"] == ("without_qualifier", "case_sensitive", True)
-    # one lowercase word, so ambiguous on that count alone
+    # one common word, so ambiguous on that count alone
     assert variants["integer"] == ("full_name", "caseless", True)
     assert variants["int"] == ("abbreviation", "case_sensitive", True)
     # an explicit label keeps its own assignment over another label's head
@@ -179,6 +179,9 @@ def test_common_words_are_flagged_not_dropped():
         # a library's name that is not an everyday word
         ("pandas", "pandas", False),
         ("NumPy", "numpy", False),
+        # an acronym matches only in capitals, so it is never the everyday word
+        ("CART", "cart", False),
+        ("CART", "carts", False),
         # the plural of a common word, though the plural itself is rarer
         ("kernel", "kernels", True),
         ("decision tree", "decision tree", False),
