@@ -1405,27 +1405,47 @@ def release_resource_concepts(*names: str) -> pl.DataFrame:
     )
 
 
+def built_by(frame: pl.DataFrame, build: str) -> pl.DataFrame:
+    """Return a candidate projection as dbt invocation build would write it."""
+    return frame.with_columns(
+        pl.lit(build, dtype=pl.String).alias(release_module.BUILD_COLUMN)
+    )
+
+
 def candidate(
     tables: dict[str, pl.DataFrame],
     *names: str,
     stale: tuple[str, ...] = (),
+    build: str = "build1",
     **overrides,
 ) -> None:
-    """Stage what dbt would build for the next release candidate.
+    """Stage what one dbt invocation would build for the next release candidate.
 
     :param stale: names whose description inputs changed since they were described
+    :param build: the dbt invocation id
     """
-    tables["int__courseware__release_manifest"] = manifest(
-        concept_count=len(names),
-        **{"resource_count": 1, "resource_concept_count": len(names), **overrides},
-    )
     tables["int__courseware__concept_description_inputs"] = description_inputs_for(
         *names
     )
-    tables["int__courseware__release_concepts"] = release_concepts(*names, stale=stale)
-    tables["int__courseware__release_resource_knowledge"] = release_resources(*names)
-    tables["int__courseware__release_resource_concepts"] = release_resource_concepts(
-        *names
+    projections = {
+        "int__courseware__release_concepts": release_concepts(*names, stale=stale),
+        "int__courseware__release_resource_knowledge": release_resources(*names),
+        "int__courseware__release_resource_concepts": release_resource_concepts(*names),
+    }
+    for table, frame in projections.items():
+        tables[table] = built_by(frame, build)
+    tables["int__courseware__release_manifest"] = manifest(
+        concept_count=len(names),
+        **{"resource_count": 1, "resource_concept_count": len(names), **overrides},
+    ).with_columns(
+        **{
+            column: pl.lit(build if count else None, dtype=pl.String)
+            for column, count in (
+                ("concepts_invocation_id", len(names)),
+                ("resources_invocation_id", 1),
+                ("resource_concepts_invocation_id", len(names)),
+            )
+        }
     )
 
 
@@ -1506,7 +1526,7 @@ def test_a_failed_graph_build_leaves_the_last_release_published(tables):
     ):
         assert published_rows(tables, table)[column].to_list() == [value]
 
-    # The graph build succeeds: the next candidate moves both projections together.
+    # The graph build succeeds: the next candidate moves all three projections.
     candidate(
         tables,
         "area under the curve",
@@ -1672,7 +1692,7 @@ def test_a_description_from_changed_inputs_is_refused(tables):
     check = check_result(built, "release_candidate_valid")
     assert not check.passed
     assert check.metadata["validation_errors"].value == [
-        "1 concepts' descriptions predate their current inputs"
+        "1 concepts' descriptions predate their current inputs or have none"
     ]
     assert published_rows(tables, "courseware_release_concept")["name"].to_list() == [
         "AUC"
@@ -1686,7 +1706,12 @@ def test_a_policy_change_may_empty_the_release_and_blocks_older_rollbacks(tables
 
     # the only run naming AUC is made ineligible: the empty candidate retracts it
     candidate(tables, source_policy_version="pol2", resource_count=0)
-    tables["int__courseware__release_resource_knowledge"] = release_resources().head(0)
+    tables["int__courseware__release_resource_knowledge"] = built_by(
+        release_resources().head(0), "build1"
+    )
+    tables["int__courseware__release_manifest"] = tables[
+        "int__courseware__release_manifest"
+    ].with_columns(resources_invocation_id=pl.lit(None, dtype=pl.String))
     built, _ = release(tables)
 
     assert check_result(built, "release_candidate_valid").passed
@@ -1699,15 +1724,55 @@ def test_a_policy_change_may_empty_the_release_and_blocks_older_rollbacks(tables
     assert failure_class(published) == "PermanentFailure"
 
 
-def test_a_projection_from_another_dbt_build_is_not_released(tables):
+@pytest.mark.parametrize(
+    "rebuilt",
+    [
+        # the concepts were rebuilt after the manifest, the resource model failed
+        ("AUC", "pandas"),
+        # the same count: AUC was merged into another concept, and the resource
+        # projections still name AUC
+        ("area under the curve",),
+    ],
+)
+def test_a_projection_from_another_dbt_build_is_not_released(tables, rebuilt):
     candidate(tables, "AUC")
-    # the concepts were rebuilt after the manifest, the resource model failed
-    tables["int__courseware__release_concepts"] = release_concepts("AUC", "pandas")
+    tables["int__courseware__release_concepts"] = built_by(
+        release_concepts(*rebuilt), "build2"
+    )
 
     built, _ = release(tables)
 
     assert not built.success
+    assert "not the dbt build the manifest read" in str(
+        next(e for e in built.all_events if e.is_step_failure).step_failure_data.error
+    )
     assert "courseware_release" not in tables
+
+
+def test_a_release_carries_no_dbt_invocation(tables):
+    candidate(tables, "AUC")
+    release(tables)
+    candidate(tables, "AUC", build="build2")
+
+    release(tables)
+
+    # a rebuild with the same rows is the same candidate
+    assert tables["courseware_release"].height == 1
+    for table in release_module.PROJECTIONS:
+        assert release_module.BUILD_COLUMN not in tables[table].columns
+
+
+def test_validation_refuses_a_description_of_a_concept_without_inputs():
+    errors = release_module.validate_candidate(
+        manifest().row(0, named=True),
+        release_concepts("AUC"),
+        current_input_checksums(description_inputs_for()),
+        "pol",
+    )
+
+    assert errors == [
+        "1 concepts' descriptions predate their current inputs or have none"
+    ]
 
 
 def test_graph_writes_the_closure_of_approved_edges_and_fails_on_an_approved_cycle(

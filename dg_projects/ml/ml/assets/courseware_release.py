@@ -72,6 +72,14 @@ PROJECTION_COUNTS = {
     "courseware_release_resource_knowledge": "resource_count",
     "courseware_release_resource_concept": "resource_concept_count",
 }
+# The manifest column naming the dbt invocation that built each projection, which
+# every projection row carries as BUILD_COLUMN. It is not copied into a release.
+PROJECTION_BUILDS = {
+    "courseware_release_concept": "concepts_invocation_id",
+    "courseware_release_resource_knowledge": "resources_invocation_id",
+    "courseware_release_resource_concept": "resource_concepts_invocation_id",
+}
+BUILD_COLUMN = "dbt_invocation_id"
 RELEASE_TABLES = (*PROJECTIONS, RELEASE_KEY.path[-1])
 # The manifest columns copied onto the release row.
 MANIFEST_SCHEMA = {
@@ -153,18 +161,20 @@ def validate_candidate(
             f"under prompt {manifest['description_prompt_version']}"
         )
     # A description written from inputs that have since changed (a run made
-    # ineligible, a merge) still says what the old inputs said.
+    # ineligible, a merge), or that no longer exist, still says what the old inputs
+    # said. int__courseware__release_concepts gives a concept without inputs no
+    # description, so the second is a candidate model that regressed.
     stale = sum(
         1
         for concept_id, checksum in concepts.select(
             "concept_id", "description_input_checksum"
         ).iter_rows()
-        if checksum is not None
-        and concept_id in input_checksums
-        and input_checksums[concept_id] != checksum
+        if checksum is not None and input_checksums.get(concept_id) != checksum
     )
     if stale:
-        errors.append(f"{stale} concepts' descriptions predate their current inputs")
+        errors.append(
+            f"{stale} concepts' descriptions predate their current inputs or have none"
+        )
     # An empty candidate under the published release's policy is most likely a
     # review mistake, and would empty every learner-facing projection. Under a
     # changed policy it is the policy retracting what it no longer allows.
@@ -203,6 +213,34 @@ def candidate_checksum(
             frame.sort(keys).select(sorted(frame.columns)).write_ndjson().encode()
         )
     return digest.hexdigest()
+
+
+def projection_drift(
+    manifest_row: dict[str, Any], projections: dict[str, pl.DataFrame]
+) -> dict[str, Any]:
+    """Name the projections that are not the dbt build the manifest read.
+
+    The manifest records each projection's row count and the dbt invocation that
+    built it. A projection rebuilt alone after the manifest (say, the concepts with
+    concept B in place of A while the resource projections still name A) can keep
+    its row count but not its invocation.
+
+    :param manifest_row: the int__courseware__release_manifest row
+    :param projections: each candidate projection, with BUILD_COLUMN
+    :returns: per drifted projection, what the manifest recorded and what was read
+    :rtype: dict[str, Any]
+    """
+    drift = {}
+    for table, frame in projections.items():
+        recorded = (
+            manifest_row[PROJECTION_COUNTS[table]],
+            manifest_row[PROJECTION_BUILDS[table]],
+        )
+        builds = sorted(frame[BUILD_COLUMN].unique())
+        read = (frame.height, builds[0] if len(builds) == 1 else builds or None)
+        if read != recorded:
+            drift[table] = {"manifest": recorded, "read": read}
+    return drift
 
 
 def newest(rows: pl.LazyFrame | None, column: str) -> dict[str, Any] | None:
@@ -246,9 +284,9 @@ def release_check(release: dict[str, Any]) -> AssetCheckResult:
 
 @multi_asset(
     group_name="courseware",
-    # The manifest alone: dbt builds it only after both projections built in the
-    # same run, so a run that rebuilt one projection and failed the other does not
-    # request a release. The projections and description inputs are read too.
+    # The manifest alone: dbt builds it only after all three projections built, so
+    # a run that rebuilt one projection and failed another does not request a
+    # release. The projections and description inputs are read too.
     deps=[MANIFEST_KEY],
     outs={
         table: AssetOut(
@@ -286,21 +324,22 @@ def courseware_knowledge_release(context: AssetExecutionContext):
     if manifest_rows.height != 1:
         msg = f"{MANIFEST_KEY.path[-1]} has {manifest_rows.height} rows, not one"
         raise permanent_failure(msg)
-    manifest = {column: manifest_rows[column][0] for column in MANIFEST_SCHEMA}
-    projections = {
+    manifest_row = manifest_rows.row(0, named=True)
+    manifest = {column: manifest_row[column] for column in MANIFEST_SCHEMA}
+    built = {
         table: require_table("intermediate", key.path[-1]).collect()
         for table, (key, _) in PROJECTIONS.items()
     }
-    counts = {
-        table: manifest_rows[column][0] for table, column in PROJECTION_COUNTS.items()
-    }
-    if any(projections[table].height != count for table, count in counts.items()):
+    if drift := projection_drift(manifest_row, built):
         msg = (
-            "The candidate projections changed since the manifest was built "
-            f"({ {table: frame.height for table, frame in projections.items()} } rows, "
-            f"manifest {counts}); the next dbt build requests another release"
+            "The candidate projections are not the dbt build the manifest read "
+            f"((row count, dbt invocation) per projection: {drift}); the next dbt "
+            "build requests another release"
         )
         raise Failure(msg)
+    # The invocation changes with every dbt build, so it stays out of the release
+    # and its checksum.
+    projections = {table: frame.drop(BUILD_COLUMN) for table, frame in built.items()}
     published = published_release()
     if not projections["courseware_release_concept"].height and published is None:
         # Until a reviewer accepts a concept every candidate is empty, and failing

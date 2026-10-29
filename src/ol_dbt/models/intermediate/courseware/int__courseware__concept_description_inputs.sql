@@ -29,8 +29,7 @@ with eligible_runs as (
 )
 
 , approval as (
-    select case when count(*) = 1 then max(prompt_version) end as prompt_version
-    from {{ ref('courseware_description_approval') }}
+    {{ courseware_approved_description_prompt() }}
 )
 
 , course_runs as (

@@ -1135,12 +1135,14 @@ models:
     - unique
     - not_null
   - name: name
-    description: str, the label source-eligible runs mention most
+    description: str, the surface form of the label key the concept's mentions in
+      source-eligible runs use most
   - name: concept_kind
-    description: str, that label's kind
+    description: str, the kind the concept's mentions in source-eligible runs give
+      it most
   - name: short_description
     description: str, at most 12 words; null when the concept has no description under
-      the approved prompt yet
+      the approved prompt yet, or no description inputs
   - name: description
     description: str, one or two course-agnostic sentences
   - name: is_learner_facing
@@ -1164,6 +1166,9 @@ models:
   - name: course_count
     description: int, courses whose source-eligible run relates to the concept in
       any way
+  - name: dbt_invocation_id
+    description: str, the dbt invocation that built this table; the release asset
+      checks it against int__courseware__release_manifest and does not copy it
 
 - name: int__courseware__release_resource_knowledge
   description: Each Learn course's knowledge as the next knowledge release would publish
@@ -1210,6 +1215,9 @@ models:
     description: array of str, who the material says the course is for
   - name: context_document
     description: str, markdown rendered from the arrays in this row
+  - name: dbt_invocation_id
+    description: str, the dbt invocation that built this table; the release asset
+      checks it against int__courseware__release_manifest and does not copy it
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [etl_source, readable_id]
@@ -1250,6 +1258,9 @@ models:
     description: int, accepted claims behind the relation
   - name: first_scope_position
     description: int, the first scope in the run that supports the relation
+  - name: dbt_invocation_id
+    description: str, the dbt invocation that built this table; the release asset
+      checks it against int__courseware__release_manifest and does not copy it
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [etl_source, readable_id, concept_id, relation, requirement_source]
@@ -1283,7 +1294,8 @@ models:
       after a resolution run whose graph build failed or has not run yet
   - name: description_prompt_version
     description: str, the description prompt version courseware_description_approval
-      approves
+      approves, read from the seed, so a release that retracts every described run
+      still has one; null when the seed has no row or more than one
   - name: undescribed_concept_count
     description: int, candidate concepts awaiting a description under that version
   - name: concept_count
@@ -1294,6 +1306,15 @@ models:
   - name: resource_concept_count
     description: int, rows in int__courseware__release_resource_concepts when this
       was built
+  - name: concepts_invocation_id
+    description: str, the dbt_invocation_id of int__courseware__release_concepts when
+      this was built; null when it was empty
+  - name: resources_invocation_id
+    description: str, the dbt_invocation_id of int__courseware__release_resource_knowledge
+      when this was built; null when it was empty
+  - name: resource_concepts_invocation_id
+    description: str, the dbt_invocation_id of int__courseware__release_resource_concepts
+      when this was built; null when it was empty
   - name: extraction_selection_checksum
     description: str, md5 of the current extraction keys of source-eligible runs
   - name: extraction_count
