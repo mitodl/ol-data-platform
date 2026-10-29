@@ -23,6 +23,7 @@ from ml.lib.courseware.resolve import (
     label_embedder,
     resolve_concepts,
 )
+from ml.lib.courseware.senses import SENSE_PROMPT, SENSE_PROMPT_VERSION
 from ml.lib.courseware.warehouse import anthropic_client, latest_run_rows
 from ml.lib.warehouse import read_table, require_table, warehouse_database
 from ml.resources.llm import LLMClientFactory
@@ -32,8 +33,11 @@ from ol_orchestrate.lib.failures import PermanentFailure
 from pydantic import Field
 
 LABELS_KEY = AssetKey(["intermediate", "int__courseware__concept_labels"])
+SENSE_INPUTS_KEY = AssetKey(["intermediate", "int__courseware__concept_sense_inputs"])
 RUN_KEY = AssetKey(["intermediate", "courseware_resolution_run"])
 ADJUDICATION_PROMPT_NAME = "courseware-concept-adjudication"
+SENSE_PROMPT_NAME = "courseware-concept-sense"
+UNIT_COLUMNS = ("concept_label_key", "platform", "courserun_readable_id")
 # The pilot's full rebuild kept 636 of 650 assignments (2.2% changed).
 DEFAULT_MAX_ASSIGNMENT_CHURN = 0.05
 # Written in this order; the run row goes last, because the next run reads the
@@ -42,10 +46,13 @@ SNAPSHOT_TABLES = {
     "courseware_concept_registry": "registry",
     "courseware_concept_assignment": "assignments",
     "courseware_concept_relation": "relations",
+    "courseware_concept_alias": "aliases",
+    "courseware_concept_sense_assignment": "sense_assignments",
 }
 APPEND_TABLES = (
     *SNAPSHOT_TABLES,
     "courseware_resolution_decision",
+    "courseware_sense_decision",
     "courseware_concept_label_embedding",
     RUN_KEY.path[-1],
 )
@@ -117,6 +124,28 @@ def assignment_churn(
     return joined.height, changed.height
 
 
+def undecided_sense_units(
+    sense_inputs: pl.DataFrame, sense_assignments: pl.DataFrame, label_keys: set[str]
+) -> int:
+    """Count current (label, course run) units with no sense assignment row.
+
+    A unit in the review queue has a row (needs_review), so it does not make a run
+    on its own; any run asks about it again. A unit whose sense batch failed has no
+    row, so it does.
+
+    :param sense_inputs: int__courseware__concept_sense_inputs
+    :param sense_assignments: the newest run's sense assignment snapshot
+    :param label_keys: the run's current concept_label_keys
+    """
+    return (
+        sense_inputs.filter(pl.col("concept_label_key").is_in(label_keys))
+        .select(UNIT_COLUMNS)
+        .unique()
+        .join(sense_assignments.select(UNIT_COLUMNS), on=UNIT_COLUMNS, how="anti")
+        .height
+    )
+
+
 def churn_check(
     previous: pl.DataFrame,
     current: pl.DataFrame,
@@ -144,13 +173,13 @@ def churn_check(
 
 @multi_asset(
     group_name="courseware",
-    deps=[LABELS_KEY],
+    deps=[LABELS_KEY, SENSE_INPUTS_KEY],
     outs={
         table: AssetOut(
             key=AssetKey(["intermediate", table]),
             io_manager_key="io_manager",
             metadata=_OUTPUT_METADATA,
-            code_version=f"{RESOLVER_ID}-{PROMPT_VERSION}",
+            code_version=f"{RESOLVER_ID}-{PROMPT_VERSION}-{SENSE_PROMPT_VERSION}",
             automation_condition=upstream_or_code_changes(),
             # No new run is written when every label already has an assignment.
             is_required=False,
@@ -174,13 +203,16 @@ def courseware_resolution(
     config: CoursewareResolutionConfig,
     llm: LLMClientFactory,
 ):
-    """Assign every concept label to a stable concept id, resolving only new labels.
+    """Assign every concept label to a stable concept id, resolving only new labels,
+    then each course run's use of a label to one of its senses.
 
     Calls ml.lib.courseware.resolve.resolve_concepts with the newest run's
-    registry, assignment and relation snapshots and the label embedding cache,
-    then appends this run's snapshots, decisions, new embeddings and run row.
+    registry, assignment, relation, alias and sense assignment snapshots and the
+    label embedding cache, then appends this run's snapshots, decisions, new
+    embeddings and run row.
     """
     labels = require_table("intermediate", LABELS_KEY.path[-1]).collect()
+    sense_inputs = require_table("intermediate", SENSE_INPUTS_KEY.path[-1]).collect()
 
     runs = read_table("intermediate", RUN_KEY.path[-1])
     last_run = (
@@ -194,8 +226,18 @@ def courseware_resolution(
     for table, attribute in SNAPSHOT_TABLES.items():
         snapshot = latest_run_rows("intermediate", table, "resolution_run_id", last_run)
         if snapshot is not None:
+            # a column added since the snapshot was written (the registry's
+            # split_from_concept_id) is null in its rows
+            columns = getattr(state, attribute).schema
             setattr(
-                state, attribute, snapshot.select(getattr(state, attribute).columns)
+                state,
+                attribute,
+                snapshot.select(
+                    pl.col(name)
+                    if name in snapshot.columns
+                    else pl.lit(None, dtype=dtype).alias(name)
+                    for name, dtype in columns.items()
+                ),
             )
     cached = read_table("intermediate", "courseware_concept_label_embedding")
     if cached is not None:
@@ -204,9 +246,14 @@ def courseware_resolution(
     # Membership, not equality: the snapshot also carries the assignments of
     # labels that are no longer current, and those never need resolving.
     label_keys = set(labels["concept_label_key"])
-    if not config.rebuild and label_keys <= set(state.assignments["concept_label_key"]):
+    if (
+        not config.rebuild
+        and label_keys <= set(state.assignments["concept_label_key"])
+        and not undecided_sense_units(sense_inputs, state.sense_assignments, label_keys)
+    ):
         context.log.info(
-            "All %d labels already have an assignment in run %s; nothing to resolve",
+            "All %d labels and their course runs already have assignments in run %s;"
+            " nothing to resolve",
             labels.height,
             last_run,
         )
@@ -229,11 +276,13 @@ def courseware_resolution(
     opik_prompt_version = publish_prompt_version(
         ADJUDICATION_PROMPT_NAME, ADJUDICATION_PROMPT
     )
+    opik_sense_prompt_version = publish_prompt_version(SENSE_PROMPT_NAME, SENSE_PROMPT)
     result = resolve_concepts(
         labels,
         state,
         client,
         label_embedder(run_id=context.run.run_id),
+        mentions=sense_inputs,
         model_id=model_id,
         rebuild=config.rebuild,
     )
@@ -243,12 +292,19 @@ def courseware_resolution(
     # count; the assignments also carry labels that are no longer current, so
     # this is set membership, not a difference of counts.
     unassigned = len(label_keys - set(result.assignments["concept_label_key"]))
+    # units of a failed sense batch; the next run asks about them again
+    undecided_units = undecided_sense_units(
+        sense_inputs, result.sense_assignments, label_keys
+    )
     context.log.info("Resolution run %s", run)
     for table, frame in (
         ("courseware_concept_registry", result.registry),
         ("courseware_concept_assignment", result.assignments),
         ("courseware_concept_relation", result.relations),
+        ("courseware_concept_alias", result.aliases),
+        ("courseware_concept_sense_assignment", result.sense_assignments),
         ("courseware_resolution_decision", result.decisions),
+        ("courseware_sense_decision", result.sense_decisions),
         ("courseware_concept_label_embedding", result.embeddings),
     ):
         yield Output(
@@ -271,6 +327,12 @@ def courseware_resolution(
             "unassigned_label_count": MetadataValue.int(unassigned),
             "prompt_version": MetadataValue.text(PROMPT_VERSION),
             "opik_prompt_version": MetadataValue.text(opik_prompt_version),
+            "sense_calls": MetadataValue.int(run["sense_calls"]),
+            "senses_minted": MetadataValue.int(run["senses_minted"]),
+            "sense_review_count": MetadataValue.int(run["sense_review_count"]),
+            "undecided_sense_unit_count": MetadataValue.int(undecided_units),
+            "sense_prompt_version": MetadataValue.text(SENSE_PROMPT_VERSION),
+            "opik_sense_prompt_version": MetadataValue.text(opik_sense_prompt_version),
         },
     )
     yield churn_check(
@@ -285,19 +347,21 @@ def courseware_resolution(
 
     # What succeeded is stored. The failure is permanent for run_retries, which
     # would pay for every batch again; automation re-requests once, and that run
-    # adjudicates only the labels still unassigned.
-    if run["failed_batch_count"]:
+    # adjudicates only the labels and course runs still undecided.
+    if run["failed_batch_count"] or undecided_units:
         raise AdjudicationFailure(
             description=(
                 f"{run['failed_batch_count']} of {run['adjudication_calls']} "
                 f"adjudication batches failed ({run['failed_label_count']} labels, "
-                f"{unassigned} left without a concept)"
+                f"{unassigned} left without a concept); {undecided_units} course "
+                "runs' uses of a label have no sense decision"
             ),
             metadata={
                 "retryable": False,
                 "failed_batch_count": run["failed_batch_count"],
                 "failed_label_count": run["failed_label_count"],
                 "unassigned_label_count": unassigned,
+                "undecided_sense_unit_count": undecided_units,
             },
             allow_retries=False,
         )

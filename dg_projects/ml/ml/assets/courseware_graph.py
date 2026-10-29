@@ -15,10 +15,16 @@ from dagster import (
     Output,
     multi_asset,
 )
-from ml.lib.courseware.graph import GRAPH_VERSION, compute_graph, previous_membership
+from ml.lib.courseware.graph import (
+    GRAPH_VERSION,
+    PrerequisiteCycleError,
+    compute_graph,
+    previous_membership,
+)
 from ml.lib.courseware.warehouse import latest_run_rows
 from ml.lib.warehouse import read_table, require_table, warehouse_database
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.failures import PermanentFailure
 from pydantic import Field
 
 CONCEPTS_KEY = AssetKey(["dimensional", "dim_concept"])
@@ -30,6 +36,7 @@ GRAPH_TABLES = (
     "courseware_concept_graph_node",
     "courseware_concept_graph_edge",
     "courseware_concept_graph_community",
+    "courseware_concept_graph_prerequisite_closure",
     RUN_KEY.path[-1],
 )
 # How many cycle members the check lists, for review.
@@ -55,6 +62,14 @@ class CoursewareGraphConfig(Config):
         ge=0,
         description="The same, for cycles in the broader hierarchy.",
     )
+
+
+class ApprovedPrerequisiteCycle(PermanentFailure):
+    """Approved builds_on edges form a cycle, so the closure has no learning order.
+
+    Permanent because recomputing the same input fails the same way; a reviewer has
+    to withdraw one of the approvals.
+    """
 
 
 def cycle_check(
@@ -120,12 +135,15 @@ def cycle_check(
 def courseware_concept_graph(
     context: AssetExecutionContext, config: CoursewareGraphConfig
 ):
-    """Compute the concept graph's communities, sequencing, hierarchy and sparsity.
+    """Compute the concept graph's communities, sequencing, hierarchy, sparsity and
+    experimental prerequisite closure.
 
-    Calls ml.lib.courseware.graph.compute_graph on dim_concept and
-    bridge_concept_relation, carrying community ids from the newest run. A run
-    whose input checksum and graph version match the newest run's is not written
-    again.
+    Calls ml.lib.courseware.graph.compute_graph on dim_concept and every
+    bridge_concept_relation column, so review_status reaches select_edges and only
+    approved builds_on edges enter the closure. Community ids carry from the newest
+    run. A run whose input checksum and graph version match the newest run's is not
+    written again. A cycle among approved edges fails the run without writing
+    anything, so the last run's closure stays the newest.
     """
     runs = read_table("intermediate", RUN_KEY.path[-1])
     last_run = (
@@ -134,22 +152,29 @@ def courseware_concept_graph(
         else None
     )
     last_run_id = last_run["graph_run_id"] if last_run else None
-    result = compute_graph(
-        require_table("dimensional", CONCEPTS_KEY.path[-1]).collect(),
-        require_table("dimensional", RELATIONS_KEY.path[-1]).collect(),
-        previous_nodes=previous_membership(
-            latest_run_rows(
-                "intermediate", GRAPH_TABLES[0], "graph_run_id", last_run_id
-            ),
-            latest_run_rows(
-                "intermediate",
-                "courseware_concept_graph_community",
-                "graph_run_id",
+    try:
+        result = compute_graph(
+            require_table("dimensional", CONCEPTS_KEY.path[-1]).collect(),
+            require_table("dimensional", RELATIONS_KEY.path[-1]).collect(),
+            previous_nodes=previous_membership(
+                latest_run_rows(
+                    "intermediate", GRAPH_TABLES[0], "graph_run_id", last_run_id
+                ),
+                latest_run_rows(
+                    "intermediate",
+                    "courseware_concept_graph_community",
+                    "graph_run_id",
+                    last_run_id,
+                ),
                 last_run_id,
             ),
-            last_run_id,
-        ),
-    )
+        )
+    except PrerequisiteCycleError as error:
+        raise ApprovedPrerequisiteCycle(
+            description=str(error),
+            metadata={"retryable": False},
+            allow_retries=False,
+        ) from error
     run = result.run.row(0, named=True)
     # The checksum covers the input and parameters, not the algorithm, so a
     # GRAPH_VERSION bump (the asset's code version) must still write a run.
@@ -173,7 +198,13 @@ def courseware_concept_graph(
     context.log.info("Graph run %s", run)
     for table, frame in zip(
         GRAPH_TABLES,
-        (result.nodes, result.edges, result.communities, result.run),
+        (
+            result.nodes,
+            result.edges,
+            result.communities,
+            result.prerequisite_closure,
+            result.run,
+        ),
         strict=True,
     ):
         yield Output(
