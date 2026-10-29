@@ -129,9 +129,19 @@ STRATA_FALLBACKS: dict[str, tuple[pl.Expr, ...]] = {
     "subsections": (pl.format("{}|{}", "size_band", "models"), pl.col("models")),
 }
 # With declared disciplines the point of the sample is per-discipline estimates, so
-# the fallbacks give up the other axes and keep the discipline.
+# the fallbacks give up the other axes and keep the discipline. Claims keep the
+# compared strata apart first: only they have an autorater, and a stratum with a
+# null autorater anywhere is estimated without one.
+_COMPARED = (
+    pl.when(pl.col("agreement").is_in(("not_compared", "unpaired")))
+    .then(pl.col("agreement"))
+    .otherwise(pl.lit("compared"))
+)
 DISCIPLINE_FALLBACKS: dict[str, tuple[pl.Expr, ...]] = {
-    "claims": (pl.format("{}|{}", "discipline", "model"),),
+    "claims": (
+        pl.format("{}|{}|{}", "discipline", "model", _COMPARED),
+        pl.format("{}|{}", "discipline", "model"),
+    ),
     "subsections": (pl.format("{}|{}", "discipline", "models"),),
 }
 

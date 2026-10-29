@@ -1687,3 +1687,28 @@ def test_prerequisite_population_flags_pipeline_hierarchy():
     flags = dict(population.select("item_id", "pipeline_hierarchy").iter_rows())
     # a kind of b with no sequence edge, and a builds on c with no hierarchy
     assert flags == {"a||b": True, "a||c": False, "b||c": False}
+
+
+def test_claim_fallback_with_disciplines_keeps_the_autorater_strata_apart():
+    agreements = [
+        agreement
+        for agreement in ("both", "haiku_only", "not_compared", "unpaired")
+        for _ in range(5)
+    ]
+    population = pl.DataFrame(
+        {
+            "item_id": [f"c{n:02d}" for n in range(len(agreements))],
+            "model": ["haiku"] * len(agreements),
+            "discipline": ["math"] * len(agreements),
+            "agreement": agreements,
+        }
+    ).with_columns(
+        pl.format("{}|{}|{}", "discipline", "model", "agreement").alias("stratum")
+    )
+    # four strata need 16 labels; pooling both and haiku_only fits 12
+    fitted, _ = samples.fit_strata(population, "claims", 12, 4, keep_discipline=True)
+    assert set(fitted["stratum"]) == {
+        "math|haiku|compared",
+        "math|haiku|not_compared",
+        "math|haiku|unpaired",
+    }
