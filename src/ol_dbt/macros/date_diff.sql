@@ -7,8 +7,8 @@
 {% endmacro %}
 
 {% macro duckdb__date_diff(unit, date1, date2) %}
-  {# DuckDB's date_diff(part, start, end) is end - start, as Trino's is (checked on DuckDB 2.0). #}
-  date_diff({{ unit }}, {{ date1 }}, {{ date2 }})
+  {# Whole units from date1 to date2, as in Trino. DuckDB's date_diff counts unit boundaries crossed instead. #}
+  date_sub({{ unit }}, {{ date1 }}, {{ date2 }})
 {% endmacro %}
 
 {% macro default__date_diff(unit, date1, date2) %}

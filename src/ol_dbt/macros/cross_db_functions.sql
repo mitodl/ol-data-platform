@@ -1570,7 +1570,8 @@
 
 {#
     split_part_or_null: field `index` (1-based) of `string` split on `delimiter`, or NULL
-    when `string` is NULL or has fewer fields than `index`, as Trino's split_part() does.
+    when `string` or `index` is NULL or `string` has fewer fields than `index`, as Trino's
+    split_part() does.
     StarRocks' split_part() returns '' for both (checked on 4.1.6) and DuckDB's returns ''
     past the last field, so both count the fields first.
 #}
@@ -1589,8 +1590,9 @@
 {% macro starrocks__split_part_or_null(string, delimiter, index) -%}
     case
         when
-            {{ string }} is null
-            or {{ index }} > (length({{ string }}) - length(replace({{ string }}, {{ delimiter }}, '')))
+            ({{ string }}) is null
+            or ({{ index }}) is null
+            or ({{ index }}) > (length({{ string }}) - length(replace({{ string }}, {{ delimiter }}, '')))
             / length({{ delimiter }}) + 1
             then null
         else split_part({{ string }}, {{ delimiter }}, {{ index }})
