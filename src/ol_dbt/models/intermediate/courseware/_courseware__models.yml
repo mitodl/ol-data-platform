@@ -314,8 +314,8 @@ models:
       covers the part (under any version when the allowlist does not cover the run)
   - name: has_current_input_extraction
     description: boolean, whether one of those has the part's current split and input
-      text; false for a part whose new text failed to extract, whose older extraction
-      may still be current
+      text (for v2, also the current course header); false for a part whose new text
+      or header failed to extract, whose older extraction may still be current
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
