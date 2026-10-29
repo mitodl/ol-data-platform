@@ -17,12 +17,9 @@ from typing import Any
 import cyclopts
 import polars as pl
 from ml.lib.courseware.evaluation import labelstudio, samples, score
-from ml.lib.courseware.evaluation.matching import (
-    MATCHING_RULE,
-    LabelMatcher,
-    concept_label_key,
-)
+from ml.lib.courseware.evaluation.matching import MATCHING_RULE, LabelMatcher
 from ml.lib.courseware.evaluation.metrics import MIN_LABELS_PER_STRATUM
+from ml.lib.courseware.tagging import label_key
 
 gold = cyclopts.App(name="gold", help=__doc__)
 SETS = ("claims", "subsections", "pairs", "clusters", "prerequisites")
@@ -332,7 +329,7 @@ def score_gold(  # noqa: PLR0913
         matcher = LabelMatcher.from_frame(pl.read_parquet(sample_dir / MATCHER))
         if gold_label_map:
             keys = [
-                (concept_label_key(label), concept_label_key(model_label))
+                (label_key(label), label_key(model_label))
                 for label, model_label in pl.read_parquet(gold_label_map)
                 .select("label", "model_label")
                 .iter_rows()
