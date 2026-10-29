@@ -40,10 +40,16 @@ with content_types as (
     select
         content_types.model
         , uservote.content_object_id
-        , array_agg(cast(uservote.user_id as varchar) order by uservote.id)
-            filter (where uservote.vote > 0) as votes_up
-        , array_agg(cast(uservote.user_id as varchar) order by uservote.id)
-            filter (where uservote.vote < 0) as votes_down
+        , {{ array_agg_filter(
+            'cast(uservote.user_id as varchar)'
+            , 'uservote.vote > 0'
+            , order_by='uservote.id'
+        ) }} as votes_up
+        , {{ array_agg_filter(
+            'cast(uservote.user_id as varchar)'
+            , 'uservote.vote < 0'
+            , order_by='uservote.id'
+        ) }} as votes_down
     from {{ source('ol_warehouse_raw_data', 'raw__xpro__openedx__mysql__forum_uservote') }} as uservote
     inner join content_types on uservote.content_type_id = content_types.id
     group by content_types.model, uservote.content_object_id

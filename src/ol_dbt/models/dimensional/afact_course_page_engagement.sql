@@ -18,9 +18,9 @@ with vertical_structure as (
         , openedx_user_id
         , courserun_readable_id
         , block_fk
-        , arbitrary(user_username) as user_username
-        , arbitrary(platform_fk) as platform_fk
-        , arbitrary(user_fk) as user_fk
+        , {{ arbitrary('user_username') }} as user_username
+        , {{ arbitrary('platform_fk') }} as platform_fk
+        , {{ arbitrary('user_fk') }} as user_fk
         , count(*) as num_of_views
         , max(event_timestamp) as last_view_timestamp
     from {{ ref('tfact_course_navigation_events') }}

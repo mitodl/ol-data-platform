@@ -94,12 +94,12 @@ with content as (
         *
         , coalesce(
             file_json not in ('null', 'false', '""', '[]', '{}')
-            and coalesce(try_cast(file_json as double), 1) != 0
+            and coalesce({{ try_cast('file_json', 'double') }}, 1) != 0
             , false
         ) as names_file
         , coalesce(
             language_json not in ('null', 'false', '""', '[]', '{}')
-            and coalesce(try_cast(language_json as double), 1) != 0
+            and coalesce({{ try_cast('language_json', 'double') }}, 1) != 0
             , false
         ) as names_language
     from transcript_entries

@@ -40,9 +40,9 @@ with problem_structure as (
         , openedx_user_id
         , problem_block_fk
         , courserun_readable_id
-        , arbitrary(user_username) as user_username
-        , arbitrary(platform_fk) as platform_fk
-        , arbitrary(user_fk) as user_fk
+        , {{ arbitrary('user_username') }} as user_username
+        , {{ arbitrary('platform_fk') }} as platform_fk
+        , {{ arbitrary('user_fk') }} as user_fk
         , max(attempt) as num_of_attempts
         , max(event_timestamp) as last_attempt_timestamp
         , count(case when success = 'correct' then 1 end) as num_of_correct_attempts

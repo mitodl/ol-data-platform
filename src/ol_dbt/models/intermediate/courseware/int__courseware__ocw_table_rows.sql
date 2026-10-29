@@ -30,7 +30,7 @@ with ocw_row_pages as (
         , row_pages.reads_sessions
         , page_tables.table_index
         , {{ regexp_split(
-            "split_part(" ~ element_at_array('row_pages.tables', 'page_tables.table_index') ~ ", '</table>', 1)"
+            split_part_or_null(element_at_array('row_pages.tables', 'page_tables.table_index'), "'</table>'", 1)
             , "'<tr'"
         ) }} as table_rows
     from ocw_row_pages as row_pages

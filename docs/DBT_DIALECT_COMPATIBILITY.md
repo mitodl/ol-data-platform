@@ -51,6 +51,41 @@ These functions have cross-database macros and work across all targets:
    - StarRocks: `array_length(arr)` (`cardinality()` only exists from v3)
    - **Status**: Applied to every model; no bare `cardinality()` remains
 
+7. **`arbitrary(expr)`** - Any non-null value in the group
+   - Trino: `arbitrary(x)` (native)
+   - DuckDB: `any_value(x)` (DuckDB's `arbitrary()` is `first()` and can return NULL)
+   - StarRocks: `any_value(x)` (no `arbitrary()`)
+   - **Status**: Applied everywhere except `marts__micromasters_summary_timeseries`
+
+8. **`approx_percentile(expr, percentage)`** - Approximate percentile
+   - Trino: `approx_percentile(x, p)`, a value of `x`'s type
+   - DuckDB: `approx_quantile(x, p)`
+   - StarRocks: `percentile_approx(x, p)`, interpolated and a double, so values can differ
+   - **Status**: Applied to every model
+
+9. **`split_part_or_null(string, delimiter, index)`** - One field of a split string
+   - Trino: `split_part(s, d, i)`, NULL past the last field
+   - DuckDB, StarRocks: count the fields first. StarRocks' `split_part()` returns `''` past
+     the last field and for a NULL string; DuckDB's returns `''` past the last field
+   - **Status**: Applied to every model
+
+10. **`array_sort(array)`** - Ascending sort with NULL elements last
+    - Trino: `array_sort(arr)` (native)
+    - StarRocks: sorts the non-null elements and appends the NULLs (its `array_sort()` puts
+      NULLs first)
+    - **Status**: Applied to every model
+
+11. **`array_agg_filter(expr, condition, order_by, distinct)`** - `array_agg(...) filter (where ...)`
+    - Trino, DuckDB: the `FILTER` clause (native)
+    - StarRocks: aggregates `(condition, expr)` pairs and keeps the pairs whose condition is
+      true. Its own `FILTER` rewrite (`array_agg_if`) puts a NULL in the array for every row
+      that fails the condition, and fails to analyze with an `ORDER BY`
+    - **Status**: Applied to every `array_agg ... filter` in the models
+
+12. **`try_cast(expr, type)`**, **`date_diff(unit, date1, date2)`**, **`dbt.dateadd`** - existing
+    macros, now used for every bare `try_cast`, `date_diff` and `date_add` in the models.
+    StarRocks' `date_diff()` is `date1 - date2`, the reverse of Trino's.
+
 ### ⚠️ Partially Compatible (Known Issues)
 
 7. **JSON with nested quotes** - Some JSON paths contain literal double quotes
