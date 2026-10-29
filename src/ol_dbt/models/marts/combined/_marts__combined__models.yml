@@ -167,13 +167,9 @@ models:
     description: int, the users latest income in usd. Only populated for mitxonline.
   - name: has_program_certificate
     description: boolean, true if any marts__combined_program_enrollment_detail row
-      with the user's email has a programcertificate_uuid, otherwise null (never false).
-      Unlike user_has_completed_program, this counts revoked MITx Online and xPRO
-      certificates.
-  - name: has_dedp_program_certificate
-    description: boolean, true if any DEDP marts__combined_program_enrollment_detail
-      row with the user's email has a programcertificate_uuid, otherwise null (never
-      false). Like has_program_certificate, this counts revoked certificates.
+      with the user's email has user_has_completed_program true, otherwise null (never
+      false). A revoked certificate does not count. For which programs the user completed,
+      read marts__combined_program_enrollment_detail.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -627,10 +623,9 @@ models:
   - name: user_has_completed_program
     description: >-
       boolean, whether the learner has completed the program. This column is the
-      program completion rule, and the other program completion columns
-      (marts__combined__users.has_program_certificate, program_summary_report.program_certificates,
-      learner_demographics_and_cert_info's DEDP indicators) state how they differ
-      from it. The rule depends on the platform.
+      program completion rule. marts__combined__users.has_program_certificate,
+      program_summary_report.program_certificates and learner_demographics_and_cert_info.program_cert_ind
+      read it. The rule depends on the platform.
       MITx Online and xPRO (platform_name is the xPRO program's platform, xPRO or
       Simplilearn): true when the application holds an unrevoked program certificate.
       The rule reads programcertificate_url, which is null when the certificate
@@ -1435,3 +1430,36 @@ unit_tests:
       capstone_indicator: N, program_completion_days: null, program_report_key: "program-v1:MITxT+SDS-General-Track"}
     - {platform_name: edX.org, user_id: 7, unique_courses_taken_in_program: 2, capstone_indicator: Y,
       program_completion_days: 181, program_report_key: "program-v1:MITxT+SDS-General-Track"}
+- name: test_marts__combined__users_has_program_certificate_ignores_revoked
+  description: >
+    has_program_certificate follows user_has_completed_program. A revoked certificate
+    keeps its programcertificate_uuid but has user_has_completed_program false, so
+    it does not set the flag.
+  model: marts__combined__users
+  given:
+  - input: ref('int__mitx__users')
+    rows: []
+  - input: ref('int__combined__users')
+    rows:
+    - {user_hashed_id: "completed", user_id: 1, user_email: "completed@example.com",
+      platform: "xPro"}
+    - {user_hashed_id: "revoked", user_id: 2, user_email: "revoked@example.com", platform: "xPro"}
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('int__combined__courserun_enrollments')
+    rows: []
+  - input: ref('marts__combined_program_enrollment_detail')
+    rows:
+    - {user_email: "completed@example.com", programcertificate_uuid: "uuid-1", user_has_completed_program: true}
+    - {user_email: "revoked@example.com", programcertificate_uuid: "uuid-2", user_has_completed_program: false}
+  - input: ref('marts__combined__orders')
+    rows:
+    - {user_email: "completed@example.com", order_total_price_paid: 100.0}
+  - input: ref('marts__mitxonline_user_profiles')
+    rows: []
+  - input: ref('int__combined__course_runs')
+    rows: []
+  expect:
+    rows:
+    - {user_hashed_id: "completed", has_program_certificate: true}
+    - {user_hashed_id: "revoked", has_program_certificate: null}

@@ -72,8 +72,8 @@ metadata:
       ownState: {}
     description: ''
     filterType: filter_select
-    id: NATIVE_FILTER-RV4K3jCG00isIH5GM8vi8
-    name: DEDP_Program_Cert_Indicator
+    id: NATIVE_FILTER-SDAUM5euCgpM0iShyPHdk
+    name: Program
     scope:
       excluded: []
       rootPath:
@@ -83,7 +83,7 @@ metadata:
     - TAB-dhOB0wMgmenerPbUQNy7K
     targets:
     - column:
-        name: any_dedp_program_cert_ind
+        name: program_title
       datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
     type: NATIVE_FILTER
   - cascadeParentIds: []
@@ -102,8 +102,8 @@ metadata:
       ownState: {}
     description: ''
     filterType: filter_select
-    id: NATIVE_FILTER-qPMfIWPCHb2lhenCJVuMT
-    name: DEDP_Course_Cert_Count
+    id: NATIVE_FILTER-IVJDe2h771RNB8lAgUhGI
+    name: Program Cert Indicator
     scope:
       excluded: []
       rootPath:
@@ -113,7 +113,37 @@ metadata:
     - TAB-dhOB0wMgmenerPbUQNy7K
     targets:
     - column:
-        name: dedp_course_cert_count
+        name: program_cert_ind
+      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 261
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-hcJluFLgCI7wKMyt5MwxD
+    name: Program Name Course Cert Count
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    sortMetric: null
+    tabsInScope:
+    - TAB-dhOB0wMgmenerPbUQNy7K
+    targets:
+    - column:
+        name: program_name_course_cert_count
       datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
     type: NATIVE_FILTER
   - cascadeParentIds:
@@ -193,8 +223,8 @@ metadata:
       ownState: {}
     description: ''
     filterType: filter_select
-    id: NATIVE_FILTER-neydWriKnWkdQrS0Dh_w7
-    name: DEDP Program Enrolled Indicator
+    id: NATIVE_FILTER-UIxrZhJug0ZG0cZU5AJez
+    name: Program Enrolled Indicator
     scope:
       excluded: []
       rootPath:
@@ -204,7 +234,7 @@ metadata:
     - TAB-dhOB0wMgmenerPbUQNy7K
     targets:
     - column:
-        name: any_dedp_program_enroll_ind
+        name: program_enroll_ind
       datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
     type: NATIVE_FILTER
   refresh_frequency: 0
@@ -247,7 +277,19 @@ position:
       code: '### Change Log
 
         **2/2/26**: Enabled search functionality on User Email and User Full Name
-        filters'
+        filters
+
+        **10/27/26**: Replaced the DEDP columns and filters with program columns
+        and filters. The table has one row per learner and program, and each DEDP
+        track is its own program. To see the former DEDP view, select the three
+        DEDP programs in the Program filter: Data, Economics, and Design of Policy:
+        International Development (program-v1:MITx+DEDP), Data, Economics, and Design
+        of Policy: Public Policy (program-v1:MITx+DEDP-Public-Policy) and Data, Economics,
+        and Design of Policy (program-v1:MITx+DEDP+2T2023). A learner in two DEDP
+        programs has a row for each. program_name_course_cert_count, and the Program
+        Name Course Cert Count filter, reproduce the old DEDP course certificate count:
+        a learner''s distinct course certificates across all three DEDP programs,
+        repeated on each of their DEDP rows.'
       height: 50
       width: 12
     parents:

@@ -800,7 +800,15 @@ models:
           "activity_date"]
 
 - name: learner_demographics_and_cert_info
-  description: A report that contains learner demographics and cerificate information
+  description: A report that contains learner demographics and certificate information.
+    One row per user and program, for each program the user enrolled in or holds a
+    course certificate for. A user with neither has one row with null program columns.
+    Rows group on the program_report_key that marts__combined_program_enrollment_detail
+    and marts__combined_coursesinprogram carry, the key program_summary_report groups
+    on, so each DEDP and Statistics and Data Science track is its own row and an edX.org
+    or MicroMasters program counts toward the MITx Online program its title maps to.
+    A program row with no program_report_key is left out. Programs are matched to
+    the user by lowercased email.
   config:
     meta:
       qa_branches:
@@ -848,27 +856,47 @@ models:
     description: number, the number of courses learner enrolled based on their emails
       so this counts as same person if they use the email to register on different
       platforms
-  - name: dedp_course_cert_count
-    description: int, count of the number of times the user has recieved a DEDP course
-      credential
-  - name: any_dedp_program_cert_ind
-    description: str, indictor showing if the user has recieved any DEDP program credentials.
-      The DEDP indicators read programcertificate_uuid is not null and programcertificate_is_revoked
-      false or null, which on DEDP rows is the same as user_has_completed_program.
-      marts__combined__users.has_dedp_program_certificate counts revoked certificates
-      too.
-  - name: dedp_international_program_cert_ind
-    description: str, indictor showing if the user has recieved any DEDP Inernational
-      program credentials
-  - name: dedp_public_policy_program_cert_ind
-    description: str, indictor showing if the user has recieved any DEDP Public Policy
-      program credentials
-  - name: any_dedp_program_enroll_ind
-    description: str, indicator showing if the user has enrolled in any DEDP program
+  - name: program_readable_id
+    description: str, readable id of the program, formatted as program-v1:{org}+{code},
+      from MITx Online for MITx Online programs and the edX.org and MicroMasters programs
+      mapped to them, from xPRO for xPRO programs. Null for an edX.org or MicroMasters
+      program that maps to no MITx Online program, whose row is keyed on program_title
+      instead, and on a user's row with no program.
+  - name: program_title
+    description: str, title of the program, which names the track for a DEDP or Statistics
+      and Data Science track. It is the MITx Online program's title for a mapped edX.org
+      program. Null on a user's row with no program.
+  - name: program_course_cert_count
+    description: int, count of distinct courses in the program (marts__combined_coursesinprogram,
+      mapped to the program key the same way) for which the user earned a course certificate.
+      Null when there are none. A course that belongs to two tracks counts in both
+      tracks' rows, so summing a program's track rows can count a course twice.
+  - name: program_name_course_cert_count
+    description: int, count of distinct courses for which the user earned a course
+      certificate, across every program that shares this row's program name (report_program_name
+      in marts__combined_program_enrollment_detail). The value repeats on each of
+      the user's rows for those programs. The three DEDP programs (International Development,
+      Public Policy and Data, Economics, and Design of Policy) share the name 'Data,
+      Economics, and Design of Policy', so this counts a learner's DEDP courses once
+      across all three, the way the old dedp_course_cert_count did. Each MITx Online
+      Statistics and Data Science track has its own program name, so for those rows
+      it equals program_course_cert_count. It differs from program_course_cert_count
+      only where programs share a name. A program with no enrollment rows has no program
+      name and groups on its own program_report_key instead, which for a title-keyed
+      program is its title, as dim_program_report_key's program_name would be. Null
+      when there are none.
+  - name: program_cert_ind
+    description: str, 'Y' when any marts__combined_program_enrollment_detail row for
+      the user's email and this program has user_has_completed_program true, otherwise
+      null. A revoked certificate does not count.
+  - name: program_enroll_ind
+    description: str, 'Y' when the user's email has a marts__combined_program_enrollment_detail
+      row for this program, otherwise null. Null on rows that exist only because of
+      a course certificate.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["user_hashed_id"]
+        column_list: ["user_hashed_id", "program_readable_id", "program_title"]
 
 - name: combined_enrollments_with_gender_and_date
   description: A report that contains learner enrollment details with demographic
@@ -1984,6 +2012,104 @@ unit_tests:
     - {program_readable_id: null, program_title: Computer Science, program_type: XSeries,
       total_enrollments: 1, unique_users: 1, verified_enrollments: 0, course_certificates: 0,
       program_certificates: 1}
+- name: test_learner_demographics_and_cert_info_program_rows
+  description: >
+    One row per user and program, grouped on the program key both program marts carry.
+    Each track is its own row, and a program keyed on its title has a null program_readable_id.
+    A revoked certificate (user_has_completed_program false) does not set program_cert_ind.
+    A course certificate alone adds a row with no enrollment, and a user with neither
+    gets one row with null program columns. Emails match regardless of letter case
+    on the user, program enrollment and course enrollment sides.
+    A program row the marts key to no program adds no row. Learner a holds certificates
+    in course-2 (only in the International Development track), course-1 (in both tracks)
+    and course-5 (only in the Public Policy track), so each track row counts 2 courses
+    and program_name_course_cert_count, across both tracks of the Policy name, is
+    3. The Elective program has courses but no enrollment rows, so it has no program
+    name and its program_name_course_cert_count equals its program_course_cert_count.
+  model: learner_demographics_and_cert_info
+  given:
+  - input: ref('marts__combined__users')
+    rows:
+    - {user_hashed_id: "a", user_email: "a@example.com"}
+    - {user_hashed_id: "b", user_email: "b@example.com"}
+    - {user_hashed_id: "c", user_email: "c@example.com"}
+    - {user_hashed_id: "d", user_email: "d@example.com"}
+    - {user_hashed_id: "e", user_email: "E@Example.com"}
+  - input: ref('marts__combined_program_enrollment_detail')
+    rows:
+    - {user_email: "a@example.com", user_has_completed_program: true, program_report_key: "program-v1:MITx+ID",
+      report_program_readable_id: "program-v1:MITx+ID", report_program_title: "Policy:\
+        \ International Development", report_program_name: "Policy"}
+    - {user_email: "a@example.com", user_has_completed_program: true, program_report_key: "program-v1:MITx+PP",
+      report_program_readable_id: "program-v1:MITx+PP", report_program_title: "Policy:\
+        \ Public Policy", report_program_name: "Policy"}
+    - {user_email: "a@example.com", user_has_completed_program: false, program_report_key: "program-v1:MITx+ID",
+      report_program_readable_id: "program-v1:MITx+ID", report_program_title: "Policy:\
+        \ International Development", report_program_name: "Policy"}
+    - {user_email: "a@example.com", user_has_completed_program: true, program_report_key: null,
+      report_program_readable_id: null, report_program_title: null, report_program_name: null}
+    - {user_email: "B@Example.com", user_has_completed_program: false, program_report_key: "program-v1:xPRO+L",
+      report_program_readable_id: "program-v1:xPRO+L", report_program_title: "Leadership",
+      report_program_name: "Leadership"}
+    - {user_email: "b@example.com", user_has_completed_program: true, program_report_key: "Computer\
+        \ Science", report_program_readable_id: null, report_program_title: "Computer\
+        \ Science", report_program_name: "Computer Science"}
+    - {user_email: "e@example.com", user_has_completed_program: true, program_report_key: "program-v1:MITx+PP",
+      report_program_readable_id: "program-v1:MITx+PP", report_program_title: "Policy:\
+        \ Public Policy", report_program_name: "Policy"}
+  - input: ref('marts__combined_course_enrollment_detail')
+    rows:
+    - {user_email: "a@example.com", course_readable_id: "course-1", courseruncertificate_is_earned: true}
+    - {user_email: "a@example.com", course_readable_id: "course-2", courseruncertificate_is_earned: true}
+    - {user_email: "a@example.com", course_readable_id: "course-3", courseruncertificate_is_earned: false}
+    - {user_email: "a@example.com", course_readable_id: "course-5", courseruncertificate_is_earned: true}
+    - {user_email: "c@example.com", course_readable_id: "course-1", courseruncertificate_is_earned: true}
+    - {user_email: "c@example.com", course_readable_id: "course-4", courseruncertificate_is_earned: true}
+    - {user_email: "C@Example.com", course_readable_id: "course-6", courseruncertificate_is_earned: true}
+  - input: ref('marts__combined_coursesinprogram')
+    rows:
+    - {course_readable_id: "course-1", program_report_key: "program-v1:MITx+ID", report_program_readable_id: "program-v1:MITx+ID",
+      report_program_title: "Policy: International Development"}
+    - {course_readable_id: "course-1", program_report_key: "program-v1:MITx+PP", report_program_readable_id: "program-v1:MITx+PP",
+      report_program_title: "Policy: Public Policy"}
+    - {course_readable_id: "course-2", program_report_key: "program-v1:MITx+ID", report_program_readable_id: "program-v1:MITx+ID",
+      report_program_title: "Policy: International Development"}
+    - {course_readable_id: "course-3", program_report_key: "program-v1:MITx+ID", report_program_readable_id: "program-v1:MITx+ID",
+      report_program_title: "Policy: International Development"}
+    - {course_readable_id: "course-5", program_report_key: "program-v1:MITx+PP", report_program_readable_id: "program-v1:MITx+PP",
+      report_program_title: "Policy: Public Policy"}
+    - {course_readable_id: "course-6", program_report_key: "program-v1:MITx+EL", report_program_readable_id: "program-v1:MITx+EL",
+      report_program_title: "Elective"}
+    - {course_readable_id: "course-4", program_report_key: null, report_program_readable_id: null,
+      report_program_title: null}
+  expect:
+    rows:
+    - {user_hashed_id: "a", program_readable_id: "program-v1:MITx+ID", program_title: "Policy:\
+        \ International Development", program_course_cert_count: 2, program_name_course_cert_count: 3,
+      program_cert_ind: "Y", program_enroll_ind: "Y"}
+    - {user_hashed_id: "a", program_readable_id: "program-v1:MITx+PP", program_title: "Policy:\
+        \ Public Policy", program_course_cert_count: 2, program_name_course_cert_count: 3,
+      program_cert_ind: "Y", program_enroll_ind: "Y"}
+    - {user_hashed_id: "b", program_readable_id: "program-v1:xPRO+L", program_title: "Leadership",
+      program_course_cert_count: null, program_name_course_cert_count: null, program_cert_ind: null,
+      program_enroll_ind: "Y"}
+    - {user_hashed_id: "b", program_readable_id: null, program_title: "Computer Science",
+      program_course_cert_count: null, program_name_course_cert_count: null, program_cert_ind: "Y",
+      program_enroll_ind: "Y"}
+    - {user_hashed_id: "c", program_readable_id: "program-v1:MITx+ID", program_title: "Policy:\
+        \ International Development", program_course_cert_count: 1, program_name_course_cert_count: 1,
+      program_cert_ind: null, program_enroll_ind: null}
+    - {user_hashed_id: "c", program_readable_id: "program-v1:MITx+PP", program_title: "Policy:\
+        \ Public Policy", program_course_cert_count: 1, program_name_course_cert_count: 1,
+      program_cert_ind: null, program_enroll_ind: null}
+    - {user_hashed_id: "c", program_readable_id: "program-v1:MITx+EL", program_title: "Elective",
+      program_course_cert_count: 1, program_name_course_cert_count: 1, program_cert_ind: null,
+      program_enroll_ind: null}
+    - {user_hashed_id: "d", program_readable_id: null, program_title: null, program_course_cert_count: null,
+      program_name_course_cert_count: null, program_cert_ind: null, program_enroll_ind: null}
+    - {user_hashed_id: "e", program_readable_id: "program-v1:MITx+PP", program_title: "Policy:\
+        \ Public Policy", program_course_cert_count: null, program_name_course_cert_count: null,
+      program_cert_ind: "Y", program_enroll_ind: "Y"}
 
 - name: test_program_enrollment_with_user_report_matches_one_course_set_per_row
   description: >
