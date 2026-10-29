@@ -6,7 +6,7 @@ deployment: mit_climate
 layer: api
 scope: scoped
 strategies:
-  qa: omit
+  qa: ingest
   local: fixture
 loader: dlt
 table_prefix: raw__mit_climate__api__

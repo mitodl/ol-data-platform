@@ -245,8 +245,8 @@ which reads five units, so a tagged union is now accepted on three conditions:
 
 `ingest` units carry no age limit, so an ingested branch that stopped loading still passes; the
 union is then consistent as of that branch's last load rather than missing it. A table that
-empties after the observation is caught by `qa_observation_drift_daily` (12:00 UTC, after the
-03:00 build), not by the build itself.
+empties after the observation is caught by `qa_observation_drift_daily` (05:00 UTC, before the
+05:30 build), not by the build itself.
 
 `integrations__learn__program_certificates` declares all five of its units and lists
 `raw__mitxonline__openedx__mysql__auth_user` as partial. QA's whole MITx Online Open edX unit is empty Iceberg shells from

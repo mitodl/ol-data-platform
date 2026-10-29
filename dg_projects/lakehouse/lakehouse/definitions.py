@@ -709,11 +709,13 @@ non_airbyte_staging_schedules = (
 # one ingestion unit unless it declares every one of them in qa_branches and the
 # committed QA observation shows them held (program_certificates lists the
 # empty mitxonline/mysql auth_user in qa_partial_tables), so a QA build is
-# complete relative to QA's apps rather than a silently partial union. The rest
-# wait on raw tables QA does not have: ocw_courses on the OCW live bucket (the
-# ocw__s3 unit is omitted in QA), and the dlt/API sources (mit_edx_programs on
-# the edX catalog, mitpe, mit_climate, oll, podcasts) whose loaders run in
-# production only.
+# complete relative to QA's apps rather than a silently partial union. The
+# YouTube, podcast, mitpe, mit_climate and oll views read public sources that
+# QA's data_loading schedules load daily, so QA holds close to production's
+# rows. Those schedules set no default status, so they run in QA because they
+# were started in its UI. ocw_courses waits on the OCW live bucket (the ocw__s3 unit is
+# omitted in QA), and mit_edx_programs also reads mitlearn topic tables QA does
+# not hold.
 learn_integrations_qa_schedule = ScheduleDefinition(
     name="learn_integrations_qa_daily",
     job=define_asset_job(
@@ -724,8 +726,13 @@ learn_integrations_qa_schedule = ScheduleDefinition(
         ),
     ),
     # The QA sync_and_stage schedules run at 00:00 (QA renders no inventory
-    # intervals, so every group takes the 24-hour default).
-    cron_schedule="0 3 * * *",
+    # intervals, so every group takes the 24-hour default). The dlt loads these
+    # views read land in QA from 03:00 (oll) to about 05:10 (YouTube), so a
+    # 03:00 build left them a day behind their raw. 05:30 rather than 06:00:
+    # qa_mirror_monthly_schedule drops and recreates the edX mirror tables this
+    # selection reads at 06:00 on the 1st, and their staging models build in
+    # the first minutes of the run.
+    cron_schedule="30 5 * * *",
     execution_timezone="UTC",
     default_status=DefaultScheduleStatus.RUNNING,
 )
