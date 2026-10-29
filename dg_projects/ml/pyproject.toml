@@ -64,10 +64,10 @@ root_module = "ml"
 [tool.setuptools.packages.find]
 exclude=["ml_tests"]
 
-# The embedding strategies are read from the installed package, and the image
-# installs the project as a wheel.
+# The embedding strategies and the common-word list are read from the installed
+# package, and the image installs the project as a wheel.
 [tool.setuptools.package-data]
-ml = ["embedding_strategies.yaml"]
+ml = ["embedding_strategies.yaml", "lib/courseware/common_words.txt"]
 
 [tool.uv.sources]
 ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }

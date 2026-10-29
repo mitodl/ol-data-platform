@@ -558,12 +558,17 @@ sources:
     - name: described_at
       description: timestamp, when the description was written
   - name: courseware_concept_tagging_run
-    description: One row per dictionary tagging run (ml.lib.courseware.tagging), which
-      tags every extraction source with the concepts of dim_concept_alias. Each run
-      is a full snapshot.
     config:
       enabled: "{{ var('courseware_tagging_in_warehouse') or target.type == 'duckdb'\
         \ }}"
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_tagging_run]
+    description: One row per dictionary tagging run (ml.lib.courseware.tagging), which
+      tags extraction sources with the concepts of dim_concept_alias. A run tags only
+      the sources whose text changed since the run before it, unless the dictionary,
+      tagger or parameters changed, which re-tags every source; its courseware_concept_tagging_source
+      rows say which run's mentions are current for each source.
     columns:
     - name: tagging_run_id
       description: str, the run's UUID; re-running old inputs gets a new one, so the
@@ -571,6 +576,9 @@ sources:
       tests:
       - unique
       - not_null
+    - name: previous_tagging_run_id
+      description: str, the run whose source records this run carried forward for
+        the sources it did not tag; null when it tagged every source
     - name: input_key
       description: str, sha256 of the tagger, its parameters, the dictionary and the
         source text; a run is skipped when the newest run has the same key
@@ -596,11 +604,14 @@ sources:
     - name: ambiguous_pattern_count
       description: int, phrases flagged ambiguous
     - name: source_count
-      description: int, sources tagged
+      description: int, current sources, tagged or carried forward
+    - name: retagged_source_count
+      description: int, sources this run tagged, every source when previous_tagging_run_id
+        is null
     - name: char_count
       description: int, characters of source text read
     - name: tagged_source_count
-      description: int, sources with at least one mention
+      description: int, sources this run tagged that have at least one mention
     - name: mention_count
       description: int, mention rows written
     - name: match_seconds
@@ -610,12 +621,43 @@ sources:
         the output frames included
     - name: tagged_at
       description: timestamp, when the run started
-  - name: courseware_concept_mention
-    description: Every place a dictionary phrase occurs in an extraction source's
-      text, per tagging run, one row per candidate concept.
+  - name: courseware_concept_tagging_source
     config:
       enabled: "{{ var('courseware_tagging_in_warehouse') or target.type == 'duckdb'\
         \ }}"
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_tagging_source]
+    description: One row per tagging run and extraction source current when it ran,
+      naming the run whose courseware_concept_mention rows hold the source's mentions.
+      The newest run's rows are the current mentions; a source absent from them has
+      been removed.
+    columns:
+    - name: tagging_run_id
+      description: str, the tagging run
+    - name: platform
+      description: str, mitxonline, mitxpro, residential or ocw
+    - name: courserun_readable_id
+      description: str, the course run
+    - name: scope_id
+      description: str, the source's scope
+    - name: source_ref
+      description: str, the block id, or the exported file's path
+    - name: source_checksum
+      description: str, sha256 of the source row as tagged, its text included
+    - name: mention_run_id
+      description: str, the run whose mention rows for this source are current, this
+        run when it tagged the source
+  - name: courseware_concept_mention
+    config:
+      enabled: "{{ var('courseware_tagging_in_warehouse') or target.type == 'duckdb'\
+        \ }}"
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_mention]
+    description: Every place a dictionary phrase occurs in an extraction source's
+      text, per tagging run, one row per candidate concept. A run writes rows only
+      for the sources it tagged.
     columns:
     - name: tagging_run_id
       description: str, the tagging run
@@ -642,11 +684,14 @@ sources:
     - name: char_end
       description: int, end offset of the mention in source_text
   - name: courseware_concept_tagging_alias
-    description: The dictionary a tagging run matched, one row per (phrase, concept),
-      with each phrase's match mode and ambiguity flags.
     config:
       enabled: "{{ var('courseware_tagging_in_warehouse') or target.type == 'duckdb'\
         \ }}"
+      meta:
+        dagster:
+          asset_key: [intermediate, courseware_concept_tagging_alias]
+    description: The dictionary a tagging run matched, one row per (phrase, concept),
+      with each phrase's match mode and ambiguity flags.
     columns:
     - name: tagging_run_id
       description: str, the tagging run
@@ -668,7 +713,8 @@ sources:
       description: boolean, the phrase is a label's head without its qualifier, e.g.
         entropy from "entropy (information theory)"
     - name: is_single_word
-      description: boolean, the phrase is one lowercase word
+      description: boolean, the phrase is one common English word, or its plural,
+        in any case (e.g. data, None)
     - name: has_multiple_concepts
       description: boolean, the phrase belongs to more than one concept
     - name: is_ambiguous

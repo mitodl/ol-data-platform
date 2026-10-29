@@ -55,7 +55,14 @@ from ml.lib.courseware.resolve import (
     resolve_concepts,
 )
 from ml.lib.courseware.scopes import CHARS_PER_TOKEN, Scope, build_scopes
-from ml.lib.courseware.tagging import ConceptDictionary, tag_sources, tagging_input_key
+from ml.lib.courseware.tagging import (
+    SOURCE_SCHEMA,
+    ConceptDictionary,
+    PreviousRun,
+    newest_run,
+    tag_sources,
+    tagging_input_key,
+)
 from ml.resources.llm import LLMClientFactory
 
 app = cyclopts.App(help=__doc__)
@@ -510,7 +517,8 @@ def conform(output_dir: Path) -> None:
 
 @app.command
 def tag(sources: Path, aliases: Path, output_dir: Path) -> None:
-    """Tag every source with the known concepts its text mentions.
+    """Tag the sources whose text or dictionary changed with the known concepts
+    their text mentions.
 
     :param sources: int__courseware__extraction_sources exported to parquet
     :param aliases: dim_concept_alias exported to parquet
@@ -519,16 +527,26 @@ def tag(sources: Path, aliases: Path, output_dir: Path) -> None:
     """
     source_rows = pl.read_parquet(sources)
     alias_rows = pl.read_parquet(aliases)
-    runs = _existing(output_dir, "courseware_concept_tagging_run")
+    last_run = newest_run(_existing(output_dir, "courseware_concept_tagging_run"))
     input_key = tagging_input_key(ConceptDictionary(alias_rows), source_rows)
     # only the newest run counts: after A, B, A the warehouse must move back to A
-    if runs is not None and runs.sort("tagged_at")["input_key"][-1] == input_key:
+    if last_run is not None and last_run["input_key"] == input_key:
         print("the newest tagging run already has these inputs")  # noqa: T201
         return
-    result = tag_sources(source_rows, alias_rows)
+    previous = None
+    if last_run is not None:
+        records = _existing(output_dir, "courseware_concept_tagging_source")
+        previous = PreviousRun(
+            last_run,
+            records.filter(pl.col("tagging_run_id") == last_run["tagging_run_id"])
+            if records is not None
+            else pl.DataFrame(schema=SOURCE_SCHEMA),
+        )
+    result = tag_sources(source_rows, alias_rows, previous)
     output_dir.mkdir(parents=True, exist_ok=True)
     for table, new_rows in (
         ("courseware_concept_mention", result.mentions),
+        ("courseware_concept_tagging_source", result.sources),
         ("courseware_concept_tagging_alias", result.aliases),
         ("courseware_concept_tagging_run", result.run),
     ):
