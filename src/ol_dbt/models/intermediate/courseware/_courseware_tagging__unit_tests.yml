@@ -217,3 +217,76 @@ unit_tests:
     rows:
     - {pattern_key: csv, concept_id: csv, tagged_concept_id: a_csv, tagged_mention_count: 1,
       tagged_source_count: 1, share_of_tagged_mentions: 1.0}
+
+- name: test_int__courseware__concept_tags_resolves_through_any_label_of_the_concept
+  description: >
+    The dictionary records "csv" under one label of concept csv, but a run can name
+    the concept by another, and two merged dictionary rows can disagree. A span
+    whose concept the run assigned under any label is resolved, so both merged rows
+    of the span resolve and one is kept. In the ml run, whose sense of "kernel" is
+    a
+    concept split off since this tagging run, the stale os-kernel tag stays a
+    candidate rather than vanishing.
+  model: int__courseware__concept_tags
+  given:
+  - input: source('courseware_intermediate', 'courseware_concept_mention')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, source_ref: b1,
+      pattern_key: csv, concept_id: a_csv, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, source_ref: b1,
+      pattern_key: csv, concept_id: b_csv, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: other, source_ref: b2,
+      pattern_key: csv, concept_id: a_csv, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, source_ref: b3,
+      pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+  - input: ref('int__courseware__concept_tagging_aliases')
+    rows:
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: csv, tagged_concept_id: a_csv,
+      concept_label_key: comma separated values csv}
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: csv, tagged_concept_id: b_csv,
+      concept_label_key: csv file csv}
+    - {tagging_run_id: r1, pattern_key: kernel, concept_id: os-kernel, tagged_concept_id: os-kernel,
+      concept_label_key: kernel}
+  - input: ref('int__courseware__concept_sense_assignments')
+    rows:
+    - {concept_label_key: csv file csv, platform: mitxonline, courserun_readable_id: run,
+      concept_id: csv, sense_status: assigned}
+    - {concept_label_key: csv data, platform: mitxonline, courserun_readable_id: other,
+      concept_id: csv, sense_status: assigned}
+    - {concept_label_key: kernel, platform: mitxonline, courserun_readable_id: ml,
+      concept_id: ml-kernel, sense_status: assigned}
+  expect:
+    rows:
+    - {courserun_readable_id: run, concept_id: csv, tagged_concept_id: a_csv, sense_status: course_sense}
+    - {courserun_readable_id: other, concept_id: csv, tagged_concept_id: a_csv, sense_status: course_sense}
+    - {courserun_readable_id: ml, concept_id: os-kernel, tagged_concept_id: os-kernel,
+      sense_status: candidate}
+
+- name: test_int__courseware__concept_tags_keeps_the_resolved_row_of_a_merged_span
+  description: >
+    Two dictionary rows of one span whose concepts have since merged can disagree:
+    the run's sense of one label is queued for review while it named the concept
+    under the other. The resolved row is kept, whatever its tagged id.
+  model: int__courseware__concept_tags
+  given:
+  - input: source('courseware_intermediate', 'courseware_concept_mention')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, source_ref: b1,
+      pattern_key: csv, concept_id: a_csv, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, source_ref: b1,
+      pattern_key: csv, concept_id: b_csv, char_start: 0}
+  - input: ref('int__courseware__concept_tagging_aliases')
+    rows:
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: csv, tagged_concept_id: a_csv,
+      concept_label_key: comma separated values csv}
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: csv, tagged_concept_id: b_csv,
+      concept_label_key: csv file csv}
+  - input: ref('int__courseware__concept_sense_assignments')
+    rows:
+    - {concept_label_key: comma separated values csv, platform: mitxonline, courserun_readable_id: run,
+      concept_id: null, sense_status: needs_review}
+    - {concept_label_key: csv file csv, platform: mitxonline, courserun_readable_id: run,
+      concept_id: csv, sense_status: assigned}
+  expect:
+    rows:
+    - {courserun_readable_id: run, concept_id: csv, tagged_concept_id: b_csv, sense_status: course_sense}

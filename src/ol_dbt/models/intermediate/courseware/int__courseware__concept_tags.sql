@@ -10,19 +10,24 @@
     survivor), so it joins to the extractor's resolved mentions; tagged_concept_id
     is the id as tagged, which the run's dictionary rows are keyed by. A phrase the
     run gave to two concepts that have since merged tagged each of its spans twice,
-    so one row per span and current concept is kept: the one with the lowest
-    tagged_concept_id.
+    so one row per span and current concept is kept: a resolved one first, then the
+    lowest tagged_concept_id.
 
     A label can name several concepts (its senses), and the dictionary emits a
     candidate for each. Which one a mention means is the course run's sense of the
     label (int__courseware__concept_sense_assignments), never the dictionary's:
-    - course_sense: the run's sense of the label is this concept;
+    - course_sense: the run's sense of the label is this concept, or the run gave
+      another label to this concept (the dictionary records one label per phrase and
+      concept, e.g. "CSV" from "comma-separated values (CSV)" but not from "CSV file
+      (CSV)");
     - needs_review: the run's sense of the label is in the review queue;
-    - candidate: the extractor never named the label in this run, so nothing has
-      decided its sense here, even when the label has only one known sense.
-    A candidate for a concept other than the run's sense is dropped, so one sense is
-    not spread to every course that uses the label. Ambiguity flags are review
-    signals and decide nothing.
+    - candidate: nothing has decided the sense here: the extractor never named the
+      label in this run (even when the label has one known sense), or the run's
+      sense is a concept this tagging run had no candidate for (a sense split off
+      since).
+    A candidate for a concept other than the run's sense is dropped when that sense
+    is among the phrase's candidates, so one sense is not spread to every course
+    that uses the label. Ambiguity flags are review signals and decide nothing.
 #}
 with mentions as (
     select mention.*
@@ -37,6 +42,22 @@ with mentions as (
 
 , sense_assignments as (
     select * from {{ ref('int__courseware__concept_sense_assignments') }}
+)
+
+, run_concepts as (
+    select distinct
+        platform
+        , courserun_readable_id
+        , concept_id
+    from sense_assignments
+    where sense_status = 'assigned'
+)
+
+, phrase_concepts as (
+    select distinct
+        pattern_key
+        , concept_id
+    from aliases
 )
 
 , redirected as (
@@ -62,7 +83,10 @@ with mentions as (
         , case
             when sense_assignments.sense_status = 'needs_review' then 'needs_review'
             when sense_assignments.concept_id = aliases.concept_id then 'course_sense'
-            when sense_assignments.concept_id is null then 'candidate'
+            -- another of the phrase's candidates is the run's sense of the label
+            when sense_candidates.concept_id is not null then null
+            when run_concepts.concept_id is not null then 'course_sense'
+            else 'candidate'
         end as sense_status
         , mentions.matched_text
         , mentions.char_start
@@ -77,6 +101,15 @@ with mentions as (
             aliases.concept_label_key = sense_assignments.concept_label_key
             and mentions.platform = sense_assignments.platform
             and mentions.courserun_readable_id = sense_assignments.courserun_readable_id
+    left join phrase_concepts as sense_candidates
+        on
+            mentions.pattern_key = sense_candidates.pattern_key
+            and sense_assignments.concept_id = sense_candidates.concept_id
+    left join run_concepts
+        on
+            mentions.platform = run_concepts.platform
+            and mentions.courserun_readable_id = run_concepts.courserun_readable_id
+            and aliases.concept_id = run_concepts.concept_id
 )
 
 select
@@ -107,7 +140,10 @@ from (
         *
         , row_number() over (
             partition by platform, courserun_readable_id, source_ref, char_start, concept_id
-            order by tagged_concept_id
+            -- a resolved row wins over a candidate for the same span and concept
+            order by
+                case sense_status when 'course_sense' then 0 when 'needs_review' then 1 else 2 end
+                , tagged_concept_id
         ) as span_rank
     from redirected
     -- the run uses the label in another sense
