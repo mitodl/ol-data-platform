@@ -669,6 +669,81 @@ class TestGetColumnsReadFromRef:
         assert get_columns_read_from_ref(parsed, "stg_users") == {"user_id", "user_email"}
 
 
+def _reads(tmp_path: Path, sql: str, placeholder_map: dict[str, str], upstream: str) -> set[str] | None:
+    """``get_columns_read_from_ref(upstream)`` for *sql* whose refs are *placeholder_map*."""
+    from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
+
+    sql_file = tmp_path / "downstream.sql"
+    sql_file.write_text(sql)
+    parsed = parse_model_sql("downstream", sql)
+    parsed.refs = list(placeholder_map.values())
+    parsed.ref_placeholder_map = placeholder_map
+    parsed.source_path = sql_file
+    return get_columns_read_from_ref(parsed, upstream)
+
+
+class TestColumnReadsAcrossForeignSources:
+    """A ref read beside another relation: what can and cannot be attributed to it."""
+
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "select user_pk, u.email from ref_dim_user u join ref_enrollments e on u.id = e.user_id",
+            "select user_pk, ref_dim_user.email from ref_dim_user "
+            "join ref_enrollments e on ref_dim_user.id = e.user_id",
+        ],
+    )
+    def test_bare_column_beside_a_join_is_inconclusive(self, tmp_path: Path, sql: str) -> None:
+        """``user_pk`` may come from either relation, so ``{email, id}`` is not the read set.
+
+        Returning it as complete clears a removed ``user_pk`` as unread, and disables the
+        manifest fallback key-regeneration analysis uses.
+        """
+        placeholders = {"ref_dim_user": "dim_user", "ref_enrollments": "enrollments"}
+        assert _reads(tmp_path, sql, placeholders, "dim_user") is None
+        assert _reads(tmp_path, sql, placeholders, "enrollments") is None
+
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "select user_id, grade from ref_users u cross join (select 1 as grade) c",
+            "select user_id, grade from ref_users cross join (select 1 as grade) c",
+        ],
+    )
+    def test_bare_column_beside_a_derived_table_is_not_the_refs(self, tmp_path: Path, sql: str) -> None:
+        """``grade`` comes from the derived table, not users; ``user_id`` can only be users'."""
+        assert _reads(tmp_path, sql, {"ref_users": "users"}, "users") == {"user_id"}
+
+    def test_cte_with_a_star_per_joined_table_is_not_a_passthrough(self, tmp_path: Path) -> None:
+        """``u.*, o.*`` forwards stg_enroll's ``grade`` too, so ``j.grade`` is not a stg_users read."""
+        sql = """
+        with j as (
+            select u.*, o.*
+            from ref_stg_users as u
+            inner join ref_stg_enroll as o on u.user_id = o.user_id
+        )
+        select j.user_id, j.grade from j
+        """
+        placeholders = {"ref_stg_users": "stg_users", "ref_stg_enroll": "stg_enroll"}
+        assert _reads(tmp_path, sql, placeholders, "stg_users") is None
+
+    def test_computed_column_of_a_cte_is_still_read_from_the_ref_itself(self, tmp_path: Path) -> None:
+        """``dedup`` computes ``row_num``; ``original.row_num`` reads the ref directly and counts.
+
+        stg_users has no ``row_num``, so validate must see the read to report it as broken.
+        """
+        sql = """
+        with dedup as (
+            select *, row_number() over (partition by user_id order by user_id) as row_num
+            from ref_stg_users
+        )
+        select dedup.user_id, original.row_num
+        from dedup
+        inner join ref_stg_users as original on dedup.user_id = original.user_id
+        """
+        assert _reads(tmp_path, sql, {"ref_stg_users": "stg_users"}, "stg_users") == {"user_id", "row_num"}
+
+
 class TestOutputColumnPassthrough:
     """Tests for output-column passthrough detection in downstream impact functions."""
 
