@@ -4,7 +4,8 @@ python -m ml.lib.courseware.local gold sample gold/ \\
         --extraction out/ --extraction out_haiku/ \\
         --sources extraction_sources.parquet \\
         --identity identity/ --concept-labels concept_labels.parquet \\
-        --concepts dim_concept.parquet --relations bridge_concept_relation.parquet
+        --concepts dim_concept.parquet --relations bridge_concept_relation.parquet \\
+        --disciplines disciplines.csv
 python -m ml.lib.courseware.local gold score gold/ --claims-export claims.json
 """
 
@@ -61,15 +62,19 @@ def _write_set(  # noqa: PLR0913
     )
 
 
-def _coarsened(
+def _coarsened(  # noqa: PLR0913
     name: str,
     population: pl.DataFrame,
     dropped: list[pl.DataFrame],
     budget: int,
     min_size: int = MIN_LABELS_PER_STRATUM,
+    *,
+    keep_discipline: bool = False,
 ) -> pl.DataFrame:
     """Fit the set's strata to its budget, recording any dropped from the set."""
-    population, small = samples.fit_strata(population, name, budget, min_size)
+    population, small = samples.fit_strata(
+        population, name, budget, min_size, keep_discipline=keep_discipline
+    )
     dropped.append(
         small.select(
             pl.lit(name).alias("set"),
@@ -92,6 +97,7 @@ def sample(  # noqa: PLR0913
     concepts: Path,
     relations: Path,
     label_map: list[Path] | None = None,
+    disciplines: Path | None = None,
     seed: int = 20261017,
     claims: int = 400,
     subsections: int = 30,
@@ -110,6 +116,11 @@ def sample(  # noqa: PLR0913
     :param relations: bridge_concept_relation as parquet
     :param label_map: parquet of concept_label_key -> canonical_label_key pairs
         added to the matching rule (e.g. both models' labels resolved together)
+    :param disciplines: CSV of course (a run id or course family) and discipline;
+        claims and subsections are then sampled per declared discipline, and only
+        from the listed courses. Without it they are stratified by course family,
+        which is one stratum for a single-program corpus, so the result is not a
+        cross-domain measurement
     :param seed: sampling seed; the same seed and inputs give the same samples
     :param claims: claims to verify
     :param subsections: unit scopes to annotate exhaustively
@@ -118,15 +129,28 @@ def sample(  # noqa: PLR0913
     :param prerequisites: concept pairs to label, half with an inferred edge
     """
     inputs = samples.load_inputs(
-        extraction, sources, identity, concept_labels, concepts, relations, label_map
+        extraction,
+        sources,
+        identity,
+        concept_labels,
+        concepts,
+        relations,
+        label_map,
+        disciplines,
     )
+    declared = inputs.disciplines is not None
     output_dir.mkdir(parents=True, exist_ok=True)
     built: list[pl.DataFrame] = []
     dropped: list[pl.DataFrame] = []
 
     population = _coarsened(
-        "claims", samples.claims_population(inputs), dropped, claims
+        "claims",
+        samples.claims_population(inputs),
+        dropped,
+        claims,
+        keep_discipline=declared,
     )
+    sampled_disciplines = sorted(population["discipline"].unique())
     drawn = samples.sample_claims(inputs, population, size=claims, seed=seed)
     built.append(
         _write_set(
@@ -144,6 +168,7 @@ def sample(  # noqa: PLR0913
         dropped,
         subsections,
         samples.SUBSECTIONS_MIN_PER_STRATUM,
+        keep_discipline=declared,
     )
     drawn = samples.sample_subsections(inputs, population, size=subsections, seed=seed)
     built.append(
@@ -221,6 +246,11 @@ def sample(  # noqa: PLR0913
                     "concepts": str(concepts),
                     "relations": str(relations),
                     "label_map": [str(path) for path in label_map or []],
+                    "disciplines": str(disciplines) if disciplines else None,
+                },
+                "disciplines": {
+                    "declared": declared,
+                    "sampled": sampled_disciplines,
                 },
             },
             indent=1,
@@ -228,6 +258,13 @@ def sample(  # noqa: PLR0913
     )
     with pl.Config(tbl_rows=-1, tbl_width_chars=120, fmt_str_lengths=60):
         print(strata)  # noqa: T201
+    if not declared:
+        print(  # noqa: T201
+            f"claims and subsections are stratified by course family "
+            f"({', '.join(sampled_disciplines)}); pass --disciplines to sample "
+            "declared disciplines",
+            file=sys.stderr,
+        )
 
 
 @gold.command(name="score")
@@ -241,6 +278,7 @@ def score_gold(  # noqa: PLR0913
     prerequisites_export: Path | None = None,
     autorater: Path | None = None,
     gold_label_map: Path | None = None,
+    model_roles: Path | None = None,
     alpha: float = 0.05,
 ) -> None:
     """Score the annotated exports against the populations the sample step wrote.
@@ -256,6 +294,9 @@ def score_gold(  # noqa: PLR0913
     :param gold_label_map: parquet of label, model_label pairs mapping annotators'
         concept names onto model labels, made by reviewing
         unmatched_gold_concepts.csv
+    :param model_roles: parquet of scope_id, model, label and role (objective,
+        needed, or no_central with a null label) from the central-objective
+        extractor variant, scored against the annotators' objectives
     :param alpha: confidence intervals target 1 - alpha coverage
     """
     manifest = json.loads((sample_dir / MANIFEST).read_text())
@@ -263,7 +304,12 @@ def score_gold(  # noqa: PLR0913
     def read(name: str, kind: str) -> pl.DataFrame:
         return pl.read_parquet(sample_dir / f"{name}_{kind}.parquet")
 
-    report: dict[str, Any] = {"seed": manifest["seed"], "alpha": alpha}
+    report: dict[str, Any] = {
+        "seed": manifest["seed"],
+        "alpha": alpha,
+        # a sample from one course family is a fixture, not cross-domain validation
+        "disciplines": manifest.get("disciplines"),
+    }
     if claims_export:
         report["claims"] = score.score_claims(
             read("claims", "population"),
@@ -281,6 +327,7 @@ def score_gold(  # noqa: PLR0913
             Path(paths["concepts"]),
             Path(paths["relations"]),
             [Path(path) for path in paths["label_map"]],
+            Path(paths["disciplines"]) if paths.get("disciplines") else None,
         )
         if gold_label_map:
             keys = [
@@ -294,15 +341,30 @@ def score_gold(  # noqa: PLR0913
                 (key, model_key) for key, model_key in keys if key and model_key
             )
         model_concepts = samples.scope_concepts(inputs)
+        population = read("subsections", "population")
+        exported = labelstudio.read_export(subsections_export)
         report["subsections"], unmatched = score.score_subsections(
-            read("subsections", "population"),
+            population,
             read("subsections", "sample"),
-            labelstudio.read_export(subsections_export),
+            exported,
             model_concepts,
             inputs.matcher,
             alpha=alpha,
         )
+        roles = None
+        if model_roles:
+            roles = pl.read_parquet(model_roles).with_columns(
+                pl.col("label")
+                .map_elements(inputs.matcher.canonical, return_dtype=pl.String)
+                .alias("canonical")
+            )
+        report["subsections"]["objectives"] = score.score_objectives(
+            population, exported, inputs.matcher, alpha=alpha, model_roles=roles
+        )
         unmatched.write_csv(sample_dir / "unmatched_gold_concepts.csv")
+        score.gold_subsection_concepts(
+            score.subsection_gold(exported, inputs.matcher)
+        ).write_csv(sample_dir / "gold_subsection_concepts.csv")
     for name, export, scorer in (
         ("pairs", pairs_export, score.score_pairs),
         ("clusters", clusters_export, score.score_clusters),

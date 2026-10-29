@@ -5,6 +5,14 @@ autorater prediction, which stratified PPI needs for the unlabelled items) and t
 sample to annotate, with the text an annotator sees. Sampling is deterministic: each
 stratum draws from its own generator seeded by (seed, set, stratum), over items
 sorted by id, so adding a stratum does not reshuffle the others.
+
+Claims and subsections are stratified by discipline. Without a declared discipline
+map a run's discipline is its course family (the course number's prefix), which is
+one family for a single-program corpus such as the five UAI courses: those samples
+are an engineering fixture, not cross-domain validation. A discipline map
+(read_disciplines) names the disciplines to sample, so a sense-diverse population
+(OCW and MITx courses across departments) is drawn per discipline and a declared
+discipline with nothing extracted fails the sampling.
 """
 
 import hashlib
@@ -120,6 +128,12 @@ STRATA_FALLBACKS: dict[str, tuple[pl.Expr, ...]] = {
     "claims": (pl.format("{}|{}", "model", "agreement"),),
     "subsections": (pl.format("{}|{}", "size_band", "models"), pl.col("models")),
 }
+# With declared disciplines the point of the sample is per-discipline estimates, so
+# the fallbacks give up the other axes and keep the discipline.
+DISCIPLINE_FALLBACKS: dict[str, tuple[pl.Expr, ...]] = {
+    "claims": (pl.format("{}|{}", "discipline", "model"),),
+    "subsections": (pl.format("{}|{}", "discipline", "models"),),
+}
 
 
 def coarsen_strata(
@@ -174,28 +188,41 @@ def coarsen_strata(
 
 
 def fit_strata(
-    population: pl.DataFrame, set_name: str, budget: int, min_size: int
+    population: pl.DataFrame,
+    set_name: str,
+    budget: int,
+    min_size: int,
+    *,
+    keep_discipline: bool = False,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Coarsen a set's strata, falling back to coarser ones until the floors fit.
 
     The first stratification whose strata, once coarsened, need at most `budget`
     labels at min_size each (or all of a smaller stratum) is used, so a corpus with
-    many course families pools them (STRATA_FALLBACKS). If even the coarsest does
-    not fit, it is returned as is and allocate raises for the budget.
+    many course families pools them (STRATA_FALLBACKS). With keep_discipline the
+    fallbacks keep the discipline instead (DISCIPLINE_FALLBACKS). If even the
+    coarsest does not fit, it is returned as is and allocate raises for the budget.
 
     :param population: items with a stratum column
     :param set_name: the gold set, a key of SCORING_GROUPS
     :param budget: labels the set will allocate
     :param min_size: smallest stratum kept as is, and the floor per stratum
+    :param keep_discipline: never pool declared disciplines
     :returns: the coarsened population and the dropped strata, as coarsen_strata
     :rtype: tuple[pl.DataFrame, pl.DataFrame]
     """
-    fallbacks = STRATA_FALLBACKS.get(set_name, ())
+    fallbacks = (DISCIPLINE_FALLBACKS if keep_discipline else STRATA_FALLBACKS).get(
+        set_name, ()
+    )
+    within = SCORING_GROUPS[set_name]
+    if keep_discipline and within is not None:
+        # a merged stratum spanning disciplines would mix what is reported apart
+        within = pl.format("{}|{}", within, "discipline")
     for stratification in (pl.col("stratum"), *fallbacks):
         coarsened, dropped = coarsen_strata(
             population.with_columns(stratification.alias("stratum")),
             min_size,
-            SCORING_GROUPS[set_name],
+            within,
         )
         sizes = coarsened.group_by("stratum").len()["len"]
         if sizes.clip(upper_bound=min_size).sum() <= budget:
@@ -245,6 +272,8 @@ class GoldInputs:
     :param concepts: dim_concept rows
     :param relations: bridge_concept_relation rows
     :param matcher: the frozen label matching rule
+    :param disciplines: declared discipline per course run or course family
+        (read_disciplines); None stratifies by course family
     """
 
     extractions: pl.DataFrame
@@ -259,6 +288,66 @@ class GoldInputs:
     concepts: pl.DataFrame
     relations: pl.DataFrame
     matcher: LabelMatcher
+    disciplines: dict[str, str] | None = None
+
+
+def read_disciplines(path: Path) -> dict[str, str]:
+    """Read a discipline map: a CSV with columns course and discipline.
+
+    course is a course run's readable id (an OCW run's is its site uid) or a course
+    family as course_family returns it ("6", "18", "UAI"). A run id takes precedence
+    over its family.
+
+    :param path: the CSV
+    :returns: discipline by course run or course family
+    :rtype: dict[str, str]
+    """
+    rows = pl.read_csv(path, schema={"course": pl.String, "discipline": pl.String})
+    duplicated = rows.filter(pl.col("course").is_duplicated())["course"].unique()
+    if duplicated.len():
+        msg = f"{path}: courses listed twice: {sorted(duplicated)}"
+        raise ValueError(msg)
+    return dict(rows.iter_rows())
+
+
+def with_discipline(
+    frame: pl.DataFrame, disciplines: dict[str, str] | None, set_name: str
+) -> pl.DataFrame:
+    """Add course_family and discipline, keeping only runs a declared map names.
+
+    :param frame: rows with courserun_readable_id
+    :param disciplines: read_disciplines output, or None for course families
+    :param set_name: the gold set, for the error message
+    :returns: the rows whose run has a discipline, with course_family and discipline
+    :rtype: pl.DataFrame
+    :raises ValueError: when a declared discipline has no row, since its estimates
+        would silently be missing
+    """
+    family = pl.col("courserun_readable_id").map_elements(
+        course_family, return_dtype=pl.String
+    )
+    frame = frame.with_columns(family.alias("course_family"))
+    if disciplines is None:
+        return frame.with_columns(pl.col("course_family").alias("discipline"))
+    frame = frame.with_columns(
+        pl.col("courserun_readable_id")
+        .replace_strict(
+            disciplines, default=pl.lit(None, dtype=pl.String), return_dtype=pl.String
+        )
+        .fill_null(
+            pl.col("course_family").replace_strict(
+                disciplines,
+                default=pl.lit(None, dtype=pl.String),
+                return_dtype=pl.String,
+            )
+        )
+        .alias("discipline")
+    ).filter(pl.col("discipline").is_not_null())
+    missing = sorted(set(disciplines.values()) - set(frame["discipline"]))
+    if missing:
+        msg = f"{set_name}: no extracted items for declared disciplines {missing}"
+        raise ValueError(msg)
+    return frame
 
 
 def _follow_merges(assignments: pl.DataFrame, registry: pl.DataFrame) -> pl.DataFrame:
@@ -292,6 +381,7 @@ def load_inputs(  # noqa: PLR0913
     concepts: Path,
     relations: Path,
     label_maps: list[Path] | None = None,
+    disciplines: Path | None = None,
 ) -> GoldInputs:
     """Load the extraction, resolution and dimensional outputs a gold set samples.
 
@@ -305,6 +395,8 @@ def load_inputs(  # noqa: PLR0913
     :param label_maps: parquet files with concept_label_key and
         canonical_label_key, extra equivalences for the matching rule (e.g. a
         resolution of two models' labels together)
+    :param disciplines: a discipline map CSV (read_disciplines); None stratifies
+        claims and subsections by course family
     :returns: the loaded inputs
     :rtype: GoldInputs
     """
@@ -408,6 +500,7 @@ def load_inputs(  # noqa: PLR0913
         concepts=pl.read_parquet(concepts),
         relations=pl.read_parquet(relations),
         matcher=matcher,
+        disciplines=read_disciplines(disciplines) if disciplines else None,
     )
 
 
@@ -433,9 +526,6 @@ def _with_canonical(inputs: GoldInputs) -> pl.DataFrame:
         pl.col("model_id")
         .map_elements(model_family, return_dtype=pl.String)
         .alias("model"),
-        pl.col("courserun_readable_id")
-        .map_elements(course_family, return_dtype=pl.String)
-        .alias("course_family"),
         pl.when(pl.col("claim_kind").is_in(CONCEPT_CLAIM_KINDS))
         .then(
             pl.col("label").map_elements(
@@ -485,7 +575,8 @@ def claims_population(inputs: GoldInputs) -> pl.DataFrame:
         .agg((pl.col("status") == pl.col("status_other")).any().alias("same_status"))
     )
     claims = (
-        claims.join(models_per_scope, on=scope)
+        with_discipline(claims, inputs.disciplines, "claims")
+        .join(models_per_scope, on=scope)
         .join(same_concept, on="item_id", how="left")
         .with_columns(
             pl.when(pl.col("scope_models").list.len() < 2)  # noqa: PLR2004
@@ -503,9 +594,7 @@ def claims_population(inputs: GoldInputs) -> pl.DataFrame:
             .when(pl.col("agreement").str.ends_with("_only"))
             .then(pl.lit(0.0))
             .alias("autorater"),
-            pl.format("{}|{}|{}", "course_family", "model", "agreement").alias(
-                "stratum"
-            ),
+            pl.format("{}|{}|{}", "discipline", "model", "agreement").alias("stratum"),
         )
     )
     return claims.drop("scope_models", "same_status").sort("item_id")
@@ -698,14 +787,10 @@ def subsections_population(inputs: GoldInputs) -> pl.DataFrame:
             .then(pl.lit("short"))
             .otherwise(pl.lit("long"))
             .alias("size_band"),
-            pl.col("courserun_readable_id")
-            .map_elements(course_family, return_dtype=pl.String)
-            .alias("course_family"),
         )
+        .pipe(with_discipline, inputs.disciplines, "subsections")
         .with_columns(
-            pl.format("{}|{}|{}", "course_family", "size_band", "models").alias(
-                "stratum"
-            )
+            pl.format("{}|{}|{}", "discipline", "size_band", "models").alias("stratum")
         )
         .sort("item_id")
     )
@@ -1121,6 +1206,8 @@ def prerequisites_population(inputs: GoldInputs) -> pl.DataFrame:
     support band, and a non-edge pair's stratum says whether another relation links
     it (hierarchy, association) or none does. Pairs are unordered (concept_a <
     concept_b); edge_direction says which comes first, as the edges have it.
+    pipeline_hierarchy says whether a hierarchy relation links the pair, edge or
+    not, so scoring can test whether hierarchy and dependency coexist.
 
     :param inputs: loaded gold-set inputs
     :returns: one row per unordered concept pair
@@ -1137,6 +1224,7 @@ def prerequisites_population(inputs: GoldInputs) -> pl.DataFrame:
             sequence[pair].append(edge)
         else:
             other[pair].add(edge["relation_family"])
+    hierarchical = {pair for pair, families in other.items() if "hierarchy" in families}
 
     assigned = dict(
         _active_assignments(inputs)
@@ -1191,6 +1279,7 @@ def prerequisites_population(inputs: GoldInputs) -> pl.DataFrame:
                 "concept_b": pair[1],
                 "stratum": stratum,
                 "edge_direction": direction,
+                "pipeline_hierarchy": pair in hierarchical,
                 "autorater": 0.0 if direction == "none" else 1.0,
             }
         )

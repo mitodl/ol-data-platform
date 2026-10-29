@@ -3,7 +3,9 @@
 One Label Studio project per annotation set. Import the set's tasks JSON (it
 carries pre-annotations as `predictions`, which annotators start from when the
 project's "use predictions to prelabel" setting is on), paste the set's labeling
-config, and export with the JSON format. The project API's `maximum_annotations`
+config, and export with the JSON format. Pre-annotations carry spans, concept
+labels and statuses only; salience and central-explanation roles are always the
+annotator's. The project API's `maximum_annotations`
 (and `overlap_cohort_percentage`) sets how many annotators see each task: 2 on a
 quarter of the claims, subsections and pairs, 3 on every prerequisite pair.
 
@@ -24,18 +26,53 @@ import polars as pl
 CLAIM_VERDICTS = ("supported", "partially_supported", "unsupported")
 STATUS_JUDGMENTS = ("correct", "wrong", "not_applicable")
 LABEL_JUDGMENTS = ("good", "too_broad", "too_narrow", "not_a_concept", "not_applicable")
+GRANULARITY_ERRORS = ("too_broad", "too_narrow")
 GOLD_STATUSES = ("taught", "reviewed", "used", "mentioned", "assumed")
+# Whether the subsection is about the concept, independent of its teaching status.
+SALIENCE = ("central", "supporting", "incidental")
+# Whether the subsection has one line of explanation the rest of it serves.
+CENTRAL_EXPLANATION = ("present", "absent")
+# A concept's place in that explanation; a concept with neither is left unmarked.
+CENTRAL_ROLES = ("objective", "needed")
 PAIR_RELATIONS = ("exact", "close", "a_narrower", "a_broader", "related", "distinct")
-PREREQUISITE_LABELS = ("b_before_a", "a_before_b", "neither")
+# Hierarchy and dependency are judged separately: a pair can be both.
+UNDECIDED = ("context_dependent", "uncertain")
+HIERARCHY_DIRECTIONS = ("a_kind_of_b", "b_kind_of_a", "a_part_of_b", "b_part_of_a")
+HIERARCHY_LABELS = (*HIERARCHY_DIRECTIONS, "none", *UNDECIDED)
+DEPENDENCY_DIRECTIONS = ("b_before_a", "a_before_b")
+DEPENDENCY_LABELS = (*DEPENDENCY_DIRECTIONS, "none", *UNDECIDED)
+DEPTHS = ("introductory", "intermediate", "advanced")
 MAX_CLUSTER_GROUPS = 8
 
 
-def _choices(name: str, to_name: str, values: Sequence[str], hint: str) -> str:
+def _choices(  # noqa: PLR0913
+    name: str,
+    to_name: str,
+    values: Sequence[str],
+    hint: str,
+    *,
+    choice: str = "single",
+    required: bool = True,
+    per_region: bool = False,
+) -> str:
     options = "\n".join(f"    <Choice value={quoteattr(value)}/>" for value in values)
+    attributes = f'choice="{choice}" showInline="true"'
+    if required:
+        attributes += ' required="true"'
+    if per_region:
+        attributes += ' perRegion="true"'
     return (
         f'  <Header value={quoteattr(hint)} size="5"/>\n'
         f"  <Choices name={quoteattr(name)} toName={quoteattr(to_name)} "
-        f'choice="single" required="true" showInline="true">\n{options}\n  </Choices>'
+        f"{attributes}>\n{options}\n  </Choices>"
+    )
+
+
+def _shown_for(tag: str, values: Sequence[str], body: str) -> str:
+    """Wrap controls in a View shown only while one of these choices is selected."""
+    return (
+        f'  <View visibleWhen="choice-selected" whenTagName={quoteattr(tag)} '
+        f"whenChoiceValue={quoteattr(','.join(values))}>\n{body}\n  </View>"
     )
 
 
@@ -76,13 +113,47 @@ CLAIMS_CONFIG = f"""<View>
 
 SUBSECTIONS_CONFIG = f"""<View>
   <Header value="$heading"/>
-  <Header value="Mark every concept this material teaches, reviews, uses, mentions or assumes. One span per concept, at the place that best shows its status; name it in the box." size="5"/>
+  <Header value="Mark every concept this material teaches, reviews, uses, mentions or assumes. One span per concept, at the place that best shows its status; name it in the box and give its salience." size="5"/>
   <Labels name="concept" toName="text">
 {chr(10).join(f"    <Label value={quoteattr(status)}/>" for status in GOLD_STATUSES)}
   </Labels>
+  <View visibleWhen="region-selected" whenTagName="text">
   <TextArea name="concept_label" toName="text" perRegion="true" editable="true"
             maxSubmissions="1" required="true" placeholder="Concept name"/>
+{
+    _choices(
+        "salience",
+        "text",
+        SALIENCE,
+        "Salience: is the subsection about this concept? central: it is what the "
+        "subsection is about. supporting: it serves a central concept. incidental: "
+        "named or used in passing.",
+        per_region=True,
+    )
+}
+{
+    _choices(
+        "central_role",
+        "text",
+        CENTRAL_ROLES,
+        "Only when the subsection has a central explanation. objective: the "
+        "explanation teaches it. needed: following the explanation directly needs "
+        "it. Leave unmarked otherwise.",
+        required=False,
+        per_region=True,
+    )
+}
+  </View>
   <Text name="text" value="$source_text" granularity="word"/>
+{
+    _choices(
+        "central_explanation",
+        "text",
+        CENTRAL_EXPLANATION,
+        "Does the subsection have one central explanation the rest of it serves "
+        "(absent: e.g. a problem set over several topics, an overview)?",
+    )
+}
 </View>
 """  # noqa: E501
 
@@ -122,6 +193,12 @@ def clusters_config(groups: int) -> str:
 """  # noqa: E501
 
 
+_DEPTH_HINT = (
+    "At which depths does it hold? introductory: first exposure, intuition and use. "
+    "intermediate: a typical undergraduate course. advanced: a formal or graduate "
+    "treatment."
+)
+
 PREREQUISITES_CONFIG = f"""<View>
   <Header value="A: $label_a"/>
   <Text name="a" value="$text_a"/>
@@ -129,14 +206,55 @@ PREREQUISITES_CONFIG = f"""<View>
   <Text name="b" value="$text_b"/>
 {
     _choices(
-        "prerequisite",
+        "hierarchy",
         "a",
-        PREREQUISITE_LABELS,
-        "b_before_a: a learner needs B to learn A. a_before_b: needs A to learn B. "
-        "neither: no prerequisite either way (a kind-of or related pair is "
-        "neither).",
+        HIERARCHY_LABELS,
+        "Hierarchy: is one a kind or a part of the other? context_dependent: it "
+        "depends on the sense, discipline or audience (say which below). uncertain: "
+        "you cannot tell.",
     )
 }
+{
+    _shown_for(
+        "hierarchy",
+        HIERARCHY_DIRECTIONS,
+        _choices(
+            "hierarchy_depth",
+            "a",
+            DEPTHS,
+            _DEPTH_HINT,
+            choice="multiple",
+            required=False,
+        ),
+    )
+}
+{
+    _choices(
+        "dependency",
+        "a",
+        DEPENDENCY_LABELS,
+        "Dependency, judged apart from hierarchy: b_before_a: a learner needs B to "
+        "learn A. a_before_b: needs A to learn B. context_dependent: it depends on "
+        "the sense, discipline or audience (say which below). uncertain: you cannot "
+        "tell.",
+    )
+}
+{
+    _shown_for(
+        "dependency",
+        DEPENDENCY_DIRECTIONS,
+        _choices(
+            "dependency_depth",
+            "a",
+            DEPTHS,
+            _DEPTH_HINT,
+            choice="multiple",
+            required=False,
+        ),
+    )
+}
+  <TextArea name="context" toName="a" editable="true" maxSubmissions="1"
+            placeholder="For context_dependent or uncertain: what it depends on"/>
 </View>
 """
 
@@ -262,15 +380,35 @@ class Annotation:
     created_at: str
     results: list[dict[str, Any]]
 
-    def choice(self, name: str) -> str | None:
-        """Return the single choice made in a Choices control, if any."""
+    def choices(self, name: str) -> tuple[str, ...]:
+        """Return the choices made in a task-level Choices control, sorted.
+
+        A per-region control's results share their region's id, so they are not
+        task-level choices.
+        """
+        regions = {
+            result["id"] for result in self.results if result["type"] == "labels"
+        }
         for result in self.results:
-            if result["from_name"] == name and result["type"] == "choices":
-                return str(result["value"]["choices"][0])
-        return None
+            if (
+                result["from_name"] == name
+                and result["type"] == "choices"
+                and result.get("id") not in regions
+            ):
+                return tuple(sorted(result["value"]["choices"]))
+        return ()
+
+    def choice(self, name: str) -> str | None:
+        """Return the single choice made in a task-level Choices control, if any."""
+        made = self.choices(name)
+        return str(made[0]) if made else None
 
     def regions(self, labels_name: str) -> dict[str, dict[str, Any]]:
-        """Return labelled spans by region id, with any per-region text joined in."""
+        """Return labelled spans by region id, with per-region controls joined in.
+
+        A region's TextArea text is under "concept" and each per-region Choices
+        control's choice under the control's name (e.g. "salience").
+        """
         spans = {
             result["id"]: {
                 "start": result["value"]["start"],
@@ -282,8 +420,14 @@ class Annotation:
             if result["from_name"] == labels_name and result["type"] == "labels"
         }
         for result in self.results:
-            if result["type"] == "textarea" and result["id"] in spans:
+            if result.get("id") not in spans:
+                continue
+            if result["type"] == "textarea":
                 spans[result["id"]]["concept"] = " ".join(result["value"]["text"])
+            elif result["type"] == "choices":
+                spans[result["id"]][result["from_name"]] = str(
+                    result["value"]["choices"][0]
+                )
         return spans
 
     def buckets(self, name: str) -> dict[str, list[str]]:

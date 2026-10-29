@@ -1232,3 +1232,458 @@ def test_a_model_that_extracted_no_claims_still_counts_for_the_scope(tmp_path):
         1,
     )
     assert (u2["models"], u2["gold_hat"]) == ("haiku+opus", 0)
+
+
+def _annotation(annotator, minute, results):
+    return {
+        "completed_by": annotator,
+        "created_at": datetime(2026, 10, 28, minute, tzinfo=UTC).isoformat(),
+        "result": results,
+    }
+
+
+def _prerequisite_task(item_id, answers):
+    """answers: (annotator, hierarchy, dependency, dependency depths) per annotator."""
+    return {
+        "data": {"item_id": item_id},
+        "annotations": [
+            _annotation(
+                annotator,
+                minute,
+                [
+                    {
+                        "id": f"h{minute}",
+                        "from_name": "hierarchy",
+                        "type": "choices",
+                        "value": {"choices": [hierarchy]},
+                    },
+                    {
+                        "id": f"d{minute}",
+                        "from_name": "dependency",
+                        "type": "choices",
+                        "value": {"choices": [dependency]},
+                    },
+                    {
+                        "id": f"dd{minute}",
+                        "from_name": "dependency_depth",
+                        "type": "choices",
+                        "value": {"choices": list(depths)},
+                    },
+                ],
+            )
+            for minute, (annotator, hierarchy, dependency, depths) in enumerate(answers)
+        ],
+    }
+
+
+def test_prerequisites_score_hierarchy_and_dependency_separately(tmp_path):
+    items = [f"a{n}||b{n}" for n in range(6)]
+    population = pl.DataFrame(
+        {
+            "item_id": items,
+            "concept_a": [f"a{n}" for n in range(6)],
+            "stratum": ["builds_on|support1"] * 3 + ["non_edge|hierarchy"] * 3,
+            "edge_direction": ["b_before_a"] * 3 + ["none"] * 3,
+            "pipeline_hierarchy": [True, False, False, True, True, False],
+        }
+    )
+    # item 1 is shown flipped: the annotator's B is the population's a1
+    sample = population.select(
+        "item_id",
+        pl.when(pl.col("item_id") == "a1||b1")
+        .then(pl.lit("b1"))
+        .otherwise(pl.col("concept_a"))
+        .alias("concept_a"),
+    )
+    intro = ("introductory",)
+    tasks = [
+        # a kind of b, and still needs b: hierarchy and dependency coexist
+        _prerequisite_task(
+            "a0||b0",
+            [
+                (1, "a_kind_of_b", "b_before_a", intro),
+                (2, "a_kind_of_b", "b_before_a", ("introductory", "advanced")),
+            ],
+        ),
+        # shown flipped, so a_before_b as shown is b_before_a in population order
+        _prerequisite_task(
+            "a1||b1", [(1, "none", "a_before_b", intro), (2, "none", "a_before_b", ())]
+        ),
+        _prerequisite_task(
+            "a2||b2",
+            [
+                (1, "none", "context_dependent", ()),
+                (2, "none", "context_dependent", ()),
+            ],
+        ),
+        _prerequisite_task(
+            "a3||b3", [(1, "b_part_of_a", "none", ()), (2, "b_part_of_a", "none", ())]
+        ),
+        _prerequisite_task(
+            "a4||b4",
+            [(1, "a_kind_of_b", "uncertain", ()), (2, "uncertain", "none", ())],
+        ),
+        _prerequisite_task(
+            "a5||b5",
+            [(1, "none", "a_before_b", intro), (2, "none", "a_before_b", intro)],
+        ),
+    ]
+    report = score.score_prerequisites(
+        population, sample, _export(tmp_path, tasks), alpha=0.05
+    )
+    edges = report["edge_precision"]["strata"]["builds_on|support1"]
+    assert edges["labeled_ratio"] == pytest.approx(2 / 3)
+    lenient = report["edge_precision_lenient"]["strata"]["builds_on|support1"]
+    assert lenient["labeled_ratio"] == 1.0
+    # a0 is both a kind of b0 and dependent on it; a3 is a part, not dependent
+    given = report["dependency_given_hierarchy"]["strata"]
+    assert given["builds_on|support1"]["labeled_ratio"] == 1.0
+    assert given["non_edge|hierarchy"]["labeled_ratio"] == 0.0
+    assert report["ties"] == {"hierarchy": ["a4||b4"], "dependency": ["a4||b4"]}
+    assert report["hierarchy_by_dependency"]["a_kind_of_b|b_before_a"] == 1
+    assert report["depths"]["dependency"] == {
+        "introductory": 5,
+        "advanced": 1,
+        "unset": 1,
+    }
+    assert report["kappa"]["hierarchy"]["items"] == 6
+    assert report["kappa"]["dependency"]["items"] == 6
+    assert report["labelled_edges_reversed"] == 0
+
+
+def test_prerequisites_config_judges_hierarchy_and_dependency_apart():
+    config = labelstudio.PREREQUISITES_CONFIG
+    for name in ("hierarchy", "hierarchy_depth", "dependency", "dependency_depth"):
+        assert f'name="{name}"' in config
+    assert "neither" not in labelstudio.DEPENDENCY_LABELS
+    assert {"context_dependent", "uncertain"} <= set(labelstudio.HIERARCHY_LABELS)
+    assert 'whenChoiceValue="b_before_a,a_before_b"' in config
+
+
+def _region_task(item_id, annotations):
+    """annotations: (annotator, central_explanation, concepts), each concept
+    (label, status, salience, role).
+    """
+    results_per = []
+    for annotator, central, concepts in annotations:
+        results = [
+            {
+                "id": "central",
+                "from_name": "central_explanation",
+                "type": "choices",
+                "value": {"choices": [central]},
+            }
+        ]
+        for index, (label, status, salience, role) in enumerate(concepts):
+            span = {"start": index, "end": index + 1, "text": "x"}
+            results.extend(
+                [
+                    {
+                        "id": f"r{index}",
+                        "from_name": "concept",
+                        "type": "labels",
+                        "value": {**span, "labels": [status]},
+                    },
+                    {
+                        "id": f"r{index}",
+                        "from_name": "concept_label",
+                        "type": "textarea",
+                        "value": {**span, "text": [label]},
+                    },
+                    {
+                        "id": f"r{index}",
+                        "from_name": "salience",
+                        "type": "choices",
+                        "value": {**span, "choices": [salience]},
+                    },
+                ]
+            )
+            if role:
+                results.append(
+                    {
+                        "id": f"r{index}",
+                        "from_name": "central_role",
+                        "type": "choices",
+                        "value": {**span, "choices": [role]},
+                    }
+                )
+        results_per.append((annotator, results))
+    return {
+        "data": {"item_id": item_id},
+        "annotations": [
+            _annotation(annotator, minute, results)
+            for minute, (annotator, results) in enumerate(results_per)
+        ],
+    }
+
+
+def test_per_region_choices_join_their_region_and_are_not_task_choices(tmp_path):
+    (annotation,) = _export(
+        tmp_path,
+        [
+            _region_task(
+                "u0",
+                [(1, "present", [("k-means", "reviewed", "supporting", "needed")])],
+            )
+        ],
+    )
+    (region,) = annotation.regions("concept").values()
+    assert region["salience"] == "supporting"
+    assert region["central_role"] == "needed"
+    assert annotation.choice("salience") is None
+    assert annotation.choice("central_explanation") == "present"
+
+
+_LECTURE = [
+    ("interpretable clustering", "taught", "central", "objective"),
+    ("k-means clustering", "reviewed", "supporting", "needed"),
+    ("Bluebikes", "used", "supporting", None),
+]
+
+
+def test_subsections_score_salience_and_central_recall(tmp_path):
+    items = ["u0", "u1"]
+    population = pl.DataFrame(
+        {
+            "item_id": items,
+            "scope_id": items,
+            "stratum": ["s"] * 2,
+            "models": ["haiku"] * 2,
+            "found_hat_haiku": [1, 1],
+            "gold_hat": [2, 2],
+        }
+    )
+    sample = pl.DataFrame({"item_id": items, "blind": [True, True]})
+    matcher = LabelMatcher()
+    model_concepts = pl.DataFrame(
+        {
+            "scope_id": items,
+            "model": ["haiku"] * 2,
+            "canonical": [matcher.canonical("interpretable clustering")] * 2,
+            "status": ["taught"] * 2,
+        }
+    )
+    tasks = [
+        _region_task("u0", [(1, "present", _LECTURE), (2, "present", _LECTURE)]),
+        _region_task(
+            "u1",
+            [
+                (1, "present", _LECTURE),
+                (2, "present", [(*_LECTURE[0][:2], "supporting", "objective")]),
+            ],
+        ),
+    ]
+    exported = _export(tmp_path, tasks)
+    report, _ = score.score_subsections(
+        population, sample, exported, model_concepts, matcher, alpha=0.05
+    )
+    central = report["models"]["haiku"]["central_recall"]["strata"]["s"]
+    # u1's salience of interpretable clustering tied, so only u0's counts
+    assert central["labeled_ratio"] == 1.0
+    concept = report["models"]["haiku"]["concept_recall"]["strata"]["s"]
+    assert concept["labeled_ratio"] == pytest.approx(2 / 6)
+    salience = report["salience"]
+    assert salience["kappa"]["items"] == 4
+    assert salience["status_by_salience"]["taught|undecided"] == 1
+    gold = score.gold_subsection_concepts(score.subsection_gold(exported, matcher))
+    assert gold.filter(pl.col("item_id") == "u0").sort("canonical")[
+        "central_role"
+    ].to_list() == ["none", "objective", "needed"]
+
+
+def test_objectives_agreement_conflicts_and_model_hooks(tmp_path):
+    items = ["u0", "u1", "u2"]
+    population = pl.DataFrame(
+        {"item_id": items, "scope_id": items, "stratum": ["s"] * 3}
+    )
+    assignment = [("pivot table", "used", "central", None)]
+    tasks = [
+        _region_task("u0", [(1, "present", _LECTURE), (2, "present", _LECTURE)]),
+        _region_task(
+            "u1",
+            [
+                (1, "absent", assignment),
+                # roles with no central explanation are ignored and listed
+                (2, "absent", [(*assignment[0][:3], "objective")]),
+            ],
+        ),
+        _region_task("u2", [(1, "absent", assignment)]),
+    ]
+    matcher = LabelMatcher()
+    canonical = matcher.canonical
+    model_roles = pl.DataFrame(
+        {
+            "scope_id": ["u0", "u0", "u0", "u1", "u2"],
+            "model": ["variant"] * 5,
+            "canonical": [
+                canonical("interpretable clustering"),
+                canonical("k-means clustering"),
+                canonical("Bluebikes"),
+                canonical("pivot table"),
+                None,
+            ],
+            "role": ["objective", "needed", "needed", "objective", "no_central"],
+        }
+    )
+    report = score.score_objectives(
+        population,
+        _export(tmp_path, tasks),
+        matcher,
+        alpha=0.05,
+        model_roles=model_roles,
+    )
+    assert report["objective_dice"] == 1.0
+    assert report["kappa_needed"]["items"] == 2
+    assert report["central_explanation"] == {"present": 1, "absent": 2}
+    assert report["conflicts"] == [
+        {
+            "item_id": "u1",
+            "annotator": "2",
+            "problem": "roles marked with no central explanation (ignored)",
+        }
+    ]
+    variant = report["models"]["variant"]
+    assert variant["needed_precision"]["strata"]["s"]["labeled_ratio"] == 0.5
+    assert variant["objective_recall"]["strata"]["s"]["labeled_ratio"] == 1.0
+    assert variant["objective_precision"]["strata"]["s"]["labeled_ratio"] == 0.5
+    # u1 and u2 have no central explanation; the variant chose one in u1
+    assert variant["false_objective_rate"]["strata"]["s"]["labeled_ratio"] == 0.5
+
+
+def test_subsections_config_has_salience_and_objectives():
+    config = labelstudio.SUBSECTIONS_CONFIG
+    assert 'name="salience"' in config
+    assert 'name="central_role"' in config
+    assert 'name="central_explanation"' in config
+    salience = config[config.index('name="salience"') :].split(">", 1)[0]
+    assert 'perRegion="true"' in salience
+    assert 'required="true"' in salience
+
+
+def test_claims_report_granularity_errors_beside_precision(tmp_path):
+    population = pl.DataFrame(
+        {
+            "item_id": [f"c{n}" for n in range(8)],
+            "model": ["haiku"] * 8,
+            "claim_kind": ["concept"] * 6 + ["skill"] * 2,
+            "discipline": ["UAI"] * 4 + ["18"] * 4,
+            "stratum": ["UAI|s"] * 4 + ["18|s"] * 4,
+            "autorater": [None] * 8,
+        },
+        schema_overrides={"autorater": pl.Float64},
+    )
+    good = {"verdict": "supported", "status": "correct", "label_quality": "good"}
+    broad = {**good, "label_quality": "too_broad"}
+    narrow = {**good, "label_quality": "too_narrow"}
+    skill = {"verdict": "supported", "status": "not_applicable"}
+    tasks = [
+        _choice_task("c0", [(1, good)]),
+        _choice_task("c1", [(1, broad)]),
+        _choice_task("c2", [(1, narrow)]),
+        _choice_task("c3", [(1, good)]),
+        _choice_task("c4", [(1, good)]),
+        _choice_task("c5", [(1, broad)]),
+        _choice_task("c6", [(1, {**skill, "label_quality": "too_broad"})]),
+        _choice_task("c7", [(1, {**skill, "label_quality": "not_applicable"})]),
+    ]
+    report = score.score_claims(population, _export(tmp_path, tasks), alpha=0.05)
+    haiku = report["models"]["haiku"]
+    # granularity does not lower precision, and is reported over concept kinds only
+    assert haiku["correct"]["point"] == 1.0
+    assert haiku["granularity_error"]["strata"]["UAI|s"]["labeled_ratio"] == 0.5
+    assert haiku["granularity_error"]["strata"]["18|s"]["labeled"] == 2
+    by_discipline = haiku["by_discipline"]
+    assert by_discipline["18"]["granularity_error"]["point"] == pytest.approx(0.5)
+    assert set(by_discipline) == {"UAI", "18"}
+
+
+def test_declared_disciplines_select_and_name_the_strata(tmp_path):
+    claims = pl.DataFrame(
+        [
+            _claim("opus", "u1", 1, "Linear regression"),
+            {
+                **_claim("opus", "u2", 1, "eigenvalue"),
+                "extraction_key": "opus-ocw",
+                "courserun_readable_id": "97db384ef34009a64df7cb86cf701979",
+            },
+            {
+                **_claim("opus", "u3", 1, "recursion"),
+                "extraction_key": "opus-6",
+                "courserun_readable_id": "course-v1:MITx+6.100A+2T2026",
+            },
+        ]
+    )
+    path = tmp_path / "disciplines.csv"
+    path.write_text(
+        "course,discipline\nUAI,ai\n97db384ef34009a64df7cb86cf701979,mathematics\n"
+    )
+    inputs = dataclasses.replace(
+        _inputs(claims), disciplines=samples.read_disciplines(path)
+    )
+    population = samples.claims_population(inputs)
+    # the MITx 6 run is not declared, so it is not sampled
+    assert dict(population.select("label", "discipline").iter_rows()) == {
+        "Linear regression": "ai",
+        "eigenvalue": "mathematics",
+    }
+    assert set(population["stratum"]) == {
+        "ai|opus|unpaired",
+        "mathematics|opus|unpaired",
+    }
+    path.write_text("course,discipline\nUAI,ai\n18,mathematics\n")
+    with pytest.raises(ValueError, match=r"declared disciplines \['mathematics'\]"):
+        samples.claims_population(
+            dataclasses.replace(inputs, disciplines=samples.read_disciplines(path))
+        )
+    path.write_text("course,discipline\nUAI,ai\nUAI,cs\n")
+    with pytest.raises(ValueError, match="listed twice"):
+        samples.read_disciplines(path)
+
+
+def test_fit_strata_keeps_declared_disciplines_apart():
+    population = _subsection_strata(3).with_columns(
+        pl.col("course_family").alias("discipline")
+    )
+    floor = samples.SUBSECTIONS_MIN_PER_STRATUM
+    kept, dropped = samples.fit_strata(
+        population, "subsections", 40, floor, keep_discipline=True
+    )
+    assert dropped.is_empty()
+    assert set(kept["stratum"]) == {
+        f"F{family}|{models}"
+        for family in range(3)
+        for models in ("haiku", "opus", "haiku+opus")
+    }
+
+
+def test_prerequisite_population_flags_pipeline_hierarchy():
+    concepts = pl.DataFrame({"concept_pk": ["a", "b", "c"]})
+    relations = pl.DataFrame(
+        {
+            "from_concept_fk": ["a", "a"],
+            "to_concept_fk": ["b", "c"],
+            "relation": ["broader", "builds_on"],
+            "relation_family": ["hierarchy", "sequence"],
+            "courserun_support": [1, 1],
+        }
+    )
+    claims = pl.DataFrame(
+        [_claim("opus", "u1", n, label) for n, label in enumerate("xyz")]
+    )
+    inputs = dataclasses.replace(
+        _inputs(claims),
+        relations=relations,
+        concepts=concepts,
+        assignments=pl.DataFrame(
+            {"concept_label_key": list("xyz"), "concept_id": list("abc")}
+        ),
+        registry=pl.DataFrame(
+            {"concept_id": list("abc"), "merged_into_concept_id": [None] * 3},
+            schema_overrides={"merged_into_concept_id": pl.String},
+        ),
+        labels=pl.DataFrame({"concept_label_key": list("xyz")}),
+    )
+    population = samples.prerequisites_population(inputs)
+    flags = dict(population.select("item_id", "pipeline_hierarchy").iter_rows())
+    # a kind of b with no sequence edge, and a builds on c with no hierarchy
+    assert flags == {"a||b": True, "a||c": False, "b||c": False}
