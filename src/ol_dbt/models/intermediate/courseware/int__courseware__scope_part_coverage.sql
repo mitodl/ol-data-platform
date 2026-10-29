@@ -3,8 +3,8 @@
     whether an extraction covers it. A part with no extraction has no row in
     int__courseware__extractions, so a scope that grew to two parts whose part 2
     failed shows up only here. has_current_input_extraction is false both for that
-    and for a part whose changed text failed to extract (its older extraction may
-    still be current). Runs the extractor never recorded a read for are not listed.
+    and for a part whose changed text, or for v2 changed course header, failed to
+    extract (its older extraction may still be current). Runs the extractor never recorded a read for are not listed.
     Which claims are current is decided in int__courseware__extractions, not here.
 #}
 with expected as (
