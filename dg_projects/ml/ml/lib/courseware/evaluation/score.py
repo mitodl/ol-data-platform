@@ -956,7 +956,8 @@ def score_prerequisites(
     - sequence_edge_precision: the same over builds_on and practiced_with edges,
       each stratum reported on its own, which is how practiced_with is read.
     - edge_recall: pairs with a directed dependency consensus that have a
-      builds_on or practiced_with edge that way.
+      builds_on edge that way. A practiced_with edge asserts no dependency, so it
+      does not find one. sequence_edge_recall also counts practiced_with edges.
     - dependency_given_hierarchy: of the pairs annotators call a kind or part of
       one another, the share that also have a directed dependency. A hierarchy
       relation does not rule a dependency out, which this measures.
@@ -1012,13 +1013,21 @@ def score_prerequisites(
     precision = edge_precision("builds_on_direction", builds_on, lenient=False)
     lenient = edge_precision("builds_on_direction", builds_on, lenient=True)
     sequence_precision = edge_precision("edge_direction", edges, lenient=False)
-    recall = _strata(
-        population,
-        {
-            item: (float(found(item, value)), float(value in DEPENDENCY_DIRECTIONS))
-            for item, value in dependency.items()
-        },
-    )
+
+    def edge_recall(directions: Mapping[str, str]) -> list[Stratum]:
+        return _strata(
+            population,
+            {
+                item: (
+                    float(found(item, value, directions)),
+                    float(value in DEPENDENCY_DIRECTIONS),
+                )
+                for item, value in dependency.items()
+            },
+        )
+
+    recall = edge_recall(builds_on)
+    sequence_recall = edge_recall(edges)
     both = dependency.keys() & hierarchy.keys()
     given_hierarchy = _strata(
         population,
@@ -1063,6 +1072,7 @@ def score_prerequisites(
         "edge_precision_lenient": _estimate(lenient, alpha=alpha),
         "sequence_edge_precision": _estimate(sequence_precision, alpha=alpha),
         "edge_recall": _estimate(recall, alpha=alpha),
+        "sequence_edge_recall": _estimate(sequence_recall, alpha=alpha),
         "dependency_given_hierarchy": _estimate(given_hierarchy, alpha=alpha),
         "pipeline_hierarchy_precision": _estimate(pipeline_hierarchy, alpha=alpha),
         "labelled_edges_reversed": reversed_edges,

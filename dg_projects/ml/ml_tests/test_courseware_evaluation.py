@@ -1333,8 +1333,13 @@ def test_prerequisites_score_hierarchy_and_dependency_separately(tmp_path):
     ]
     # a tool and what is practiced with it: no dependency, as the guideline says
     tasks += [
-        _prerequisite_task(item, [(1, "none", "none", ()), (2, "none", "none", ())])
-        for item in ("a6||b6", "a7||b7")
+        _prerequisite_task(
+            "a6||b6", [(1, "none", "none", ()), (2, "none", "none", ())]
+        ),
+        # a dependency the practiced_with edge happens to point the same way as
+        _prerequisite_task(
+            "a7||b7", [(1, "none", "a_before_b", ()), (2, "none", "a_before_b", ())]
+        ),
     ]
     report = score.score_prerequisites(
         population, sample, _export(tmp_path, tasks), alpha=0.05
@@ -1345,8 +1350,14 @@ def test_prerequisites_score_hierarchy_and_dependency_separately(tmp_path):
     edges = report["edge_precision"]["strata"]["builds_on|support1"]
     assert edges["labeled_ratio"] == pytest.approx(2 / 3)
     sequence = report["sequence_edge_precision"]["strata"]
-    assert sequence["practiced_with|support1"]["labeled_ratio"] == 0.0
+    assert sequence["practiced_with|support1"]["labeled_ratio"] == pytest.approx(0.5)
     assert sequence["builds_on|support1"]["labeled_ratio"] == pytest.approx(2 / 3)
+    # a7's dependency has only a practiced_with edge, which does not find it
+    recall = report["edge_recall"]["strata"]
+    assert recall["practiced_with|support1"]["labeled_ratio"] == 0.0
+    assert recall["builds_on|support1"]["labeled_ratio"] == 1.0
+    sequence_recall = report["sequence_edge_recall"]["strata"]
+    assert sequence_recall["practiced_with|support1"]["labeled_ratio"] == 1.0
     lenient = report["edge_precision_lenient"]["strata"]["builds_on|support1"]
     assert lenient["labeled_ratio"] == 1.0
     # a0 is both a kind of b0 and dependent on it; a3 is a part, not dependent
@@ -1358,7 +1369,7 @@ def test_prerequisites_score_hierarchy_and_dependency_separately(tmp_path):
     assert report["depths"]["dependency"] == {
         "introductory": 5,
         "advanced": 1,
-        "unset": 1,
+        "unset": 3,
     }
     assert report["kappa"]["hierarchy"]["items"] == 8
     assert report["kappa"]["dependency"]["items"] == 8
