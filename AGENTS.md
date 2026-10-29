@@ -162,7 +162,7 @@ python bin/uv-operations.py lock --upgrade
   - `resources/`: Reusable connections (databases, APIs, Vault)
   - `io_managers/`: S3FileObjectIOManager, FileObjectIOManager for asset persistence
   - `lib/`: Utilities, constants, helpers
-- `dg_projects/`: 8 Dagster code locations (canvas, data_loading, delivery, edxorg, lakehouse, legacy_openedx, ml, openedx). Being consolidated to 6 lifecycle-aligned locations -- see issue #2260. **Do not add a new one.**
+- `dg_projects/`: 7 Dagster code locations (data_loading, delivery, edxorg, lakehouse, legacy_openedx, ml, openedx). Being consolidated to 6 lifecycle-aligned locations -- see issue #2260. **Do not add a new one.**
   - Each has: `<project>/assets/`, `<project>/resources/`, `<project>/definitions.py`, `pyproject.toml`, `Dockerfile`
 - `dg_deployments/local/`: Local Docker deployment configuration
 - `src/ol_dbt/`: Complete dbt project
@@ -261,7 +261,7 @@ analysis, and validation. It is installed as part of `uv sync`.
 | `ol-dbt local register` | Register AWS Glue Iceberg tables as DuckDB views |
 | `ol-dbt fixtures load` | Create the local lake's raw tables from `ingestion/inventory/fixtures/` and each unit's factory package (see `docs/LOCAL_LAKE.md`) |
 | `ol-dbt fixtures generate` | Write the rows `fixtures load` would insert as JSON lines, with no StarRocks connection |
-| `ol-dbt fixtures scaffold` | Write a unit's base factories from a dump of its Django app's models (`bin/django-model-dump.py`) |
+| `ol-dbt fixtures scaffold` | Write a unit's base factories from a dump of its Django app's models (`bin/django-model-dump.py`), or for a unit with no dump draft them from its staging models' dbt tests |
 | `ol-dbt ingest local` | Load the local lake's raw tables from the local-dev app databases, for units with `strategies.local: ingest` |
 
 ### `ol-dbt run` — Incremental State-Based Execution
@@ -367,6 +367,13 @@ incremental until `--full-refresh` is used.
   `dg_projects/delivery/CONTRIBUTING.md`, "Delivering to a local MIT Learn"
 - `DBT_MODEL_LOCAL_LAKE`: in dev, `get_dbt_model_as_dataframe` reads the table
   from the local lake (`ol_warehouse_local_<layer>`) and not Glue. Same section
+- `AZURE_OPENAI_ENDPOINT` + `OPENAI_API_VERSION`: the Azure OpenAI account and
+  API version the ml location's Learn embedding assets call. Deployed envs
+  authenticate with workload identity; in dev set `AZURE_OPENAI_API_KEY` too
+- `LEARN_QDRANT_COLLECTION_BASE`: Learn's Qdrant collection prefix (e.g.
+  `mitlearn-production`) for the ml location's `matches_learn_qdrant` checks.
+  Required in qa and production, where the code location fails to load without
+  it; dev has neither the checks nor the variable
 
 ## Trust These Instructions
 

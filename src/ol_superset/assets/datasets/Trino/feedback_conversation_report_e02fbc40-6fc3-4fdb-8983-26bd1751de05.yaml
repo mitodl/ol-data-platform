@@ -96,8 +96,8 @@ columns:
 - advanced_data_type: null
   column_name: conversation_id
   datetime_format: null
-  description: 'For Zendesk, the ticket ID. Open the ticket at https://odl.zendesk.com/agent/tickets/<ID>.
-    For other sources, the ID of the chat, forum thread or feedback item in that system.'
+  description: For Zendesk, the ticket ID. Open the ticket at https://odl.zendesk.com/agent/tickets/<ID>.
+    For other sources, the ID of the chat, forum thread or feedback item in that system.
   expression: ''
   extra: null
   filterable: true

@@ -33,11 +33,10 @@ from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
 from ml.lib.courseware.resolve import (
     BEDROCK_ADJUDICATION_MODEL,
     ResolutionState,
+    label_embedder,
     resolve_concepts,
 )
-from ml.lib.courseware.resolve import EMBEDDING_DIM as RESOLUTION_EMBEDDING_DIM
 from ml.lib.courseware.scopes import CHARS_PER_TOKEN, build_scopes
-from ml.lib.embed import BedrockEmbeddingClient, build_embedding_client
 from ml.resources.llm import LLMClientFactory
 
 app = cyclopts.App(help=__doc__)
@@ -189,7 +188,8 @@ def resolve(
     :param concept_labels: int__courseware__concept_labels exported to parquet
     :param output_dir: where the resolution tables are read and appended
     :param model_id: Bedrock model or inference profile id for adjudication
-    :param aws_region: Bedrock region
+    :param aws_region: Bedrock region for adjudication; the label embeddings go
+        through ol-llm, which reads AWS_DEFAULT_REGION
     :param rebuild: re-resolve every label, carrying ids forward by overlap
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -199,13 +199,7 @@ def resolve(
     if not isinstance(client, AnthropicBedrock):
         msg = f"bedrock client_class built a {type(client).__name__}"
         raise TypeError(msg)
-    embedding_client = build_embedding_client(
-        LLMClientFactory(client_class="bedrock_embeddings", aws_region=aws_region),
-        dim=RESOLUTION_EMBEDDING_DIM,
-    )
-    if not isinstance(embedding_client, BedrockEmbeddingClient):
-        msg = f"bedrock_embeddings built a {type(embedding_client).__name__}"
-        raise TypeError(msg)
+    embedding_client = label_embedder()
 
     runs = _existing(output_dir, "courseware_resolution_run")
     last_run = (

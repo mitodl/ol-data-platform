@@ -12,7 +12,6 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
-import numpy as np
 import polars as pl
 import pytest
 from anthropic import Anthropic
@@ -43,11 +42,13 @@ from ml.assets.courseware_resolution import (
     assignment_churn,
     courseware_resolution,
 )
-from ml.lib.courseware import graph, warehouse
+from ml.lib import warehouse
+from ml.lib.courseware import graph
 from ml.resources import opik_auth
 from ml.resources.llm import LLMClientFactory
 from ml.sensors import courseware as sensor_module
 from ml.sensors.courseware import courseware_extraction_text_sensor
+from ml_tests.test_courseware_resolve import FakeEmbedder
 from ol_orchestrate.lib.failures import (
     RETRY_ON_ASSET_OR_OP_FAILURE_TAG,
     PermanentFailure,
@@ -248,19 +249,6 @@ class FakeLLM(LLMClientFactory):
 def calls() -> list[str]:
     CALLS.clear()
     return CALLS
-
-
-class FakeEmbedder:
-    model_version = "fake-embed"
-    max_request_batch_size = 16
-    dim = 26
-    max_input_chars = None
-
-    def embed_batch(self, texts, *, trace_metadata=None):  # noqa: ARG002
-        return [
-            list(np.eye(26, dtype=np.float32)[ord(text[0].lower()) - 97] + 0.01)
-            for text in texts
-        ]
 
 
 # -------------------------------------------------------------------- extraction
@@ -689,7 +677,6 @@ def resolve(
         resources={
             "io_manager": Warehouse(tables),
             "llm": llm or FakeLLM(),
-            "embedding_llm": FakeLLM(),
         },
         run_config={"ops": {"courseware_resolution": {"config": {"rebuild": rebuild}}}},
         raise_on_error=False,
@@ -708,9 +695,7 @@ def failure_class(result) -> str:
 
 @pytest.fixture
 def embedder(monkeypatch) -> None:
-    monkeypatch.setattr(
-        resolution_module, "build_embedding_client", lambda *_, **__: FakeEmbedder()
-    )
+    monkeypatch.setattr(resolution_module, "label_embedder", lambda **_: FakeEmbedder())
 
 
 @pytest.mark.usefixtures("embedder")
@@ -1010,6 +995,5 @@ def test_courseware_definitions_load():
             "io_manager": Warehouse({}),
             "courseware_io_manager": Warehouse({}),
             "llm": FakeLLM(),
-            "embedding_llm": FakeLLM(),
         },
     ).resolve_all_job_defs()

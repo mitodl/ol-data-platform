@@ -5,6 +5,7 @@ dataset_uuid: 378cfe46-2614-42e3-82f3-f161aa37e66d  # program_enrollment_with_us
 description: null
 params:
   adhoc_filters: []
+  align_pn: false
   all_columns:
   - platform_name
   - program_type
@@ -41,10 +42,9 @@ params:
   - user_address_city
   - user_address_state_or_territory
   - user_address_postal_code
-  - all_courses_passed_in_program
-  - verified_courses_passed_in_program
+  - course_certificate_sum
+  allow_rearrange_columns: false
   allow_render_html: true
-  annotation_layers: []
   color_pn: true
   column_config:
     courses_taken_in_program:
@@ -53,15 +53,41 @@ params:
       showCellBars: false
     user_id:
       showCellBars: false
+  comparison_color_enabled: false
   comparison_color_scheme: Green
+  comparison_type: values
   conditional_formatting: []
   extra_form_data: {}
   groupby: []
   include_search: true
+  matrixify_all_sort_by_columns: a_to_z
+  matrixify_all_sort_by_rows: a_to_z
+  matrixify_cell_title_template: ''
+  matrixify_charts_per_row: 3
+  matrixify_dimension_columns:
+    dimension: ''
+    values: []
+  matrixify_dimension_rows:
+    dimension: ''
+    values: []
+  matrixify_dimension_selection_mode_columns: members
+  matrixify_dimension_selection_mode_rows: members
+  matrixify_enable: false
+  matrixify_fit_columns_dynamically: true
+  matrixify_mode_columns: disabled
+  matrixify_mode_rows: disabled
+  matrixify_row_height: 300
+  matrixify_show_column_headers: true
+  matrixify_show_row_labels: true
+  matrixify_topn_order_columns: true
+  matrixify_topn_order_rows: true
+  matrixify_topn_value_columns: 10
+  matrixify_topn_value_rows: 10
   order_by_cols: []
   percent_metrics: []
   query_mode: raw
   row_limit: 50000
+  server_pagination: false
   show_cell_bars: true
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}

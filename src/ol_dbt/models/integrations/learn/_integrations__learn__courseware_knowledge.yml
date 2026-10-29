@@ -5,6 +5,7 @@ models:
 - name: integrations__learn__resource_knowledge
   description: What each Learn course teaches, assesses and expects, from its most
     recently extracted run, with a deterministic markdown context document for embedding.
+    Only accepted concepts and claims are included.
   config:
     meta:
       # It reads claims only the courseware extractor writes, which no QA run produces
@@ -50,7 +51,8 @@ models:
 
 - name: integrations__learn__concepts
   description: Learner-facing concepts with their descriptions and course counts,
-    for concept chips, tooltips and concept pages in Learn.
+    for concept chips, tooltips and concept pages in Learn. Only accepted concepts
+    are included.
   config:
     meta:
       # Same as integrations__learn__resource_knowledge: no QA form until the Dagster
@@ -71,7 +73,7 @@ models:
   - name: description
     description: str, one or two course-agnostic sentences
   - name: review_status
-    description: str, proposed until reviewed
+    description: str, always accepted
   - name: description_model_id
     description: str, the model that wrote the descriptions
   - name: teaching_course_count

@@ -12,18 +12,22 @@ from ml.lib.courseware.resolve import (
     lexical_neighbours,
     resolve_concepts,
 )
+from ol_orchestrate.lib.embeddings.models import EmbeddingBatch, EmbeddingModelSpec
 
 
 class FakeEmbedder:
-    model_version = "fake-embed"
-    max_request_batch_size = 16
+    spec = EmbeddingModelSpec(model="fake:embed", dimensions=26, batch_size=16)
 
-    def embed_batch(self, texts):
+    def embed(self, texts, *, input_type):
+        assert input_type == "document"
         # one-hot on the first letter keeps the vectors deterministic and distinct
-        return [
-            list(np.eye(26, dtype=np.float32)[ord(text[0].lower()) - 97] + 0.01)
-            for text in texts
-        ]
+        return EmbeddingBatch(
+            vectors=[
+                list(np.eye(26, dtype=np.float32)[ord(text[0].lower()) - 97] + 0.01)
+                for text in texts
+            ],
+            input_tokens=0,
+        )
 
 
 def labels(*keys, mentions=None):

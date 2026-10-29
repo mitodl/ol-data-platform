@@ -25,11 +25,21 @@ from ml.assets.feedback_embeddings import feedback_embeddings
 from ml.assets.feedback_redacted import feedback_redacted
 from ml.assets.feedback_sentiment_eval import feedback_sentiment_eval
 from ml.assets.feedback_summaries import feedback_summaries
+from ml.assets.learn_embedding_checks import learn_parity_definitions
+from ml.assets.learn_embeddings import (
+    content_file_embedding_chunks,
+    content_file_embedding_vectors,
+    embedding_strategies,
+    learn_content_file_text,
+    topic_embedding_chunks,
+    topic_embedding_vectors,
+)
 from ml.assets.risk_probability import student_risk_probability
 from ml.resources.llm import LLMClientFactory
-from ml.resources.opik_auth import configure_opik_keycloak_auth
+from ml.resources.opik_auth import configure_ol_llm
 from ml.sensors.courseware import courseware_extraction_text_sensor
 from ml.sensors.feedback_clusters import feedback_clusters_growth_sensor
+from ml.sensors.learn_embeddings import learn_content_file_text_sensor
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
@@ -41,6 +51,7 @@ from ol_orchestrate.lib.utils import (
     s3_uploads_bucket,
     unauthenticated_vault,
 )
+from ol_orchestrate.resources.embeddings import EmbeddingsResource
 
 init_sentry("ml")
 
@@ -58,10 +69,10 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
     vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
 
-# Must run before any Opik client/tracer/@opik.track call in this process --
-# see ml/resources/opik_auth.py. A no-op (returns False) wherever
-# OPIK_URL_OVERRIDE isn't set for this deployment.
-configure_opik_keycloak_auth(vault)
+# Must run before any Opik client/tracer/@opik.track call or ol-llm model in this
+# process -- see ml/resources/opik_auth.py. Tracing stays off wherever
+# is_opik_configured() is False for this deployment.
+configure_ol_llm(vault)
 
 data_export_job = define_asset_job(
     name="student_risk_probability_data_export_job",
@@ -135,6 +146,26 @@ courseware_automation_sensor = AutomationConditionSensorDefinition(
     default_status=DefaultSensorStatus.STOPPED,
 )
 
+# Chunking and embedding of Learn's content files and topics. Every run it launches
+# carries LEARN_EMBEDDINGS_TAG for ol-infrastructure's run_coordinator
+# tag_concurrency_limits to bound the model calls and the concurrent commits to the
+# vector tables, as for courseware. That limit does not exist yet, so add it before
+# turning this on: a chunker change requests every course run at once. Stopped by
+# default: the first build of each table is a backfill launched by hand.
+LEARN_EMBEDDINGS_TAG = "learn_embeddings/model_calls"
+learn_embeddings_automation_sensor = AutomationConditionSensorDefinition(
+    name="learn_embeddings_automation_sensor",
+    target=AssetSelection.assets(
+        content_file_embedding_chunks,
+        content_file_embedding_vectors,
+        topic_embedding_chunks,
+        topic_embedding_vectors,
+        embedding_strategies,
+    ),
+    run_tags={LEARN_EMBEDDINGS_TAG: "true"},
+    default_status=DefaultSensorStatus.STOPPED,
+)
+
 iceberg_catalog = IcebergCatalogConfig(
     properties={
         "type": "glue",
@@ -148,6 +179,20 @@ iceberg_catalog = IcebergCatalogConfig(
         "s3.connect-timeout": "10",
         "s3.request-timeout": "120",
     }
+)
+
+dynamic_partitions_io_manager = PolarsIcebergIOManager(
+    name="iceberg_io_manager",
+    config=iceberg_catalog,
+    reader_override="pyiceberg",
+    db_io_manager="custom",
+)
+
+# The smokechecks of the Learn vectors against Learn's Qdrant run with every
+# build of the vector assets. Dev has no Learn cluster, so it has neither the
+# checks nor their resource.
+learn_parity_resources, learn_parity_checks = learn_parity_definitions(
+    vault, DAGSTER_ENV
 )
 
 # Create unified definitions
@@ -167,16 +212,12 @@ defs = Definitions(
             config=iceberg_catalog,
             reader_override="pyiceberg",
         ),
-        # The same catalog for courseware extraction, whose partitions have a
-        # dynamic dimension. Dagster's default DbIOManager resolves a multi-partition
-        # key range without the instance, which a dynamic dimension needs, so
-        # writing fails; dagster-iceberg's custom one reads the run's keys directly.
-        "courseware_io_manager": PolarsIcebergIOManager(
-            name="iceberg_io_manager",
-            config=iceberg_catalog,
-            reader_override="pyiceberg",
-            db_io_manager="custom",
-        ),
+        # The same catalog for the assets whose partitions have a dynamic
+        # dimension. Dagster's default DbIOManager resolves a multi-partition key
+        # range without the instance, which a dynamic dimension needs, so writing
+        # fails; dagster-iceberg's custom one reads the run's keys directly.
+        "courseware_io_manager": dynamic_partitions_io_manager,
+        "learn_embeddings_io_manager": dynamic_partitions_io_manager,
         "s3file_io_manager": default_file_object_io_manager(
             dagster_env=DAGSTER_ENV,
             bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
@@ -184,13 +225,14 @@ defs = Definitions(
         ),
         "vault": vault,
         "s3": S3Resource(),
-        # Bedrock in every deployed env (IAM metadata auth, no API key needed) --
-        # only "dev" lacks the Bedrock IAM role, so it needs an API key there.
-        # SUMMARY_PROVIDER/EMBEDDING_PROVIDER override the client_class picked here.
+        # Category proposals and sentiment eval; feedback_summaries and
+        # feedback_embeddings call models through ol-llm (SUMMARY_MODEL in
+        # ml.lib.summarize, EMBEDDING_MODEL in ml.lib.embed). Bedrock in every
+        # deployed env (IAM metadata auth, no API key needed) -- only "dev" lacks
+        # the Bedrock IAM role, so it needs an API key there.
+        # SUMMARY_PROVIDER overrides the client_class picked here.
         # LLM_BASE_URL/LLM_AZURE_ENDPOINT are only required for
-        # 'openai_compatible'/'azure_openai' -- shared with embedding_llm below on
-        # the assumption local testing points both at the same gateway (e.g.
-        # Parley); set client_class independently per resource if that's not true.
+        # 'openai_compatible'/'azure_openai'.
         "llm": LLMClientFactory(
             client_class=os.environ.get(
                 "SUMMARY_PROVIDER",
@@ -199,20 +241,16 @@ defs = Definitions(
             base_url=os.environ.get("LLM_BASE_URL"),
             azure_endpoint=os.environ.get("LLM_AZURE_ENDPOINT"),
         ),
-        # Separate resource, not a reused "llm": Anthropic/Bedrock has no embeddings
-        # API, so this needs its own client_class/key. Which Bedrock embedding
-        # model to keep is still open (§B.1's bake-off); bedrock_embeddings is the
-        # default deployed envs need since no OPENAI_API_KEY is provisioned there.
-        "embedding_llm": LLMClientFactory(
-            client_class=os.environ.get(
-                "EMBEDDING_PROVIDER",
-                "openai" if DAGSTER_ENV == "dev" else "bedrock_embeddings",
-            ),
-            # Only required (and only read) when EMBEDDING_PROVIDER='openai_compatible'
-            # -- e.g. a local gateway like Parley that fronts multiple providers
-            # behind one OpenAI-shaped API. Shared var with "llm" above.
-            base_url=os.environ.get("LLM_BASE_URL"),
+        # The Learn embedding assets call Azure OpenAI through ol-llm. Deployed
+        # envs authenticate with the pod's workload identity; dev has no Azure
+        # identity, so ol-llm's client falls back to AZURE_OPENAI_API_KEY there.
+        "embeddings": EmbeddingsResource(
+            vault=vault,
+            environment=DAGSTER_ENV,
+            azure_ad_auth=DAGSTER_ENV != "dev",
         ),
+        # Learn's cluster, read-only, for the learn_v1 smokechecks (not in dev).
+        **learn_parity_resources,
     },
     assets=with_failure_hooks(
         [
@@ -230,8 +268,15 @@ defs = Definitions(
             courseware_resolution,
             courseware_concept_description,
             courseware_concept_graph,
+            learn_content_file_text,
+            content_file_embedding_chunks,
+            content_file_embedding_vectors,
+            topic_embedding_chunks,
+            topic_embedding_vectors,
+            embedding_strategies,
         ]
     ),
+    asset_checks=learn_parity_checks,
     jobs=[
         data_export_job,
         feedback_redacted_job,
@@ -245,5 +290,7 @@ defs = Definitions(
         feedback_clusters_growth_sensor,
         courseware_extraction_text_sensor,
         courseware_automation_sensor,
+        learn_content_file_text_sensor,
+        learn_embeddings_automation_sensor,
     ],
 )

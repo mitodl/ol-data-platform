@@ -17,20 +17,14 @@ from ml.lib.courseware.resolve import (
     ADJUDICATION_MODEL,
     ADJUDICATION_PROMPT,
     BEDROCK_ADJUDICATION_MODEL,
-    EMBEDDING_DIM,
     PROMPT_VERSION,
     RESOLVER_ID,
     ResolutionState,
+    label_embedder,
     resolve_concepts,
 )
-from ml.lib.courseware.warehouse import (
-    anthropic_client,
-    latest_run_rows,
-    read_table,
-    require_table,
-    warehouse_database,
-)
-from ml.lib.embed import build_embedding_client
+from ml.lib.courseware.warehouse import anthropic_client, latest_run_rows
+from ml.lib.warehouse import read_table, require_table, warehouse_database
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import publish_prompt_version
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
@@ -179,7 +173,6 @@ def courseware_resolution(
     context: AssetExecutionContext,
     config: CoursewareResolutionConfig,
     llm: LLMClientFactory,
-    embedding_llm: LLMClientFactory,
 ):
     """Assign every concept label to a stable concept id, resolving only new labels.
 
@@ -240,7 +233,7 @@ def courseware_resolution(
         labels,
         state,
         client,
-        build_embedding_client(embedding_llm, dim=EMBEDDING_DIM),
+        label_embedder(run_id=context.run.run_id),
         model_id=model_id,
         rebuild=config.rebuild,
     )

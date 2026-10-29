@@ -25,6 +25,18 @@ same inputs, formatted as ruff formats it.
 
 Column names are matched without case: Airbyte lowercases them, so a model's
 ``CEUs`` is the fixture's ``ceus``.
+
+A unit with no Django app (an S3 or API unit) has no dump.
+:func:`scaffold_from_tests` drafts one from the fixture's column types and the
+dbt tests of the staging models that read each table, and writes it the same
+way. A test on a staging column maps back to the raw column the model passes
+through it, renamed or cast and nothing more
+(:func:`~ol_dbt_cli.lib.sql_parser.passthrough_columns_via_scope`):
+``accepted_values`` gives choices, ``unique`` a sequence, ``relationships`` to
+another table of the fixture a foreign key, and a compound unique test a
+unique-together comment. A column no ``not_null`` test covers is NULL in a
+share of rows. The tests of a derived column, and a relationship to a table the
+fixture leaves out, are not mapped and are noted.
 """
 
 from __future__ import annotations
@@ -35,15 +47,19 @@ import re
 import textwrap
 import zlib
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from ol_dbt_cli.lib.fixture_trees import TREEBEARD_STEPLEN
+from ol_dbt_cli.lib.sql_parser import parse_model_file, passthrough_columns_via_scope, read_macro_sources
+from ol_dbt_cli.lib.yaml_registry import build_yaml_registry
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from ol_dbt_cli.lib.inventory import Unit
     from ol_dbt_cli.lib.raw_fixtures import TableFixture, UnitFixture
+    from ol_dbt_cli.lib.yaml_registry import DataTest
 
 MODELS_FILE = "models.json"
 GENERATED_FILE = "_generated.py"
@@ -73,7 +89,8 @@ _INTEGER_TYPES = frozenset(
 _TEXT_TYPES = frozenset({"CharField", "TextField", "SlugField", "EmailField", "URLField", "FilePathField"})
 # Column-name rules, tried in order on a text column: a regex on the name and
 # the provider it gets. `None` means url(). Whole words of the name, so
-# `capacity` is not a city.
+# `capacity` is not a city. A phone number or an IP address has no rule:
+# mimesis's can be real, so value() refuses them.
 _NAME_PROVIDERS: tuple[tuple[str, str | None], ...] = (
     (r"(^|_)email($|_)", "person.email"),
     (r"^first_name$", "person.first_name"),
@@ -81,8 +98,6 @@ _NAME_PROVIDERS: tuple[tuple[str, str | None], ...] = (
     (r"^(full|display|legal)_name$|(^|_)(person|instructor|author|contact|owner|user)_name$", "person.full_name"),
     (r"(^|_)name$", "text.title"),
     (r"(^|_)username$", "person.username"),
-    (r"(^|_)phone($|_)", "person.telephone"),
-    (r"(^|_)ip(_address)?$", "internet.ip_v4"),
     (r"(^|_)(url|link)$", None),
     (r"(^|_)title$", "text.title"),
     (r"(^|_)slug$", "internet.slug"),
@@ -125,6 +140,30 @@ _FIXTURE_TYPE_DECLARATIONS = {
     "timestamp": f'fg.value("datetime.datetime", {_DATE_RANGE})',
     "string": 'fg.value("text.word")',
 }
+# Under the dbt project: the models whose tests draft a unit with no dump.
+STAGING_DIR = Path("models") / "staging"
+# By fixture type: the field a dump would report for such a column, so a
+# drafted column is drawn as a model's is.
+_FIXTURE_TYPE_FIELDS = {
+    "boolean": "BooleanField",
+    "int": "IntegerField",
+    "long": "BigIntegerField",
+    "float": "FloatField",
+    "double": "FloatField",
+    "date": "DateField",
+    "timestamp": "DateTimeField",
+    "string": "CharField",
+}
+# The fields a drafted column can be whose unique values the writer draws.
+_UNIQUE_TYPES = _INTEGER_TYPES | {"CharField"}
+# A compound unique test, and the argument that lists its columns.
+_UNIQUE_TOGETHER_TESTS = {
+    "dbt_utils.unique_combination_of_columns": "combination_of_columns",
+    "dbt_expectations.expect_compound_columns_to_be_unique": "column_list",
+}
+# A relationships test's `to:`.
+_REF = re.compile(r"""^ref\(\s*['"]([^'"]+)['"]\s*\)$""")
+_SOURCE = re.compile(r"""^source\(\s*['"][^'"]+['"]\s*,\s*['"]([^'"]+)['"]\s*\)$""")
 
 
 @dataclass(frozen=True)
@@ -134,7 +173,11 @@ class Scaffold:
     source: str
     """The text of ``_generated.py``."""
     models: dict[str, Any]
-    """The dump, cut down to the unit's fixture tables, to commit next to it."""
+    """The dump, cut down to the unit's fixture tables, to commit next to it.
+
+    From :func:`scaffold_from_tests`, the document drafted from the tests,
+    which is not committed: the next run drafts it again.
+    """
     notes: list[str] = field(default_factory=list)
     """What the fixture and the models disagree on, for the caller to print."""
 
@@ -176,8 +219,9 @@ def starter_package(unit: Unit) -> str:
     return f'''"""The factory package of the `{unit.key}` unit.
 
 `_generated.py` holds the base factories `ol-dbt fixtures scaffold` wrote from
-the app's models. This module subclasses them for what the models cannot say
-and wires the tables together in `generate` (see ol_dbt_cli.fixture_factories).
+the app's models, or for a unit with no app from its staging models' tests. This
+module subclasses them for what those cannot say and wires the tables together
+in `generate` (see ol_dbt_cli.fixture_factories).
 """
 
 from __future__ import annotations
@@ -209,8 +253,267 @@ def scaffold(fixture: UnitFixture, unit: Unit, models: Mapping[str, Any]) -> Sca
     if models.get("format_version") != FORMAT_VERSION:
         msg = f"models has format_version {models.get('format_version')!r}; this scaffold reads {FORMAT_VERSION}"
         raise ValueError(msg)
+    provenance = (
+        f"From {models['app']} at {models['commit']}. Written by `ol-dbt fixtures scaffold` from models.json "
+        "and rewritten wholesale on every run: change a factory by subclassing it in __init__.py."
+    )
+    return _scaffold(
+        fixture, unit, models, f"Base factories of the `{unit.key}` unit, scaffolded from its models.", provenance, []
+    )
+
+
+def scaffold_from_tests(fixture: UnitFixture, unit: Unit, dbt_dir: Path) -> Scaffold:
+    """Draft the base factories of a unit with no dump from its fixture and its staging models' tests.
+
+    :param fixture: The unit's parsed fixture file.
+    :param unit: The inventory unit, for its table prefix and primary keys.
+    :param dbt_dir: The dbt project, whose staging models read the unit's tables.
+    :returns: The module's source, the drafted document and what was not mapped.
+    :rtype: Scaffold
+    :raises ValueError: If no staging model reads a table of ``fixture``.
+    """
+    models, notes = _models_from_tests(fixture, unit, dbt_dir)
+    provenance = (
+        "From the column types of its fixture file and the dbt tests of the staging models that read each table, "
+        "mapped back through renames and casts. Written by `ol-dbt fixtures scaffold`, which drafts from tests "
+        "when the unit has no models.json, and rewritten wholesale on every run: change a factory by subclassing "
+        "it in __init__.py."
+    )
+    return _scaffold(
+        fixture,
+        unit,
+        models,
+        f"Base factories of the `{unit.key}` unit, drafted from its staging models' tests.",
+        provenance,
+        notes,
+    )
+
+
+def _models_from_tests(fixture: UnitFixture, unit: Unit, dbt_dir: Path) -> tuple[dict[str, Any], list[str]]:
+    """Return a document shaped as ``bin/django-model-dump.py`` writes, from the fixture and the staging tests.
+
+    Every column is the field its fixture type would be, NULL in a share of
+    rows unless the inventory makes it part of the primary key or a staging
+    test says it is not null. A composite key is unique together, and a
+    column of it only if a test says so. A string column that a hand-written
+    row holds a mapping or list in is JSON. No table has a model.
+
+    :param fixture: The unit's parsed fixture file.
+    :param unit: The inventory unit, for its table prefix and primary keys.
+    :param dbt_dir: The dbt project, whose staging models read the unit's tables.
+    :returns: The document, and a note for each test that was not mapped.
+    :rtype: tuple[dict[str, Any], list[str]]
+    :raises ValueError: If no staging model reads a table of ``fixture``.
+    """
+    tables = {table.raw_table: table for table in fixture.tables}
+    staged = _staged_models(tables, dbt_dir)
+    if not staged:
+        msg = f"no staging model under {dbt_dir / STAGING_DIR} reads a table of {fixture.path}"
+        raise ValueError(msg)
+    keys = {entry["raw_table"]: [path[0].lower() for path in entry.get("primary_key") or []] for entry in unit.tables}
+    columns = {
+        raw_table: {
+            column.lower(): _column_facts(table, column, key=column.lower() in keys.get(raw_table, []))
+            for column in table.columns
+        }
+        for raw_table, table in tables.items()
+    }
+    unique_together: dict[str, list[list[str]]] = {raw_table: [] for raw_table in tables}
+    for raw_table in tables:
+        if len(key := keys.get(raw_table, [])) > 1:
+            # A composite key is unique as a whole: rows share a playlist, not a (playlist, video).
+            for column in key:
+                columns[raw_table][column]["unique"] = False
+            unique_together[raw_table].append(key)
+    # A staging model that keeps one row of many (the newest load of a history
+    # table) can test unique what the raw table repeats.
+    repeated = {
+        (raw_table, column.lower())
+        for raw_table, table in tables.items()
+        for column in table.columns
+        if _repeats([row.get(column) for row in table.rows])
+    }
+    read = {raw_table for model in staged.values() for raw_table in model.reads}
+    notes = [
+        f"{raw_table}: no staging model reads it; every column is drawn by its fixture type"
+        for raw_table in tables
+        if raw_table not in read
+    ]
+    registry = build_yaml_registry(dbt_dir / STAGING_DIR)
+    for model_name, model in staged.items():
+        if not model.passed:
+            notes.append(f"{model_name}: passes no column of {', '.join(sorted(model.reads))} through; no test maps")
+            continue
+        declared = registry.get_model(model_name)
+        if declared is None:
+            notes.append(f"{model_name}: in no schema YAML, so it has no tests to draw from")
+            continue
+        for column_name, column in declared.columns.items():
+            raw = model.passed.get(column_name, [])
+            for test in column.data_tests:
+                notes += _map_test(test, f"{model_name}.{column_name}", raw, columns, repeated, staged, unit)
+        for test in declared.data_tests:
+            if test.name not in _UNIQUE_TOGETHER_TESTS:
+                notes.append(f"{model_name}: {test.name} not mapped; the writer has no equivalent")
+                continue
+            listed = [name.lower() for name in test.arguments[_UNIQUE_TOGETHER_TESTS[test.name]]]
+            raw_columns = [model.passed.get(name, []) for name in listed]
+            if all(len(raw) == 1 for raw in raw_columns) and len({raw[0][0] for raw in raw_columns}) == 1:
+                together = [raw[0][1] for raw in raw_columns]
+                if together not in unique_together[raw_columns[0][0][0]]:
+                    unique_together[raw_columns[0][0][0]].append(together)
+            else:
+                notes.append(
+                    f"{model_name}: {test.name} on {', '.join(listed)} not mapped; "
+                    "its columns are not all passed through from one table"
+                )
+    document: dict[str, Any] = {"format_version": FORMAT_VERSION, "tables": {}}
+    for raw_table in tables:
+        body: dict[str, Any] = {"model": None, "columns": columns[raw_table]}
+        if unique_together[raw_table]:
+            body["unique_together"] = sorted(unique_together[raw_table])
+        document["tables"][_db_table(raw_table, unit)] = body
+    return document, notes
+
+
+@dataclass(frozen=True)
+class _Staged:
+    """A staging model that reads fixture tables: which, and the columns it passes through."""
+
+    reads: frozenset[str]
+    passed: dict[str, list[tuple[str, str]]]
+    """By the model's column, each ``(raw table, raw column)`` it passes through."""
+
+
+def _staged_models(tables: Mapping[str, TableFixture], dbt_dir: Path) -> dict[str, _Staged]:
+    """Return the staging models that ``source()`` a fixture table, by name, in path order."""
+    macro_sources = read_macro_sources(dbt_dir)
+    staged: dict[str, _Staged] = {}
+    for path in sorted((dbt_dir / STAGING_DIR).rglob("*.sql")):
+        # Parsing every staging model takes seconds; a model that reads a table names it.
+        if not any(raw_table in path.read_text() for raw_table in tables):
+            continue
+        parsed = parse_model_file(path, macro_sources=macro_sources)
+        upstream = {
+            key: {column.lower() for column in tables[raw_table].columns}
+            for key in parsed.source_refs
+            if (raw_table := key.partition(".")[2]) in tables
+        }
+        if not upstream:
+            continue
+        staged[parsed.name] = _Staged(
+            reads=frozenset(key.partition(".")[2] for key in upstream),
+            # A column the fixture does not declare can still qualify to its table.
+            passed={
+                column: [
+                    (key.partition(".")[2], raw_column) for key, raw_column in passed if raw_column in upstream[key]
+                ]
+                for column, passed in passthrough_columns_via_scope(parsed, upstream).items()
+            },
+        )
+    return staged
+
+
+def _column_facts(table: TableFixture, column: str, *, key: bool) -> dict[str, Any]:
+    """Return what a dump would say of a column of ``table`` from its fixture type alone."""
+    fixture_type = table.columns[column]
+    if match := _DECIMAL.match(fixture_type):
+        facts: dict[str, Any] = {"field": "DecimalField", "internal_type": "DecimalField"}
+        facts["max_digits"], facts["decimal_places"] = int(match.group(1)), int(match.group(2))
+    else:
+        facts = {"field": _FIXTURE_TYPE_FIELDS[fixture_type], "internal_type": _FIXTURE_TYPE_FIELDS[fixture_type]}
+    facts |= {"null": not key, "primary_key": key, "unique": key}
+    if any(isinstance(row.get(column), dict | list) for row in table.rows):
+        facts["json"] = True
+    return facts
+
+
+def _map_test(
+    test: DataTest,
+    where: str,
+    raw: list[tuple[str, str]],
+    columns: Mapping[str, Mapping[str, dict[str, Any]]],
+    repeated: set[tuple[str, str]],
+    staged: Mapping[str, _Staged],
+    unit: Unit,
+) -> list[str]:
+    """Set what ``test`` on a staging column says on each raw column it passes, and return what was not mapped."""
+    if test.name not in {"not_null", "unique", "accepted_values", "relationships"}:
+        return [f"{where}: {test.name} not mapped; the writer has no equivalent"]
+    if not raw:
+        return [f"{where}: {test.name} not mapped; the column is derived, not a raw column renamed or cast"]
+    targets = [columns[raw_table][raw_column] for raw_table, raw_column in raw]
+    if test.name == "not_null":
+        for facts in targets:
+            facts["null"] = False
+    elif test.name == "unique":
+        # Each table counts on its own sequence, so the branches of a union
+        # would repeat each other's values.
+        if len(targets) > 1:
+            return [f"{where}: unique not mapped; it unions {len(targets)} raw columns"]
+        if raw[0] in repeated:
+            return [f"{where}: unique not mapped; the fixture's rows repeat a value of {raw[0][0]}.{raw[0][1]}"]
+        if targets[0]["internal_type"] not in _UNIQUE_TYPES:
+            return [f"{where}: unique not mapped; the writer draws no distinct {targets[0]['internal_type']}"]
+        targets[0]["unique"] = True
+    elif test.name == "accepted_values":
+        listed = test.arguments["values"]
+        # A Jinja expression (e.g. '{{ highest_education_values() }}') stays the string it was written as.
+        if not isinstance(listed, list):
+            return [f"{where}: accepted_values not mapped; its values are {listed!r}, not a list"]
+        notes = []
+        for (raw_table, raw_column), facts in zip(raw, targets, strict=True):
+            # YAML reads an unquoted 2025 as a number; a string column holds its text.
+            values = [str(value) if facts["field"] == "CharField" else value for value in listed]
+            choices = [value for value in facts.get("choices", values) if value in values]
+            if not choices:
+                # The earlier test's choices still pass that test.
+                notes.append(
+                    f"{where}: accepted_values not mapped; another test on {raw_table}.{raw_column} "
+                    "accepts none of its values"
+                )
+                continue
+            facts["choices"] = choices
+        return notes
+    else:
+        parent = _parent(str(test.arguments["to"]), str(test.arguments["field"]).lower(), columns, staged)
+        if parent is None:
+            return [
+                f"{where}: relationships to {test.arguments['to']} not mapped; "
+                f"its {test.arguments['field']} is not a column of a fixture table renamed or cast"
+            ]
+        for facts in targets:
+            facts["foreign_key"] = {"table": _db_table(parent[0], unit), "column": parent[1]}
+    return []
+
+
+def _repeats(values: list[Any]) -> bool:
+    present = [json.dumps(value, sort_keys=True, default=str) for value in values if value is not None]
+    return len(set(present)) < len(present)
+
+
+def _parent(
+    to: str, field_name: str, columns: Mapping[str, Mapping[str, Any]], staged: Mapping[str, _Staged]
+) -> tuple[str, str] | None:
+    """Return the fixture table and column a relationships test's ``to`` and ``field`` name, if it is one."""
+    if match := _REF.match(to.strip()):
+        model = staged.get(match.group(1))
+        passed = model.passed.get(field_name, []) if model else []
+        return passed[0] if len(passed) == 1 else None
+    if (match := _SOURCE.match(to.strip())) and field_name in columns.get(match.group(1), {}):
+        return match.group(1), field_name
+    return None
+
+
+def _scaffold(
+    fixture: UnitFixture,
+    unit: Unit,
+    models: Mapping[str, Any],
+    summary: str,
+    provenance: str,
+    notes: list[str],
+) -> Scaffold:
     tables = {name: _lowered(body) for name, body in models["tables"].items()}
-    notes: list[str] = []
     primary_keys = {entry["raw_table"]: entry.get("primary_key") or [] for entry in unit.tables}
     fixture_tables = {table.raw_table for table in fixture.tables}
     names = _class_names(fixture.tables, unit, tables)
@@ -234,7 +537,7 @@ def scaffold(fixture: UnitFixture, unit: Unit, models: Mapping[str, Any]) -> Sca
             )
         classes.append(_factory(table, db_table, model, names, unit, fixture_tables, inventory_key, notes))
     return Scaffold(
-        source=_module(models, unit, classes, alphabets),
+        source=_module(summary, provenance, classes, alphabets),
         models=trimmed_models(models, fixture, unit),
         notes=notes,
     )
@@ -505,8 +808,6 @@ def _provider(column: str, facts: Mapping[str, Any], fixture_type: str) -> str: 
         return 'fg.value("datetime.time")'
     if internal_type == "UUIDField":
         return 'fg.value("cryptographic.uuid")'
-    if internal_type == "GenericIPAddressField":
-        return 'fg.value("internet.ip_v4")'
     if internal_type in {"FileField", "ImageField"}:
         return 'fg.value("file.file_name")'
     # A field class with no rule here (a DurationField): what its column holds.
@@ -526,7 +827,7 @@ def _choices(column: str, choices: list[Any], facts: Mapping[str, Any], written:
     return _nullable(f"factory.Iterator({constant})", facts)
 
 
-def _module(models: Mapping[str, Any], unit: Unit, classes: list[_Class], alphabets: dict[str, str]) -> str:
+def _module(summary: str, provenance: str, classes: list[_Class], alphabets: dict[str, str]) -> str:
     body: list[str] = []
     for written in classes:
         body += ["", "", *_fit("", f'@fg.table("{written.raw_table}", default_count=SCAFFOLD_DEFAULT_COUNT)')]
@@ -545,12 +846,8 @@ def _module(models: Mapping[str, Any], unit: Unit, classes: list[_Class], alphab
             body.append("")
             body += [fitted for line in written.lines for fitted in _fit(_INDENT, line)]
     text = "\n".join(body)
-    provenance = (
-        f"From {models['app']} at {models['commit']}. Written by `ol-dbt fixtures scaffold` from models.json "
-        "and rewritten wholesale on every run: change a factory by subclassing it in __init__.py."
-    )
     header = [
-        f'"""Base factories of the `{unit.key}` unit, scaffolded from its models.',
+        f'"""{summary}',
         "",
         *_wrapped(provenance, 0),
         '"""',
