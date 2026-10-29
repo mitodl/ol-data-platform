@@ -1186,6 +1186,22 @@ def _extraction(key, model, scope, *, part=1, checksums=None, day=17):
     }
 
 
+def _sources(*scopes):
+    """extraction_sources rows for unit scopes of _extraction's course run."""
+    return pl.DataFrame(
+        {
+            "platform": ["mitxonline"] * len(scopes),
+            "courserun_readable_id": ["course-v1:UAI_SOURCE+UAI.4+1T2026"]
+            * len(scopes),
+            "scope_id": list(scopes),
+            "scope_kind": ["unit"] * len(scopes),
+            "scope_title": list(scopes),
+            "scope_position": list(range(1, len(scopes) + 1)),
+            "source_text": ["text"] * len(scopes),
+        }
+    )
+
+
 def test_current_extractions_take_each_models_newest_complete_reading():
     extractions = pl.DataFrame(
         [
@@ -1204,7 +1220,7 @@ def test_current_extractions_take_each_models_newest_complete_reading():
             _extraction("h2-2old", "haiku", "u2", part=2, checksums="g,h", day=1),
         ]
     )
-    current = samples.current_extractions(extractions)
+    current = samples.current_extractions(extractions, _sources("u1", "u2"))
     assert sorted(current["extraction_key"]) == [
         "h1",
         "h2-1",
@@ -1268,7 +1284,9 @@ def _write_gold_inputs(
     empty = pl.DataFrame({"unused": [None]})
     for name in ("concepts", "relations"):
         empty.write_parquet(directory / f"{name}.parquet")
-    (empty if sources is None else sources).write_parquet(directory / "sources.parquet")
+    (_sources("u1") if sources is None else sources).write_parquet(
+        directory / "sources.parquet"
+    )
     return samples.load_inputs(
         [extraction],
         directory / "sources.parquet",
@@ -1423,23 +1441,30 @@ def test_recall_with_no_labelled_denominator_is_skipped():
     )
 
 
-def test_a_model_that_extracted_no_claims_still_counts_for_the_scope(tmp_path):
-    # haiku extracted u1 and u2 and returned no claims; opus named nothing in u2
-    claim = _claim("opus", "u1", 1, "Linear regression")
-    inputs = _write_gold_inputs(
-        tmp_path,
-        assignments=pl.DataFrame({"concept_label_key": ["x"], "concept_id": ["k1"]}),
-        registry=pl.DataFrame(
+def _one_concept():
+    """Identity frames for _write_gold_inputs: one label of one concept, no verdicts."""
+    return {
+        "assignments": pl.DataFrame({"concept_label_key": ["x"], "concept_id": ["k1"]}),
+        "registry": pl.DataFrame(
             {"concept_id": ["k1"], "merged_into_concept_id": [None]},
             schema={"concept_id": pl.String, "merged_into_concept_id": pl.String},
         ),
-        decisions=pl.DataFrame(
+        "decisions": pl.DataFrame(
             schema={
                 "query_label_key": pl.String,
                 "candidate_label_key": pl.String,
                 "verdict": pl.String,
             }
         ),
+    }
+
+
+def test_a_model_that_extracted_no_claims_still_counts_for_the_scope(tmp_path):
+    # haiku extracted u1 and u2 and returned no claims; opus named nothing in u2
+    claim = _claim("opus", "u1", 1, "Linear regression")
+    inputs = _write_gold_inputs(
+        tmp_path,
+        **_one_concept(),
         extractions=pl.DataFrame(
             [
                 _extraction("opus-u1", "opus", "u1"),
@@ -1456,17 +1481,7 @@ def test_a_model_that_extracted_no_claims_still_counts_for_the_scope(tmp_path):
             "description",
             "teaching_status",
         ),
-        sources=pl.DataFrame(
-            {
-                "platform": ["mitxonline"] * 2,
-                "courserun_readable_id": [claim["courserun_readable_id"]] * 2,
-                "scope_id": ["u1", "u2"],
-                "scope_kind": ["unit"] * 2,
-                "scope_title": ["u1", "u2"],
-                "scope_position": [1, 2],
-                "source_text": ["text"] * 2,
-            }
-        ),
+        sources=_sources("u1", "u2"),
     )
     [row] = samples.claims_population(inputs).to_dicts()
     # haiku saw the scope and did not name it: a disagreement, not unpaired
@@ -1483,6 +1498,39 @@ def test_a_model_that_extracted_no_claims_still_counts_for_the_scope(tmp_path):
         1,
     )
     assert (u2["models"], u2["gold_hat"]) == ("haiku+opus", 0)
+
+
+def test_a_retired_scope_has_no_current_claims_or_evidence(tmp_path):
+    # opus extracted u1 and u2; u2 has since left the course, so it is not in sources
+    inputs = _write_gold_inputs(
+        tmp_path,
+        **_one_concept(),
+        extractions=pl.DataFrame(
+            [
+                _extraction("opus-u1", "opus", "u1"),
+                _extraction("opus-u2", "opus", "u2"),
+            ]
+        ),
+        claims=pl.DataFrame(
+            [
+                _claim("opus", "u1", 1, "Linear regression"),
+                _claim("opus", "u2", 1, "k-means"),
+            ]
+        ).select(
+            "extraction_key",
+            "claim_ordinal",
+            "claim_kind",
+            "label",
+            "description",
+            "teaching_status",
+        ),
+        sources=_sources("u1"),
+    )
+    assert inputs.extractions["scope_id"].to_list() == ["u1"]
+    assert inputs.evidence["extraction_key"].to_list() == ["opus-u1"]
+    # claims and subsections sample the same scopes
+    assert samples.claims_population(inputs)["scope_id"].to_list() == ["u1"]
+    assert samples.subsections_population(inputs)["scope_id"].to_list() == ["u1"]
 
 
 def _annotation(annotator, minute, results):
