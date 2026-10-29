@@ -24,22 +24,16 @@
     sense_assignment_version is that run's sense_prompt_version, the version of the
     sense step that wrote it. A run written before sense assignment has none, and the
     release asset refuses it.
+
+    Deploy order: dim_concept and everything built from it, this model included,
+    fail until the courseware_resolution asset has run with sense assignment.
+    That run creates courseware_concept_alias and courseware_concept_sense_assignment
+    and adds split_from_concept_id to the registry and sense_prompt_version to
+    courseware_resolution_run, so this model reads sense_prompt_version directly.
 #}
-{%- set resolution_runs = source('courseware_intermediate', 'courseware_resolution_run') %}
 with registry as (
     select max(resolution_run_id) as resolution_run_id
     from {{ ref('int__courseware__concept_registry') }}
-)
-
--- sense_prompt_version exists once the resolution asset first writes a run with
--- sense assignment; a table only earlier runs wrote lacks it
-, resolution_runs as (
-    select
-        *
-        {{- missing_columns_as_nulls(resolution_runs, {
-            'sense_prompt_version': dbt.type_string(),
-        }) }}
-    from {{ resolution_runs }}
 )
 
 , resolution as (
@@ -48,7 +42,7 @@ with registry as (
         , runs.resolver_id
         , runs.prompt_version as resolution_prompt_version
         , runs.sense_prompt_version as sense_assignment_version
-    from resolution_runs as runs
+    from {{ source('courseware_intermediate', 'courseware_resolution_run') }} as runs
     inner join registry
         on runs.resolution_run_id = registry.resolution_run_id
 )

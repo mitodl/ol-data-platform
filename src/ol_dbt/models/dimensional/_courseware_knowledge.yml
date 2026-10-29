@@ -243,6 +243,9 @@ models:
 - name: dim_concept
   description: Every concept id the resolver has minted, active or retired, with its
     display label, descriptions and lifecycle. review_status is 'proposed' until reviewed.
+    It and every model built from it fail until the courseware_resolution asset has
+    run with sense assignment, which creates courseware_concept_alias and courseware_concept_sense_assignment
+    and adds the registry's split_from_concept_id.
   config:
     meta:
       # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
