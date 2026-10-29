@@ -86,6 +86,8 @@ unit_tests:
       is_current: true}
   - input: ref('dim_course')
     rows: []
+  - input: ref('dim_concept')
+    rows: []
   expect:
     rows:
     - {courserun_fk: r1, concept_fk: x, course_support: 1, passes_support_rule: false}
@@ -157,6 +159,8 @@ unit_tests:
     rows:
     - {course_pk: cx, course_readable_id: "course-v1:MITx+X", is_current: true}
     - {course_pk: cy, course_readable_id: "MIT-EM-Y", is_current: true}
+  - input: ref('dim_concept')
+    rows: []
   expect:
     rows:
     - {courserun_fk: r1, concept_fk: x, course_support: 1, passes_support_rule: false}
@@ -280,6 +284,8 @@ unit_tests:
       is_current: true}
   - input: ref('dim_course')
     rows: []
+  - input: ref('dim_concept')
+    rows: []
   expect:
     rows:
     - {courserun_fk: ra, concept_fk: sklearn, relation: requires, tool_status: unresolved,
@@ -336,6 +342,8 @@ unit_tests:
     - {courserun_pk: ra, platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026",
       is_current: true}
   - input: ref('dim_course')
+    rows: []
+  - input: ref('dim_concept')
     rows: []
   expect:
     rows:
@@ -444,6 +452,8 @@ unit_tests:
     - {course_pk: cm, course_readable_id: "course-v1:MITx+6.86x", is_current: true}
     - {course_pk: ce, course_readable_id: "MITx/6.86x", is_current: true}
     - {course_pk: cs, course_readable_id: "course-v1:MITx+6.36x", is_current: true}
+  - input: ref('dim_concept')
+    rows: []
   expect:
     rows:
     - {courserun_fk: rm, concept_fk: x, course_support: 1, passes_support_rule: false}
@@ -452,3 +462,65 @@ unit_tests:
     - {courserun_fk: null, concept_fk: x, course_support: 1, passes_support_rule: false}
     - {courserun_fk: rm, concept_fk: y, course_support: 2, passes_support_rule: true}
     - {courserun_fk: rs, concept_fk: y, course_support: 2, passes_support_rule: true}
+- name: test_bridge_courserun_concept_takes_a_tool_kind_from_dim_concept_for_assumed_only_mentions
+  description: >
+    Run re names pandas only in assumed_knowledge claims, which carry no kind, so
+    its
+    own claims don't say whether pandas is a tool and dim_concept.concept_kind (tool)
+    does. Its requirement is a tool requirement, assumed from re's claims. Course
+    F
+    teaches pandas; the next test, without F, gives re the same row.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+E.1+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: pandas}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+E.1+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: assumed_knowledge, concept_id: pandas}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+F.1+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: concept, concept_id: pandas,
+      teaching_status: taught, concept_kind: tool}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: re, platform: mitxonline, courserun_readable_id: "course-v1:ORG+E.1+1T2026",
+      is_current: true}
+    - {courserun_pk: rf, platform: mitxonline, courserun_readable_id: "course-v1:ORG+F.1+1T2026",
+      is_current: true}
+  - input: ref('dim_concept')
+    rows:
+    - {concept_pk: pandas, concept_kind: tool}
+  - input: ref('dim_course')
+    rows: []
+  expect:
+    rows:
+    - {courserun_fk: re, concept_fk: pandas, relation: requires, tool_status: assumed,
+      passes_support_rule: true}
+    - {courserun_fk: rf, concept_fk: pandas, relation: teaches, tool_status: null,
+      passes_support_rule: true}
+
+- name: test_bridge_courserun_concept_assumed_only_tool_without_other_courses
+  description: >
+    re alone, as in the previous test: without course F teaching pandas its row is
+    the same.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+E.1+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: pandas}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+E.1+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: assumed_knowledge, concept_id: pandas}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: re, platform: mitxonline, courserun_readable_id: "course-v1:ORG+E.1+1T2026",
+      is_current: true}
+  - input: ref('dim_concept')
+    rows:
+    - {concept_pk: pandas, concept_kind: tool}
+  - input: ref('dim_course')
+    rows: []
+  expect:
+    rows:
+    - {courserun_fk: re, concept_fk: pandas, relation: requires, tool_status: assumed,
+      passes_support_rule: true}
