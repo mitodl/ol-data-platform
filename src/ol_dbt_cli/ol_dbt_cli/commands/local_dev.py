@@ -24,6 +24,7 @@ import trino
 from trino.auth import OAuth2Authentication
 
 from ol_dbt_cli.lib.dbt_executable import dbt_executable
+from ol_dbt_cli.lib.duckdb_aws import USE_AWS_CREDENTIAL_CHAIN_SQL
 from ol_dbt_cli.lib.git_utils import get_repo_root
 
 if TYPE_CHECKING:
@@ -321,7 +322,7 @@ def _register_single_table(
         with duckdb.connect(str(duckdb_path)) as conn:
             for ext in ["httpfs", "aws", "iceberg"]:
                 conn.execute(f"LOAD {ext}")
-            conn.execute("CALL load_aws_credentials()")
+            conn.execute(USE_AWS_CREDENTIAL_CHAIN_SQL)
             conn.execute(create_view_sql)
             conn.execute(
                 """
@@ -364,7 +365,7 @@ def _register_tables_in_duckdb(
             if verbose:
                 print("  ✓ Extensions loaded")
 
-            setup_conn.execute("CALL load_aws_credentials()")
+            setup_conn.execute(USE_AWS_CREDENTIAL_CHAIN_SQL)
             if verbose:
                 print("  ✓ AWS credentials loaded")
 
@@ -1040,7 +1041,7 @@ def test(
         region = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
         conn.execute(f"SET s3_region='{region}'")
         print(f"   ✓ Region: {region}")
-        conn.execute("CALL load_aws_credentials()")
+        conn.execute(USE_AWS_CREDENTIAL_CHAIN_SQL)
         print("   ✓ Loaded AWS credentials from chain")
 
         print("\n3. Testing Iceberg table read from Glue catalog...")
@@ -1399,7 +1400,7 @@ def setup(
         for ext in ["httpfs", "aws", "iceberg"]:
             conn.execute(f"INSTALL {ext}")
             conn.execute(f"LOAD {ext}")
-        conn.execute("CALL load_aws_credentials()")
+        conn.execute(USE_AWS_CREDENTIAL_CHAIN_SQL)
         _ensure_registry_tables(conn)
         conn.close()
         print(f"✓ DuckDB database initialized: {duckdb_path}")

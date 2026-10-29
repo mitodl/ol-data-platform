@@ -23,6 +23,7 @@ from ol_dbt_cli.commands.local_dev import (
     register,
     snapshot,
 )
+from ol_dbt_cli.lib.duckdb_aws import USE_AWS_CREDENTIAL_CHAIN_SQL
 
 
 class TestSnapshot:
@@ -235,7 +236,7 @@ class TestRegisterSingleTable:
         assert "Iceberg manifest read failed" in (extra or "")
 
     def test_loads_extensions_and_credentials_per_connection(self, tmp_path: Path) -> None:
-        """Every worker thread must LOAD extensions and call load_aws_credentials()."""
+        """Every worker thread must LOAD extensions and create the AWS credential chain secret."""
         table = self._make_table()
 
         with patch("ol_dbt_cli.commands.local_dev.duckdb.connect") as mock_connect:
@@ -248,7 +249,7 @@ class TestRegisterSingleTable:
         assert any("LOAD httpfs" in c for c in execute_calls)
         assert any("LOAD aws" in c for c in execute_calls)
         assert any("LOAD iceberg" in c for c in execute_calls)
-        assert any("load_aws_credentials" in c for c in execute_calls)
+        mock_conn.execute.assert_any_call(USE_AWS_CREDENTIAL_CHAIN_SQL)
 
     def test_view_name_uses_database_prefix(self, tmp_path: Path) -> None:
         """View name is always glue__{database}__{table}."""
