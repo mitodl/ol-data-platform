@@ -12,7 +12,10 @@ sense throughout ("one sense per discourse"), and the run's title and claim
 descriptions are the context that tells the senses apart.
 
 - A label seen in one course run only, with one sense, takes that sense without a
-  model call.
+  model call, unless a run of the label is queued for review or that sense is the
+  primary of another label with split senses: label resolution matched it against
+  that label's description across all of its senses, so it may mean one of the
+  splits.
 - Every other new (label, course run) goes to a model with the label's senses and
   their glosses. The model picks an existing sense, groups runs into a new sense
   (minted as a concept split from the primary one), or says it cannot tell, which
@@ -378,6 +381,17 @@ def assign_senses(  # noqa: PLR0913
     """
     assignments = carried_assignments(previous_assignments, aliases, run_id, active)
     seen_runs = Counter(key[0] for key in assignments)
+    # a queued run is not carried, but its label had runs the model could not tell
+    # apart, so a run that survives is asked about again, not shortcut
+    queued = set(
+        previous_assignments.filter(pl.col("sense_status") == "needs_review")[
+            "concept_label_key"
+        ]
+    )
+    # Label resolution matched a new label against a known label's description
+    # across all of its senses, so a label resolved onto the primary sense of a label
+    # that has split senses may mean one of the splits.
+    ambiguous = {senses[0].concept_id for senses in aliases.values() if len(senses) > 1}
     pending: dict[str, list[Unit]] = defaultdict(list)
     for key, unit in units.items():
         if key[0] in aliases and key not in assignments:
@@ -387,7 +401,9 @@ def assign_senses(  # noqa: PLR0913
         if (
             len(aliases[label_key]) == 1
             and not seen_runs[label_key]
+            and label_key not in queued
             and len(label_units) == 1
+            and aliases[label_key][0].concept_id not in ambiguous
         ):
             key = label_units[0].key
             assignments[key] = _assignment(
@@ -471,14 +487,18 @@ def label_aliases(
 
     :param primaries: each label's concept from label resolution, redirect-resolved
     :param previous_aliases: the previous run's aliases
-    :param glosses: the gloss for a label whose primary sense is new
+    :param glosses: the gloss for a label whose primary sense no label had before
     :param run_id: this resolution run
     :param current: a concept id's active concept after merges, or None when it
         was deprecated
     """
     previous: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    # the saved gloss of each concept that is some label's primary sense
+    primary_glosses: dict[str | None, str] = {}
     for row in previous_aliases.iter_rows(named=True):
         previous[row["concept_label_key"]].append(row)
+        if row["sense_role"] == "primary":
+            primary_glosses.setdefault(current(row["concept_id"]), row["sense_gloss"])
     aliases: dict[str, list[Alias]] = {}
     for label_key, primary in sorted(primaries.items()):
         # The previous primary carries its gloss only while it is still the label's
@@ -500,13 +520,17 @@ def label_aliases(
             if row["sense_role"] == "split"
             and (concept_id := current(row["concept_id"])) not in {None, primary}
         }
+        # A label new to an existing concept takes that concept's saved gloss, not
+        # its own description, so its runs are judged against what the concept means.
+        if carried_primary:
+            gloss = carried_primary["sense_gloss"]
+        else:
+            gloss = primary_glosses.get(primary, glosses[label_key])
         senses = [
             Alias(
                 primary,
                 "primary",
-                carried_primary["sense_gloss"]
-                if carried_primary
-                else glosses[label_key],
+                gloss,
                 carried_primary["added_run_id"] if carried_primary else run_id,
             )
         ]

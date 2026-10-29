@@ -381,6 +381,56 @@ def test_default_state_has_empty_sense_tables():
     assert state.sense_assignments.is_empty()
 
 
+@pytest.mark.usefixtures("verdicts")
+def test_a_label_whose_runs_were_queued_is_not_shortcut_when_one_drops_out(choose):
+    choose.table[OS] = ("unsure", None)
+    choose.table[ML] = ("unsure", None)
+    first = run(labels("kernel"), mentions=mentions(("kernel", OS), ("kernel", ML)))
+    assert first.run["sense_review_count"][0] == 2
+    choose.asked.clear()
+    # a later extraction drops the label from the ML run
+    second = run(labels("kernel"), state_from(first), mentions=mentions(("kernel", OS)))
+    assert [unit.key[2] for query in choose.asked for unit in query.units] == [OS]
+    assert sense_of(second, "kernel", OS)["sense_status"] == "needs_review"
+
+
+def test_a_synonym_of_an_ambiguous_label_is_judged_against_its_saved_sense(
+    choose, monkeypatch
+):
+    monkeypatch.setattr(
+        resolve,
+        "adjudicate",
+        lambda _client, _model_id, _candidates, _rows: ([], 1, set()),
+    )
+    choose.table[OS] = ("existing", 0)
+    choose.table[ML] = ("new", 1)
+    first = run(labels("kernel"), mentions=mentions(("kernel", OS), ("kernel", ML)))
+    os_kernel = sense_of(first, "kernel", OS)["concept_id"]
+    os_gloss = first.aliases.filter(pl.col("sense_role") == "primary")["sense_gloss"][0]
+
+    # "kernel function" resolves onto kernel's primary, the operating systems sense
+    monkeypatch.setattr(
+        resolve,
+        "adjudicate",
+        lambda _client, _model_id, _candidates, _rows: (
+            [("kernel function", "kernel", "exact")],
+            1,
+            set(),
+        ),
+    )
+    choose.asked.clear()
+    choose.table[LINALG] = ("new", 1)
+    second = run(
+        labels("kernel", "kernel function"),
+        state_from(first),
+        mentions=mentions(("kernel", OS), ("kernel", ML), ("kernel function", LINALG)),
+    )
+    [query] = choose.asked
+    assert query.label_key == "kernel function"
+    assert [alias.sense_gloss for alias in query.senses] == [os_gloss]
+    assert sense_of(second, "kernel function", LINALG)["concept_id"] != os_kernel
+
+
 def test_the_batch_parser_rejects_two_decisions_for_one_run():
     query = SenseQuery(
         "kernel",
