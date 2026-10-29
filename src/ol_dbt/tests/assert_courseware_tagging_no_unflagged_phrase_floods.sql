@@ -1,4 +1,7 @@
-{{ config(severity="warn") }}
+{{ config(
+    severity="warn"
+    , enabled=courseware_local_tables_enabled("courseware_tagging_in_warehouse")
+) }}
 
 -- Dictionary tagging repeats each phrase's concept at every occurrence of the phrase,
 -- so one wrong dictionary entry (a bad merge that put a common phrase under a concept,
