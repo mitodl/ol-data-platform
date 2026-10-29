@@ -448,9 +448,12 @@ def test_text_stage_reads_each_distinct_text_once_per_run():
     assert tables.extractions["text_input_digest"].n_unique() == 1
 
 
-def _run_and_copy() -> tuple[pl.DataFrame, pl.DataFrame]:
+def _run_and_copy(
+    column: str = "courserun_readable_id", value: str = "course-v1:X+Y+COPY"
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Return a run and a copy of it under another run."""
     run = _rows(["shared text"]).with_columns(source_title=pl.lit("Intro"))
-    return run, run.with_columns(courserun_readable_id=pl.lit("course-v1:X+Y+COPY"))
+    return run, run.with_columns(pl.lit(value).alias(column))
 
 
 def test_text_readings_cross_runs_only_when_asked():
@@ -481,10 +484,15 @@ def test_text_readings_cross_runs_only_when_asked():
 
 
 @pytest.mark.parametrize(("across_runs", "text_calls"), [(False, 1), (True, 0)])
+# a run is its platform and readable id, so a copy can differ in either
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [("courserun_readable_id", "course-v1:X+Y+COPY"), ("platform", "mitxpro")],
+)
 def test_local_extract_reuses_another_runs_reading_only_with_the_flag(
-    tmp_path, monkeypatch, capsys, across_runs, text_calls
+    tmp_path, monkeypatch, capsys, across_runs, text_calls, column, value
 ):
-    run, copy = _run_and_copy()
+    run, copy = _run_and_copy(column, value)
     model = FakeModel()
     _use_model(monkeypatch, model)
     sources = tmp_path / "sources.parquet"

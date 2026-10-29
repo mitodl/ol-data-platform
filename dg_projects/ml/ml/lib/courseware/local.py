@@ -189,7 +189,8 @@ def _print_plan(  # noqa: PLR0913
             message = context_message(scope, reading.claims, reading.evidence)
             marker = (
                 "context"
-                if reading.courserun_readable_id == scope.course.courserun_readable_id
+                if (reading.platform, reading.courserun_readable_id)
+                == (scope.course.platform, scope.course.courserun_readable_id)
                 else "reused"
             )
             tokens = context_tokens + len(message) // CHARS_PER_TOKEN
