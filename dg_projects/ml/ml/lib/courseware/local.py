@@ -2,14 +2,16 @@
 
 For proof-of-concept runs against the local DuckDB lake: export
 int__courseware__extraction_sources to parquet, run this, then expose the output
-files (the three extraction tables and courseware_scope_input) to dbt as the
-courseware_intermediate sources. Re-running skips every scope whose extraction key
-is already in the output directory.
+files (the extraction, claim, evidence and courseware_scope_input tables) to dbt as
+the courseware_intermediate sources. Re-running skips every scope whose extraction
+key is already in the output directory, and reuses a run's stored text readings
+(courseware_text_extraction).
 
     python -m ml.lib.courseware.local extract sources.parquet out/ --dry-run
 """
 
 import logging
+from collections.abc import Mapping
 from pathlib import Path
 
 import cyclopts
@@ -24,19 +26,22 @@ from ml.lib.courseware.answer_check import (
 from ml.lib.courseware.describe import describe_concepts
 from ml.lib.courseware.extract import (
     BEDROCK_DEFAULT_MODEL,
-    CLAIM_SCHEMA,
     DEFAULT_EFFORT,
-    EVIDENCE_SCHEMA,
-    EXTRACTION_SCHEMA,
     Effort,
-    covered_keys,
+    ReadingKey,
+    TextReading,
     extract_scopes,
-    extraction_key,
+    plan_scopes,
     scope_inputs,
-    stored_extraction_key,
+    stored_readings,
 )
 from ml.lib.courseware.graph import compute_graph, previous_membership
-from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
+from ml.lib.courseware.prompts import (
+    CONTEXT_SYSTEM_PROMPT,
+    TEXT_SYSTEM_PROMPT,
+    context_message,
+    text_message,
+)
 from ml.lib.courseware.resolve import EMBEDDING_DIM as RESOLUTION_EMBEDDING_DIM
 from ml.lib.courseware.resolve import ResolutionState, resolve_concepts
 from ml.lib.courseware.scopes import CHARS_PER_TOKEN, Scope, build_scopes
@@ -49,11 +54,7 @@ BEDROCK_DESCRIPTION_MODEL = "us.anthropic.claude-haiku-5-5"
 # Answer checks are short and many; the small model is the default.
 BEDROCK_ANSWER_CHECK_MODEL = "us.anthropic.claude-haiku-5-5"
 EXTRACTION_TABLE = "courseware_claim_extraction"
-OUTPUT_SCHEMAS = {
-    "courseware_claim": CLAIM_SCHEMA,
-    "courseware_claim_evidence": EVIDENCE_SCHEMA,
-    EXTRACTION_TABLE: EXTRACTION_SCHEMA,
-}
+TEXT_EXTRACTION_TABLE = "courseware_text_extraction"
 
 
 def _existing(output_dir: Path, table: str) -> pl.DataFrame | None:
@@ -67,60 +68,6 @@ def _write(frame: pl.DataFrame, output_dir: Path, table: str) -> None:
     staged = path.with_suffix(".parquet.tmp")
     frame.write_parquet(staged)
     staged.replace(path)
-
-
-def _require_current(output_dir: Path) -> pl.DataFrame | None:
-    """Refuse a directory that ``local rekey`` has to bring up to date first.
-
-    Extractions still keyed the old way would all miss, so every scope would be
-    extracted and billed again. A table under an older schema would fail the append
-    only after every model call had been paid for, storing none of them.
-
-    :param output_dir: the directory holding the three extraction tables
-    :returns: the stored extractions, or None when there are none yet
-    :raises ValueError: when the directory needs ``local rekey`` first
-    """
-    for table, schema in OUTPUT_SCHEMAS.items():
-        path = output_dir / f"{table}.parquet"
-        if path.exists() and pl.read_parquet_schema(path) != schema:
-            msg = f"{table} predates the current schema; run `local rekey` first"
-            raise ValueError(msg)
-    stored = _existing(output_dir, EXTRACTION_TABLE)
-    if stored is None:
-        return None
-    for row in stored.filter(pl.col("header_version").is_null()).iter_rows(named=True):
-        if stored_extraction_key(row) != row["extraction_key"]:
-            msg = "extraction keys predate the current scheme; run `local rekey` first"
-            raise ValueError(msg)
-    return stored
-
-
-def _conform(rows: pl.DataFrame, table: str) -> pl.DataFrame:
-    """Bring a table stored under an older schema to the current one.
-
-    Columns added since it was written become typed nulls, in the current column
-    order, so later appends concatenate with new rows. A column whose type changed
-    is refused rather than cast, because a cast can be lossy (a float truncated to
-    an integer) and rekey overwrites the only copy.
-
-    :raises ValueError: when the table holds a column the current schema dropped,
-        or one of another type
-    """
-    schema = OUTPUT_SCHEMAS[table]
-    if dropped := sorted(set(rows.columns) - set(schema)):
-        msg = f"{table} holds columns the current schema does not: {dropped}"
-        raise ValueError(msg)
-    if retyped := sorted(
-        column for column, dtype in rows.schema.items() if dtype != schema[column]
-    ):
-        msg = f"{table} holds columns of another type than the schema: {retyped}"
-        raise ValueError(msg)
-    return rows.select(
-        pl.col(column)
-        if column in rows.columns
-        else pl.lit(None, dtype=dtype).alias(column)
-        for column, dtype in schema.items()
-    )
 
 
 def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
@@ -143,6 +90,43 @@ def _read_scopes(sources: Path, courserun: list[str] | None) -> list[Scope]:
     ]
 
 
+def _print_plan(
+    scopes: list[Scope],
+    model_id: str,
+    effort: Effort,
+    readings: Mapping[ReadingKey, TextReading],
+    existing_keys: set[str],
+) -> None:
+    """Print what extract would send for each scope part, and the input it would cost.
+
+    A part marked "stored" is skipped. One marked "context" has a stored text
+    reading, so only the context stage runs, at the size shown. An unmarked part
+    runs both stages; only its text stage's input is counted, since the context
+    stage's depends on the claims the text stage returns.
+    """
+    text_tokens = len(TEXT_SYSTEM_PROMPT) // CHARS_PER_TOKEN
+    context_tokens = len(CONTEXT_SYSTEM_PROMPT) // CHARS_PER_TOKEN
+    total = 0
+    for planned in plan_scopes(
+        scopes, model_id=model_id, effort=effort, readings=readings
+    ):
+        scope, reading = planned.scope, planned.reading
+        if planned.extraction_key in existing_keys:
+            marker, tokens = "stored", 0
+        elif reading is not None:
+            message = context_message(scope, reading.claims, reading.evidence)
+            marker, tokens = "context", context_tokens + len(message) // CHARS_PER_TOKEN
+        else:
+            marker = ""
+            tokens = text_tokens + len(text_message(scope)) // CHARS_PER_TOKEN
+        total += tokens
+        print(  # noqa: T201
+            f"{scope.course.courserun_readable_id} {scope.scope_key:<70.70} "
+            f"{len(scope.sources):>3} sources ~{tokens:>7,} tokens {marker}"
+        )
+    print(f"{len(scopes)} scopes, ~{total:,} input tokens to send")  # noqa: T201
+
+
 @app.command
 def observe(
     sources: Path, output_dir: Path, *, courserun: list[str] | None = None
@@ -150,7 +134,7 @@ def observe(
     """Record every scope part's current input without extracting anything.
 
     extract records it too; this is for a directory whose extractions are all
-    stored, e.g. after `rekey`.
+    stored.
 
     :param sources: int__courseware__extraction_sources exported to parquet
     :param output_dir: where courseware_scope_input is appended
@@ -173,7 +157,6 @@ def extract(  # noqa: PLR0913
     effort: Effort = DEFAULT_EFFORT,
     aws_region: str = "us-east-1",
     max_workers: int = 6,
-    key_on_header: bool = False,
     dry_run: bool = False,
 ) -> None:
     """Extract claims for every scope of the runs in a sources parquet file.
@@ -186,8 +169,6 @@ def extract(  # noqa: PLR0913
     :param effort: output_config.effort
     :param aws_region: Bedrock region
     :param max_workers: concurrent model calls
-    :param key_on_header: re-extract scopes whose course header changed since they
-        were extracted, or whose header was never recorded (extraction_key)
     :param dry_run: print the scopes and their estimated input size, call nothing
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -198,26 +179,13 @@ def extract(  # noqa: PLR0913
         if not scope_title or scope.scope_title in scope_title
     ]
     output_dir.mkdir(parents=True, exist_ok=True)
-    stored = _require_current(output_dir)
-    existing_keys = covered_keys(stored) if stored is not None else set()
+    stored = _existing(output_dir, EXTRACTION_TABLE)
+    existing_keys = set(stored["extraction_key"]) if stored is not None else set()
+    stored_text = _existing(output_dir, TEXT_EXTRACTION_TABLE)
+    readings = stored_readings(stored_text) if stored_text is not None else {}
 
     if dry_run:
-        system_tokens = len(SYSTEM_PROMPT) // CHARS_PER_TOKEN
-        total = 0
-        for scope in scopes:
-            tokens = system_tokens + len(scope_message(scope)) // CHARS_PER_TOKEN
-            stored_marker = (
-                "stored"
-                if extraction_key(scope, model_id, effort, key_on_header=key_on_header)
-                in existing_keys
-                else ""
-            )
-            total += 0 if stored_marker else tokens
-            print(  # noqa: T201
-                f"{scope.course.courserun_readable_id} {scope.scope_key:<70.70} "
-                f"{len(scope.sources):>3} sources ~{tokens:>7,} tokens {stored_marker}"
-            )
-        print(f"{len(scopes)} scopes, ~{total:,} input tokens to send")  # noqa: T201
+        _print_plan(scopes, model_id, effort, readings, existing_keys)
         return
 
     # every scope of the runs read, not only the scope_title selection
@@ -234,9 +202,12 @@ def extract(  # noqa: PLR0913
         model_id=model_id,
         effort=effort,
         existing_keys=existing_keys,
+        readings=readings,
         max_workers=max_workers,
-        key_on_header=key_on_header,
     )
+    # Text readings first: a stored one is reused, so a run cut off later pays only
+    # for the context stage again.
+    _append(output_dir, TEXT_EXTRACTION_TABLE, tables.text_extractions)
     # A stored extraction key is what makes a re-run skip a scope, so the extraction
     # table is written last. A run cut off before it leaves claim and evidence rows
     # with no extraction, which are dropped here and written again.
@@ -254,10 +225,13 @@ def extract(  # noqa: PLR0913
             table,
         )
     print(  # noqa: T201
+        f"{tables.text_extractions.height} text readings, "
         f"{tables.extractions.height} extractions, {tables.claims.height} claims, "
         f"{tables.evidence.height} evidence rows; "
+        f"{tables.text_extractions['input_tokens'].sum():,} + "
         f"{tables.extractions['input_tokens'].sum():,} in / "
-        f"{tables.extractions['output_tokens'].sum():,} out tokens"
+        f"{tables.text_extractions['output_tokens'].sum():,} + "
+        f"{tables.extractions['output_tokens'].sum():,} out tokens (text + context)"
     )
 
 
@@ -410,47 +384,6 @@ def describe(
     combined = new_rows if previous is None else pl.concat([previous, new_rows])
     combined.write_parquet(output_dir / f"{table}.parquet")
     print(f"{new_rows.height} concepts described")  # noqa: T201
-
-
-@app.command
-def rekey(output_dir: Path) -> None:
-    """Re-key extractions stored before keys left out the course header.
-
-    Their keys hashed the whole message. Their rows hold every column the current
-    key hashes (stored_extraction_key without key_on_header), so it is recomputed
-    exactly and nothing is re-extracted. Their header_version stays null, because
-    the header they read was not stored. Rows written since record header_version
-    and are left alone. Columns added to a table's schema since it was written are
-    added as nulls (_conform).
-
-    Claims and evidence are written before the extraction table, which holds the
-    old keys until last, so a re-run after a crash finishes the job.
-
-    :param output_dir: the directory holding the three extraction tables
-    """
-    # dict order: the extraction table, which marks keys done, is written last
-    stored = {
-        table: _conform(pl.read_parquet(output_dir / f"{table}.parquet"), table)
-        for table in OUTPUT_SCHEMAS
-    }
-    extractions = stored[EXTRACTION_TABLE]
-    new_keys = {
-        row["extraction_key"]: stored_extraction_key(row)
-        for row in extractions.filter(pl.col("header_version").is_null()).iter_rows(
-            named=True
-        )
-    }
-    rekeyed = {
-        table: rows.with_columns(pl.col("extraction_key").replace(new_keys))
-        for table, rows in stored.items()
-    }
-    if rekeyed[EXTRACTION_TABLE]["extraction_key"].is_duplicated().any():
-        msg = "extractions that differ only in their course header share a new key"
-        raise ValueError(msg)
-    for table, rows in rekeyed.items():
-        _write(rows, output_dir, table)
-    changed = sum(old != new for old, new in new_keys.items())
-    print(f"{changed} of {extractions.height} extractions re-keyed")  # noqa: T201
 
 
 @app.command(name="answer-check")

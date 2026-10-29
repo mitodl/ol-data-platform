@@ -60,6 +60,14 @@ models:
   - name: header_version
     description: str, hash of the course header the call read; null for extractions
       recorded before it was
+  - name: text_extraction_key
+    description: str, the text-stage reading the claims came from (v2); null for v1
+  - name: text_input_digest
+    description: str, sha256 of the text stage's exact input (v2). Extractions sharing
+      it read identical text, so their claims are one source's, not independent corroboration
+  - name: context_input_digest
+    description: str, sha256 of the context stage's exact input, the course header
+      and the text claims (v2)
   - name: source_count
     description: int, sources the call read
   - name: truncated_source_count

@@ -37,6 +37,9 @@ select
     , extractions.effort
     , extractions.input_text_checksum
     , extractions.header_version
+    , extractions.text_extraction_key
+    , extractions.text_input_digest
+    , extractions.context_input_digest
     , extractions.source_count
     , extractions.truncated_source_count
     , extractions.summary
