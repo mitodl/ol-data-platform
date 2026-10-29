@@ -466,7 +466,8 @@ def accepted_components(
     singletons for review.
 
     A component joins the concepts its carried labels already belong to, so the
-    distinct check covers every label of those concepts, not only the component's.
+    distinct check covers every label that ends up in those concepts: their carried
+    labels and every other component that joins one of them.
 
     :param keys: the labels to group; a decision naming any other label is ignored
     :param decisions: (query, candidate, verdict) triples
@@ -489,23 +490,49 @@ def accepted_components(
         elif verdict == "distinct":
             distinct[query].add(candidate)
             distinct[candidate].add(query)
-    carried = carried or {}
-    concept_members: dict[str, set[str]] = defaultdict(set)
-    for key, concept_id in carried.items():
-        concept_members[concept_id].add(key)
+    found = union_find.components(keys)
     components: list[set[str]] = []
     rejected = 0
-    for component in union_find.components(keys):
-        destination = component.union(
-            *(concept_members[carried[key]] for key in component if key in carried)
+    for component, destination in zip(
+        found, _destinations(found, carried or {}), strict=True
+    ):
+        # a single label has nothing to merge, whatever its destination holds
+        conflicted = len(component) > 1 and any(
+            distinct[key] & destination for key in destination
         )
-        conflicted = any(distinct[key] & destination for key in destination)
         if len(component) > MAX_MERGE_COMPONENT or conflicted:
             rejected += 1
             components.extend({key} for key in component)
         else:
             components.append(component)
     return components, rejected
+
+
+def _destinations(
+    components: list[set[str]], carried: dict[str, str]
+) -> list[set[str]]:
+    """Every label each component's concept will hold once all components are
+    assigned: a component that joins concepts X and Y merges them, so it shares a
+    destination with every component joining X or Y.
+    """
+    concept_groups = _UnionFind()
+    joined = [
+        [carried[key] for key in component if key in carried]
+        for component in components
+    ]
+    for concepts in joined:
+        for concept_id in concepts:
+            concept_groups.union(concept_id, concepts[0])
+    labels: dict[str, set[str]] = defaultdict(set)
+    for key, concept_id in carried.items():
+        labels[concept_groups.find(concept_id)].add(key)
+    for component, concepts in zip(components, joined, strict=True):
+        if concepts:
+            labels[concept_groups.find(concepts[0])] |= component
+    return [
+        labels[concept_groups.find(concepts[0])] if concepts else component
+        for component, concepts in zip(components, joined, strict=True)
+    ]
 
 
 def _resolve_redirects(registry: dict[str, dict[str, Any]]) -> None:

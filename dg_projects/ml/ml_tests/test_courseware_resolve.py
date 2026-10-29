@@ -230,6 +230,7 @@ def test_concepts_bridged_twice_merge_one_way(verdicts):
     verdicts[("n1", "l2")] = "close"
     verdicts[("o2", "s1")] = "close"
     verdicts[("o2", "l1")] = "close"
+    verdicts[("n1", "o2")] = "close"
     second = run(
         labels("l1", "l2", "n1", "o2", "s1", "s2", mentions=mentions),
         state_from(first),
@@ -379,6 +380,9 @@ def test_a_relation_follows_a_merge_made_later_in_the_run(verdicts):
     verdicts[("n", "s1")] = "exact"
     verdicts[("n", "l2")] = "exact"
     verdicts[("n", "l1")] = "close"
+    # n merges l1's concept into s1's, so x ends up beside s1 and n
+    verdicts[("x", "s1")] = "close"
+    verdicts[("x", "n")] = "close"
     second = run(
         labels("l1", "l2", "n", "p", "s1", "x", mentions=mentions), state_from(first)
     )
@@ -468,3 +472,24 @@ def test_a_complete_adjudication_is_returned():
     assert resolve._adjudicate_batch(
         client, "fake-model", [("auc", ["area under the curve"])], rows
     ) == [("auc", "area under the curve", "exact")]
+
+
+def test_two_new_labels_distinct_from_each_other_do_not_both_join_a_concept(verdicts):
+    verdicts[("auc", "area under the curve")] = "exact"
+    first = run(labels("auc", "area under the curve"))
+    concept = concept_of(first, "auc")
+    # each new label is exact to a different member of the concept, and the two are
+    # distinct from each other
+    verdicts[("auc roc", "auc")] = "exact"
+    verdicts[("auc roc", "area under the curve")] = "close"
+    verdicts[("pr auc", "area under the curve")] = "exact"
+    verdicts[("pr auc", "auc")] = "close"
+    verdicts[("auc roc", "pr auc")] = "distinct"
+    second = run(
+        labels("auc", "area under the curve", "auc roc", "pr auc"), state_from(first)
+    )
+    joined = [
+        key for key in ("auc roc", "pr auc") if concept_of(second, key) == concept
+    ]
+    assert joined == []
+    assert second.run["rejected_components"][0] == 2
