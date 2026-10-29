@@ -7,8 +7,10 @@
     id and never resolves labels again. integrations__learn__concepts has each
     concept's name and descriptions.
 
-    Only accepted concepts, and relations at least one accepted claim supports, are
-    published. No review workflow exists yet, so this is empty until one does.
+    Only concepts integrations__learn__concepts publishes (accepted, active,
+    learner-facing, with current labels), and relations at least one accepted claim
+    supports, are published, so every concept_id here has a row there. No review
+    workflow exists yet, so this is empty until one does.
 
     The release manifest will add a release id to every row, binding this to the
     resolution run, sense assignments and graph run it was built from; until then
@@ -25,7 +27,7 @@ with learn_runs as (
 
 , concepts as (
     select * from {{ ref('dim_concept') }}
-    where review_status = 'accepted' and lifecycle_status = 'active'
+    where {{ learn_publishable_concept() }}
 )
 
 select

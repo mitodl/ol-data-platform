@@ -1,5 +1,7 @@
 import itertools
 import uuid
+from contextlib import contextmanager
+from types import SimpleNamespace
 
 import numpy as np
 import polars as pl
@@ -252,6 +254,13 @@ def test_concepts_bridged_twice_merge_one_way(verdicts):
     verdicts[("n1", "l1")] = "exact"
     verdicts[("o2", "s2")] = "exact"
     verdicts[("o2", "l2")] = "exact"
+    # each new label joins both concepts whole, so it is not distinct from the other
+    # member of either
+    verdicts[("n1", "s2")] = "close"
+    verdicts[("n1", "l2")] = "close"
+    verdicts[("o2", "s1")] = "close"
+    verdicts[("o2", "l1")] = "close"
+    verdicts[("n1", "o2")] = "close"
     second = run(
         labels("l1", "l2", "n1", "o2", "s1", "s2", mentions=mentions),
         state_from(first),
@@ -344,3 +353,190 @@ def test_a_label_that_drops_out_keeps_its_id_until_a_rebuild():
         row["concept_id"]: row for row in rebuilt.registry.iter_rows(named=True)
     }
     assert registry[pandas]["concept_status"] == "deprecated"
+
+
+def test_a_label_distinct_from_a_member_of_its_destination_is_not_merged(verdicts):
+    verdicts[("auc", "area under the curve")] = "exact"
+    first = run(labels("auc", "area under the curve"))
+    # exact to one member of the concept, distinct from the other
+    verdicts[("auc roc", "auc")] = "exact"
+    verdicts[("auc roc", "area under the curve")] = "distinct"
+    second = run(labels("auc", "area under the curve", "auc roc"), state_from(first))
+    assert concept_of(second, "auc roc") != concept_of(first, "auc")
+    assert second.run["rejected_components"][0] == 1
+
+
+def test_a_failed_label_is_not_brought_back_as_a_candidate():
+    components, _ = accepted_components(
+        ["auc", "pandas"], [("auc", "area under the curve", "exact")]
+    )
+    assert sorted(map(sorted, components)) == [["auc"], ["pandas"]]
+
+
+def test_incremental_run_leaves_a_failed_label_unassigned(verdicts, monkeypatch):
+    first = run(labels("auc", "pandas"))
+    verdicts[("auc roc", "auc")] = "exact"
+    verdicts[("area under the curve", "auc")] = "exact"
+
+    def adjudicate_failing_auc_roc(_client, _model_id, candidates, _rows):
+        # auc roc's own batch failed, but another query still lists it as exact
+        decided = [
+            (query, candidate, verdicts.get((query, candidate), "distinct"))
+            for query, found in candidates.items()
+            if query != "auc roc"
+            for candidate in found
+        ]
+        decided.append(("area under the curve", "auc roc", "exact"))
+        return decided, 1, {"auc roc"}
+
+    monkeypatch.setattr(resolve, "adjudicate", adjudicate_failing_auc_roc)
+    second = run(
+        labels("auc", "pandas", "area under the curve", "auc roc"), state_from(first)
+    )
+    assigned = second.assignments["concept_label_key"].to_list()
+    assert "auc roc" not in assigned
+    assert concept_of(second, "area under the curve") == concept_of(first, "auc")
+
+
+def test_a_relation_follows_a_merge_made_later_in_the_run(verdicts):
+    verdicts[("l1", "l2")] = "exact"
+    mentions = {"s1": 5}
+    first = run(labels("l1", "l2", "p", "s1", mentions=mentions))
+    survivor = concept_of(first, "s1")
+    # x joins l1's concept, then n merges that concept into s1's
+    verdicts[("x", "l1")] = "exact"
+    verdicts[("x", "l2")] = "close"
+    verdicts[("x", "p")] = "related"
+    verdicts[("n", "s1")] = "exact"
+    verdicts[("n", "l2")] = "exact"
+    verdicts[("n", "l1")] = "close"
+    # n merges l1's concept into s1's, so x ends up beside s1 and n
+    verdicts[("x", "s1")] = "close"
+    verdicts[("x", "n")] = "close"
+    second = run(
+        labels("l1", "l2", "n", "p", "s1", "x", mentions=mentions), state_from(first)
+    )
+    assert concept_of(second, "x") == survivor
+    rows = list(second.relations.iter_rows(named=True))
+    assert [
+        ({row["from_concept_id"], row["to_concept_id"]}, row["relation"])
+        for row in rows
+    ] == [({survivor, concept_of(first, "p")}, "related")]
+
+
+class _VerdictClient:
+    """Stands in for an Anthropic client, returning one fixed record_verdicts call."""
+
+    def __init__(self, tool_input):
+        self.messages = self
+        self.tool_input = tool_input
+
+    @contextmanager
+    def stream(self, **_kwargs):
+        response = SimpleNamespace(
+            stop_reason="tool_use",
+            content=[
+                SimpleNamespace(
+                    type="tool_use", name="record_verdicts", input=self.tool_input
+                )
+            ],
+        )
+        yield SimpleNamespace(get_final_message=lambda: response)
+
+
+@pytest.mark.parametrize(
+    "tool_input",
+    [
+        {"queries": []},
+        {"queries": [{"query_id": 0, "verdicts": []}]},
+        {
+            "queries": [
+                {"query_id": 0, "verdicts": [{"candidate_id": 0, "verdict": "exact"}]}
+            ]
+            * 2
+        },
+        {
+            "queries": [
+                {"query_id": 1, "verdicts": [{"candidate_id": 0, "verdict": "exact"}]}
+            ]
+        },
+        {
+            "queries": [
+                {
+                    "query_id": 0,
+                    "verdicts": [
+                        {"candidate_id": 0, "verdict": "exact"},
+                        {"candidate_id": 0, "verdict": "close"},
+                    ],
+                }
+            ]
+        },
+    ],
+)
+def test_an_incomplete_adjudication_fails_the_batch(tool_input):
+    rows = {
+        key: {"preferred_label": key, "concept_kind": "concept", "description": ""}
+        for key in ("auc", "area under the curve")
+    }
+    with pytest.raises(ValueError, match="verdicts for"):
+        resolve._adjudicate_batch(
+            _VerdictClient(tool_input),
+            "fake-model",
+            [("auc", ["area under the curve"])],
+            rows,
+        )
+
+
+def test_a_complete_adjudication_is_returned():
+    rows = {
+        key: {"preferred_label": key, "concept_kind": "concept", "description": ""}
+        for key in ("auc", "area under the curve")
+    }
+    client = _VerdictClient(
+        {
+            "queries": [
+                {"query_id": 0, "verdicts": [{"candidate_id": 0, "verdict": "exact"}]}
+            ]
+        }
+    )
+    assert resolve._adjudicate_batch(
+        client, "fake-model", [("auc", ["area under the curve"])], rows
+    ) == [("auc", "area under the curve", "exact")]
+
+
+def test_two_new_labels_distinct_from_each_other_do_not_both_join_a_concept(verdicts):
+    verdicts[("auc", "area under the curve")] = "exact"
+    first = run(labels("auc", "area under the curve"))
+    concept = concept_of(first, "auc")
+    # each new label is exact to a different member of the concept, and the two are
+    # distinct from each other
+    verdicts[("auc roc", "auc")] = "exact"
+    verdicts[("auc roc", "area under the curve")] = "close"
+    verdicts[("pr auc", "area under the curve")] = "exact"
+    verdicts[("pr auc", "auc")] = "close"
+    verdicts[("auc roc", "pr auc")] = "distinct"
+    second = run(
+        labels("auc", "area under the curve", "auc roc", "pr auc"), state_from(first)
+    )
+    joined = [
+        key for key in ("auc roc", "pr auc") if concept_of(second, key) == concept
+    ]
+    assert joined == []
+    assert second.run["rejected_components"][0] == 2
+
+
+def test_a_new_label_exact_to_many_labels_of_one_concept_joins_it(verdicts):
+    members = [f"k means {suffix}" for suffix in "abcdefg"]
+    for left, right in itertools.combinations(members, 2):
+        verdicts[(left, right)] = "exact"
+    # the concept grows to seven labels over two runs
+    first = run(labels(*members[:4]))
+    grown = run(labels(*members), state_from(first))
+    concept = concept_of(first, members[0])
+    assert {concept_of(grown, key) for key in members} == {concept}
+    # a new label exact to all seven joins one concept, not a seven-way chain
+    for member in members:
+        verdicts[("kmeans", member)] = "exact"
+    second = run(labels(*members, "kmeans"), state_from(grown))
+    assert concept_of(second, "kmeans") == concept
+    assert second.run["rejected_components"][0] == 0

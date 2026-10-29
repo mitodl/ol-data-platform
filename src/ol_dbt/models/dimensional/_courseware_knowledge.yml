@@ -532,9 +532,11 @@ models:
     description: int, the earliest scope with the relation; for inferred requires,
       the first scope that relies on the concept
   - name: claim_count
-    description: int, claims behind the relation
+    description: int, claims behind the relation, each counted once however many of
+      its labels name the concept
   - name: accepted_claim_count
-    description: int, accepted claims behind the relation; learner-facing views take
+    description: int, accepted claims behind the relation; for an inferred requires,
+      only those made before any scope teaches the concept. Learner-facing views take
       only relations with at least one
   - name: scope_count
     description: int, distinct scopes behind the relation

@@ -9,16 +9,21 @@
     they teach counts as taught from the start; the context scope teaches nothing.
 
     Every relation is kept here for review whatever its claims' review status;
-    accepted_claim_count is how many of claim_count are accepted, and learner-facing
-    views take only relations with at least one.
+    accepted_claim_count is how many of claim_count are accepted (for an inferred
+    requirement, only those made before the run teaches the concept), and
+    learner-facing views take only relations with at least one.
 #}
+-- one row per (claim, concept): an assessment that lists two labels of one concept
+-- is one claim behind the relation, not two
 with mentions as (
-    select
+    select distinct
         platform
         , courserun_readable_id
         , scope_id
         , scope_kind
         , scope_position
+        , extraction_key
+        , claim_ordinal
         , claim_kind
         , teaching_status
         , concept_kind
@@ -71,15 +76,15 @@ with mentions as (
     group by platform, courserun_readable_id, concept_id
 )
 
-, relied_on as (
+-- every claim a unit makes that relies on the concept
+, reliance as (
     select
         platform
         , courserun_readable_id
         , concept_id
-        , min(scope_position) as first_relied_position
-        , count(*) as claim_count
-        , count(case when review_status = 'accepted' then 1 end) as accepted_claim_count
-        , count(distinct scope_id) as scope_count
+        , scope_id
+        , scope_position
+        , review_status
     from mentions
     where
         scope_kind = 'unit'
@@ -89,29 +94,45 @@ with mentions as (
             claim_kind = 'assumed_knowledge'
             or (claim_kind = 'concept' and teaching_status = 'used')
         )
-    group by platform, courserun_readable_id, concept_id
 )
 
 , inferred_requirements as (
     select
-        relied_on.platform
-        , relied_on.courserun_readable_id
-        , relied_on.concept_id
+        reliance.platform
+        , reliance.courserun_readable_id
+        , reliance.concept_id
         , 'requires' as relation
         , 'inferred' as requirement_source
-        , relied_on.first_relied_position as first_scope_position
-        , relied_on.claim_count
-        , relied_on.accepted_claim_count
-        , relied_on.scope_count
-    from relied_on
+        , min(reliance.scope_position) as first_scope_position
+        , count(*) as claim_count
+        -- only an accepted claim that relies on the concept before any scope teaches
+        -- it supports the requirement; a later one is use of what the run taught
+        , count(
+            case
+                when
+                    reliance.review_status = 'accepted'
+                    and (
+                        first_taught.first_taught_position is null
+                        or reliance.scope_position < first_taught.first_taught_position
+                    )
+                    then 1
+            end
+        ) as accepted_claim_count
+        , count(distinct reliance.scope_id) as scope_count
+    from reliance
     left join first_taught
         on
-            relied_on.platform = first_taught.platform
-            and relied_on.courserun_readable_id = first_taught.courserun_readable_id
-            and relied_on.concept_id = first_taught.concept_id
-    where
+            reliance.platform = first_taught.platform
+            and reliance.courserun_readable_id = first_taught.courserun_readable_id
+            and reliance.concept_id = first_taught.concept_id
+    group by
+        reliance.platform
+        , reliance.courserun_readable_id
+        , reliance.concept_id
+        , first_taught.first_taught_position
+    having
         first_taught.first_taught_position is null
-        or first_taught.first_taught_position > relied_on.first_relied_position
+        or first_taught.first_taught_position > min(reliance.scope_position)
 )
 
 , relations as (
