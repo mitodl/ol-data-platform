@@ -71,10 +71,12 @@ with openedx_events as (
         , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
         , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
         , case when useractivity_event_type like '%response'
-             then regexp_replace(
-                 {{ json_query_string('useractivity_event_object', "'$.value'") }}
-                 , '^b[''"]|[''"]$', ''
-               )
+             -- Two passes: StarRocks 4.1.6 applies only the first branch of an alternation.
+             then {{ regexp_replace_all(
+                 regexp_replace_all(json_query_string('useractivity_event_object', "'$.value'"), "'^b[''\"]'", "''")
+                 , "'[''\"]$'"
+                 , "''"
+               ) }}
           else {{ json_query_string('useractivity_event_object', "'$.value'") }}
         end as event_value
         , coalesce(
