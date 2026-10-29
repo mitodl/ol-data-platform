@@ -1,0 +1,141 @@
+{#
+    The concepts the next knowledge release would publish, built from the newest
+    run of each stage. The courseware_knowledge_release asset copies these rows into
+    a release, and integrations__learn__concepts reads them from the published one,
+    never from here.
+
+    A concept is here when a reviewer accepted it, it is active, and the current
+    claims of at least one source-eligible run name it. Its displayed label, kind
+    and course counts come from eligible runs only, so a run under an ineligible
+    source changes nothing a learner sees. The description is the newest one written
+    under the prompt version courseware_description_approval approves; a concept
+    with none yet has null description columns, and the release asset refuses a
+    candidate that has any.
+#}
+with concepts as (
+    select * from {{ ref('dim_concept') }}
+    where
+        lifecycle_status = 'active'
+        and review_status = 'accepted'
+)
+
+, eligible_runs as (
+    select * from {{ ref('int__courseware__source_eligibility') }}
+    where is_source_eligible
+)
+
+, eligible_mentions as (
+    select
+        mentions.concept_id
+        , mentions.concept_label_key
+    from {{ ref('int__courseware__resolved_concept_mentions') }} as mentions
+    inner join eligible_runs
+        on
+            mentions.platform = eligible_runs.platform
+            and mentions.courserun_readable_id = eligible_runs.courserun_readable_id
+)
+
+, labels as (
+    select * from {{ ref('int__courseware__concept_labels') }}
+)
+
+-- the label eligible runs mention most, as dim_concept picks over every run
+, display_labels as (
+    select
+        concept_id
+        , preferred_label
+        , concept_kind
+    from (
+        select
+            label_counts.concept_id
+            , labels.preferred_label
+            , labels.concept_kind
+            , row_number() over (
+                partition by label_counts.concept_id
+                order by label_counts.mention_count desc, label_counts.concept_label_key asc
+            ) as label_rank
+        from (
+            select
+                concept_id
+                , concept_label_key
+                , count(*) as mention_count
+            from eligible_mentions
+            group by concept_id, concept_label_key
+        ) as label_counts
+        inner join labels
+            on label_counts.concept_label_key = labels.concept_label_key
+    ) as ranked
+    where label_rank = 1
+)
+
+, approval as (
+    select max(approved_prompt_version) as prompt_version
+    from {{ ref('int__courseware__concept_description_inputs') }}
+)
+
+, descriptions as (
+    select
+        concept_id
+        , short_description
+        , description
+        , is_learner_facing
+        , model_id
+        , prompt_version
+    from (
+        select
+            descriptions.*
+            , row_number() over (
+                partition by descriptions.concept_id order by descriptions.described_at desc
+            ) as description_rank
+        from {{ source('courseware_intermediate', 'courseware_concept_description') }} as descriptions
+        inner join approval
+            on descriptions.prompt_version = approval.prompt_version
+    ) as ranked
+    where description_rank = 1
+)
+
+, eligible_bridge as (
+    select bridge.*
+    from {{ ref('bridge_courserun_concept') }} as bridge
+    inner join eligible_runs
+        on
+            bridge.platform = eligible_runs.platform
+            and bridge.courserun_readable_id = eligible_runs.courserun_readable_id
+)
+
+, course_runs as (
+    select * from {{ ref('dim_course_run') }}
+    where is_current
+)
+
+, course_counts as (
+    select
+        eligible_bridge.concept_fk
+        , count(distinct case when eligible_bridge.relation = 'teaches' then course_runs.course_fk end)
+        as teaching_course_count
+        , count(distinct course_runs.course_fk) as course_count
+    from eligible_bridge
+    inner join course_runs
+        on eligible_bridge.courserun_fk = course_runs.courserun_pk
+    group by eligible_bridge.concept_fk
+)
+
+select
+    concepts.concept_pk as concept_id
+    , display_labels.preferred_label as name
+    , display_labels.concept_kind
+    , descriptions.short_description
+    , descriptions.description
+    , descriptions.is_learner_facing
+    , concepts.review_status
+    , descriptions.model_id as description_model_id
+    , descriptions.prompt_version as description_prompt_version
+    , coalesce(course_counts.teaching_course_count, 0) as teaching_course_count
+    , coalesce(course_counts.course_count, 0) as course_count
+from concepts
+inner join display_labels
+    on concepts.concept_pk = display_labels.concept_id
+left join descriptions
+    on concepts.concept_pk = descriptions.concept_id
+left join course_counts
+    on concepts.concept_pk = course_counts.concept_fk

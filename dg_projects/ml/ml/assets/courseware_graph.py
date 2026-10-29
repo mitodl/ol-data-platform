@@ -11,6 +11,7 @@ from dagster import (
     AssetKey,
     AssetOut,
     Config,
+    Failure,
     MetadataValue,
     Output,
     multi_asset,
@@ -96,6 +97,21 @@ def cycle_check(
     )
 
 
+def built_from(concepts: pl.DataFrame) -> str | None:
+    """Return the resolution run dim_concept was built from.
+
+    :param concepts: dim_concept, whose resolution_run_id is the same on every row
+    :returns: that run, or None when dim_concept is empty
+    :rtype: str | None
+    :raises Failure: when dim_concept names more than one run
+    """
+    runs = concepts["resolution_run_id"].drop_nulls().unique().to_list()
+    if len(runs) > 1:
+        msg = f"dim_concept names {len(runs)} resolution runs, not one: {sorted(runs)}"
+        raise Failure(msg)
+    return runs[0] if runs else None
+
+
 @multi_asset(
     group_name="courseware",
     deps=[CONCEPTS_KEY, RELATIONS_KEY],
@@ -127,9 +143,10 @@ def courseware_concept_graph(
     """Compute the concept graph's communities, sequencing, hierarchy and sparsity.
 
     Calls ml.lib.courseware.graph.compute_graph on dim_concept and
-    bridge_concept_relation, carrying community ids from the newest run. A run
-    whose input checksum and graph version match the newest run's is not written
-    again.
+    bridge_concept_relation, carrying community ids from the newest run. Each run
+    records the resolution run dim_concept was built from, so a knowledge release
+    can tell whether the graph matches its concepts. A run whose input checksum,
+    graph version and resolution run match the newest run's is not written again.
     """
     runs = read_table("intermediate", RUN_KEY.path[-1])
     last_run = (
@@ -138,8 +155,10 @@ def courseware_concept_graph(
         else None
     )
     last_run_id = last_run["graph_run_id"] if last_run else None
+    concepts = require_table("dimensional", CONCEPTS_KEY.path[-1]).collect()
+    resolution_run_id = built_from(concepts)
     result = compute_graph(
-        require_table("dimensional", CONCEPTS_KEY.path[-1]).collect(),
+        concepts,
         require_table("dimensional", RELATIONS_KEY.path[-1]).collect(),
         previous_nodes=previous_membership(
             latest_run_rows(
@@ -154,16 +173,24 @@ def courseware_concept_graph(
             last_run_id,
         ),
     )
-    run = result.run.row(0, named=True)
+    run_frame = result.run.with_columns(
+        resolution_run_id=pl.lit(resolution_run_id, dtype=pl.String)
+    )
+    run = run_frame.row(0, named=True)
     # The checksum covers the input and parameters, not the algorithm, so a
-    # GRAPH_VERSION bump (the asset's code version) must still write a run.
+    # GRAPH_VERSION bump (the asset's code version) must still write a run. A new
+    # resolution run that leaves the graph's input unchanged writes one too, which
+    # costs no model call and lets a release bind the graph to that resolution run.
+    # A run stored before resolution_run_id existed has no such key.
     if (
         last_run
         and last_run["input_checksum"] == run["input_checksum"]
         and last_run["graph_version"] == run["graph_version"]
+        and last_run.get("resolution_run_id") == resolution_run_id
     ):
         context.log.info(
-            "Graph input and version are unchanged since run %s; nothing written",
+            "Graph input, version and resolution run are unchanged since run %s; "
+            "nothing written",
             last_run_id,
         )
         last_nodes = (
@@ -177,7 +204,7 @@ def courseware_concept_graph(
     context.log.info("Graph run %s", run)
     for table, frame in zip(
         GRAPH_TABLES,
-        (result.nodes, result.edges, result.communities, result.run),
+        (result.nodes, result.edges, result.communities, run_frame),
         strict=True,
     ):
         yield Output(

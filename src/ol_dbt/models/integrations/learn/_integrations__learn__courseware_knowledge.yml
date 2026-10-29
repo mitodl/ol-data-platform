@@ -3,14 +3,19 @@ version: 2
 
 models:
 - name: integrations__learn__resource_knowledge
-  description: What each Learn course teaches, assesses and expects, from its most
-    recently extracted run, with a deterministic markdown context document for embedding.
+  description: What each Learn course teaches, assesses and expects, from the published
+    knowledge release (its most recently extracted source-eligible run, accepted concepts
+    only), with a deterministic markdown context document for embedding.
   config:
     meta:
       # It reads claims only the courseware extractor writes, which no QA run produces
       # until the Dagster assets exist.
       qa_buildable: false
   columns:
+  - name: release_id
+    description: str, the published knowledge release the row comes from (int__courseware__published_release)
+    tests:
+    - not_null
   - name: etl_source
     description: str, Learn's etl_source for the course (mitxonline, xpro)
     tests:
@@ -50,20 +55,25 @@ models:
 
 - name: integrations__learn__concepts
   description: Learner-facing concepts with their descriptions and course counts,
-    for concept chips, tooltips and concept pages in Learn.
+    for concept chips, tooltips and concept pages in Learn, from the published knowledge
+    release (accepted concepts named by source-eligible runs).
   config:
     meta:
       # Same as integrations__learn__resource_knowledge: no QA form until the Dagster
       # assets exist.
       qa_buildable: false
   columns:
+  - name: release_id
+    description: str, the published knowledge release the row comes from (int__courseware__published_release)
+    tests:
+    - not_null
   - name: concept_id
     description: str, dim_concept.concept_pk
     tests:
     - unique
     - not_null
   - name: name
-    description: str, the concept's preferred label
+    description: str, the label source-eligible runs mention most
   - name: concept_kind
     description: str, concept, method, tool or application
   - name: short_description
@@ -71,10 +81,11 @@ models:
   - name: description
     description: str, one or two course-agnostic sentences
   - name: review_status
-    description: str, proposed until reviewed
+    description: str, accepted (only accepted concepts are released)
   - name: description_model_id
     description: str, the model that wrote the descriptions
   - name: teaching_course_count
-    description: int, courses whose extracted run teaches the concept
+    description: int, courses whose source-eligible extracted run teaches the concept
   - name: course_count
-    description: int, courses whose extracted run relates to the concept in any way
+    description: int, courses whose source-eligible extracted run relates to the concept
+      in any way

@@ -604,6 +604,195 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [platform, courserun_readable_id]
 
+- name: int__courseware__source_eligibility
+  description: Whether each extracted course run's material may reach a learner-facing
+    projection, under courseware_source_eligibility, with the policy's version.
+  config:
+    meta:
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, the run's platform
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the run
+    tests:
+    - not_null
+  - name: is_source_eligible
+    description: boolean, true when the run's own policy row, else its platform's,
+      makes it eligible; false when neither exists
+  - name: eligibility_level
+    description: str, courserun or platform, the policy row that decided; null when
+      none did
+  - name: source_policy_version
+    description: str, md5 of the whole policy, the same on every row
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [platform, courserun_readable_id]
+
+- name: int__courseware__release_concepts
+  description: The concepts the next knowledge release would publish, from the newest
+    run of each stage. Accepted, active concepts a source-eligible run names, with
+    labels and counts from eligible runs only and descriptions under the approved
+    prompt. ml.assets.courseware_release copies them into a release.
+  config:
+    meta:
+      qa_buildable: false
+  columns:
+  - name: concept_id
+    description: str, the concept's UUID
+    tests:
+    - unique
+    - not_null
+  - name: name
+    description: str, the label source-eligible runs mention most
+  - name: concept_kind
+    description: str, that label's kind
+  - name: short_description
+    description: str, at most 12 words; null when the concept has no description under
+      the approved prompt yet
+  - name: description
+    description: str, one or two course-agnostic sentences
+  - name: is_learner_facing
+    description: boolean, the describer's flag; null when undescribed
+  - name: review_status
+    description: str, accepted
+  - name: description_model_id
+    description: str, the model that wrote the description
+  - name: description_prompt_version
+    description: str, the approved prompt version it was written under; null when
+      undescribed
+  - name: teaching_course_count
+    description: int, courses whose source-eligible run teaches the concept
+  - name: course_count
+    description: int, courses whose source-eligible run relates to the concept in
+      any way
+
+- name: int__courseware__release_resource_knowledge
+  description: Each Learn course's knowledge as the next knowledge release would publish
+    it, from its most recently extracted source-eligible run, naming only concepts
+    int__courseware__release_concepts publishes as learner-facing. ml.assets.courseware_release
+    copies it into a release.
+  config:
+    meta:
+      qa_buildable: false
+  columns:
+  - name: etl_source
+    description: str, Learn's etl_source for the course (mitxonline, xpro)
+    tests:
+    - not_null
+  - name: readable_id
+    description: str, the course readable_id as Learn keys it
+    tests:
+    - not_null
+  - name: extracted_courserun_readable_id
+    description: str, the run the knowledge was extracted from
+  - name: course_title
+    description: str, the course's title
+  - name: concepts_taught
+    description: array of str, names of released concepts the run teaches, most claimed
+      first
+  - name: concepts_reviewed
+    description: array of str, names of released concepts the run reviews
+  - name: concepts_used
+    description: array of str, names of released concepts the run uses without teaching
+  - name: concepts_assessed
+    description: array of str, names of released concepts the run's assessments name
+  - name: prerequisites_declared
+    description: array of str, names of released concepts the course material states
+      as prerequisites
+  - name: prerequisites_inferred
+    description: array of str, names of released concepts the run relies on before
+      or without teaching them
+  - name: skills
+    description: array of str, skill statements
+  - name: learning_outcomes
+    description: array of str, stated learning outcomes
+  - name: audience
+    description: array of str, who the material says the course is for
+  - name: context_document
+    description: str, markdown rendered from the arrays in this row
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [etl_source, readable_id]
+
+- name: int__courseware__release_manifest
+  description: One row binding what the next knowledge release would be built from,
+    the resolution run, graph run, approved description prompt, current extractions
+    of eligible runs and source policy, with whether the graph was computed over that
+    resolution run.
+  config:
+    meta:
+      qa_buildable: false
+  columns:
+  - name: resolution_run_id
+    description: str, the resolution run dim_concept was built from
+  - name: resolver_id
+    description: str, that run's resolver version
+  - name: resolution_prompt_version
+    description: str, that run's adjudication prompt version
+  - name: sense_assignment_version
+    description: str, null until claim-level sense assignment exists
+  - name: graph_run_id
+    description: str, the newest graph run
+  - name: graph_version
+    description: str, that run's algorithm version
+  - name: graph_resolution_run_id
+    description: str, the resolution run that graph was computed over
+  - name: is_graph_current
+    description: boolean, whether the graph was computed over resolution_run_id; false
+      after a resolution run whose graph build failed or has not run yet
+  - name: description_prompt_version
+    description: str, the description prompt version courseware_description_approval
+      approves
+  - name: undescribed_concept_count
+    description: int, released concepts with no description under that version
+  - name: extraction_selection_checksum
+    description: str, md5 of the current extraction keys of source-eligible runs
+  - name: extraction_count
+    description: int, how many such extractions
+  - name: source_policy_version
+    description: str, int__courseware__source_eligibility.source_policy_version
+  tests:
+  - dbt_expectations.expect_table_row_count_to_equal:
+      arguments:
+        value: 1
+
+- name: int__courseware__published_release
+  description: The knowledge release the newest courseware_release_publication row
+    names, with its manifest. Every learner-facing courseware projection selects its
+    rows through it.
+  config:
+    meta:
+      qa_buildable: false
+  columns:
+  - name: release_id
+    description: str, the published release
+    tests:
+    - unique
+  - name: published_at
+    description: timestamp, when it was published
+  - name: built_at
+    description: timestamp, when the release was built
+  - name: output_schema_version
+    description: str, hash of the release projections' columns
+  - name: resolution_run_id
+    description: str, the release's resolution run
+  - name: sense_assignment_version
+    description: str, null until claim-level sense assignment exists
+  - name: graph_run_id
+    description: str, the release's graph run
+  - name: graph_version
+    description: str, that run's algorithm version
+  - name: description_prompt_version
+    description: str, the approved prompt the release's descriptions were written
+      under
+  - name: extraction_selection_checksum
+    description: str, md5 of the extraction keys the release was built from
+  - name: source_policy_version
+    description: str, the source policy the release was built under
+
 unit_tests:
 - name: test_int__courseware__extraction_sources_scopes_ocw_course
   description: >
