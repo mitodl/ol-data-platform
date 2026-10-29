@@ -142,3 +142,64 @@ open_learning:
       username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
       password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
       threads: 4
+    # The layered warehouse on StarRocks, written into the Glue-backed Iceberg
+    # catalog (`catalog`, not `database`, is what selects it). Each resolves the
+    # same layer schemas as the Trino output of the same environment:
+    # <schema>_<layer>, e.g. ol_warehouse_qa_staging. The b2b views are disabled
+    # on these targets and build on the default_catalog ones above.
+    #
+    # dbt-starrocks connects to <catalog>.<schema>, and if that fails for any
+    # reason it runs a bare CREATE DATABASE for it, which in Glue has no location.
+    # Seeds build into the profile schema itself, so it has to exist with one
+    # first. ol_warehouse_qa and ol_warehouse_production already do. `ol-dbt
+    # starrocks` creates the others (ol_warehouse_ci, every suffixed schema) with
+    # a location before it starts dbt.
+    #
+    # The canonical QA and production layer schemas are the ones the Trino
+    # build writes until the cutover.
+    starrocks_qa_lake:
+      type: starrocks
+      host: '{{ env_var("DBT_STARROCKS_HOST", "127.0.0.1") }}'
+      port: 9030
+      catalog: ol_data_lake_qa
+      schema: ol_warehouse_qa
+      username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
+      password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
+      threads: 4
+    # A developer's own copy of the QA warehouse, ol_warehouse_qa_<suffix>_<layer>,
+    # like the Trino dev_qa output.
+    starrocks_dev_qa:
+      type: starrocks
+      host: '{{ env_var("DBT_STARROCKS_HOST", "127.0.0.1") }}'
+      port: 9030
+      catalog: ol_data_lake_qa
+      schema: ol_warehouse_qa{{ "_{}".format(var('schema_suffix')) }}
+      username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
+      password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
+      threads: 4
+    starrocks_production_lake:
+      type: starrocks
+      host: '{{ env_var("DBT_STARROCKS_HOST", "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local")
+        }}'
+      port: 9030
+      catalog: ol_data_lake_production
+      schema: ol_warehouse_production
+      username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
+      password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
+      threads: 4
+    # CI StarRocks writing its own lake (ol-infrastructure#6533). DBT_TARGET_MAP
+    # in lakehouse.lib.dbt_environment names this output for DAGSTER_ENVIRONMENT=ci.
+    # Without a schema_suffix var it builds the canonical ol_warehouse_ci_<layer>
+    # schemas; a PR build passes one (e.g. `--vars '{schema_suffix: pr_123}'`) to
+    # get its own.
+    ci:
+      type: starrocks
+      host: '{{ env_var("DBT_STARROCKS_HOST", "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local")
+        }}'
+      port: 9030
+      catalog: ol_data_lake_ci
+      schema: ol_warehouse_ci{{ "_{}".format(var('schema_suffix')) if var('schema_suffix',
+        '') else '' }}
+      username: '{{ env_var("DBT_STARROCKS_USERNAME") }}'
+      password: '{{ env_var("DBT_STARROCKS_PASSWORD") }}'
+      threads: 4

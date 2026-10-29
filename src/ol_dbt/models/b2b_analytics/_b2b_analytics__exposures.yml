@@ -21,7 +21,8 @@ exposures:
     floor applies to each column; config.meta.cohort on the models records the
     same thing next to the SQL.
   config:
-    enabled: "{{ target.type == 'starrocks' }}"
+    enabled: "{{ target.type == 'starrocks' and target.catalog == 'default_catalog'\
+      \ }}"
   owner:
     name: data-platform
   depends_on:
