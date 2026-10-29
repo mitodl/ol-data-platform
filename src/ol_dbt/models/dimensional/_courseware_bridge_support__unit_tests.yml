@@ -18,6 +18,8 @@ unit_tests:
     rows:
     - {courserun_pk: r1, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
       is_current: true}
+  - input: ref('dim_concept')
+    rows: []
   expect:
     rows:
     - {courserun_fk: r1, concept_fk: kmeans, relation: assesses, claim_count: 1, accepted_claim_count: 1}
@@ -49,6 +51,8 @@ unit_tests:
     rows:
     - {courserun_pk: r1, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
       is_current: true}
+  - input: ref('dim_concept')
+    rows: []
   expect:
     rows:
     - {courserun_fk: r1, concept_fk: linalg, relation: uses, requirement_source: null,
