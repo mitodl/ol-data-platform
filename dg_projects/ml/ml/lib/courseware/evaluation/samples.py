@@ -275,11 +275,15 @@ class GoldInputs:
         the extraction's scope and model columns
     :param evidence: evidence rows of those claims
     :param sources: int__courseware__extraction_sources rows
-    :param assignments: concept assignment of every label key, newest run
+    :param assignments: concept assignment of every label key (its primary
+        sense), newest run
     :param registry: concept registry, newest run
     :param concept_relations: the resolver's relations between concepts
         (from_concept_id, to_concept_id, relation), newest run; broader runs from
         the narrower concept to the broader one
+    :param sense_assignments: the concept each course run's use of a label is
+        assigned to (concept_label_key, platform, courserun_readable_id,
+        concept_id, sense_status), newest run; how claims join concepts
     :param decisions: resolver verdicts, newest per label pair across runs
     :param labels: int__courseware__concept_labels rows
     :param embeddings: one embedding per label key
@@ -297,6 +301,7 @@ class GoldInputs:
     assignments: pl.DataFrame
     registry: pl.DataFrame
     concept_relations: pl.DataFrame
+    sense_assignments: pl.DataFrame
     decisions: pl.DataFrame
     labels: pl.DataFrame
     embeddings: pl.DataFrame
@@ -537,6 +542,10 @@ def load_inputs(  # noqa: PLR0913
     concept_relations = _newest_run(
         pl.read_parquet(identity_dir / "courseware_concept_relation.parquet"), runs
     )
+    sense_assignments = _newest_run(
+        pl.read_parquet(identity_dir / "courseware_concept_sense_assignment.parquet"),
+        runs,
+    )
     run_order = runs.select(
         "resolution_run_id", pl.col("started_at").alias("run_started_at")
     )
@@ -577,6 +586,7 @@ def load_inputs(  # noqa: PLR0913
         assignments=assignments,
         registry=registry,
         concept_relations=concept_relations,
+        sense_assignments=sense_assignments,
         decisions=decisions,
         labels=pl.read_parquet(concept_labels),
         embeddings=embeddings,
@@ -1079,7 +1089,9 @@ def pairs_population(inputs: GoldInputs) -> pl.DataFrame:
 
     Only current labels (inputs.labels) pair up. The decision and embedding tables
     accumulate over runs and keep labels no current claim uses, which the samplers
-    have no text for.
+    have no text for. Pairs judge label resolution, which gives each label its
+    primary concept, so merged reads the primary assignments; the course-run senses
+    split off a label are judged in the clusters set.
 
     :param inputs: loaded gold-set inputs
     :returns: one row per unordered label pair (key_a < key_b)
@@ -1243,17 +1255,47 @@ def _active_assignments(inputs: GoldInputs) -> pl.DataFrame:
     )
 
 
+def _sense_units(inputs: GoldInputs) -> pl.DataFrame:
+    """Return each current label's assigned sense per course run, merges followed.
+
+    This is how int__courseware__resolved_concept_mentions joins claims to
+    concepts: a course run's use of a label is the concept its sense assignment
+    names, which for a label with a meaning split off is not always the label's
+    primary concept. A (label, course run) queued for review has no concept and
+    is left out, as it is there.
+    """
+    return _follow_merges(
+        inputs.sense_assignments.filter(
+            (pl.col("sense_status") == "assigned")
+            & pl.col("concept_label_key").is_in(set(inputs.labels["concept_label_key"]))
+        ).select(
+            "concept_label_key", "platform", "courserun_readable_id", "concept_id"
+        ),
+        inputs.registry,
+    )
+
+
 def clusters_population(inputs: GoldInputs) -> pl.DataFrame:
     """Every resolved concept as a cluster of label keys, stratified by size.
 
+    A concept's members are the labels some course run uses in that sense, so a
+    label with two senses is a member of both concepts, and runs lists the course
+    runs each member is assigned from.
+
     :param inputs: loaded gold-set inputs
-    :returns: one row per concept with its member keys and size
+    :returns: one row per concept with its member keys, their runs and size
     :rtype: pl.DataFrame
     """
     return (
-        _active_assignments(inputs)
+        _sense_units(inputs)
+        .group_by("concept_id", "concept_label_key")
+        .agg(pl.col("courserun_readable_id").unique().sort().alias("runs"))
+        .sort("concept_label_key")
         .group_by("concept_id")
-        .agg(pl.col("concept_label_key").sort().alias("members"))
+        .agg(
+            pl.col("concept_label_key").alias("members"),
+            pl.col("runs").alias("member_runs"),
+        )
         .with_columns(
             pl.col("members").list.len().alias("size"),
             pl.col("concept_id").alias("item_id"),
@@ -1274,8 +1316,9 @@ def sample_clusters(
     """Draw concepts to review, each with its nearest other concepts.
 
     The reviewer sorts the members into groups that are one concept each and puts a
-    neighbour into a group when it is that concept too. Neighbours are the
-    concepts nearest the cluster's mean label embedding.
+    neighbour into a group when it is that concept too. Each member shows the
+    courses that use it in this sense, which tells the senses of a shared label
+    apart. Neighbours are the concepts nearest the cluster's mean label embedding.
 
     :param inputs: loaded gold-set inputs
     :param population: clusters_population output
@@ -1297,6 +1340,11 @@ def sample_clusters(
     members = {
         row["item_id"]: row["members"] for row in population.iter_rows(named=True)
     }
+    course_titles = dict(
+        inputs.sources.select("courserun_readable_id", "course_title")
+        .unique("courserun_readable_id")
+        .iter_rows()
+    )
     ids = sorted(members)
     centroids = np.array(
         [
@@ -1323,9 +1371,12 @@ def sample_clusters(
             {
                 "id": f"m:{key}",
                 "title": info[key]["preferred_label"],
-                "body": f"member | {info[key]['description'] or ''}",
+                "body": f"member | {info[key]['description'] or ''} | used in: "
+                + "; ".join(course_titles[run] for run in runs),
             }
-            for key in cluster["members"]
+            for key, runs in zip(
+                cluster["members"], cluster["member_runs"], strict=True
+            )
         ] + [
             {
                 "id": f"n:{concept}",
@@ -1379,19 +1430,21 @@ def prerequisites_population(inputs: GoldInputs) -> pl.DataFrame:
             other[pair].add(edge["relation_family"])
     hierarchical = {pair for pair, families in other.items() if "hierarchy" in families}
 
-    assigned = dict(
-        _active_assignments(inputs)
-        .select("concept_label_key", "concept_id")
-        .iter_rows()
-    )
+    # a run's concepts are its labels' senses there, as the pipeline joins them
+    sense = {
+        (key, platform, run): concept
+        for key, platform, run, concept in _sense_units(inputs).iter_rows()
+    }
     claims = _with_canonical(inputs).filter(
         pl.col("claim_kind").is_in(CONCEPT_CLAIM_KINDS)
     )
-    per_run: dict[str, set[str]] = defaultdict(set)
-    for run, label in claims.select("courserun_readable_id", "label").iter_rows():
-        concept = assigned.get(concept_label_key(label))
+    per_run: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for platform, run, label in claims.select(
+        "platform", "courserun_readable_id", "label"
+    ).iter_rows():
+        concept = sense.get((concept_label_key(label), platform, run))
         if concept is not None:
-            per_run[run].add(concept)
+            per_run[platform, run].add(concept)
     co_occurring = {
         pair
         for concepts in per_run.values()

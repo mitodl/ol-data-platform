@@ -1,6 +1,6 @@
 # Courseware annotation guideline
 
-Version 2, 2026-10-28. Not yet piloted; see [Pilot](#pilot) for what changes it.
+Version 3, 2026-10-29. Not yet piloted; see [Pilot](#pilot) for what changes it.
 
 This guideline is for the people who label the courseware knowledge gold set in Label Studio. The gold set measures how well the extraction and resolution pipeline does against people rather than against another model ([extraction design §11, item 1](courseware_knowledge_extraction.md#11-follow-up-work-from-the-practice-review)). Most disagreement between annotators in published studies comes from imprecise guidelines rather than from the annotators ([practice review §4 and §5](courseware_knowledge_practice_review.md)), so every rule below says what to pick and gives a reason you can apply to a case it does not cover.
 
@@ -210,7 +210,7 @@ Choose exact only when you would merge the two into one concept. Merge precision
 
 ## 4. Cluster review
 
-Each task is one concept as resolution built it. Its _members_ are the labels resolution assigned to the concept, each with a description. Below them are the eight _nearby concepts_ closest to it, each shown by its labels. Sort them into groups:
+Each task is one concept as resolution built it. Its _members_ are the labels some course uses in this concept's sense, each with a description and the courses that use it this way. A label with two meanings ("kernel" in an operating systems course and in linear algebra) is a member of each of its concepts, so judge a member by how those courses use it, not by the label alone. Below them are the eight _nearby concepts_ closest to it, each shown by its labels. Sort them into groups:
 
 1. Put the members that name one concept into the same group ("Concept 1").
 2. If a nearby concept is that same concept, drag it into the group too.
@@ -296,3 +296,4 @@ Claims, subsections, pairs and prerequisite pairs are scored by majority. An ite
 
 - Version 1, 2026-10-18: first version, from the Label Studio configs in `ml.lib.courseware.evaluation.labelstudio` and the UAI gold sample of 2026-10-17.
 - Version 2, 2026-10-28: prerequisite pairs judge hierarchy and dependency as separate predicates, each with context_dependent and uncertain outcomes and the depths a directed answer holds at, instead of forcing kind-of and part-of pairs to "neither". Exhaustive subsections add salience and the central explanation (objectives and needed concepts). Granularity errors are reported beside claim precision. UAI-only samples are marked as fixtures.
+- Version 3, 2026-10-29: cluster members are the labels as course runs use them (a label with two senses is a member of both concepts), shown with those courses. A claim whose quote was not found in a source shows the whole source.
