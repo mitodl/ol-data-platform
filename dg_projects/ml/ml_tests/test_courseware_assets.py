@@ -20,6 +20,8 @@ from dagster import (
     AssetSelection,
     AssetSpec,
     DagsterInstance,
+    DagsterRun,
+    DagsterRunStatus,
     Definitions,
     IOManager,
     MultiPartitionKey,
@@ -45,6 +47,7 @@ from ml.assets.courseware_extraction import (
 )
 from ml.assets.courseware_graph import courseware_concept_graph
 from ml.assets.courseware_resolution import (
+    RUN_KEY,
     assignment_churn,
     courseware_resolution,
 )
@@ -789,6 +792,38 @@ def test_resolution_resolves_only_new_labels(tables, calls):
 
 
 @pytest.mark.usefixtures("embedder")
+def test_resolution_refuses_to_overlap_another_resolution_run(tables, calls):
+    tables["int__courseware__concept_labels"] = labels("auc", "accuracy")
+    instance = DagsterInstance.ephemeral()
+    for run_id, status, selection in (
+        ("other-resolution", DagsterRunStatus.STARTED, frozenset({RUN_KEY})),
+        ("finished-resolution", DagsterRunStatus.SUCCESS, frozenset({RUN_KEY})),
+        ("other-asset", DagsterRunStatus.STARTED, None),
+    ):
+        instance.add_run(
+            DagsterRun(
+                job_name="__ASSET_JOB",
+                run_id=run_id,
+                status=status,
+                asset_selection=selection,
+            )
+        )
+
+    result = resolve(tables, instance=instance)
+
+    assert not result.success
+    error = next(e for e in result.all_events if e.is_step_failure)
+    message = error.step_failure_data.error.message
+    assert "other-resolution" in message
+    assert "finished-resolution" not in message
+    assert calls == []
+    assert "courseware_resolution_run" not in tables
+
+    instance.delete_run("other-resolution")
+    assert resolve(tables, instance=instance).success
+
+
+@pytest.mark.usefixtures("embedder")
 def test_resolution_stores_what_succeeded_and_fails_on_a_failed_batch(tables, calls):
     tables["int__courseware__concept_labels"] = labels("auc", "accuracy", "bias")
     resolve(tables)
@@ -1334,6 +1369,10 @@ def test_graph_writes_the_closure_of_approved_edges_and_fails_on_an_approved_cyc
     ) == [("a", "b", 1), ("a", "c", 2), ("b", "c", 1)]
     run_id = tables["courseware_concept_graph_run"]["graph_run_id"][0]
     assert closure["graph_run_id"].unique().to_list() == [run_id]
+    # every approved edge joins active concepts, so the run excludes none
+    assert tables["courseware_concept_graph_run"][
+        "prerequisite_closure_excluded_json"
+    ].to_list() == ["[]"]
 
     # approving c -> a closes a cycle: the run fails permanently and writes nothing,
     # so the previous closure stays the newest

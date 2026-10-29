@@ -24,7 +24,7 @@
     many narrower concepts they cover; coverage gives no verdict on whether that is
     enough. provider_scope_count is the
     provider's scopes teaching or reviewing the concept (direct) or its best close
-    equivalent (close); a narrower match counts concepts instead, so it has
+    equivalent (close), a scope that does both counted once; a narrower match counts concepts instead, so it has
     narrower_taught_count from coverage and a null scope count. provider_rank orders
     a prerequisite's providers by match type, then by whichever of the two the match
     type has. provider_prerequisite_count
@@ -58,14 +58,23 @@ with run_concepts as (
     group by courserun_fk, concept_fk
 )
 
+-- what each run teaches or reviews, read from the claims bridge_courserun_concept
+-- reads because its teaches and reviews rows each count their scopes, so summing them
+-- would count a scope that both teaches and reviews a concept twice
 , taught as (
     select
-        courserun_fk
-        , concept_fk
-        , sum(scope_count) as scope_count
-    from run_concepts
-    where relation in ('teaches', 'reviews')
-    group by courserun_fk, concept_fk
+        course_runs.courserun_pk as courserun_fk
+        , mentions.concept_id as concept_fk
+        , count(distinct mentions.scope_id) as scope_count
+    from {{ ref('int__courseware__resolved_concept_mentions') }} as mentions
+    inner join course_runs
+        on
+            mentions.platform = course_runs.platform
+            and mentions.courserun_readable_id = course_runs.courserun_readable_id
+    where
+        mentions.claim_kind = 'concept'
+        and mentions.teaching_status in ('taught', 'reviewed')
+    group by course_runs.courserun_pk, mentions.concept_id
 )
 
 -- each requirement reaches itself at depth 0 and what it builds on at closure depth
