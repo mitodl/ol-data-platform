@@ -149,6 +149,8 @@ TEXT_EXTRACTION_SCHEMA = {
     "claims_json": pl.String,
     "evidence_json": pl.String,
     "stop_reason": pl.String,
+    # this text-stage call's usage, as a per-call diagnostic; cost is in Opik, under
+    # the courseware:text tag
     **_TOKEN_SCHEMA,
     "extracted_at": pl.Datetime(time_zone="UTC"),
 }
@@ -188,7 +190,8 @@ EXTRACTION_SCHEMA = {
     "summary": pl.String,
     "notes_json": pl.String,
     "stop_reason": pl.String,
-    # the context-stage call's usage; the text stage's is on its own row
+    # the context-stage call's usage, as a per-call diagnostic (zero when no call
+    # was made); the text stage's is on its own row, and cost is in Opik
     **_TOKEN_SCHEMA,
     "extracted_at": pl.Datetime(time_zone="UTC"),
 }
@@ -503,12 +506,36 @@ class _ModelResult[T: BaseModel]:
         return {column: getattr(self, column) for column in _TOKEN_SCHEMA}
 
 
-@traced(
-    "courseware_extract_scope",
-    tags=TRACE_TAGS,
-    ignore_arguments=["client", "stage", "check", "trace_metadata"],
-)
 def call_model[T: BaseModel](  # noqa: PLR0913
+    client: Anthropic | AnthropicBedrock,
+    model_id: str,
+    effort: Effort,
+    message: str,
+    *,
+    stage: _Stage[T],
+    trace_metadata: dict[str, Any],
+    check: Callable[[T], None] | None = None,
+) -> _ModelResult[T]:
+    """Ask for one stage's output for one scope, as that stage's own Opik span.
+
+    :param stage: TEXT_STAGE or CONTEXT_STAGE
+    :param trace_metadata: what identifies the call on its Opik span
+    :param check: see _request
+    :raises ExtractionError: when no attempt returns a valid output
+    """
+    traced_request: Callable[..., _ModelResult[T]] = _TRACED_REQUESTS[stage.name]
+    return traced_request(
+        client,
+        model_id,
+        effort,
+        message,
+        stage=stage,
+        trace_metadata=trace_metadata,
+        check=check,
+    )
+
+
+def _request[T: BaseModel](  # noqa: PLR0913
     client: Anthropic | AnthropicBedrock,
     model_id: str,
     effort: Effort,
@@ -598,6 +625,26 @@ def call_model[T: BaseModel](  # noqa: PLR0913
         )
     msg = f"no valid {stage.name} output after {ATTEMPTS} attempts: {error}"
     raise ExtractionError(msg)
+
+
+def _traced_stage(stage: _Stage[Any]) -> Callable[..., _ModelResult[Any]]:
+    """Wrap _request in an Opik span named and tagged for one stage.
+
+    Cost lives in Opik (project OPIK_PROJECT_NAME, dagster-ml by default), not in the
+    warehouse. The tag (courseware:text or courseware:context) beside "courseware" is
+    what splits it by stage. A text reading that is reused makes no call, so no span.
+    """
+    decorate = traced(
+        f"courseware_extract_{stage.name}",
+        tags=[*TRACE_TAGS, f"courseware:{stage.name}"],
+        ignore_arguments=["client", "stage", "check", "trace_metadata"],
+    )
+    return decorate(_request)
+
+
+_TRACED_REQUESTS = {
+    stage.name: _traced_stage(stage) for stage in (TEXT_STAGE, CONTEXT_STAGE)
+}
 
 
 def _claim_row(ordinal: int, kind: str, claim: BaseModel) -> dict[str, Any]:
