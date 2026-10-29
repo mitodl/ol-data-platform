@@ -74,6 +74,36 @@ unit_tests:
       courserun_count: 1, label_count: 1, concept_kind: method, extracted_description: a
         similarity function between inputs}
 
+- name: test_dim_concept_counts_no_label_for_a_sense_with_no_mentions
+  description: >
+    Every course run that uses "kernel" is assigned to the operating systems sense,
+    so the linear algebra sense, still an alias of the current label, has no label,
+    mention or course run and Learn leaves it out.
+  model: dim_concept
+  given:
+  - input: ref('int__courseware__concept_registry')
+    rows:
+    - {concept_id: os-kernel, concept_status: active, minted_label: kernel, split_from_concept_id: null}
+    - {concept_id: linalg-kernel, concept_status: active, minted_label: kernel, split_from_concept_id: os-kernel}
+  - input: ref('int__courseware__concept_aliases')
+    rows:
+    - {concept_label_key: kernel, concept_id: os-kernel, sense_role: primary}
+    - {concept_label_key: kernel, concept_id: linalg-kernel, sense_role: split}
+  - input: ref('int__courseware__concept_labels')
+    rows:
+    - {concept_label_key: kernel, preferred_label: kernel}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {concept_id: os-kernel, concept_label_key: kernel, platform: mitxonline, courserun_readable_id: os,
+      teaching_status: taught, concept_kind: concept, description: the core of an
+        operating system}
+  - input: source('courseware_intermediate', 'courseware_concept_description')
+    rows: []
+  expect:
+    rows:
+    - {concept_pk: os-kernel, label_count: 1, mention_count: 1, courserun_count: 1}
+    - {concept_pk: linalg-kernel, label_count: 0, mention_count: 0, courserun_count: 0}
+
 - name: test_dim_concept_takes_its_kind_from_the_mentions_that_have_one
   description: >
     The longest description of calculus comes from an assumed-knowledge claim, which
