@@ -367,6 +367,29 @@ def test_incremental_run_leaves_a_failed_label_unassigned(verdicts, monkeypatch)
     assert concept_of(second, "area under the curve") == concept_of(first, "auc")
 
 
+def test_a_relation_follows_a_merge_made_later_in_the_run(verdicts):
+    verdicts[("l1", "l2")] = "exact"
+    mentions = {"s1": 5}
+    first = run(labels("l1", "l2", "p", "s1", mentions=mentions))
+    survivor = concept_of(first, "s1")
+    # x joins l1's concept, then n merges that concept into s1's
+    verdicts[("x", "l1")] = "exact"
+    verdicts[("x", "l2")] = "close"
+    verdicts[("x", "p")] = "related"
+    verdicts[("n", "s1")] = "exact"
+    verdicts[("n", "l2")] = "exact"
+    verdicts[("n", "l1")] = "close"
+    second = run(
+        labels("l1", "l2", "n", "p", "s1", "x", mentions=mentions), state_from(first)
+    )
+    assert concept_of(second, "x") == survivor
+    rows = list(second.relations.iter_rows(named=True))
+    assert [
+        ({row["from_concept_id"], row["to_concept_id"]}, row["relation"])
+        for row in rows
+    ] == [({survivor, concept_of(first, "p")}, "related")]
+
+
 class _VerdictClient:
     """Stands in for an Anthropic client, returning one fixed record_verdicts call."""
 

@@ -730,7 +730,10 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
             continue
         if query not in assignments or candidate not in assignments:
             continue
-        left, right = assignments[query][0], assignments[candidate][0]
+        # an assignment made before a later component merged its concept still
+        # holds the losing id
+        left = resolved(assignments[query][0])
+        right = resolved(assignments[candidate][0])
         if left == right:
             continue
         if verdict == "broader":
