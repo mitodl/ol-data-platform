@@ -1,10 +1,14 @@
--- Every concept each concept builds on, directly or through others, from the newest
--- concept graph run: one row per (from, to) with the fewest published builds_on
--- hops between them. ml.lib.courseware.graph computes it with NetworKit and stops at
--- MAX_PREREQUISITE_DEPTH hops (parameters_json on afact_concept_graph_run), so only a
--- concept whose sequence_level exceeds the cap can have prerequisites this leaves out. A
--- published builds_on cycle fails the graph run, so the closure is a strict partial
--- order. Rows reflect bridge_concept_relation as of that run, not the latest build.
+-- Experimental. Every concept each concept builds on, directly or through others,
+-- over approved builds_on edges (review_status accepted) from the newest concept graph
+-- run: one row per (from, to) with the fewest hops between them. A closure keeps the
+-- meaning of its input edges and validates none of them, so it reads only edges a
+-- reviewer approved for this purpose, never the observed builds_on candidates. No
+-- review workflow exists yet, so it is empty. ml.lib.courseware.graph computes it with
+-- NetworKit and stops at MAX_PREREQUISITE_DEPTH hops (parameters_json on
+-- afact_concept_graph_run), an engineering bound, not evidence of anything. An
+-- approved builds_on cycle fails the graph run, so the closure is a strict partial
+-- order. Rows reflect bridge_concept_relation as of that run, not the latest build,
+-- and are not yet pinned to a knowledge release.
 with closure as (
     select closure.*
     from {{ source('courseware_intermediate', 'courseware_concept_graph_prerequisite_closure') }} as closure

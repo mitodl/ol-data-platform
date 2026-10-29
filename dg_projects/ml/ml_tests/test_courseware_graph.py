@@ -30,6 +30,7 @@ def relation(source, target, kind, **evidence):
         "co_taught_lift": evidence.get("lift"),
         "is_adjudicated": evidence.get("adjudicated", False),
         "has_co_assessed_evidence": False,
+        "review_status": evidence.get("review", "proposed"),
     }
 
 
@@ -45,6 +46,7 @@ def relations(*rows):
             "co_taught_lift": pl.Float64,
             "is_adjudicated": pl.Boolean,
             "has_co_assessed_evidence": pl.Boolean,
+            "review_status": pl.String,
         },
     )
 
@@ -162,13 +164,16 @@ def test_prerequisite_closure_rejects_a_cycle():
         prerequisite_closure(directed(3, (0, 1), (1, 2), (2, 0)))
 
 
-def test_graph_run_publishes_the_closure_of_published_builds_on():
+def test_the_closure_reads_only_approved_builds_on():
     result = compute_graph(
-        concepts("mean", "variance", "regression", "plot"),
+        concepts("mean", "variance", "regression", "plot", "median"),
         relations(
-            relation("variance", "mean", "builds_on"),
-            relation("regression", "variance", "builds_on"),
-            relation("plot", "mean", "builds_on", passes=False),
+            relation("variance", "mean", "builds_on", review="accepted"),
+            relation("regression", "variance", "builds_on", review="accepted"),
+            # observations that pass the support rule but nobody has approved
+            relation("median", "mean", "builds_on"),
+            relation("regression", "median", "builds_on"),
+            relation("plot", "mean", "builds_on", passes=False, review="accepted"),
             relation("regression", "plot", "practiced_with"),
         ),
     )
@@ -186,12 +191,36 @@ def test_graph_run_publishes_the_closure_of_published_builds_on():
     }
 
 
-def test_a_published_builds_on_cycle_fails_the_graph_run():
+def test_the_closure_is_empty_until_an_edge_is_approved():
+    result = compute_graph(
+        concepts("mean", "variance", "regression"),
+        relations(
+            relation("variance", "mean", "builds_on"),
+            relation("regression", "variance", "builds_on"),
+        ),
+    )
+    assert result.prerequisite_closure.is_empty()
+    assert by_concept(result)["regression"]["sequence_level"] == 2
+
+
+def test_a_cycle_of_observations_is_a_finding_not_a_failure():
+    result = compute_graph(
+        concepts("mean", "variance"),
+        relations(
+            relation("variance", "mean", "builds_on"),
+            relation("mean", "variance", "builds_on"),
+        ),
+    )
+    assert by_concept(result)["mean"]["in_sequence_cycle"]
+    assert result.prerequisite_closure.is_empty()
+
+
+def test_an_approved_builds_on_cycle_fails_the_graph_run():
     with pytest.raises(PrerequisiteCycleError, match="mean"):
         compute_graph(
             concepts("mean", "variance"),
             relations(
-                relation("variance", "mean", "builds_on"),
-                relation("mean", "variance", "builds_on"),
+                relation("variance", "mean", "builds_on", review="accepted"),
+                relation("mean", "variance", "builds_on", review="accepted"),
             ),
         )

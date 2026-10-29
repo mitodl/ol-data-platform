@@ -1,9 +1,13 @@
 {#
-    What to take before a course run: every concept it requires, directly or through
-    what those build on, with the runs of other courses that teach each one. One row
-    per (run, prerequisite concept, providing run), and one row with a null provider
-    for a prerequisite no other course covers. Only published requirements of current
-    runs count.
+    Experimental preparation candidates for a course run, not validated prerequisites
+    or readiness advice: every concept it requires (inferred requirements are
+    observations of the run), and what those build on through
+    bridge_concept_prerequisite_closure, with the runs of other courses that teach
+    each one. One row per (run, prerequisite concept, providing run), and one row with
+    a null provider for a prerequisite no other course covers. Only requirements of
+    current runs that pass the support rule count. The closure reads approved
+    builds_on edges only, so until a review workflow approves some, every row is at
+    depth 1.
 
     prerequisite_depth is 1 for a concept the run requires, and 1 plus the
     bridge_concept_prerequisite_closure depth for a concept a requirement builds on
@@ -16,7 +20,9 @@
     Providers follow bridge_courserun_prerequisite_coverage: a current run of a
     different course (courseware_current_course_runs) that teaches or reviews the
     concept (direct) or a close equivalent (close). Depth 1 also takes coverage's
-    satisfied narrower matches, for umbrella requirements. provider_scope_count is the
+    narrower matches, for umbrella requirements, ranked below direct and close by how
+    many narrower concepts they cover; coverage gives no verdict on whether that is
+    enough. provider_scope_count is the
     provider's scopes teaching or reviewing the concept (direct) or its best close
     equivalent (close); a narrower match counts concepts instead, so it has
     narrower_taught_count from coverage and a null scope count. provider_rank orders

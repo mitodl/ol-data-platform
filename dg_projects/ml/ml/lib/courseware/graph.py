@@ -7,13 +7,18 @@ that pass dbt's support rule), and computes on three views of the graph with Net
 - association: undirected and weighted, every relation family. Leiden communities,
   connected components, degree, density and sparsity, and a local-degree backbone
   score per edge for drawing a sparsified graph.
-- sequence: builds_on, directed from a concept to what it builds on. PageRank on it
-  is a foundation rank (rank flows to the concepts many others build on);
-  sequence_level is the longest chain of prerequisites beneath a concept; and the
-  prerequisite closure lists every concept each one builds on, directly or through
-  others, at its shortest depth. Learning order must be acyclic, and dbt's acyclic
-  test holds published builds_on to it, so a cycle here fails the run rather than
-  publishing a closure that puts a concept before itself.
+- sequence: builds_on, directed from a concept to what it builds on. These edges are
+  observed instructional order (units teaching one concept relied on the other), not
+  reviewed prerequisites, so this view is exploratory. PageRank on it is a foundation
+  rank (rank flows to the concepts many others build on); strongly connected
+  components find cycles, which are findings to review; sequence_level is the longest
+  chain of builds_on edges beneath a concept.
+- prerequisite closure: every concept each concept builds on, directly or through
+  others, at its shortest depth, over approved builds_on edges only (review_status
+  accepted). It is an experimental projection that keeps the meaning of its input
+  edges and validates none of them. No review workflow exists yet, so nothing is
+  approved and the closure is empty. A cycle among approved edges fails the run
+  rather than writing a closure that puts a concept before itself.
 - hierarchy: broader, directed from narrower to broader. hierarchy_depth is the
   longest chain of broader concepts above a concept; cycles are findings too.
 
@@ -122,14 +127,15 @@ class GraphResult:
 
 
 class PrerequisiteCycleError(ValueError):
-    """Published builds_on edges form a cycle, so learning order is undefined."""
+    """Approved builds_on edges form a cycle, so learning order is undefined."""
 
 
 def select_edges(relations: pl.DataFrame) -> pl.DataFrame:
     """Keep the edges whose evidence clears the thresholds, with a weight each.
 
     :param relations: bridge_concept_relation rows
-    :returns: from_concept_fk, to_concept_fk, relation, weight
+    :returns: from_concept_fk, to_concept_fk, relation, weight, and is_approved for
+        a builds_on edge a reviewer accepted, the closure's only input
     :rtype: pl.DataFrame
     """
     support = pl.col("courserun_support")
@@ -155,9 +161,13 @@ def select_edges(relations: pl.DataFrame) -> pl.DataFrame:
             (
                 pl.col("relation").replace_strict(RELATION_WEIGHTS, default=0.1)
                 * (1 + support.cast(pl.Float64).log1p())
-            ).alias("weight")
+            ).alias("weight"),
+            (
+                (pl.col("relation") == "builds_on")
+                & (pl.col("review_status") == "accepted")
+            ).alias("is_approved"),
         )
-        .select("from_concept_fk", "to_concept_fk", "relation", "weight")
+        .select("from_concept_fk", "to_concept_fk", "relation", "weight", "is_approved")
     )
 
 
@@ -227,6 +237,25 @@ def prerequisite_closure(
         for node, depths in reachable.items()
         for prerequisite, depth in depths.items()
     }
+
+
+def _approved_closure(
+    approved: nk.Graph, labels: list[str]
+) -> dict[tuple[int, int], int]:
+    """Close over approved builds_on, naming any cycle by its concept labels.
+
+    :param approved: approved builds_on edges, directed from a concept to what it
+        builds on
+    :param labels: each node's display label, by node index
+    :returns: (node, prerequisite node) -> fewest approved builds_on hops
+    :rtype: dict[tuple[int, int], int]
+    :raises PrerequisiteCycleError: when approved edges form a cycle
+    """
+    if cycle_nodes := _cycle_nodes(approved):
+        cycle = sorted(labels[node] for node in cycle_nodes)
+        msg = f"approved builds_on has a cycle through {cycle}"
+        raise PrerequisiteCycleError(msg)
+    return prerequisite_closure(approved)
 
 
 def _carry_forward_communities(
@@ -300,6 +329,7 @@ def compute_graph(  # noqa: PLR0915
     node_count = len(concept_ids)
     association = nk.Graph(node_count, weighted=True, directed=False)
     sequence = nk.Graph(node_count, directed=True)
+    approved_sequence = nk.Graph(node_count, directed=True)
     hierarchy = nk.Graph(node_count, directed=True)
     for row in edges.iter_rows(named=True):
         source, target = index[row["from_concept_fk"]], index[row["to_concept_fk"]]
@@ -309,6 +339,8 @@ def compute_graph(  # noqa: PLR0915
             association.addEdge(source, target, row["weight"])
         if row["relation"] == "builds_on" and not sequence.hasEdge(source, target):
             sequence.addEdge(source, target)
+        if row["is_approved"] and not approved_sequence.hasEdge(source, target):
+            approved_sequence.addEdge(source, target)
         if row["relation"] == "broader" and not hierarchy.hasEdge(source, target):
             hierarchy.addEdge(source, target)
 
@@ -339,11 +371,7 @@ def compute_graph(  # noqa: PLR0915
         foundation = pagerank.scores()
 
     sequence_cycles = _cycle_nodes(sequence)
-    if sequence_cycles:
-        cycle = sorted(labels[concept_ids[node]] for node in sequence_cycles)
-        msg = f"published builds_on has a cycle through {cycle}"
-        raise PrerequisiteCycleError(msg)
-    closure = prerequisite_closure(sequence)
+    closure = _approved_closure(approved_sequence, [labels[c] for c in concept_ids])
     hierarchy_cycles = _cycle_nodes(hierarchy)
     sequence_level = _longest_chain(sequence, sequence_cycles)
     hierarchy_depth = _longest_chain(hierarchy, hierarchy_cycles)
@@ -423,6 +451,7 @@ def compute_graph(  # noqa: PLR0915
         "relation_weights": RELATION_WEIGHTS,
         "leiden_gamma": LEIDEN_GAMMA,
         "max_prerequisite_depth": MAX_PREREQUISITE_DEPTH,
+        "prerequisite_closure_input": "builds_on with review_status accepted",
         "seed": SEED,
     }
     input_checksum = hashlib.sha256(

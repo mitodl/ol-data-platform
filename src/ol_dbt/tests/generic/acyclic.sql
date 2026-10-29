@@ -8,8 +8,8 @@
     edges, and a start that has returned to itself is carried forward, so each step
     reads only the one before it and the edges. A cycle longer than max_length goes
     unseen here; ml.lib.courseware.graph finds every cycle with strongly connected
-    components on each graph run, failing the run on a published builds_on cycle and
-    counting broader cycles.
+    components on each graph run, failing the run on an approved builds_on cycle and
+    counting the other cycles.
 #}
 {% test acyclic(model, column_name, to_column, max_length=32) %}
 
