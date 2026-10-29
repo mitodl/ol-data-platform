@@ -78,6 +78,13 @@ sources:
         kind and sources, nothing of the course). Extractions with one digest read
         the same text, so their claims share one source and are not independent corroboration
         of each other; null for v1
+    - name: text_platform
+      description: str, the platform of the run the text reading was made for (v2)
+    - name: text_courserun_readable_id
+      description: str, the run the text reading was made for (v2); another run's
+        when the extractor reused a reading of identical text across runs
+    - name: text_scope_id
+      description: str, the scope the text reading was made for (v2)
     - name: context_input_digest
       description: str, sha256 of the context stage's exact message (course header,
         scope title and the text stage's claims); null for v1

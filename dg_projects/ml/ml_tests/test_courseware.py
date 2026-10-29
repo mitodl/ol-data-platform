@@ -270,6 +270,9 @@ def _reading() -> TextReading:
     return TextReading(
         text_extraction_key="t",
         text_input_digest="d",
+        platform="mitxonline",
+        courserun_readable_id="course-v1:X+Y+Z",
+        scope_id="seq-1",
         summary="s",
         notes=[],
         claims=[
@@ -443,6 +446,68 @@ def test_text_stage_reads_each_distinct_text_once_per_run():
     # every extraction of the text groups under one digest, so its claims are not
     # counted as independent corroboration
     assert tables.extractions["text_input_digest"].n_unique() == 1
+
+
+def _run_and_copy() -> tuple[pl.DataFrame, pl.DataFrame]:
+    run = _rows(["shared text"]).with_columns(source_title=pl.lit("Intro"))
+    return run, run.with_columns(courserun_readable_id=pl.lit("course-v1:X+Y+COPY"))
+
+
+def test_text_readings_cross_runs_only_when_asked():
+    run, copy = _run_and_copy()
+    built = [*scopes.build_scopes(run), *scopes.build_scopes(copy)]
+    model = FakeModel()
+
+    tables = extract_scopes(
+        built, model, model_id="model", max_workers=1, reuse_text_across_runs=True
+    )
+
+    assert model.calls.count("record_extraction") == 1
+    # each run still places the claims in its own course
+    assert model.calls.count("record_context") == 2
+    (text,) = tables.text_extractions.iter_rows(named=True)
+    copied = tables.extractions.filter(
+        pl.col("courserun_readable_id") == "course-v1:X+Y+COPY"
+    ).row(0, named=True)
+    # the copy keeps the run its reading was made for, and the text's digest
+    assert (copied["text_courserun_readable_id"], copied["text_scope_id"]) == (
+        text["courserun_readable_id"],
+        text["scope_id"],
+    )
+    assert copied["text_courserun_readable_id"] != copied["courserun_readable_id"]
+    assert tables.extractions["text_input_digest"].n_unique() == 1
+    # the copy's evidence names its own blocks
+    assert set(tables.evidence["source_ref"]) == {"block-0"}
+
+
+@pytest.mark.parametrize(("across_runs", "text_calls"), [(False, 1), (True, 0)])
+def test_local_extract_reuses_another_runs_reading_only_with_the_flag(
+    tmp_path, monkeypatch, capsys, across_runs, text_calls
+):
+    run, copy = _run_and_copy()
+    model = FakeModel()
+    _use_model(monkeypatch, model)
+    sources = tmp_path / "sources.parquet"
+    output_dir = tmp_path / "out"
+    run.write_parquet(sources)
+    local.extract(sources, output_dir)
+    copy.write_parquet(sources)
+    model.calls.clear()
+    capsys.readouterr()
+
+    local.extract(
+        sources,
+        output_dir,
+        reuse_text_across_runs=across_runs,
+        dry_run=True,
+    )
+    marks = capsys.readouterr().out.splitlines()[0].split()[-1]
+    local.extract(sources, output_dir, reuse_text_across_runs=across_runs)
+
+    assert marks == ("reused" if across_runs else "tokens")
+    assert model.calls.count("record_extraction") == text_calls
+    assert model.calls.count("record_context") == 1
+    capsys.readouterr()
 
 
 def test_stored_readings_give_the_same_keys_without_a_text_call():
