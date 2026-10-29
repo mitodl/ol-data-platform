@@ -64,7 +64,9 @@ LEXICAL_MIN_JACCARD = 0.3
 # ten items per decision (LLM-CER, SIGMOD 2026); each label here brings up to twelve
 # candidates, so a call stays at a few dozen short lines.
 QUERIES_PER_CALL = 8
-# An exact-match component larger than this is not merged automatically.
+# An exact-match component that joins more than this many concepts and new labels
+# is not merged automatically. An existing concept counts once, however many of its
+# labels the component holds.
 MAX_MERGE_COMPONENT = 6
 CARRY_FORWARD_MIN_JACCARD = 0.5
 ADJUDICATION_MAX_TOKENS = 16_000
@@ -490,17 +492,20 @@ def accepted_components(
         elif verdict == "distinct":
             distinct[query].add(candidate)
             distinct[candidate].add(query)
+    carried = carried or {}
     found = union_find.components(keys)
     components: list[set[str]] = []
     rejected = 0
     for component, destination in zip(
-        found, _destinations(found, carried or {}), strict=True
+        found, _destinations(found, carried), strict=True
     ):
         # a single label has nothing to merge, whatever its destination holds
         conflicted = len(component) > 1 and any(
             distinct[key] & destination for key in destination
         )
-        if len(component) > MAX_MERGE_COMPONENT or conflicted:
+        # labels of one existing concept are one unit, not a chain of merges
+        size = len({carried.get(key, key) for key in component})
+        if size > MAX_MERGE_COMPONENT or conflicted:
             rejected += 1
             components.extend({key} for key in component)
         else:

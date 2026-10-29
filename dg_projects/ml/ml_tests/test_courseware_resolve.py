@@ -493,3 +493,20 @@ def test_two_new_labels_distinct_from_each_other_do_not_both_join_a_concept(verd
     ]
     assert joined == []
     assert second.run["rejected_components"][0] == 2
+
+
+def test_a_new_label_exact_to_many_labels_of_one_concept_joins_it(verdicts):
+    members = [f"k means {suffix}" for suffix in "abcdefg"]
+    for left, right in itertools.combinations(members, 2):
+        verdicts[(left, right)] = "exact"
+    # the concept grows to seven labels over two runs
+    first = run(labels(*members[:4]))
+    grown = run(labels(*members), state_from(first))
+    concept = concept_of(first, members[0])
+    assert {concept_of(grown, key) for key in members} == {concept}
+    # a new label exact to all seven joins one concept, not a seven-way chain
+    for member in members:
+        verdicts[("kmeans", member)] = "exact"
+    second = run(labels(*members, "kmeans"), state_from(grown))
+    assert concept_of(second, "kmeans") == concept
+    assert second.run["rejected_components"][0] == 0
