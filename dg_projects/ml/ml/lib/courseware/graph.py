@@ -2,7 +2,7 @@
 
 Reads bridge_concept_relation (edges with their evidence) and dim_concept (active
 concepts), keeps the edges that clear the support thresholds (for builds_on, the ones
-dbt publishes), and computes on three views of the graph with NetworKit:
+that pass dbt's support rule), and computes on three views of the graph with NetworKit:
 
 - association: undirected and weighted, every relation family. Leiden communities,
   connected components, degree, density and sparsity, and a local-degree backbone
@@ -136,7 +136,7 @@ def select_edges(relations: pl.DataFrame) -> pl.DataFrame:
     keep = (
         # bridge_concept_relation owns the builds_on support and direction rule
         pl.when(pl.col("relation") == "builds_on")
-        .then(pl.col("is_published"))
+        .then(pl.col("passes_support_rule"))
         .when(pl.col("relation") == "practiced_with")
         .then(support >= MIN_COURSERUN_SUPPORT)
         .when(pl.col("relation") == "complements")
@@ -176,8 +176,8 @@ def _longest_chain(graph: nk.Graph, blocked: set[int]) -> dict[int, int]:
     """Longest path length from each node along out-edges, ignoring cyclic nodes.
 
     For builds_on (concept -> what it builds on) this is the depth of the
-    prerequisite chain beneath a concept; for broader it is the depth of the
-    hierarchy above it.
+    observed instructional order beneath a concept; for broader it is the depth of
+    the hierarchy above it.
     """
     if not graph.numberOfNodes():
         # topologicalSort rejects a graph with no nodes

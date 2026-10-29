@@ -15,11 +15,18 @@ models:
   - name: drivefile_mime_type
     description: str, MIME type of the Google Drive file
   - name: websitecontent_id
-    description: int, linked OCW Studio resource ID; null for unlinked files
+    description: int, linked OCW Studio resource ID; null for unlinked files. Studio
+      hard-deletes a replaced Drive file, which an incremental load does not see,
+      so the raw table can keep the replaced file still linked to the resource.
     tests:
+    # Warn only: int__ocw__resources keeps the newest file per resource, which is the
+    # one the resource's file points at.
     - unique:
         config:
           where: "lower(drivefile_mime_type) like 'video/%'"
+          severity: warn
+  - name: drivefile_created_on
+    description: timestamp, date and time when OCW Studio first synced the Drive file
 
 - name: stg__ocw__studio__postgres__websites_website
   description: OCW websites metadata on production environment. A website can refers

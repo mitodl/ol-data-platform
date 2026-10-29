@@ -62,6 +62,132 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [platform, courserun_readable_id, scope_id, source_ref]
 
+- name: int__courseware__ocw_files
+  description: One row per file int__ocw__content_files publishes for the OCW courses
+    var('courseware_ocw_courses') selects, with whether it is an answer key and, for
+    a page, its role and unit. int__courseware__extraction_sources scopes OCW courses
+    from it. It is a table because that model reads it from many places, and Trino
+    plans every reference to a CTE again.
+  config:
+    meta:
+      # It reads int__ocw__content_files, which QA cannot build.
+      qa_buildable: false
+  columns:
+  - name: courserun_readable_id
+    description: str, Learn's run id for the course
+    tests:
+    - not_null
+  - name: course_slug
+    description: str, the course's directory under courses/ in the OCW bucket
+  - name: content_file_key
+    description: str, the file's key, courses/<slug>/pages/<path>/ for a page
+    tests:
+    - not_null
+    - unique
+  - name: content_type
+    description: str, page or the resource's type (pdf, video, file, ...)
+  - name: title
+    description: str, the file's title
+  - name: file_extension
+    description: str, the resource's file extension; null for a page
+  - name: page_path
+    description: str, a page's path under pages/; null for the course's root page
+      and for a resource
+  - name: section
+    description: str, the top-level section a page sits in (e.g. lecture-notes)
+  - name: parent_key
+    description: str, the key of the page a page sits under
+  - name: is_solution
+    description: boolean, true for an answer key by its type, name, title, opening
+      text or answer markers (courseware_ocw_answer_resource), and for a page of answers;
+      false for a page that holds problems and their solutions together
+  - name: body
+    description: str, the file's text; for a page, its HTML with answer and solution
+      reveals cut (courseware_ocw_answers_removed)
+  - name: depth
+    description: int, the number of levels a page sits below pages/, from 1
+  - name: has_children
+    description: boolean, true for a page that other pages sit under
+  - name: page_role
+    description: str, unit, context (the syllabus), skipped (calendar, related resources
+      and the like), reference (a textbook section in a course taught by three or
+      more page groups) or solution; null for a resource and for the course's root
+      page
+  - name: unit_key
+    description: str, the key of the unit page a unit-role page is read in
+  - name: is_flat_section
+    description: boolean, true for a unit-role top-level section page with no child
+      pages, whose tables can hold sessions
+
+- name: int__courseware__ocw_table_rows
+  description: One row per table row, the header row included, on the pages in int__courseware__ocw_files.
+    int__courseware__ocw_resources reads its answer-key columns from the header row,
+    and int__courseware__extraction_sources its session rows.
+  config:
+    meta:
+      # It reads int__ocw__content_files, which QA cannot build.
+      qa_buildable: false
+  columns:
+  - name: courserun_readable_id
+    description: str, Learn's run id for the course
+    tests:
+    - not_null
+  - name: page_key
+    description: str, the key of the page the table is on
+    tests:
+    - not_null
+  - name: section
+    description: str, the page's top-level section
+  - name: reads_sessions
+    description: boolean, true on the calendar and on a flat top-level section page,
+      where a row can be a session's
+  - name: table_index
+    description: int, the table's place on the page, from 2
+  - name: row_index
+    description: int, the row's place in its table, from 2 (the header row)
+  - name: row_html
+    description: str, the row's HTML
+  - name: header_html
+    description: str, the HTML inside the header row's first cell (without its <th>
+      or <td> tag)
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [page_key, table_index, row_index]
+
+- name: int__courseware__ocw_resources
+  description: The resources in int__courseware__ocw_files that int__courseware__extraction_sources
+    may read, one row per resource that is not a page, has text and is not an answer
+    key. An answer key is a file int__courseware__ocw_files marks as one, a resource
+    a table links in a column headed Solutions (or Answers, Key), or one whose text
+    is the same as such a resource's.
+  config:
+    meta:
+      # It reads int__ocw__content_files, which QA cannot build.
+      qa_buildable: false
+  columns:
+  - name: courserun_readable_id
+    description: str, Learn's run id for the course
+    tests:
+    - not_null
+  - name: content_file_key
+    description: str, the resource's key
+    tests:
+    - not_null
+    - unique
+  - name: content_type
+    description: str, the resource's type
+  - name: file_extension
+    description: str, the resource's file extension
+  - name: title
+    description: str, the resource's title
+  - name: resource_text
+    description: str, the resource's text
+  - name: source_kind
+    description: str, video_transcript for a video or transcript file, else document
+    tests:
+    - accepted_values:
+        values: [video_transcript, document]
+
 - name: int__courseware__extractions
   description: Every claim extraction, and whether it is current, the one its scope
     part is read from now. A scope's newest complete reading is current, so a run
@@ -256,13 +382,16 @@ models:
     description: str, the label as normalized by the courseware_label_key macro (lowercase,
       plus and hash signs spelled out, separators collapsed), for concept, assumed
       knowledge and declared prerequisite claims; null for a label with no letters
-      or numbers
+      or numbers and for a declared "no prerequisites" (explicitly_none)
   - name: evidence_count
     description: int, evidence passages quoted for the claim
   - name: verified_evidence_count
     description: int, passages found in the source text (exact or fuzzy)
   - name: is_verified
     description: boolean, whether at least one evidence passage was found in the source
+  - name: review_status
+    description: str, proposed, accepted or rejected; proposed until a review workflow
+      records decisions
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [extraction_key, claim_ordinal]
@@ -348,8 +477,11 @@ models:
     tests:
     - not_null
   - name: prerequisite_kind
-    description: str, prerequisite, corequisite, recommended or explicitly_none for
-      declared prerequisites; null otherwise
+    description: str, prerequisite, corequisite or recommended for declared prerequisites;
+      null otherwise. A declared "no prerequisites" (explicitly_none) has no concept
+      label key, so it has no row.
+  - name: review_status
+    description: str, the claim's review status
 
 - name: int__courseware__concept_labels
   description: One row per normalized concept label key across every course, with
@@ -497,8 +629,10 @@ models:
     tests:
     - not_null
   - name: prerequisite_kind
-    description: str, prerequisite, corequisite, recommended or explicitly_none for
-      declared prerequisites; null otherwise
+    description: str, prerequisite, corequisite or recommended for declared prerequisites;
+      null otherwise
+  - name: review_status
+    description: str, the claim's review status
 
 - name: int__courseware__adjudicated_concept_relations
   description: Broader, close and related proposals from resolution adjudication,
@@ -520,7 +654,9 @@ models:
 
 - name: int__courseware__concept_relation_evidence
   description: Every observation that two concepts are related, per relation, evidence
-    source (adjudication, course_sequence, co_taught, co_assessed) and course run.
+    source (adjudication, course_sequence, co_taught, co_assessed), course run and
+    scope, with the extractor version of the scope's reading. A course_sequence row
+    is an instructional observation in one unit, not a dependency between the concepts.
   config:
     meta:
       # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
@@ -544,8 +680,18 @@ models:
     description: str, the course run's platform; null for adjudication
   - name: courserun_readable_id
     description: str, the course run that showed the relation; null for adjudication
+  - name: scope_id
+    description: str, the unit that showed the relation; null for adjudication
+  - name: extractor_id
+    description: str, the extractor of the scope's current reading; null for adjudication
+  - name: prompt_version
+    description: str, the prompt version of the scope's current reading; null for
+      adjudication
+  - name: model_id
+    description: str, the model of the scope's current reading; null for adjudication
   - name: scope_count
-    description: int, units in the course run that showed the relation; 0 for adjudication
+    description: int, 1 for course evidence (one row per unit) and 0 for adjudication,
+      so summing it counts units
   - name: observed_at
     description: timestamp, the earliest extraction or resolution that showed it
 
@@ -601,14 +747,74 @@ models:
       column_list: [platform, courserun_readable_id]
 
 unit_tests:
+- name: test_int__courseware__ocw_files_scopes_unpublished_parents_and_answer_keys
+  description: >
+    The site publishes visualizations/light1/ but no visualizations/ page, so light1
+    is a unit of its own. "Review of Aqueous Solutions" and a lecture opening
+    "Solution of dynamic equilibrium equations" name topics; ps1_key and "Mock Exam
+    Key" are answer keys.
+  model: int__courseware__ocw_files
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
+      - c2
+  given:
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
+        the course.</p>}
+    - {course_slug: c2, courserun_readable_id: run2, course_title: Course Two, course_description_html: <p>Another
+        course.</p>}
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run2, course_slug: c2, content_file_key: courses/c2/pages/readings/,
+      content_type: page, title: Readings, file_extension: null, content_tags: null,
+      content: <p>Readings.</p><a href="/courses/c1/resources/mit5_111f08_lec3">Aqueous</a>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/visualizations/light1/,
+      content_type: page, title: Light, file_extension: null, content_tags: null,
+      content: <p>Light and optics.</p><a href="/courses/c1/resources/light_notes">Notes</a>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/light_notes/,
+      content_type: pdf, title: Light Notes, file_extension: .pdf, content_tags: null,
+      content: Notes on light and optics.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/mit5_111f08_lec3/,
+      content_type: pdf, title: Review of Aqueous Solutions, file_extension: .pdf,
+      content_tags: null, content: Review of aqueous solutions. An aqueous solution
+        is a solute in water.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/mit2_092f09_lec15/,
+      content_type: pdf, title: mit2_092f09_lec15.pdf, file_extension: .pdf, content_tags: null,
+      content: Solution of dynamic equilibrium equations by direct integration.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ps1_key/,
+      content_type: pdf, title: ps1_key, file_extension: .pdf, content_tags: null,
+      content: 1. The force is 3 N.}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/mock_exam/,
+      content_type: pdf, title: Mock Exam Key, file_extension: .pdf, content_tags: null,
+      content: 1. Beowulf is an epic.}
+  expect:
+    rows:
+    - {content_file_key: courses/c2/pages/readings/, is_solution: false, page_role: unit,
+      unit_key: courses/c2/pages/readings/}
+    - {content_file_key: courses/c1/pages/visualizations/light1/, is_solution: false,
+      page_role: unit, unit_key: courses/c1/pages/visualizations/light1/}
+    - {content_file_key: courses/c1/resources/light_notes/, is_solution: false, page_role: null,
+      unit_key: null}
+    - {content_file_key: courses/c1/resources/mit5_111f08_lec3/, is_solution: false,
+      page_role: null, unit_key: null}
+    - {content_file_key: courses/c1/resources/mit2_092f09_lec15/, is_solution: false,
+      page_role: null, unit_key: null}
+    - {content_file_key: courses/c1/resources/ps1_key/, is_solution: true, page_role: null,
+      unit_key: null}
+    - {content_file_key: courses/c1/resources/mock_exam/, is_solution: true, page_role: null,
+      unit_key: null}
 - name: test_int__courseware__extraction_sources_scopes_ocw_course
   description: >
     The site publishes visualizations/light1/ but no visualizations/ page, so light1
-    is a unit of its own and its notes are read there, not dropped. "Review of Aqueous
-    Solutions" and a lecture opening "Solution of dynamic equilibrium equations" name
-    topics, so they stay in materials; ps1_key and "Mock Exam Key" are answer keys
-    and are left out. c2's readings page links c1's aqueous solutions notes, which
-    stay c1's: c2 does not read them and they still count as unlinked in c1.
+    is a unit of its own and its notes are read there, not dropped. "Review of
+    Aqueous Solutions" and a lecture opening "Solution of dynamic equilibrium
+    equations" name topics, so they stay in materials; ps1_key and "Mock Exam Key"
+    are answer keys and are left out. c2's readings page links c1's aqueous
+    solutions notes, which stay c1's: c2 does not read them and they still count as
+    unlinked in c1.
   model: int__courseware__extraction_sources
   overrides:
     vars:
@@ -634,30 +840,32 @@ unit_tests:
         course.</p>}
   - input: ref('stg__ocw__s3__course_content')
     rows: []
-  - input: ref('int__ocw__content_files')
+  - input: ref('int__courseware__ocw_files')
     rows:
-    - {courserun_readable_id: run2, course_slug: c2, content_file_key: courses/c2/pages/readings/,
-      content_type: page, title: Readings, file_extension: null, content_tags: null,
-      content: '<p>Readings.</p><a href="/courses/c1/resources/mit5_111f08_lec3">Aqueous</a>'}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/visualizations/light1/,
-      content_type: page, title: Light, file_extension: null, content_tags: null,
-      content: '<p>Light and optics.</p><a href="/courses/c1/resources/light_notes">Notes</a>'}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/light_notes/,
-      content_type: pdf, title: Light Notes, file_extension: .pdf, content_tags: null,
-      content: Notes on light and optics.}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/mit5_111f08_lec3/,
-      content_type: pdf, title: Review of Aqueous Solutions, file_extension: .pdf,
-      content_tags: null, content: Review of aqueous solutions. An aqueous solution
-        is a solute in water.}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/mit2_092f09_lec15/,
-      content_type: pdf, title: mit2_092f09_lec15.pdf, file_extension: .pdf, content_tags: null,
-      content: Solution of dynamic equilibrium equations by direct integration.}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ps1_key/,
-      content_type: pdf, title: ps1_key, file_extension: .pdf, content_tags: null,
-      content: 1. The force is 3 N.}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/mock_exam/,
-      content_type: pdf, title: Mock Exam Key, file_extension: .pdf, content_tags: null,
-      content: 1. Beowulf is an epic.}
+    - {courserun_readable_id: run2, content_file_key: courses/c2/pages/readings/,
+      title: Readings, page_path: readings/, section: readings, parent_key: courses/c2/pages/,
+      is_solution: false, body: <p>Readings.</p><a href="/courses/c1/resources/mit5_111f08_lec3">Aqueous</a>,
+      depth: 1, has_children: false, page_role: unit, unit_key: courses/c2/pages/readings/,
+      is_flat_section: true}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/visualizations/light1/,
+      title: Light, page_path: visualizations/light1/, section: visualizations, parent_key: courses/c1/pages/visualizations/,
+      is_solution: false, body: <p>Light and optics.</p><a href="/courses/c1/resources/light_notes">Notes</a>,
+      depth: 2, has_children: false, page_role: unit, unit_key: courses/c1/pages/visualizations/light1/,
+      is_flat_section: false}
+  - input: ref('int__courseware__ocw_table_rows')
+    rows: []
+  - input: ref('int__courseware__ocw_resources')
+    rows:
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/light_notes/,
+      content_type: pdf, file_extension: .pdf, title: Light Notes, resource_text: Notes
+        on light and optics., source_kind: document}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/mit5_111f08_lec3/,
+      content_type: pdf, file_extension: .pdf, title: Review of Aqueous Solutions,
+      resource_text: Review of aqueous solutions. An aqueous solution is a solute
+        in water., source_kind: document}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/mit2_092f09_lec15/,
+      content_type: pdf, file_extension: .pdf, title: mit2_092f09_lec15.pdf, resource_text: Solution
+        of dynamic equilibrium equations by direct integration., source_kind: document}
   - input: ref('int__courseware__extraction_allowlist')
     rows: []
   expect:
@@ -676,31 +884,22 @@ unit_tests:
       source_ref: courses/c1/resources/mit5_111f08_lec3/, source_kind: document}
     - {scope_id: materials, scope_kind: materials, scope_title: Course materials,
       source_ref: courses/c1/resources/mit2_092f09_lec15/, source_kind: document}
-
-- name: test_int__courseware__extraction_sources_reads_ocw_solution_file_names
+- name: test_int__courseware__ocw_files_reads_solution_file_names
   description: >
     A file name carries "sol" glued to other letters both in answer keys and in
     topics. Solnhofen limestone, Solis and Wets, and lab 2's solids are teaching
-    material and stay; exam_smpsolqii2a (a sample answer to exam question II-2A)
-    and samplesol are answer keys and are left out.
-  model: int__courseware__extraction_sources
+    material; exam_smpsolqii2a (a sample answer to exam question II-2A) and
+    samplesol are answer keys.
+  model: int__courseware__ocw_files
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
   given:
-  - input: ref('dim_course_content')
-    rows: []
-  - input: ref('int__combined__course_xml_blocks')
-    rows: []
-  - input: ref('stg__openedx__s3__course_file_exclusions')
-    rows: []
-  - input: ref('stg__openedx__s3__course_document_text')
-    rows: []
-  - input: ref('stg__openedx__s3__course_transcript_text')
-    rows: []
   - input: ref('int__ocw__live_courses')
     rows:
     - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
         the course.</p>}
-  - input: ref('stg__ocw__s3__course_content')
-    rows: []
   - input: ref('int__ocw__content_files')
     rows:
     - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/solnhofenlimestone/,
@@ -718,43 +917,28 @@ unit_tests:
     - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/samplesoltxt/,
       content_type: file, title: samplesol.txt, file_extension: .txt, content_tags: '["Problem
         Sets"]', content: 'Edit Distance: 73'}
-  - input: ref('int__courseware__extraction_allowlist')
-    rows: []
   expect:
     rows:
-    - {scope_id: context, source_ref: courses/c1/}
-    - {scope_id: materials, source_ref: courses/c1/resources/solnhofenlimestone/}
-    - {scope_id: materials, source_ref: courses/c1/resources/ses5_solis_wets/}
-    - {scope_id: materials, source_ref: courses/c1/resources/catialab2solids/}
-
+    - {content_file_key: courses/c1/resources/solnhofenlimestone/, is_solution: false}
+    - {content_file_key: courses/c1/resources/ses5_solis_wets/, is_solution: false}
+    - {content_file_key: courses/c1/resources/catialab2solids/, is_solution: false}
+    - {content_file_key: courses/c1/resources/exam_smpsolqii2a/, is_solution: true}
+    - {content_file_key: courses/c1/resources/samplesoltxt/, is_solution: true}
+- name: test_int__courseware__ocw_files_reads_mixed_solution_types
+  description: >
+    "Multiple Assignment Types with Solutions" tags answer keys and the material
+    they go with, so the tag alone does not make a resource one. The facilitation
+    guide is not; hw3sol is by its name, and the Exam Solutions file by its type.
+  model: int__courseware__ocw_files
   overrides:
     vars:
       courseware_ocw_courses:
       - c1
-- name: test_int__courseware__extraction_sources_reads_ocw_mixed_solution_types
-  description: >
-    "Multiple Assignment Types with Solutions" tags answer keys and the material
-    they go with, so the tag alone does not leave a resource out. The facilitation
-    guide stays; hw3sol is left out by its name, and the Exam Solutions file by its
-    type.
-  model: int__courseware__extraction_sources
   given:
-  - input: ref('dim_course_content')
-    rows: []
-  - input: ref('int__combined__course_xml_blocks')
-    rows: []
-  - input: ref('stg__openedx__s3__course_file_exclusions')
-    rows: []
-  - input: ref('stg__openedx__s3__course_document_text')
-    rows: []
-  - input: ref('stg__openedx__s3__course_transcript_text')
-    rows: []
   - input: ref('int__ocw__live_courses')
     rows:
     - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
         the course.</p>}
-  - input: ref('stg__ocw__s3__course_content')
-    rows: []
   - input: ref('int__ocw__content_files')
     rows:
     - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/facilitation_guide_pdf/,
@@ -768,24 +952,17 @@ unit_tests:
     - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/review2/,
       content_type: pdf, title: Quiz 2 Review, file_extension: .pdf, content_tags: '["Exams","Exam
         Solutions"]', content: 1. The runtime is O(n log n).}
-  - input: ref('int__courseware__extraction_allowlist')
-    rows: []
   expect:
     rows:
-    - {scope_id: context, source_ref: courses/c1/}
-    - {scope_id: materials, source_ref: courses/c1/resources/facilitation_guide_pdf/}
-
-  overrides:
-    vars:
-      courseware_ocw_courses:
-      - c1
+    - {content_file_key: courses/c1/resources/facilitation_guide_pdf/, is_solution: false}
+    - {content_file_key: courses/c1/resources/hw3sol/, is_solution: true}
+    - {content_file_key: courses/c1/resources/review2/, is_solution: true}
 - name: test_int__courseware__extraction_sources_follows_ocw_resource_descriptions
   description: >
     Session 10's page links a video clip whose description links the session notes.
     The clip has no transcript, so int__ocw__content_files drops it, but the notes
-    are
-    read in the page's unit, after the page, and do not land in materials. The clip's
-    link to another course's notes is left to that course.
+    are read in the page's unit, after the page, and do not land in materials. The
+    clip's link to another course's notes is left to that course.
   model: int__courseware__extraction_sources
   given:
   - input: ref('dim_course_content')
@@ -805,24 +982,31 @@ unit_tests:
   - input: ref('stg__ocw__s3__course_content')
     rows:
     - {course_slug: c1, coursecontent_kind: resource, coursecontent_s3_key: courses/c1/resources/clip-1-quotient-rule/data.json,
-      coursecontent_body: '<p><a href="/courses/c1/resources/ses10a/">Accompanying
-        Notes (PDF)</a></p> <p><a href="/courses/c0/resources/lec4/">Lecture 4</a></p>'}
-  - input: ref('int__ocw__content_files')
+      coursecontent_body: <p><a href="/courses/c1/resources/ses10a/">Accompanying
+        Notes (PDF)</a></p> <p><a href="/courses/c0/resources/lec4/">Lecture 4</a></p>}
+  - input: ref('int__courseware__ocw_files')
     rows:
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/differentiation/,
-      content_type: page, title: Differentiation, file_extension: null, content_tags: null,
-      content: '<p>Part A.</p><a href="/courses/c1/pages/differentiation/session-10-quotient-rule/">Session
-        10</a>'}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/differentiation/session-10-quotient-rule/,
-      content_type: page, title: 'Session 10: Quotient Rule', file_extension: null,
-      content_tags: null, content: '<p>The quotient rule.</p><a href="/courses/c1/resources/clip-1-quotient-rule/">Clip
-        1</a><a href="/courses/c1/resources/ex10prb/">Problems</a>'}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ses10a/,
-      content_type: pdf, title: MIT18_01SCF10_Ses10a.pdf, file_extension: .pdf, content_tags: null,
-      content: The derivative of u/v is (u'v - uv')/v^2.}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ex10prb/,
-      content_type: pdf, title: MIT18_01SCF10_ex10prb.pdf, file_extension: .pdf, content_tags: null,
-      content: Differentiate x/(x+1).}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/differentiation/,
+      title: Differentiation, page_path: differentiation/, section: differentiation,
+      parent_key: courses/c1/pages/, is_solution: false, body: <p>Part A.</p><a href="/courses/c1/pages/differentiation/session-10-quotient-rule/">Session
+        10</a>, depth: 1, has_children: true, page_role: unit, unit_key: courses/c1/pages/differentiation/,
+      is_flat_section: false}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/differentiation/session-10-quotient-rule/,
+      title: 'Session 10: Quotient Rule', page_path: differentiation/session-10-quotient-rule/,
+      section: differentiation, parent_key: courses/c1/pages/differentiation/, is_solution: false,
+      body: <p>The quotient rule.</p><a href="/courses/c1/resources/clip-1-quotient-rule/">Clip
+        1</a><a href="/courses/c1/resources/ex10prb/">Problems</a>, depth: 2, has_children: false,
+      page_role: unit, unit_key: courses/c1/pages/differentiation/, is_flat_section: false}
+  - input: ref('int__courseware__ocw_table_rows')
+    rows: []
+  - input: ref('int__courseware__ocw_resources')
+    rows:
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/ses10a/,
+      content_type: pdf, file_extension: .pdf, title: MIT18_01SCF10_Ses10a.pdf, resource_text: The
+        derivative of u/v is (u'v - uv')/v^2., source_kind: document}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/ex10prb/,
+      content_type: pdf, file_extension: .pdf, title: MIT18_01SCF10_ex10prb.pdf, resource_text: Differentiate
+        x/(x+1)., source_kind: document}
   - input: ref('int__courseware__extraction_allowlist')
     rows: []
   expect:
@@ -832,17 +1016,77 @@ unit_tests:
     - {scope_id: courses/c1/pages/differentiation/, source_position: 2, source_ref: courses/c1/pages/differentiation/session-10-quotient-rule/}
     - {scope_id: courses/c1/pages/differentiation/, source_position: 3, source_ref: courses/c1/resources/ses10a/}
     - {scope_id: courses/c1/pages/differentiation/, source_position: 4, source_ref: courses/c1/resources/ex10prb/}
-
   overrides:
     vars:
       courseware_ocw_courses:
       - c1
+- name: test_int__courseware__ocw_files_reads_textbook_as_reference_in_week_courses
+  description: >
+    c1 teaches through three weeks, so its Online Textbook is reference reading. c2
+    is its Open Textbook, which is a unit.
+  model: int__courseware__ocw_files
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
+      - c2
+  given:
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
+        the course.</p>}
+    - {course_slug: c2, courserun_readable_id: run2, course_title: Course Two, course_description_html: <p>Another
+        course.</p>}
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-1/,
+      content_type: page, title: Week 1, file_extension: null, content_tags: null,
+      content: <p>Kinematics.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-1/lesson-1/,
+      content_type: page, title: Lesson 1, file_extension: null, content_tags: null,
+      content: <p>Position.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-2/,
+      content_type: page, title: Week 2, file_extension: null, content_tags: null,
+      content: <p>Forces.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-2/lesson-2/,
+      content_type: page, title: Lesson 2, file_extension: null, content_tags: null,
+      content: <p>Newton.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-3/,
+      content_type: page, title: Week 3, file_extension: null, content_tags: null,
+      content: <p>Energy.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-3/lesson-3/,
+      content_type: page, title: Lesson 3, file_extension: null, content_tags: null,
+      content: <p>Work.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/online-textbook/,
+      content_type: page, title: Online Textbook, file_extension: null, content_tags: null,
+      content: <p>The textbook.</p><a href="/courses/c1/resources/chapter1/">Chapter
+        1</a>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/chapter1/,
+      content_type: pdf, title: Chapter 1, file_extension: .pdf, content_tags: null,
+      content: Chapter 1. Kinematics in one dimension.}
+    - {courserun_readable_id: run2, course_slug: c2, content_file_key: courses/c2/pages/open-textbook/,
+      content_type: page, title: Open Textbook, file_extension: null, content_tags: null,
+      content: <p>The book.</p><a href="/courses/c2/resources/chapter1/">Chapter 1</a>}
+    - {courserun_readable_id: run2, course_slug: c2, content_file_key: courses/c2/resources/chapter1/,
+      content_type: pdf, title: Chapter 1, file_extension: .pdf, content_tags: null,
+      content: Chapter 1. Limits.}
+  expect:
+    rows:
+    - {content_file_key: courses/c1/pages/week-1/, page_role: unit}
+    - {content_file_key: courses/c1/pages/week-1/lesson-1/, page_role: unit}
+    - {content_file_key: courses/c1/pages/week-2/, page_role: unit}
+    - {content_file_key: courses/c1/pages/week-2/lesson-2/, page_role: unit}
+    - {content_file_key: courses/c1/pages/week-3/, page_role: unit}
+    - {content_file_key: courses/c1/pages/week-3/lesson-3/, page_role: unit}
+    - {content_file_key: courses/c2/pages/open-textbook/, page_role: unit}
+    - {content_file_key: courses/c1/pages/online-textbook/, page_role: reference}
+    - {content_file_key: courses/c1/resources/chapter1/, page_role: null}
+    - {content_file_key: courses/c2/resources/chapter1/, page_role: null}
 - name: test_int__courseware__extraction_sources_skips_ocw_textbook_in_week_courses
   description: >
     c1 teaches through three weeks, so its Online Textbook is reference reading: the
     textbook page and the chapter only it links are not read, and the chapter does
-    not
-    land in materials. c2 is its Open Textbook, which it reads as a unit.
+    not land in materials. c2 is its Open Textbook, which it reads as a unit.
   model: int__courseware__extraction_sources
   given:
   - input: ref('dim_course_content')
@@ -863,40 +1107,52 @@ unit_tests:
         course.</p>}
   - input: ref('stg__ocw__s3__course_content')
     rows: []
-  - input: ref('int__ocw__content_files')
+  - input: ref('int__courseware__ocw_files')
     rows:
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-1/,
-      content_type: page, title: 'Week 1', file_extension: null, content_tags: null,
-      content: <p>Kinematics.</p>}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-1/lesson-1/,
-      content_type: page, title: Lesson 1, file_extension: null, content_tags: null,
-      content: <p>Position.</p>}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-2/,
-      content_type: page, title: 'Week 2', file_extension: null, content_tags: null,
-      content: <p>Forces.</p>}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-2/lesson-2/,
-      content_type: page, title: Lesson 2, file_extension: null, content_tags: null,
-      content: <p>Newton.</p>}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-3/,
-      content_type: page, title: 'Week 3', file_extension: null, content_tags: null,
-      content: <p>Energy.</p>}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/week-3/lesson-3/,
-      content_type: page, title: Lesson 3, file_extension: null, content_tags: null,
-      content: <p>Work.</p>}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/online-textbook/,
-      content_type: page, title: Online Textbook, file_extension: null, content_tags: null,
-      content: '<p>The textbook.</p><a href="/courses/c1/resources/chapter1/">Chapter
-        1</a>'}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/chapter1/,
-      content_type: pdf, title: Chapter 1, file_extension: .pdf, content_tags: null,
-      content: Chapter 1. Kinematics in one dimension.}
-    - {courserun_readable_id: run2, course_slug: c2, content_file_key: courses/c2/pages/open-textbook/,
-      content_type: page, title: Open Textbook, file_extension: null, content_tags: null,
-      content: '<p>The book.</p><a href="/courses/c2/resources/chapter1/">Chapter
-        1</a>'}
-    - {courserun_readable_id: run2, course_slug: c2, content_file_key: courses/c2/resources/chapter1/,
-      content_type: pdf, title: Chapter 1, file_extension: .pdf, content_tags: null,
-      content: Chapter 1. Limits.}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/week-1/, title: Week
+        1, page_path: week-1/, section: week-1, parent_key: courses/c1/pages/, is_solution: false,
+      body: <p>Kinematics.</p>, depth: 1, has_children: true, page_role: unit, unit_key: courses/c1/pages/week-1/,
+      is_flat_section: false}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/week-1/lesson-1/,
+      title: Lesson 1, page_path: week-1/lesson-1/, section: week-1, parent_key: courses/c1/pages/week-1/,
+      is_solution: false, body: <p>Position.</p>, depth: 2, has_children: false, page_role: unit,
+      unit_key: courses/c1/pages/week-1/, is_flat_section: false}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/week-2/, title: Week
+        2, page_path: week-2/, section: week-2, parent_key: courses/c1/pages/, is_solution: false,
+      body: <p>Forces.</p>, depth: 1, has_children: true, page_role: unit, unit_key: courses/c1/pages/week-2/,
+      is_flat_section: false}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/week-2/lesson-2/,
+      title: Lesson 2, page_path: week-2/lesson-2/, section: week-2, parent_key: courses/c1/pages/week-2/,
+      is_solution: false, body: <p>Newton.</p>, depth: 2, has_children: false, page_role: unit,
+      unit_key: courses/c1/pages/week-2/, is_flat_section: false}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/week-3/, title: Week
+        3, page_path: week-3/, section: week-3, parent_key: courses/c1/pages/, is_solution: false,
+      body: <p>Energy.</p>, depth: 1, has_children: true, page_role: unit, unit_key: courses/c1/pages/week-3/,
+      is_flat_section: false}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/week-3/lesson-3/,
+      title: Lesson 3, page_path: week-3/lesson-3/, section: week-3, parent_key: courses/c1/pages/week-3/,
+      is_solution: false, body: <p>Work.</p>, depth: 2, has_children: false, page_role: unit,
+      unit_key: courses/c1/pages/week-3/, is_flat_section: false}
+    - {courserun_readable_id: run2, content_file_key: courses/c2/pages/open-textbook/,
+      title: Open Textbook, page_path: open-textbook/, section: open-textbook, parent_key: courses/c2/pages/,
+      is_solution: false, body: <p>The book.</p><a href="/courses/c2/resources/chapter1/">Chapter
+        1</a>, depth: 1, has_children: false, page_role: unit, unit_key: courses/c2/pages/open-textbook/,
+      is_flat_section: true}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/online-textbook/,
+      title: Online Textbook, page_path: online-textbook/, section: online-textbook,
+      parent_key: courses/c1/pages/, is_solution: false, body: <p>The textbook.</p><a
+        href="/courses/c1/resources/chapter1/">Chapter 1</a>, depth: 1, has_children: false,
+      page_role: reference}
+  - input: ref('int__courseware__ocw_table_rows')
+    rows: []
+  - input: ref('int__courseware__ocw_resources')
+    rows:
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/chapter1/,
+      content_type: pdf, file_extension: .pdf, title: Chapter 1, resource_text: Chapter
+        1. Kinematics in one dimension., source_kind: document}
+    - {courserun_readable_id: run2, content_file_key: courses/c2/resources/chapter1/,
+      content_type: pdf, file_extension: .pdf, title: Chapter 1, resource_text: Chapter
+        1. Limits., source_kind: document}
   - input: ref('int__courseware__extraction_allowlist')
     rows: []
   expect:
@@ -911,12 +1167,58 @@ unit_tests:
     - {scope_id: context, source_ref: courses/c2/}
     - {scope_id: courses/c2/pages/open-textbook/, source_ref: courses/c2/pages/open-textbook/}
     - {scope_id: courses/c2/pages/open-textbook/, source_ref: courses/c2/resources/chapter1/}
-
   overrides:
     vars:
       courseware_ocw_courses:
       - c1
       - c2
+- name: test_int__courseware__ocw_files_counts_groups_by_section
+  description: >
+    c1's three page groups are all inside its Lecture Notes section, so it is not
+    taught by groups and its Online Textbook is a unit.
+  model: int__courseware__ocw_files
+  overrides:
+    vars:
+      courseware_ocw_courses:
+      - c1
+  given:
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: c1, courserun_readable_id: run1, course_title: Course One, course_description_html: <p>About
+        the course.</p>}
+  - input: ref('int__ocw__content_files')
+    rows:
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/,
+      content_type: page, title: Lecture Notes, file_extension: null, content_tags: null,
+      content: <p>Notes.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-1/,
+      content_type: page, title: Part 1, file_extension: null, content_tags: null,
+      content: <p>Kinematics.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-1/lesson-1/,
+      content_type: page, title: Lesson 1, file_extension: null, content_tags: null,
+      content: <p>Position.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-2/,
+      content_type: page, title: Part 2, file_extension: null, content_tags: null,
+      content: <p>Forces.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-2/lesson-2/,
+      content_type: page, title: Lesson 2, file_extension: null, content_tags: null,
+      content: <p>Newton.</p>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/online-textbook/,
+      content_type: page, title: Online Textbook, file_extension: null, content_tags: null,
+      content: <p>The textbook.</p><a href="/courses/c1/resources/chapter1/">Chapter
+        1</a>}
+    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/chapter1/,
+      content_type: pdf, title: Chapter 1, file_extension: .pdf, content_tags: null,
+      content: Chapter 1. Kinematics in one dimension.}
+  expect:
+    rows:
+    - {content_file_key: courses/c1/pages/lecture-notes/, page_role: unit}
+    - {content_file_key: courses/c1/pages/lecture-notes/part-1/, page_role: unit}
+    - {content_file_key: courses/c1/pages/lecture-notes/part-1/lesson-1/, page_role: unit}
+    - {content_file_key: courses/c1/pages/lecture-notes/part-2/, page_role: unit}
+    - {content_file_key: courses/c1/pages/lecture-notes/part-2/lesson-2/, page_role: unit}
+    - {content_file_key: courses/c1/pages/online-textbook/, page_role: unit}
+    - {content_file_key: courses/c1/resources/chapter1/, page_role: null}
 - name: test_int__courseware__extraction_sources_counts_ocw_groups_by_section
   description: >
     c1's three page groups are all inside its Lecture Notes section, so it is not
@@ -939,30 +1241,42 @@ unit_tests:
         the course.</p>}
   - input: ref('stg__ocw__s3__course_content')
     rows: []
-  - input: ref('int__ocw__content_files')
+  - input: ref('int__courseware__ocw_files')
     rows:
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/,
-      content_type: page, title: Lecture Notes, file_extension: null, content_tags: null,
-      content: <p>Notes.</p>}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-1/,
-      content_type: page, title: Part 1, file_extension: null, content_tags: null,
-      content: <p>Kinematics.</p>}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-1/lesson-1/,
-      content_type: page, title: Lesson 1, file_extension: null, content_tags: null,
-      content: <p>Position.</p>}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-2/,
-      content_type: page, title: Part 2, file_extension: null, content_tags: null,
-      content: <p>Forces.</p>}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/part-2/lesson-2/,
-      content_type: page, title: Lesson 2, file_extension: null, content_tags: null,
-      content: <p>Newton.</p>}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/online-textbook/,
-      content_type: page, title: Online Textbook, file_extension: null, content_tags: null,
-      content: '<p>The textbook.</p><a href="/courses/c1/resources/chapter1/">Chapter
-        1</a>'}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/chapter1/,
-      content_type: pdf, title: Chapter 1, file_extension: .pdf, content_tags: null,
-      content: Chapter 1. Kinematics in one dimension.}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/lecture-notes/,
+      title: Lecture Notes, page_path: lecture-notes/, section: lecture-notes, parent_key: courses/c1/pages/,
+      is_solution: false, body: <p>Notes.</p>, depth: 1, has_children: true, page_role: unit,
+      unit_key: courses/c1/pages/lecture-notes/, is_flat_section: false}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/lecture-notes/part-1/,
+      title: Part 1, page_path: lecture-notes/part-1/, section: lecture-notes, parent_key: courses/c1/pages/lecture-notes/,
+      is_solution: false, body: <p>Kinematics.</p>, depth: 2, has_children: true,
+      page_role: unit, unit_key: courses/c1/pages/lecture-notes/part-1/, is_flat_section: false}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/lecture-notes/part-1/lesson-1/,
+      title: Lesson 1, page_path: lecture-notes/part-1/lesson-1/, section: lecture-notes,
+      parent_key: courses/c1/pages/lecture-notes/part-1/, is_solution: false, body: <p>Position.</p>,
+      depth: 3, has_children: false, page_role: unit, unit_key: courses/c1/pages/lecture-notes/part-1/,
+      is_flat_section: false}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/lecture-notes/part-2/,
+      title: Part 2, page_path: lecture-notes/part-2/, section: lecture-notes, parent_key: courses/c1/pages/lecture-notes/,
+      is_solution: false, body: <p>Forces.</p>, depth: 2, has_children: true, page_role: unit,
+      unit_key: courses/c1/pages/lecture-notes/part-2/, is_flat_section: false}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/lecture-notes/part-2/lesson-2/,
+      title: Lesson 2, page_path: lecture-notes/part-2/lesson-2/, section: lecture-notes,
+      parent_key: courses/c1/pages/lecture-notes/part-2/, is_solution: false, body: <p>Newton.</p>,
+      depth: 3, has_children: false, page_role: unit, unit_key: courses/c1/pages/lecture-notes/part-2/,
+      is_flat_section: false}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/online-textbook/,
+      title: Online Textbook, page_path: online-textbook/, section: online-textbook,
+      parent_key: courses/c1/pages/, is_solution: false, body: <p>The textbook.</p><a
+        href="/courses/c1/resources/chapter1/">Chapter 1</a>, depth: 1, has_children: false,
+      page_role: unit, unit_key: courses/c1/pages/online-textbook/, is_flat_section: true}
+  - input: ref('int__courseware__ocw_table_rows')
+    rows: []
+  - input: ref('int__courseware__ocw_resources')
+    rows:
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/chapter1/,
+      content_type: pdf, file_extension: .pdf, title: Chapter 1, resource_text: Chapter
+        1. Kinematics in one dimension., source_kind: document}
   - input: ref('int__courseware__extraction_allowlist')
     rows: []
   expect:
@@ -975,7 +1289,6 @@ unit_tests:
     - {scope_id: courses/c1/pages/lecture-notes/part-2/, source_ref: courses/c1/pages/lecture-notes/part-2/lesson-2/}
     - {scope_id: courses/c1/pages/online-textbook/, source_ref: courses/c1/pages/online-textbook/}
     - {scope_id: courses/c1/pages/online-textbook/, source_ref: courses/c1/resources/chapter1/}
-
   overrides:
     vars:
       courseware_ocw_courses:
@@ -1003,26 +1316,47 @@ unit_tests:
         the course.</p>}
   - input: ref('stg__ocw__s3__course_content')
     rows: []
-  - input: ref('int__ocw__content_files')
+  - input: ref('int__courseware__ocw_files')
     rows:
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/calendar/,
-      content_type: page, title: Calendar, file_extension: null, content_tags: null,
-      content: '<table><tr><th>SES #</th><th>TOPICS</th><th>KEY DATES</th></tr><tr><td>1</td><td>Introduction</td><td></td></tr><tr><td>2</td><td>Limits</td><td>Problem
-        set 1 out<br>PS 2 out</td></tr></table>'}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/lecture-notes/,
-      content_type: page, title: Lecture Notes, file_extension: null, content_tags: null,
-      content: '<table><tr><th>SES #</th><th>TOPICS</th></tr><tr><td>1</td><td><a
-        href="/courses/c1/resources/ps2/">PS 2</a></td></tr></table>'}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/pages/assignments/,
-      content_type: page, title: Assignments, file_extension: null, content_tags: null,
-      content: '<p>Problem sets.</p><a href="/courses/c1/resources/ps1/">Problem Set
-        1</a>'}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ps1/,
-      content_type: pdf, title: ps1.pdf, file_extension: .pdf, content_tags: null,
-      content: 1. Find the limit of sin(x)/x.}
-    - {courserun_readable_id: run1, course_slug: c1, content_file_key: courses/c1/resources/ps2/,
-      content_type: pdf, title: ps2.pdf, file_extension: .pdf, content_tags: null,
-      content: 1. Differentiate x^2.}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/lecture-notes/,
+      title: Lecture Notes, page_path: lecture-notes/, section: lecture-notes, parent_key: courses/c1/pages/,
+      is_solution: false, body: '<table><tr><th>SES #</th><th>TOPICS</th></tr><tr><td>1</td><td><a
+        href="/courses/c1/resources/ps2/">PS 2</a></td></tr></table>', depth: 1, has_children: false,
+      page_role: unit, unit_key: courses/c1/pages/lecture-notes/, is_flat_section: true}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/assignments/,
+      title: Assignments, page_path: assignments/, section: assignments, parent_key: courses/c1/pages/,
+      is_solution: false, body: <p>Problem sets.</p><a href="/courses/c1/resources/ps1/">Problem
+        Set 1</a>, depth: 1, has_children: false, page_role: unit, unit_key: courses/c1/pages/assignments/,
+      is_flat_section: true}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/calendar/,
+      title: Calendar, page_path: calendar/, section: calendar, parent_key: courses/c1/pages/,
+      is_solution: false, body: '<table><tr><th>SES #</th><th>TOPICS</th><th>KEY DATES</th></tr><tr><td>1</td><td>Introduction</td><td></td></tr><tr><td>2</td><td>Limits</td><td>Problem
+        set 1 out<br>PS 2 out</td></tr></table>', depth: 1, has_children: false, page_role: skipped}
+  - input: ref('int__courseware__ocw_table_rows')
+    rows:
+    - {courserun_readable_id: run1, page_key: courses/c1/pages/lecture-notes/, section: lecture-notes,
+      reads_sessions: true, table_index: 2, row_index: 3, row_html: '><td>1</td><td><a
+        href="/courses/c1/resources/ps2/">PS 2</a></td></tr>', header_html: 'SES #'}
+    - {courserun_readable_id: run1, page_key: courses/c1/pages/calendar/, section: calendar,
+      reads_sessions: true, table_index: 2, row_index: 4, row_html: '><td>2</td><td>Limits</td><td>Problem
+        set 1 out<br>PS 2 out</td></tr>', header_html: 'SES #'}
+    - {courserun_readable_id: run1, page_key: courses/c1/pages/lecture-notes/, section: lecture-notes,
+      reads_sessions: true, table_index: 2, row_index: 2, row_html: '><th>SES #</th><th>TOPICS</th></tr>',
+      header_html: 'SES #'}
+    - {courserun_readable_id: run1, page_key: courses/c1/pages/calendar/, section: calendar,
+      reads_sessions: true, table_index: 2, row_index: 3, row_html: '><td>1</td><td>Introduction</td><td></td></tr>',
+      header_html: 'SES #'}
+    - {courserun_readable_id: run1, page_key: courses/c1/pages/calendar/, section: calendar,
+      reads_sessions: true, table_index: 2, row_index: 2, row_html: '><th>SES #</th><th>TOPICS</th><th>KEY
+        DATES</th></tr>', header_html: 'SES #'}
+  - input: ref('int__courseware__ocw_resources')
+    rows:
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/ps1/, content_type: pdf,
+      file_extension: .pdf, title: ps1.pdf, resource_text: 1. Find the limit of sin(x)/x.,
+      source_kind: document}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/ps2/, content_type: pdf,
+      file_extension: .pdf, title: ps2.pdf, resource_text: 1. Differentiate x^2.,
+      source_kind: document}
   - input: ref('int__courseware__extraction_allowlist')
     rows: []
   expect:
@@ -1035,3 +1369,88 @@ unit_tests:
     vars:
       courseware_ocw_courses:
       - c1
+- name: test_int__courseware__ocw_table_rows_splits_tables_and_marks_session_pages
+  description: >
+    Each table row on a page is one row, the header row (row_index 2) included, and
+    header_html is the header row's first cell. A flat top-level section page and
+    the
+    calendar can hold sessions; a page under a unit cannot. A page with no table,
+    and
+    a resource, have no rows.
+  model: int__courseware__ocw_table_rows
+  given:
+  - input: ref('int__courseware__ocw_files')
+    rows:
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/lecture-notes/,
+      page_path: lecture-notes/, section: lecture-notes, is_flat_section: true, body: '<p>Notes.</p><table><tr><th>SES
+        #</th><th>TOPICS</th></tr><tr><td>1</td><td>Intro</td></tr></table>'}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/calendar/,
+      page_path: calendar/, section: calendar, body: '<table><tr><th>WEEK</th></tr><tr><td>1</td></tr></table>'}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/week-1/lesson-1/,
+      page_path: week-1/lesson-1/, section: week-1, is_flat_section: false, body: '<table><tr><th>Problem</th></tr><tr><td>2</td></tr></table>'}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/syllabus/,
+      page_path: syllabus/, section: syllabus, body: <p>No tables.</p>}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/notes/,
+      content_type: pdf, body: '<table> in extracted text'}
+  expect:
+    rows:
+    - {page_key: courses/c1/pages/lecture-notes/, reads_sessions: true, table_index: 2,
+      row_index: 2, row_html: '><th>SES #</th><th>TOPICS</th></tr>', header_html: 'SES
+        #'}
+    - {page_key: courses/c1/pages/lecture-notes/, reads_sessions: true, table_index: 2,
+      row_index: 3, row_html: '><td>1</td><td>Intro</td></tr>', header_html: 'SES
+        #'}
+    - {page_key: courses/c1/pages/calendar/, reads_sessions: true, table_index: 2,
+      row_index: 2, row_html: '><th>WEEK</th></tr>', header_html: WEEK}
+    - {page_key: courses/c1/pages/calendar/, reads_sessions: true, table_index: 2,
+      row_index: 3, row_html: '><td>1</td></tr>', header_html: WEEK}
+    - {page_key: courses/c1/pages/week-1/lesson-1/, reads_sessions: false, table_index: 2,
+      row_index: 2, row_html: '><th>Problem</th></tr>', header_html: Problem}
+    - {page_key: courses/c1/pages/week-1/lesson-1/, reads_sessions: false, table_index: 2,
+      row_index: 3, row_html: '><td>2</td></tr>', header_html: Problem}
+- name: test_int__courseware__ocw_resources_leaves_out_answer_keys
+  description: >
+    ps2_key is a file int__courseware__ocw_files marks as an answer key. ps1_sol is
+    linked in a table column headed Solutions, and ps1_sol_copy has the same text,
+    so
+    both are answer keys too. A page, and a file with no text, are not resources.
+    ps1
+    is read as a document and the lecture video as a transcript.
+  model: int__courseware__ocw_resources
+  given:
+  - input: ref('int__courseware__ocw_files')
+    rows:
+    - {courserun_readable_id: run1, content_file_key: courses/c1/pages/assignments/,
+      content_type: page, page_path: assignments/, is_solution: false, body: <p>Assignments.</p>}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/ps1/, content_type: pdf,
+      file_extension: .pdf, title: Problem Set 1, is_solution: false, body: 1. Find
+        x.}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/ps1_sol/,
+      content_type: pdf, file_extension: .pdf, title: Problem Set 1 Notes, is_solution: false,
+      body: '1. x is 3 because 2x plus 1 is 7 and so 2x is 6. Every step of the derivation
+        is written out here in full with the reasoning that leads from the equation
+        to its unique solution so that a reader can check each line.'}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/ps1_sol_copy/,
+      content_type: pdf, file_extension: .pdf, title: Copy, is_solution: false, body: '1.
+        x is 3 because 2x plus 1 is 7 and so 2x is 6. Every step of the derivation
+        is written out here in full with the reasoning that leads from the equation
+        to its unique solution so that a reader can check each line.'}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/ps2_key/,
+      content_type: pdf, file_extension: .pdf, title: ps2_key, is_solution: true,
+      body: 1. 4}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/lec1/,
+      content_type: video, title: Lecture 1, is_solution: false, body: Welcome to
+        the course.}
+    - {courserun_readable_id: run1, content_file_key: courses/c1/resources/empty/,
+      content_type: pdf, file_extension: .pdf, title: Scan, is_solution: false}
+  - input: ref('int__courseware__ocw_table_rows')
+    rows:
+    - {courserun_readable_id: run1, page_key: courses/c1/pages/assignments/, table_index: 2,
+      row_index: 2, row_html: '><th>PROBLEM SETS</th><th>SOLUTIONS</th></tr>'}
+    - {courserun_readable_id: run1, page_key: courses/c1/pages/assignments/, table_index: 2,
+      row_index: 3, row_html: '><td><a href="/courses/c1/resources/ps1/">PS 1</a></td><td><a
+        href="/courses/c1/resources/ps1_sol/">Solutions 1</a></td></tr>'}
+  expect:
+    rows:
+    - {content_file_key: courses/c1/resources/ps1/, source_kind: document}
+    - {content_file_key: courses/c1/resources/lec1/, source_kind: video_transcript}

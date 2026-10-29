@@ -27,7 +27,7 @@
 #}
 with run_concepts as (
     select * from {{ ref('bridge_courserun_concept') }}
-    where courserun_fk is not null and is_published
+    where courserun_fk is not null and passes_support_rule
 )
 
 , closure as (
@@ -144,8 +144,7 @@ with run_concepts as (
         , narrower_taught_count
     from {{ ref('bridge_courserun_prerequisite_coverage') }}
     where
-        requirement_is_published
-        and is_satisfied
+        requirement_passes_support_rule
         and match_type = 'narrower'
 )
 

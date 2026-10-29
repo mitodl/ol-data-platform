@@ -78,6 +78,7 @@ override-dependencies = [
 # connection). Tracked upstream in dagster-io/dagster#34232, #34235 and #33959.
 constraint-dependencies = [
     "sqlalchemy<2.1",
+    "certifi>=2026.10.19",  # eMudhra CA compromise: never resolve a certifi that trusts the compromised CAs
 ]
 
 [tool.uv.sources]

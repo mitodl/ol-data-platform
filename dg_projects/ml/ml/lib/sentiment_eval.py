@@ -222,8 +222,8 @@ def build_sentiment_client(
 ) -> AnthropicSentimentClient | OpenAISentimentClient:
     """Build the client whose model_version comes from run config, else a default.
 
-    Mirrors ml.lib.summarize.build_summary_client's dispatch and
-    model_version/bedrock_model_version split.
+    Bedrock's model id namespace differs from the plain Anthropic/OpenAI one,
+    hence the model_version/bedrock_model_version split.
     """
     return build_llm_client(
         llm,

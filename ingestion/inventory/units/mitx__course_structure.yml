@@ -6,9 +6,9 @@
 # The openedx code location un-nests each course's structure document into one
 # JSON Lines file of blocks per structure version
 # (mitx/openedx/processed_data/course_blocks/), and
-# ol_dlt.sources.course_xml_blocks loads them. The table loads beside
-# mitx/api's Airbyte-loaded raw__mitx__openedx__api__course_blocks, to replace
-# it, and is unmodeled until staging is repointed at it.
+# ol_dlt.sources.course_xml_blocks loads them. The table replaced
+# mitx/api's Airbyte-loaded raw__mitx__openedx__api__course_blocks (see
+# retired.yml).
 schema_version: 1
 deployment: mitx
 layer: course_structure
@@ -30,4 +30,4 @@ tables:
   sync_mode: incremental_append
   cursor_field:
   - _file_modified_at
-  modeled: false
+  modeled: true

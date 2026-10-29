@@ -683,6 +683,67 @@ def test_a_step_failure_with_no_error_payload_is_still_reported() -> None:
     assert is_an_interrupted_worker(step_failure_of([failure])) is False
 
 
+def test_a_resumed_run_that_then_fails_is_reported() -> None:
+    """Regression: run 8bfd8d87 (iceberg_raw_orphan_files_job) was skipped.
+
+    Its first worker was preempted and logged a STEP_FAILURE with
+    DagsterExecutionInterruptedError. Run monitoring resumed it, and the new
+    worker failed for real. The report was built from the first event, so the
+    sensor called the run an interrupted worker and dropped the real failure.
+    """
+    context = _context(
+        [
+            _step_failure(
+                "orphan_files", "SIGTERM", cls_name="DagsterExecutionInterruptedError"
+            ),
+            _step_failure(
+                "orphan_files",
+                "1 objects could not be deleted",
+                cls_name="DagsterExecutionStepExecutionError",
+                cause=SimpleNamespace(cls_name="RuntimeError", cause=None),
+            ),
+        ]
+    )
+    failure = _failure_of(context)
+
+    assert is_an_interrupted_worker(failure) is False
+    assert sentry_message(context, failure) == "RuntimeError: orphan_files"
+
+
+def test_a_real_failure_in_another_step_is_reported() -> None:
+    """A real failure logged before another step's interruption still reports.
+
+    Reading the last event instead of the first would fix the resumed run and
+    break this one.
+    """
+    context = _context(
+        [
+            _step_failure("some_model", "boom", cls_name="ValueError"),
+            _step_failure(
+                "other_model", "SIGTERM", cls_name="DagsterExecutionInterruptedError"
+            ),
+        ]
+    )
+    failure = _failure_of(context)
+
+    assert is_an_interrupted_worker(failure) is False
+    assert sentry_message(context, failure) == "ValueError: some_model"
+
+
+def test_a_run_whose_every_step_was_interrupted_is_not_reported() -> None:
+    """Preferring a real failure must not turn an all-interrupted run into one."""
+    context = _context(
+        [
+            _step_failure(
+                "some_model", "SIGTERM", cls_name="DagsterExecutionInterruptedError"
+            ),
+            _step_failure("other_model", "SIGINT", cls_name="KeyboardInterrupt"),
+        ]
+    )
+
+    assert is_an_interrupted_worker(_failure_of(context)) is True
+
+
 # ── Slack rate limiting ───────────────────────────────────────────────────────
 
 

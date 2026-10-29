@@ -3,14 +3,17 @@
     assesses or requires, from current verified claims.
 
     requires is declared (a stated prerequisite) or inferred. An inferred requirement
-    is a concept the run relies on (assumed knowledge, or a concept it uses without
-    explaining) before, or without, any scope of the run teaching or reviewing it.
-    The course's documents (the materials scope) accompany its lectures, so a concept
-    they teach counts as taught from the start; the context scope teaches nothing.
+    is an observation about this run: a concept it relies on (assumed knowledge, or a
+    concept it uses without explaining) before, or without, any scope of the run
+    teaching or reviewing it. It is not a reviewed prerequisite, and nothing here
+    says how much of the concept a learner needs. The course's documents (the
+    materials scope) accompany its lectures, so a concept they teach counts as taught
+    from the start; the context scope teaches nothing.
 
-    An inferred requirement is published (is_published) only with support beyond one
-    model call, because LLMs over-predict prerequisites and every spurious one then
-    matches some course that teaches it:
+    An inferred requirement passes the support rule (passes_support_rule) only with
+    support beyond one model call, because LLMs over-predict prerequisites and every
+    spurious one then matches some course that teaches it. Passing filters that
+    noise; it does not accept the requirement:
       - prior_scope_count, the units relying on the concept before the run teaches it,
         is at least courseware_prerequisite_min_scope_support, or course_support,
         the courses with a run that declares the concept or infers it with a
@@ -23,22 +26,25 @@
       - direction_consistency, prior_scope_count over that plus taught_scope_count
         (the scopes that teach it later, which says the run covers it itself), is at
         least courseware_prerequisite_min_direction_consistency.
+    Candidates that fail keep their rows, with support_rule_failure, for review.
+    Declared requirements and the other relations always pass.
 
-    A tool the run introduces is not a requirement either (unpublished_reason
-    introduced_by_run): a concept whose dim_concept.concept_kind is tool, that the run
-    only uses (no claim of the run, in any scope, assumes it or declares it a
-    prerequisite or recommended background), and that no other course teaches or
-    reviews. Courses demonstrate libraries such as scikit-learn and Seaborn as they
-    go, so requiring them would leave a prerequisite no course could ever satisfy.
-    "Other course" and "teaches or reviews" are as bridge_courserun_prerequisite_coverage
-    reads them (the same course_key, a current run, and any teaches or reviews row),
-    so a tool is introduced only where coverage would find no direct provider. Where
-    the tool first appears does not separate these cases: on the pilot, the
-    introduced tools first appear between the 4th and 10th unit, like pandas, which
-    an earlier course teaches and which stays a requirement.
+    tool_status describes an inferred requirement of a tool (dim_concept.concept_kind
+    tool) from this run's own claims only:
+      assumed     the run says learners should already know it: an assumed_knowledge
+                  claim in any scope, or a declared prerequisite or recommended
+                  background
+      introduced  otherwise, the run teaches it in some scope (after first using it)
+      unresolved  the run only uses it, which can mean it demonstrates the tool as it
+                  goes or that it expects learners to know it; the claims don't say
+    Whether another course teaches the tool is left to
+    bridge_courserun_prerequisite_coverage, where it can rank possible preparation.
+    It never changes this status, so adding an unrelated course leaves an unchanged
+    run's tool status as it was. tool_status does not change the support rule.
 
-    Unpublished candidates keep their rows, with unpublished_reason, for review.
-    Declared requirements and the other relations are always published.
+    Every relation is kept here for review whatever its claims' review status;
+    accepted_claim_count is how many of claim_count are accepted, and learner-facing
+    views take only relations with at least one.
 #}
 with mentions as (
     select
@@ -52,6 +58,7 @@ with mentions as (
         , concept_kind
         , concept_id
         , prerequisite_kind
+        , review_status
     from {{ ref('int__courseware__resolved_concept_mentions') }}
 )
 
@@ -100,11 +107,9 @@ with mentions as (
         , case when claim_kind = 'declared_prerequisite' then 'declared' end as requirement_source
         , scope_position
         , scope_id
+        , review_status
     from mentions
-    where
-        claim_kind in ('concept', 'assessment_expectation', 'declared_prerequisite')
-        -- "no prerequisites": its label names what is not required
-        and coalesce(prerequisite_kind, '') != 'explicitly_none'
+    where claim_kind in ('concept', 'assessment_expectation', 'declared_prerequisite')
 )
 
 , first_taught as (
@@ -130,6 +135,7 @@ with mentions as (
         , scope_id
         , min(scope_position) as relied_position
         , count(*) as claim_count
+        , count(case when review_status = 'accepted' then 1 end) as accepted_claim_count
     from mentions
     where
         scope_kind = 'unit'
@@ -149,7 +155,9 @@ with mentions as (
         , relied_on.concept_id
         , min(relied_on.relied_position) as first_scope_position
         , sum(relied_on.claim_count) as claim_count
+        , sum(relied_on.accepted_claim_count) as accepted_claim_count
         , count(*) as scope_count
+        , array_agg(relied_on.scope_id order by relied_on.relied_position, relied_on.scope_id) as relied_scope_ids
         , sum(
             case
                 when
@@ -184,40 +192,17 @@ with mentions as (
         or (claim_kind = 'declared_prerequisite' and prerequisite_kind in ('prerequisite', 'recommended'))
 )
 
--- candidates some other course teaches or reviews, as coverage would find them:
--- coverage's providers are current runs only
-, taught_elsewhere as (
-    select distinct
-        inferred_candidates.platform
-        , inferred_candidates.courserun_readable_id
-        , inferred_candidates.concept_id
-    from inferred_candidates
-    inner join run_courses
-        on
-            inferred_candidates.platform = run_courses.platform
-            and inferred_candidates.courserun_readable_id = run_courses.courserun_readable_id
-    inner join direct_relations as teaching
-        on
-            inferred_candidates.concept_id = teaching.concept_id
-            and teaching.relation in ('teaches', 'reviews')
-    inner join course_runs as teaching_courses
-        on
-            teaching.platform = teaching_courses.platform
-            and teaching.courserun_readable_id = teaching_courses.courserun_readable_id
-    where teaching_courses.course_key != run_courses.course_key
-)
-
 , inferred_directions as (
     select
         inferred_candidates.*
         , cast(inferred_candidates.prior_scope_count as double)
         / (inferred_candidates.prior_scope_count + inferred_candidates.taught_scope_count) as direction_consistency
-        , coalesce(
-            concepts.concept_kind = 'tool'
-            and expected_by_run.concept_id is null
-            and taught_elsewhere.concept_id is null
-            , false
-        ) as is_introduced_by_run
+        , case
+            when concepts.concept_kind != 'tool' or concepts.concept_kind is null then cast(null as varchar)
+            when expected_by_run.concept_id is not null then 'assumed'
+            when inferred_candidates.taught_scope_count > 0 then 'introduced'
+            else 'unresolved'
+        end as tool_status
     from inferred_candidates
     left join concepts
         on inferred_candidates.concept_id = concepts.concept_pk
@@ -226,15 +211,10 @@ with mentions as (
             inferred_candidates.platform = expected_by_run.platform
             and inferred_candidates.courserun_readable_id = expected_by_run.courserun_readable_id
             and inferred_candidates.concept_id = expected_by_run.concept_id
-    left join taught_elsewhere
-        on
-            inferred_candidates.platform = taught_elsewhere.platform
-            and inferred_candidates.courserun_readable_id = taught_elsewhere.courserun_readable_id
-            and inferred_candidates.concept_id = taught_elsewhere.concept_id
 )
 
 -- courses that require each concept, for cross-course support: declared, or inferred
--- by a run whose own evidence points the right way and that does not introduce it
+-- by a run whose own evidence points the right way, keyed by run_courses
 , requiring_courses as (
     select
         requiring.concept_id
@@ -245,9 +225,7 @@ with mentions as (
             , courserun_readable_id
             , concept_id
         from inferred_directions
-        where
-            direction_consistency >= {{ var('courseware_prerequisite_min_direction_consistency') }}
-            and not is_introduced_by_run
+        where direction_consistency >= {{ var('courseware_prerequisite_min_direction_consistency') }}
         union all
         select
             platform
@@ -272,12 +250,14 @@ with mentions as (
         , 'inferred' as requirement_source
         , inferred_directions.first_scope_position
         , inferred_directions.claim_count
+        , inferred_directions.accepted_claim_count
         , inferred_directions.scope_count
+        , inferred_directions.relied_scope_ids
         , inferred_directions.prior_scope_count
         , inferred_directions.taught_scope_count
         , coalesce(requiring_courses.course_support, 0) as course_support
         , inferred_directions.direction_consistency
-        , inferred_directions.is_introduced_by_run
+        , inferred_directions.tool_status
     from inferred_directions
     left join requiring_courses
         on inferred_directions.concept_id = requiring_courses.concept_id
@@ -292,12 +272,14 @@ with mentions as (
         , requirement_source
         , min(scope_position) as first_scope_position
         , count(*) as claim_count
+        , count(case when review_status = 'accepted' then 1 end) as accepted_claim_count
         , count(distinct scope_id) as scope_count
+        , {{ null_varchar_array() }} as relied_scope_ids
         , cast(null as bigint) as prior_scope_count
         , cast(null as bigint) as taught_scope_count
         , cast(null as bigint) as course_support
         , cast(null as double) as direction_consistency
-        , false as is_introduced_by_run
+        , cast(null as varchar) as tool_status
     from direct_relations
     group by platform, courserun_readable_id, concept_id, relation, requirement_source
 
@@ -310,7 +292,6 @@ with mentions as (
     select
         *
         , case
-            when is_introduced_by_run then 'introduced_by_run'
             when
                 requirement_source = 'inferred'
                 and prior_scope_count < {{ var('courseware_prerequisite_min_scope_support') }}
@@ -320,7 +301,7 @@ with mentions as (
                 requirement_source = 'inferred'
                 and direction_consistency < {{ var('courseware_prerequisite_min_direction_consistency') }}
                 then 'contested_direction'
-        end as unpublished_reason
+        end as support_rule_failure
     from relations
 )
 
@@ -337,13 +318,16 @@ select
     , judged.requirement_source
     , judged.first_scope_position
     , judged.claim_count
+    , judged.accepted_claim_count
     , judged.scope_count
+    , judged.relied_scope_ids
     , judged.prior_scope_count
     , judged.taught_scope_count
     , judged.course_support
     , judged.direction_consistency
-    , judged.unpublished_reason is null as is_published
-    , judged.unpublished_reason
+    , judged.tool_status
+    , judged.support_rule_failure is null as passes_support_rule
+    , judged.support_rule_failure
 from judged
 left join course_runs
     on

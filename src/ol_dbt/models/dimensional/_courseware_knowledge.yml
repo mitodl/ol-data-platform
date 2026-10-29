@@ -160,6 +160,12 @@ models:
   - name: is_current
     description: boolean, whether the claim's extraction is the one its scope part
       is read from now (int__courseware__extractions)
+  - name: review_status
+    description: str, proposed, accepted or rejected. Only accepted claims reach learner-facing
+      views; every claim is proposed until review exists.
+    tests:
+    - accepted_values:
+        values: [proposed, accepted, rejected]
   - name: extracted_at
     description: timestamp, when the extraction returned
 
@@ -255,7 +261,11 @@ models:
         to: ref('dim_concept')
         field: concept_pk
   - name: review_status
-    description: str, proposed, accepted or rejected
+    description: str, proposed, accepted or rejected. Only accepted concepts reach
+      learner-facing views; every concept is proposed until review exists.
+    tests:
+    - accepted_values:
+        values: [proposed, accepted, rejected]
   - name: wikidata_qid
     description: str, the concept's Wikidata item; null until concept-level linking
       exists
@@ -327,11 +337,13 @@ models:
     - relationships:
         to: ref('dim_concept')
         field: concept_pk
-    # learning order is a strict partial order, so published builds_on has no cycles
+    # builds_on rows are observations, so a cycle among passing edges is a signal
+    # to review, not a broken contract
     - acyclic:
         to_column: to_concept_fk
         config:
-          where: relation = 'builds_on' and is_published
+          severity: warn
+          where: relation = 'builds_on' and passes_support_rule
   - name: to_concept_fk
     description: str, the broader concept, the concept or tool built on, or the higher
       id
@@ -356,8 +368,8 @@ models:
     description: int, builds_on only, scope_support with each course's reruns and
       platform copies counted once (the run with the most units; courses keyed by
       courseware_current_course_runs' course_key, so an edxorg and a mitxonline copy
-      with one readable id are one course); the support the publishing rule reads,
-      since reruns and copies of one course have near-identical text
+      with one readable id are one course); the support the support rule reads, since
+      reruns and copies of one course have near-identical text
   - name: reverse_scope_support
     description: int, builds_on only, course_scope_support of the opposite direction
   - name: direction_consistency
@@ -380,17 +392,18 @@ models:
     description: timestamp, the latest evidence for the edge
   - name: review_status
     description: str, proposed, accepted or rejected
-  - name: is_published
-    description: boolean, whether the edge clears the publishing rule; builds_on needs
+  - name: passes_support_rule
+    description: boolean, whether the edge passes the support rule, which filters
+      noise and does not accept the edge (review_status does that); builds_on needs
       course_scope_support of courseware_prerequisite_min_scope_support and direction_consistency
       of courseware_prerequisite_min_direction_consistency (no course-count clause,
       since every supporting course adds at least one unit), every other relation
-      is published
+      passes. A passing builds_on edge is still a course observation, not a prerequisite
     tests:
     - not_null
-  - name: unpublished_reason
+  - name: support_rule_failure
     description: str, builds_on only, insufficient_support or contested_direction
-      when the edge is not published
+      when the edge fails the support rule
     tests:
     - accepted_values:
         values: [insufficient_support, contested_direction]
@@ -442,12 +455,13 @@ models:
   - name: foundation_rank
     description: float, PageRank over builds_on toward foundations
   - name: sequence_level
-    description: int, longest chain of concepts beneath this one in builds_on
+    description: int, longest chain of concepts beneath this one in builds_on (observed
+      instructional order, not a prerequisite chain)
   - name: hierarchy_depth
     description: int, longest chain of broader concepts above this one
   - name: in_sequence_cycle
-    description: boolean, whether the concept is on a builds_on cycle. Always false,
-      since a published builds_on cycle fails the graph run
+    description: boolean, whether the concept is on a builds_on cycle (a finding to
+      review; builds_on edges are observations, so a cycle is not by itself bad data)
   - name: in_hierarchy_cycle
     description: boolean, whether the concept is on a broader cycle (a data-quality
       finding)
@@ -550,8 +564,15 @@ models:
       the first scope that relies on the concept
   - name: claim_count
     description: int, claims behind the relation
+  - name: accepted_claim_count
+    description: int, accepted claims behind the relation; learner-facing views take
+      only relations with at least one
   - name: scope_count
     description: int, distinct scopes behind the relation
+  - name: relied_scope_ids
+    description: array of str, inferred requires only, the units relying on the concept,
+      in course order; join on (platform, courserun_readable_id, scope_id) to dim_courseware_extraction
+      for the extraction version behind each
   - name: prior_scope_count
     description: int, inferred requires only, units relying on the concept before
       the run teaches it
@@ -561,32 +582,39 @@ models:
   - name: course_support
     description: int, inferred requires only, distinct courses, keyed as bridge_courserun_prerequisite_coverage
       keys them (course_key, across platforms), with a run that declares the concept
-      or infers it with a direction_consistency clearing the threshold and does not
-      introduce it (introduced_by_run), this run included
+      or infers it with a direction_consistency clearing the threshold, this run included
   - name: direction_consistency
     description: float, inferred requires only, prior_scope_count / (prior_scope_count
       + taught_scope_count)
-  - name: is_published
-    description: boolean, whether the relation clears the publishing rule; inferred
-      requires needs the courseware_prerequisite_* support and direction thresholds
-      and must not be a tool the run introduces, every other relation is published
-    tests:
-    - not_null
-  - name: unpublished_reason
-    description: str, inferred requires only, why the requirement is not published.
-      introduced_by_run for a tool the run only uses (no claim of the run assumes
-      it or declares it a prerequisite or recommended background) and no other course,
-      as bridge_courserun_prerequisite_coverage keys courses, teaches or reviews (the
-      run introduces it); otherwise insufficient_support or contested_direction
+  - name: tool_status
+    description: str, inferred requires of a tool only, from the run's own claims;
+      assumed (an assumed_knowledge claim, or a declared prerequisite or recommended
+      background), introduced (the run teaches it in some scope) or unresolved (the
+      run only uses it). Whether another course teaches the tool never changes it
     tests:
     - accepted_values:
-        values: [introduced_by_run, insufficient_support, contested_direction]
+        values: [assumed, introduced, unresolved]
+  - name: passes_support_rule
+    description: boolean, whether the relation passes the support rule, which filters
+      noise and does not accept it; inferred requires needs the courseware_prerequisite_*
+      support and direction thresholds, every other relation passes. A passing inferred
+      requirement is still an observation of this run, not a reviewed prerequisite
+    tests:
+    - not_null
+  - name: support_rule_failure
+    description: str, inferred requires only, insufficient_support or contested_direction
+      when the requirement fails the support rule
+    tests:
+    - accepted_values:
+        values: [insufficient_support, contested_direction]
 
 - name: bridge_courserun_prerequisite_coverage
-  description: Which other course runs cover each concept a course run requires, directly,
-    through a close equivalent, or by teaching enough of its narrower concepts (an
-    umbrella requirement such as Python programming), one row per requirement and
-    providing run.
+  description: Experimental preparation evidence, not a readiness verdict. Which other
+    course runs teach or review each concept a course run requires, directly, through
+    a close equivalent, or through some of its narrower concepts (an umbrella requirement
+    such as Python programming), one row per requirement and providing run, with match
+    type, depth, covered and missing narrower concepts and the sources of uncertainty
+    as separate columns.
   config:
     meta:
       # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
@@ -614,8 +642,10 @@ models:
     description: str, dim_concept.concept_pk, the required concept
   - name: requirement_source
     description: str, declared or inferred
-  - name: requirement_is_published
-    description: boolean, bridge_courserun_concept.is_published of the requirement
+  - name: requirement_passes_support_rule
+    description: boolean, bridge_courserun_concept.passes_support_rule of the requirement;
+      its rule counts other courses requiring the concept, so adding a course can
+      change it
   - name: provider_platform
     description: str, the providing run's platform
   - name: provider_courserun_readable_id
@@ -631,24 +661,36 @@ models:
   - name: match_type
     description: str, direct (teaches or reviews the concept), close (teaches or reviews
       a close equivalent) or narrower (teaches or reviews some of its narrower concepts),
-      the first that applies
+      the closest that applies
     tests:
     - not_null
     - accepted_values:
         values: [direct, close, narrower]
-  - name: narrower_concept_count
-    description: int, narrower concepts of the required concept, within courseware_prerequisite_max_narrower_hops
-      published broader edges, that appear in any current course run
-  - name: narrower_taught_count
-    description: int, of those, the ones the providing run teaches or reviews
-  - name: narrower_coverage
-    description: float, narrower_taught_count / narrower_concept_count; null when
-      the concept has no narrower concepts
-  - name: is_satisfied
-    description: boolean, a direct or close match, or a narrower match with at least
-      courseware_prerequisite_min_narrower_coverage and courseware_prerequisite_min_narrower_taught
+  - name: provider_relation
+    description: str, direct and close only, teaches when the provider teaches the
+      matched concept, reviews when it only reviews it (which can assume it is known)
+  - name: match_depth
+    description: int, broader hops from the required concept to the nearest concept
+      the provider covers; 0 for direct and close
     tests:
     - not_null
+  - name: relies_on_unreviewed_relation
+    description: boolean, whether no covered close or narrower concept is reached
+      over accepted bridge_concept_relation edges only; false for direct
+    tests:
+    - not_null
+  - name: narrower_concept_count
+    description: int, narrower concepts of the required concept, within courseware_prerequisite_max_narrower_hops
+      passing broader edges, that appear in any current course run. This depends on
+      the corpus, not on what the requiring course needs, so it is not a denominator
+      for a verdict
+  - name: narrower_taught_count
+    description: int, of those, the ones the providing run teaches or reviews
+  - name: covered_narrower_concept_fks
+    description: array of str, the narrower concepts the providing run teaches or
+      reviews; null when none
+  - name: missing_narrower_concept_fks
+    description: array of str, the narrower concepts it does not; null when none
 
 - name: bridge_concept_prerequisite_closure
   description: Every concept each concept builds on, directly or through others, at

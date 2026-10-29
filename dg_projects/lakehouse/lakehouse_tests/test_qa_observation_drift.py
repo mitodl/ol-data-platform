@@ -5,6 +5,7 @@ left here is the Dagster side: what it reads, and when a run fails.
 """
 
 import dataclasses
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -12,10 +13,13 @@ from dagster import build_asset_context
 from lakehouse.assets import qa_observation_drift as module
 from lakehouse.assets.qa_observation_drift import qa_observation_drift
 from lakehouse.lib.scheduled_automation import SCHEDULE_ENVIRONMENTS
+from ol_dbt_cli.lib.inventory import load_units
+from ol_dbt_cli.lib.qa_mirror import mirror_tables
 from ol_dbt_cli.lib.qa_observation import (
     OBSERVATION_FILENAME,
     Observation,
     TableState,
+    holds_rows,
     load_observation,
 )
 from ol_orchestrate.lib.failures import PermanentFailure
@@ -76,6 +80,30 @@ def test_a_table_that_landed_fails_the_run(
     assert f"{empty}: committed observation holds no rows, QA now holds 5 rows" in (
         capsys.readouterr().err
     )
+
+
+def test_a_mirror_copy_past_its_max_age_fails_the_run(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    # Ageing changes no table's emptiness, so without this a copy could go
+    # stale indefinitely while the committed observation still matched QA.
+    mirrored = next(
+        table.raw_table
+        for tables in mirror_tables(load_units(module.INVENTORY_DIR)).values()
+        for table in tables
+        if holds_rows(COMMITTED.tables[table.raw_table])
+    )
+    later = dataclasses.replace(
+        COMMITTED, observed_at=COMMITTED.observed_at + timedelta(days=365)
+    )
+    _observing(monkeypatch, later)
+
+    with pytest.raises(PermanentFailure, match="mirror_max_age_days") as raised:
+        qa_observation_drift(build_asset_context())
+
+    assert "qa_mirror_monthly_job" in str(raised.value)
+    assert "QA raw table(s) differ" not in str(raised.value)
+    assert f"{mirrored}: copied " in capsys.readouterr().err
 
 
 def test_a_missing_observation_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):

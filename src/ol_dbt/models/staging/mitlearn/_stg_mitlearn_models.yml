@@ -12,9 +12,14 @@ models:
     - not_null
   - name: user_global_id
     description: str, global identifier that can be used across all MIT Learning platforms
-      to uniquely identify a user
+      to uniquely identify a user. Falls back to scim_external_id when global_id is
+      empty, so a SCIM-provisioned account and the account Learn later created for
+      the same person share one value.
     tests:
-    - unique
+    # Warn only: dim_user keeps one Learn account per user_global_id.
+    - unique:
+        config:
+          severity: warn
   - name: user_username
     description: str, username chosen by the user
     tests:

@@ -3,9 +3,15 @@
     (from, to, relation). This is the graph's edge table and the input to
     ml.lib.courseware.graph.
 
+    Every row is a candidate relation aggregated from observations
+    (int__courseware__concept_relation_evidence, which keeps the course, unit,
+    source and extractor version of each), not an accepted assertion: review_status
+    stays proposed until a review workflow exists.
+
     relation_family groups relations by what they mean for a learner:
       hierarchy    broader      from is a kind or part of to
-      sequence     builds_on    from is learned on top of to
+      sequence     builds_on    units teaching from relied on to (an instructional
+                                observation, not evidence that from requires to)
       practice     practiced_with  learning from involves using the tool to
       equivalence  close        nearly interchangeable (exact matches are merged
                                 into one concept, not linked)
@@ -31,15 +37,18 @@
     whose evidence disappears (an extraction version replaced) drops out on the
     next build.
 
-    builds_on is the one relation this model publishes by rule, because one unit's
-    extraction is one model call and LLMs over-predict prerequisites. An edge is
-    published (is_published) when course_scope_support reaches
+    builds_on is the one relation this model holds to a support rule, because one
+    unit's extraction is one model call and LLMs over-predict reliance. An edge passes
+    (passes_support_rule) when course_scope_support reaches
     courseware_prerequisite_min_scope_support and direction_consistency reaches
     courseware_prerequisite_min_direction_consistency, so only the dominant direction
-    of a contested pair can publish. Every supporting course contributes at least one
-    unit, so a course count could never publish an edge this misses. Unpublished edges keep their rows, with
-    unpublished_reason, for review. Every other relation is is_published, and its
-    consumers apply their own thresholds to the support columns as before.
+    of a contested pair passes. Every supporting course contributes at least one
+    unit, so a course count could never pass an edge this misses. The rule filters
+    noise from repeated observations; it does not show that learning from needs to
+    (two units can each use to in an exercise unrelated to from), so a passing edge
+    is still an observation, not a prerequisite. Edges that fail keep their rows,
+    with support_rule_failure. Every other relation passes, and its consumers apply
+    their own thresholds to the support columns as before.
 #}
 with evidence as (
     select * from {{ ref('int__courseware__concept_relation_evidence') }}
@@ -102,24 +111,35 @@ with evidence as (
     group by from_concept_id, to_concept_id, relation
 )
 
--- the course each run belongs to, keyed as bridge_courserun_concept keys it, so a
+-- units per builds_on run, keyed by course as bridge_courserun_concept keys it, so a
 -- course's reruns and its copies on other platforms count once. A run that is not a
 -- current dim_course_run is keyed by its run id.
 , builds_on_course_runs as (
     select
         evidence.from_concept_id
         , evidence.to_concept_id
-        , evidence.scope_count
         , coalesce(
             course_runs.course_key
             , {{ courseware_course_key('evidence.courserun_readable_id') }}
         ) as course_key
+        , evidence.platform
+        , evidence.courserun_readable_id
+        , sum(evidence.scope_count) as scope_count
     from evidence
     left join course_runs
         on
             evidence.platform = course_runs.platform
             and evidence.courserun_readable_id = course_runs.courserun_readable_id
     where evidence.relation = 'builds_on'
+    group by
+        evidence.from_concept_id
+        , evidence.to_concept_id
+        , coalesce(
+            course_runs.course_key
+            , {{ courseware_course_key('evidence.courserun_readable_id') }}
+        )
+        , evidence.platform
+        , evidence.courserun_readable_id
 )
 
 , builds_on_course_support as (
@@ -157,7 +177,7 @@ with evidence as (
             and support.to_concept_id = reverse_support.from_concept_id
 )
 
-, builds_on_publication as (
+, builds_on_rule as (
     select
         from_concept_id
         , to_concept_id
@@ -168,7 +188,7 @@ with evidence as (
             when not has_min_support then 'insufficient_support'
             when direction_consistency < {{ var('courseware_prerequisite_min_direction_consistency') }}
                 then 'contested_direction'
-        end as unpublished_reason
+        end as support_rule_failure
     from builds_on_direction
 )
 
@@ -188,9 +208,9 @@ select
     , edges.courserun_support
     , edges.scope_support
     , coalesce(reverse_edges.courserun_support, 0) as reverse_courserun_support
-    , builds_on_publication.course_scope_support
-    , builds_on_publication.reverse_scope_support
-    , builds_on_publication.direction_consistency
+    , builds_on_rule.course_scope_support
+    , builds_on_rule.reverse_scope_support
+    , builds_on_rule.direction_consistency
     , case
         when edges.relation = 'complements' and edges.co_taught_unit_count > 0
             then edges.co_taught_unit_count * cast(unit_totals.taught_unit_count as double)
@@ -203,8 +223,8 @@ select
     , edges.first_observed_at
     , edges.last_observed_at
     , 'proposed' as review_status
-    , builds_on_publication.unpublished_reason is null as is_published
-    , builds_on_publication.unpublished_reason
+    , builds_on_rule.support_rule_failure is null as passes_support_rule
+    , builds_on_rule.support_rule_failure
 from edges
 cross join unit_totals
 left join edges as reverse_edges
@@ -213,11 +233,11 @@ left join edges as reverse_edges
         and reverse_edges.relation = 'builds_on'
         and edges.from_concept_id = reverse_edges.to_concept_id
         and edges.to_concept_id = reverse_edges.from_concept_id
-left join builds_on_publication
+left join builds_on_rule
     on
         edges.relation = 'builds_on'
-        and edges.from_concept_id = builds_on_publication.from_concept_id
-        and edges.to_concept_id = builds_on_publication.to_concept_id
+        and edges.from_concept_id = builds_on_rule.from_concept_id
+        and edges.to_concept_id = builds_on_rule.to_concept_id
 left join concept_unit_counts as from_units
     on edges.from_concept_id = from_units.concept_id
 left join concept_unit_counts as to_units
