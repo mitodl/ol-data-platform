@@ -1,7 +1,8 @@
 -- One row per extractor call: which scope of which run it read, with which extractor
--- version and model, and what it cost. Versions are rows, never overwrites, so two
--- extractors or models can be compared on the same scopes; is_current marks the ones
--- the rollups read and is_approved_version the ones of the run's allowlisted version
+-- version and model, and the call's token usage as a diagnostic (cost is in Opik).
+-- Versions are rows, never overwrites, so two extractors or models can be compared
+-- on the same scopes; is_current marks the ones the rollups read and
+-- is_approved_version the ones of the run's allowlisted version
 -- (int__courseware__extractions).
 with extractions as (
     select * from {{ ref('int__courseware__extractions') }}
