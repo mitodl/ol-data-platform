@@ -188,12 +188,18 @@ class _LakeTarget:
     :param schema: The profile's ``schema`` before any ``_<schema_suffix>``.
     :param suffix: Whether the profile appends the ``schema_suffix`` var:
         always, only when one is passed, or never.
+    :param can_defer: Whether ``--defer`` may be used. dbt-starrocks records a
+        lake relation as ``schema.table``, with no catalog, so a deferred parent
+        resolves in this target's catalog whatever manifest it came from. A
+        target whose catalog no other manifest describes (``ci``: the deferred
+        parents would be QA's) builds its parents instead.
     """
 
     env: str
     catalog: str
     schema: str
     suffix: Literal["required", "optional", "none"]
+    can_defer: bool = True
 
 
 # Every lake profile in profiles.yml except starrocks_local, whose schema the
@@ -207,7 +213,9 @@ _LAKE_TARGETS: dict[str, _LakeTarget] = {
     "starrocks_production_lake": _LakeTarget(
         "production", "ol_data_lake_production", "ol_warehouse_production", "none"
     ),
-    "ci": _LakeTarget("ci", "ol_data_lake_ci", "ol_warehouse_ci", "optional"),
+    # CI builds the parents of what it builds from the fixtures in its own raw
+    # schema rather than reading QA's tables through ol_data_lake_ci.
+    "ci": _LakeTarget("ci", "ol_data_lake_ci", "ol_warehouse_ci", "optional", can_defer=False),
 }
 
 
@@ -452,9 +460,14 @@ def run(  # noqa: PLR0913
         Parameter(name="--full-refresh", help="Force a complete rebuild of all models, ignoring state."),
     ] = False,
     defer: Annotated[
-        bool,
-        Parameter(name="--defer", help="Defer upstream refs to state manifest. Default: enabled."),
-    ] = True,
+        bool | None,
+        Parameter(
+            name="--defer",
+            help="Defer upstream refs to state manifest. Default: enabled, except on the `ci` "
+            "target, which refuses it.",
+            show_default=False,
+        ),
+    ] = None,
     save_state: Annotated[
         bool,
         Parameter(name="--save-state", help="Save state artifacts after run. Default: enabled."),
@@ -514,6 +527,18 @@ def run(  # noqa: PLR0913
     # Default to the env-appropriate dbt target if the caller didn't specify one.
     effective_target = target or env_cfg["dbt_target"]
     lake = _LAKE_TARGETS.get(effective_target)
+    if lake is not None and not lake.can_defer:
+        if defer:
+            err_console.print(
+                f"[red]--target {effective_target} cannot --defer:[/] a state manifest records "
+                f"lake relations without their catalog, so its parents would be read from "
+                f"{lake.catalog} under another environment's schema names. Build the parents "
+                "from fixtures instead (e.g. --select +my_model)."
+            )
+            sys.exit(1)
+        defer = False
+    elif defer is None:
+        defer = True
     if lake is not None and lake.env != env:
         err_console.print(
             f"[red]--target {effective_target} cannot be used with --env {env}:[/] it writes "

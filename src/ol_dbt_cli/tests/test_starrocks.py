@@ -266,6 +266,49 @@ def test_an_override_without_the_catalog_stops_before_dbt(
 @patch("ol_dbt_cli.commands.starrocks._dbt_run")
 @patch("ol_dbt_cli.commands.starrocks._start_port_forward")
 @patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_ci_lake_target_refuses_defer(mock_fetch, mock_port_forward, mock_dbt_run, mock_connect) -> None:
+    """A deferred parent renders as schema.table, so on ci it would read QA's tables through ol_data_lake_ci."""
+    with pytest.raises(SystemExit):
+        run(env="ci", target="ci", defer=True)
+
+    mock_fetch.assert_not_called()
+    mock_connect.assert_not_called()
+    mock_dbt_run.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("env", "target", "cli_vars", "defers"),
+    [
+        ("ci", "ci", None, False),
+        ("qa", "starrocks_dev_qa", "{schema_suffix: alice}", True),
+        ("qa", "starrocks_qa_vault", None, True),
+    ],
+)
+@patch("mysql.connector.connect")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_defer_default_follows_the_target(  # noqa: PLR0913
+    mock_fetch,
+    mock_port_forward,
+    mock_dbt_run,
+    mock_connect,
+    env: str,
+    target: str,
+    cli_vars: str | None,
+    defers: bool,  # noqa: FBT001
+) -> None:
+    mock_fetch.return_value = ("user", "pass")
+    run(env=env, target=target, vars=cli_vars)
+
+    _, kwargs = mock_dbt_run.call_args
+    assert kwargs["defer"] is defers
+
+
+@patch("mysql.connector.connect")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
 def test_default_catalog_target_makes_no_schema(mock_fetch, mock_port_forward, mock_dbt_run, mock_connect) -> None:
     """The b2b targets' databases are provisioned in ol-infrastructure."""
     mock_fetch.return_value = ("user", "pass")
