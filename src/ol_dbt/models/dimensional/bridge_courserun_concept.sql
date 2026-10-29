@@ -3,14 +3,17 @@
     assesses or requires, from current verified claims.
 
     requires is declared (a stated prerequisite) or inferred. An inferred requirement
-    is a concept the run relies on (assumed knowledge, or a concept it uses without
-    explaining) before, or without, any scope of the run teaching or reviewing it.
-    The course's documents (the materials scope) accompany its lectures, so a concept
-    they teach counts as taught from the start; the context scope teaches nothing.
+    is an observation about this run: a concept it relies on (assumed knowledge, or a
+    concept it uses without explaining) before, or without, any scope of the run
+    teaching or reviewing it. It is not a reviewed prerequisite, and nothing here
+    says how much of the concept a learner needs. The course's documents (the
+    materials scope) accompany its lectures, so a concept they teach counts as taught
+    from the start; the context scope teaches nothing.
 
-    An inferred requirement is published (is_published) only with support beyond one
-    model call, because LLMs over-predict prerequisites and every spurious one then
-    matches some course that teaches it:
+    An inferred requirement passes the support rule (passes_support_rule) only with
+    support beyond one model call, because LLMs over-predict prerequisites and every
+    spurious one then matches some course that teaches it. Passing filters that
+    noise; it does not accept the requirement:
       - prior_scope_count, the units relying on the concept before the run teaches it,
         is at least courseware_prerequisite_min_scope_support, or course_support,
         the courses with a run that declares the concept or infers it with a
@@ -21,8 +24,8 @@
       - direction_consistency, prior_scope_count over that plus taught_scope_count
         (the scopes that teach it later, which says the run covers it itself), is at
         least courseware_prerequisite_min_direction_consistency.
-    Unpublished candidates keep their rows, with unpublished_reason, for review.
-    Declared requirements and the other relations are always published.
+    Candidates that fail keep their rows, with support_rule_failure, for review.
+    Declared requirements and the other relations always pass.
 #}
 with mentions as (
     select
@@ -230,7 +233,7 @@ with mentions as (
                 requirement_source = 'inferred'
                 and direction_consistency < {{ var('courseware_prerequisite_min_direction_consistency') }}
                 then 'contested_direction'
-        end as unpublished_reason
+        end as support_rule_failure
     from relations
 )
 
@@ -252,8 +255,8 @@ select
     , judged.taught_scope_count
     , judged.course_support
     , judged.direction_consistency
-    , judged.unpublished_reason is null as is_published
-    , judged.unpublished_reason
+    , judged.support_rule_failure is null as passes_support_rule
+    , judged.support_rule_failure
 from judged
 left join course_runs
     on

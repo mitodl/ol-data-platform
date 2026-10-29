@@ -2,16 +2,17 @@
 
 Reads bridge_concept_relation (edges with their evidence) and dim_concept (active
 concepts), keeps the edges that clear the support thresholds (for builds_on, the ones
-dbt publishes), and computes on three views of the graph with NetworKit:
+that pass dbt's support rule), and computes on three views of the graph with NetworKit:
 
 - association: undirected and weighted, every relation family. Leiden communities,
   connected components, degree, density and sparsity, and a local-degree backbone
   score per edge for drawing a sparsified graph.
-- sequence: builds_on, directed from a concept to what it builds on. PageRank on it
-  is a foundation rank (rank flows to the concepts many others build on); strongly
-  connected components find cycles, which are data-quality findings, since learning
-  order should be acyclic; sequence_level is the longest chain of prerequisites
-  beneath a concept.
+- sequence: builds_on, directed from a concept to what it builds on. These edges are
+  observed instructional order (units teaching one concept relied on the other), not
+  reviewed prerequisites, so this view is exploratory. PageRank on it is a foundation
+  rank (rank flows to the concepts many others build on); strongly connected
+  components find cycles, which are findings to review; sequence_level is the longest
+  chain of builds_on edges beneath a concept.
 - hierarchy: broader, directed from narrower to broader. hierarchy_depth is the
   longest chain of broader concepts above a concept; cycles are findings too.
 
@@ -117,7 +118,7 @@ def select_edges(relations: pl.DataFrame) -> pl.DataFrame:
     keep = (
         # bridge_concept_relation owns the builds_on support and direction rule
         pl.when(pl.col("relation") == "builds_on")
-        .then(pl.col("is_published"))
+        .then(pl.col("passes_support_rule"))
         .when(pl.col("relation") == "practiced_with")
         .then(support >= MIN_COURSERUN_SUPPORT)
         .when(pl.col("relation") == "complements")

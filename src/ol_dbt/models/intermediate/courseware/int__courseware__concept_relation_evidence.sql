@@ -1,8 +1,11 @@
 {#
     Every observation that two concepts are related, one row per (concept pair,
-    relation, evidence source, course run). Rows are rebuilt from the current claims
-    and the newest resolution run on every build, so an edge gains support as courses
-    are extracted and loses it when an extraction version stops being current.
+    relation, evidence source, course run, scope) for course evidence and per (concept
+    pair, relation) for adjudication. Course rows keep the extractor version of the
+    scope's current reading, so each observation traces to the unit and the model call
+    behind it. Rows are rebuilt from the current claims and the newest resolution run
+    on every build, so an edge gains support as courses are extracted and loses it
+    when an extraction version stops being current.
 
     Relations, and what produces them:
       broader     resolution adjudication: from is a kind or part of to (hierarchy)
@@ -10,7 +13,9 @@
       related     resolution adjudication: connected, neither same nor kind-of
       builds_on   course_sequence: a unit that teaches `from` relies on `to` (assumes
                   it, uses it unexplained, or reviews it), and `to` is taught earlier
-                  in the same course or not at all; so `from` builds on `to`
+                  in the same course or not at all. This is an instructional
+                  observation in one course, not a dependency between the concepts:
+                  the unit can use `to` in an exercise unrelated to `from`
       practiced_with  the same, when `to` is a tool: learning `from` here involves
                   using the tool, which is not a step in knowledge order
       complements co_taught: both taught in the same unit
@@ -23,6 +28,25 @@
 with mentions as (
     select * from {{ ref('int__courseware__resolved_concept_mentions') }}
     where coalesce(concept_kind, '') != 'dataset'
+)
+
+, extractions as (
+    select * from {{ ref('int__courseware__extractions') }}
+)
+
+-- the extractor version of each scope's current reading; every part of a reading
+-- shares it
+, scope_versions as (
+    select distinct
+        mentions.platform
+        , mentions.courserun_readable_id
+        , mentions.scope_id
+        , extractions.extractor_id
+        , extractions.prompt_version
+        , extractions.model_id
+    from mentions
+    inner join extractions
+        on mentions.extraction_key = extractions.extraction_key
 )
 
 , adjudicated as (
@@ -95,7 +119,8 @@ with mentions as (
         , 'course_sequence' as evidence_source
         , taught.platform
         , taught.courserun_readable_id
-        , count(distinct taught.scope_id) as scope_count
+        , taught.scope_id
+        , 1 as scope_count
         , min(taught.extracted_at) as observed_at
     from taught
     inner join relied_on
@@ -116,7 +141,7 @@ with mentions as (
         or first_taught.first_taught_position < taught.scope_position
     group by
         taught.concept_id, relied_on.concept_id, concept_kinds.concept_kind
-        , taught.platform, taught.courserun_readable_id
+        , taught.platform, taught.courserun_readable_id, taught.scope_id
 )
 
 , co_taught as (
@@ -127,7 +152,8 @@ with mentions as (
         , 'co_taught' as evidence_source
         , left_taught.platform
         , left_taught.courserun_readable_id
-        , count(distinct left_taught.scope_id) as scope_count
+        , left_taught.scope_id
+        , 1 as scope_count
         , min(left_taught.extracted_at) as observed_at
     from taught as left_taught
     inner join taught as right_taught
@@ -136,7 +162,9 @@ with mentions as (
             and left_taught.courserun_readable_id = right_taught.courserun_readable_id
             and left_taught.scope_id = right_taught.scope_id
             and left_taught.concept_id < right_taught.concept_id
-    group by left_taught.concept_id, right_taught.concept_id, left_taught.platform, left_taught.courserun_readable_id
+    group by
+        left_taught.concept_id, right_taught.concept_id
+        , left_taught.platform, left_taught.courserun_readable_id, left_taught.scope_id
 )
 
 , assessed as (
@@ -160,7 +188,8 @@ with mentions as (
         , 'co_assessed' as evidence_source
         , left_assessed.platform
         , left_assessed.courserun_readable_id
-        , count(distinct left_assessed.scope_id) as scope_count
+        , left_assessed.scope_id
+        , 1 as scope_count
         , min(left_assessed.extracted_at) as observed_at
     from assessed as left_assessed
     inner join assessed as right_assessed
@@ -170,7 +199,7 @@ with mentions as (
             and left_assessed.concept_id < right_assessed.concept_id
     group by
         left_assessed.concept_id, right_assessed.concept_id
-        , left_assessed.platform, left_assessed.courserun_readable_id
+        , left_assessed.platform, left_assessed.courserun_readable_id, left_assessed.scope_id
 )
 
 , adjudication as (
@@ -181,15 +210,53 @@ with mentions as (
         , 'adjudication' as evidence_source
         , cast(null as varchar) as platform
         , cast(null as varchar) as courserun_readable_id
+        , cast(null as varchar) as scope_id
         , 0 as scope_count
         , proposed_at as observed_at
     from adjudicated
 )
 
-select * from course_sequence
+, course_evidence as (
+    select * from course_sequence
+    union all
+    select * from co_taught
+    union all
+    select * from co_assessed
+)
+
+select
+    course_evidence.from_concept_id
+    , course_evidence.to_concept_id
+    , course_evidence.relation
+    , course_evidence.evidence_source
+    , course_evidence.platform
+    , course_evidence.courserun_readable_id
+    , course_evidence.scope_id
+    , scope_versions.extractor_id
+    , scope_versions.prompt_version
+    , scope_versions.model_id
+    , course_evidence.scope_count
+    , course_evidence.observed_at
+from course_evidence
+left join scope_versions
+    on
+        course_evidence.platform = scope_versions.platform
+        and course_evidence.courserun_readable_id = scope_versions.courserun_readable_id
+        and course_evidence.scope_id = scope_versions.scope_id
+
 union all
-select * from co_taught
-union all
-select * from co_assessed
-union all
-select * from adjudication
+
+select
+    from_concept_id
+    , to_concept_id
+    , relation
+    , evidence_source
+    , platform
+    , courserun_readable_id
+    , scope_id
+    , cast(null as varchar) as extractor_id
+    , cast(null as varchar) as prompt_version
+    , cast(null as varchar) as model_id
+    , scope_count
+    , observed_at
+from adjudication
