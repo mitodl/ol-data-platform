@@ -451,9 +451,11 @@ def test_text_stage_reads_each_distinct_text_once_per_run():
 def _run_and_copy(
     column: str = "courserun_readable_id", value: str = "course-v1:X+Y+COPY"
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
-    """Return a run and a copy of it under another run."""
+    """Return a run and a copy of it under another run, with its own block ids."""
     run = _rows(["shared text"]).with_columns(source_title=pl.lit("Intro"))
-    return run, run.with_columns(pl.lit(value).alias(column))
+    return run, run.with_columns(
+        pl.lit(value).alias(column), source_ref=pl.lit("copy-block-0")
+    )
 
 
 def test_text_readings_cross_runs_only_when_asked():
@@ -479,8 +481,16 @@ def test_text_readings_cross_runs_only_when_asked():
     )
     assert copied["text_courserun_readable_id"] != copied["courserun_readable_id"]
     assert tables.extractions["text_input_digest"].n_unique() == 1
-    # the copy's evidence names its own blocks
-    assert set(tables.evidence["source_ref"]) == {"block-0"}
+    # each run's evidence names its own blocks, the copy's included
+    refs = tables.evidence.join(
+        tables.extractions.select("extraction_key", "courserun_readable_id"),
+        on="extraction_key",
+    )
+    assert dict(
+        refs.group_by("courserun_readable_id")
+        .agg(pl.col("source_ref").unique().sort())
+        .iter_rows()
+    ) == {"course-v1:X+Y+Z": ["block-0"], "course-v1:X+Y+COPY": ["copy-block-0"]}
 
 
 @pytest.mark.parametrize(("across_runs", "text_calls"), [(False, 1), (True, 0)])
