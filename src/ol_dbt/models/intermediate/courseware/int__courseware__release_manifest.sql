@@ -10,9 +10,12 @@
     whose graph was not computed over its resolution run (is_graph_current), as when
     a resolution run merged concepts and the graph build after it failed.
 
-    It reads every candidate projection and counts its rows, so dbt builds it only
-    after all of them built in the same run, and the release asset, which runs on
-    this model alone, checks the projections it copies still have those counts.
+    It reads every candidate projection, so dbt builds it only after all of them,
+    and records each one's row count and dbt_invocation_id, the dbt invocation that
+    built it. The release asset, which runs on this model alone, refuses projections
+    whose rows another invocation built since, as when a projection is rebuilt
+    alone after this model, so it never copies projections this manifest did not
+    read.
 
     extraction_selection_checksum hashes the current extraction keys. A
     courseware_claims_v2 key hashes the text stage's key (its exact text input) and
@@ -24,22 +27,16 @@
     sense_assignment_version is that run's sense_prompt_version, the version of the
     sense step that wrote it. A run written before sense assignment has none, and the
     release asset refuses it.
+
+    Deploy order: dim_concept and everything built from it, this model included,
+    fail until the courseware_resolution asset has run with sense assignment.
+    That run creates courseware_concept_alias and courseware_concept_sense_assignment
+    and adds split_from_concept_id to the registry and sense_prompt_version to
+    courseware_resolution_run, so this model reads sense_prompt_version directly.
 #}
-{%- set resolution_runs = source('courseware_intermediate', 'courseware_resolution_run') %}
 with registry as (
     select max(resolution_run_id) as resolution_run_id
     from {{ ref('int__courseware__concept_registry') }}
-)
-
--- sense_prompt_version exists once the resolution asset first writes a run with
--- sense assignment; a table only earlier runs wrote lacks it
-, resolution_runs as (
-    select
-        *
-        {{- missing_columns_as_nulls(resolution_runs, {
-            'sense_prompt_version': dbt.type_string(),
-        }) }}
-    from {{ resolution_runs }}
 )
 
 , resolution as (
@@ -48,7 +45,7 @@ with registry as (
         , runs.resolver_id
         , runs.prompt_version as resolution_prompt_version
         , runs.sense_prompt_version as sense_assignment_version
-    from resolution_runs as runs
+    from {{ source('courseware_intermediate', 'courseware_resolution_run') }} as runs
     inner join registry
         on runs.resolution_run_id = registry.resolution_run_id
 )
@@ -84,25 +81,32 @@ with registry as (
         and eligibility.is_source_eligible
 )
 
+-- from the seed, not the description inputs, which a policy excluding every
+-- described run empties while the seed still approves a prompt
 , descriptions as (
-    select max(approved_prompt_version) as description_prompt_version
-    from {{ ref('int__courseware__concept_description_inputs') }}
+    select approval.prompt_version as description_prompt_version
+    from ({{ courseware_approved_description_prompt() }}) as approval
 )
 
 , concepts as (
     select
         count(*) as concept_count
         , count(case when is_awaiting_description then 1 end) as undescribed_concept_count
+        , max(dbt_invocation_id) as concepts_invocation_id
     from {{ ref('int__courseware__release_concepts') }}
 )
 
 , resources as (
-    select count(*) as resource_count
+    select
+        count(*) as resource_count
+        , max(dbt_invocation_id) as resources_invocation_id
     from {{ ref('int__courseware__release_resource_knowledge') }}
 )
 
 , resource_concepts as (
-    select count(*) as resource_concept_count
+    select
+        count(*) as resource_concept_count
+        , max(dbt_invocation_id) as resource_concepts_invocation_id
     from {{ ref('int__courseware__release_resource_concepts') }}
 )
 
@@ -120,6 +124,9 @@ select
     , concepts.concept_count
     , resources.resource_count
     , resource_concepts.resource_concept_count
+    , concepts.concepts_invocation_id
+    , resources.resources_invocation_id
+    , resource_concepts.resource_concepts_invocation_id
     , extractions.extraction_selection_checksum
     , extractions.extraction_count
     , eligibility.source_policy_version

@@ -7,7 +7,9 @@
     input_text_checksum, in order). A reading is complete when, under one extractor
     version and model, every part has an extraction whose input_text_checksum is
     that part's, whichever run wrote it: a part whose text did not change keeps its
-    extraction key, so a later run skips it rather than writing it again.
+    extraction key, so a later run skips it rather than writing it again. For the
+    same reason the latest read's split is a reading even when no extraction records
+    it: its parts can all be stored under other splits (a,b and c,d, then a,d).
 
     A two-stage (v2) extraction's key also covers the course header its context
     stage read, so for v2 the header_version is part of the reading too: after a
@@ -149,6 +151,22 @@ with stored_extractions as (
     from latest_scope_inputs
 )
 
+-- the latest read's split of each scope, as scope_part_checksums
+, latest_splits as (
+    select
+        platform
+        , courserun_readable_id
+        , scope_id
+        , scope_part_count
+        , {{ array_join('array_agg(input_text_checksum order by scope_part)', ',') }} as scope_part_checksums
+    from latest_scope_inputs
+    group by platform, courserun_readable_id, scope_id, scope_part_count
+)
+
+-- Every split an extraction records, and the latest read's split under each version,
+-- model and header that has any of its parts. Nothing records a split recombined
+-- from parts of stored ones (after readings a,b and c,d, a read of a,d finds both
+-- keys stored and writes no row), so the latest read's split is built here.
 , readings as (
     select
         platform
@@ -162,8 +180,53 @@ with stored_extractions as (
         , scope_part_count
         , scope_part_checksums
         , reading_header_version
-        , max(extracted_at) as read_at
-    from extractions
+        , max(read_at) as read_at
+    from (
+        select
+            platform
+            , courserun_readable_id
+            , scope_id
+            , extractor_id
+            , prompt_version
+            , schema_version
+            , model_id
+            , effort
+            , scope_part_count
+            , scope_part_checksums
+            , reading_header_version
+            , extracted_at as read_at
+        from extractions
+
+        union all
+
+        select
+            extractions.platform
+            , extractions.courserun_readable_id
+            , extractions.scope_id
+            , extractions.extractor_id
+            , extractions.prompt_version
+            , extractions.schema_version
+            , extractions.model_id
+            , extractions.effort
+            , latest_splits.scope_part_count
+            , latest_splits.scope_part_checksums
+            , extractions.reading_header_version
+            , extractions.extracted_at as read_at
+        from extractions
+        inner join latest_scope_inputs
+            on
+                extractions.platform = latest_scope_inputs.platform
+                and extractions.courserun_readable_id = latest_scope_inputs.courserun_readable_id
+                and extractions.scope_id = latest_scope_inputs.scope_id
+                and extractions.scope_part = latest_scope_inputs.scope_part
+                and extractions.scope_part_count = latest_scope_inputs.scope_part_count
+                and extractions.input_text_checksum = latest_scope_inputs.input_text_checksum
+        inner join latest_splits
+            on
+                latest_scope_inputs.platform = latest_splits.platform
+                and latest_scope_inputs.courserun_readable_id = latest_splits.courserun_readable_id
+                and latest_scope_inputs.scope_id = latest_splits.scope_id
+    ) as recorded_splits
     group by
         platform
         , courserun_readable_id
@@ -176,40 +239,6 @@ with stored_extractions as (
         , scope_part_count
         , scope_part_checksums
         , reading_header_version
-)
-
--- the splits whose every part has the input the latest read computed
-, latest_splits as (
-    select
-        splits.platform
-        , splits.courserun_readable_id
-        , splits.scope_id
-        , splits.scope_part_count
-        , splits.scope_part_checksums
-    from (
-        select distinct
-            platform
-            , courserun_readable_id
-            , scope_id
-            , scope_part_count
-            , scope_part_checksums
-        from readings
-    ) as splits
-    inner join latest_scope_inputs
-        on
-            splits.platform = latest_scope_inputs.platform
-            and splits.courserun_readable_id = latest_scope_inputs.courserun_readable_id
-            and splits.scope_id = latest_scope_inputs.scope_id
-            and splits.scope_part_count = latest_scope_inputs.scope_part_count
-            and split_part(splits.scope_part_checksums, ',', latest_scope_inputs.scope_part)
-            = latest_scope_inputs.input_text_checksum
-    group by
-        splits.platform
-        , splits.courserun_readable_id
-        , splits.scope_id
-        , splits.scope_part_count
-        , splits.scope_part_checksums
-    having count(*) = splits.scope_part_count
 )
 
 -- the extractions that hold each part of each reading

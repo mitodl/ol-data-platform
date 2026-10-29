@@ -37,6 +37,8 @@ from ml.lib.courseware.evaluation.samples import CONCEPT_CLAIM_KINDS, STATUS_ORD
 
 # Labels per item (y, g); g is 1 for a mean.
 Labels = Mapping[str, tuple[float, float]]
+# A scope id is unique only within its course run (OCW courses reuse session-1).
+SCOPE = ("platform", "courserun_readable_id", "scope_id")
 
 
 def _strata(
@@ -503,7 +505,8 @@ def score_subsections(  # noqa: PLR0913
     :param population: subsections_population output
     :param sample: sample_subsections output (for the blind flag)
     :param annotations: the subsections project's export
-    :param model_concepts: (scope_id, model, canonical, status) per model concept
+    :param model_concepts: (platform, courserun_readable_id, scope_id, model,
+        canonical, status) per model concept
     :param matcher: the matching rule, with any reviewer label map added
     :param alpha: interval error level
     :returns: the report, and the gold concepts no model named, for review
@@ -511,12 +514,14 @@ def score_subsections(  # noqa: PLR0913
     """
     gold = subsection_gold(annotations, matcher)
     blind = dict(sample.select("item_id", "blind").iter_rows())
-    scope_of = dict(population.select("item_id", "scope_id").iter_rows())
-    named: dict[tuple[str, str], dict[str, str]] = {}
-    for scope_id, model, canonical, status in model_concepts.select(
-        "scope_id", "model", "canonical", "status"
+    scope_of = {
+        row[0]: row[1:] for row in population.select("item_id", *SCOPE).iter_rows()
+    }
+    named: dict[tuple[tuple[str, ...], str], dict[str, str]] = {}
+    for *scope, model, canonical, status in model_concepts.select(
+        *SCOPE, "model", "canonical", "status"
     ).iter_rows():
-        named.setdefault((scope_id, model), {})[canonical] = status
+        named.setdefault((tuple(scope), model), {})[canonical] = status
     unmatched: list[dict[str, Any]] = []
     agreement = []
     for item, subsection in gold.items():
@@ -530,8 +535,8 @@ def score_subsections(  # noqa: PLR0913
             )
         found_any = {
             canonical
-            for (scope_id, _), concepts in named.items()
-            if scope_id == scope_of[item]
+            for (scope, _), concepts in named.items()
+            if scope == scope_of[item]
             for canonical in concepts
         }
         unmatched.extend(
@@ -658,15 +663,18 @@ def score_objectives(
       the share where it chose an objective.
 
     Concepts whose gold role tied are left out of both sides. Each is a ratio
-    estimate over the population's strata with no autorater.
+    estimate over the population's strata with no autorater. Role rows for a scope
+    outside the population (a context scope, a course or stratum the sample left
+    out) are not scored, and scopes_outside_population counts them per model.
 
     :param population: subsections_population output
     :param annotations: the subsections project's export
     :param matcher: the matching rule, with any reviewer label map added
     :param alpha: interval error level
-    :param model_roles: scope_id, model, canonical and role (objective, needed, or
-        no_central with a null canonical for a scope the model found no central
-        explanation in); every scope a model extracted needs at least one row
+    :param model_roles: platform, courserun_readable_id, scope_id, model,
+        canonical and role (objective, needed, or no_central with a null canonical
+        for a scope the model found no central explanation in); every scope a model
+        extracted needs at least one row
     :returns: agreement, gold counts, conflicts and per-model estimates
     :rtype: dict[str, Any]
     """
@@ -688,22 +696,27 @@ def score_objectives(
     }
     if model_roles is None:
         return report
-    item_of = dict(population.select("scope_id", "item_id").iter_rows())
-    for (model,), rows in model_roles.group_by("model"):
+    item_of = {
+        row[1:]: row[0] for row in population.select("item_id", *SCOPE).iter_rows()
+    }
+    for (model,), rows in model_roles.group_by("model", maintain_order=True):
         flagged: dict[str, dict[str, set[str]]] = {}
-        for scope_id, canonical, role in rows.select(
-            "scope_id", "canonical", "role"
+        outside = set()
+        for *scope, canonical, role in rows.select(
+            *SCOPE, "canonical", "role"
         ).iter_rows():
-            marks = flagged.setdefault(
-                item_of[scope_id], {r: set() for r in CENTRAL_ROLES}
-            )
+            item = item_of.get(tuple(scope))
+            if item is None:
+                outside.add(tuple(scope))
+                continue
+            marks = flagged.setdefault(item, {r: set() for r in CENTRAL_ROLES})
             if role in CENTRAL_ROLES:
                 marks[role].add(canonical)
         extracted = population.filter(pl.col("item_id").is_in(list(flagged)))
         report["models"][model] = {
             name: _estimate(_strata(extracted, values), alpha=alpha)
             for name, values in _model_role_labels(gold, flagged).items()
-        }
+        } | {"scopes_outside_population": len(outside)}
     return report
 
 
@@ -933,6 +946,21 @@ _SWAP = {
 }
 
 
+def _confirmed_edges(
+    direction: str, value: str, *, lenient: bool
+) -> tuple[float, float]:
+    """Return (emitted edges the consensus confirms, emitted edges) for one pair.
+
+    :param direction: the pair's edge direction, "both" for edges both ways
+    :param value: the dependency consensus
+    :param lenient: count a context_dependent consensus as confirming every edge
+    """
+    emitted = DEPENDENCY_DIRECTIONS if direction == "both" else (direction,)
+    if lenient and value == "context_dependent":
+        return float(len(emitted)), float(len(emitted))
+    return float(value in emitted), float(len(emitted))
+
+
 def score_prerequisites(
     population: pl.DataFrame,
     sample: pl.DataFrame,
@@ -947,8 +975,10 @@ def score_prerequisites(
     predicate gets its own consensus, ties and kappa. From them:
 
     - edge_precision: inferred builds_on edges whose dependency consensus is the
-      edge's direction. edge_precision_lenient also counts a context_dependent
-      consensus as confirming the edge. A practiced_with edge asserts no
+      edge's direction, counted per directed edge: a pair with edges both ways
+      emits two, and a directed consensus confirms at most one of them.
+      edge_precision_lenient also counts a context_dependent consensus as
+      confirming every edge of the pair. A practiced_with edge asserts no
       dependency (the guideline's answer for a tool and what is practiced with it
       is none), so it is left out. Pairs with a builds_on edge cross the strata
       (a pair's stratum follows its best-supported edge), so this is a
@@ -990,22 +1020,15 @@ def score_prerequisites(
     edges = dict(population.select("item_id", "edge_direction").iter_rows())
     builds_on = dict(population.select("item_id", "builds_on_direction").iter_rows())
 
-    def found(
-        item: str,
-        value: str,
-        directions: Mapping[str, str] = edges,
-        *,
-        lenient: bool = False,
-    ) -> bool:
-        if lenient and value == "context_dependent":
-            return directions[item] != "none"
+    def found(item: str, value: str, directions: Mapping[str, str]) -> bool:
+        """Whether an edge runs the way the consensus does, for recall."""
         return value in DEPENDENCY_DIRECTIONS and directions[item] in (value, "both")
 
     def edge_precision(column: str, directions: Mapping[str, str], *, lenient: bool):
         return _strata(
             population.filter(pl.col(column) != "none"),
             {
-                item: (float(found(item, value, directions, lenient=lenient)), 1.0)
+                item: _confirmed_edges(directions[item], value, lenient=lenient)
                 for item, value in dependency.items()
             },
         )

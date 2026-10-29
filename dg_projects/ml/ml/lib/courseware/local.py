@@ -453,8 +453,7 @@ def describe(
         existing=previous,
     )
     output_dir.mkdir(parents=True, exist_ok=True)
-    combined = new_rows if previous is None else pl.concat([previous, new_rows])
-    combined.write_parquet(output_dir / f"{table}.parquet")
+    _append(output_dir, table, new_rows)
     print(f"{new_rows.height} concepts described")  # noqa: T201
 
 

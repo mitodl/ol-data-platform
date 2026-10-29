@@ -20,6 +20,8 @@ from dagster import (
     AssetSelection,
     AssetSpec,
     DagsterInstance,
+    DagsterRun,
+    DagsterRunStatus,
     Definitions,
     IOManager,
     MultiPartitionKey,
@@ -50,6 +52,7 @@ from ml.assets.courseware_release import (
     courseware_release_publication,
 )
 from ml.assets.courseware_resolution import (
+    RUN_KEY,
     assignment_churn,
     courseware_resolution,
 )
@@ -837,6 +840,38 @@ def test_resolution_resolves_only_new_labels(tables, calls):
 
 
 @pytest.mark.usefixtures("embedder")
+def test_resolution_refuses_to_overlap_another_resolution_run(tables, calls):
+    tables["int__courseware__concept_labels"] = labels("auc", "accuracy")
+    instance = DagsterInstance.ephemeral()
+    for run_id, status, selection in (
+        ("other-resolution", DagsterRunStatus.STARTED, frozenset({RUN_KEY})),
+        ("finished-resolution", DagsterRunStatus.SUCCESS, frozenset({RUN_KEY})),
+        ("other-asset", DagsterRunStatus.STARTED, None),
+    ):
+        instance.add_run(
+            DagsterRun(
+                job_name="__ASSET_JOB",
+                run_id=run_id,
+                status=status,
+                asset_selection=selection,
+            )
+        )
+
+    result = resolve(tables, instance=instance)
+
+    assert not result.success
+    error = next(e for e in result.all_events if e.is_step_failure)
+    message = error.step_failure_data.error.message
+    assert "other-resolution" in message
+    assert "finished-resolution" not in message
+    assert calls == []
+    assert "courseware_resolution_run" not in tables
+
+    instance.delete_run("other-resolution")
+    assert resolve(tables, instance=instance).success
+
+
+@pytest.mark.usefixtures("embedder")
 def test_resolution_stores_what_succeeded_and_fails_on_a_failed_batch(tables, calls):
     tables["int__courseware__concept_labels"] = labels("auc", "accuracy", "bias")
     resolve(tables)
@@ -1084,6 +1119,54 @@ def test_description_refuses_a_prompt_that_is_not_approved(
     assert "courseware_concept_description" not in tables
 
 
+def test_description_refuses_inputs_built_before_the_approval_column(tables, calls):
+    # The ml image deployed before lakehouse rebuilt the inputs with the seed.
+    tables[DESCRIPTION_INPUTS] = description_inputs().drop("approved_prompt_version")
+
+    result = describe(tables)
+
+    assert not result.success
+    assert "approves no version" in step_failure(result).description
+    assert calls == []
+    skipped = describe(tables, tags={AUTOMATION_CONDITION_TAG: "true"})
+    assert skipped.success
+    assert skipped.get_asset_materialization_events() == []
+    assert "courseware_concept_description" not in tables
+
+
+def test_description_stamps_the_prompt_version_on_rows_written_before_it(tables, calls):
+    tables[DESCRIPTION_INPUTS] = description_inputs()
+    assert describe(tables).success
+    stored = tables["courseware_concept_description"]
+    # c1 as written before rows carried a prompt_version, and c2 under an older
+    # prompt, which this prompt's version cannot vouch for
+    tables["courseware_concept_description"] = pl.concat(
+        [
+            stored.filter(pl.col("concept_id") == "c1"),
+            stored.filter(pl.col("concept_id") == "c2").with_columns(
+                description_version=pl.lit("0ld0ld0ld0ld")
+            ),
+        ]
+    ).drop("prompt_version")
+    calls.clear()
+
+    assert describe(tables).success
+    assert describe(tables).success
+
+    # c2 is described again, c1 only copied, and neither twice
+    assert calls == ["record_descriptions"]
+    rows = tables["courseware_concept_description"]
+    assert rows.select("concept_id", "prompt_version").rows() == [
+        ("c1", None),
+        ("c2", None),
+        ("c1", DESCRIPTION_PROMPT_VERSION),
+        ("c2", DESCRIPTION_PROMPT_VERSION),
+    ]
+    c1 = rows.filter(pl.col("concept_id") == "c1")
+    assert c1["description"].n_unique() == 1
+    assert c1["described_at"].n_unique() == 1
+
+
 def test_automation_skips_a_description_prompt_that_is_not_approved(
     tables, calls, monkeypatch
 ):
@@ -1201,6 +1284,19 @@ def test_description_describes_only_concepts_new_at_the_approved_version(tables,
         "c1",
         "c2",
     ]
+
+
+def test_description_describes_inputs_that_changed_back_again(tables, calls):
+    # a release takes the newest description, which is of the inputs in between
+    for label in ("auc", "area under the curve", "auc"):
+        tables[DESCRIPTION_INPUTS] = description_inputs(concepts={"c1": label})
+        assert describe(tables).success
+
+    assert calls == ["record_descriptions"] * 3
+    newest = tables["courseware_concept_description"].sort("described_at")[-1]
+    assert newest["input_checksum"].item() == next(
+        iter(current_input_checksums(tables[DESCRIPTION_INPUTS]).values())
+    )
 
 
 def test_description_describes_each_concept_once(tables, calls):
@@ -1432,27 +1528,47 @@ def release_resource_concepts(*names: str) -> pl.DataFrame:
     )
 
 
+def built_by(frame: pl.DataFrame, build: str) -> pl.DataFrame:
+    """Return a candidate projection as dbt invocation build would write it."""
+    return frame.with_columns(
+        pl.lit(build, dtype=pl.String).alias(release_module.BUILD_COLUMN)
+    )
+
+
 def candidate(
     tables: dict[str, pl.DataFrame],
     *names: str,
     stale: tuple[str, ...] = (),
+    build: str = "build1",
     **overrides,
 ) -> None:
-    """Stage what dbt would build for the next release candidate.
+    """Stage what one dbt invocation would build for the next release candidate.
 
     :param stale: names whose description inputs changed since they were described
+    :param build: the dbt invocation id
     """
-    tables["int__courseware__release_manifest"] = manifest(
-        concept_count=len(names),
-        **{"resource_count": 1, "resource_concept_count": len(names), **overrides},
-    )
     tables["int__courseware__concept_description_inputs"] = description_inputs_for(
         *names
     )
-    tables["int__courseware__release_concepts"] = release_concepts(*names, stale=stale)
-    tables["int__courseware__release_resource_knowledge"] = release_resources(*names)
-    tables["int__courseware__release_resource_concepts"] = release_resource_concepts(
-        *names
+    projections = {
+        "int__courseware__release_concepts": release_concepts(*names, stale=stale),
+        "int__courseware__release_resource_knowledge": release_resources(*names),
+        "int__courseware__release_resource_concepts": release_resource_concepts(*names),
+    }
+    for table, frame in projections.items():
+        tables[table] = built_by(frame, build)
+    tables["int__courseware__release_manifest"] = manifest(
+        concept_count=len(names),
+        **{"resource_count": 1, "resource_concept_count": len(names), **overrides},
+    ).with_columns(
+        **{
+            column: pl.lit(build if count else None, dtype=pl.String)
+            for column, count in (
+                ("concepts_invocation_id", len(names)),
+                ("resources_invocation_id", 1),
+                ("resource_concepts_invocation_id", len(names)),
+            )
+        }
     )
 
 
@@ -1533,7 +1649,7 @@ def test_a_failed_graph_build_leaves_the_last_release_published(tables):
     ):
         assert published_rows(tables, table)[column].to_list() == [value]
 
-    # The graph build succeeds: the next candidate moves both projections together.
+    # The graph build succeeds: the next candidate moves all three projections.
     candidate(
         tables,
         "area under the curve",
@@ -1648,6 +1764,33 @@ def test_a_rollback_holds_until_a_new_release_is_built(tables):
     assert tables["courseware_release_publication"]["release_id"][-1] == third
 
 
+def test_a_rollback_does_not_publish_a_release_it_skipped(tables):
+    candidate(tables, "AUC")
+    release(tables)
+    first = tables["courseware_release"]["release_id"][0]
+    # r2 and r3 are built before publication runs again, which takes r3
+    candidate(tables, "AUC", "pandas", extraction_count=4)
+    materialize(
+        [courseware_knowledge_release], resources={"io_manager": Warehouse(tables)}
+    )
+    candidate(tables, "AUC", "pandas", "numpy", extraction_count=5)
+    release(tables)
+    _, skipped, third = tables["courseware_release"]["release_id"].to_list()
+    assert tables["courseware_release_publication"]["release_id"].to_list() == [
+        first,
+        third,
+    ]
+
+    release(tables, release_id=first)
+    release(tables)
+
+    # r2 was never published, but it is older than r3, so it does not undo the
+    # rollback
+    published = tables["courseware_release_publication"]["release_id"].to_list()
+    assert published == [first, third, first]
+    assert skipped not in published
+
+
 def test_publication_refuses_an_invalid_release(tables):
     candidate(tables, "AUC", is_graph_current=False)
     release(tables)
@@ -1672,7 +1815,7 @@ def test_a_description_from_changed_inputs_is_refused(tables):
     check = check_result(built, "release_candidate_valid")
     assert not check.passed
     assert check.metadata["validation_errors"].value == [
-        "1 concepts' descriptions predate their current inputs"
+        "1 concepts' descriptions predate their current inputs or have none"
     ]
     assert published_rows(tables, "courseware_release_concept")["name"].to_list() == [
         "AUC"
@@ -1686,7 +1829,12 @@ def test_a_policy_change_may_empty_the_release_and_blocks_older_rollbacks(tables
 
     # the only run naming AUC is made ineligible: the empty candidate retracts it
     candidate(tables, source_policy_version="pol2", resource_count=0)
-    tables["int__courseware__release_resource_knowledge"] = release_resources().head(0)
+    tables["int__courseware__release_resource_knowledge"] = built_by(
+        release_resources().head(0), "build1"
+    )
+    tables["int__courseware__release_manifest"] = tables[
+        "int__courseware__release_manifest"
+    ].with_columns(resources_invocation_id=pl.lit(None, dtype=pl.String))
     built, _ = release(tables)
 
     assert check_result(built, "release_candidate_valid").passed
@@ -1699,15 +1847,55 @@ def test_a_policy_change_may_empty_the_release_and_blocks_older_rollbacks(tables
     assert failure_class(published) == "PermanentFailure"
 
 
-def test_a_projection_from_another_dbt_build_is_not_released(tables):
+@pytest.mark.parametrize(
+    "rebuilt",
+    [
+        # the concepts were rebuilt after the manifest, the resource model failed
+        ("AUC", "pandas"),
+        # the same count: AUC was merged into another concept, and the resource
+        # projections still name AUC
+        ("area under the curve",),
+    ],
+)
+def test_a_projection_from_another_dbt_build_is_not_released(tables, rebuilt):
     candidate(tables, "AUC")
-    # the concepts were rebuilt after the manifest, the resource model failed
-    tables["int__courseware__release_concepts"] = release_concepts("AUC", "pandas")
+    tables["int__courseware__release_concepts"] = built_by(
+        release_concepts(*rebuilt), "build2"
+    )
 
     built, _ = release(tables)
 
     assert not built.success
+    assert "not the dbt build the manifest read" in str(
+        next(e for e in built.all_events if e.is_step_failure).step_failure_data.error
+    )
     assert "courseware_release" not in tables
+
+
+def test_a_release_carries_no_dbt_invocation(tables):
+    candidate(tables, "AUC")
+    release(tables)
+    candidate(tables, "AUC", build="build2")
+
+    release(tables)
+
+    # a rebuild with the same rows is the same candidate
+    assert tables["courseware_release"].height == 1
+    for table in release_module.PROJECTIONS:
+        assert release_module.BUILD_COLUMN not in tables[table].columns
+
+
+def test_validation_refuses_a_description_of_a_concept_without_inputs():
+    errors = release_module.validate_candidate(
+        manifest().row(0, named=True),
+        release_concepts("AUC"),
+        current_input_checksums(description_inputs_for()),
+        "pol",
+    )
+
+    assert errors == [
+        "1 concepts' descriptions predate their current inputs or have none"
+    ]
 
 
 def test_graph_writes_the_closure_of_approved_edges_and_fails_on_an_approved_cycle(
@@ -1727,6 +1915,10 @@ def test_graph_writes_the_closure_of_approved_edges_and_fails_on_an_approved_cyc
     ) == [("a", "b", 1), ("a", "c", 2), ("b", "c", 1)]
     run_id = tables["courseware_concept_graph_run"]["graph_run_id"][0]
     assert closure["graph_run_id"].unique().to_list() == [run_id]
+    # every approved edge joins active concepts, so the run excludes none
+    assert tables["courseware_concept_graph_run"][
+        "prerequisite_closure_excluded_json"
+    ].to_list() == ["[]"]
 
     # approving c -> a closes a cycle: the run fails permanently and writes nothing,
     # so the previous closure stays the newest
