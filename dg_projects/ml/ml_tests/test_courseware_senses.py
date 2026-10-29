@@ -344,10 +344,8 @@ def test_the_batch_parser_maps_decisions_and_rejects_unlisted_senses():
                         {"run_id": 1, "decision": "new", "sense": 1},
                         # s3 is not listed, so this cannot assign the run
                         {"run_id": 2, "decision": "existing", "sense": 3},
-                        {"run_id": 9, "decision": "existing", "sense": 0},
                     ],
                 },
-                {"query_id": 4, "runs": []},
             ]
         }
     )
@@ -452,6 +450,54 @@ def test_the_batch_parser_rejects_two_decisions_for_one_run():
     )
     with pytest.raises(ValueError, match="more than one sense decision"):
         _adjudicate_senses_batch(client, "fake-model", [query])
+
+
+@pytest.mark.parametrize(
+    ("queries", "error"),
+    [
+        # the model numbered the runs from 1: r1 would take r0's sense
+        (
+            [
+                {
+                    "query_id": 0,
+                    "runs": [
+                        {"run_id": 1, "decision": "existing", "sense": 0},
+                        {"run_id": 2, "decision": "new", "sense": 1},
+                    ],
+                }
+            ],
+            r"Q0 runs \[1, 2\], expected 0 to 1",
+        ),
+        # one run left out
+        (
+            [
+                {
+                    "query_id": 0,
+                    "runs": [{"run_id": 0, "decision": "existing", "sense": 0}],
+                }
+            ],
+            r"Q0 runs \[0\], expected 0 to 1",
+        ),
+        # the whole query left out, and one that was not asked
+        (
+            [{"query_id": 1, "runs": []}],
+            r"queries \[1\], expected 0 to 0",
+        ),
+    ],
+)
+def test_the_batch_parser_rejects_an_omitted_or_unlisted_run(queries, error):
+    query = SenseQuery(
+        "kernel",
+        [Alias("k-os", "primary", "kernel: the core of an operating system", "r")],
+        [
+            Unit(("kernel", "mitxonline", OS), "kernel", TITLES[OS], ("the OS core",)),
+            Unit(("kernel", "mitxonline", ML), "kernel", TITLES[ML], ("a similarity",)),
+        ],
+    )
+    with pytest.raises(ValueError, match=error):
+        _adjudicate_senses_batch(
+            FakeClient({"queries": queries}), "fake-model", [query]
+        )
 
 
 def test_a_synonym_of_a_label_adjudicated_in_the_same_run_is_not_shortcut(
