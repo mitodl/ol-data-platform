@@ -496,12 +496,13 @@ models:
   - name: foundation_rank
     description: float, PageRank over builds_on toward foundations
   - name: sequence_level
-    description: int, longest chain of concepts beneath this one in builds_on
+    description: int, longest chain of concepts beneath this one in builds_on (observed
+      instructional order, not a prerequisite chain)
   - name: hierarchy_depth
     description: int, longest chain of broader concepts above this one
   - name: in_sequence_cycle
-    description: boolean, whether the concept is on a builds_on cycle (a data-quality
-      finding)
+    description: boolean, whether the concept is on a builds_on cycle (a finding to
+      review; builds_on edges are observations, so a cycle is not by itself bad data)
   - name: in_hierarchy_cycle
     description: boolean, whether the concept is on a broader cycle (a data-quality
       finding)
@@ -598,6 +599,10 @@ models:
     description: int, claims behind the relation
   - name: scope_count
     description: int, distinct scopes behind the relation
+  - name: relied_scope_ids
+    description: array of str, inferred requires only, the units relying on the concept,
+      in course order; join on (platform, courserun_readable_id, scope_id) to dim_courseware_extraction
+      for the extraction version behind each
   - name: prior_scope_count
     description: int, inferred requires only, units relying on the concept before
       the run teaches it

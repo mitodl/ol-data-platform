@@ -116,6 +116,7 @@ with mentions as (
         , min(relied_on.relied_position) as first_scope_position
         , sum(relied_on.claim_count) as claim_count
         , count(*) as scope_count
+        , array_agg(relied_on.scope_id order by relied_on.relied_position, relied_on.scope_id) as relied_scope_ids
         , sum(
             case
                 when
@@ -189,6 +190,7 @@ with mentions as (
         , inferred_directions.first_scope_position
         , inferred_directions.claim_count
         , inferred_directions.scope_count
+        , inferred_directions.relied_scope_ids
         , inferred_directions.prior_scope_count
         , inferred_directions.taught_scope_count
         , coalesce(requiring_courses.course_support, 0) as course_support
@@ -208,6 +210,7 @@ with mentions as (
         , min(scope_position) as first_scope_position
         , count(*) as claim_count
         , count(distinct scope_id) as scope_count
+        , {{ null_varchar_array() }} as relied_scope_ids
         , cast(null as bigint) as prior_scope_count
         , cast(null as bigint) as taught_scope_count
         , cast(null as bigint) as course_support
@@ -251,6 +254,7 @@ select
     , judged.first_scope_position
     , judged.claim_count
     , judged.scope_count
+    , judged.relied_scope_ids
     , judged.prior_scope_count
     , judged.taught_scope_count
     , judged.course_support
