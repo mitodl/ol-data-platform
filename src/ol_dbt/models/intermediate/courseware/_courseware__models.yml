@@ -66,22 +66,22 @@ models:
   description: Every claim extraction, and whether it is current, the one its scope
     part is read from now. A scope's current reading is its first complete one by
     the run's allowlist-approved extractor version, then matching the extractor's
-    latest read of the run, then newest, so a run that extracts only some parts of
-    a new reading changes nothing until the rest succeed. A scope the run's extraction
-    sources no longer have has no current extraction.
+    latest read of the run (its text, then for v2 its course header), then newest,
+    so a run that extracts only some parts of a new reading changes nothing until
+    the rest succeed. A scope the run's extraction sources no longer have has no current
+    extraction.
   config:
     meta:
       # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
       qa_buildable: false
   columns:
   - name: extraction_key
-    description: str, sha256 of everything the call depended on (extractor, prompt
-      and schema versions, model, effort, run, scope and the full message text)
+    description: str, sha256 of what the extraction read (see the source's description)
     tests:
     - not_null
     - unique
   - name: extractor_id
-    description: str, the extractor, e.g. courseware_claims_v1
+    description: str, the extractor, e.g. courseware_claims_v2
   - name: prompt_version
     description: str, hash of the system prompt
   - name: schema_version
@@ -115,6 +115,13 @@ models:
   - name: header_version
     description: str, hash of the course header the call read; null for extractions
       recorded before it was
+  - name: text_extraction_key
+    description: str, the text-stage reading the claims came from; null for v1
+  - name: text_input_digest
+    description: str, sha256 of the text stage's exact input; extractions sharing
+      it read identical text, so their claims are one source's; null for v1
+  - name: context_input_digest
+    description: str, sha256 of the context stage's exact input; null for v1
   - name: source_count
     description: int, number of sources the call read
   - name: truncated_source_count
@@ -142,8 +149,8 @@ models:
       and schema) int__courseware__extraction_allowlist approves for the run; null
       when the allowlist does not cover the run
   - name: matches_current_input
-    description: boolean, whether the part's split and input text are the ones the
-      extractor's latest read of the run computed
+    description: boolean, whether the part's split and input text, and for v2 the
+      course header, are the ones the extractor's latest read of the run computed
     tests:
     - not_null
   - name: is_current
@@ -210,8 +217,8 @@ models:
   - name: input_text_checksum
     description: str, sha256 of the source text the part's call would read
   - name: header_version
-    description: str, hash of the course header as read; the same on every row of
-      a run
+    description: str, hash of the course header at the read; null for reads recorded
+      before it was
   - name: observed_at
     description: timestamp, when the extractor read the run
   tests:
@@ -305,6 +312,9 @@ models:
     description: str, the model that made the claim
   - name: extracted_at
     description: timestamp, when the extraction returned
+  - name: text_input_digest
+    description: str, sha256 of the text the claim was read from; claims sharing it
+      are one source's and not independent corroboration; null for v1
   - name: is_current
     description: boolean, whether the claim's extraction is the one its scope part
       is read from now (int__courseware__extractions)
@@ -319,7 +329,14 @@ models:
   - name: concept_kind
     description: str, concept, method, tool, dataset or application (concepts only)
   - name: teaching_status
-    description: str, taught, reviewed, used or mentioned (concepts and skills)
+    description: str, taught, reviewed, used or mentioned (concepts and skills), in
+      the course's context
+  - name: text_teaching_status
+    description: str, the status read from the text alone, before the course context
+      (v2); null for v1
+  - name: sense_hint
+    description: str, the field or sense the course means when the label is ambiguous
+      across fields (v2); null otherwise
   - name: how_used
     description: str, where the material relies on assumed knowledge
   - name: flagged_as_prior

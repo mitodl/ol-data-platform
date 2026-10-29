@@ -13,8 +13,8 @@ import polars as pl
 import pytest
 from anthropic import Anthropic, AnthropicBedrock
 from ml.lib.courseware import scopes
-from ml.lib.courseware.extract import PROMPT_VERSION, extract_scopes
-from ml.lib.courseware.prompts import SYSTEM_PROMPT
+from ml.lib.courseware.extract import TEXT_PROMPT_VERSION, extract_scopes
+from ml.lib.courseware.prompts import TEXT_SYSTEM_PROMPT
 from ml.lib.courseware.tracing import attach_call
 from ml.resources import opik_auth
 
@@ -100,7 +100,7 @@ def span(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(
         opik_auth,
         "_published_prompts",
-        {SYSTEM_PROMPT: PROMPT},
+        {TEXT_SYSTEM_PROMPT: PROMPT},
     )
     recorded: dict[str, Any] = {"metadata": {}}
 
@@ -123,9 +123,11 @@ def test_extraction_span_carries_its_key_and_the_usage_of_every_attempt(span):
 
     tables = extract_scopes([_scope()], client, model_id=MODEL, effort="low")
 
+    # the reading has no claims, so the text stage's is the only call
     assert span["metadata"] == {
-        "extraction_key": tables.extractions["extraction_key"][0],
-        "prompt_version": PROMPT_VERSION,
+        "stage": "text",
+        "key": tables.text_extractions["text_extraction_key"][0],
+        "prompt_version": TEXT_PROMPT_VERSION,
         "effort": "low",
         "platform": "mitxonline",
         "courserun_readable_id": "course-v1:X+Y+Z",
@@ -154,7 +156,7 @@ def test_bedrock_usage_is_attached_in_bedrock_keys(span):
         client,
         "us.anthropic.claude-haiku-5-5",
         [_usage(10, 5, 7)],
-        template=SYSTEM_PROMPT,
+        template=TEXT_SYSTEM_PROMPT,
         metadata={},
     )
 
@@ -169,7 +171,7 @@ def test_bedrock_usage_is_attached_in_bedrock_keys(span):
 
 def test_nothing_is_attached_when_opik_is_not_configured(monkeypatch):
     monkeypatch.delenv("OPIK_URL_OVERRIDE", raising=False)
-    monkeypatch.setattr(opik_auth, "_published_prompts", {SYSTEM_PROMPT: PROMPT})
+    monkeypatch.setattr(opik_auth, "_published_prompts", {TEXT_SYSTEM_PROMPT: PROMPT})
 
     def update_current_span(**_kwargs: Any) -> None:
         msg = "no span is open without Opik"
