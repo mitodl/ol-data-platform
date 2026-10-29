@@ -57,16 +57,6 @@ with enrollment as (
     select * from {{ ref('dim_discount') }}
 )
 
-, program_order_coupons as (
-    select
-        program_orders.order_id
-        , program_orders.platform_fk
-        , max(discount.discount_code) as program_coupon_code
-    from {{ ref('tfact_order') }} as program_orders
-    inner join discount on program_orders.discount_fk = discount.discount_pk
-    group by program_orders.order_id, program_orders.platform_fk
-)
-
 , payment as (
     select
         payment_id
@@ -228,7 +218,7 @@ select
     , f_order.order_state
     , f_order.order_updated_on
     , f_order.program_order_id
-    , program_order_coupons.program_coupon_code
+    , program_discount.discount_code as program_coupon_code
     , payment.transaction_amount as receipt_payment_amount
     , payment_method.payment_method_name as receipt_payment_method
     , payment.transaction_created_on as receipt_payment_timestamp
@@ -267,10 +257,8 @@ left join f_order
     on enrollment.enrollment_key = f_order.enrollment_key
 left join discount
     on f_order.discount_fk = discount.discount_pk
-left join program_order_coupons
-    on
-        f_order.program_order_id = program_order_coupons.order_id
-        and enrollment.platform_fk = program_order_coupons.platform_fk
+left join discount as program_discount
+    on f_order.program_discount_fk = program_discount.discount_pk
 left join payment
     on
         f_order.order_id = payment.order_id

@@ -81,6 +81,7 @@ STARROCKS_TYPES: dict[str, str] = {
 }
 _DECIMAL = re.compile(r"^decimal\((\d+),\s*(\d+)\)$")
 _INTEGER_BITS = {"int": 32, "long": 64}
+_FLOATING = frozenset({"float", "double"})
 # What `full_refresh_append` and `incremental_append` end in, of a unit table's sync modes.
 _APPEND_SUFFIX = "_append"
 
@@ -199,41 +200,22 @@ def parse_fixture(path: Path, unit: Unit) -> UnitFixture:
             msg = f"{path}: {raw_table} is not a table of unit {unit.key}"
             raise ValueError(msg)
         columns: dict[str, str] = body["columns"]
-        if not columns:
-            msg = f"{path}: {raw_table} has no columns"
-            raise ValueError(msg)
-        for column, fixture_type in columns.items():
-            try:
-                starrocks_type(fixture_type)
-            except ValueError as error:
-                msg = f"{path}: {raw_table}.{column}: {error}"
-                raise ValueError(msg) from error
+        check_columns(columns, f"{path}: {raw_table}")
         rows = body.get("rows") or []
         table = TableFixture(raw_table=raw_table, columns=dict(columns), rows=list(rows))
         key_paths = declared[raw_table].get("primary_key") or []
         key_columns = [path[0] for path in key_paths]
         # A key the fixture cannot hold (a nested path, a column it does not
         # declare) is `validate_generated`'s to report: only generating needs it.
-        # An append table keeps every version of a row, so its key repeats.
         comparable = (
             bool(key_paths)
             and all(len(path) == 1 and path[0] in columns for path in key_paths)
-            and not declared[raw_table]["sync_mode"].endswith(_APPEND_SUFFIX)
+            and not _keeps_versions(declared[raw_table])
         )
         seen: dict[tuple[Any, ...], int] = {}
         for number, row in enumerate(rows, start=1):
             label = f"{path}: {raw_table} row {number}"
-            if unknown := sorted(set(row) - set(columns)):
-                msg = f"{label} sets {', '.join(unknown)}, which the table does not have"
-                raise ValueError(msg)
-            for column, value in row.items():
-                if value is None:
-                    continue
-                try:
-                    _stored_value(value, columns[column])
-                except (ValueError, TypeError, ArithmeticError, struct.error) as error:
-                    msg = f"{label} has {value!r} in column {column}, which is not a valid {columns[column]}"
-                    raise ValueError(msg) from error
+            check_row(row, columns, label)
             # A row with no key is NULL there, as any column it leaves out is.
             if not comparable or any(row.get(column) is None for column in key_columns):
                 continue
@@ -245,6 +227,46 @@ def parse_fixture(path: Path, unit: Unit) -> UnitFixture:
             seen[key] = number
         tables.append(table)
     return UnitFixture(path=path, tables=tables)
+
+
+def check_columns(columns: Mapping[str, str], label: str) -> None:
+    """Check that a table declares columns, and only of types the format has.
+
+    :param columns: ``{column: fixture type}``.
+    :param label: Names the table in an error.
+    :raises ValueError: If there are no columns or a type is not in the format.
+    """
+    if not columns:
+        msg = f"{label} has no columns"
+        raise ValueError(msg)
+    for column, fixture_type in columns.items():
+        try:
+            starrocks_type(fixture_type)
+        except ValueError as error:
+            msg = f"{label}.{column}: {error}"
+            raise ValueError(msg) from error
+
+
+def check_row(row: Mapping[str, Any], columns: Mapping[str, str], label: str) -> None:
+    """Check that a fixture row sets only the table's columns, each to a value its type can hold.
+
+    :param row: A hand-written row.
+    :param columns: The table's ``{column: fixture type}``.
+    :param label: Names the row in an error.
+    :raises ValueError: If the row sets a column the table does not have, or a
+        value its column cannot hold.
+    """
+    if unknown := sorted(set(row) - set(columns)):
+        msg = f"{label} sets {', '.join(unknown)}, which the table does not have"
+        raise ValueError(msg)
+    for column, value in row.items():
+        if value is None:
+            continue
+        try:
+            _stored_value(value, columns[column])
+        except (ValueError, TypeError, ArithmeticError, struct.error) as error:
+            msg = f"{label} has {value!r} in column {column}, which is not a valid {columns[column]}"
+            raise ValueError(msg) from error
 
 
 def load_fixtures(inventory_dir: Path, units: Iterable[Unit], *, selected: bool = False) -> list[UnitFixture]:
@@ -314,10 +336,12 @@ def validate_generated(fixture: UnitFixture, unit: Unit, generated: Mapping[str,
     :raises ValueError: If a table is not in the fixture file, a row sets a
         column the table does not have, a primary key column is NULL or holds
         a value its type cannot, or a primary key repeats one of the
-        hand-written or generated rows.
+        hand-written or generated rows of a table that does not keep every
+        version of a row.
     """
     tables = {table.raw_table: table for table in fixture.tables}
     primary_keys = {table["raw_table"]: table["primary_key"] for table in unit.tables if table.get("primary_key")}
+    versioned = {table["raw_table"] for table in unit.tables if _keeps_versions(table)}
     for raw_table, rows in generated.items():
         where = f"{unit.key} factories: {raw_table}"
         if raw_table not in tables:
@@ -346,11 +370,19 @@ def validate_generated(fixture: UnitFixture, unit: Unit, generated: Mapping[str,
                 msg = f"{where} generated row {number} has no value for primary key column {', '.join(missing)}"
                 raise ValueError(msg)
             key = stored_key(table, row, key_columns, f"{where} generated row {number}")
-            if key in seen:
+            if key in seen and raw_table not in versioned:
                 value = ", ".join(f"{column}={row[column]!r}" for column in key_columns)
                 msg = f"{where} generated row {number} repeats primary key {value}"
                 raise ValueError(msg)
             seen.add(key)
+
+
+def _keeps_versions(table: Mapping[str, Any]) -> bool:
+    """Return whether an inventory table keeps every version of a row, so its primary key repeats.
+
+    Staging deduplicates an append table, so a key its raw rows repeat is not an error.
+    """
+    return table["sync_mode"].endswith(_APPEND_SUFFIX)
 
 
 def stored_key(table: TableFixture, row: Mapping[str, Any], key_columns: list[str], label: str) -> tuple[Any, ...]:
@@ -376,6 +408,12 @@ def stored_key(table: TableFixture, row: Mapping[str, Any], key_columns: list[st
 
 
 def _stored_value(value: Any, fixture_type: str) -> Any:  # noqa: C901, PLR0911
+    # int() and float() take a bool (YAML `true`) as 1, which a numeric column
+    # would then hold. bool is an int, so it is named before the int branch.
+    if isinstance(value, bool) and (
+        fixture_type in _INTEGER_BITS or fixture_type in _FLOATING or _DECIMAL.match(fixture_type)
+    ):
+        raise TypeError(value)
     if fixture_type in _INTEGER_BITS:
         number = int(value)
         # int() drops the fraction of a float or Decimal. Of a string it raises.
@@ -416,6 +454,9 @@ def _stored_value(value: Any, fixture_type: str) -> Any:  # noqa: C901, PLR0911
             raise ValueError(value)
         return bool(value)
     if fixture_type == "string":
+        # str() of these is their repr (`b'x'`, a YAML `!!binary` or `!!set`), not text.
+        if isinstance(value, (set, frozenset, tuple, bytes, bytearray)):
+            raise TypeError(value)
         return str(value)
     if fixture_type == "date":
         day = datetime.date.fromisoformat(value) if isinstance(value, str) else value
@@ -439,7 +480,7 @@ def coerce_value(value: Any, fixture_type: str) -> Any:
     ``decimal(p,s)`` is rounded to ``s`` places, an aware ``timestamp`` is moved
     to UTC and loses its offset, and a scalar in a ``string`` column becomes
     its ``str``. A mapping or a list there is left for the loader to write
-    as JSON.
+    as JSON. Anything else goes through the check a hand-written value does.
 
     :param value: The generated value, not ``None``.
     :param fixture_type: The column's type in the fixture file.
@@ -453,10 +494,7 @@ def coerce_value(value: Any, fixture_type: str) -> Any:
             # Raises TypeError here, where the column is known, not in the loader.
             json.dumps(value)
             return value
-        if isinstance(value, (set, frozenset, tuple, bytes, bytearray)):
-            raise TypeError(value)
-        return str(value)
-    if match := _DECIMAL.match(fixture_type):
+    elif match := _DECIMAL.match(fixture_type):
         precision, scale = int(match.group(1)), int(match.group(2))
         # Raises InvalidOperation when the rounded value has more than `precision` digits.
         value = Decimal(str(value)).quantize(Decimal(1).scaleb(-scale), context=Context(prec=precision))

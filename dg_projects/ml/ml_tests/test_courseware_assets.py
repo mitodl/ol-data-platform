@@ -34,7 +34,7 @@ from ml.assets.courseware_extraction import (
     courseware_extraction_text,
     extraction_text_version,
 )
-from ml.lib.courseware import warehouse
+from ml.lib import warehouse
 from ml.resources import opik_auth
 from ml.resources.llm import LLMClientFactory
 from ml.sensors import courseware as sensor_module

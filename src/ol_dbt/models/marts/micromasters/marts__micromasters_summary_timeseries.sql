@@ -57,7 +57,17 @@ with enrollments as (
             as total_enrollments
         , count(distinct enrollments.user_email) as unique_users
         , count(distinct enrollments.user_address_country) as unique_countries
-        , count_if(enrollments.courserunenrollment_enrollment_mode = 'verified') as verified_enrollments
+        -- An enrollment has a row per program its course is in, so it is counted once here,
+        -- on the same key as total_enrollments.
+        , count(
+            distinct case
+                when enrollments.courserunenrollment_enrollment_mode = 'verified'
+                    then concat_ws(
+                        ',', cast(enrollments.user_id as varchar), enrollments.platform, enrollments.courserun_readable_id
+                    )
+            end
+        )
+            as verified_enrollments
         , count(
             distinct case
                 when enrollments.courserunenrollment_enrollment_mode = 'verified' then enrollments.user_email
