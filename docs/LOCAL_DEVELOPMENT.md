@@ -405,7 +405,7 @@ If you need to go back to the Trino-based workflow:
 
 ```bash
 # Use legacy target (Trino, until Galaxy access is revoked)
-uv run dbt run --target dev_qa
+uv run dbt run --target dev_qa --vars '{schema_suffix: your_username}'
 
 # Or clean up local environment
 rm -rf ~/.ol-dbt/
