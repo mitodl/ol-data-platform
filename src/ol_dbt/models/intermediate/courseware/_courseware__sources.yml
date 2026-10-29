@@ -200,6 +200,14 @@ sources:
         or contained a distinct verdict
     - name: started_at
       description: timestamp, when the run started
+    - name: sense_prompt_version
+      description: str, hash of the sense adjudication prompt and schema
+    - name: sense_calls
+      description: int, sense adjudication model calls made
+    - name: senses_minted
+      description: int, concepts split off a label for a new sense
+    - name: sense_review_count
+      description: int, (label, course run) units in the review queue
   - name: courseware_concept_registry
     description: Every concept id ever minted, per resolution run.
     columns:
@@ -218,8 +226,12 @@ sources:
       description: str, the run that minted the id
     - name: minted_at
       description: timestamp, when the id was minted
+    - name: split_from_concept_id
+      description: str, for a concept minted as another sense of a label, the label's
+        primary concept it was split from; null in snapshots written before senses
   - name: courseware_concept_assignment
-    description: Which concept each normalized label belongs to, per resolution run.
+    description: Which concept each normalized label belongs to (its primary sense),
+      per resolution run.
     columns:
     - name: resolution_run_id
       description: str, the run this snapshot row belongs to
@@ -231,6 +243,62 @@ sources:
       description: str, carried, exact_match, minted or rebuild_carried
     - name: assigned_run_id
       description: str, the run that first made this assignment
+  - name: courseware_concept_alias
+    description: Every sense of every normalized label, per resolution run (ml.lib.courseware.senses).
+      A label has its primary concept and any concepts split off it for another meaning.
+    columns:
+    - name: resolution_run_id
+      description: str, the run this snapshot row belongs to
+    - name: concept_label_key
+      description: str, the normalized label key
+    - name: concept_id
+      description: str, the active concept this sense is
+    - name: sense_role
+      description: str, primary (the label's concept from label resolution) or split
+    - name: sense_gloss
+      description: str, what the label means in this sense, as the sense model is
+        shown it
+    - name: added_run_id
+      description: str, the run that first gave the label this sense
+  - name: courseware_concept_sense_assignment
+    description: Which sense of its label each course run uses, per resolution run,
+      one row per (concept_label_key, platform, courserun_readable_id).
+    columns:
+    - name: resolution_run_id
+      description: str, the run this snapshot row belongs to
+    - name: concept_label_key
+      description: str, the normalized label key
+    - name: platform
+      description: str, the course run's platform
+    - name: courserun_readable_id
+      description: str, the course run
+    - name: concept_id
+      description: str, the concept the run's sense of the label is; null in the review
+        queue
+    - name: sense_status
+      description: str, assigned or needs_review
+    - name: assignment_source
+      description: str, single_sense (the label's only course run), context_selected,
+        new_sense or unsure
+    - name: assigned_run_id
+      description: str, the run that made the assignment
+  - name: courseware_sense_decision
+    description: Every sense adjudication decision, append-only, for review and evaluation.
+    columns:
+    - name: resolution_run_id
+      description: str, the run that made the decision
+    - name: concept_label_key
+      description: str, the label
+    - name: platform
+      description: str, the course run's platform
+    - name: courserun_readable_id
+      description: str, the course run
+    - name: decision
+      description: str, existing, new or unsure
+    - name: concept_id
+      description: str, the concept chosen or minted; null when unsure
+    - name: model_id
+      description: str, the sense adjudication model
   - name: courseware_concept_relation
     description: Concept-to-concept relations proposed by adjudication, per run, carried
       forward and redirect-resolved.

@@ -1,0 +1,331 @@
+from types import SimpleNamespace
+
+import polars as pl
+import pytest
+from ml.lib.courseware import resolve, senses
+from ml.lib.courseware.resolve import ResolutionState
+from ml.lib.courseware.senses import Alias, SenseQuery, Unit, _adjudicate_senses_batch
+from ml_tests.test_courseware_resolve import labels, run, state_from
+
+OS = "course-v1:MITx+6.033+1T2026"
+ML = "course-v1:MITx+6.036+1T2026"
+LINALG = "course-v1:MITx+18.06+1T2026"
+TITLES = {
+    OS: "Computer Systems Engineering",
+    ML: "Introduction to Machine Learning",
+    LINALG: "Linear Algebra",
+}
+
+
+def mentions(*uses):
+    """One mention per (label, course run)."""
+    rows = [
+        {
+            "concept_label_key": key,
+            "platform": "mitxonline",
+            "courserun_readable_id": courserun,
+            "course_title": TITLES[courserun],
+            "label": key,
+            "concept_kind": "concept",
+            "description": f"{key} as {TITLES[courserun]} uses it",
+            "teaching_status": "taught",
+        }
+        for key, courserun in uses
+    ]
+    return pl.DataFrame(rows, schema=dict.fromkeys(rows[0], pl.String))
+
+
+@pytest.fixture
+def verdicts(monkeypatch):
+    """Label adjudication finds no exact matches, so each label is its own concept."""
+
+    def fake_adjudicate(_client, _model_id, _candidates, _rows):
+        return [], 1, set()
+
+    monkeypatch.setattr(resolve, "adjudicate", fake_adjudicate)
+
+
+@pytest.fixture
+def choose(monkeypatch):
+    """Replace sense adjudication with a table, {courserun: (decision, sense)}.
+
+    A run missing from the table fails, as a failed batch does.
+    """
+    table: dict[str, tuple[str, int | None]] = {}
+    asked: list[SenseQuery] = []
+
+    def fake_adjudicate_senses(_client, _model_id, queries):
+        asked.extend(queries)
+        decided = [
+            (unit.key, *table[unit.key[2]])
+            for query in queries
+            for unit in query.units
+            if unit.key[2] in table
+        ]
+        return decided, len(queries)
+
+    monkeypatch.setattr(senses, "adjudicate_senses", fake_adjudicate_senses)
+    return SimpleNamespace(table=table, asked=asked)
+
+
+def sense_of(result, key, courserun):
+    row = result.sense_assignments.filter(
+        (pl.col("concept_label_key") == key)
+        & (pl.col("courserun_readable_id") == courserun)
+    )
+    return row.row(0, named=True) if row.height else None
+
+
+def registry_of(result):
+    return {row["concept_id"]: row for row in result.registry.iter_rows(named=True)}
+
+
+@pytest.mark.usefixtures("verdicts")
+def test_a_label_in_one_course_run_takes_its_only_sense_without_a_call(choose):
+    result = run(labels("kernel"), mentions=mentions(("kernel", OS)))
+    assignment = sense_of(result, "kernel", OS)
+    assert assignment["concept_id"] == result.assignments["concept_id"][0]
+    assert assignment["assignment_source"] == "single_sense"
+    assert choose.asked == []
+
+
+@pytest.mark.usefixtures("verdicts")
+def test_a_homonym_splits_into_a_new_sense_with_lineage(choose):
+    choose.table[OS] = ("existing", 0)
+    choose.table[ML] = ("new", 1)
+    result = run(labels("kernel"), mentions=mentions(("kernel", OS), ("kernel", ML)))
+    primary = result.assignments["concept_id"][0]
+    os_sense = sense_of(result, "kernel", OS)
+    ml_sense = sense_of(result, "kernel", ML)
+    assert os_sense["concept_id"] == primary
+    assert ml_sense["concept_id"] != primary
+    assert ml_sense["assignment_source"] == "new_sense"
+    registry = registry_of(result)
+    assert registry[ml_sense["concept_id"]]["split_from_concept_id"] == primary
+    assert registry[ml_sense["concept_id"]]["concept_status"] == "active"
+    aliases = result.aliases.filter(pl.col("concept_label_key") == "kernel")
+    assert aliases["sense_role"].to_list() == ["primary", "split"]
+    assert aliases["concept_id"].to_list() == [primary, ml_sense["concept_id"]]
+    assert result.run["senses_minted"][0] == 1
+
+
+@pytest.mark.usefixtures("verdicts")
+def test_runs_sharing_a_new_sense_get_one_concept(choose):
+    choose.table[OS] = ("existing", 0)
+    choose.table[ML] = ("new", 1)
+    choose.table[LINALG] = ("new", 1)
+    result = run(
+        labels("kernel"),
+        mentions=mentions(("kernel", OS), ("kernel", ML), ("kernel", LINALG)),
+    )
+    assert (
+        sense_of(result, "kernel", ML)["concept_id"]
+        == sense_of(result, "kernel", LINALG)["concept_id"]
+    )
+    assert result.run["senses_minted"][0] == 1
+
+
+@pytest.mark.usefixtures("verdicts")
+def test_a_run_the_model_cannot_place_goes_to_review_and_stays_there(choose):
+    choose.table[OS] = ("existing", 0)
+    choose.table[ML] = ("unsure", None)
+    uses = mentions(("kernel", OS), ("kernel", ML))
+    first = run(labels("kernel"), mentions=uses)
+    queued = sense_of(first, "kernel", ML)
+    assert queued["sense_status"] == "needs_review"
+    assert queued["concept_id"] is None
+    assert first.run["sense_review_count"][0] == 1
+    choose.asked.clear()
+    second = run(labels("kernel"), state_from(first), mentions=uses)
+    assert sense_of(second, "kernel", ML)["sense_status"] == "needs_review"
+    assert choose.asked == []
+
+
+@pytest.mark.usefixtures("verdicts")
+def test_a_new_course_run_of_a_known_label_is_adjudicated_not_inherited(choose):
+    first = run(labels("pandas"), mentions=mentions(("pandas", OS)))
+    pandas = sense_of(first, "pandas", OS)["concept_id"]
+    choose.table[ML] = ("existing", 0)
+    second = run(
+        labels("pandas"),
+        state_from(first),
+        mentions=mentions(("pandas", OS), ("pandas", ML)),
+    )
+    # the earlier run is carried, the new one asked about, and the id kept
+    assert [unit.key[2] for query in choose.asked for unit in query.units] == [ML]
+    assert sense_of(second, "pandas", OS)["concept_id"] == pandas
+    assert sense_of(second, "pandas", ML)["concept_id"] == pandas
+    assert sense_of(second, "pandas", ML)["assignment_source"] == "context_selected"
+    assert (
+        sense_of(second, "pandas", OS)["assigned_run_id"]
+        == (first.run["resolution_run_id"][0])
+    )
+
+
+@pytest.mark.usefixtures("verdicts")
+def test_a_new_run_can_select_a_split_sense(choose):
+    choose.table[OS] = ("existing", 0)
+    choose.table[ML] = ("new", 1)
+    first = run(labels("kernel"), mentions=mentions(("kernel", OS), ("kernel", ML)))
+    ml_kernel = sense_of(first, "kernel", ML)["concept_id"]
+    choose.asked.clear()
+    choose.table[LINALG] = ("existing", 1)
+    second = run(
+        labels("kernel"),
+        state_from(first),
+        mentions=mentions(("kernel", OS), ("kernel", ML), ("kernel", LINALG)),
+    )
+    [query] = choose.asked
+    assert [alias.concept_id for alias in query.senses][1] == ml_kernel
+    assert sense_of(second, "kernel", LINALG)["concept_id"] == ml_kernel
+    assert second.run["senses_minted"][0] == 0
+
+
+@pytest.mark.usefixtures("verdicts")
+def test_a_failed_sense_batch_leaves_the_runs_unassigned_for_the_next_run(choose):
+    first = run(labels("kernel"), mentions=mentions(("kernel", OS), ("kernel", ML)))
+    assert first.sense_assignments.height == 0
+    choose.table[OS] = ("existing", 0)
+    choose.table[ML] = ("existing", 0)
+    second = run(
+        labels("kernel"),
+        state_from(first),
+        mentions=mentions(("kernel", OS), ("kernel", ML)),
+    )
+    assert second.sense_assignments.height == 2
+
+
+@pytest.mark.usefixtures("verdicts")
+def test_a_rebuild_keeps_split_senses(choose):
+    choose.table[OS] = ("existing", 0)
+    choose.table[ML] = ("new", 1)
+    uses = mentions(("kernel", OS), ("kernel", ML))
+    first = run(labels("kernel"), mentions=uses)
+    ml_kernel = sense_of(first, "kernel", ML)["concept_id"]
+    rebuilt = run(labels("kernel"), state_from(first), mentions=uses, rebuild=True)
+    assert registry_of(rebuilt)[ml_kernel]["concept_status"] == "active"
+    assert sense_of(rebuilt, "kernel", ML)["concept_id"] == ml_kernel
+    assert rebuilt.run["concepts_deprecated"][0] == 0
+
+
+@pytest.mark.usefixtures("verdicts")
+def test_sense_assignments_follow_a_label_merge(choose, monkeypatch):
+    first = run(
+        labels("auc", "area under the curve", mentions={"auc": 5}),
+        mentions=mentions(("auc", OS), ("area under the curve", ML)),
+    )
+    survivor = sense_of(first, "auc", OS)["concept_id"]
+    loser = sense_of(first, "area under the curve", ML)["concept_id"]
+
+    def merge_new_label(_client, _model_id, _candidates, _rows):
+        return (
+            [("auc roc", "auc", "exact"), ("auc roc", "area under the curve", "exact")],
+            1,
+            set(),
+        )
+
+    monkeypatch.setattr(resolve, "adjudicate", merge_new_label)
+    second = run(
+        labels("auc", "area under the curve", "auc roc", mentions={"auc": 5}),
+        state_from(first),
+        mentions=mentions(
+            ("auc", OS), ("area under the curve", ML), ("auc roc", LINALG)
+        ),
+    )
+    assert registry_of(second)[loser]["merged_into_concept_id"] == survivor
+    assert sense_of(second, "area under the curve", ML)["concept_id"] == survivor
+    assert choose.asked == []
+
+
+@pytest.mark.usefixtures("verdicts")
+def test_registry_rows_from_before_senses_read_without_split_lineage():
+    first = run(labels("pandas"), mentions=mentions(("pandas", OS)))
+    old = state_from(first)
+    old.registry = old.registry.drop("split_from_concept_id")
+    second = run(labels("pandas"), old, mentions=mentions(("pandas", OS)))
+    assert second.registry["split_from_concept_id"].to_list() == [None]
+
+
+class FakeStream:
+    def __init__(self, response):
+        self.response = response
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def get_final_message(self):
+        return self.response
+
+
+class FakeClient:
+    """Answers every call with one record_senses tool call."""
+
+    def __init__(self, tool_input):
+        block = SimpleNamespace(type="tool_use", name="record_senses", input=tool_input)
+        self.response = SimpleNamespace(content=[block], stop_reason="tool_use")
+        self.calls = []
+        self.messages = self
+
+    def stream(self, **kwargs):
+        self.calls.append(kwargs)
+        return FakeStream(self.response)
+
+
+def test_the_batch_parser_maps_decisions_and_rejects_unlisted_senses():
+    query = SenseQuery(
+        "kernel",
+        [Alias("k-os", "primary", "kernel: the core of an operating system", "r")],
+        [
+            Unit(("kernel", "mitxonline", OS), "kernel", TITLES[OS], ("the OS core",)),
+            Unit(("kernel", "mitxonline", ML), "kernel", TITLES[ML], ("a similarity",)),
+            Unit(("kernel", "mitxonline", LINALG), "kernel", TITLES[LINALG], ()),
+        ],
+    )
+    client = FakeClient(
+        {
+            "queries": [
+                {
+                    "query_id": 0,
+                    "runs": [
+                        {"run_id": 0, "decision": "existing", "sense": 0},
+                        {"run_id": 1, "decision": "new", "sense": 1},
+                        # s3 is not listed, so this cannot assign the run
+                        {"run_id": 2, "decision": "existing", "sense": 3},
+                        {"run_id": 9, "decision": "existing", "sense": 0},
+                    ],
+                },
+                {"query_id": 4, "runs": []},
+            ]
+        }
+    )
+    decided = _adjudicate_senses_batch(client, "fake-model", [query])
+    assert decided == [
+        (("kernel", "mitxonline", OS), "existing", 0),
+        (("kernel", "mitxonline", ML), "new", 1),
+        (("kernel", "mitxonline", LINALG), "unsure", None),
+    ]
+    [call] = client.calls
+    listing = call["messages"][0]["content"]
+    assert "s0: kernel: the core of an operating system" in listing
+    assert "r1: kernel in Introduction to Machine Learning: a similarity" in listing
+
+
+def test_the_batch_parser_raises_when_the_model_records_nothing():
+    client = FakeClient(None)
+    client.response.content = []
+    query = SenseQuery(
+        "kernel",
+        [Alias("k", "primary", "g", "r")],
+        [Unit(("kernel", "mitxonline", OS), "kernel", TITLES[OS], ())],
+    )
+    with pytest.raises(ValueError, match="no sense decisions"):
+        _adjudicate_senses_batch(client, "fake-model", [query])
+
+
+def test_default_state_has_empty_sense_tables():
+    state = ResolutionState()
+    assert state.aliases.is_empty()
+    assert state.sense_assignments.is_empty()
