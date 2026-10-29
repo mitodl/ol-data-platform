@@ -561,6 +561,9 @@ sources:
     description: One row per dictionary tagging run (ml.lib.courseware.tagging), which
       tags every extraction source with the concepts of dim_concept_alias. Each run
       is a full snapshot.
+    config:
+      enabled: "{{ var('courseware_tagging_in_warehouse') or target.type == 'duckdb'\
+        \ }}"
     columns:
     - name: tagging_run_id
       description: str, the run's UUID; re-running old inputs gets a new one, so the
@@ -610,6 +613,9 @@ sources:
   - name: courseware_concept_mention
     description: Every place a dictionary phrase occurs in an extraction source's
       text, per tagging run, one row per candidate concept.
+    config:
+      enabled: "{{ var('courseware_tagging_in_warehouse') or target.type == 'duckdb'\
+        \ }}"
     columns:
     - name: tagging_run_id
       description: str, the tagging run
@@ -638,6 +644,9 @@ sources:
   - name: courseware_concept_tagging_alias
     description: The dictionary a tagging run matched, one row per (phrase, concept),
       with each phrase's match mode and ambiguity flags.
+    config:
+      enabled: "{{ var('courseware_tagging_in_warehouse') or target.type == 'duckdb'\
+        \ }}"
     columns:
     - name: tagging_run_id
       description: str, the tagging run
@@ -669,6 +678,9 @@ sources:
       an answer key or worked solutions (ml.lib.courseware.answer_check), one row
       per source per check version and source text. A copy of a text already checked
       reuses its verdict.
+    config:
+      enabled: "{{ var('courseware_answer_check_in_warehouse') or target.type == 'duckdb'\
+        \ }}"
     columns:
     - name: platform
       description: str, mitxonline, mitxpro, residential or ocw
