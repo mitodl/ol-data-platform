@@ -317,7 +317,7 @@ models:
       row; the graph asset records it on its run so a knowledge release can check
       the graph matches its concepts
   - name: label_count
-    description: int, normalized labels assigned to the concept
+    description: int, normalized labels with mentions assigned to the concept
   - name: mention_count
     description: int, mentions across those labels
   - name: courserun_count

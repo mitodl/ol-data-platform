@@ -391,10 +391,10 @@ def courseware_resolution(
     if run["failed_batch_count"] or undecided_units:
         raise AdjudicationFailure(
             description=(
-                f"{run['failed_batch_count']} of {run['adjudication_calls']} "
+                f"{run['failed_batch_count']} of {run['adjudication_calls']} label "
                 f"adjudication batches failed ({run['failed_label_count']} labels, "
                 f"{unassigned} left without a concept); {undecided_units} course "
-                "runs' uses of a label have no sense decision"
+                "runs' uses of a label are in a failed sense batch"
             ),
             metadata={
                 "retryable": False,
