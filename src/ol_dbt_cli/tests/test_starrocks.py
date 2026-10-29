@@ -130,7 +130,7 @@ def test_profile_schema_is_what_dbt_renders(target: str, cli_vars: dict[str, str
 
     assert rendered["schema"] == schema
     assert rendered["catalog"] == _LAKE_TARGETS[target].catalog
-    assert _profile_schema(target, _LAKE_TARGETS[target], json.dumps(cli_vars) if cli_vars else None) == schema
+    assert _profile_schema(target, _LAKE_TARGETS[target], cli_vars) == schema
 
 
 @patch("ol_dbt_cli.commands.starrocks._dbt_run")
@@ -215,6 +215,51 @@ def test_lake_target_gets_its_profile_schema_with_a_location_first(  # noqa: PLR
         "dbt",
     ]
     mock_connect.return_value.close.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    ("cli_vars", "location"),
+    [
+        (
+            "{iceberg_schema_location_roots: {ol_data_lake_ci: 's3://elsewhere/processed'}}",
+            "s3://elsewhere/processed/ol_warehouse_ci",
+        ),
+        # JSON is YAML, and is what the --vars help shows.
+        (
+            '{"schema_suffix": "pr_1", "iceberg_schema_location_roots": {"ol_data_lake_ci": "s3://elsewhere"}}',
+            "s3://elsewhere/ol_warehouse_ci_pr_1",
+        ),
+    ],
+)
+@patch("mysql.connector.connect")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_profile_schema_location_follows_a_vars_override(  # noqa: PLR0913
+    mock_fetch, mock_port_forward, mock_dbt_run, mock_connect, cli_vars: str, location: str
+) -> None:
+    """starrocks__create_schema reads the var dbt was given, so the profile schema must too."""
+    mock_fetch.return_value = ("user", "pass")
+    run(env="ci", target="ci", vars=cli_vars)
+
+    (sql,), _ = mock_connect.return_value.cursor.return_value.execute.call_args
+    assert sql.endswith(f'PROPERTIES ("location" = "{location}")')
+
+
+@patch("mysql.connector.connect")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_an_override_without_the_catalog_stops_before_dbt(
+    mock_fetch, mock_port_forward, mock_dbt_run, mock_connect
+) -> None:
+    """Dbt replaces the whole map with the --vars one, so the macro would raise on it too."""
+    mock_fetch.return_value = ("user", "pass")
+    with pytest.raises(SystemExit):
+        run(env="ci", target="ci", vars="{iceberg_schema_location_roots: {ol_data_lake_qa: 's3://x'}}")
+
+    mock_connect.assert_not_called()
+    mock_dbt_run.assert_not_called()
 
 
 @patch("mysql.connector.connect")

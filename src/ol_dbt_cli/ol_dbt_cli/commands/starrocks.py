@@ -211,13 +211,13 @@ _LAKE_TARGETS: dict[str, _LakeTarget] = {
 }
 
 
-def _profile_schema(target: str, lake: _LakeTarget, cli_vars: str | None) -> str:
+def _profile_schema(target: str, lake: _LakeTarget, cli_vars: dict[str, Any]) -> str:
     """Return the schema the *target* profile renders for these ``--vars``.
 
     :raises SystemExit: when the profile needs a ``schema_suffix`` and none was
         passed, or the result is not a name Iceberg can load from Glue.
     """
-    suffix = (yaml.safe_load(cli_vars) or {}).get("schema_suffix") if cli_vars else None
+    suffix = cli_vars.get("schema_suffix")
     if lake.suffix == "required" and not suffix:
         err_console.print(f"[red]--target {target} needs a schema suffix:[/] pass --vars '{{schema_suffix: <name>}}'.")
         sys.exit(1)
@@ -231,18 +231,29 @@ def _profile_schema(target: str, lake: _LakeTarget, cli_vars: str | None) -> str
     return schema
 
 
-def _ensure_profile_schema(lake: _LakeTarget, schema: str, host: str, dbt_dir: Path) -> None:
+def _ensure_profile_schema(lake: _LakeTarget, schema: str, host: str, dbt_dir: Path, cli_vars: dict[str, Any]) -> None:
     """Create the profile's schema in *lake*'s catalog, with a location, if it is missing.
 
     The location follows starrocks__create_schema: ``<root>/<schema>``, with the
-    root from the ``iceberg_schema_location_roots`` var in dbt_project.yml.
+    root from the ``iceberg_schema_location_roots`` var. A ``--vars`` value for it
+    replaces dbt_project.yml's whole map, as it does for dbt, so the root is read
+    from the same place the macro reads it.
     ``IF NOT EXISTS`` leaves an existing database as it is, location or not.
     """
     import mysql.connector  # noqa: PLC0415
     from mysql.connector import errors  # noqa: PLC0415
 
-    project = yaml.safe_load((dbt_dir / "dbt_project.yml").read_text())
-    location = f"{project['vars']['iceberg_schema_location_roots'][lake.catalog]}/{schema}"
+    roots = (
+        cli_vars.get("iceberg_schema_location_roots")
+        or yaml.safe_load((dbt_dir / "dbt_project.yml").read_text())["vars"]["iceberg_schema_location_roots"]
+    )
+    if lake.catalog not in roots:
+        err_console.print(
+            f"[red]No entry for catalog {lake.catalog!r} in the iceberg_schema_location_roots var,[/] "
+            f"so {schema!r} cannot be given a location."
+        )
+        sys.exit(1)
+    location = f"{roots[lake.catalog]}/{schema}"
     try:
         connection = mysql.connector.connect(
             host=host,
@@ -509,7 +520,9 @@ def run(  # noqa: PLR0913
             f"{lake.catalog}, which only the {lake.env} cluster can write. Use --env {lake.env}."
         )
         sys.exit(1)
-    lake_schema = _profile_schema(effective_target, lake, vars) if lake is not None else None
+    # dbt reads --vars as YAML too.
+    cli_vars: dict[str, Any] = (yaml.safe_load(vars) or {}) if vars else {}
+    lake_schema = _profile_schema(effective_target, lake, cli_vars) if lake is not None else None
     # substructure/starrocks grants `app` only USAGE on a lake catalog and DML on
     # its tables. Building one takes CREATE DATABASE and CREATE TABLE.
     if vault_role is None:
@@ -548,7 +561,7 @@ def run(  # noqa: PLR0913
     os.environ["DBT_DATA_LAKE_ENV"] = env_cfg["data_lake_env"]
 
     if lake is not None and lake_schema is not None:
-        _ensure_profile_schema(lake, lake_schema, host, _find_dbt_dir(project_dir))
+        _ensure_profile_schema(lake, lake_schema, host, _find_dbt_dir(project_dir), cli_vars)
 
     started = time.time()
     try:
