@@ -16,15 +16,16 @@
     A label can name several concepts (its senses), and the dictionary emits a
     candidate for each. Which one a mention means is the course run's sense of the
     label (int__courseware__concept_sense_assignments), never the dictionary's:
-    - course_sense: the run's sense of the label is this concept, or the run gave
-      another label to this concept (the dictionary records one label per phrase and
+    - course_sense: the run's sense of the label is this concept, or the run never
+      used the label but gave another label to this concept and to none of the
+      phrase's other candidates (the dictionary records one label per phrase and
       concept, e.g. "CSV" from "comma-separated values (CSV)" but not from "CSV file
       (CSV)");
     - needs_review: the run's sense of the label is in the review queue;
     - candidate: nothing has decided the sense here: the extractor never named the
-      label in this run (even when the label has one known sense), or the run's
-      sense is a concept this tagging run had no candidate for (a sense split off
-      since).
+      label in this run (even when the label has one known sense) and names none or
+      several of the phrase's concepts under other labels, or the run's sense is a
+      concept this tagging run had no candidate for (a sense split off since).
     A candidate for a concept other than the run's sense is dropped when that sense
     is among the phrase's candidates, so one sense is not spread to every course
     that uses the label. Ambiguity flags are review signals and decide nothing.
@@ -60,6 +61,22 @@ with mentions as (
     from aliases
 )
 
+-- how many of a phrase's candidate concepts each course run assigned under any label
+, phrase_run_concepts as (
+    select
+        phrase_concepts.pattern_key
+        , run_concepts.platform
+        , run_concepts.courserun_readable_id
+        , count(*) as assigned_candidate_count
+    from phrase_concepts
+    inner join run_concepts
+        on phrase_concepts.concept_id = run_concepts.concept_id
+    group by
+        phrase_concepts.pattern_key
+        , run_concepts.platform
+        , run_concepts.courserun_readable_id
+)
+
 , redirected as (
     select
         mentions.tagging_run_id
@@ -85,7 +102,14 @@ with mentions as (
             when sense_assignments.concept_id = aliases.concept_id then 'course_sense'
             -- another of the phrase's candidates is the run's sense of the label
             when sense_candidates.concept_id is not null then null
-            when run_concepts.concept_id is not null then 'course_sense'
+            -- the run never used the label, and named only this one of the phrase's
+            -- concepts under another label; an explicit sense the dictionary has no
+            -- candidate for, or several named concepts, decide nothing
+            when
+                sense_assignments.concept_label_key is null
+                and run_concepts.concept_id is not null
+                and phrase_run_concepts.assigned_candidate_count = 1
+                then 'course_sense'
             else 'candidate'
         end as sense_status
         , mentions.matched_text
@@ -110,6 +134,11 @@ with mentions as (
             mentions.platform = run_concepts.platform
             and mentions.courserun_readable_id = run_concepts.courserun_readable_id
             and aliases.concept_id = run_concepts.concept_id
+    left join phrase_run_concepts
+        on
+            mentions.pattern_key = phrase_run_concepts.pattern_key
+            and mentions.platform = phrase_run_concepts.platform
+            and mentions.courserun_readable_id = phrase_run_concepts.courserun_readable_id
 )
 
 select
