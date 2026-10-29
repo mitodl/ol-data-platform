@@ -414,7 +414,9 @@ _READING = [
 ]
 
 
-def current_extractions(extractions: pl.DataFrame) -> pl.DataFrame:
+def current_extractions(
+    extractions: pl.DataFrame, sources: pl.DataFrame
+) -> pl.DataFrame:
     """Return each model's newest complete reading of each scope, one row per part.
 
     The rule int__courseware__extractions applies, per model: a reading is a split
@@ -423,8 +425,11 @@ def current_extractions(extractions: pl.DataFrame) -> pl.DataFrame:
     reading is current and each of its parts reads from its newest matching
     extraction. Taking the newest extraction of each part on its own would mix two
     splits when a scope is split differently or a new reading is partly extracted.
+    A scope no longer in sources (retired) has no current extraction, as
+    subsections_population leaves it out.
 
     :param extractions: courseware_claim_extraction rows, one per extraction_key
+    :param sources: int__courseware__extraction_sources rows, the current scopes
     :returns: the current extractions
     :rtype: pl.DataFrame
     """
@@ -458,7 +463,12 @@ def current_extractions(extractions: pl.DataFrame) -> pl.DataFrame:
         .unique([*scope, "scope_part"], keep="first")
         .select("extraction_key")
     )
-    return extractions.join(keys, on="extraction_key")
+    current_scopes = sources.select(
+        "platform", "courserun_readable_id", "scope_id"
+    ).unique()
+    return extractions.join(keys, on="extraction_key").join(
+        current_scopes, on=["platform", "courserun_readable_id", "scope_id"], how="semi"
+    )
 
 
 def load_inputs(  # noqa: PLR0913
@@ -495,8 +505,9 @@ def load_inputs(  # noqa: PLR0913
         ],
         how="diagonal_relaxed",
     ).unique("extraction_key", keep="first")
+    source_rows = pl.read_parquet(sources)
     current = (
-        current_extractions(extractions)
+        current_extractions(extractions, source_rows)
         .sort("extraction_key")
         .select(
             "extraction_key",
@@ -583,7 +594,7 @@ def load_inputs(  # noqa: PLR0913
         extractions=current,
         claims=claims,
         evidence=evidence,
-        sources=pl.read_parquet(sources),
+        sources=source_rows,
         assignments=assignments,
         registry=registry,
         concept_relations=concept_relations,

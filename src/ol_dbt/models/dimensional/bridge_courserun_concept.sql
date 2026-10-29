@@ -32,7 +32,9 @@
     tool_status describes an inferred requirement of a tool from this run's own claims
     only. A concept is a tool here when most of the run's claims that give it a kind
     say tool (a tie counts as tool), not by dim_concept.concept_kind, which votes
-    across every course:
+    across every course. Assumed-knowledge and declared-prerequisite claims give no
+    kind, so a run that names the concept only through those takes
+    dim_concept.concept_kind; the status still comes from the run's claims alone:
       assumed     the run says learners should already know it: an assumed_knowledge
                   claim in any scope, or a declared prerequisite or recommended
                   background
@@ -73,8 +75,13 @@ with mentions as (
     {{ courseware_current_course_runs() }}
 )
 
--- whether the run's own claims call each concept a tool; assumed-knowledge claims
--- carry no kind, so a concept only those mention has no row
+, concepts as (
+    select * from {{ ref('dim_concept') }}
+)
+
+-- whether the run's own claims call each concept a tool; assumed-knowledge and
+-- declared-prerequisite claims carry no kind, so a concept only those mention has
+-- no row and is judged by dim_concept.concept_kind
 , run_concept_kinds as (
     select
         platform
@@ -226,7 +233,7 @@ with mentions as (
         , cast(inferred_candidates.prior_scope_count as double)
         / (inferred_candidates.prior_scope_count + inferred_candidates.taught_scope_count) as direction_consistency
         , case
-            when not coalesce(run_concept_kinds.is_tool, false) then cast(null as varchar)
+            when not coalesce(run_concept_kinds.is_tool, concepts.concept_kind = 'tool', false) then cast(null as varchar)
             when expected_by_run.concept_id is not null then 'assumed'
             when inferred_candidates.taught_scope_count > 0 then 'introduced'
             else 'unresolved'
@@ -237,6 +244,8 @@ with mentions as (
             inferred_candidates.platform = run_concept_kinds.platform
             and inferred_candidates.courserun_readable_id = run_concept_kinds.courserun_readable_id
             and inferred_candidates.concept_id = run_concept_kinds.concept_id
+    left join concepts
+        on inferred_candidates.concept_id = concepts.concept_pk
     left join expected_by_run
         on
             inferred_candidates.platform = expected_by_run.platform
