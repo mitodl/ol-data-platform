@@ -23,26 +23,17 @@ with tags as (
     select * from {{ ref('int__courseware__concept_tags') }}
 )
 
-, registry as (
-    select * from {{ ref('int__courseware__concept_registry') }}
-)
-
 , aliases as (
+    -- dictionary rows of one phrase whose concepts have since merged fold into one
     select *
     from (
         select
-            alias.*
-            , alias.concept_id as tagged_concept_id
-            , coalesce(registry.merged_into_concept_id, alias.concept_id) as current_concept_id
+            *
             , row_number() over (
-                partition by alias.pattern_key, coalesce(registry.merged_into_concept_id, alias.concept_id)
-                order by alias.concept_id
+                partition by pattern_key, concept_id
+                order by tagged_concept_id
             ) as concept_rank
-        from {{ source('courseware_intermediate', 'courseware_concept_tagging_alias') }} as alias
-        inner join (select distinct tagging_run_id from tags) as latest_run
-            on alias.tagging_run_id = latest_run.tagging_run_id
-        left join registry
-            on alias.concept_id = registry.concept_id
+        from {{ ref('int__courseware__concept_tagging_aliases') }}
     ) as ranked
     where concept_rank = 1
 )
@@ -157,7 +148,7 @@ with tags as (
 select
     aliases.tagging_run_id
     , aliases.pattern_key
-    , aliases.current_concept_id as concept_id
+    , aliases.concept_id
     , aliases.tagged_concept_id
     , aliases.concept_label_key
     , aliases.variant
@@ -188,8 +179,8 @@ cross join totals
 left join phrase_stats
     on
         aliases.pattern_key = phrase_stats.pattern_key
-        and aliases.current_concept_id = phrase_stats.concept_id
+        and aliases.concept_id = phrase_stats.concept_id
 left join concept_label_counts
-    on aliases.current_concept_id = concept_label_counts.concept_id
+    on aliases.concept_id = concept_label_counts.concept_id
 left join label_scopes
     on aliases.concept_label_key = label_scopes.concept_label_key

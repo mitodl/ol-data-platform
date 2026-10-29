@@ -47,8 +47,9 @@ and ambiguity flags: short, qualified (a head without its qualifier), single_wor
 phrase belongs to more than one concept, which emits one mention per candidate).
 Ambiguous mentions are emitted with the flag rather than dropped. Many single words
 are what these courses teach (variance, recall, regression), so dropping them would
-cost more recall than the flag costs a consumer, who can filter on it or require
-the extractor's corroboration.
+cost more recall than the flag costs a consumer. The flags are review signals: which
+of a label's concepts a mention means is decided in dbt by the course run's sense of
+the label (int__courseware__concept_tags), not here.
 
 These are mentions only. Whether a block teaches a concept is the extractor's call.
 """

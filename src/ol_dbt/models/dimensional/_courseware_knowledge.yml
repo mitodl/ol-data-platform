@@ -585,7 +585,11 @@ models:
   - name: first_char_start
     description: int, offset of the first mention in the source's text
   - name: is_ambiguous
-    description: boolean, every mention came through an ambiguous phrase
+    description: boolean, every mention came through an ambiguous phrase; a review
+      signal, not a sense decision
+  - name: is_sense_resolved
+    description: boolean, the course run's sense of the label is this concept; otherwise
+      the row is a mention candidate whose sense nothing has decided
   - name: is_cited_by_extractor
     description: boolean, a current verified claim naming the concept quotes this
       source

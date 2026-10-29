@@ -4,10 +4,15 @@
     with dim_concept_alias. Mentions only, not teaching status: bridge_courserun_concept
     has what a run teaches, uses or requires.
 
+    Every row is a mention candidate. is_sense_resolved is true when the course run's
+    sense of the label is this concept, i.e. the extractor named the label in the run
+    and sense assignment chose this concept; otherwise nothing has decided which of
+    the label's concepts the text means here, even for a label with one known sense.
+    Where the concept must be right, require is_sense_resolved.
+
     is_ambiguous is true when every mention came through an ambiguous phrase (short, a
     head without its qualifier, a single lowercase word such as "data", or shared by
-    several concepts). Where a wrong tag costs more than a missed one, filter on it or
-    require is_named_in_scope or is_cited_by_extractor.
+    several concepts). It is a review signal for the dictionary, not a sense decision.
 #}
 with tags as (
     select * from {{ ref('int__courseware__concept_tags') }}
@@ -45,6 +50,7 @@ with tags as (
         , count(distinct pattern_key) as phrase_count
         , min(char_start) as first_char_start
         , min(case when is_ambiguous then 1 else 0 end) = 1 as is_ambiguous
+        , max(case when sense_status = 'course_sense' then 1 else 0 end) = 1 as is_sense_resolved
     from tags
     group by
         tagging_run_id
@@ -75,6 +81,7 @@ select
     , source_concepts.phrase_count
     , source_concepts.first_char_start
     , source_concepts.is_ambiguous
+    , source_concepts.is_sense_resolved
     , cited_sources.source_ref is not null as is_cited_by_extractor
     , named_in_scope.concept_id is not null as is_named_in_scope
     , source_concepts.tagging_run_id
