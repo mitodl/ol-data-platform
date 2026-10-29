@@ -34,6 +34,7 @@ from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
 from ml.lib.courseware.resolve import EMBEDDING_DIM as RESOLUTION_EMBEDDING_DIM
 from ml.lib.courseware.resolve import ResolutionState, resolve_concepts
 from ml.lib.courseware.scopes import CHARS_PER_TOKEN, build_scopes
+from ml.lib.courseware.tagging import ConceptDictionary, tag_sources, tagging_input_key
 from ml.lib.embed import resolve_embedding_model
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import OPIK_PROJECT_NAME
@@ -66,7 +67,10 @@ def _write(frame: pl.DataFrame, output_dir: Path, table: str) -> None:
 def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
     previous = _existing(output_dir, table)
     _write(
-        new_rows if previous is None else pl.concat([previous, new_rows]),
+        # diagonal: a column added since the file was written is null in older rows
+        new_rows
+        if previous is None
+        else pl.concat([previous, new_rows], how="diagonal_relaxed"),
         output_dir,
         table,
     )
@@ -178,19 +182,23 @@ def _latest_run(
 
 
 @app.command
-def resolve(
+def resolve(  # noqa: PLR0913
     concept_labels: Path,
+    sense_inputs: Path,
     output_dir: Path,
     *,
     model_id: str = BEDROCK_DESCRIPTION_MODEL,
     aws_region: str = "us-east-1",
     rebuild: bool = False,
 ) -> None:
-    """Assign concept labels to stable concept ids, resolving only new labels.
+    """Assign concept labels to stable concept ids, resolving only new labels, then
+    assign each course run's use of a label to one of the label's senses.
 
     :param concept_labels: int__courseware__concept_labels exported to parquet
+    :param sense_inputs: int__courseware__concept_sense_inputs exported to parquet
     :param output_dir: where the resolution tables are read and appended
-    :param model_id: Bedrock model or inference profile id for adjudication
+    :param model_id: Bedrock model or inference profile id for label and sense
+        adjudication
     :param aws_region: Bedrock region for adjudication; the label embeddings go
         through ol-llm, which reads AWS_DEFAULT_REGION
     :param rebuild: re-resolve every label, carrying ids forward by overlap
@@ -225,6 +233,8 @@ def resolve(
         ("registry", "courseware_concept_registry"),
         ("assignments", "courseware_concept_assignment"),
         ("relations", "courseware_concept_relation"),
+        ("aliases", "courseware_concept_alias"),
+        ("sense_assignments", "courseware_concept_sense_assignment"),
     ):
         snapshot = _latest_run(output_dir, table, last_run)
         if snapshot is not None:
@@ -238,6 +248,7 @@ def resolve(
         state,
         client,
         embedding_client,
+        mentions=pl.read_parquet(sense_inputs),
         model_id=model_id,
         rebuild=rebuild,
     )
@@ -246,7 +257,10 @@ def resolve(
         ("courseware_concept_registry", result.registry),
         ("courseware_concept_assignment", result.assignments),
         ("courseware_concept_relation", result.relations),
+        ("courseware_concept_alias", result.aliases),
+        ("courseware_concept_sense_assignment", result.sense_assignments),
         ("courseware_resolution_decision", result.decisions),
+        ("courseware_sense_decision", result.sense_decisions),
         ("courseware_concept_label_embedding", result.embeddings),
         ("courseware_resolution_run", result.run),
     ):
@@ -280,6 +294,7 @@ def graph(concepts: Path, relations: Path, output_dir: Path) -> None:
         ("courseware_concept_graph_node", result.nodes),
         ("courseware_concept_graph_edge", result.edges),
         ("courseware_concept_graph_community", result.communities),
+        ("courseware_concept_graph_prerequisite_closure", result.prerequisite_closure),
         ("courseware_concept_graph_run", result.run),
     ):
         _append(output_dir, table, new_rows)
@@ -323,6 +338,34 @@ def describe(
     combined = new_rows if previous is None else pl.concat([previous, new_rows])
     combined.write_parquet(output_dir / f"{table}.parquet")
     print(f"{new_rows.height} concepts described")  # noqa: T201
+
+
+@app.command
+def tag(sources: Path, aliases: Path, output_dir: Path) -> None:
+    """Tag every source with the known concepts its text mentions.
+
+    :param sources: int__courseware__extraction_sources exported to parquet
+    :param aliases: dim_concept_alias exported to parquet
+    :param output_dir: where the courseware_concept_tagging_* and
+        courseware_concept_mention tables are appended
+    """
+    source_rows = pl.read_parquet(sources)
+    alias_rows = pl.read_parquet(aliases)
+    runs = _existing(output_dir, "courseware_concept_tagging_run")
+    input_key = tagging_input_key(ConceptDictionary(alias_rows), source_rows)
+    # only the newest run counts: after A, B, A the warehouse must move back to A
+    if runs is not None and runs.sort("tagged_at")["input_key"][-1] == input_key:
+        print("the newest tagging run already has these inputs")  # noqa: T201
+        return
+    result = tag_sources(source_rows, alias_rows)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for table, new_rows in (
+        ("courseware_concept_mention", result.mentions),
+        ("courseware_concept_tagging_alias", result.aliases),
+        ("courseware_concept_tagging_run", result.run),
+    ):
+        _append(output_dir, table, new_rows)
+    print(result.run.to_dicts()[0])  # noqa: T201
 
 
 @app.command(name="answer-check")
