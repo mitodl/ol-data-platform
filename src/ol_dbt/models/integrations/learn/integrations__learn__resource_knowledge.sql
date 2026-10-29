@@ -4,8 +4,11 @@
 
     context_document renders the same arrays as markdown, deterministically, so it can
     be embedded as a resource's search text (the embedding substrate's
-    resource_knowledge_markdown_v1 builder) without another model call. Concepts are
-    still 'proposed'; filtering to accepted ones belongs here once review exists.
+    resource_knowledge_markdown_v1 builder) without another model call.
+
+    Only accepted concepts and accepted claims are published; proposed ones stay in
+    dim_concept and tfact_courseware_claim for review. No review workflow exists
+    yet, so the concept and statement arrays are null until one does.
 #}
 with extractions as (
     select * from {{ ref('dim_courseware_extraction') }}
@@ -28,11 +31,12 @@ with extractions as (
 
 , concepts as (
     select * from {{ ref('dim_concept') }}
+    where review_status = 'accepted'
 )
 
 , claims as (
     select * from {{ ref('tfact_courseware_claim') }}
-    where is_current and is_verified
+    where is_current and is_verified and review_status = 'accepted'
 )
 
 -- the course's run with the newest extraction
