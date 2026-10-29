@@ -88,24 +88,6 @@ ol-dbt local setup --layers all
 
 ## Cleanup Trino Dev Schemas
 
-**Using dbt run-operation (Recommended)**:
-```bash
-cd src/ol_dbt
-
-# Drop schemas with your suffix (dry run first to preview)
-uv run dbt run-operation trino__drop_old_relations \
-  --args "{dry_run: true}" --target dev_production
-
-# Execute cleanup
-uv run dbt run-operation trino__drop_old_relations --target dev_production
-
-# Drop all schemas with prefix
-uv run dbt run-operation trino__drop_schemas_by_prefixes \
-  --args "{prefixes: ['ol_warehouse_production_myname']}" \
-  --target dev_production
-```
-
-**Using Python CLI** (more detailed output):
 ```bash
 # Dry run
 ol-dbt local cleanup --target dev_production

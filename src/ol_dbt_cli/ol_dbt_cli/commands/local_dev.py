@@ -1123,11 +1123,6 @@ def cleanup(
     Safely drops tables/views in developer schemas (identified by a suffix) while
     blocking deletion of production and QA base schemas.
 
-    For most cases, prefer the dbt run-operation approach inside src/ol_dbt:
-
-        uv run dbt run-operation trino__drop_schemas_by_prefixes \\
-            --args "{prefixes: ['ol_warehouse_production_myname']}"
-
     Safety features:
     - Only operates on schemas containing your suffix
     - Dry-run by default; requires --execute to delete
