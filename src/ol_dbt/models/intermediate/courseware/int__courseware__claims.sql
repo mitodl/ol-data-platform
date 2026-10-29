@@ -20,12 +20,21 @@
     decisions; this is where they will be joined in. Learner-facing views take only
     accepted claims.
 #}
+{%- set stored_claims = source('courseware_intermediate', 'courseware_claim') %}
 with extractions as (
     select * from {{ ref('int__courseware__extractions') }}
 )
 
+-- text_teaching_status and sense_hint exist once the extraction asset first
+-- writes a v2 claim
 , claims as (
-    select * from {{ source('courseware_intermediate', 'courseware_claim') }}
+    select
+        *
+        {{- missing_columns_as_nulls(stored_claims, {
+            'text_teaching_status': dbt.type_string(),
+            'sense_hint': dbt.type_string(),
+        }) }}
+    from {{ stored_claims }}
 )
 
 , evidence as (

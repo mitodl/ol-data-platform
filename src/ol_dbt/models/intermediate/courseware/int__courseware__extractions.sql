@@ -60,12 +60,27 @@
     out and reordering a course moves a scope without re-extracting it. The position
     stored at extraction time is kept for a scope the sources do not list.
 #}
-with extractions as (
+{%- set stored = source('courseware_intermediate', 'courseware_claim_extraction') %}
+-- The v2 columns exist once the extraction asset first writes a v2 row; a table
+-- only v1 wrote lacks them.
+with stored_extractions as (
+    select
+        *
+        {{- missing_columns_as_nulls(stored, {
+            'header_version': dbt.type_string(),
+            'text_extraction_key': dbt.type_string(),
+            'text_input_digest': dbt.type_string(),
+            'context_input_digest': dbt.type_string(),
+        }) }}
+    from {{ stored }}
+)
+
+, extractions as (
     select
         *
         -- the header a reading is under, where the key covers it (v2)
         , case when text_extraction_key is not null then header_version end as reading_header_version
-    from {{ source('courseware_intermediate', 'courseware_claim_extraction') }}
+    from stored_extractions
 )
 
 , current_scopes as (

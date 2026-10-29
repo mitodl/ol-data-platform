@@ -261,13 +261,25 @@ models:
   - name: stop_reason
     description: str, the response's stop_reason
   - name: input_tokens
-    description: int, uncached input tokens billed
+    description: int, uncached input tokens; a per-call diagnostic for one stage only
+      (v2, the context stage's call, 0 when no call was made; the text stage's are
+      on courseware_text_extraction). Cost is tracked in Opik, project dagster-ml,
+      tags courseware:text and courseware:context, not summed here
   - name: output_tokens
-    description: int, output tokens billed, thinking included
+    description: int, output tokens, thinking included; a per-call diagnostic for
+      one stage only (v2, the context stage's call, 0 when no call was made; the text
+      stage's are on courseware_text_extraction). Cost is tracked in Opik, project
+      dagster-ml, tags courseware:text and courseware:context, not summed here
   - name: cache_read_input_tokens
-    description: int, input tokens read from the prompt cache
+    description: int, input tokens read from the prompt cache; a per-call diagnostic
+      for one stage only (v2, the context stage's call, 0 when no call was made; the
+      text stage's are on courseware_text_extraction). Cost is tracked in Opik, project
+      dagster-ml, tags courseware:text and courseware:context, not summed here
   - name: cache_creation_input_tokens
-    description: int, input tokens written to the prompt cache
+    description: int, input tokens written to the prompt cache; a per-call diagnostic
+      for one stage only (v2, the context stage's call, 0 when no call was made; the
+      text stage's are on courseware_text_extraction). Cost is tracked in Opik, project
+      dagster-ml, tags courseware:text and courseware:context, not summed here
   - name: extracted_at
     description: timestamp, when the call returned
   - name: is_approved_version
