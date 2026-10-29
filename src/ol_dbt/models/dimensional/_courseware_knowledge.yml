@@ -284,7 +284,7 @@ models:
   - name: minted_at
     description: timestamp, when the id was minted
   - name: label_count
-    description: int, normalized labels assigned to the concept
+    description: int, normalized labels with mentions assigned to the concept
   - name: mention_count
     description: int, mentions across those labels
   - name: courserun_count
