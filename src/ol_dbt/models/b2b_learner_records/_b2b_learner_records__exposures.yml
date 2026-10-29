@@ -13,7 +13,8 @@ exposures:
     organization's systems per-learner enrollment and progress records. It
     withholds outcome columns from a learner whose outcomes_shared is false.
   config:
-    enabled: "{{ target.type == 'starrocks' }}"
+    enabled: "{{ target.type == 'starrocks' and target.catalog == 'default_catalog'\
+      \ }}"
   owner:
     name: data-platform
   depends_on:

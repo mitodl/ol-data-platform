@@ -14,8 +14,10 @@ import yaml
 
 from ol_dbt_cli.commands.starrocks import (
     _ENVS,
+    _LAKE_TARGETS,
     _local_raw_row_counts,
     _port_is_free,
+    _profile_schema,
     _report_local_branches,
     run,
 )
@@ -67,6 +69,185 @@ def test_ci_connects_directly_like_production() -> None:
     """
     assert _ENVS["ci"]["port_forward"] is False
     assert _ENVS["ci"]["dbt_target"] == _ENVS["production"]["dbt_target"]
+
+
+def test_ci_logs_in_through_ci_vault() -> None:
+    """CI StarRocks's database secrets engine is in vault-ci (mitodl/ol-data-platform#3185 for bin/starrocks-auth)."""
+    assert _ENVS["ci"]["vault_addr"] == "https://vault-ci.odl.mit.edu"
+
+
+# ---------------------------------------------------------------------------
+# _LAKE_TARGETS against profiles.yml and dbt_project.yml
+# ---------------------------------------------------------------------------
+
+_DBT_DIR = Path(__file__).parents[2] / "ol_dbt"
+_PROFILE_OUTPUTS = yaml.safe_load((_DBT_DIR / "profiles.yml").read_text())["open_learning"]["outputs"]
+_LOCATION_ROOTS = yaml.safe_load((_DBT_DIR / "dbt_project.yml").read_text())["vars"]["iceberg_schema_location_roots"]
+
+
+def test_every_lake_profile_is_declared() -> None:
+    """A lake profile missing here would reach dbt with no profile schema made for it."""
+    lake_outputs = {
+        name
+        for name, output in _PROFILE_OUTPUTS.items()
+        if output["type"] == "starrocks" and output.get("catalog", "default_catalog") != "default_catalog"
+    }
+    # The local-dev stack creates ol_warehouse_local itself.
+    assert lake_outputs - {"starrocks_local"} == set(_LAKE_TARGETS)
+
+
+@pytest.mark.parametrize("target", list(_LAKE_TARGETS))
+def test_lake_target_matches_its_profile(target: str) -> None:
+    lake = _LAKE_TARGETS[target]
+    output = _PROFILE_OUTPUTS[target]
+    assert output["catalog"] == lake.catalog
+    assert output["schema"].startswith(lake.schema)
+    assert ("schema_suffix" in output["schema"]) == (lake.suffix != "none")
+    assert lake.env in _ENVS
+    assert lake.catalog in _LOCATION_ROOTS
+
+
+_RENDER_CASES = [
+    ("ci", {}, "ol_warehouse_ci"),
+    ("ci", {"schema_suffix": ""}, "ol_warehouse_ci"),
+    ("ci", {"schema_suffix": "pr_123"}, "ol_warehouse_ci_pr_123"),
+    ("starrocks_dev_qa", {"schema_suffix": "alice"}, "ol_warehouse_qa_alice"),
+    ("starrocks_qa_lake", {"schema_suffix": "alice"}, "ol_warehouse_qa"),
+    ("starrocks_production_lake", {}, "ol_warehouse_production"),
+]
+
+
+@pytest.mark.parametrize(("target", "cli_vars", "schema"), _RENDER_CASES)
+def test_profile_schema_is_what_dbt_renders(target: str, cli_vars: dict[str, str], schema: str) -> None:
+    """_profile_schema has to name the database dbt will connect to, or dbt makes its own without a location."""
+    profile = pytest.importorskip("dbt.config.profile")
+    renderer = pytest.importorskip("dbt.config.renderer")
+    from dbt_common.context import set_invocation_context  # noqa: PLC0415
+
+    set_invocation_context({"DBT_STARROCKS_USERNAME": "u", "DBT_STARROCKS_PASSWORD": "p"})
+    raw = yaml.safe_load((_DBT_DIR / "profiles.yml").read_text())["open_learning"]
+    _, rendered = profile.Profile.render_profile(raw, "open_learning", target, renderer.ProfileRenderer(cli_vars))
+
+    assert rendered["schema"] == schema
+    assert rendered["catalog"] == _LAKE_TARGETS[target].catalog
+    assert _profile_schema(target, _LAKE_TARGETS[target], json.dumps(cli_vars) if cli_vars else None) == schema
+
+
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_lake_target_refuses_another_env_s_cluster(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    """The CI cluster reads ol_data_lake_qa but cannot write it, and production has no CI lake."""
+    with pytest.raises(SystemExit):
+        run(env="ci", target="starrocks_qa_lake")
+    with pytest.raises(SystemExit):
+        run(env="production", target="ci")
+
+    mock_fetch.assert_not_called()
+    mock_dbt_run.assert_not_called()
+
+
+@pytest.mark.parametrize("cli_vars", [None, "{schema_suffix: ''}"])
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_developer_lake_target_needs_a_suffix(
+    mock_fetch, mock_port_forward, mock_dbt_run, cli_vars: str | None
+) -> None:
+    with pytest.raises(SystemExit):
+        run(env="qa", target="starrocks_dev_qa", vars=cli_vars)
+
+    mock_fetch.assert_not_called()
+
+
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_lake_target_refuses_a_schema_glue_cannot_load(mock_fetch, mock_port_forward, mock_dbt_run) -> None:
+    with pytest.raises(SystemExit):
+        run(env="qa", target="starrocks_dev_qa", vars="{schema_suffix: my-branch}")
+
+    mock_fetch.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("env", "target", "cli_vars", "schema", "host"),
+    [
+        ("ci", "ci", None, "ol_warehouse_ci", _ENVS["ci"]["host"]),
+        ("ci", "ci", "{schema_suffix: pr_123}", "ol_warehouse_ci_pr_123", _ENVS["ci"]["host"]),
+        # qa reaches the FE through the port-forward.
+        ("qa", "starrocks_dev_qa", "{schema_suffix: alice}", "ol_warehouse_qa_alice", "127.0.0.1"),
+        # The profile ignores schema_suffix, so the schema made must too.
+        ("qa", "starrocks_qa_lake", "{schema_suffix: alice}", "ol_warehouse_qa", "127.0.0.1"),
+    ],
+)
+@patch("mysql.connector.connect")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_lake_target_gets_its_profile_schema_with_a_location_first(  # noqa: PLR0913
+    mock_fetch,
+    mock_port_forward,
+    mock_dbt_run,
+    mock_connect,
+    env: str,
+    target: str,
+    cli_vars: str | None,
+    schema: str,
+    host: str,
+) -> None:
+    mock_fetch.return_value = ("user", "pass")
+    calls: list[str] = []
+    mock_connect.return_value.cursor.return_value.execute.side_effect = lambda sql: calls.append(sql)
+    mock_dbt_run.side_effect = lambda *_, **__: calls.append("dbt")
+
+    run(env=env, target=target, vars=cli_vars)
+
+    catalog = _LAKE_TARGETS[target].catalog
+    _, kwargs = mock_connect.call_args
+    assert (kwargs["user"], kwargs["password"]) == ("user", "pass")  # pragma: allowlist secret
+    assert kwargs["host"] == host
+    # app cannot create databases in a lake catalog.
+    assert mock_fetch.call_args.args[3] == "admin"
+    assert calls == [
+        f"CREATE DATABASE IF NOT EXISTS `{catalog}`.`{schema}` "
+        f'PROPERTIES ("location" = "{_LOCATION_ROOTS[catalog]}/{schema}")',
+        "dbt",
+    ]
+    mock_connect.return_value.close.assert_called_once()
+
+
+@patch("mysql.connector.connect")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_default_catalog_target_makes_no_schema(mock_fetch, mock_port_forward, mock_dbt_run, mock_connect) -> None:
+    """The b2b targets' databases are provisioned in ol-infrastructure."""
+    mock_fetch.return_value = ("user", "pass")
+    run(env="ci")
+
+    mock_connect.assert_not_called()
+    mock_dbt_run.assert_called_once()
+    assert mock_fetch.call_args.args[3] == "app"
+
+
+@patch("mysql.connector.connect")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_dbt_does_not_start_when_the_profile_schema_cannot_be_made(
+    mock_fetch, mock_port_forward, mock_dbt_run, mock_connect
+) -> None:
+    """Starting dbt anyway would create the database itself, with no location."""
+    from mysql.connector import errors  # noqa: PLC0415
+
+    mock_fetch.return_value = ("user", "pass")
+    mock_connect.return_value.cursor.return_value.execute.side_effect = errors.ProgrammingError("Access denied")
+
+    with pytest.raises(SystemExit):
+        run(env="ci", target="ci", vault_role="app")
+
+    mock_dbt_run.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
