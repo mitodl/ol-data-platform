@@ -331,8 +331,10 @@ models:
       for example a B2B code. Null when there is no program order or it used no coupon.
   - name: receipt_payment_amount
     data_type: double
-    description: numeric, total amount for the order - req_amount from cybersource
-      payment
+    description: numeric, transaction_amount of the order's latest payment in tfact_payment.
+      For MITx Online that is a 'payment' transaction; for xPRO an accepted CyberSource
+      'sale' receipt (req_amount). Null when the order has no such payment, e.g. a
+      $0 coupon order.
   - name: receipt_payment_method
     data_type: varchar
     description: string, payment method from cybersource payment transaction. Value
@@ -1882,3 +1884,83 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["source", "conversation_id"]
+
+unit_tests:
+- name: test_enrollment_detail_report_takes_the_accepted_xpro_receipt
+  description: >
+    xPRO records a payment as a CyberSource 'sale' receipt and keeps cancelled and
+    declined attempts beside it, so an xPRO enrollment reports its order's accepted
+    sale receipt, the latest when it has two, and none when no receipt was accepted.
+    A MITx Online enrollment reports its 'payment' transaction, never its refund.
+  model: enrollment_detail_report
+  given:
+  - input: ref('tfact_enrollment')
+    rows:
+    - {enrollment_key: e-pro, platform: mitxpro, platform_fk: p-pro, courserun_fk: run-1,
+      user_fk: u-1}
+    - {enrollment_key: e-online, platform: mitxonline, platform_fk: p-online, courserun_fk: run-1,
+      user_fk: u-1}
+    - {enrollment_key: e-pro-two-accepted, platform: mitxpro, platform_fk: p-pro,
+      courserun_fk: run-1, user_fk: u-1}
+    - {enrollment_key: e-pro-declined, platform: mitxpro, platform_fk: p-pro, courserun_fk: run-1,
+      user_fk: u-1}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: run-1, is_current: true}
+  - input: ref('dim_user')
+    rows:
+    - {user_pk: u-1}
+  - input: ref('tfact_enrollment_order')
+    rows:
+    - {enrollment_key: e-pro, order_id: 10}
+    - {enrollment_key: e-online, order_id: 20}
+    - {enrollment_key: e-pro-two-accepted, order_id: 11}
+    - {enrollment_key: e-pro-declined, order_id: 12}
+  - input: ref('tfact_payment')
+    rows:
+    - {payment_id: 1, order_id: 10, platform_fk: p-pro, transaction_type: sale, transaction_status: ACCEPT,
+      transaction_amount: 900.00, transaction_created_on: '2026-01-01T00:00:00'}
+    - {payment_id: 2, order_id: 10, platform_fk: p-pro, transaction_type: sale, transaction_status: CANCEL,
+      transaction_amount: 900.00, transaction_created_on: '2026-01-02T00:00:00'}
+    - {payment_id: 3, order_id: 10, platform_fk: p-pro, transaction_type: sale, transaction_status: DECLINE,
+      transaction_amount: 900.00, transaction_created_on: '2026-01-03T00:00:00'}
+    - {payment_id: 4, order_id: 20, platform_fk: p-online, transaction_type: payment,
+      transaction_status: ACCEPT, transaction_amount: 250.00, transaction_created_on: '2026-01-01T00:00:00'}
+    - {payment_id: 5, order_id: 20, platform_fk: p-online, transaction_type: refund,
+      transaction_status: null, transaction_amount: 250.00, transaction_created_on: '2026-01-05T00:00:00'}
+    - {payment_id: 6, order_id: 11, platform_fk: p-pro, transaction_type: sale, transaction_status: ACCEPT,
+      transaction_amount: 400.00, transaction_created_on: '2026-02-01T00:00:00'}
+    - {payment_id: 7, order_id: 11, platform_fk: p-pro, transaction_type: sale, transaction_status: ACCEPT,
+      transaction_amount: 450.00, transaction_created_on: '2026-02-02T00:00:00'}
+    - {payment_id: 8, order_id: 12, platform_fk: p-pro, transaction_type: sale, transaction_status: DECLINE,
+      transaction_amount: 900.00, transaction_created_on: '2026-03-01T00:00:00'}
+  - input: ref('dim_contract')
+    rows: []
+  - input: ref('dim_course')
+    rows: []
+  - input: ref('dim_discount')
+    rows: []
+  - input: ref('dim_discount_type')
+    rows: []
+  - input: ref('dim_organization')
+    rows: []
+  - input: ref('dim_payment_method')
+    rows: []
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('marts__combined_course_enrollment_detail')
+    rows: []
+  - input: ref('marts__combined_discounts')
+    rows: []
+  - input: ref('marts__combined__orders')
+    rows: []
+  - input: ref('tfact_certificate')
+    rows: []
+  - input: ref('tfact_grade')
+    rows: []
+  expect:
+    rows:
+    - {enrollment_key: e-pro, receipt_payment_amount: 900.00, receipt_payment_timestamp: '2026-01-01T00:00:00'}
+    - {enrollment_key: e-online, receipt_payment_amount: 250.00, receipt_payment_timestamp: '2026-01-01T00:00:00'}
+    - {enrollment_key: e-pro-two-accepted, receipt_payment_amount: 450.00, receipt_payment_timestamp: '2026-02-02T00:00:00'}
+    - {enrollment_key: e-pro-declined, receipt_payment_amount: null, receipt_payment_timestamp: null}

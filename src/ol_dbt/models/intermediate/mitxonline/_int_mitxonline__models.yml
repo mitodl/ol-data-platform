@@ -375,21 +375,24 @@ models:
     tests:
     - not_null
   - name: discount_type
-    description: string, one of  "percent-off", "dollars-off" and "fixed-price". Specifys
-      if the ammount of the discount refers to a percent of, a dollar amount off or
-      a discounted price
+    description: string, one of "percent-off", "dollars-off", "fixed-price" and "paid-amount-off".
+      Specifies if the amount of the discount refers to a percent off, a dollar amount
+      off, a discounted price, or the amount the learner paid for a qualifying prior
+      purchase (resolved at checkout; the discount stores 0)
     tests:
     - not_null
     - accepted_values:
         arguments:
-          values: ["percent-off", "dollars-off", "fixed-price"]
+          values: ["percent-off", "dollars-off", "fixed-price", "paid-amount-off"]
   - name: discount_redemption_type
-    description: string, one of  "one-time",  "one-time-per-user" and "unlimited"
+    description: string, one of "one-time", "one-time-per-user", "unlimited", "program-child-purchase"
+      (required by paid-amount-off) and "internal" (attached by MITx Online itself)
     tests:
     - not_null
     - accepted_values:
         arguments:
-          values: ["one-time", "one-time-per-user", "unlimited"]
+          values: ["one-time", "one-time-per-user", "unlimited", "program-child-purchase",
+            "internal"]
   - name: discount_max_redemptions
     description: int, maximum times a coupon can be redeemed
   - name: discount_code
@@ -599,8 +602,14 @@ models:
       redemption for the order. It can be percent-off which is <dollar amount>% off,
       dollars-off which is $<dollar amount> off or fixed-price
   - name: discount_amount
-    description: numeric, actual discount dollar amount. For percent off discount,
-      this is calculated as product price * percentage off
+    description: numeric, discount dollar amount off product_price. percent-off is
+      product_price * percentage / 100, dollars-off is the amount capped at product_price,
+      and fixed-price is product_price minus the fixed price, or 0 when the fixed
+      price is above product_price (MITx Online charges the lower of the two). product_price
+      is the product's current price and the discount's current amount, so this is
+      not what the line was charged when either changed after purchase. Null for a
+      paid-amount-off discount, whose amount is resolved at checkout and not stored
+      on the discount.
   - name: discount_redemption_type
     description: str, one of  "one-time",  "one-time-per-user" and "unlimited"
   - name: discount_id
@@ -2931,3 +2940,75 @@ unit_tests:
     - {course_id: 52, programrequirement_requirement_id: 4, programrequirement_type: Elective,
       programrequirement_is_required: false, programrequirement_is_a_nested_requirement: false,
       programrequirement_parent_requirement_id: null, course_order_in_program: 3}
+
+- name: test_int__mitxonline__ecommerce_order_discount_amount_is_dollars_off
+  description: >
+    discount_amount is the dollar amount taken off product_price for every discount
+    type. A fixed-price discount's stored amount is the price the learner pays, so
+    the amount off is product_price minus it, and 0 when it is above product_price,
+    as MITx Online charges the lower of the two. dollars-off cannot take more than
+    product_price off, as MITx Online charges max(0, price - amount).
+  model: int__mitxonline__ecommerce_order
+  given:
+  - input: ref('stg__mitxonline__app__postgres__ecommerce_line')
+    rows:
+    - {line_id: 1, order_id: 1, product_version_id: 100}
+    - {line_id: 2, order_id: 2, product_version_id: 100}
+    - {line_id: 3, order_id: 3, product_version_id: 100}
+    - {line_id: 4, order_id: 4, product_version_id: 100}
+    - {line_id: 5, order_id: 5, product_version_id: 100}
+    - {line_id: 6, order_id: 6, product_version_id: 100}
+    - {line_id: 7, order_id: 7, product_version_id: 100}
+    - {line_id: 8, order_id: 8, product_version_id: 100}
+  - input: ref('stg__mitxonline__app__postgres__django_contenttype')
+    rows:
+    - {contenttype_id: 9, contenttype_full_name: ecommerce_product}
+  - input: ref('stg__mitxonline__app__postgres__reversion_version')
+    rows:
+    - {version_id: 100, version_object_id: 50, contenttype_id: 9}
+  - input: ref('stg__mitxonline__app__postgres__ecommerce_order')
+    rows:
+    - {order_id: 1, order_state: fulfilled, order_purchaser_user_id: 7}
+    - {order_id: 2, order_state: fulfilled, order_purchaser_user_id: 7}
+    - {order_id: 3, order_state: fulfilled, order_purchaser_user_id: 7}
+    - {order_id: 4, order_state: fulfilled, order_purchaser_user_id: 7}
+    - {order_id: 5, order_state: fulfilled, order_purchaser_user_id: 7}
+    - {order_id: 6, order_state: fulfilled, order_purchaser_user_id: 7}
+    - {order_id: 7, order_state: fulfilled, order_purchaser_user_id: 7}
+    - {order_id: 8, order_state: fulfilled, order_purchaser_user_id: 7}
+  - input: ref('int__mitxonline__users')
+    rows:
+    - {user_id: 7}
+  - input: ref('int__mitxonline__ecommerce_product')
+    rows:
+    - {product_id: 50, product_price: 1000.00}
+  - input: ref('stg__mitxonline__app__postgres__ecommerce_discount')
+    rows:
+    - {discount_id: 11, discount_type: percent-off, discount_amount: 25.00}
+    - {discount_id: 12, discount_type: dollars-off, discount_amount: 150.00}
+    - {discount_id: 13, discount_type: dollars-off, discount_amount: 1500.00}
+    - {discount_id: 14, discount_type: fixed-price, discount_amount: 300.00}
+    - {discount_id: 15, discount_type: fixed-price, discount_amount: 1200.00}
+    - {discount_id: 16, discount_type: percent-off, discount_amount: 12.50000}
+    - {discount_id: 17, discount_type: paid-amount-off, discount_amount: 0.00000}
+  - input: ref('stg__mitxonline__app__postgres__ecommerce_discountredemption')
+    rows:
+    - {order_id: 1, discount_id: 11, discountredemption_timestamp: '2026-01-01T00:00:00'}
+    - {order_id: 2, discount_id: 12, discountredemption_timestamp: '2026-01-01T00:00:00'}
+    - {order_id: 3, discount_id: 13, discountredemption_timestamp: '2026-01-01T00:00:00'}
+    - {order_id: 4, discount_id: 14, discountredemption_timestamp: '2026-01-01T00:00:00'}
+    - {order_id: 6, discount_id: 15, discountredemption_timestamp: '2026-01-01T00:00:00'}
+    - {order_id: 7, discount_id: 16, discountredemption_timestamp: '2026-01-01T00:00:00'}
+    - {order_id: 8, discount_id: 17, discountredemption_timestamp: '2026-01-01T00:00:00'}
+  - input: ref('int__mitxonline__ecommerce_transaction')
+    rows: []
+  expect:
+    rows:
+    - {line_id: 1, discount_amount: 250.00}
+    - {line_id: 2, discount_amount: 150.00}
+    - {line_id: 3, discount_amount: 1000.00}
+    - {line_id: 4, discount_amount: 700.00}
+    - {line_id: 5, discount_amount: null}
+    - {line_id: 6, discount_amount: 0.00}
+    - {line_id: 7, discount_amount: 125.00}
+    - {line_id: 8, discount_amount: null}

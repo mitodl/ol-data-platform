@@ -1568,8 +1568,9 @@ models:
     description: string, type of discount. e.g. percent-off, dollars-off, fixed-price
   - name: discount_amount
     description: decimal, numeric amount of the discount (percentage or dollar value
-      depending on discount_type). For percent-off discounts, this is a number between
-      0 and 100 representing the percentage
+      depending on discount_type). For percent-off and MicroMasters percent-discount
+      discounts, this is a number between 0 and 100 representing the percentage. For
+      fixed-price discounts it is the price paid, not an amount off
   - name: discount_source
     description: string, source or payment type of the discount. e.g. marketing, b2b,
       financial-assistance
@@ -3125,3 +3126,42 @@ unit_tests:
       date_fk: 20240116
     - user_username: "utc"
       date_fk: 20240115
+
+- name: test_dim_discount_percentages_share_the_0_to_100_scale
+  description: >
+    MicroMasters and xPRO store a percent discount as a fraction and MITx Online as
+    a percentage. discount_amount puts all three on 0-100, and leaves dollar and
+    fixed-price amounts as stored.
+  model: dim_discount
+  given:
+  - input: ref('stg__mitxonline__app__postgres__ecommerce_discount')
+    rows:
+    - {discount_id: 1, discount_code: ONLINE25, discount_type: percent-off, discount_amount: 25.00}
+  - input: ref('int__mitxpro__ecommerce_allcoupons')
+    format: sql
+    rows: |
+      select
+          cast(2 as bigint) as coupon_id
+          , cast(null as bigint) as b2bcoupon_id
+          , 'PRO25' as coupon_code
+          , 'percent-off' as discount_type
+          , cast(0.25 as decimal(38, 4)) as discount_amount_numeric
+          , cast(null as varchar) as coupon_type
+          , cast(null as varchar) as discount_source
+          , cast(null as bigint) as max_redemptions
+          , cast(null as varchar) as activated_on
+          , cast(null as varchar) as expires_on
+          , cast(null as varchar) as coupon_created_on
+          , cast(null as varchar) as coupon_updated_on
+  - input: ref('stg__micromasters__app__postgres__ecommerce_coupon')
+    rows:
+    - {coupon_id: 3, coupon_code: MM25, coupon_amount_type: percent-discount, coupon_amount: 0.25}
+    - {coupon_id: 4, coupon_code: MM50OFF, coupon_amount_type: fixed-discount, coupon_amount: 50.00}
+    - {coupon_id: 5, coupon_code: MMAT100, coupon_amount_type: fixed-price, coupon_amount: 100.00}
+  expect:
+    rows:
+    - {platform_code: mitxonline, source_discount_id: 1, discount_amount: 25.00}
+    - {platform_code: mitxpro, source_discount_id: 2, discount_amount: 25.00}
+    - {platform_code: micromasters, source_discount_id: 3, discount_amount: 25.00}
+    - {platform_code: micromasters, source_discount_id: 4, discount_amount: 50.00}
+    - {platform_code: micromasters, source_discount_id: 5, discount_amount: 100.00}
