@@ -93,6 +93,9 @@ vars:
     # concept before the run teaches it over those plus the units that teach it. 0.75
     # needs three units for every contrary one.
     courseware_prerequisite_min_direction_consistency: 0.75
+    # How far bridge_courserun_prerequisite_coverage walks down passing broader edges
+    # to list an umbrella requirement's (e.g. Python programming) narrower concepts.
+    courseware_prerequisite_max_narrower_hops: 3
 
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models

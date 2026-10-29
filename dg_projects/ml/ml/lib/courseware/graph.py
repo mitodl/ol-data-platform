@@ -14,6 +14,12 @@ NetworKit:
   rank (rank flows to the concepts many others build on); strongly connected
   components find cycles, which are findings to review; sequence_level is the longest
   chain of builds_on edges beneath a concept.
+- prerequisite closure: every concept each concept builds on, directly or through
+  others, at its shortest depth, over approved builds_on edges only (review_status
+  accepted). It is an experimental projection that keeps the meaning of its input
+  edges and validates none of them. No review workflow exists yet, so nothing is
+  approved and the closure is empty. A cycle among approved edges fails the run
+  rather than writing a closure that puts a concept before itself.
 - hierarchy: broader, directed from narrower to broader. hierarchy_depth is the
   longest chain of broader concepts above a concept; cycles are findings too.
 
@@ -46,6 +52,12 @@ RELATION_WEIGHTS = {
     "complements": 0.5,
     "related": 0.2,
 }
+# The closure stops at this many builds_on hops. A concept further back than this
+# is not useful as "take this first", and the cap keeps the closure from growing
+# with the square of the corpus along long chains. Only a concept whose
+# sequence_level exceeds it can have prerequisites the closure leaves out, since
+# sequence_level is the longest chain and the closure keeps the shortest.
+MAX_PREREQUISITE_DEPTH = 8
 COMMUNITY_CARRY_FORWARD_MIN_JACCARD = 0.3
 LEIDEN_GAMMA = 1.0
 SEED = 20261016
@@ -70,6 +82,12 @@ EDGE_SCHEMA = {
     "relation": pl.String,
     "weight": pl.Float64,
     "backbone_score": pl.Float64,
+}
+PREREQUISITE_CLOSURE_SCHEMA = {
+    "graph_run_id": pl.String,
+    "from_concept_id": pl.String,
+    "to_concept_id": pl.String,
+    "min_depth": pl.Int64,
 }
 COMMUNITY_SCHEMA = {
     "graph_run_id": pl.String,
@@ -105,14 +123,20 @@ class GraphResult:
     nodes: pl.DataFrame
     edges: pl.DataFrame
     communities: pl.DataFrame
+    prerequisite_closure: pl.DataFrame
     run: pl.DataFrame
+
+
+class PrerequisiteCycleError(ValueError):
+    """Approved builds_on edges form a cycle, so learning order is undefined."""
 
 
 def select_edges(relations: pl.DataFrame) -> pl.DataFrame:
     """Keep the edges whose evidence clears the thresholds, with a weight each.
 
     :param relations: bridge_concept_relation rows
-    :returns: from_concept_fk, to_concept_fk, relation, weight
+    :returns: from_concept_fk, to_concept_fk, relation, weight, and is_approved for
+        a builds_on edge a reviewer accepted, the closure's only input
     :rtype: pl.DataFrame
     """
     support = pl.col("courserun_support")
@@ -138,9 +162,13 @@ def select_edges(relations: pl.DataFrame) -> pl.DataFrame:
             (
                 pl.col("relation").replace_strict(RELATION_WEIGHTS, default=0.1)
                 * (1 + support.cast(pl.Float64).log1p())
-            ).alias("weight")
+            ).alias("weight"),
+            (
+                (pl.col("relation") == "builds_on")
+                & (pl.col("review_status") == "accepted")
+            ).alias("is_approved"),
         )
-        .select("from_concept_fk", "to_concept_fk", "relation", "weight")
+        .select("from_concept_fk", "to_concept_fk", "relation", "weight", "is_approved")
     )
 
 
@@ -176,6 +204,45 @@ def _longest_chain(graph: nk.Graph, blocked: set[int]) -> dict[int, int]:
         for target in acyclic.iterNeighbors(node):
             depth[node] = max(depth[node], depth[target] + 1)
     return depth
+
+
+def prerequisite_closure(
+    graph: nk.Graph,
+    max_depth: int = MAX_PREREQUISITE_DEPTH,
+    labels: list[str] | None = None,
+) -> dict[tuple[int, int], int]:
+    """Every node each node builds on, within max_depth hops, at its shortest depth.
+
+    :param graph: builds_on, directed from a concept to what it builds on
+    :param max_depth: the most hops a pair may be apart
+    :param labels: each node's display label by node index, to name a cycle's
+        concepts in the error
+    :returns: (node, prerequisite node) -> fewest builds_on hops between them
+    :rtype: dict[tuple[int, int], int]
+    :raises PrerequisiteCycleError: when the graph has a directed cycle
+    """
+    if cycle := _cycle_nodes(graph):
+        names = sorted(labels[node] for node in cycle) if labels else sorted(cycle)
+        msg = f"builds_on has a cycle through {names}"
+        raise PrerequisiteCycleError(msg)
+    if not graph.numberOfNodes():
+        return {}
+    reachable: dict[int, dict[int, int]] = {}
+    # reverse topological order closes every target before its sources, and a
+    # shortest path's tail is a shortest path, so one pass gives min depths
+    for node in reversed(nk.graphtools.topologicalSort(graph)):
+        depths: dict[int, int] = {}
+        for target in graph.iterNeighbors(node):
+            depths[target] = 1
+            for prerequisite, depth in reachable[target].items():
+                if depth + 1 <= min(max_depth, depths.get(prerequisite, max_depth)):
+                    depths[prerequisite] = depth + 1
+        reachable[node] = depths
+    return {
+        (node, prerequisite): depth
+        for node, depths in reachable.items()
+        for prerequisite, depth in depths.items()
+    }
 
 
 def _carry_forward_communities(
@@ -249,6 +316,7 @@ def compute_graph(  # noqa: PLR0915
     node_count = len(concept_ids)
     association = nk.Graph(node_count, weighted=True, directed=False)
     sequence = nk.Graph(node_count, directed=True)
+    approved_sequence = nk.Graph(node_count, directed=True)
     hierarchy = nk.Graph(node_count, directed=True)
     for row in edges.iter_rows(named=True):
         source, target = index[row["from_concept_fk"]], index[row["to_concept_fk"]]
@@ -258,6 +326,8 @@ def compute_graph(  # noqa: PLR0915
             association.addEdge(source, target, row["weight"])
         if row["relation"] == "builds_on" and not sequence.hasEdge(source, target):
             sequence.addEdge(source, target)
+        if row["is_approved"] and not approved_sequence.hasEdge(source, target):
+            approved_sequence.addEdge(source, target)
         if row["relation"] == "broader" and not hierarchy.hasEdge(source, target):
             hierarchy.addEdge(source, target)
 
@@ -288,6 +358,9 @@ def compute_graph(  # noqa: PLR0915
         foundation = pagerank.scores()
 
     sequence_cycles = _cycle_nodes(sequence)
+    closure = prerequisite_closure(
+        approved_sequence, labels=[labels[concept] for concept in concept_ids]
+    )
     hierarchy_cycles = _cycle_nodes(hierarchy)
     sequence_level = _longest_chain(sequence, sequence_cycles)
     hierarchy_depth = _longest_chain(hierarchy, hierarchy_cycles)
@@ -348,6 +421,16 @@ def compute_graph(  # noqa: PLR0915
             }
         )
 
+    closure_rows = [
+        {
+            "graph_run_id": run_id,
+            "from_concept_id": concept_ids[source],
+            "to_concept_id": concept_ids[target],
+            "min_depth": depth,
+        }
+        for (source, target), depth in sorted(closure.items())
+    ]
+
     edge_count = association.numberOfEdges()
     possible = node_count * (node_count - 1) / 2
     density = edge_count / possible if possible else 0.0
@@ -356,6 +439,8 @@ def compute_graph(  # noqa: PLR0915
         "min_courserun_support": MIN_COURSERUN_SUPPORT,
         "relation_weights": RELATION_WEIGHTS,
         "leiden_gamma": LEIDEN_GAMMA,
+        "max_prerequisite_depth": MAX_PREREQUISITE_DEPTH,
+        "prerequisite_closure_input": "builds_on with review_status accepted",
         "seed": SEED,
     }
     input_checksum = hashlib.sha256(
@@ -396,6 +481,9 @@ def compute_graph(  # noqa: PLR0915
         nodes=nodes,
         edges=pl.DataFrame(edge_rows, schema=EDGE_SCHEMA),
         communities=pl.DataFrame(community_rows, schema=COMMUNITY_SCHEMA),
+        prerequisite_closure=pl.DataFrame(
+            closure_rows, schema=PREREQUISITE_CLOSURE_SCHEMA
+        ),
         run=run,
     )
 

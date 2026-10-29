@@ -260,6 +260,14 @@ models:
     - relationships:
         to: ref('dim_concept')
         field: concept_pk
+  - name: split_from_concept_fk
+    description: str, for a concept minted as another sense of a label (e.g. "kernel"
+      in machine learning, split from the operating systems one), the concept it was
+      split from
+    tests:
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
   - name: review_status
     description: str, proposed, accepted or rejected. Only accepted concepts reach
       learner-facing views; every concept is proposed until review exists.
@@ -285,14 +293,15 @@ models:
     description: int, mentions with teaching_status taught or reviewed
 
 - name: dim_concept_alias
-  description: Every normalized label a concept was extracted under.
+  description: Every sense of every normalized label, one row per (label, concept).
+    A label can name several concepts, so the label alone does not identify one.
   config:
     meta:
       # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
       qa_buildable: false
   columns:
   - name: concept_alias_pk
-    description: str, surrogate key of the label key
+    description: str, surrogate key of the label key and the concept
     tests:
     - unique
     - not_null
@@ -306,14 +315,15 @@ models:
     description: str, the normalized label key
   - name: alias
     description: str, the label's most used surface form
-  - name: mention_count
-    description: int, mentions of the label
+  - name: sense_role
+    description: str, primary (the concept label resolution put the label in) or split
+      (a concept minted for another meaning of the label)
+  - name: sense_gloss
+    description: str, what the label means in this sense
+  - name: added_run_id
+    description: str, the resolution run that first gave the label this sense
   - name: courserun_count
-    description: int, distinct course runs that mention the label
-  - name: assignment_source
-    description: str, carried, exact_match, minted or rebuild_carried
-  - name: assigned_run_id
-    description: str, the resolution run that first assigned the label to the concept
+    description: int, course runs whose use of the label is assigned to this sense
 
 - name: bridge_concept_relation
   description: Concept-to-concept candidate edges with their accumulated evidence,
@@ -375,9 +385,11 @@ models:
     description: int, builds_on only, course runs showing the opposite direction
   - name: course_scope_support
     description: int, course relations only, scope_support with each course's reruns
-      counted once (the run with the most units; a run without a course_fk is keyed
-      by the run id less its run segment); the support the builds_on support rule
-      and support_score read, since reruns of one course have near-identical text
+      and platform copies counted once (the run with the most units; courses keyed
+      by courseware_current_course_runs' course_key, so an edxorg and a mitxonline
+      copy with one readable id are one course); the support the builds_on support
+      rule and support_score read, since reruns and copies of one course have near-identical
+      text
   - name: reverse_scope_support
     description: int, builds_on only, course_scope_support of the opposite direction
   - name: direction_consistency
@@ -562,7 +574,8 @@ models:
   - name: modularity
     description: float, modularity of the Leiden partition
   - name: sequence_cycle_node_count
-    description: int, concepts on builds_on cycles
+    description: int, concepts on cycles of builds_on edges passing the support rule,
+      a finding to review; only a cycle among approved edges fails the graph run
   - name: hierarchy_cycle_node_count
     description: int, concepts on broader cycles
 
@@ -581,7 +594,14 @@ models:
     - unique
     - not_null
   - name: courserun_fk
-    description: str, dim_course_run.courserun_pk
+    description: str, dim_course_run.courserun_pk. Null for a run with no current
+      dim_course_run row, which course_support keys by its run id and can count as
+      a course of its own.
+    tests:
+    # counts those runs, to decide whether they should stop counting as support
+    - not_null:
+        config:
+          severity: warn
   - name: platform
     description: str, mitxonline, mitxpro or residential
   - name: courserun_readable_id
@@ -623,13 +643,21 @@ models:
     description: int, inferred requires only, scopes of the run that teach the concept
       (all after the first reliance), the contrary evidence
   - name: course_support
-    description: int, inferred requires only, distinct courses (course_fk, or for
-      a run without one the platform and the run id less its run segment) with a run
-      that declares the concept or infers it with a direction_consistency clearing
-      the threshold, this run included
+    description: int, inferred requires only, distinct courses, keyed as bridge_courserun_prerequisite_coverage
+      keys them (course_key, across platforms), with a run that declares the concept
+      or infers it with a direction_consistency clearing the threshold, this run included
   - name: direction_consistency
     description: float, inferred requires only, prior_scope_count / (prior_scope_count
       + taught_scope_count)
+  - name: tool_status
+    description: str, inferred requires of a tool (most of the run's own claims that
+      give the concept a kind say tool) only, from the run's own claims; assumed (an
+      assumed_knowledge claim, or a declared prerequisite or recommended background),
+      introduced (the run teaches it in some scope) or unresolved (the run only uses
+      it). Whether another course teaches the tool never changes it
+    tests:
+    - accepted_values:
+        values: [assumed, introduced, unresolved]
   - name: passes_support_rule
     description: boolean, whether the relation passes the support rule, which filters
       noise and does not accept it; inferred requires needs the courseware_prerequisite_*
@@ -643,6 +671,268 @@ models:
     tests:
     - accepted_values:
         values: [insufficient_support, contested_direction]
+
+- name: bridge_courserun_prerequisite_coverage
+  description: Experimental preparation evidence, not a readiness verdict. Which other
+    course runs teach or review each concept a course run requires, directly, through
+    a close equivalent, or through some of its narrower concepts (an umbrella requirement
+    such as Python programming), one row per requirement and providing run, with match
+    type, depth, covered and missing narrower concepts and the sources of uncertainty
+    as separate columns.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: courserun_prerequisite_coverage_pk
+    description: str, surrogate key of (courserun_concept_fk, provider_courserun_fk)
+    tests:
+    - unique
+    - not_null
+  - name: courserun_concept_fk
+    description: str, the requires row, bridge_courserun_concept.courserun_concept_pk
+    tests:
+    - not_null
+    - relationships:
+        to: ref('bridge_courserun_concept')
+        field: courserun_concept_pk
+  - name: platform
+    description: str, the requiring run's platform
+  - name: courserun_readable_id
+    description: str, the requiring run
+  - name: courserun_fk
+    description: str, dim_course_run.courserun_pk of the requiring run
+  - name: concept_fk
+    description: str, dim_concept.concept_pk, the required concept
+  - name: requirement_source
+    description: str, declared or inferred
+  - name: requirement_passes_support_rule
+    description: boolean, bridge_courserun_concept.passes_support_rule of the requirement;
+      its rule counts other courses requiring the concept, so adding a course can
+      change it
+  - name: provider_platform
+    description: str, the providing run's platform
+  - name: provider_courserun_readable_id
+    description: str, a current run of another course that covers the concept. Runs
+      are the same course when they share dim_course.course_readable_id across platforms,
+      or, without a course_fk, the run id less its run tag, with an edxorg {org}/{course}
+      read as course-v1:{org}+{course}; edxorg and mitxonline copies whose readable
+      ids differ (e.g. by org) still count as different courses
+  - name: provider_courserun_fk
+    description: str, dim_course_run.courserun_pk of the providing run
+    tests:
+    - not_null
+  - name: match_type
+    description: str, direct (teaches or reviews the concept), close (teaches or reviews
+      a close equivalent) or narrower (teaches or reviews some of its narrower concepts),
+      the closest that applies
+    tests:
+    - not_null
+    - accepted_values:
+        values: [direct, close, narrower]
+  - name: provider_relation
+    description: str, direct and close only, teaches when the provider teaches the
+      matched concept, reviews when it only reviews it (which can assume it is known)
+  - name: match_depth
+    description: int, broader hops from the required concept to the nearest concept
+      the provider covers; 0 for direct and close
+    tests:
+    - not_null
+  - name: relies_on_unreviewed_relation
+    description: boolean, whether no covered close or narrower concept is reached
+      over accepted bridge_concept_relation edges only; false for direct
+    tests:
+    - not_null
+  - name: narrower_concept_count
+    description: int, narrower concepts of the required concept, within courseware_prerequisite_max_narrower_hops
+      passing broader edges, that appear in any current course run. This depends on
+      the corpus, not on what the requiring course needs, so it is not a denominator
+      for a verdict
+  - name: narrower_taught_count
+    description: int, of those, the ones the providing run teaches or reviews
+  - name: covered_narrower_concept_fks
+    description: array of str, the narrower concepts the providing run teaches or
+      reviews; null when none
+  - name: missing_narrower_concept_fks
+    description: array of str, the narrower concepts it does not; null when none
+
+- name: bridge_concept_prerequisite_closure
+  description: Experimental. Every concept each concept builds on, directly or through
+    others, at the fewest hops over approved builds_on edges (review_status accepted),
+    from the newest graph run; empty until a review workflow approves edges. It keeps
+    the meaning of its input and validates nothing. Capped at the run's max_prerequisite_depth
+    (afact_concept_graph_run.parameters_json).
+  columns:
+  - name: from_concept_fk
+    description: str, dim_concept.concept_pk of the concept that builds on to_concept_fk
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
+  - name: to_concept_fk
+    description: str, dim_concept.concept_pk of the prerequisite concept
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
+  - name: min_depth
+    description: int, the fewest approved builds_on hops between the two; 1 is an
+      approved builds_on edge
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_values_to_be_between:
+        min_value: 1
+  - name: graph_run_id
+    description: str, the graph run these rows come from
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [from_concept_fk, to_concept_fk]
+
+- name: bridge_courserun_prerequisite_path
+  description: Experimental preparation candidates for a course run, not validated
+    prerequisites or readiness advice. Every concept the run requires, and what those
+    build on over the approved closure (empty until review exists), with the runs
+    of other courses that teach each one, ranked. One row per run, prerequisite concept
+    and providing run, and one row with a null provider for a prerequisite no other
+    course covers.
+  config:
+    meta:
+      # Same as bridge_courserun_prerequisite_coverage.
+      qa_buildable: false
+  columns:
+  - name: courserun_prerequisite_path_pk
+    description: str, surrogate key of (courserun_fk, concept_fk, provider_courserun_fk)
+    tests:
+    - unique
+    - not_null
+  - name: platform
+    description: str, the requiring run's platform
+  - name: courserun_readable_id
+    description: str, the requiring run
+  - name: courserun_fk
+    description: str, dim_course_run.courserun_pk of the requiring run
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_course_run')
+        field: courserun_pk
+  - name: concept_fk
+    description: str, dim_concept.concept_pk, the prerequisite concept
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
+  - name: prerequisite_depth
+    description: int, 1 for a concept the run requires (bridge_courserun_concept requires,
+      passing the support rule), 1 plus the bridge_concept_prerequisite_closure min_depth
+      for a concept a requirement builds on over approved edges, the shortest over
+      the run's requirements
+    tests:
+    - not_null
+  - name: prerequisite_source
+    description: str, declared or inferred for a requirement (declared when both),
+      builds_on for a concept reached through what requirements build on
+    tests:
+    - not_null
+    - accepted_values:
+        values: [declared, inferred, builds_on]
+  - name: required_concept_count
+    description: int, the run's requirements that are or build on this concept
+    tests:
+    - not_null
+  - name: provider_platform
+    description: str, the providing run's platform
+  - name: provider_courserun_readable_id
+    description: str, a current run of another course that teaches the concept, as
+      in bridge_courserun_prerequisite_coverage; null when none does
+  - name: provider_courserun_fk
+    description: str, dim_course_run.courserun_pk of the providing run
+    tests:
+    - relationships:
+        to: ref('dim_course_run')
+        field: courserun_pk
+  - name: match_type
+    description: str, direct (teaches or reviews the concept), close (a close equivalent)
+      or, for requirements only, narrower (a narrower match in bridge_courserun_prerequisite_coverage),
+      the first that applies
+    tests:
+    - accepted_values:
+        values: [direct, close, narrower]
+  - name: provider_scope_count
+    description: int, the provider's scopes teaching or reviewing the concept (direct)
+      or its best close equivalent (close); null for narrower, which counts concepts
+  - name: narrower_taught_count
+    description: int, narrower only, the required concept's narrower concepts the
+      provider teaches or reviews (bridge_courserun_prerequisite_coverage)
+  - name: provider_rank
+    description: int, 1 for the best provider of this prerequisite, by match type
+      and then provider_scope_count, or narrower_taught_count for narrower
+  - name: provider_prerequisite_count
+    description: int, how many of the run's prerequisites this provider covers, which
+      ranks candidate courses (not advice on what to take first)
+
+- name: bridge_course_content_concept
+  description: Which known concepts each courseware block or course document mentions,
+    from dictionary tagging, one row per (source, concept). Mentions only, not teaching
+    status.
+  config:
+    meta:
+      # It reads tables only the courseware tagger writes, which no QA run produces
+      # until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: course_content_concept_pk
+    description: str, surrogate key of (platform, courserun_readable_id, source_ref,
+      concept)
+    tests:
+    - unique
+    - not_null
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: content_block_fk
+    description: str, dim_course_content.content_block_pk of the latest retrieval;
+      null when the source is an exported file rather than a block
+  - name: concept_fk
+    description: str, dim_concept.concept_pk of the concept as of the newest resolution
+      run; a concept merged since the tagging run reads as its survivor
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
+  - name: scope_id
+    description: str, the sequential's block id, or 'context' or 'materials'
+  - name: scope_kind
+    description: str, unit, context or materials
+  - name: source_ref
+    description: str, the block id, or the exported file's path
+  - name: source_kind
+    description: str, html, problem, video_transcript, document or a page kind
+  - name: mention_count
+    description: int, mentions of the concept in the source
+  - name: phrase_count
+    description: int, distinct phrases that matched
+  - name: first_char_start
+    description: int, offset of the first mention in the source's text
+  - name: is_ambiguous
+    description: boolean, every mention came through an ambiguous phrase; a review
+      signal, not a sense decision
+  - name: is_sense_resolved
+    description: boolean, the course run's sense of the label is this concept; otherwise
+      the row is a mention candidate whose sense nothing has decided
+  - name: is_cited_by_extractor
+    description: boolean, a current verified claim naming the concept quotes this
+      source
+  - name: is_named_in_scope
+    description: boolean, a current verified claim in the source's scope names the
+      concept
+  - name: tagging_run_id
+    description: str, the tagging run the rows come from
 
 unit_tests:
 - name: test_bridge_concept_relation_keeps_hierarchy_beside_dependency_and_cuts_hierarchy_cycles
@@ -744,6 +1034,10 @@ unit_tests:
       contrary_verdict_count: 0, pair_verdict_count: 1}
     - {from_concept_id: s, to_concept_id: t, relation: related, supporting_verdict_count: 0,
       contrary_verdict_count: 0, pair_verdict_count: 0}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: course1, course_readable_id: "course-v1:MITx+C1", is_current: true}
+    - {course_pk: course2, course_readable_id: "course-v1:MITx+C2", is_current: true}
   - input: ref('int__courseware__resolved_concept_mentions')
     rows:
     - {platform: mitxonline, courserun_readable_id: run1, scope_id: u1, concept_id: m,
@@ -827,6 +1121,8 @@ unit_tests:
       contrary_verdict_count: 0, pair_verdict_count: 3}
     - {from_concept_id: y, to_concept_id: z, relation: broader, supporting_verdict_count: 3,
       contrary_verdict_count: 0, pair_verdict_count: 3}
+  - input: ref('dim_course')
+    rows: []
   - input: ref('int__courseware__resolved_concept_mentions')
     rows: []
   expect:
@@ -866,6 +1162,9 @@ unit_tests:
     - {platform: mitxonline, courserun_readable_id: run3, course_fk: course1, is_current: true}
   - input: ref('int__courseware__adjudicated_concept_relations')
     rows: []
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: course1, course_readable_id: "course-v1:MITx+C1", is_current: true}
   - input: ref('int__courseware__resolved_concept_mentions')
     rows: []
   expect:
