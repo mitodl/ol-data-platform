@@ -43,16 +43,21 @@
     run's tool status as it was. tool_status does not change the support rule.
 
     Every relation is kept here for review whatever its claims' review status;
-    accepted_claim_count is how many of claim_count are accepted, and learner-facing
-    views take only relations with at least one.
+    accepted_claim_count is how many of claim_count are accepted (for an inferred
+    requirement, only those made before the run teaches the concept), and
+    learner-facing views take only relations with at least one.
 #}
+-- one row per (claim, concept): an assessment that lists two labels of one concept
+-- is one claim behind the relation, not two
 with mentions as (
-    select
+    select distinct
         platform
         , courserun_readable_id
         , scope_id
         , scope_kind
         , scope_position
+        , extraction_key
+        , claim_ordinal
         , claim_kind
         , teaching_status
         , concept_kind
@@ -120,6 +125,7 @@ with mentions as (
     group by platform, courserun_readable_id, concept_id
 )
 
+-- each unit that relies on the concept, with how many of its claims do
 , relied_on as (
     select
         platform
@@ -148,7 +154,17 @@ with mentions as (
         , relied_on.concept_id
         , min(relied_on.relied_position) as first_scope_position
         , sum(relied_on.claim_count) as claim_count
-        , sum(relied_on.accepted_claim_count) as accepted_claim_count
+        -- only an accepted claim that relies on the concept before any scope teaches
+        -- it supports the requirement; a later one is use of what the run taught
+        , sum(
+            case
+                when
+                    first_taught.first_taught_position is null
+                    or relied_on.relied_position < first_taught.first_taught_position
+                    then relied_on.accepted_claim_count
+                else 0
+            end
+        ) as accepted_claim_count
         , count(*) as scope_count
         , array_agg(relied_on.scope_id order by relied_on.relied_position, relied_on.scope_id) as relied_scope_ids
         , sum(
@@ -209,18 +225,16 @@ with mentions as (
             and inferred_candidates.concept_id = expected_by_run.concept_id
 )
 
+, course_keys as (
+    {{ courseware_run_course_keys('mentions') }}
+)
+
 -- courses that require each concept, for cross-course support: declared, or inferred
--- by a run whose own evidence points the right way. A run with no course_fk (e.g.
--- residential) is keyed by its course's readable id.
+-- by a run whose own evidence points the right way
 , requiring_courses as (
     select
         requiring.concept_id
-        , count(
-            distinct coalesce(
-                course_runs.course_fk
-                , concat(requiring.platform, '|', {{ courserun_course_readable_id('requiring.courserun_readable_id') }})
-            )
-        ) as course_support
+        , count(distinct course_keys.course_key) as course_support
     from (
         select
             platform
@@ -236,10 +250,10 @@ with mentions as (
         from direct_relations
         where relation = 'requires'
     ) as requiring
-    left join course_runs
+    left join course_keys
         on
-            requiring.platform = course_runs.platform
-            and requiring.courserun_readable_id = course_runs.courserun_readable_id
+            requiring.platform = course_keys.platform
+            and requiring.courserun_readable_id = course_keys.courserun_readable_id
     group by requiring.concept_id
 )
 

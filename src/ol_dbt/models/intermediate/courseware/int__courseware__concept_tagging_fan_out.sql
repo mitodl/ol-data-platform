@@ -55,12 +55,14 @@ with tags as (
     select * from {{ ref('int__courseware__resolved_concept_mentions') }}
 )
 
+-- from the extractions, not the claims, so a scope whose current extraction found no
+-- claims still counts its tagged sources as compared (and disagreeing)
 , extracted_scopes as (
     select distinct
         platform
         , courserun_readable_id
         , scope_id
-    from {{ ref('int__courseware__claims') }}
+    from {{ ref('int__courseware__extractions') }}
     where is_current
 )
 
