@@ -5,7 +5,8 @@ import pytest
 from ml.lib.courseware import resolve, senses
 from ml.lib.courseware.resolve import ResolutionState
 from ml.lib.courseware.senses import Alias, SenseQuery, Unit, _adjudicate_senses_batch
-from ml_tests.test_courseware_resolve import labels, run, state_from
+
+from .test_courseware_resolve import labels, run, state_from
 
 OS = "course-v1:MITx+6.033+1T2026"
 ML = "course-v1:MITx+6.036+1T2026"
