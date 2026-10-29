@@ -50,10 +50,8 @@ from ml.lib.courseware.warehouse import (
     EXTRACTION_PARTITIONS,
     anthropic_client,
     partition_courserun,
-    read_table,
-    require_table,
-    warehouse_database,
 )
+from ml.lib.warehouse import read_table, require_table, warehouse_database
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import publish_prompt_version
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes

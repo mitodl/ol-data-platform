@@ -13,6 +13,12 @@ The split:
 - **`data_loading`** owns the *orchestration* — thin `@dlt_assets` wrappers,
   translators, schedules, and the edxorg sensor — and imports `ol_dlt`.
 
+One exception is not dlt: `defs/canvas/`, the Canvas course exports moved from
+the retired `canvas` code location (issue #2260). It is a plain Dagster
+`multi_asset` that writes each course's Common Cartridge and metadata JSON to the
+landing zone, keyed `canvas/course_content` and `canvas/course_metadata` rather
+than under `ol_warehouse_raw_data`. Its webhook to MIT Learn lives in `delivery`.
+
 See the root [`AGENTS.md`](../../AGENTS.md) for repo-wide build and validation
 workflows, and [`src/ol_dlt/README.md`](../../src/ol_dlt/README.md) for the dlt
 project itself.
@@ -31,12 +37,13 @@ src/ol_dlt/                         # the standalone dlt project (pure dlt)
 dg_projects/data_loading/
 ├── data_loading/
 │   ├── definitions.py              # load_from_defs_folder + DagsterDltResource
-│   └── defs/ingestion/
-│       ├── __init__.py             # maps DAGSTER_ENVIRONMENT -> DLT_PROFILE
-│       ├── translators.py          # RawDataDltTranslator + EdxorgDltTranslator
-│       ├── assets.py               # build_ingest_assets() factory + per-source @dlt_assets
-│       ├── schedules.py
-│       └── sensor.py               # edxorg upstream multi_asset_sensor
+│   ├── defs/ingestion/
+│   │   ├── __init__.py             # maps DAGSTER_ENVIRONMENT -> DLT_PROFILE
+│   │   ├── translators.py          # RawDataDltTranslator + EdxorgDltTranslator
+│   │   ├── assets.py               # build_ingest_assets() factory + per-source @dlt_assets
+│   │   ├── schedules.py
+│   │   └── sensor.py               # edxorg upstream multi_asset_sensor
+│   └── defs/canvas/                # Canvas course exports (not dlt), see above
 └── data_loading_tests/test_translators.py
 ```
 

@@ -1,13 +1,22 @@
 ---
-# OpenMetadata domain for each dbt model, snapshot, seed and source.
+# OpenMetadata domain for each dbt model, snapshot, seed and source, and for
+# the lake tables dbt does not declare.
 #
 # The lakehouse code applies these rules to manifest.json when it uploads the
 # manifest for OpenMetadata (dg_projects/lakehouse/lakehouse/lib/
 # openmetadata_domains.py), and the nightly om-ingest-dbt job sets each table's
-# domain from the result. They live here rather than in dbt_project.yml because
-# the model folders are split by source platform, not business area, and dbt
-# merges `meta` shallowly: a per-model `openmetadata` override would have to
-# repeat owner and tier.
+# domain from the result. The lakehouse code uploads the rules too, and
+# ol-infrastructure's om-ingest-domains job (open_metadata/scripts/
+# domain_assignment.py) applies them by name to the raw and other lake tables
+# that are not in the manifest. That job also gives each Superset dataset and
+# dashboard the domain of the tables it reads, or none when they span several.
+# Glue's copies of the lake tables, Dagster and Airbyte pipelines, and charts
+# get no domain; see that script for why.
+#
+# The rules live here rather than in dbt_project.yml because the model folders
+# are split by source platform, not business area, and dbt merges `meta`
+# shallowly: a per-model `openmetadata` override would have to repeat owner and
+# tier.
 #
 # Each node's name is matched against the rules in order, case-insensitively,
 # with shell-style globs, and the first match wins. A node that sets

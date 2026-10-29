@@ -17,7 +17,7 @@ import markupsafe
 import sqlglot
 import sqlglot.expressions as exp
 from sqlglot.optimizer.qualify import qualify
-from sqlglot.optimizer.scope import traverse_scope
+from sqlglot.optimizer.scope import Scope, build_scope, traverse_scope
 
 # ---------------------------------------------------------------------------
 # Jinja2 rendering (primary path)
@@ -99,6 +99,9 @@ def _make_jinja_env(
 
     env = jinja2.Environment(
         undefined=_SqlSafeUndefined,
+        # dbt enables `do`, and a macro file using it (deduplicate_raw_table's)
+        # would otherwise fail to load, leaving its macros unexpanded.
+        extensions=["jinja2.ext.do"],
         autoescape=False,  # noqa: S701 — generating SQL, not HTML; autoescaping not applicable
         # Allow Jinja2 to handle dbt's {%- -%} whitespace-trimming syntax
         trim_blocks=False,
@@ -1292,6 +1295,47 @@ def get_columns_read_from_ref(
     return cols_read if cols_read else None
 
 
+def _qualified_against_upstreams(
+    clean_sql: str, downstream_parsed: ParsedModel, upstream_columns: Mapping[str, set[str]]
+) -> tuple[exp.Expr, dict[str, str]] | None:
+    """Qualify *clean_sql* with each ref/source placeholder anchored to its known columns.
+
+    Returns the qualified AST and a map of placeholder to upstream name, or
+    ``None`` when no upstream schema is known or the SQL does not parse or
+    qualify.
+    """
+    schema: dict[str, object] = {}
+    placeholder_to_name: dict[str, str] = {}
+    for placeholder, model_name in downstream_parsed.ref_placeholder_map.items():
+        cols = upstream_columns.get(model_name)
+        if cols:
+            schema[placeholder] = {col.lower(): "VARCHAR" for col in cols}
+            placeholder_to_name[placeholder] = model_name
+    for placeholder, source_key in downstream_parsed.source_placeholder_map.items():
+        cols = upstream_columns.get(source_key)
+        if cols:
+            schema[placeholder] = {col.lower(): "VARCHAR" for col in cols}
+            placeholder_to_name[placeholder] = source_key
+    if not schema:
+        return None
+
+    try:
+        statements = sqlglot.parse(clean_sql, dialect="trino", error_level=sqlglot.ErrorLevel.IGNORE)
+        ast = next((s for s in reversed(statements) if s is not None), None)
+        if ast is None:
+            return None
+        qualified = qualify(
+            ast,
+            schema=schema,
+            dialect="trino",
+            validate_qualify_columns=False,
+            allow_partial_qualification=True,
+        )
+    except Exception:  # noqa: BLE001 — any parse/optimizer failure means "can't attribute"
+        return None
+    return qualified, placeholder_to_name
+
+
 def consumed_columns_by_ref_via_scope(
     downstream_parsed: ParsedModel,
     upstream_columns: dict[str, set[str]],
@@ -1341,35 +1385,10 @@ def consumed_columns_by_ref_via_scope(
     except Exception:  # noqa: BLE001
         return {}
 
-    schema: dict[str, object] = {}
-    placeholder_to_name: dict[str, str] = {}
-    for placeholder, model_name in downstream_parsed.ref_placeholder_map.items():
-        cols = upstream_columns.get(model_name)
-        if cols:
-            schema[placeholder] = {col.lower(): "VARCHAR" for col in cols}
-            placeholder_to_name[placeholder] = model_name
-    for placeholder, source_key in downstream_parsed.source_placeholder_map.items():
-        cols = upstream_columns.get(source_key)
-        if cols:
-            schema[placeholder] = {col.lower(): "VARCHAR" for col in cols}
-            placeholder_to_name[placeholder] = source_key
-    if not schema:
+    anchored = _qualified_against_upstreams(clean_sql, downstream_parsed, upstream_columns)
+    if anchored is None:
         return {}
-
-    try:
-        statements = sqlglot.parse(clean_sql, dialect="trino", error_level=sqlglot.ErrorLevel.IGNORE)
-        ast = next((s for s in reversed(statements) if s is not None), None)
-        if ast is None:
-            return {}
-        qualified = qualify(
-            ast,
-            schema=schema,
-            dialect="trino",
-            validate_qualify_columns=False,
-            allow_partial_qualification=True,
-        )
-    except Exception:  # noqa: BLE001 — any parse/optimizer failure means "can't attribute"
-        return {}
+    qualified, placeholder_to_name = anchored
 
     consumed: dict[str, set[str]] = {}
     for scope in traverse_scope(qualified):
@@ -1385,6 +1404,96 @@ def consumed_columns_by_ref_via_scope(
                 consumed.setdefault(placeholder_to_name[source.name], set()).add(col_name)
 
     return consumed
+
+
+def passthrough_columns_via_scope(
+    downstream_parsed: ParsedModel,
+    upstream_columns: dict[str, set[str]],
+) -> dict[str, list[tuple[str, str]]]:
+    """Map each output column that passes an upstream column through to the column it passes.
+
+    Passed through means renamed or cast and nothing more, followed across CTEs
+    and subqueries: ``page_ptr_id as wagtail_page_id`` or
+    ``cast(rank as bigint) as course_rank`` is, ``lower(title)`` or
+    ``coalesce(a, b)`` is not. A column of a ``UNION`` passes the column of every
+    branch that passes one straight; the other set operations take only the
+    left branch's rows, so only it counts.
+
+    Unlike :func:`consumed_columns_by_ref_via_scope`, the project's macros are
+    expanded in every model, not only in one that is nothing but macro calls:
+    ``deduplicate_raw_table`` emits the CTE a model selects from, and without it
+    no column of the model reaches its source.
+
+    *upstream_columns* is keyed as for :func:`consumed_columns_by_ref_via_scope`.
+    Returns ``{output_column: [(upstream_name, upstream_column), ...]}`` for the
+    output columns that pass at least one through; empty when the SQL is
+    unavailable or does not qualify.
+    """
+    sql_path = downstream_parsed.source_path
+    if sql_path is None or not sql_path.exists():
+        return {}
+    sql = sql_path.read_text()
+    try:
+        clean_sql = _render_jinja(sql, downstream_parsed.macro_sources)[0]
+    except Exception:  # noqa: BLE001 — a macro that needs a real dbt context: keep the placeholders
+        clean_sql = strip_jinja(sql).clean_sql
+
+    anchored = _qualified_against_upstreams(clean_sql, downstream_parsed, upstream_columns)
+    if anchored is None:
+        return {}
+    qualified, placeholder_to_name = anchored
+    root = build_scope(qualified)
+    if root is None:
+        return {}
+    return {
+        column: [(placeholder_to_name[table], name) for table, name in passed if table in placeholder_to_name]
+        for column, passed in _scope_outputs(root, {})
+        if any(table in placeholder_to_name for table, _ in passed)
+    }
+
+
+_ScopeOutputs = list[tuple[str, list[tuple[str, str]]]]
+
+
+def _scope_outputs(scope: Scope, traced: dict[int, _ScopeOutputs]) -> _ScopeOutputs:
+    """Return each output column of *scope* in order, with the ``(table, column)`` pairs it passes through.
+
+    *traced* holds the scopes already traced, by id: every column of a CTE's
+    reader asks for the CTE's outputs, so without it a chain of CTEs is traced
+    once per column per level.
+    """
+    if id(scope) not in traced:
+        traced[id(scope)] = _traced_outputs(scope, traced)
+    return traced[id(scope)]
+
+
+def _traced_outputs(scope: Scope, traced: dict[int, _ScopeOutputs]) -> _ScopeOutputs:
+    if isinstance(scope.expression, exp.SetOperation):
+        left, right = (_scope_outputs(branch, traced) for branch in scope.set_operation_scopes)
+        if not isinstance(scope.expression, exp.Union):
+            return left
+        return [(name, passed + right[position][1]) for position, (name, passed) in enumerate(left[: len(right)])]
+    # A table function (UNNEST) makes its columns rather than passing any.
+    if not isinstance(scope.expression, exp.Query):
+        return []
+    return [
+        (projection.alias_or_name.lower(), _passed(scope, projection, traced))
+        for projection in scope.expression.selects
+    ]
+
+
+def _passed(scope: Scope, expression: exp.Expr, traced: dict[int, _ScopeOutputs]) -> list[tuple[str, str]]:
+    # TryCast is a Cast.
+    while isinstance(expression, exp.Alias | exp.Cast | exp.Paren):
+        expression = expression.this
+    if not isinstance(expression, exp.Column):
+        return []
+    source = scope.sources.get(expression.table)
+    if isinstance(source, exp.Table):
+        return [(source.name, expression.name.lower())]
+    if isinstance(source, Scope):
+        return dict(_scope_outputs(source, traced)).get(expression.name.lower(), [])
+    return []
 
 
 def consumed_columns_via_scope(

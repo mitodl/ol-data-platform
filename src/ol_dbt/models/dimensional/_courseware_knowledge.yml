@@ -174,6 +174,12 @@ models:
   - name: is_current
     description: boolean, whether the claim's extraction is the one its scope part
       is read from now (int__courseware__extractions)
+  - name: review_status
+    description: str, proposed, accepted or rejected. Only accepted claims reach learner-facing
+      views; every claim is proposed until review exists.
+    tests:
+    - accepted_values:
+        values: [proposed, accepted, rejected]
   - name: extracted_at
     description: timestamp, when the extraction returned
 
@@ -269,7 +275,11 @@ models:
         to: ref('dim_concept')
         field: concept_pk
   - name: review_status
-    description: str, proposed, accepted or rejected
+    description: str, proposed, accepted or rejected. Only accepted concepts reach
+      learner-facing views; every concept is proposed until review exists.
+    tests:
+    - accepted_values:
+        values: [proposed, accepted, rejected]
   - name: wikidata_qid
     description: str, the concept's Wikidata item; null until concept-level linking
       exists
@@ -527,5 +537,8 @@ models:
       the first scope that relies on the concept
   - name: claim_count
     description: int, claims behind the relation
+  - name: accepted_claim_count
+    description: int, accepted claims behind the relation; learner-facing views take
+      only relations with at least one
   - name: scope_count
     description: int, distinct scopes behind the relation

@@ -283,18 +283,21 @@ unit_tests:
   description: >
     publish_date is a UTC instant with three fractional digits, as Trino's
     to_iso8601 renders the timestamp(3) both feeds' dates are parsed into.
+    A Medium post with no date has a NULL publish_date.
   model: integrations__learn__news_feed_items
   given:
   - input: ref('stg__medium__rss__posts')
     rows:
     - {post_guid: https://medium.com/p/1, post_published_on_raw: "Wed, 18 Feb 2026\
         \ 14:28:25 GMT"}
+    - {post_guid: https://medium.com/p/2, post_published_on_raw: null}
   - input: ref('stg__mitpe__api__news')
     rows:
     - {news_id: mitpe-1, news_date_raw: "2026-09-30"}
   expect:
     rows:
     - {guid: https://medium.com/p/1, publish_date: "2026-02-18T14:28:25.000Z"}
+    - {guid: https://medium.com/p/2, publish_date: null}
     - {guid: mitpe-1, publish_date: "2026-09-30T04:00:00.000Z"}
 
 - name: test_integrations__learn__event_feed_items_event_datetime_matches_trino
