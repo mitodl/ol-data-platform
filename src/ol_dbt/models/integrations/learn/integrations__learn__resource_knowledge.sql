@@ -24,7 +24,7 @@ with extractions as (
 
 , run_bridge as (
     select * from {{ ref('bridge_courserun_concept') }}
-    where is_published
+    where passes_support_rule
 )
 
 , concepts as (

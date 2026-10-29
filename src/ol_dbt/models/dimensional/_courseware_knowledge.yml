@@ -327,11 +327,13 @@ models:
     - relationships:
         to: ref('dim_concept')
         field: concept_pk
-    # learning order is a strict partial order, so published builds_on has no cycles
+    # builds_on rows are observations, so a cycle among passing edges is a signal
+    # to review, not a broken contract
     - acyclic:
         to_column: to_concept_fk
         config:
-          where: relation = 'builds_on' and is_published
+          severity: warn
+          where: relation = 'builds_on' and passes_support_rule
   - name: to_concept_fk
     description: str, the broader concept, the concept or tool built on, or the higher
       id
@@ -355,7 +357,7 @@ models:
   - name: course_scope_support
     description: int, builds_on only, scope_support with each course's reruns counted
       once (the run with the most units; a run without a course_fk is keyed by the
-      run id less its run segment); the support the publishing rule reads, since reruns
+      run id less its run segment); the support the support rule reads, since reruns
       of one course have near-identical text
   - name: reverse_scope_support
     description: int, builds_on only, course_scope_support of the opposite direction
@@ -379,17 +381,18 @@ models:
     description: timestamp, the latest evidence for the edge
   - name: review_status
     description: str, proposed, accepted or rejected
-  - name: is_published
-    description: boolean, whether the edge clears the publishing rule; builds_on needs
+  - name: passes_support_rule
+    description: boolean, whether the edge passes the support rule, which filters
+      noise and does not accept the edge (review_status does that); builds_on needs
       course_scope_support of courseware_prerequisite_min_scope_support and direction_consistency
       of courseware_prerequisite_min_direction_consistency (no course-count clause,
       since every supporting course adds at least one unit), every other relation
-      is published
+      passes. A passing builds_on edge is still a course observation, not a prerequisite
     tests:
     - not_null
-  - name: unpublished_reason
+  - name: support_rule_failure
     description: str, builds_on only, insufficient_support or contested_direction
-      when the edge is not published
+      when the edge fails the support rule
     tests:
     - accepted_values:
         values: [insufficient_support, contested_direction]
@@ -441,12 +444,13 @@ models:
   - name: foundation_rank
     description: float, PageRank over builds_on toward foundations
   - name: sequence_level
-    description: int, longest chain of concepts beneath this one in builds_on
+    description: int, longest chain of concepts beneath this one in builds_on (observed
+      instructional order, not a prerequisite chain)
   - name: hierarchy_depth
     description: int, longest chain of broader concepts above this one
   - name: in_sequence_cycle
-    description: boolean, whether the concept is on a builds_on cycle (a data-quality
-      finding)
+    description: boolean, whether the concept is on a builds_on cycle (a finding to
+      review; builds_on edges are observations, so a cycle is not by itself bad data)
   - name: in_hierarchy_cycle
     description: boolean, whether the concept is on a broader cycle (a data-quality
       finding)
@@ -543,6 +547,10 @@ models:
     description: int, claims behind the relation
   - name: scope_count
     description: int, distinct scopes behind the relation
+  - name: relied_scope_ids
+    description: array of str, inferred requires only, the units relying on the concept,
+      in course order; join on (platform, courserun_readable_id, scope_id) to dim_courseware_extraction
+      for the extraction version behind each
   - name: prior_scope_count
     description: int, inferred requires only, units relying on the concept before
       the run teaches it
@@ -557,15 +565,16 @@ models:
   - name: direction_consistency
     description: float, inferred requires only, prior_scope_count / (prior_scope_count
       + taught_scope_count)
-  - name: is_published
-    description: boolean, whether the relation clears the publishing rule; inferred
-      requires needs the courseware_prerequisite_* support and direction thresholds,
-      every other relation is published
+  - name: passes_support_rule
+    description: boolean, whether the relation passes the support rule, which filters
+      noise and does not accept it; inferred requires needs the courseware_prerequisite_*
+      support and direction thresholds, every other relation passes. A passing inferred
+      requirement is still an observation of this run, not a reviewed prerequisite
     tests:
     - not_null
-  - name: unpublished_reason
+  - name: support_rule_failure
     description: str, inferred requires only, insufficient_support or contested_direction
-      when the requirement is not published
+      when the requirement fails the support rule
     tests:
     - accepted_values:
         values: [insufficient_support, contested_direction]
