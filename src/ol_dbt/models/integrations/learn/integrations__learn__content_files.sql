@@ -12,6 +12,9 @@
   /Title (2026-10-02, three sample runs, 64 PDF/PPTX files). Learn's title then
   falls back to the file name, as title does here. checksum is the MD5 of the extracted text, not of the file
   bytes as Learn's archive_checksum is, so it changes when the text does.
+  release_date is ContentFile.release_date (mit-learn#4093). Learn shows a file
+  only while it is published and its release_date is null or past, so a
+  future-dated row is here but hidden in Learn until that date.
 #}
 
 with content_files as (
@@ -40,4 +43,5 @@ select
     , extraction_status
     , true as published
     , extracted_at as last_modified
+    , release_date
 from content_files

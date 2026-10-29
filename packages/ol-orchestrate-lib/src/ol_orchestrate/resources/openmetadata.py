@@ -10,8 +10,8 @@ from ol_orchestrate.resources.api_client import BaseApiClient
 class OpenMetadataApiClient(BaseApiClient):
     """OpenMetadata's API at ``base_url`` (the ``/api`` root, e.g. ``https://data.ol.mit.edu/api``).
 
-    The Vault secret holds ``server_url`` and ``token`` (a bot JWT), the same pair
-    ol-infrastructure gives OpenMetadata's own ingestion jobs.
+    The Vault secret holds ``server_url`` and ``token`` (a bot JWT), written by
+    ol-infrastructure's substructure/open_metadata stack for dagster-bot.
     """
 
     token: str = Field(description="OpenMetadata bot JWT")

@@ -189,27 +189,8 @@ with mitxonline_enrollments as (
 -- same code (courserun_external_readable_id, as in int__combined__courserun_enrollments),
 -- this lookup resolves it to that run's courserun_readable_id. Codes with no xPro run keep
 -- the external code, which matches the platform's own dim_course_run row.
--- xPro can give two runs one code (e.g. MCPO and MO_MCPO both carry MO-MCPO-26-12#1 since
--- 2026-10-14). The earliest-created run takes the code, so an enrollment resolves to one
--- run, and to the xPro course wrike_course_codes_of_mitxpro_courses gives the code in
--- dim_course.
 , mitxpro_external_readable_id_lookup as (
-    select courserun_external_readable_id, courserun_readable_id
-    from (
-        select
-            courserun_external_readable_id
-            , courserun_readable_id
-            , row_number() over (
-                partition by courserun_external_readable_id
-                order by courserun_created_on, courserun_id
-            ) as _row_num
-        from {{ ref('int__mitxpro__course_runs') }}
-        -- xPro runs with no external id carry '' rather than null; without this, a source row
-        -- with an empty run code would fan out across all of them
-        where courserun_external_readable_id is not null
-            and courserun_external_readable_id != ''
-    ) as ranked
-    where _row_num = 1
+    {{ mitxpro_course_runs_by_external_readable_id() }}
 )
 
 , emeritus_enrollments as (
@@ -508,14 +489,19 @@ with mitxonline_enrollments as (
     group by platform, enrollment_type
 )
 
--- Snapshot of the target's current foreign keys, used to re-select rows whose user_fk has
--- gone stale after a dim_user re-key, whose courserun_fk has changed (e.g. an Emeritus run
--- code that gains an xPro match), or whose contract_fk has (MITx Online backfilled the
--- enrollment's contract without moving updated_on past our watermark). The source row
--- itself did not change, so the activity-timestamp watermark alone would never catch these.
+-- Snapshot of the target's current foreign keys and enrollment state, used to re-select
+-- rows whose user_fk has gone stale after a dim_user re-key, whose courserun_fk has changed
+-- (e.g. an Emeritus run code that gains an xPro match), or whose contract_fk has (MITx
+-- Online backfilled the enrollment's contract without moving updated_on past our
+-- watermark). The source row itself did not change, so the activity-timestamp watermark
+-- alone would never catch these.
+-- The enrollment state is compared because edX.org and residential enrollments have no
+-- updated_on: an unenrollment or mode change after the 7-day lookback never moves a
+-- watermark, so the fact kept such enrollments active. A MITx Online DEDP enrollment's mode
+-- is also derived from orders, which do not bump the enrollment's updated_on.
 -- One row per key: a key a past run wrote twice would otherwise match each source row twice
 -- and be written twice again. It is re-selected instead, so delete+insert leaves one copy.
-, stale_fk_lookup as (
+, stored_row_lookup as (
     select
         enrollment_key
         , max(user_fk) as stored_user_fk
@@ -523,6 +509,9 @@ with mitxonline_enrollments as (
         , max(
             {% if target_has_contract_fk %}contract_fk{% else %}cast(null as varchar){% endif %}
         ) as stored_contract_fk
+        , bool_or(enrollment_is_active) as stored_is_active
+        , max(enrollment_mode) as stored_mode
+        , max(enrollment_status) as stored_status
         , count(*) > 1 as stored_has_copies
     from {{ this }}
     group by enrollment_key
@@ -559,7 +548,7 @@ with mitxonline_enrollments as (
     left join incremental_watermarks w
         on w.watermark_platform = ewf.platform
         and w.watermark_enrollment_type = ewf.enrollment_scope
-    left join stale_fk_lookup as sfk
+    left join stored_row_lookup as sfk
         on sfk.enrollment_key = {{ dbt_utils.generate_surrogate_key([
             "cast(ewf.enrollment_id as varchar)",
             "ewf.platform",
@@ -569,8 +558,9 @@ with mitxonline_enrollments as (
         w.max_activity_on is null  -- platform/type not yet in target, include all
         -- Use >= for updated_on watermark: updated_on can equal max on state changes within same second
         or coalesce(ewf.enrollment_updated_on, ewf.enrollment_created_on) >= w.max_activity_on
-        -- For platforms without updated_on (edxorg, residential), apply a 7-day lookback to catch
-        -- status changes (deactivations, mode upgrades) that don't bump enrollment_created_on
+        -- For platforms without updated_on (edxorg, residential), apply a 7-day lookback so a
+        -- recent enrollment is rewritten while its source row settles. Later changes are
+        -- caught by the stored-state comparison below.
         or (
             ewf.enrollment_updated_on is null
             and ewf.enrollment_created_on is not null
@@ -583,6 +573,10 @@ with mitxonline_enrollments as (
         or sfk.stored_courserun_fk is distinct from ewf.courserun_fk
         -- contract added or re-resolved, including every B2B row on the run that adds the column
         or sfk.stored_contract_fk is distinct from ewf.contract_fk
+        -- unenrolled, reactivated, or mode/status changed with no timestamp to show it
+        or sfk.stored_is_active is distinct from ewf.enrollment_is_active
+        or sfk.stored_mode is distinct from ewf.enrollment_mode
+        or sfk.stored_status is distinct from ewf.enrollment_status
         or sfk.stored_has_copies
     )
     {% endif %}

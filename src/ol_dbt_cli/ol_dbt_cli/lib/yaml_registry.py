@@ -9,6 +9,19 @@ from typing import Any
 import yaml
 
 
+@dataclass(frozen=True)
+class DataTest:
+    """One dbt data test as declared, with its arguments."""
+
+    name: str
+    arguments: dict[str, Any] = field(default_factory=dict)
+    """The test's arguments, from ``arguments:`` or the legacy top-level keys.
+
+    A legacy entry's top-level config keys (``where:``) land here too, since
+    nothing tells them from arguments; ``config:`` itself never does.
+    """
+
+
 @dataclass
 class YamlColumn:
     """A column definition as declared in a dbt YAML schema file."""
@@ -16,6 +29,8 @@ class YamlColumn:
     name: str
     description: str = ""
     tests: list[str] = field(default_factory=list)
+    data_tests: list[DataTest] = field(default_factory=list)
+    """The same tests as :attr:`tests`, with their arguments."""
 
 
 @dataclass
@@ -52,6 +67,8 @@ class YamlModel:
     columns: dict[str, YamlColumn] = field(default_factory=dict)
     tests: list[str] = field(default_factory=list)
     """Model-level test names (e.g. dbt_utils.unique_combination_of_columns)."""
+    data_tests: list[DataTest] = field(default_factory=list)
+    """The same tests as :attr:`tests`, with their arguments."""
 
     @property
     def column_names(self) -> set[str]:
@@ -90,6 +107,10 @@ class YamlRegistry:
         return table.column_names
 
 
+# Keys of a test entry that configure or describe it rather than pass it an argument.
+_TEST_PROPERTIES = frozenset({"arguments", "config", "name", "description"})
+
+
 def _parse_tests(node_raw: dict[str, Any]) -> list[str]:
     """Flatten a column's or model's dbt test specs to test name strings.
 
@@ -98,13 +119,25 @@ def _parse_tests(node_raw: dict[str, Any]) -> list[str]:
     is either a bare string (``unique``) or a ``{name: {...}}`` config dict — for
     a config dict only the test name (the single key) is kept.
     """
-    result: list[str] = []
+    return [test.name for test in _parse_data_tests(node_raw)]
+
+
+def _parse_data_tests(node_raw: dict[str, Any]) -> list[DataTest]:
+    """Read a column's or model's dbt test specs with their arguments, as :func:`_parse_tests` reads their names.
+
+    dbt 1.10 nests a test's arguments under ``arguments:``; earlier entries set
+    them beside ``config:``. Both are read.
+    """
+    result: list[DataTest] = []
     for key in ("tests", "data_tests"):
         for entry in node_raw.get(key, []) or []:
             if isinstance(entry, str):
-                result.append(entry)
+                result.append(DataTest(entry))
             elif isinstance(entry, dict):
-                result.extend(entry.keys())
+                for name, spec in entry.items():
+                    spec = spec or {}
+                    legacy = {argument: value for argument, value in spec.items() if argument not in _TEST_PROPERTIES}
+                    result.append(DataTest(name, {**legacy, **(spec.get("arguments") or {})}))
     return result
 
 
@@ -135,6 +168,7 @@ def _parse_columns(raw_columns: list[Any]) -> dict[str, YamlColumn]:
             name=col_name,
             description=col_raw.get("description", ""),
             tests=_parse_tests(col_raw),
+            data_tests=_parse_data_tests(col_raw),
         )
     return columns
 
@@ -162,6 +196,7 @@ def _parse_yaml_file(path: Path) -> tuple[list[YamlModel], list[YamlSource]]:
                     description=model_raw.get("description", ""),
                     columns=_parse_columns(model_raw.get("columns", [])),
                     tests=_parse_tests(model_raw),
+                    data_tests=_parse_data_tests(model_raw),
                 )
             )
             # Also rescue nested model definitions that were accidentally placed

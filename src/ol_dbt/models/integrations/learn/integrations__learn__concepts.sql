@@ -2,13 +2,18 @@
     The concepts Learn can show to learners: one row per learner-facing concept with
     its descriptions and how many courses teach it, for concept chips, tooltips and a
     concept page. Pairs with integrations__learn__resource_knowledge, which lists each
-    course's concepts by label. Still includes 'proposed' concepts; the filter to
-    accepted ones goes here once review exists.
+    course's concepts by label.
+
+    Only accepted concepts are published, and course counts come only from relations
+    an accepted claim supports; proposed rows stay in dim_concept and
+    bridge_courserun_concept for review. No review workflow exists yet, so this is
+    empty until one does.
 #}
 with concepts as (
     select * from {{ ref('dim_concept') }}
     where
-        lifecycle_status = 'active'
+        review_status = 'accepted'
+        and lifecycle_status = 'active'
         and coalesce(is_learner_facing, false)
         -- a concept whose labels no current claim names stays active until a rebuild
         and label_count > 0
@@ -16,6 +21,7 @@ with concepts as (
 
 , run_bridge as (
     select * from {{ ref('bridge_courserun_concept') }}
+    where accepted_claim_count > 0
 )
 
 , course_runs as (
