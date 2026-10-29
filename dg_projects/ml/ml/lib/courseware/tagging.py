@@ -486,7 +486,7 @@ class ConceptDictionary:
             aliases.select("concept_label_key", "concept_fk", "alias").iter_rows(),
             key=lambda row: (row[0] or "", row[1], row[2]),
         )
-        explicit = {key for key, _, _ in rows}
+        explicit = {key for key, _, _ in rows if key is not None}
         self.label_count = len(explicit)
         self.tokenless_label_count = 0
         by_phrase: dict[str, set[Entry]] = defaultdict(set)
