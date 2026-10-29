@@ -7,6 +7,10 @@
     explaining) before, or without, any scope of the run teaching or reviewing it.
     The course's documents (the materials scope) accompany its lectures, so a concept
     they teach counts as taught from the start; the context scope teaches nothing.
+
+    Every relation is kept here for review whatever its claims' review status;
+    accepted_claim_count is how many of claim_count are accepted, and learner-facing
+    views take only relations with at least one.
 #}
 with mentions as (
     select
@@ -20,6 +24,7 @@ with mentions as (
         , concept_kind
         , concept_id
         , prerequisite_kind
+        , review_status
     from {{ ref('int__courseware__resolved_concept_mentions') }}
 )
 
@@ -47,11 +52,9 @@ with mentions as (
         , case when claim_kind = 'declared_prerequisite' then 'declared' end as requirement_source
         , scope_position
         , scope_id
+        , review_status
     from mentions
-    where
-        claim_kind in ('concept', 'assessment_expectation', 'declared_prerequisite')
-        -- "no prerequisites": its label names what is not required
-        and coalesce(prerequisite_kind, '') != 'explicitly_none'
+    where claim_kind in ('concept', 'assessment_expectation', 'declared_prerequisite')
 )
 
 , first_taught as (
@@ -75,6 +78,7 @@ with mentions as (
         , concept_id
         , min(scope_position) as first_relied_position
         , count(*) as claim_count
+        , count(case when review_status = 'accepted' then 1 end) as accepted_claim_count
         , count(distinct scope_id) as scope_count
     from mentions
     where
@@ -97,6 +101,7 @@ with mentions as (
         , 'inferred' as requirement_source
         , relied_on.first_relied_position as first_scope_position
         , relied_on.claim_count
+        , relied_on.accepted_claim_count
         , relied_on.scope_count
     from relied_on
     left join first_taught
@@ -118,6 +123,7 @@ with mentions as (
         , requirement_source
         , min(scope_position) as first_scope_position
         , count(*) as claim_count
+        , count(case when review_status = 'accepted' then 1 end) as accepted_claim_count
         , count(distinct scope_id) as scope_count
     from direct_relations
     group by platform, courserun_readable_id, concept_id, relation, requirement_source
@@ -140,6 +146,7 @@ select
     , relations.requirement_source
     , relations.first_scope_position
     , relations.claim_count
+    , relations.accepted_claim_count
     , relations.scope_count
 from relations
 left join course_runs

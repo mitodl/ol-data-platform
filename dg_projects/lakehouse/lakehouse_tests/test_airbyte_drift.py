@@ -188,8 +188,8 @@ class TestOutcome:
 
     @pytest.mark.usefixtures("inventory")
     def test_a_warning_alone_does_not_fail(self) -> None:
-        # An undeclared connection is usually config nobody deleted. Paging on
-        # it would train people to ignore this.
+        # An undeclared active connection is usually config made in the UI.
+        # Paging on it would train people to ignore this.
         extra = connection(
             connectionId="conn-2",
             name="Something From The UI",

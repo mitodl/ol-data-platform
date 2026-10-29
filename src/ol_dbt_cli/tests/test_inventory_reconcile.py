@@ -71,11 +71,31 @@ EDX_UNIT: dict[str, Any] = {
     ],
 }
 
+FROZEN_TABLE = "raw__bootcamps__app__postgres__auth_user"
+FROZEN_ENTRY: dict[str, Any] = {
+    "deployment": "bootcamps",
+    "layer": "app_postgres",
+    "raw_tables": [FROZEN_TABLE],
+    "retired_on": "2026-02-12",
+    "reason": "The bootcamps application is decommissioned.",
+    "frozen": True,
+}
+
+UNMODELED_TABLE = "raw__bootcamps__app__postgres__wagtailcore_page"
+UNMODELED_ENTRY: dict[str, Any] = {
+    **FROZEN_ENTRY,
+    "raw_tables": [UNMODELED_TABLE],
+    "modeled": False,
+}
+
 DECLARED = {
     f"{MITX_PREFIX}auth_user",
     f"{MITX_PREFIX}courseware_studentmodule",
     f"{EDX_PREFIX}tables__auth_user",
 }
+
+# What dbt declares when it agrees with every unit's `modeled:` flag.
+MODELED = {f"{MITX_PREFIX}auth_user", f"{EDX_PREFIX}tables__auth_user"}
 
 
 @pytest.fixture
@@ -153,6 +173,35 @@ class TestWarehouseReconciliation:
         assert report.issues == []
         assert result.both == DECLARED
 
+    def test_frozen_table_in_the_warehouse_is_not_drift(self, inventory: Path) -> None:
+        units = load_units(inventory)
+        report = ValidationReport()
+        result = reconcile_warehouse(units, DECLARED | {FROZEN_TABLE}, report, frozen=frozenset({FROZEN_TABLE}))
+
+        assert report.issues == []
+        assert FROZEN_TABLE not in result.observed_not_declared
+
+    def test_frozen_table_missing_from_the_warehouse_is_a_warning(self, inventory: Path) -> None:
+        # No loader can bring it back, so its absence is reported rather than
+        # waiting for the models that read it to build empty.
+        units = load_units(inventory)
+        report = ValidationReport()
+        reconcile_warehouse(units, DECLARED, report, frozen=frozenset({FROZEN_TABLE}))
+
+        assert _messages(report, Severity.WARNING) == [f"{FROZEN_TABLE} is frozen but the warehouse does not hold it"]
+
+    def test_retired_table_still_in_the_warehouse_is_named_as_retired(self, inventory: Path) -> None:
+        # Not unclaimed: the graveyard says what it was. What is left to decide
+        # is whether its data goes or stays, which is the entry's `frozen:`.
+        units = load_units(inventory)
+        report = ValidationReport()
+        retired = f"{MITX_PREFIX}dropped_table"
+        reconcile_warehouse(units, DECLARED | {retired}, report, retired=frozenset({retired}))
+
+        assert [(issue.model, issue.message) for issue in report.issues] == [
+            ("retired.yml", f"{retired} is retired but the warehouse still holds it")
+        ]
+
 
 class TestDbtReconciliation:
     def test_dbt_source_no_unit_loads_is_an_error(self, inventory: Path) -> None:
@@ -214,6 +263,48 @@ class TestDbtReconciliation:
         assert report.errors == []
         assert _messages(report, Severity.WARNING) == [
             f"{MITX_PREFIX}courseware_studentmodule is marked modeled: false but dbt declares a source for it"
+        ]
+
+    def test_frozen_dbt_source_is_expected_not_stale(self, inventory: Path) -> None:
+        # A frozen table is retired *and* kept for dbt to read, so dbt declaring
+        # it is the state the entry asserts, not a model going stale.
+        _write_retired(inventory, [FROZEN_ENTRY])
+        units = load_units(inventory)
+        report = ValidationReport()
+        result = reconcile_dbt(units, DECLARED | {FROZEN_TABLE}, inventory, report)
+
+        assert FROZEN_TABLE not in result.observed_not_declared
+        assert all(FROZEN_TABLE not in issue.message for issue in report.issues)
+
+    def test_frozen_table_dbt_no_longer_reads_is_a_warning(self, inventory: Path) -> None:
+        # Keeping history nothing models is the marker going stale.
+        _write_retired(inventory, [FROZEN_ENTRY])
+        units = load_units(inventory)
+        report = ValidationReport()
+        reconcile_dbt(units, {f"{MITX_PREFIX}auth_user", f"{EDX_PREFIX}tables__auth_user"}, inventory, report)
+
+        assert report.errors == []
+        assert _messages(report, Severity.WARNING) == [f"{FROZEN_TABLE} is frozen but dbt declares no source for it"]
+
+    def test_frozen_table_dbt_never_modeled_is_not_reported(self, inventory: Path) -> None:
+        # `modeled: false` keeps raw history dbt never read, so dbt not
+        # declaring it is the state the entry asserts.
+        _write_retired(inventory, [FROZEN_ENTRY, UNMODELED_ENTRY])
+        units = load_units(inventory)
+        report = ValidationReport()
+        reconcile_dbt(units, MODELED | {FROZEN_TABLE}, inventory, report)
+
+        assert report.issues == []
+
+    def test_frozen_unmodeled_table_dbt_declares_is_a_warning(self, inventory: Path) -> None:
+        _write_retired(inventory, [UNMODELED_ENTRY])
+        units = load_units(inventory)
+        report = ValidationReport()
+        result = reconcile_dbt(units, MODELED | {UNMODELED_TABLE}, inventory, report)
+
+        assert UNMODELED_TABLE not in result.observed_not_declared
+        assert _messages(report, Severity.WARNING) == [
+            f"{UNMODELED_TABLE} is frozen with modeled: false but dbt declares a source for it"
         ]
 
     def test_loaded_but_unmodeled_is_not_reported(self, inventory: Path) -> None:

@@ -127,18 +127,25 @@ select
     , live_courses.course_readable_id as child_readable_id
     , cast(null as varchar) as child_display_mode
     , positioned.child_position
+    , cast(null as bigint) as child_program_order
 from positioned
 inner join programs on positioned.program_id = programs.program_id
 inner join live_courses on positioned.child_id = live_courses.course_id
 where positioned.child_resource_type = 'course'
 union all
 -- Every required program is a child program. Only one shown as a course has a position.
+-- The ETL lists them in path order (get_program_ids_from_req_tree), and MIT Learn numbers
+-- the ones without a position after the program's other children in that order.
 select
     programs.program_readable_id as readable_id
     , 'program' as child_resource_type
     , program_nodes.required_program_readable_id as child_readable_id
     , program_nodes.required_program_display_mode as child_display_mode
     , positioned.child_position
+    , row_number() over (
+        partition by program_nodes.program_id
+        order by program_nodes.programrequirement_path
+    ) - 1 as child_program_order
 from program_nodes
 inner join programs on program_nodes.program_id = programs.program_id
 left join positioned

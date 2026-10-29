@@ -160,6 +160,12 @@ models:
   - name: is_current
     description: boolean, whether the claim's extraction is the one its scope part
       is read from now (int__courseware__extractions)
+  - name: review_status
+    description: str, proposed, accepted or rejected. Only accepted claims reach learner-facing
+      views; every claim is proposed until review exists.
+    tests:
+    - accepted_values:
+        values: [proposed, accepted, rejected]
   - name: extracted_at
     description: timestamp, when the extraction returned
 
@@ -254,8 +260,20 @@ models:
     - relationships:
         to: ref('dim_concept')
         field: concept_pk
+  - name: split_from_concept_fk
+    description: str, for a concept minted as another sense of a label (e.g. "kernel"
+      in machine learning, split from the operating systems one), the concept it was
+      split from
+    tests:
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
   - name: review_status
-    description: str, proposed, accepted or rejected
+    description: str, proposed, accepted or rejected. Only accepted concepts reach
+      learner-facing views; every concept is proposed until review exists.
+    tests:
+    - accepted_values:
+        values: [proposed, accepted, rejected]
   - name: wikidata_qid
     description: str, the concept's Wikidata item; null until concept-level linking
       exists
@@ -275,14 +293,15 @@ models:
     description: int, mentions with teaching_status taught or reviewed
 
 - name: dim_concept_alias
-  description: Every normalized label a concept was extracted under.
+  description: Every sense of every normalized label, one row per (label, concept).
+    A label can name several concepts, so the label alone does not identify one.
   config:
     meta:
       # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
       qa_buildable: false
   columns:
   - name: concept_alias_pk
-    description: str, surrogate key of the label key
+    description: str, surrogate key of the label key and the concept
     tests:
     - unique
     - not_null
@@ -296,14 +315,15 @@ models:
     description: str, the normalized label key
   - name: alias
     description: str, the label's most used surface form
-  - name: mention_count
-    description: int, mentions of the label
+  - name: sense_role
+    description: str, primary (the concept label resolution put the label in) or split
+      (a concept minted for another meaning of the label)
+  - name: sense_gloss
+    description: str, what the label means in this sense
+  - name: added_run_id
+    description: str, the resolution run that first gave the label this sense
   - name: courserun_count
-    description: int, distinct course runs that mention the label
-  - name: assignment_source
-    description: str, carried, exact_match, minted or rebuild_carried
-  - name: assigned_run_id
-    description: str, the resolution run that first assigned the label to the concept
+    description: int, course runs whose use of the label is assigned to this sense
 
 - name: bridge_concept_relation
   description: Concept-to-concept edges with their accumulated evidence, one row per
@@ -513,6 +533,9 @@ models:
       the first scope that relies on the concept
   - name: claim_count
     description: int, claims behind the relation
+  - name: accepted_claim_count
+    description: int, accepted claims behind the relation; learner-facing views take
+      only relations with at least one
   - name: scope_count
     description: int, distinct scopes behind the relation
 

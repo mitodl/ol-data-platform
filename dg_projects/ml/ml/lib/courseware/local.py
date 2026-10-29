@@ -34,8 +34,11 @@ from ml.lib.courseware.resolve import EMBEDDING_DIM as RESOLUTION_EMBEDDING_DIM
 from ml.lib.courseware.resolve import ResolutionState, resolve_concepts
 from ml.lib.courseware.scopes import CHARS_PER_TOKEN, build_scopes
 from ml.lib.courseware.tagging import ConceptDictionary, tag_sources, tagging_input_key
-from ml.lib.embed import BedrockEmbeddingClient, build_embedding_client
+from ml.lib.embed import resolve_embedding_model
 from ml.resources.llm import LLMClientFactory
+from ml.resources.opik_auth import OPIK_PROJECT_NAME
+from ol_llm import Attribution, UseCase
+from ol_orchestrate.lib.embeddings.models import OlLlmEmbedder
 
 app = cyclopts.App(help=__doc__)
 # Descriptions are short, batched and many; the small model is the default.
@@ -43,6 +46,7 @@ BEDROCK_DESCRIPTION_MODEL = "us.anthropic.claude-haiku-5-5"
 # Answer checks are short and many; the small model is the default.
 BEDROCK_ANSWER_CHECK_MODEL = "us.anthropic.claude-haiku-5-5"
 EXTRACTION_TABLE = "courseware_claim_extraction"
+RESOLUTION_EMBEDDING_MODEL = "bedrock:amazon.titan-embed-text-v2:0"
 
 
 def _existing(output_dir: Path, table: str) -> pl.DataFrame | None:
@@ -61,7 +65,10 @@ def _write(frame: pl.DataFrame, output_dir: Path, table: str) -> None:
 def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
     previous = _existing(output_dir, table)
     _write(
-        new_rows if previous is None else pl.concat([previous, new_rows]),
+        # diagonal: a column added since the file was written is null in older rows
+        new_rows
+        if previous is None
+        else pl.concat([previous, new_rows], how="diagonal_relaxed"),
         output_dir,
         table,
     )
@@ -173,20 +180,25 @@ def _latest_run(
 
 
 @app.command
-def resolve(
+def resolve(  # noqa: PLR0913
     concept_labels: Path,
+    sense_inputs: Path,
     output_dir: Path,
     *,
     model_id: str = BEDROCK_DESCRIPTION_MODEL,
     aws_region: str = "us-east-1",
     rebuild: bool = False,
 ) -> None:
-    """Assign concept labels to stable concept ids, resolving only new labels.
+    """Assign concept labels to stable concept ids, resolving only new labels, then
+    assign each course run's use of a label to one of the label's senses.
 
     :param concept_labels: int__courseware__concept_labels exported to parquet
+    :param sense_inputs: int__courseware__concept_sense_inputs exported to parquet
     :param output_dir: where the resolution tables are read and appended
-    :param model_id: Bedrock model or inference profile id for adjudication
-    :param aws_region: Bedrock region
+    :param model_id: Bedrock model or inference profile id for label and sense
+        adjudication
+    :param aws_region: Bedrock region for adjudication; the label embeddings go
+        through ol-llm, which reads AWS_DEFAULT_REGION
     :param rebuild: re-resolve every label, carrying ids forward by overlap
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -196,13 +208,19 @@ def resolve(
     if not isinstance(client, AnthropicBedrock):
         msg = f"bedrock client_class built a {type(client).__name__}"
         raise TypeError(msg)
-    embedding_client = build_embedding_client(
-        LLMClientFactory(client_class="bedrock_embeddings", aws_region=aws_region),
-        dim=RESOLUTION_EMBEDDING_DIM,
+    embedding_model = resolve_embedding_model(
+        RESOLUTION_EMBEDDING_MODEL, dim=RESOLUTION_EMBEDDING_DIM
     )
-    if not isinstance(embedding_client, BedrockEmbeddingClient):
-        msg = f"bedrock_embeddings built a {type(embedding_client).__name__}"
-        raise TypeError(msg)
+    embedding_client = OlLlmEmbedder(
+        embedding_model.spec,
+        UseCase(
+            app=OPIK_PROJECT_NAME,
+            name="courseware-concept-embedding",
+            profile="batch",
+            model=embedding_model.model,
+        ),
+        Attribution(),
+    )
 
     runs = _existing(output_dir, "courseware_resolution_run")
     last_run = (
@@ -213,6 +231,8 @@ def resolve(
         ("registry", "courseware_concept_registry"),
         ("assignments", "courseware_concept_assignment"),
         ("relations", "courseware_concept_relation"),
+        ("aliases", "courseware_concept_alias"),
+        ("sense_assignments", "courseware_concept_sense_assignment"),
     ):
         snapshot = _latest_run(output_dir, table, last_run)
         if snapshot is not None:
@@ -226,6 +246,7 @@ def resolve(
         state,
         client,
         embedding_client,
+        mentions=pl.read_parquet(sense_inputs),
         model_id=model_id,
         rebuild=rebuild,
     )
@@ -234,7 +255,10 @@ def resolve(
         ("courseware_concept_registry", result.registry),
         ("courseware_concept_assignment", result.assignments),
         ("courseware_concept_relation", result.relations),
+        ("courseware_concept_alias", result.aliases),
+        ("courseware_concept_sense_assignment", result.sense_assignments),
         ("courseware_resolution_decision", result.decisions),
+        ("courseware_sense_decision", result.sense_decisions),
         ("courseware_concept_label_embedding", result.embeddings),
         ("courseware_resolution_run", result.run),
     ):

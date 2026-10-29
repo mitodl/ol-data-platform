@@ -49,12 +49,14 @@ three deployments (dg_projects/openedx/.../openedx.py::course_structure):
         {mitx,mitxonline,xpro}/openedx/processed_data/course_blocks/
             <course>/<structure hash>.json
 
-One Airbyte source-s3 connection per deployment loads those into
-raw__<deployment>__openedx__api__course_blocks. This source loads them into
-raw__<deployment>__openedx__api__course_structure_blocks, one table per
-deployment because the rows carry no source_system and each deployment has its
-own staging model. On 2026-10-06 the prefixes held 29,953 files (13.2 GB) for
-mitxonline, 3,203 (3.2 GB) for mitx and 2,659 (1.7 GB) for xpro.
+One Airbyte source-s3 connection per deployment loaded those into
+raw__<deployment>__openedx__api__course_blocks until 2026-10. This source loads
+them into raw__<deployment>__openedx__api__course_structure_blocks, which
+replaced it, one table per deployment because the rows carry no source_system
+and each deployment has its own staging model. The retired mitx table was first
+loaded on 2025-03-03 and never held the 717 files that landed before then. On
+2026-10-06 the prefixes held 29,953 files (13.2 GB) for mitxonline, 3,203
+(3.2 GB) for mitx and 2,659 (1.7 GB) for xpro.
 
 Run standalone:
     DLT_PROFILE=dev python -m ol_dlt.sources.course_xml_blocks
@@ -75,6 +77,7 @@ from dlt.sources.filesystem import FileItemDict
 
 from ol_dlt import config
 from ol_dlt.file_metadata import FILE_METADATA_COLUMNS, add_file_metadata
+from ol_dlt.json_text import as_text
 from ol_dlt.sources.edxorg_s3 import edxorg_files
 
 logger = logging.getLogger(__name__)
@@ -158,7 +161,8 @@ DOCUMENT_TEXT_FIELDS = (*CONTENT_TEXT_FIELDS, "static_references")
 
 # The row the file exclusions asset writes
 # (dg_projects/openedx/openedx/assets/content_file_exclusions.py).
-# extracted_at is absent from files written before the asset stamped it.
+# extracted_at is absent from files written before the asset stamped it, and
+# release_date from files written before it dated files.
 FILE_EXCLUSION_FIELDS = (
     "course_id",
     "source_system",
@@ -167,6 +171,7 @@ FILE_EXCLUSION_FIELDS = (
     "excluded",
     "exclusion_reason",
     "extracted_at",
+    "release_date",
 )
 
 
@@ -285,7 +290,7 @@ OPENEDX_FILE_EXCLUSIONS = XmlBlocksTable(
         for deployment in _OPENEDX_DEPLOYMENTS
     ),
     fields=FILE_EXCLUSION_FIELDS,
-    optional_fields=frozenset({"extracted_at"}),
+    optional_fields=frozenset({"extracted_at", "release_date"}),
     pipeline_name="course_file_exclusions__openedx",
 )
 TABLES = {
@@ -302,20 +307,13 @@ TABLES = {
 }
 
 
-def _text(value: Any) -> str | None:  # noqa: ANN401
-    """Return ``value`` as text, JSON-encoding anything that is not a string."""
-    if value is None or isinstance(value, str):
-        return value
-    return json.dumps(value)
-
-
 def _row(line: str, table: XmlBlocksTable = OPENEDX) -> dict[str, str | int | None]:
     """Parse one JSON line into a row, failing on a line missing a required field."""
     record = json.loads(line)
     row: dict[str, str | int | None] = {}
     for name in table.fields:
         value = record.get(name) if name in table.optional_fields else record[name]
-        row[name] = value if name in table.integer_fields else _text(value)
+        row[name] = value if name in table.integer_fields else as_text(value)
     return row
 
 

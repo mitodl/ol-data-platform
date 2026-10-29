@@ -30,6 +30,12 @@ the ids every downstream join depends on.
 A label no current claim names keeps its assignment through incremental runs, so it
 gets the same id back if it returns. A rebuild drops such labels and retires any
 concept they leave with no members.
+
+A label's concept is its primary sense. senses.py then assigns each label as each
+course run uses it to one of the label's senses, splitting a new sense off the
+primary one when a course means something else by the label; claims join to
+concepts through those sense assignments, not through the label alone. Merges are
+recorded as merged_into_concept_id and splits as split_from_concept_id.
 """
 
 import hashlib
@@ -48,7 +54,15 @@ import numpy as np
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock, APIError
 from ml.lib.courseware.schemas import Strict
-from ml.lib.embed import BedrockEmbeddingClient
+from ml.lib.courseware.senses import (
+    ALIAS_SCHEMA,
+    SENSE_ASSIGNMENT_SCHEMA,
+    SENSE_PROMPT_VERSION,
+    assign_senses,
+    label_aliases,
+    sense_units,
+)
+from ol_orchestrate.lib.embeddings.models import Embedder
 from pydantic import ValidationError
 
 log = logging.getLogger(__name__)
@@ -130,6 +144,7 @@ REGISTRY_SCHEMA = {
     "minted_label": pl.String,
     "minted_run_id": pl.String,
     "minted_at": pl.Datetime(time_zone="UTC"),
+    "split_from_concept_id": pl.String,
 }
 ASSIGNMENT_SCHEMA = {
     "resolution_run_id": pl.String,
@@ -174,6 +189,10 @@ RUN_SCHEMA = {
     "concepts_carried_forward": pl.Int64,
     "rejected_components": pl.Int64,
     "started_at": pl.Datetime(time_zone="UTC"),
+    "sense_prompt_version": pl.String,
+    "sense_calls": pl.Int64,
+    "senses_minted": pl.Int64,
+    "sense_review_count": pl.Int64,
 }
 
 
@@ -193,18 +212,28 @@ class ResolutionState:
     embeddings: pl.DataFrame = field(
         default_factory=lambda: pl.DataFrame(schema=EMBEDDING_SCHEMA)
     )
+    aliases: pl.DataFrame = field(
+        default_factory=lambda: pl.DataFrame(schema=ALIAS_SCHEMA)
+    )
+    sense_assignments: pl.DataFrame = field(
+        default_factory=lambda: pl.DataFrame(schema=SENSE_ASSIGNMENT_SCHEMA)
+    )
 
 
 @dataclass(frozen=True)
 class ResolutionResult:
-    """Full snapshots of registry, assignments and relations for this run, plus the
-    run's new adjudication decisions, its new embeddings and its run record.
+    """Full snapshots of registry, label assignments, aliases, sense assignments and
+    relations for this run, plus the run's new label and sense decisions, its new
+    embeddings and its run record.
     """
 
     registry: pl.DataFrame
     assignments: pl.DataFrame
+    aliases: pl.DataFrame
+    sense_assignments: pl.DataFrame
     relations: pl.DataFrame
     decisions: pl.DataFrame
+    sense_decisions: pl.DataFrame
     embeddings: pl.DataFrame
     run: pl.DataFrame
 
@@ -275,7 +304,7 @@ def embedding_neighbours(
 def embed_labels(
     labels: pl.DataFrame,
     cached: pl.DataFrame,
-    client: BedrockEmbeddingClient,
+    client: Embedder,
     max_workers: int = 16,
 ) -> tuple[np.ndarray, pl.DataFrame]:
     """Embed every label whose text changed since it was cached.
@@ -291,27 +320,34 @@ def embed_labels(
     checksums = {
         key: hashlib.sha256(text.encode()).hexdigest() for key, text in texts.items()
     }
+    model_id = client.spec.model_id
     known = {
         row["concept_label_key"]: row["embedding"]
-        for row in cached.filter(
-            pl.col("embedding_model_id") == client.model_version
-        ).iter_rows(named=True)
+        for row in cached.filter(pl.col("embedding_model_id") == model_id).iter_rows(
+            named=True
+        )
         if checksums.get(row["concept_label_key"]) == row["text_checksum"]
     }
     missing = [key for key in texts if key not in known]
+    # Titan embeds one text per request, so requests run in parallel slices.
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        batches = list(batched(missing, client.max_request_batch_size))
+        slices = list(batched(missing, client.spec.batch_size))
         results = pool.map(
-            lambda batch: client.embed_batch([texts[key] for key in batch]), batches
+            lambda keys: (
+                client.embed(
+                    [texts[key] for key in keys], input_type="document"
+                ).vectors
+            ),
+            slices,
         )
-        for batch, vectors in zip(batches, results, strict=True):
-            known.update(zip(batch, vectors, strict=True))
+        for keys, vectors in zip(slices, results, strict=True):
+            known.update(zip(keys, vectors, strict=True))
     new_rows = pl.DataFrame(
         [
             {
                 "concept_label_key": key,
                 "text_checksum": checksums[key],
-                "embedding_model_id": client.model_version,
+                "embedding_model_id": model_id,
                 "embedding": known[key],
             }
             for key in missing
@@ -494,15 +530,18 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     labels: pl.DataFrame,
     state: ResolutionState,
     client: Anthropic | AnthropicBedrock,
-    embedding_client: BedrockEmbeddingClient,
+    embedding_client: Embedder,
     *,
+    mentions: pl.DataFrame,
     model_id: str,
     rebuild: bool = False,
 ) -> ResolutionResult:
-    """Run one resolution over the current label list.
+    """Run one resolution over the current label list, then assign senses.
 
     :param labels: int__courseware__concept_labels rows (concept_label_key,
         preferred_label, concept_kind, description, mention_count)
+    :param mentions: int__courseware__concept_sense_inputs rows, one per mention
+        with its course run, course title and claim description
     :param state: the previous run's snapshots
     :param client: an Anthropic or AnthropicBedrock client for adjudication
     :param embedding_client: the label embedder
@@ -516,10 +555,15 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     labels = labels.sort("concept_label_key")
     rows = {row["concept_label_key"]: row for row in labels.iter_rows(named=True)}
     keys = list(rows)
-    mentions = {key: row["mention_count"] for key, row in rows.items()}
+    mention_counts = {key: row["mention_count"] for key, row in rows.items()}
 
     registry = {
-        row["concept_id"]: dict(row, resolution_run_id=run_id)
+        # registry snapshots written before senses have no split_from_concept_id
+        row["concept_id"]: {
+            "split_from_concept_id": None,
+            **row,
+            "resolution_run_id": run_id,
+        }
         for row in state.registry.iter_rows(named=True)
     }
     previous_all = {
@@ -560,7 +604,7 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     def mint(component: set[str]) -> str:
         nonlocal minted
         concept_id = str(uuid.uuid4())
-        label = rows[max(component, key=lambda key: (mentions[key], key))][
+        label = rows[max(component, key=lambda key: (mention_counts[key], key))][
             "preferred_label"
         ]
         registry[concept_id] = {
@@ -571,6 +615,7 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
             "minted_label": label,
             "minted_run_id": run_id,
             "minted_at": started_at,
+            "split_from_concept_id": None,
         }
         minted += 1
         return concept_id
@@ -589,7 +634,7 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
                 existing,
                 key=lambda concept_id: (
                     sum(
-                        mentions[key]
+                        mention_counts[key]
                         for key in component
                         if current.get(key) == concept_id
                     ),
@@ -643,6 +688,14 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
             if key in previous:
                 assignments[key] = (active(previous[key]["concept_id"]), "carried")
         assigned_ids = {concept_id for concept_id, _ in assignments.values()}
+        # a sense split off a label that still has claims keeps its concept
+        assigned_ids.update(
+            active(row["concept_id"])
+            for row in state.aliases.filter(
+                (pl.col("sense_role") == "split")
+                & pl.col("concept_label_key").is_in(keys)
+            ).iter_rows(named=True)
+        )
         # every active concept, including one whose labels are all gone from `labels`
         for previous_id, record in registry.items():
             if record["concept_status"] != "active" or previous_id in assigned_ids:
@@ -665,6 +718,54 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
 
     def resolved(concept_id: str) -> str:
         return active(concept_id)
+
+    def live(concept_id: str) -> str | None:
+        concept_id = active(concept_id)
+        return (
+            None
+            if registry[concept_id]["concept_status"] == "deprecated"
+            else concept_id
+        )
+
+    def mint_sense(label_key: str, primary: str) -> str:
+        concept_id = str(uuid.uuid4())
+        registry[concept_id] = {
+            "resolution_run_id": run_id,
+            "concept_id": concept_id,
+            "concept_status": "active",
+            "merged_into_concept_id": None,
+            "minted_label": rows[label_key]["preferred_label"],
+            "minted_run_id": run_id,
+            "minted_at": started_at,
+            "split_from_concept_id": primary,
+        }
+        return concept_id
+
+    primaries = {
+        key: resolved(concept_id) for key, (concept_id, _) in assignments.items()
+    }
+    aliases = label_aliases(
+        primaries,
+        state.aliases,
+        {
+            key: _label_text(rows[key])
+            if key in rows
+            else registry[primary]["minted_label"]
+            for key, primary in primaries.items()
+        },
+        run_id=run_id,
+        current=live,
+    )
+    senses = assign_senses(
+        sense_units(mentions.filter(pl.col("concept_label_key").is_in(keys))),
+        aliases,
+        state.sense_assignments,
+        client,
+        model_id=model_id,
+        run_id=run_id,
+        active=active,
+        mint_sense=mint_sense,
+    )
 
     def relation_key(left: str, right: str, relation: str) -> tuple[str, str, str]:
         # only broader has a direction; the others are keyed in id order, which a
@@ -721,6 +822,9 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
 
     return ResolutionResult(
         registry=frame(registry.values(), REGISTRY_SCHEMA),
+        aliases=senses.aliases,
+        sense_assignments=senses.assignments,
+        sense_decisions=senses.decisions,
         assignments=frame(
             (
                 {
@@ -774,7 +878,7 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
                     "resolver_id": RESOLVER_ID,
                     "prompt_version": PROMPT_VERSION,
                     "model_id": model_id,
-                    "embedding_model_id": embedding_client.model_version,
+                    "embedding_model_id": embedding_client.spec.model_id,
                     "mode": "rebuild" if rebuild else "incremental",
                     "label_count": len(keys),
                     "resolved_label_count": len(pending),
@@ -785,6 +889,10 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
                     "concepts_carried_forward": carried_forward,
                     "rejected_components": rejected,
                     "started_at": started_at,
+                    "sense_prompt_version": SENSE_PROMPT_VERSION,
+                    "sense_calls": senses.calls,
+                    "senses_minted": senses.senses_minted,
+                    "sense_review_count": senses.review_count,
                 }
             ],
             RUN_SCHEMA,
