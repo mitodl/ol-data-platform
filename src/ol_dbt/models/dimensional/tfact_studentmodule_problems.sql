@@ -3,9 +3,11 @@
     unique_key=['platform', 'studentmodulehistoryextended_id'],
     incremental_strategy='delete+insert',
     on_schema_change='append_new_columns',
-    properties={
-        "partitioning": "ARRAY['platform']",
-    }
+    partition_by=(['platform'] if target.type == 'starrocks' else none),
+    properties=(
+        {"format": "'PARQUET'"} if target.type == 'starrocks'
+        else {"partitioning": "ARRAY['platform']"}
+    ),
 ) }}
 
 -- Precompute incremental watermarks once (1 scan instead of 6)
