@@ -322,7 +322,6 @@ def _register_single_table(
         with duckdb.connect(str(duckdb_path)) as conn:
             for ext in ["httpfs", "aws", "iceberg"]:
                 conn.execute(f"LOAD {ext}")
-            conn.execute(USE_AWS_CREDENTIAL_CHAIN_SQL)
             conn.execute(create_view_sql)
             conn.execute(
                 """
@@ -364,10 +363,6 @@ def _register_tables_in_duckdb(
                 setup_conn.execute(f"LOAD {ext}")
             if verbose:
                 print("  ✓ Extensions loaded")
-
-            setup_conn.execute(USE_AWS_CREDENTIAL_CHAIN_SQL)
-            if verbose:
-                print("  ✓ AWS credentials loaded")
 
             _ensure_registry_tables(setup_conn)
 
@@ -434,7 +429,17 @@ def _register_tables_in_duckdb(
             results["success"] += 1
             results[outcome] += 1
     else:
-        with ThreadPoolExecutor(max_workers=workers) as executor:
+        # The AWS secret is temporary: it lives in the in-process DuckDB instance
+        # that every worker's connection to this file shares, for as long as some
+        # connection to it is open. Creating it once on a connection held open for
+        # the whole pool avoids the catalog write-write conflict that concurrent
+        # CREATE SECRET statements from the workers raise.
+        with duckdb.connect(str(duckdb_path)) as secret_conn, ThreadPoolExecutor(max_workers=workers) as executor:
+            for ext in ["httpfs", "aws"]:
+                secret_conn.execute(f"LOAD {ext}")
+            secret_conn.execute(USE_AWS_CREDENTIAL_CHAIN_SQL)
+            if verbose:
+                print("  ✓ AWS credentials loaded")
             futures = {
                 executor.submit(
                     _register_single_table,
