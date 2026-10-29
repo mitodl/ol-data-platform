@@ -23,6 +23,8 @@ from typing import Any
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock, APIError
 from ml.lib.courseware.schemas import Strict
+from ml.lib.courseware.tracing import TRACE_TAGS, attach_call
+from ml.resources.opik_auth import traced
 from pydantic import Field, ValidationError
 
 log = logging.getLogger(__name__)
@@ -118,11 +120,18 @@ def _concept_inputs(rows: pl.DataFrame) -> list[dict[str, Any]]:
     return concepts
 
 
+@traced(
+    "courseware_describe_batch",
+    tags=TRACE_TAGS,
+    ignore_arguments=["client", "trace_metadata"],
+)
 def _describe_batch(
     client: Anthropic | AnthropicBedrock,
     model_id: str,
     effort: str,
     batch: list[dict[str, Any]],
+    *,
+    trace_metadata: dict[str, Any],
 ) -> list[ConceptDescription]:
     listing = "\n\n".join(
         f"{index} | labels: {' / '.join(entry['labels'])} | kind: {entry['kind']}\n"
@@ -139,6 +148,13 @@ def _describe_batch(
         output_config={"effort": effort},
     ) as stream:
         response = stream.get_final_message()
+    attach_call(
+        client,
+        model_id,
+        [response.usage],
+        template=DESCRIPTION_PROMPT,
+        metadata=trace_metadata,
+    )
     tool_input = next(
         (
             block.input
@@ -216,8 +232,20 @@ def describe_concepts(  # noqa: PLR0913
     output: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [
-            pool.submit(_describe_batch, client, model_id, effort, batch)
-            for batch in batches
+            pool.submit(
+                _describe_batch,
+                client,
+                model_id,
+                effort,
+                batch,
+                trace_metadata={
+                    "description_version": version,
+                    "batch_ordinal": ordinal,
+                    "concept_count": len(batch),
+                    "effort": effort,
+                },
+            )
+            for ordinal, batch in enumerate(batches)
         ]
         for batch, future in zip(batches, futures, strict=True):
             # a failed batch is left out; the next run describes only what is missing

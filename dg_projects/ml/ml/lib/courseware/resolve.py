@@ -48,7 +48,9 @@ import numpy as np
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock, APIError
 from ml.lib.courseware.schemas import Strict
+from ml.lib.courseware.tracing import TRACE_TAGS, attach_call
 from ml.lib.embed import EmbeddingClient
+from ml.resources.opik_auth import traced
 from pydantic import ValidationError
 
 log = logging.getLogger(__name__)
@@ -71,6 +73,7 @@ QUERIES_PER_CALL = 8
 MAX_MERGE_COMPONENT = 6
 CARRY_FORWARD_MIN_JACCARD = 0.5
 ADJUDICATION_MAX_TOKENS = 16_000
+ADJUDICATION_EFFORT = "medium"
 
 Verdict = Literal["exact", "close", "broader", "narrower", "related", "distinct"]
 
@@ -331,11 +334,18 @@ def embed_labels(
 
 
 # --------------------------------------------------------------------- adjudication
+@traced(
+    "courseware_adjudicate_batch",
+    tags=TRACE_TAGS,
+    ignore_arguments=["client", "rows", "trace_metadata"],
+)
 def _adjudicate_batch(
     client: Anthropic | AnthropicBedrock,
     model_id: str,
     batch: list[tuple[str, list[str]]],
     rows: dict[str, dict[str, Any]],
+    *,
+    trace_metadata: dict[str, Any],
 ) -> list[tuple[str, str, str]]:
     """Return (query_key, candidate_key, verdict) for one batch of queries."""
 
@@ -360,9 +370,16 @@ def _adjudicate_batch(
         tools=[ADJUDICATION_TOOL],
         tool_choice={"type": "auto"},
         messages=[{"role": "user", "content": listing}],
-        output_config={"effort": "medium"},
+        output_config={"effort": ADJUDICATION_EFFORT},
     ) as stream:
         response = stream.get_final_message()
+    attach_call(
+        client,
+        model_id,
+        [response.usage],
+        template=ADJUDICATION_PROMPT,
+        metadata=trace_metadata,
+    )
     tool_input = next(
         (
             block.input
@@ -392,15 +409,18 @@ def _adjudicate_batch(
     return decided
 
 
-def adjudicate(
+def adjudicate(  # noqa: PLR0913
     client: Anthropic | AnthropicBedrock,
     model_id: str,
     candidates: dict[str, list[str]],
     rows: dict[str, dict[str, Any]],
     max_workers: int = 6,
+    *,
+    run_id: str,
 ) -> tuple[list[tuple[str, str, str]], int, list[list[str]]]:
     """Adjudicate every query's candidates in small batches.
 
+    :param run_id: the resolution run, recorded on each call's Opik span
     :returns: the decisions, how many calls were made, and the query keys of each
         batch that failed (left unassigned, so the next run retries them; a
         rebuild keeps their previous concept)
@@ -411,8 +431,21 @@ def adjudicate(
     failed: list[list[str]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [
-            pool.submit(_adjudicate_batch, client, model_id, batch, rows)
-            for batch in batches
+            pool.submit(
+                _adjudicate_batch,
+                client,
+                model_id,
+                batch,
+                rows,
+                trace_metadata={
+                    "resolution_run_id": run_id,
+                    "batch_ordinal": ordinal,
+                    "query_count": len(batch),
+                    "prompt_version": PROMPT_VERSION,
+                    "effort": ADJUDICATION_EFFORT,
+                },
+            )
+            for ordinal, batch in enumerate(batches)
         ]
         for batch, future in zip(batches, futures, strict=True):
             try:
@@ -553,7 +586,9 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     candidates = {
         key: list(dict.fromkeys(by_embedding[key] + by_trigram[key])) for key in pending
     }
-    decisions, calls, failed_batches = adjudicate(client, model_id, candidates, rows)
+    decisions, calls, failed_batches = adjudicate(
+        client, model_id, candidates, rows, run_id=run_id
+    )
     failed = {key for batch in failed_batches for key in batch}
 
     components, rejected = accepted_components(
