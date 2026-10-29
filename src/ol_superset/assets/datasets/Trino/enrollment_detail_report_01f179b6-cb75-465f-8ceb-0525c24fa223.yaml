@@ -316,7 +316,8 @@ columns:
 - advanced_data_type: null
   column_name: program_coupon_code
   datetime_format: null
-  description: Coupon code used on the program purchase in Program Order ID, such as a B2B code.
+  description: Coupon code used on the program purchase in Program Order ID, such
+    as a B2B code.
   expression: ''
   extra: {}
   filterable: true

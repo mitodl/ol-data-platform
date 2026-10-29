@@ -1,5 +1,5 @@
 with course_block_source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__mitx__openedx__api__course_blocks') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__mitx__openedx__api__course_structure_blocks') }}
 )
 
 -- A retrieval is kept when the course's content hash differs from its previous retrieval's. The hash covers the

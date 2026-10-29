@@ -475,6 +475,13 @@ models:
       order on the corresponding platform, e.g. mitxonline-production-20
   - name: coupon_code
     description: string, discount code for the redeemed coupon if applicable
+  - name: program_order_id
+    description: int, order ID of the program purchase that covered this enrollment,
+      for MITx Online and xPRO. Use it to find the course runs that a program coupon
+      code paid for. Null when no program purchase covered the enrollment.
+  - name: program_coupon_code
+    description: str, coupon code redeemed on the program purchase in program_order_id,
+      for example a B2B code. Null when there is no program order or it used no coupon.
   - name: courserunenrollment_upgraded_on
     description: timestamp, date and time when the learner upgraded to the verified
       track course mode. May be the same as the date when the course enrollment was
@@ -720,8 +727,8 @@ models:
   - name: delivery
     description: str, 'Online' or 'Other' for xPro. 'Online' for MITx.
   - name: continuing_education_credits
-    description: str, number of continuing education units or credits offered. e.g.
-      4.5. NULL for MITx courses.
+    description: double, number of continuing education units or credits offered.
+      e.g. 4.5. NULL for MITx courses.
   - name: pace
     description: str, 'Self-paced' or 'Instructor-paced'
   - name: topics
@@ -746,16 +753,16 @@ models:
     meta:
       qa_branches:
       - micromasters/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
       - mitxonline/tracking_logs
       - ovs/app_postgres
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
       - xpro/tracking_logs
   columns:
@@ -854,15 +861,15 @@ models:
     meta:
       qa_branches:
       - micromasters/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/mysql
       - mitx/tracking_logs
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
       - mitxonline/tracking_logs
-      - xpro/api
       - xpro/app_postgres
+      - xpro/course_structure
       - xpro/mysql
       - xpro/tracking_logs
   columns:

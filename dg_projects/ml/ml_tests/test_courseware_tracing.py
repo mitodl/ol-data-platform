@@ -97,6 +97,8 @@ def span(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     Usage is replaced on each update and metadata merged, as Opik's span does.
     """
     monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik.example.com")
+    monkeypatch.setenv("OPIK_KEYCLOAK_VAULT_MOUNT", "secret-opik")
+    monkeypatch.setenv("OPIK_KEYCLOAK_VAULT_PATH", "sdk-client")
     monkeypatch.setattr(
         opik_auth,
         "_published_prompts",
