@@ -1163,6 +1163,19 @@ def test_description_describes_only_concepts_new_at_the_approved_version(tables,
     ]
 
 
+def test_description_describes_inputs_that_changed_back_again(tables, calls):
+    # a release takes the newest description, which is of the inputs in between
+    for label in ("auc", "area under the curve", "auc"):
+        tables[DESCRIPTION_INPUTS] = description_inputs(concepts={"c1": label})
+        assert describe(tables).success
+
+    assert calls == ["record_descriptions"] * 3
+    newest = tables["courseware_concept_description"].sort("described_at")[-1]
+    assert newest["input_checksum"].item() == next(
+        iter(current_input_checksums(tables[DESCRIPTION_INPUTS]).values())
+    )
+
+
 def test_description_describes_each_concept_once(tables, calls):
     tables[DESCRIPTION_INPUTS] = description_inputs()
     resources = {"io_manager": Warehouse(tables), "llm": FakeLLM()}

@@ -139,7 +139,9 @@ def courseware_concept_description(
         raise permanent_failure(refusal)
     stored = read_table("intermediate", DESCRIPTION_KEY.path[-1])
     existing = (
-        stored.select("concept_id", "input_checksum", "description_version").collect()
+        stored.select(
+            "concept_id", "input_checksum", "description_version", "described_at"
+        ).collect()
         if stored is not None
         else None
     )
