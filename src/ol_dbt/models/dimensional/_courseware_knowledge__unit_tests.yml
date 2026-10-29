@@ -233,10 +233,7 @@ unit_tests:
     format: sql
     rows: |
       select
-          md5(
-              coalesce(cast('ra-u' as varchar), '_dbt_utils_surrogate_key_null_')
-              || '-' || coalesce(cast('rb' as varchar), '_dbt_utils_surrogate_key_null_')
-          ) as courserun_prerequisite_coverage_pk
+          md5(concat('ra-u', '-', 'rb')) as courserun_prerequisite_coverage_pk
           , 'ra-u' as courserun_concept_fk
           , cast(null as varchar) as platform
           , cast(null as varchar) as courserun_readable_id
@@ -257,10 +254,7 @@ unit_tests:
           , ['n2']::varchar[] as missing_narrower_concept_fks
       union all
       select
-          md5(
-              coalesce(cast('ra-u' as varchar), '_dbt_utils_surrogate_key_null_')
-              || '-' || coalesce(cast('rc' as varchar), '_dbt_utils_surrogate_key_null_')
-          )
+          md5(concat('ra-u', '-', 'rc'))
           , 'ra-u', cast(null as varchar), cast(null as varchar), 'ra', 'u', 'inferred', true
           , 'mitxonline', 'course-v1:ORG+C.1+1T2026', 'rc', 'narrower', cast(null as varchar)
           , 2, true, 3, 1, ['n3']::varchar[], ['n1', 'n2']::varchar[]
