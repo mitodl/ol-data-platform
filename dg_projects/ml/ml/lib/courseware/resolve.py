@@ -30,6 +30,12 @@ the ids every downstream join depends on.
 A label no current claim names keeps its assignment through incremental runs, so it
 gets the same id back if it returns. A rebuild drops such labels and retires any
 concept they leave with no members.
+
+A label's concept is its primary sense. senses.py then assigns each label as each
+course run uses it to one of the label's senses, splitting a new sense off the
+primary one when a course means something else by the label; claims join to
+concepts through those sense assignments, not through the label alone. Merges are
+recorded as merged_into_concept_id and splits as split_from_concept_id.
 """
 
 import hashlib
@@ -48,13 +54,29 @@ import numpy as np
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock, APIError
 from ml.lib.courseware.schemas import Strict
-from ol_orchestrate.lib.embeddings.models import Embedder
+from ml.lib.courseware.senses import (
+    ALIAS_SCHEMA,
+    SENSE_ASSIGNMENT_SCHEMA,
+    SENSE_PROMPT_VERSION,
+    assign_senses,
+    label_aliases,
+    sense_units,
+)
+from ml.lib.courseware.tracing import TRACE_TAGS, attach_call
+from ml.lib.embed import resolve_embedding_model
+from ml.resources.opik_auth import OPIK_PROJECT_NAME, traced
+from ol_llm import Attribution, UseCase
+from ol_orchestrate.lib.embeddings.models import Embedder, OlLlmEmbedder
 from pydantic import ValidationError
 
 log = logging.getLogger(__name__)
 
 RESOLVER_ID = "courseware_resolution_v2"
+# Adjudication batches are short and many, so the small model is the default.
+ADJUDICATION_MODEL = "claude-haiku-5-5"
+BEDROCK_ADJUDICATION_MODEL = "us.anthropic.claude-haiku-5-5"
 EMBEDDING_DIM = 512
+EMBEDDING_MODEL = "bedrock:amazon.titan-embed-text-v2:0"
 # Candidates per new label from each blocker; the union goes to the model.
 EMBEDDING_NEIGHBOURS = 8
 LEXICAL_NEIGHBOURS = 4
@@ -68,6 +90,7 @@ QUERIES_PER_CALL = 8
 MAX_MERGE_COMPONENT = 6
 CARRY_FORWARD_MIN_JACCARD = 0.5
 ADJUDICATION_MAX_TOKENS = 16_000
+ADJUDICATION_EFFORT = "medium"
 
 Verdict = Literal["exact", "close", "broader", "narrower", "related", "distinct"]
 
@@ -130,6 +153,7 @@ REGISTRY_SCHEMA = {
     "minted_label": pl.String,
     "minted_run_id": pl.String,
     "minted_at": pl.Datetime(time_zone="UTC"),
+    "split_from_concept_id": pl.String,
 }
 ASSIGNMENT_SCHEMA = {
     "resolution_run_id": pl.String,
@@ -168,12 +192,18 @@ RUN_SCHEMA = {
     "label_count": pl.Int64,
     "resolved_label_count": pl.Int64,
     "adjudication_calls": pl.Int64,
+    "failed_batch_count": pl.Int64,
+    "failed_label_count": pl.Int64,
     "concepts_minted": pl.Int64,
     "concepts_merged": pl.Int64,
     "concepts_deprecated": pl.Int64,
     "concepts_carried_forward": pl.Int64,
     "rejected_components": pl.Int64,
     "started_at": pl.Datetime(time_zone="UTC"),
+    "sense_prompt_version": pl.String,
+    "sense_calls": pl.Int64,
+    "senses_minted": pl.Int64,
+    "sense_review_count": pl.Int64,
 }
 
 
@@ -193,18 +223,28 @@ class ResolutionState:
     embeddings: pl.DataFrame = field(
         default_factory=lambda: pl.DataFrame(schema=EMBEDDING_SCHEMA)
     )
+    aliases: pl.DataFrame = field(
+        default_factory=lambda: pl.DataFrame(schema=ALIAS_SCHEMA)
+    )
+    sense_assignments: pl.DataFrame = field(
+        default_factory=lambda: pl.DataFrame(schema=SENSE_ASSIGNMENT_SCHEMA)
+    )
 
 
 @dataclass(frozen=True)
 class ResolutionResult:
-    """Full snapshots of registry, assignments and relations for this run, plus the
-    run's new adjudication decisions, its new embeddings and its run record.
+    """Full snapshots of registry, label assignments, aliases, sense assignments and
+    relations for this run, plus the run's new label and sense decisions, its new
+    embeddings and its run record.
     """
 
     registry: pl.DataFrame
     assignments: pl.DataFrame
+    aliases: pl.DataFrame
+    sense_assignments: pl.DataFrame
     relations: pl.DataFrame
     decisions: pl.DataFrame
+    sense_decisions: pl.DataFrame
     embeddings: pl.DataFrame
     run: pl.DataFrame
 
@@ -272,6 +312,25 @@ def embedding_neighbours(
     return neighbours
 
 
+def label_embedder(run_id: str | None = None) -> OlLlmEmbedder:
+    """Return the ol-llm embedder for concept labels (Titan v2 at EMBEDDING_DIM).
+
+    :param run_id: the Dagster run, for the traces; None off the asset path
+    :rtype: OlLlmEmbedder
+    """
+    model = resolve_embedding_model(EMBEDDING_MODEL, dim=EMBEDDING_DIM)
+    return OlLlmEmbedder(
+        model.spec,
+        UseCase(
+            app=OPIK_PROJECT_NAME,
+            name="courseware-concept-embedding",
+            profile="batch",
+            model=model.model,
+        ),
+        Attribution(run_id=run_id),
+    )
+
+
 def embed_labels(
     labels: pl.DataFrame,
     cached: pl.DataFrame,
@@ -333,11 +392,18 @@ def embed_labels(
 
 
 # --------------------------------------------------------------------- adjudication
+@traced(
+    "courseware_adjudicate_batch",
+    tags=TRACE_TAGS,
+    ignore_arguments=["client", "rows", "trace_metadata"],
+)
 def _adjudicate_batch(
     client: Anthropic | AnthropicBedrock,
     model_id: str,
     batch: list[tuple[str, list[str]]],
     rows: dict[str, dict[str, Any]],
+    *,
+    trace_metadata: dict[str, Any],
 ) -> list[tuple[str, str, str]]:
     """Return (query_key, candidate_key, verdict) for one batch of queries."""
 
@@ -362,9 +428,16 @@ def _adjudicate_batch(
         tools=[ADJUDICATION_TOOL],
         tool_choice={"type": "auto"},
         messages=[{"role": "user", "content": listing}],
-        output_config={"effort": "medium"},
+        output_config={"effort": ADJUDICATION_EFFORT},
     ) as stream:
         response = stream.get_final_message()
+    attach_call(
+        client,
+        model_id,
+        [response.usage],
+        template=ADJUDICATION_PROMPT,
+        metadata=trace_metadata,
+    )
     tool_input = next(
         (
             block.input
@@ -394,33 +467,50 @@ def _adjudicate_batch(
     return decided
 
 
-def adjudicate(
+def adjudicate(  # noqa: PLR0913
     client: Anthropic | AnthropicBedrock,
     model_id: str,
     candidates: dict[str, list[str]],
     rows: dict[str, dict[str, Any]],
     max_workers: int = 6,
-) -> tuple[list[tuple[str, str, str]], int, set[str]]:
+    *,
+    run_id: str,
+) -> tuple[list[tuple[str, str, str]], int, list[list[str]]]:
     """Adjudicate every query's candidates in small batches.
 
-    :returns: the decisions, how many calls were made, and the query keys whose
-        batch failed (left unassigned, so the next run retries them)
+    :param run_id: the resolution run, recorded on each call's Opik span
+    :returns: the decisions, how many calls were made, and the query keys of each
+        batch that failed (left unassigned, so the next run retries them; a
+        rebuild keeps their previous concept)
     """
     work = [(query, found) for query, found in candidates.items() if found]
     batches = [list(batch) for batch in batched(work, QUERIES_PER_CALL)]
     decisions: list[tuple[str, str, str]] = []
-    failed: set[str] = set()
+    failed: list[list[str]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [
-            pool.submit(_adjudicate_batch, client, model_id, batch, rows)
-            for batch in batches
+            pool.submit(
+                _adjudicate_batch,
+                client,
+                model_id,
+                batch,
+                rows,
+                trace_metadata={
+                    "resolution_run_id": run_id,
+                    "batch_ordinal": ordinal,
+                    "query_count": len(batch),
+                    "prompt_version": PROMPT_VERSION,
+                    "effort": ADJUDICATION_EFFORT,
+                },
+            )
+            for ordinal, batch in enumerate(batches)
         ]
         for batch, future in zip(batches, futures, strict=True):
             try:
                 decisions.extend(future.result())
             except (ValueError, APIError):
                 log.exception("Adjudication batch of %d labels failed", len(batch))
-                failed.update(query for query, _ in batch)
+                failed.append([query for query, _ in batch])
     return decisions, len(batches), failed
 
 
@@ -503,13 +593,16 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     client: Anthropic | AnthropicBedrock,
     embedding_client: Embedder,
     *,
+    mentions: pl.DataFrame,
     model_id: str,
     rebuild: bool = False,
 ) -> ResolutionResult:
-    """Run one resolution over the current label list.
+    """Run one resolution over the current label list, then assign senses.
 
     :param labels: int__courseware__concept_labels rows (concept_label_key,
         preferred_label, concept_kind, description, mention_count)
+    :param mentions: int__courseware__concept_sense_inputs rows, one per mention
+        with its course run, course title and claim description
     :param state: the previous run's snapshots
     :param client: an Anthropic or AnthropicBedrock client for adjudication
     :param embedding_client: the label embedder
@@ -523,10 +616,15 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     labels = labels.sort("concept_label_key")
     rows = {row["concept_label_key"]: row for row in labels.iter_rows(named=True)}
     keys = list(rows)
-    mentions = {key: row["mention_count"] for key, row in rows.items()}
+    mention_counts = {key: row["mention_count"] for key, row in rows.items()}
 
     registry = {
-        row["concept_id"]: dict(row, resolution_run_id=run_id)
+        # registry snapshots written before senses have no split_from_concept_id
+        row["concept_id"]: {
+            "split_from_concept_id": None,
+            **row,
+            "resolution_run_id": run_id,
+        }
         for row in state.registry.iter_rows(named=True)
     }
     previous_all = {
@@ -554,7 +652,10 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     candidates = {
         key: list(dict.fromkeys(by_embedding[key] + by_trigram[key])) for key in pending
     }
-    decisions, calls, failed = adjudicate(client, model_id, candidates, rows)
+    decisions, calls, failed_batches = adjudicate(
+        client, model_id, candidates, rows, run_id=run_id
+    )
+    failed = {key for batch in failed_batches for key in batch}
 
     components, rejected = accepted_components(
         [key for key in keys if key not in failed or key in carried], decisions
@@ -567,7 +668,7 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     def mint(component: set[str]) -> str:
         nonlocal minted
         concept_id = str(uuid.uuid4())
-        label = rows[max(component, key=lambda key: (mentions[key], key))][
+        label = rows[max(component, key=lambda key: (mention_counts[key], key))][
             "preferred_label"
         ]
         registry[concept_id] = {
@@ -578,6 +679,7 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
             "minted_label": label,
             "minted_run_id": run_id,
             "minted_at": started_at,
+            "split_from_concept_id": None,
         }
         minted += 1
         return concept_id
@@ -596,7 +698,7 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
                 existing,
                 key=lambda concept_id: (
                     sum(
-                        mentions[key]
+                        mention_counts[key]
                         for key in component
                         if current.get(key) == concept_id
                     ),
@@ -650,6 +752,14 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
             if key in previous:
                 assignments[key] = (active(previous[key]["concept_id"]), "carried")
         assigned_ids = {concept_id for concept_id, _ in assignments.values()}
+        # a sense split off a label that still has claims keeps its concept
+        assigned_ids.update(
+            active(row["concept_id"])
+            for row in state.aliases.filter(
+                (pl.col("sense_role") == "split")
+                & pl.col("concept_label_key").is_in(keys)
+            ).iter_rows(named=True)
+        )
         # every active concept, including one whose labels are all gone from `labels`
         for previous_id, record in registry.items():
             if record["concept_status"] != "active" or previous_id in assigned_ids:
@@ -672,6 +782,54 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
 
     def resolved(concept_id: str) -> str:
         return active(concept_id)
+
+    def live(concept_id: str) -> str | None:
+        concept_id = active(concept_id)
+        return (
+            None
+            if registry[concept_id]["concept_status"] == "deprecated"
+            else concept_id
+        )
+
+    def mint_sense(label_key: str, primary: str) -> str:
+        concept_id = str(uuid.uuid4())
+        registry[concept_id] = {
+            "resolution_run_id": run_id,
+            "concept_id": concept_id,
+            "concept_status": "active",
+            "merged_into_concept_id": None,
+            "minted_label": rows[label_key]["preferred_label"],
+            "minted_run_id": run_id,
+            "minted_at": started_at,
+            "split_from_concept_id": primary,
+        }
+        return concept_id
+
+    primaries = {
+        key: resolved(concept_id) for key, (concept_id, _) in assignments.items()
+    }
+    aliases = label_aliases(
+        primaries,
+        state.aliases,
+        {
+            key: _label_text(rows[key])
+            if key in rows
+            else registry[primary]["minted_label"]
+            for key, primary in primaries.items()
+        },
+        run_id=run_id,
+        current=live,
+    )
+    senses = assign_senses(
+        sense_units(mentions.filter(pl.col("concept_label_key").is_in(keys))),
+        aliases,
+        state.sense_assignments,
+        client,
+        model_id=model_id,
+        run_id=run_id,
+        active=active,
+        mint_sense=mint_sense,
+    )
 
     def relation_key(left: str, right: str, relation: str) -> tuple[str, str, str]:
         # only broader has a direction; the others are keyed in id order, which a
@@ -728,6 +886,9 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
 
     return ResolutionResult(
         registry=frame(registry.values(), REGISTRY_SCHEMA),
+        aliases=senses.aliases,
+        sense_assignments=senses.assignments,
+        sense_decisions=senses.decisions,
         assignments=frame(
             (
                 {
@@ -786,12 +947,18 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
                     "label_count": len(keys),
                     "resolved_label_count": len(pending),
                     "adjudication_calls": calls,
+                    "failed_batch_count": len(failed_batches),
+                    "failed_label_count": len(failed),
                     "concepts_minted": minted,
                     "concepts_merged": merged,
                     "concepts_deprecated": deprecated,
                     "concepts_carried_forward": carried_forward,
                     "rejected_components": rejected,
                     "started_at": started_at,
+                    "sense_prompt_version": SENSE_PROMPT_VERSION,
+                    "sense_calls": senses.calls,
+                    "senses_minted": senses.senses_minted,
+                    "sense_review_count": senses.review_count,
                 }
             ],
             RUN_SCHEMA,

@@ -54,24 +54,52 @@ def verdicts(monkeypatch):
         reverse = table.get((candidate, query), "distinct")
         return inverse.get(reverse, reverse)
 
-    def fake_adjudicate(_client, _model_id, candidates, _rows):
+    def fake_adjudicate(_client, _model_id, candidates, _rows, **_kwargs):
         decided = [
             (query, candidate, verdict(query, candidate))
             for query, found in candidates.items()
             for candidate in found
         ]
-        return decided, 1, set()
+        return decided, 1, []
 
     monkeypatch.setattr(resolve, "adjudicate", fake_adjudicate)
     return table
 
 
-def run(input_labels, state=None, **kwargs):
+def mentions_of(input_labels, courserun="course-v1:X+Y+1T2026"):
+    """One mention of every label in one course run, so each has a single sense."""
+    keys = input_labels["concept_label_key"].to_list()
+    return pl.DataFrame(
+        {
+            "concept_label_key": keys,
+            "platform": ["mitxonline"] * len(keys),
+            "courserun_readable_id": [courserun] * len(keys),
+            "course_title": ["Data Analysis"] * len(keys),
+            "label": keys,
+            "concept_kind": ["concept"] * len(keys),
+            "description": [f"about {key}" for key in keys],
+            "teaching_status": ["taught"] * len(keys),
+        },
+        schema={
+            "concept_label_key": pl.String,
+            "platform": pl.String,
+            "courserun_readable_id": pl.String,
+            "course_title": pl.String,
+            "label": pl.String,
+            "concept_kind": pl.String,
+            "description": pl.String,
+            "teaching_status": pl.String,
+        },
+    )
+
+
+def run(input_labels, state=None, mentions=None, **kwargs):
     return resolve_concepts(
         input_labels,
         state or ResolutionState(),
         client=None,
         embedding_client=FakeEmbedder(),
+        mentions=mentions_of(input_labels) if mentions is None else mentions,
         model_id="fake-model",
         **kwargs,
     )
@@ -83,6 +111,8 @@ def state_from(result):
         assignments=result.assignments,
         relations=result.relations,
         embeddings=result.embeddings,
+        aliases=result.aliases,
+        sense_assignments=result.sense_assignments,
     )
 
 
@@ -189,14 +219,14 @@ def test_rebuild_keeps_a_failed_label_on_its_previous_concept(verdicts, monkeypa
     verdicts[("auc", "area under the curve")] = "exact"
     first = run(labels("auc", "area under the curve", "pandas"))
 
-    def adjudicate_failing_pandas(_client, _model_id, candidates, _rows):
+    def adjudicate_failing_pandas(_client, _model_id, candidates, _rows, **_kwargs):
         decided = [
             (query, candidate, verdicts.get((query, candidate), "distinct"))
             for query, found in candidates.items()
             if query != "pandas"
             for candidate in found
         ]
-        return decided, 1, {"pandas"}
+        return decided, 1, [["pandas"]]
 
     monkeypatch.setattr(resolve, "adjudicate", adjudicate_failing_pandas)
     rebuilt = run(
@@ -209,6 +239,8 @@ def test_rebuild_keeps_a_failed_label_on_its_previous_concept(verdicts, monkeypa
     }
     assert registry[pandas]["concept_status"] == "active"
     assert rebuilt.run["concepts_deprecated"][0] == 0
+    assert rebuilt.run["failed_batch_count"][0] == 1
+    assert rebuilt.run["failed_label_count"][0] == 1
 
 
 def test_concepts_bridged_twice_merge_one_way(verdicts):

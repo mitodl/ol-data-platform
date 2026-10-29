@@ -1,0 +1,5 @@
+platform,courserun_readable_id,is_eligible
+mitxonline,,true
+mitxpro,,true
+ocw,,true
+residential,,false
