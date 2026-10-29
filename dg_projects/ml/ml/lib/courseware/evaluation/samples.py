@@ -851,7 +851,10 @@ def subsections_population(inputs: GoldInputs) -> pl.DataFrame:
         .with_columns(
             pl.col("gold_hat").fill_null(0),
             *[pl.col(f"found_hat_{model}").fill_null(0) for model in models],
-            pl.format("{}#unit", "scope_id").alias("item_id"),
+            # scope ids repeat across course runs (OCW's session-1)
+            pl.format(
+                "{}|{}|{}", "platform", "courserun_readable_id", "scope_id"
+            ).alias("item_id"),
             pl.when(pl.col("chars") < SHORT_SUBSECTION_CHARS)
             .then(pl.lit("short"))
             .otherwise(pl.lit("long"))

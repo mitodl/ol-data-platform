@@ -294,9 +294,10 @@ def score_gold(  # noqa: PLR0913
     :param gold_label_map: parquet of label, model_label pairs mapping annotators'
         concept names onto model labels, made by reviewing
         unmatched_gold_concepts.csv
-    :param model_roles: parquet of scope_id, model, label and role (objective,
-        needed, or no_central with a null label) from the central-objective
-        extractor variant, scored against the annotators' objectives
+    :param model_roles: parquet of platform, courserun_readable_id, scope_id,
+        model, label and role (objective, needed, or no_central with a null label)
+        from the central-objective extractor variant, scored against the
+        annotators' objectives
     :param alpha: confidence intervals target 1 - alpha coverage
     """
     manifest = json.loads((sample_dir / MANIFEST).read_text())

@@ -719,11 +719,16 @@ def _span_task(item_id, concepts):
     }
 
 
+# the course run of the subsection-scoring fixtures, a column per frame
+_RUN = {"platform": "mitxonline", "courserun_readable_id": "run1"}
+
+
 def test_score_subsections_reports_blind_recall_separately(tmp_path):
     items = [f"u{n}" for n in range(4)]
     population = pl.DataFrame(
         {
             "item_id": items,
+            **_RUN,
             "scope_id": items,
             "stratum": ["s"] * 4,
             "models": ["haiku"] * 4,
@@ -734,6 +739,7 @@ def test_score_subsections_reports_blind_recall_separately(tmp_path):
     sample = pl.DataFrame({"item_id": items, "blind": [True, True, False, False]})
     model_concepts = pl.DataFrame(
         {
+            **_RUN,
             "scope_id": items,
             "model": ["haiku"] * 4,
             "canonical": [LabelMatcher().canonical("pandas")] * 4,
@@ -760,6 +766,60 @@ def test_score_subsections_reports_blind_recall_separately(tmp_path):
     assert haiku["concept_recall_prefilled"]["strata"]["s"]["labeled_ratio"] == 1.0
     assert haiku["status_recall"]["strata"]["s"]["labeled_ratio"] == pytest.approx(0.25)
     assert sorted(unmatched["item_id"]) == ["u0", "u1"]
+
+
+def test_subsections_in_two_runs_with_one_scope_id_stay_apart(tmp_path):
+    # OCW runs reuse scope ids; each run's model concepts score only its own scope
+    runs = ["run1", "run1", "run2", "run2"]
+    scopes = ["u0", "u1", "u0", "u1"]
+    population = pl.DataFrame(
+        {
+            "platform": ["ocw"] * 4,
+            "courserun_readable_id": runs,
+            "scope_id": scopes,
+            "stratum": ["s"] * 4,
+            "models": ["haiku"] * 4,
+            "found_hat_haiku": [1] * 4,
+            "gold_hat": [1] * 4,
+        }
+    ).with_columns(
+        pl.format("{}|{}|{}", "platform", "courserun_readable_id", "scope_id").alias(
+            "item_id"
+        )
+    )
+    items = population["item_id"].to_list()
+    sample = pl.DataFrame({"item_id": items, "blind": [True] * 4})
+    model_concepts = pl.DataFrame(
+        {
+            "platform": ["ocw"] * 2,
+            "courserun_readable_id": ["run1"] * 2,
+            "scope_id": ["u0", "u1"],
+            "model": ["haiku"] * 2,
+            "canonical": [LabelMatcher().canonical("pandas")] * 2,
+            "status": ["taught"] * 2,
+        }
+    )
+    tasks = [_span_task(item, [("pandas", "taught")]) for item in items]
+    exported = _export(tmp_path, tasks)
+    report, unmatched = score.score_subsections(
+        population, sample, exported, model_concepts, LabelMatcher(), alpha=0.05
+    )
+    recall = report["models"]["haiku"]["concept_recall"]["strata"]["s"]
+    assert recall["labeled_ratio"] == 0.5
+    assert sorted(unmatched["item_id"]) == items[2:]
+    roles = model_concepts.select(
+        *score.SCOPE, "model", "canonical", pl.lit("objective").alias("role")
+    )
+    # a scope the population does not hold (a context scope, say) is counted only
+    outside = roles.head(1).with_columns(pl.lit("overview").alias("scope_id"))
+    objectives = score.score_objectives(
+        population,
+        exported,
+        LabelMatcher(),
+        alpha=0.05,
+        model_roles=pl.concat([roles, outside]),
+    )
+    assert objectives["models"]["haiku"]["scopes_outside_population"] == 1
 
 
 def test_pairs_leave_out_labels_no_current_claim_uses():
@@ -888,6 +948,7 @@ def test_score_subsections_scores_a_model_that_named_nothing(tmp_path):
     population = pl.DataFrame(
         {
             "item_id": items,
+            **_RUN,
             "scope_id": items,
             "stratum": ["s"] * 4,
             "models": ["haiku+opus"] * 4,
@@ -899,6 +960,7 @@ def test_score_subsections_scores_a_model_that_named_nothing(tmp_path):
     sample = pl.DataFrame({"item_id": items, "blind": [True, True, False, False]})
     model_concepts = pl.DataFrame(
         {
+            **_RUN,
             "scope_id": items,
             "model": ["haiku"] * 4,
             "canonical": [LabelMatcher().canonical("pandas")] * 4,
@@ -1506,6 +1568,7 @@ def test_subsections_score_salience_and_central_recall(tmp_path):
     population = pl.DataFrame(
         {
             "item_id": items,
+            **_RUN,
             "scope_id": items,
             "stratum": ["s"] * 2,
             "models": ["haiku"] * 2,
@@ -1517,6 +1580,7 @@ def test_subsections_score_salience_and_central_recall(tmp_path):
     matcher = LabelMatcher()
     model_concepts = pl.DataFrame(
         {
+            **_RUN,
             "scope_id": items,
             "model": ["haiku"] * 2,
             "canonical": [matcher.canonical("interpretable clustering")] * 2,
@@ -1554,7 +1618,7 @@ def test_subsections_score_salience_and_central_recall(tmp_path):
 def test_objectives_agreement_conflicts_and_model_hooks(tmp_path):
     items = ["u0", "u1", "u2"]
     population = pl.DataFrame(
-        {"item_id": items, "scope_id": items, "stratum": ["s"] * 3}
+        {"item_id": items, **_RUN, "scope_id": items, "stratum": ["s"] * 3}
     )
     assignment = [("pivot table", "used", "central", None)]
     tasks = [
@@ -1573,6 +1637,8 @@ def test_objectives_agreement_conflicts_and_model_hooks(tmp_path):
     canonical = matcher.canonical
     model_roles = pl.DataFrame(
         {
+            "platform": ["mitxonline"] * 5,
+            "courserun_readable_id": ["run1"] * 5,
             "scope_id": ["u0", "u0", "u0", "u1", "u2"],
             "model": ["variant"] * 5,
             "canonical": [
