@@ -642,3 +642,104 @@ def test_extract_scopes_keeps_the_batch_when_a_stream_drops(monkeypatch):
     monkeypatch.setattr(extract, "call_model", call_model)
     tables = extract.extract_scopes(built, object(), model_id="model", max_workers=1)
     assert tables.extractions["scope_id"].to_list() == ["seq-1"]
+
+
+def _older_outputs(output_dir) -> None:
+    """Write a claim and an extraction as v1 stored them, and a read without header."""
+    rows = _course_rows("About it.", "Lecture 2", "some text")
+    tables = extract_scopes([_lecture_one(rows)], FakeModel(), model_id="model")
+    tables.extractions.drop(
+        "text_extraction_key", "text_input_digest", "context_input_digest"
+    ).write_parquet(output_dir / "courseware_claim_extraction.parquet")
+    tables.claims.drop("text_teaching_status", "sense_hint").write_parquet(
+        output_dir / "courseware_claim.parquet"
+    )
+    tables.evidence.write_parquet(output_dir / "courseware_claim_evidence.parquet")
+    scope_inputs(scopes.build_scopes(rows)).drop("header_version").write_parquet(
+        output_dir / "courseware_scope_input.parquet"
+    )
+
+
+def test_conform_adds_the_columns_older_tables_lack(tmp_path, capsys):
+    _older_outputs(tmp_path)
+    keys = pl.read_parquet(tmp_path / "courseware_claim.parquet")["extraction_key"]
+    local.conform(tmp_path)
+    local.conform(tmp_path)  # idempotent
+    for table, schema in local.OUTPUT_SCHEMAS.items():
+        path = tmp_path / f"{table}.parquet"
+        # a table the directory never had is not created
+        if table == local.TEXT_EXTRACTION_TABLE:
+            assert not path.exists()
+            continue
+        assert pl.read_parquet(path).schema == pl.Schema(schema)
+    claims = pl.read_parquet(tmp_path / "courseware_claim.parquet")
+    assert claims["extraction_key"].equals(keys)
+    assert claims["sense_hint"].to_list() == [None]
+    assert capsys.readouterr().out.splitlines() == [
+        "3 tables brought to the current schema",
+        "0 tables brought to the current schema",
+    ]
+
+
+def test_conform_refuses_a_column_the_schema_dropped(tmp_path):
+    _older_outputs(tmp_path)
+    path = tmp_path / "courseware_claim.parquet"
+    pl.read_parquet(path).with_columns(retired=pl.lit(1)).write_parquet(path)
+    with pytest.raises(ValueError, match="retired"):
+        local.conform(tmp_path)
+
+
+def test_conform_refuses_a_column_whose_type_changed(tmp_path):
+    _older_outputs(tmp_path)
+    path = tmp_path / "courseware_claim.parquet"
+    pl.read_parquet(path).with_columns(claim_ordinal=pl.lit(1.5)).write_parquet(path)
+    with pytest.raises(ValueError, match="claim_ordinal"):
+        local.conform(tmp_path)
+    assert pl.read_parquet(path)["claim_ordinal"].to_list() == [1.5]
+
+
+def test_extract_and_observe_refuse_older_tables_before_calling_the_model(
+    tmp_path, monkeypatch, capsys
+):
+    sources = tmp_path / "sources.parquet"
+    _course_rows("About it.", "Lecture 2", "some text").write_parquet(sources)
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    _older_outputs(output_dir)
+    model = FakeModel()
+    _use_model(monkeypatch, model)
+    # without the check the model is called and the append fails after it
+    with pytest.raises(ValueError, match="run `local conform` first"):
+        local.extract(sources, output_dir)
+    with pytest.raises(ValueError, match="run `local conform` first"):
+        local.observe(sources, output_dir)
+    assert model.calls == []
+    local.conform(output_dir)
+    local.observe(sources, output_dir)
+    observed = pl.read_parquet(output_dir / "courseware_scope_input.parquet")
+    # the older read keeps a null header; the new one records it
+    assert observed["header_version"].null_count() == observed.height // 2
+    assert observed["header_version"].drop_nulls().n_unique() == 1
+    capsys.readouterr()
+
+
+def test_extract_refuses_a_table_whose_columns_are_out_of_order(
+    tmp_path, monkeypatch, capsys
+):
+    sources = tmp_path / "sources.parquet"
+    rows = _course_rows("About it.", "Lecture 2", "some text")
+    rows.write_parquet(sources)
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    tables = extract_scopes([_lecture_one(rows)], FakeModel(), model_id="model")
+    path = output_dir / "courseware_claim.parquet"
+    # the right names and types, but the append concatenates by position
+    tables.claims.select(reversed(tables.claims.columns)).write_parquet(path)
+    model = FakeModel()
+    _use_model(monkeypatch, model)
+    with pytest.raises(ValueError, match="run `local conform` first"):
+        local.extract(sources, output_dir)
+    assert model.calls == []
+    local.conform(output_dir)
+    assert pl.read_parquet(path).schema == pl.Schema(extract.CLAIM_SCHEMA)
+    capsys.readouterr()

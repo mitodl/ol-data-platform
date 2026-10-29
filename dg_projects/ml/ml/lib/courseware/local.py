@@ -27,7 +27,12 @@ from ml.lib.courseware.describe import BEDROCK_DESCRIPTION_MODEL, describe_conce
 from ml.lib.courseware.evaluation.cli import gold
 from ml.lib.courseware.extract import (
     BEDROCK_DEFAULT_MODEL,
+    CLAIM_SCHEMA,
     DEFAULT_EFFORT,
+    EVIDENCE_SCHEMA,
+    EXTRACTION_SCHEMA,
+    SCOPE_INPUT_SCHEMA,
+    TEXT_EXTRACTION_SCHEMA,
     Effort,
     ReadingKey,
     TextReading,
@@ -59,6 +64,15 @@ app.command(gold)
 BEDROCK_ANSWER_CHECK_MODEL = "us.anthropic.claude-haiku-5-5"
 EXTRACTION_TABLE = "courseware_claim_extraction"
 TEXT_EXTRACTION_TABLE = "courseware_text_extraction"
+SCOPE_INPUT_TABLE = "courseware_scope_input"
+# The tables extract and observe write, with the schema each must have first.
+OUTPUT_SCHEMAS = {
+    TEXT_EXTRACTION_TABLE: TEXT_EXTRACTION_SCHEMA,
+    "courseware_claim": CLAIM_SCHEMA,
+    "courseware_claim_evidence": EVIDENCE_SCHEMA,
+    EXTRACTION_TABLE: EXTRACTION_SCHEMA,
+    SCOPE_INPUT_TABLE: SCOPE_INPUT_SCHEMA,
+}
 
 
 def _existing(output_dir: Path, table: str) -> pl.DataFrame | None:
@@ -72,6 +86,50 @@ def _write(frame: pl.DataFrame, output_dir: Path, table: str) -> None:
     staged = path.with_suffix(".parquet.tmp")
     frame.write_parquet(staged)
     staged.replace(path)
+
+
+def _require_current(output_dir: Path) -> None:
+    """Refuse a directory that ``local conform`` has to bring up to date first.
+
+    A table under an older schema would fail the append only after every model call
+    had been paid for, storing none of them.
+
+    :param output_dir: the directory holding the extraction tables
+    :raises ValueError: when a stored table's schema is not the current one
+    """
+    for table, schema in OUTPUT_SCHEMAS.items():
+        path = output_dir / f"{table}.parquet"
+        if path.exists() and pl.read_parquet_schema(path) != schema:
+            msg = f"{table} predates the current schema; run `local conform` first"
+            raise ValueError(msg)
+
+
+def _conform(rows: pl.DataFrame, table: str) -> pl.DataFrame:
+    """Bring a table stored under an older schema to the current one.
+
+    Columns added since it was written become typed nulls, in the current column
+    order, so later appends concatenate with new rows. A column whose type changed
+    is refused rather than cast, because a cast can be lossy (a float truncated to
+    an integer) and conform overwrites the only copy.
+
+    :raises ValueError: when the table holds a column the current schema dropped,
+        or one of another type
+    """
+    schema = OUTPUT_SCHEMAS[table]
+    if dropped := sorted(set(rows.columns) - set(schema)):
+        msg = f"{table} holds columns the current schema does not: {dropped}"
+        raise ValueError(msg)
+    if retyped := sorted(
+        column for column, dtype in rows.schema.items() if dtype != schema[column]
+    ):
+        msg = f"{table} holds columns of another type than the schema: {retyped}"
+        raise ValueError(msg)
+    return rows.select(
+        pl.col(column)
+        if column in rows.columns
+        else pl.lit(None, dtype=dtype).alias(column)
+        for column, dtype in schema.items()
+    )
 
 
 def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
@@ -148,8 +206,9 @@ def observe(
     :param courserun: limit to these courserun_readable_ids
     """
     output_dir.mkdir(parents=True, exist_ok=True)
+    _require_current(output_dir)
     observed = scope_inputs(_read_scopes(sources, courserun))
-    _append(output_dir, "courseware_scope_input", observed)
+    _append(output_dir, SCOPE_INPUT_TABLE, observed)
     print(f"{observed.height} scope parts observed")  # noqa: T201
 
 
@@ -179,13 +238,14 @@ def extract(  # noqa: PLR0913
     :param dry_run: print the scopes and their estimated input size, call nothing
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _require_current(output_dir)
     run_scopes = _read_scopes(sources, courserun)
     scopes = [
         scope
         for scope in run_scopes
         if not scope_title or scope.scope_title in scope_title
     ]
-    output_dir.mkdir(parents=True, exist_ok=True)
     stored = _existing(output_dir, EXTRACTION_TABLE)
     existing_keys = set(stored["extraction_key"]) if stored is not None else set()
     stored_text = _existing(output_dir, TEXT_EXTRACTION_TABLE)
@@ -196,7 +256,7 @@ def extract(  # noqa: PLR0913
         return
 
     # every scope of the runs read, not only the scope_title selection
-    _append(output_dir, "courseware_scope_input", scope_inputs(run_scopes))
+    _append(output_dir, SCOPE_INPUT_TABLE, scope_inputs(run_scopes))
     client = LLMClientFactory(
         client_class="bedrock", aws_region=aws_region
     ).get_client()
@@ -395,6 +455,29 @@ def describe(
     output_dir.mkdir(parents=True, exist_ok=True)
     _append(output_dir, table, new_rows)
     print(f"{new_rows.height} concepts described")  # noqa: T201
+
+
+@app.command
+def conform(output_dir: Path) -> None:
+    """Bring the extraction tables in a directory to their current schemas.
+
+    Columns added since a table was written are added as nulls (_conform), e.g. a
+    v1 extraction's text_extraction_key or an older read's header_version. Keys are
+    left alone, so a re-run after a crash finishes the job. A table the directory
+    lacks is skipped.
+
+    :param output_dir: the directory holding the extraction tables
+    """
+    conformed = 0
+    for table, schema in OUTPUT_SCHEMAS.items():
+        path = output_dir / f"{table}.parquet"
+        if not path.exists():
+            continue
+        rows = pl.read_parquet(path)
+        if rows.schema != pl.Schema(schema):
+            _write(_conform(rows, table), output_dir, table)
+            conformed += 1
+    print(f"{conformed} tables brought to the current schema")  # noqa: T201
 
 
 @app.command
