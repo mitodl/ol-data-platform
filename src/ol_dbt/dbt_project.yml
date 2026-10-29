@@ -96,6 +96,14 @@ vars:
     # How far bridge_courserun_prerequisite_coverage walks down passing broader edges
     # to list an umbrella requirement's (e.g. Python programming) narrower concepts.
     courseware_prerequisite_max_narrower_hops: 3
+    # Whether a Dagster asset writes the concept tagging tables
+    # (courseware_concept_tagging_run, _mention, _tagging_alias), and the answer
+    # checks (courseware_answer_check), to the warehouse. Until then only the local
+    # runner writes them, so the sources, the models that read them and those
+    # models' tests are enabled on DuckDB targets only (macro
+    # courseware_local_tables_enabled). Set true once the asset exists.
+    courseware_tagging_in_warehouse: false
+    courseware_answer_check_in_warehouse: false
 
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models

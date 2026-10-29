@@ -1,4 +1,7 @@
-{{ config(severity="warn") }}
+{{ config(
+    severity="warn"
+    , enabled=courseware_local_tables_enabled("courseware_tagging_in_warehouse")
+) }}
 
 -- Tagging through a label that resolution merged into a concept spreads that merge to
 -- every occurrence of the label. If merges were wrong at a meaningful rate, tags through

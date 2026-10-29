@@ -1,3 +1,5 @@
+{{ config(enabled=courseware_local_tables_enabled('courseware_tagging_in_warehouse')) }}
+
 {#
     Every place a known concept's label appears in courseware text, from the newest
     dictionary tagging run (ml.lib.courseware.tagging over int__courseware__extraction_sources

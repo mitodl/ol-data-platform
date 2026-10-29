@@ -23,6 +23,7 @@ from ol_dbt_cli.commands.local_dev import (
     register,
     snapshot,
 )
+from ol_dbt_cli.lib.duckdb_aws import USE_AWS_CREDENTIAL_CHAIN_SQL
 
 
 class TestSnapshot:
@@ -234,8 +235,8 @@ class TestRegisterSingleTable:
         assert view_name == "glue__my_db__users"
         assert "Iceberg manifest read failed" in (extra or "")
 
-    def test_loads_extensions_and_credentials_per_connection(self, tmp_path: Path) -> None:
-        """Every worker thread must LOAD extensions and call load_aws_credentials()."""
+    def test_loads_extensions_per_connection_without_creating_the_secret(self, tmp_path: Path) -> None:
+        """Every worker LOADs extensions; the secret comes from the pool's shared connection."""
         table = self._make_table()
 
         with patch("ol_dbt_cli.commands.local_dev.duckdb.connect") as mock_connect:
@@ -248,7 +249,7 @@ class TestRegisterSingleTable:
         assert any("LOAD httpfs" in c for c in execute_calls)
         assert any("LOAD aws" in c for c in execute_calls)
         assert any("LOAD iceberg" in c for c in execute_calls)
-        assert any("load_aws_credentials" in c for c in execute_calls)
+        assert USE_AWS_CREDENTIAL_CHAIN_SQL not in [c.args[0] for c in mock_conn.execute.call_args_list]
 
     def test_view_name_uses_database_prefix(self, tmp_path: Path) -> None:
         """View name is always glue__{database}__{table}."""
@@ -413,6 +414,27 @@ class TestRegistryAge:
         naive = datetime.datetime.now() - datetime.timedelta(days=1)  # noqa: DTZ005
         phrase, _is_stale = _describe_registry_age(naive)
         assert "ago" in phrase
+
+
+class TestRegisterTablesInDuckdbSecret:
+    """The AWS secret is created once for the worker pool, not per worker."""
+
+    def test_creates_secret_once_before_workers_run(self, tmp_path: Path) -> None:
+        from ol_dbt_cli.commands.local_dev import _register_tables_in_duckdb
+
+        tables = [{"name": f"t{i}", "metadata_location": f"s3://bucket/t{i}/v1.json"} for i in range(5)]
+        mock_conn = MagicMock()
+
+        with patch("ol_dbt_cli.commands.local_dev.duckdb.connect") as mock_connect:
+            mock_connect.return_value.__enter__.return_value = mock_conn
+            mock_connect.return_value.__exit__.return_value = False
+            results = _register_tables_in_duckdb(tables, "my_db", tmp_path / "local.duckdb", verbose=False, workers=3)
+
+        statements = [c.args[0] for c in mock_conn.execute.call_args_list]
+        assert results["success"] == 5
+        assert statements.count(USE_AWS_CREDENTIAL_CHAIN_SQL) == 1
+        first_view = next(i for i, s in enumerate(statements) if s.startswith("CREATE OR REPLACE VIEW"))
+        assert statements.index(USE_AWS_CREDENTIAL_CHAIN_SQL) < first_view
 
 
 class TestRegisterTablesInDuckdbDryRun:
