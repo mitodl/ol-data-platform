@@ -53,11 +53,6 @@ with evidence as (
     select * from {{ ref('int__courseware__concept_relation_evidence') }}
 )
 
-, course_runs as (
-    select * from {{ ref('dim_course_run') }}
-    where is_current
-)
-
 , mentions as (
     select * from {{ ref('int__courseware__resolved_concept_mentions') }}
 )
@@ -111,32 +106,29 @@ with evidence as (
     group by from_concept_id, to_concept_id, relation
 )
 
--- units per builds_on run; a run with no course_fk (e.g. residential) is keyed by
--- its course's readable id
+, course_keys as (
+    {{ courseware_run_course_keys('evidence') }}
+)
+
+-- units per builds_on run, keyed by the run's course
 , builds_on_course_runs as (
     select
         evidence.from_concept_id
         , evidence.to_concept_id
-        , coalesce(
-            course_runs.course_fk
-            , concat(evidence.platform, '|', {{ courserun_course_readable_id('evidence.courserun_readable_id') }})
-        ) as course_key
+        , course_keys.course_key
         , evidence.platform
         , evidence.courserun_readable_id
         , sum(evidence.scope_count) as scope_count
     from evidence
-    left join course_runs
+    left join course_keys
         on
-            evidence.platform = course_runs.platform
-            and evidence.courserun_readable_id = course_runs.courserun_readable_id
+            evidence.platform = course_keys.platform
+            and evidence.courserun_readable_id = course_keys.courserun_readable_id
     where evidence.relation = 'builds_on'
     group by
         evidence.from_concept_id
         , evidence.to_concept_id
-        , coalesce(
-            course_runs.course_fk
-            , concat(evidence.platform, '|', {{ courserun_course_readable_id('evidence.courserun_readable_id') }})
-        )
+        , course_keys.course_key
         , evidence.platform
         , evidence.courserun_readable_id
 )
