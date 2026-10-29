@@ -27,8 +27,10 @@
     Candidates that fail keep their rows, with support_rule_failure, for review.
     Declared requirements and the other relations always pass.
 
-    tool_status describes an inferred requirement of a tool (dim_concept.concept_kind
-    tool) from this run's own claims only:
+    tool_status describes an inferred requirement of a tool from this run's own claims
+    only. A concept is a tool here when most of the run's claims that give it a kind
+    say tool (a tie counts as tool), not by dim_concept.concept_kind, which votes
+    across every course:
       assumed     the run says learners should already know it: an assumed_knowledge
                   claim in any scope, or a declared prerequisite or recommended
                   background
@@ -65,8 +67,18 @@ with mentions as (
     where is_current
 )
 
-, concepts as (
-    select * from {{ ref('dim_concept') }}
+-- whether the run's own claims call each concept a tool; assumed-knowledge claims
+-- carry no kind, so a concept only those mention has no row
+, run_concept_kinds as (
+    select
+        platform
+        , courserun_readable_id
+        , concept_id
+        , sum(case when concept_kind = 'tool' then 1 else 0 end)
+        >= sum(case when concept_kind != 'tool' then 1 else 0 end) as is_tool
+    from mentions
+    where concept_kind is not null
+    group by platform, courserun_readable_id, concept_id
 )
 
 , direct_relations as (
@@ -179,14 +191,17 @@ with mentions as (
         , cast(inferred_candidates.prior_scope_count as double)
         / (inferred_candidates.prior_scope_count + inferred_candidates.taught_scope_count) as direction_consistency
         , case
-            when concepts.concept_kind != 'tool' or concepts.concept_kind is null then cast(null as varchar)
+            when not coalesce(run_concept_kinds.is_tool, false) then cast(null as varchar)
             when expected_by_run.concept_id is not null then 'assumed'
             when inferred_candidates.taught_scope_count > 0 then 'introduced'
             else 'unresolved'
         end as tool_status
     from inferred_candidates
-    left join concepts
-        on inferred_candidates.concept_id = concepts.concept_pk
+    left join run_concept_kinds
+        on
+            inferred_candidates.platform = run_concept_kinds.platform
+            and inferred_candidates.courserun_readable_id = run_concept_kinds.courserun_readable_id
+            and inferred_candidates.concept_id = run_concept_kinds.concept_id
     left join expected_by_run
         on
             inferred_candidates.platform = expected_by_run.platform
