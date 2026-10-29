@@ -466,10 +466,11 @@ models:
   - name: support_rule_failure
     description: str, why the edge fails the support rules. builds_on, insufficient_support
       or contested_direction; broader, hierarchy_cycle when it is the lowest-ranked
-      edge of a broader cycle
+      edge of a broader cycle, or hierarchy_cycle_unresolved when the cycle walk reaches
+      its bound (32 edges) without ruling a longer cycle out
     tests:
     - accepted_values:
-        values: [insufficient_support, contested_direction, hierarchy_cycle]
+        values: [insufficient_support, contested_direction, hierarchy_cycle, hierarchy_cycle_unresolved]
 
 - name: dim_concept_community
   description: Neighbourhoods of related concepts from the newest graph run, with
@@ -1137,6 +1138,225 @@ unit_tests:
       passes_support_rule: true, support_rule_failure: null}
     - {from_concept_fk: y, to_concept_fk: z, relation: broader, support_score: 0.875,
       passes_support_rule: true, support_rule_failure: null}
+- name: test_bridge_concept_relation_fails_closed_on_a_broader_cycle_past_the_walk_bound
+  description: >
+    h00 < h01 < ... < h32 < h00 is a 33-edge broader cycle, one longer than the
+    32-edge walk, and h32 < h00 has the fewest verdicts. Its walk is still going
+    at the bound without having closed the cycle, so it fails as
+    hierarchy_cycle_unresolved. Every other edge's walk stops at h32 < h00, ranked
+    below it, so they pass and the passing edges are acyclic.
+  model: bridge_concept_relation
+  given:
+  - input: ref('int__courseware__concept_relation_evidence')
+    rows:
+    - {from_concept_id: h00, to_concept_id: h01, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h01, to_concept_id: h02, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h02, to_concept_id: h03, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h03, to_concept_id: h04, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h04, to_concept_id: h05, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h05, to_concept_id: h06, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h06, to_concept_id: h07, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h07, to_concept_id: h08, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h08, to_concept_id: h09, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h09, to_concept_id: h10, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h10, to_concept_id: h11, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h11, to_concept_id: h12, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h12, to_concept_id: h13, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h13, to_concept_id: h14, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h14, to_concept_id: h15, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h15, to_concept_id: h16, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h16, to_concept_id: h17, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h17, to_concept_id: h18, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h18, to_concept_id: h19, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h19, to_concept_id: h20, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h20, to_concept_id: h21, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h21, to_concept_id: h22, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h22, to_concept_id: h23, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h23, to_concept_id: h24, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h24, to_concept_id: h25, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h25, to_concept_id: h26, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h26, to_concept_id: h27, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h27, to_concept_id: h28, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h28, to_concept_id: h29, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h29, to_concept_id: h30, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h30, to_concept_id: h31, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h31, to_concept_id: h32, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+    - {from_concept_id: h32, to_concept_id: h00, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_count: 0, observed_at: '2026-10-01'}
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('int__courseware__adjudicated_concept_relations')
+    rows:
+    - {from_concept_id: h00, to_concept_id: h01, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h01, to_concept_id: h02, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h02, to_concept_id: h03, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h03, to_concept_id: h04, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h04, to_concept_id: h05, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h05, to_concept_id: h06, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h06, to_concept_id: h07, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h07, to_concept_id: h08, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h08, to_concept_id: h09, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h09, to_concept_id: h10, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h10, to_concept_id: h11, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h11, to_concept_id: h12, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h12, to_concept_id: h13, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h13, to_concept_id: h14, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h14, to_concept_id: h15, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h15, to_concept_id: h16, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h16, to_concept_id: h17, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h17, to_concept_id: h18, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h18, to_concept_id: h19, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h19, to_concept_id: h20, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h20, to_concept_id: h21, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h21, to_concept_id: h22, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h22, to_concept_id: h23, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h23, to_concept_id: h24, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h24, to_concept_id: h25, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h25, to_concept_id: h26, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h26, to_concept_id: h27, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h27, to_concept_id: h28, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h28, to_concept_id: h29, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h29, to_concept_id: h30, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h30, to_concept_id: h31, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h31, to_concept_id: h32, relation: broader, supporting_verdict_count: 2,
+      contrary_verdict_count: 0, pair_verdict_count: 2}
+    - {from_concept_id: h32, to_concept_id: h00, relation: broader, supporting_verdict_count: 1,
+      contrary_verdict_count: 0, pair_verdict_count: 1}
+  - input: ref('dim_course')
+    rows: []
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows: []
+  expect:
+    rows:
+    - {from_concept_fk: h00, to_concept_fk: h01, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h01, to_concept_fk: h02, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h02, to_concept_fk: h03, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h03, to_concept_fk: h04, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h04, to_concept_fk: h05, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h05, to_concept_fk: h06, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h06, to_concept_fk: h07, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h07, to_concept_fk: h08, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h08, to_concept_fk: h09, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h09, to_concept_fk: h10, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h10, to_concept_fk: h11, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h11, to_concept_fk: h12, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h12, to_concept_fk: h13, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h13, to_concept_fk: h14, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h14, to_concept_fk: h15, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h15, to_concept_fk: h16, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h16, to_concept_fk: h17, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h17, to_concept_fk: h18, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h18, to_concept_fk: h19, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h19, to_concept_fk: h20, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h20, to_concept_fk: h21, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h21, to_concept_fk: h22, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h22, to_concept_fk: h23, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h23, to_concept_fk: h24, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h24, to_concept_fk: h25, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h25, to_concept_fk: h26, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h26, to_concept_fk: h27, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h27, to_concept_fk: h28, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h28, to_concept_fk: h29, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h29, to_concept_fk: h30, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h30, to_concept_fk: h31, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h31, to_concept_fk: h32, relation: broader, passes_support_rule: true,
+      support_rule_failure: null}
+    - {from_concept_fk: h32, to_concept_fk: h00, relation: broader, passes_support_rule: false,
+      support_rule_failure: hierarchy_cycle_unresolved}
 - name: test_bridge_concept_relation_counts_a_courses_pair_evidence_once_across_reruns
   description: >
     a < b and c < d are adjudicated broader with one verdict each. run1 and run3

@@ -102,6 +102,11 @@
       broke (z < x for z < x < y < z, when x < y is cut for x < y < w < x).
       assert_bridge_concept_relation_hierarchy_cycle_overprune counts the cut
       edges a second pass over the survivors would keep, an upper bound on that.
+      The walk is bounded at max_cycle_length edges and fails closed: an edge
+      whose walk could go on past the bound without having closed a cycle fails
+      too (hierarchy_cycle_unresolved), so the passing broader edges are acyclic
+      whatever the length of a cycle, and the acyclic test on them, bounded the
+      same way, holds.
     - broader and builds_on are judged independently. A pair can be both (a
       private method is a kind of method and builds on understanding methods), so
       neither predicate's score is used to fail the other.
@@ -413,7 +418,10 @@ with evidence as (
         , scored.relation
         , coalesce(
             scored.builds_on_rule_failure
-            , case when hierarchy_cycle_edges.from_concept_id is not null then 'hierarchy_cycle' end
+            , case hierarchy_cycle_edges.cut_reason
+                when 'cycle' then 'hierarchy_cycle'
+                when 'unresolved' then 'hierarchy_cycle_unresolved'
+            end
         ) as support_rule_failure
     from scored
     left join hierarchy_cycle_edges
