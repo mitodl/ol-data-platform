@@ -376,8 +376,8 @@ class ReleasePublicationConfig(Config):
         description=(
             "Publish this release, e.g. an earlier one to roll back. It must have "
             "passed validation under the current source policy. Unset publishes "
-            "the newest valid, never-published release built after the published "
-            "one, so a rollback holds until a new release is built."
+            "the newest valid release built after every release published so far, "
+            "so a rollback holds until a new release is built."
         ),
     )
 
@@ -391,8 +391,9 @@ def release_to_publish(
     """Choose the release to publish, or None to leave the pointer where it is.
 
     Automatic publication takes the newest valid release under the current source
-    policy that has never been published and was built after the published one,
-    so a rollback holds until a newer release is built.
+    policy built after every release published so far. Measuring from the
+    published one alone would undo a rollback: with r1, r2 and r3 built, r1 then r3
+    published and r1 restored, r2 is newer than r1 and was never published.
 
     :param releases: every courseware_release row
     :param published_ids: the release of each publication row, oldest first
@@ -418,15 +419,13 @@ def release_to_publish(
             raise permanent_failure(msg)
         return None if requested == current_id else requested
     candidates = releases.filter(
-        pl.col("is_valid")
-        & (pl.col("source_policy_version") == policy_version)
-        & ~pl.col("release_id").is_in(published_ids)
+        pl.col("is_valid") & (pl.col("source_policy_version") == policy_version)
     )
-    if current_id is not None:
-        current_built = releases.filter(pl.col("release_id") == current_id)["built_at"][
-            0
-        ]
-        candidates = candidates.filter(pl.col("built_at") > current_built)
+    if published_ids:
+        high_water = releases.filter(pl.col("release_id").is_in(published_ids))[
+            "built_at"
+        ].max()
+        candidates = candidates.filter(pl.col("built_at") > high_water)
     target = newest(candidates.lazy(), "built_at")
     return target["release_id"] if target else None
 

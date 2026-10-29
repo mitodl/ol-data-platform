@@ -1621,6 +1621,33 @@ def test_a_rollback_holds_until_a_new_release_is_built(tables):
     assert tables["courseware_release_publication"]["release_id"][-1] == third
 
 
+def test_a_rollback_does_not_publish_a_release_it_skipped(tables):
+    candidate(tables, "AUC")
+    release(tables)
+    first = tables["courseware_release"]["release_id"][0]
+    # r2 and r3 are built before publication runs again, which takes r3
+    candidate(tables, "AUC", "pandas", extraction_count=4)
+    materialize(
+        [courseware_knowledge_release], resources={"io_manager": Warehouse(tables)}
+    )
+    candidate(tables, "AUC", "pandas", "numpy", extraction_count=5)
+    release(tables)
+    _, skipped, third = tables["courseware_release"]["release_id"].to_list()
+    assert tables["courseware_release_publication"]["release_id"].to_list() == [
+        first,
+        third,
+    ]
+
+    release(tables, release_id=first)
+    release(tables)
+
+    # r2 was never published, but it is older than r3, so it does not undo the
+    # rollback
+    published = tables["courseware_release_publication"]["release_id"].to_list()
+    assert published == [first, third, first]
+    assert skipped not in published
+
+
 def test_publication_refuses_an_invalid_release(tables):
     candidate(tables, "AUC", is_graph_current=False)
     release(tables)
