@@ -627,7 +627,9 @@ models:
   - name: requirement_source
     description: str, declared or inferred
   - name: requirement_passes_support_rule
-    description: boolean, bridge_courserun_concept.passes_support_rule of the requirement
+    description: boolean, bridge_courserun_concept.passes_support_rule of the requirement;
+      its rule counts other courses requiring the concept, so adding a course can
+      change it
   - name: provider_platform
     description: str, the providing run's platform
   - name: provider_courserun_readable_id
@@ -656,8 +658,8 @@ models:
     tests:
     - not_null
   - name: relies_on_unreviewed_relation
-    description: boolean, whether a close or narrower match rests on a bridge_concept_relation
-      edge that is not accepted; false for direct
+    description: boolean, whether no covered close or narrower concept is reached
+      over accepted bridge_concept_relation edges only; false for direct
     tests:
     - not_null
   - name: narrower_concept_count

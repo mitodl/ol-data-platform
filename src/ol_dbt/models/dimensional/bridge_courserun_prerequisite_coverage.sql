@@ -32,15 +32,19 @@
     covered one (0 for direct and close). That set is what the corpus happens to
     contain, not what the target needs, so it is reported as evidence and never
     turned into a share or a threshold: adding an unrelated course can add narrower
-    concepts to the missing list, but it cannot flip a verdict. The walk does not
+    concepts to the missing list and the count, and nothing else in a provider's row. The walk does not
     start from close equivalents too: on the pilot that pulled the mathematical
     "function" tree (logistic, softmax) under "Python function".
 
     Uncertainty stays in its own columns rather than a score: requirement_source and
-    requirement_passes_support_rule for the requirement, provider_relation, and
-    relies_on_unreviewed_relation, true when a close or narrower match rests on a
-    bridge_concept_relation edge that is not accepted (every edge, until a review
-    workflow exists).
+    requirement_passes_support_rule for the requirement (that rule counts other
+    courses requiring the concept, so it can change when a course is added; it is
+    the requirement's evidence, not the provider's), provider_relation, and
+    relies_on_unreviewed_relation, true when no covered close or narrower concept is
+    reached over accepted bridge_concept_relation edges only (every edge is proposed
+    until a review workflow exists). match_depth and relies_on_unreviewed_relation
+    are judged separately, so the shallowest covered concept need not be the
+    reviewed one.
 
     A tool no course teaches, such as scikit-learn or Seaborn on the pilot, stays
     uncovered: it has no narrower concepts, because its taught neighbours (random
@@ -220,7 +224,7 @@ with run_concepts as (
         close_pairs.concept_fk
         , taught.courserun_fk as provider_courserun_fk
         , max(case when taught.is_taught then 1 else 0 end) = 1 as is_taught
-        , min(case when close_pairs.is_reviewed then 1 else 0 end) = 1 as is_reviewed
+        , max(case when close_pairs.is_reviewed then 1 else 0 end) = 1 as is_reviewed
     from close_pairs
     inner join required_concepts
         on close_pairs.concept_fk = required_concepts.concept_fk
@@ -248,23 +252,14 @@ with run_concepts as (
 )
 
 -- every provider against every narrower concept of the requirement, covered or not
-, narrower_coverage as (
+, narrower_cells as (
     select
         providers.concept_fk
         , providers.provider_courserun_fk
-        , count(taught.concept_fk) as narrower_taught_count
-        , min(case when taught.concept_fk is not null then narrower_concepts.hops end) as min_covered_hops
-        , min(
-            case
-                when taught.concept_fk is null then 1
-                when narrower_concepts.is_reviewed then 1
-                else 0
-            end
-        ) = 1 as is_reviewed
-        , array_agg(narrower_concepts.narrower_concept_fk order by narrower_concepts.narrower_concept_fk)
-            filter (where taught.concept_fk is not null) as covered_narrower_concept_fks
-        , array_agg(narrower_concepts.narrower_concept_fk order by narrower_concepts.narrower_concept_fk)
-            filter (where taught.concept_fk is null) as missing_narrower_concept_fks
+        , narrower_concepts.narrower_concept_fk
+        , narrower_concepts.hops
+        , narrower_concepts.is_reviewed
+        , taught.concept_fk is not null as is_covered
     from providers
     inner join narrower_concepts
         on providers.concept_fk = narrower_concepts.concept_fk
@@ -272,7 +267,39 @@ with run_concepts as (
         on
             providers.provider_courserun_fk = taught.courserun_fk
             and narrower_concepts.narrower_concept_fk = taught.concept_fk
-    group by providers.concept_fk, providers.provider_courserun_fk
+)
+
+, narrower_coverage as (
+    select
+        concept_fk
+        , provider_courserun_fk
+        , sum(case when is_covered then 1 else 0 end) as narrower_taught_count
+        , min(case when is_covered then hops end) as min_covered_hops
+        , max(case when is_covered and is_reviewed then 1 else 0 end) = 1 as is_reviewed
+    from narrower_cells
+    group by concept_fk, provider_courserun_fk
+)
+
+-- the lists are aggregated under where rather than filter, which StarRocks does not
+-- allow beside order by in array_agg
+, covered_narrower as (
+    select
+        concept_fk
+        , provider_courserun_fk
+        , array_agg(narrower_concept_fk order by narrower_concept_fk) as narrower_concept_fks
+    from narrower_cells
+    where is_covered
+    group by concept_fk, provider_courserun_fk
+)
+
+, missing_narrower as (
+    select
+        concept_fk
+        , provider_courserun_fk
+        , array_agg(narrower_concept_fk order by narrower_concept_fk) as narrower_concept_fks
+    from narrower_cells
+    where not is_covered
+    group by concept_fk, provider_courserun_fk
 )
 
 , judged as (
@@ -301,8 +328,8 @@ with run_concepts as (
         end as relies_on_unreviewed_relation
         , coalesce(narrower_counts.narrower_concept_count, 0) as narrower_concept_count
         , coalesce(narrower_coverage.narrower_taught_count, 0) as narrower_taught_count
-        , narrower_coverage.covered_narrower_concept_fks
-        , narrower_coverage.missing_narrower_concept_fks
+        , covered_narrower.narrower_concept_fks as covered_narrower_concept_fks
+        , missing_narrower.narrower_concept_fks as missing_narrower_concept_fks
     from providers
     left join direct_matches
         on
@@ -318,6 +345,14 @@ with run_concepts as (
         on
             providers.concept_fk = narrower_coverage.concept_fk
             and providers.provider_courserun_fk = narrower_coverage.provider_courserun_fk
+    left join covered_narrower
+        on
+            providers.concept_fk = covered_narrower.concept_fk
+            and providers.provider_courserun_fk = covered_narrower.provider_courserun_fk
+    left join missing_narrower
+        on
+            providers.concept_fk = missing_narrower.concept_fk
+            and providers.provider_courserun_fk = missing_narrower.provider_courserun_fk
 )
 
 select
