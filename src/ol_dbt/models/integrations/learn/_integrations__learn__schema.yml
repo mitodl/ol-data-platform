@@ -435,6 +435,16 @@ models:
       Learn orders a program's courses. Null for a child program that is not shown
       as a course - its courses have positions of their own. Positions have gaps where
       a course in the tree has no live page.
+  - name: child_program_order
+    description: int, zero-based place of a child program among the program's child
+      programs, by its first node in the requirement tree. This is the order MIT Learn's
+      ETL lists child_programs in (get_program_ids_from_req_tree), and Learn numbers
+      a child program without a child_position after the program's other children
+      in this order. Null for a course.
+    tests:
+    - not_null:
+        config:
+          where: "child_resource_type = 'program'"
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -542,6 +552,16 @@ models:
     description: boolean, whether price is above zero, as MIT Learn's xPRO ETL sets
       it.
     tests: [not_null]
+  - name: platform_code
+    description: str, MIT Learn's platform code for the course's platform, as its
+      XPRO_PLATFORM_TRANSFORM maps the platform name in integrations__learn__xpro_courses.
+      It is the run's resource's platform.code, part of a content file's vector point
+      key. Null for a platform Learn does not map; Learn's loader skips such a course,
+      so the run has no resource there.
+    tests:
+    - accepted_values:
+        arguments:
+          values: ['emeritus', 'globalalumni', 'simplilearn', 'susskind', 'whu', 'xpro']
 
 - name: integrations__learn__xpro_programs
   config:
@@ -619,64 +639,115 @@ models:
   - name: max_weekly_hours
     description: int, most weekly hours; null if the page does not give one.
 
-- name: integrations__learn__mit_edx_courses
+- name: integrations__learn__program_certificates
   description: >
-    MIT edX (MITx on edX.org) courses exposed for MIT Learn's Trino-pull ETL.
-    One row per course with at least one published run.
-    Sourced from stg__edxorg__api__course and stg__edxorg__api__courserun
-    (edx.org S3 exports via IRx). Source decision: edxorg dg_project, not
-    mitxresidential (which covers MIT's internal OpenEdX deployment).
+    MicroMasters + MITx Online program certificates exposed for MIT Learn's
+    warehouse-pull ETL, replacing the Hightouch sync into MIT Learn's
+    external.programcertificate table (mitodl/hq#12954). One row per
+    certificate. Sourced from int__micromasters__program_certificates.
+    NOTE: this model does not follow the readable_id/title/etl_source-enum
+    shape from docs/learn_marts_contract.md — that contract targets catalog
+    resources feeding MIT Learn's LearningResource model, whereas this feeds
+    a distinct fact model (profiles.ProgramCertificate) keyed by
+    record_hash.
+
+    QA builds this view on learn_integrations_qa_daily so MIT Learn's
+    SyncProgramCertificatesTask can be rehearsed there, and QA's rows are
+    not production's. The edX.org and IRx inputs (edxorg/s3, irx/bigquery)
+    are masked mirrors of production: usernames and emails are SHA-256
+    digests, names and addresses read 'redacted' and year of birth is NULL.
+    MITx Online and MicroMasters are QA's own apps, with their own users.
+    So learners do not join across platforms the way they do in production,
+    and the edX.org-side recipient fields carry digests or 'redacted'. QA's
+    MITx Online Open edX database (mitxonline/mysql) is empty, which
+    qa_partial_tables records for auth_user: user_mitxonline_username
+    falls back to the MITx Online app username there. A QA rehearsal
+    checks that the task reads, maps and writes these rows, not
+    certificate counts. See
+    docs/specs/QA_DATA_TOPOLOGY_SPEC.md §2.
+  config:
+    tags: [qa_scheduled]
+    meta:
+      qa_branches:
+      - edxorg/s3
+      - irx/bigquery
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      qa_partial_tables:
+      - raw__mitxonline__openedx__mysql__auth_user
   columns:
-  - name: readable_id
-    description: edX.org course key (e.g. MITx/6.00.1x). Used for upsert matching.
+  - name: record_hash
+    description: >
+      Hashed certificate identifier from int__micromasters__program_certificates
+      (program_certificate_hashed_id). Primary/upsert key for MIT Learn's
+      profiles.ProgramCertificate.
     tests: [not_null, unique]
-  - name: title
-    description: Course title.
+  - name: program_title
+    description: Program title at the time of certificate issuance.
+  - name: user_full_name
+    description: Certificate recipient's full name.
+  - name: user_email
+    description: >
+      Certificate recipient's email, preferring MicroMasters/MITx Online/
+      edX.org email in that order depending on program type and completion
+      date (see int__micromasters__program_certificates). Empty string, not
+      NULL, when no email could be resolved.
     tests: [not_null]
+  - name: user_edxorg_id
+    description: Certificate recipient's edX.org user id, when resolvable.
+  - name: user_edxorg_username
+    description: Certificate recipient's edX.org username, when resolvable.
+  - name: user_mitxonline_username
+    description: Certificate recipient's MITx Online username, when resolvable.
+  - name: micromasters_program_id
+    description: MicroMasters program id for the completed program, when applicable.
+  - name: mitxonline_program_id
+    description: >
+      MITx Online program id for the completed program. For an edX.org
+      MicroMasters certificate, the id of the MITx Online program its title
+      maps to in edxorg_to_mitxonline_program_mapping. Null when the title has
+      no mapping; the warning means a new edX.org title needs a seed row.
+    tests:
+    - not_null:
+        config:
+          severity: warn
+  - name: user_first_name
+    description: Certificate recipient's first name.
+  - name: user_last_name
+    description: Certificate recipient's last name.
+  - name: user_gender
+    description: Certificate recipient's self-reported gender, when available.
+  - name: user_year_of_birth
+    description: Certificate recipient's self-reported birth year, when available.
+  - name: user_country
+    description: Certificate recipient's self-reported country, when available.
+  - name: user_address_state_or_territory
+    description: Certificate recipient's self-reported state/territory, when available.
+  - name: user_address_city
+    description: Certificate recipient's self-reported city, when available.
+  - name: user_address_postal_code
+    description: Certificate recipient's self-reported postal code, when available.
+  - name: user_street_address
+    description: Certificate recipient's self-reported street address, when available.
+  - name: program_completion_timestamp
+    description: >
+      When the recipient completed the program's certificate requirements.
+      NULL for "override" certificates (a hardcoded list of recipients
+      granted a certificate outside the normal completion-tracking path,
+      with no completion time to report).
   - name: last_modified
-    description: Last modified timestamp from the edX.org course catalog API export.
+    description: >
+      No genuine last-modified signal exists in the source lineage (a
+      certificate is issued once and essentially never revised); reuses
+      program_completion_timestamp as the closest available proxy so MIT
+      Learn's generic incremental-pull machinery (which requires this
+      column on every integrations__learn__* view) still functions.
+      Falls back to current_timestamp for override certificates (see
+      program_completion_timestamp), so that row is simply re-upserted
+      (a no-op) on every incremental run instead of never matching an
+      incremental `since` filter.
     tests: [not_null]
-  - name: etl_source
-    description: Always 'mit_edx'.
-    tests: [not_null]
-  - name: description
-    description: Short course description from the edX.org catalog API.
-  - name: url
-    description: URL for the course's About page on edx.org.
-  - name: image_url
-    description: URL for the course image from the edX.org catalog API.
-  - name: published
-    description: True if at least one course run is published.
-  - name: platform
-    description: >
-      Always 'edxorg' (differs from etl_source, which is 'mit_edx').
-  - name: page_slug
-    description: >
-      Always NULL; edX.org courses have no CMS page slug (placeholder for
-      contract parity with other sources).
-  - name: topics
-    description: Comma-separated subject names from the edX.org course record.
-  - name: instructors
-    description: Comma-separated instructor names aggregated across all course runs.
-  - name: certification_type
-    description: >
-      Course type from the edX.org catalog API, e.g. audit, verified,
-      professional; used as this contract's certification_type.
-  - name: price
-    description: >
-      Maximum non-audit/honor seat price across all published runs, cast to
-      a string, or NULL if no priced seats.
-  - name: length
-    description: >
-      Max course run duration across published runs, e.g. '4 weeks'.
-  - name: effort
-    description: >
-      Max course run time commitment across published runs, e.g.
-      '5-7 hours per week'.
-  - name: runs
-    description: >
-      Pipe-delimited run metadata strings joined with semicolons.
-      Format per run: courserun_key|start_on|end_on|is_published
 
 unit_tests:
 - name: test_integrations__learn__ocw_courses_builds_learns_ids_and_urls
@@ -701,6 +772,27 @@ unit_tests:
       year: 2007, run_id: b89637d2d64abf7896f604f5d40d48a9}
     - {readable_id: RES.TL-002, url: "https://ocw.mit.edu/courses/res-tl-002-star/",
       slug: courses/res-tl-002-star, image_url: null, year: null, run_id: a062e4e8db044bcdbb1d4d6f80c18083}
+
+- name: test_integrations__learn__ocw_courses_slugifies_terms_as_django_does
+  description: >
+    The term is folded to ASCII and loses a leading or trailing hyphen or
+    underscore, as Django's slugify does. A term with nothing left still adds
+    the "+", as in Learn.
+  model: integrations__learn__ocw_courses
+  given:
+  - input: ref('int__ocw__live_courses')
+    rows:
+    - {course_slug: a, courserun_readable_id: a1, course_title: A, course_primary_course_number: "1.00",
+      course_term: " Été - ", course_year: "2001"}
+    - {course_slug: b, courserun_readable_id: b1, course_title: B, course_primary_course_number: "2.00",
+      course_term: _Spring  Term_, course_year: "2002"}
+    - {course_slug: c, courserun_readable_id: c1, course_title: C, course_primary_course_number: "3.00",
+      course_term: "???", course_year: "2003"}
+  expect:
+    rows:
+    - {run_id: a1, readable_id: 1.00+ete_2001}
+    - {run_id: b1, readable_id: 2.00+spring-term_2002}
+    - {run_id: c1, readable_id: 3.00+_2003}
 
 - name: test_integrations__learn__mitxonline_runs_published_status_and_prices
   description: >
@@ -755,7 +847,8 @@ unit_tests:
     a position of its own; any other required program contributes its courses where
     its node is and has no position. A course met a second time keeps its first
     position, a course without a live page leaves a gap, and a required program
-    the API does not list (B2B-only) is skipped.
+    the API does not list (B2B-only) is skipped. Required programs are ordered by
+    their first node, not by readable id.
   model: integrations__learn__mitxonline_program_children
   given:
   - input: ref('stg__mitxonline__app__postgres__courses_program')
@@ -765,6 +858,7 @@ unit_tests:
     - {program_id: 3, program_readable_id: as-course, program_is_live: true, program_is_b2b_only: false,
       program_display_mode: course}
     - {program_id: 4, program_readable_id: b2b, program_is_live: true, program_is_b2b_only: true}
+    - {program_id: 5, program_readable_id: a-track, program_is_live: true, program_is_b2b_only: false}
   - input: ref('stg__mitxonline__app__postgres__courses_programrequirement')
     rows:
     - {program_id: 1, programrequirement_node_type: program_root, programrequirement_path: "0001"}
@@ -778,6 +872,11 @@ unit_tests:
       course_id: 13}
     - {program_id: 1, programrequirement_node_type: program, programrequirement_path: "000100010005",
       required_program_id: 4}
+    - {program_id: 1, programrequirement_node_type: operator, programrequirement_path: "000100010006"}
+    - {program_id: 1, programrequirement_node_type: program, programrequirement_path: "0001000100060001",
+      required_program_id: 5}
+    - {program_id: 1, programrequirement_node_type: program, programrequirement_path: "000100010007",
+      required_program_id: 2}
     - {program_id: 2, programrequirement_node_type: course, programrequirement_path: "000200010001",
       course_id: 12}
     - {program_id: 2, programrequirement_node_type: course, programrequirement_path: "000200010002",
@@ -801,19 +900,21 @@ unit_tests:
   expect:
     rows:
     - {readable_id: parent, child_resource_type: course, child_readable_id: course-11,
-      child_display_mode: null, child_position: 0}
+      child_display_mode: null, child_position: 0, child_program_order: null}
     - {readable_id: parent, child_resource_type: course, child_readable_id: course-14,
-      child_display_mode: null, child_position: 2}
+      child_display_mode: null, child_position: 2, child_program_order: null}
     - {readable_id: parent, child_resource_type: program, child_readable_id: as-course,
-      child_display_mode: course, child_position: 3}
+      child_display_mode: course, child_position: 3, child_program_order: 1}
     - {readable_id: parent, child_resource_type: course, child_readable_id: course-13,
-      child_display_mode: null, child_position: 4}
+      child_display_mode: null, child_position: 4, child_program_order: null}
     - {readable_id: parent, child_resource_type: program, child_readable_id: track,
-      child_display_mode: null, child_position: null}
+      child_display_mode: null, child_position: null, child_program_order: 0}
+    - {readable_id: parent, child_resource_type: program, child_readable_id: a-track,
+      child_display_mode: null, child_position: null, child_program_order: 2}
     - {readable_id: track, child_resource_type: course, child_readable_id: course-11,
-      child_display_mode: null, child_position: 1}
+      child_display_mode: null, child_position: 1, child_program_order: null}
     - {readable_id: track, child_resource_type: course, child_readable_id: course-14,
-      child_display_mode: null, child_position: 2}
+      child_display_mode: null, child_position: 2, child_program_order: null}
 
 - name: test_integrations__learn__mitxonline_courses_published_certification_and_numbers
   description: >
@@ -952,3 +1053,77 @@ unit_tests:
     - {readable_id: program-2, has_page: false, published: false, certification: false,
       prices: [0], start_date: "2019-01-01T00:00:00.000", has_catalog_page: false,
       about: null, what_you_learn: null, prerequisites: null, faqs: null}
+- name: test_integrations__learn__program_certificates_maps_edxorg_programs_to_mitxonline
+  description: >
+    A non-DEDP certificate has no MITx Online program id upstream, so it takes
+    the id of the MITx Online program its edX.org title maps to, per SDS track.
+    A DEDP certificate keeps the id it already has, and a title with no mapping
+    stays null.
+  model: integrations__learn__program_certificates
+  given:
+  - input: ref('int__micromasters__program_certificates')
+    rows:
+    - {program_certificate_hashed_id: scm, program_title: Supply Chain Management,
+      micromasters_program_id: 1, mitxonline_program_id: null, program_completion_timestamp: "2020-01-01T00:00:00.000"}
+    - {program_certificate_hashed_id: sds-methods, program_title: Statistics and Data
+        Science (Methods Track), micromasters_program_id: 4, mitxonline_program_id: null,
+      program_completion_timestamp: "2020-01-01T00:00:00.000"}
+    - {program_certificate_hashed_id: dedp, program_title: 'Data, Economics, and Design
+        of Policy: Public Policy', micromasters_program_id: null, mitxonline_program_id: 2,
+      program_completion_timestamp: "2024-01-01T00:00:00.000"}
+    - {program_certificate_hashed_id: unmapped, program_title: Statistics and Data
+        Science, micromasters_program_id: 4, mitxonline_program_id: null, program_completion_timestamp: null}
+  - input: ref('edxorg_to_mitxonline_program_mapping')
+    rows:
+    - {edxorg_program_title: Supply Chain Management, mitxonline_program_readable_id: program-v1:MITxT+SCM}
+    - {edxorg_program_title: Statistics and Data Science (Methods Track), mitxonline_program_readable_id: program-v1:MITxT+SDS-Methods-Track}
+    - {edxorg_program_title: 'Data, Economics, and Design of Policy: Public Policy',
+      mitxonline_program_readable_id: program-v1:MITx+Other}
+  - input: ref('int__mitxonline__programs')
+    rows:
+    - {program_id: 44, program_readable_id: program-v1:MITxT+SCM}
+    - {program_id: 46, program_readable_id: program-v1:MITxT+SDS-Methods-Track}
+    - {program_id: 99, program_readable_id: program-v1:MITx+Other}
+  expect:
+    rows:
+    - {record_hash: scm, mitxonline_program_id: 44}
+    - {record_hash: sds-methods, mitxonline_program_id: 46}
+    - {record_hash: dedp, mitxonline_program_id: 2}
+    - {record_hash: unmapped, mitxonline_program_id: null}
+
+- name: test_integrations__learn__xpro_runs_maps_the_course_platform_as_learn_does
+  description: >
+    platform_code is what MIT Learn's XPRO_PLATFORM_TRANSFORM gives the course's
+    platform name, matched exactly, and null for a name it does not map.
+  model: integrations__learn__xpro_runs
+  given:
+  - input: ref('int__mitxpro__catalog_course_runs')
+    rows:
+    - {course_id: 1, courserun_readable_id: run-xpro, courserun_is_unexpired: true,
+      product_id: 1, courserun_current_price: 100}
+    - {course_id: 2, courserun_readable_id: run-alumni, courserun_is_unexpired: true,
+      product_id: 2, courserun_current_price: 100}
+    - {course_id: 3, courserun_readable_id: run-lowercase, courserun_is_unexpired: true,
+      product_id: 3, courserun_current_price: 100}
+    - {course_id: 4, courserun_readable_id: run-no-platform, courserun_is_unexpired: true,
+      product_id: 4, courserun_current_price: 100}
+  - input: ref('stg__mitxpro__app__postgres__courses_course')
+    rows:
+    - {course_id: 1, course_readable_id: course-xpro}
+    - {course_id: 2, course_readable_id: course-alumni}
+    - {course_id: 3, course_readable_id: course-lowercase}
+    - {course_id: 4, course_readable_id: course-no-platform}
+  - input: ref('integrations__learn__xpro_courses')
+    rows:
+    - {readable_id: course-xpro, platform: xPRO}
+    - {readable_id: course-alumni, platform: Global Alumni}
+    - {readable_id: course-lowercase, platform: emeritus}
+    - {readable_id: course-no-platform, platform: null}
+  - input: ref('int__mitxpro__catalog_pages')
+    rows: []
+  expect:
+    rows:
+    - {run_id: run-xpro, platform_code: xpro}
+    - {run_id: run-alumni, platform_code: globalalumni}
+    - {run_id: run-lowercase, platform_code: null}
+    - {run_id: run-no-platform, platform_code: null}

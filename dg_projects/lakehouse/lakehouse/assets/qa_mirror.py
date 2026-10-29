@@ -11,23 +11,34 @@ so QA cannot read what it would be copying. The production role can read
 production and write QA, which keeps the copy flowing one way: production pushes
 an allowlisted subset out and QA never gets to read production.
 
-Refreshed only when someone materializes an asset. No schedule, partitions or
-AutomationCondition (QA_DATA_TOPOLOGY_SPEC.md §1): every refresh is another
-copy of production PII into QA, so each one should be attributable to a person.
-Staleness is caught by the qa_branch_contract check, which compares the copy's
-Iceberg snapshot time with the unit's mirror_max_age_days.
+Refreshed monthly by qa_mirror_monthly_schedule, and by hand whenever someone
+needs a newer copy (QA_DATA_TOPOLOGY_SPEC.md §1). Each asset also carries a
+check that renders and plans every table's copy against production without
+running it, scheduled daily, so a production column dropped or renamed out from
+under an allowlist fails within a day rather than at the next refresh (with the
+limits of EXPLAIN noted in _render). QA's
+qa_observation_drift fails on a copy older than its unit's mirror_max_age_days.
 """
 
 from typing import Any
 
 from dagster import (
+    AssetCheckExecutionContext,
+    AssetCheckResult,
+    AssetChecksDefinition,
     AssetExecutionContext,
     AssetKey,
     AssetsDefinition,
+    AssetSelection,
+    DefaultScheduleStatus,
     Failure,
     MaterializeResult,
     MetadataValue,
+    ScheduleDefinition,
     asset,
+    asset_check,
+    define_asset_job,
+    multiprocess_executor,
 )
 from ol_dbt_cli.lib.inventory import load_units
 from ol_dbt_cli.lib.qa_mirror import (
@@ -40,9 +51,13 @@ from ol_dbt_cli.lib.qa_mirror import (
 from lakehouse.lib.inventory import INVENTORY_DIR
 from lakehouse.resources.starrocks import StarRocksResource
 
+QA_MIRROR_REFRESH_MAX_CONCURRENT = 3
+
 
 def _render(
-    context: AssetExecutionContext, starrocks: StarRocksResource, table: MirrorTable
+    context: AssetExecutionContext | AssetCheckExecutionContext,
+    starrocks: StarRocksResource,
+    table: MirrorTable,
 ) -> MirrorStatement:
     # Every identifier here comes from the inventory, quoted by lib.qa_mirror.
     described = starrocks.fetch(f"DESCRIBE {table.source}")
@@ -95,15 +110,19 @@ def _copy(
     }
 
 
+def _asset_key(unit: str) -> AssetKey:
+    return AssetKey(["qa_mirror", *unit.split("/")])
+
+
 def _mirror_asset(unit: str, tables: list[MirrorTable]) -> AssetsDefinition:
     deployment, layer = unit.split("/")
 
     @asset(
-        key=AssetKey(["qa_mirror", deployment, layer]),
+        key=_asset_key(unit),
         group_name="qa_mirror",
         description=(
             f"Masked copy of {unit}'s production raw tables into the QA lake. "
-            "Materialize by hand; see RFC 12711 step 6."
+            "Refreshed monthly; see RFC 12711 step 6."
         ),
         kinds={"starrocks", "iceberg"},
         # Per unit, because the refresh is DROP-then-CTAS with no swap: two
@@ -140,6 +159,36 @@ def _mirror_asset(unit: str, tables: list[MirrorTable]) -> AssetsDefinition:
     return _mirror
 
 
+def _plan_check(unit: str, tables: list[MirrorTable]) -> AssetChecksDefinition:
+    @asset_check(
+        asset=_asset_key(unit),
+        name="copy_plans_against_production",
+        description=(
+            f"Render and EXPLAIN each of {unit}'s copies against production "
+            "without copying anything."
+        ),
+    )
+    def _plans(
+        context: AssetCheckExecutionContext, starrocks: StarRocksResource
+    ) -> AssetCheckResult:
+        # A declaration production no longer fits raises from _render rather
+        # than returning passed=False: the Sentry hook fires on a failed step,
+        # and a failed check result is only visible to someone looking at it.
+        statements = {
+            table.name: _render(context, starrocks, table) for table in tables
+        }
+        return AssetCheckResult(
+            passed=True,
+            metadata={
+                "dropped": MetadataValue.json(
+                    {name: statement.dropped for name, statement in statements.items()}
+                )
+            },
+        )
+
+    return _plans
+
+
 @asset(
     key=AssetKey(["qa_mirror", "inventory_missing"]),
     group_name="qa_mirror",
@@ -163,4 +212,68 @@ def build_qa_mirror_assets() -> list[AssetsDefinition]:
         return [qa_mirror_inventory_missing]
     return [
         _mirror_asset(unit, tables) for unit, tables in mirror_tables(units).items()
+    ]
+
+
+def build_qa_mirror_checks() -> list[AssetChecksDefinition]:
+    """One copy-planning check per asset :func:`build_qa_mirror_assets` builds."""
+    return [
+        _plan_check(unit, tables)
+        for unit, tables in mirror_tables(load_units(INVENTORY_DIR)).items()
+    ]
+
+
+def qa_mirror_refresh_schedules(
+    assets: list[AssetsDefinition],
+) -> list[ScheduleDefinition]:
+    """Build the monthly refresh of every qa_mirror asset, if there are any.
+
+    A missing inventory leaves only qa_mirror_inventory_missing, and this still
+    schedules it, so the refresh fails monthly naming the path. The refresh
+    plans every table itself before it drops anything, so it leaves the plan
+    checks to their own daily job.
+
+    The job names its executor rather than passing executor run config, because
+    that config's shape depends on the code location's executor: production's
+    default multi_or_in_process_executor rejects the bare ``max_concurrent``
+    k8s_job_executor takes.
+    """
+    if not assets:
+        return []
+    return [
+        ScheduleDefinition(
+            name="qa_mirror_monthly_schedule",
+            job=define_asset_job(
+                name="qa_mirror_monthly_job",
+                selection=AssetSelection.groups("qa_mirror").without_checks(),
+                # Keeps one run from putting every unit's production scan on
+                # StarRocks at once.
+                executor_def=multiprocess_executor.configured(
+                    {"max_concurrent": QA_MIRROR_REFRESH_MAX_CONCURRENT}
+                ),
+            ),
+            cron_schedule="0 6 1 * *",
+            execution_timezone="UTC",
+            default_status=DefaultScheduleStatus.RUNNING,
+        )
+    ]
+
+
+def qa_mirror_plan_schedules(
+    checks: list[AssetChecksDefinition],
+) -> list[ScheduleDefinition]:
+    """Build the daily run of every copy-planning check, if there are any."""
+    if not checks:
+        return []
+    return [
+        ScheduleDefinition(
+            name="qa_mirror_plan_daily_schedule",
+            job=define_asset_job(
+                name="qa_mirror_plan_daily_job",
+                selection=AssetSelection.checks(*checks),
+            ),
+            cron_schedule="0 11 * * *",
+            execution_timezone="UTC",
+            default_status=DefaultScheduleStatus.RUNNING,
+        )
     ]

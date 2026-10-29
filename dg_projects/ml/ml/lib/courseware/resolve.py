@@ -49,8 +49,10 @@ import polars as pl
 from anthropic import Anthropic, AnthropicBedrock, APIError
 from ml.lib.courseware.schemas import Strict
 from ml.lib.courseware.tracing import TRACE_TAGS, attach_call
-from ml.lib.embed import EmbeddingClient
-from ml.resources.opik_auth import traced
+from ml.lib.embed import resolve_embedding_model
+from ml.resources.opik_auth import OPIK_PROJECT_NAME, traced
+from ol_llm import Attribution, UseCase
+from ol_orchestrate.lib.embeddings.models import Embedder, OlLlmEmbedder
 from pydantic import ValidationError
 
 log = logging.getLogger(__name__)
@@ -60,6 +62,7 @@ RESOLVER_ID = "courseware_resolution_v2"
 ADJUDICATION_MODEL = "claude-haiku-5-5"
 BEDROCK_ADJUDICATION_MODEL = "us.anthropic.claude-haiku-5-5"
 EMBEDDING_DIM = 512
+EMBEDDING_MODEL = "bedrock:amazon.titan-embed-text-v2:0"
 # Candidates per new label from each blocker; the union goes to the model.
 EMBEDDING_NEIGHBOURS = 8
 LEXICAL_NEIGHBOURS = 4
@@ -280,10 +283,29 @@ def embedding_neighbours(
     return neighbours
 
 
+def label_embedder(run_id: str | None = None) -> OlLlmEmbedder:
+    """Return the ol-llm embedder for concept labels (Titan v2 at EMBEDDING_DIM).
+
+    :param run_id: the Dagster run, for the traces; None off the asset path
+    :rtype: OlLlmEmbedder
+    """
+    model = resolve_embedding_model(EMBEDDING_MODEL, dim=EMBEDDING_DIM)
+    return OlLlmEmbedder(
+        model.spec,
+        UseCase(
+            app=OPIK_PROJECT_NAME,
+            name="courseware-concept-embedding",
+            profile="batch",
+            model=model.model,
+        ),
+        Attribution(run_id=run_id),
+    )
+
+
 def embed_labels(
     labels: pl.DataFrame,
     cached: pl.DataFrame,
-    client: EmbeddingClient,
+    client: Embedder,
     max_workers: int = 16,
 ) -> tuple[np.ndarray, pl.DataFrame]:
     """Embed every label whose text changed since it was cached.
@@ -299,27 +321,34 @@ def embed_labels(
     checksums = {
         key: hashlib.sha256(text.encode()).hexdigest() for key, text in texts.items()
     }
+    model_id = client.spec.model_id
     known = {
         row["concept_label_key"]: row["embedding"]
-        for row in cached.filter(
-            pl.col("embedding_model_id") == client.model_version
-        ).iter_rows(named=True)
+        for row in cached.filter(pl.col("embedding_model_id") == model_id).iter_rows(
+            named=True
+        )
         if checksums.get(row["concept_label_key"]) == row["text_checksum"]
     }
     missing = [key for key in texts if key not in known]
+    # Titan embeds one text per request, so requests run in parallel slices.
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        batches = list(batched(missing, client.max_request_batch_size))
+        slices = list(batched(missing, client.spec.batch_size))
         results = pool.map(
-            lambda batch: client.embed_batch([texts[key] for key in batch]), batches
+            lambda keys: (
+                client.embed(
+                    [texts[key] for key in keys], input_type="document"
+                ).vectors
+            ),
+            slices,
         )
-        for batch, vectors in zip(batches, results, strict=True):
-            known.update(zip(batch, vectors, strict=True))
+        for keys, vectors in zip(slices, results, strict=True):
+            known.update(zip(keys, vectors, strict=True))
     new_rows = pl.DataFrame(
         [
             {
                 "concept_label_key": key,
                 "text_checksum": checksums[key],
-                "embedding_model_id": client.model_version,
+                "embedding_model_id": model_id,
                 "embedding": known[key],
             }
             for key in missing
@@ -533,7 +562,7 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
     labels: pl.DataFrame,
     state: ResolutionState,
     client: Anthropic | AnthropicBedrock,
-    embedding_client: EmbeddingClient,
+    embedding_client: Embedder,
     *,
     model_id: str,
     rebuild: bool = False,
@@ -816,7 +845,7 @@ def resolve_concepts(  # noqa: PLR0912, PLR0913, PLR0915, C901
                     "resolver_id": RESOLVER_ID,
                     "prompt_version": PROMPT_VERSION,
                     "model_id": model_id,
-                    "embedding_model_id": embedding_client.model_version,
+                    "embedding_model_id": embedding_client.spec.model_id,
                     "mode": "rebuild" if rebuild else "incremental",
                     "label_count": len(keys),
                     "resolved_label_count": len(pending),

@@ -7,7 +7,9 @@
 
     The concept lists name only concepts int__courseware__release_concepts would
     publish as learner-facing, by the same label, so every concept a course lists is
-    in the same release's concept list.
+    in the same release's concept list, and only relations an accepted claim
+    supports. The statement lists take only accepted claims. Accepting a concept
+    does not accept the claims naming it.
 
     context_document renders the same arrays as markdown, deterministically, so it can
     be embedded as a resource's search text (the embedding substrate's
@@ -40,6 +42,7 @@ with eligible_runs as (
 
 , run_bridge as (
     select * from {{ ref('bridge_courserun_concept') }}
+    where accepted_claim_count > 0
 )
 
 , concepts as (
@@ -49,7 +52,7 @@ with eligible_runs as (
 
 , claims as (
     select * from {{ ref('tfact_courseware_claim') }}
-    where is_current and is_verified
+    where is_current and is_verified and review_status = 'accepted'
 )
 
 -- the course's run with the newest extraction

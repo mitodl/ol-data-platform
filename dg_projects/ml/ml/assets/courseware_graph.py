@@ -17,12 +17,8 @@ from dagster import (
     multi_asset,
 )
 from ml.lib.courseware.graph import GRAPH_VERSION, compute_graph, previous_membership
-from ml.lib.courseware.warehouse import (
-    latest_run_rows,
-    read_table,
-    require_table,
-    warehouse_database,
-)
+from ml.lib.courseware.warehouse import latest_run_rows
+from ml.lib.warehouse import read_table, require_table, warehouse_database
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from pydantic import Field
 

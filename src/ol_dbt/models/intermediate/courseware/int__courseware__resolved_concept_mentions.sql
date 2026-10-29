@@ -26,6 +26,7 @@ select
     , mentions.concept_label_key
     , assignments.concept_id
     , mentions.prerequisite_kind
+    , mentions.review_status
 from mentions
 inner join assignments
     on mentions.concept_label_key = assignments.concept_label_key

@@ -36,7 +36,7 @@ from dagster import (
     asset,
     multi_asset,
 )
-from ml.lib.courseware.warehouse import read_table, require_table, warehouse_database
+from ml.lib.warehouse import read_table, require_table, warehouse_database
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.failures import permanent_failure
 from pydantic import Field

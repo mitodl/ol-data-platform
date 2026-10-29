@@ -5,7 +5,7 @@ models:
 - name: integrations__learn__resource_knowledge
   description: What each Learn course teaches, assesses and expects, from the published
     knowledge release (its most recently extracted source-eligible run, accepted concepts
-    only), with a deterministic markdown context document for embedding.
+    and claims only), with a deterministic markdown context document for embedding.
   config:
     meta:
       # It reads claims only the courseware extractor writes, which no QA run produces

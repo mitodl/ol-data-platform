@@ -7,7 +7,9 @@
     A concept is here when a reviewer accepted it, it is active, and the current
     claims of at least one source-eligible run name it. Its displayed label, kind
     and course counts come from eligible runs only, so a run under an ineligible
-    source changes nothing a learner sees. The description is the newest one written
+    source changes nothing a learner sees, and course counts come only from
+    relations an accepted claim supports (#3021's gate: accepting a concept does not
+    accept the claims naming it). The description is the newest one written
     under the prompt version courseware_description_approval approves; a concept
     with none yet has null description columns, and the release asset refuses a
     candidate that has any.
@@ -101,6 +103,7 @@ with concepts as (
         on
             bridge.platform = eligible_runs.platform
             and bridge.courserun_readable_id = eligible_runs.courserun_readable_id
+    where bridge.accepted_claim_count > 0
 )
 
 , course_runs as (

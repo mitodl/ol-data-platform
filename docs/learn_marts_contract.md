@@ -49,33 +49,32 @@ These columns are optional but recommended for most marts:
 
 ## Source-Specific Columns
 
-Each source may add additional columns following its needs. Common patterns include:
+Each source may add additional columns following its needs.
 
-### Course Sources (MIT edX)
+### MIT edX programs
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `platform` | string | Platform name (e.g., "ocw", "xpro") |
-| `topics` | string | Comma-separated topic labels (e.g., `"Engineering, Computer Science"`) |
-| `instructors` | string | Comma-separated instructor names |
-| `runs` | string | Semicolon-separated run records; each record is pipe-delimited: `readable_id\|start_on\|end_on\|is_live` |
-| `published` | boolean | Whether the resource is published/live |
-
-### Program Sources (MIT edX)
+`integrations__learn__mit_edx_programs` carries list-valued fields as arrays, not
+delimited strings. Beyond the required columns, the ones MIT Learn links on are:
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `courses` | string | Comma-separated list of course `readable_id` values belonging to this program |
-| `departments` | string | Comma-separated department names |
+| `course_readable_ids` | array(string) | The program's course keys in the programs API's order. MIT Learn links the ones it publishes |
+| `topics` | array(string) | MIT Learn topics the program's published courses' edX subjects resolve to through the topic crosswalk |
+
+The model's full column list is in `_integrations__learn__cohort2__schema.yml`.
 
 ### OCW
 
 `integrations__learn__ocw_courses` has one row per course in the OCW live bucket, read from
-the course's published `data.json`, which is what MIT Learn's OCW ETL reads. It does not
-follow the delimited-string columns above. A course has one run, so the run's fields are
-columns of the course. A course that leaves the bucket leaves the model. A directory left in
-the bucket by a site that ocw-studio now publishes under another path is not a course, and
-its files are not in `integrations__learn__ocw_content_files`.
+the course's published `data.json`, which is what MIT Learn's OCW ETL reads. A course has
+one run, so the run's fields are columns of the course. A course that leaves the bucket
+leaves the model. A directory left in the bucket by a site that ocw-studio now publishes
+under another path is not a course, and its files are not in
+`integrations__learn__ocw_content_files`. Neither is a course whose site ocw-studio has
+unpublished: it leaves the model on the first build after ocw-studio's database syncs,
+which can be before the bucket load's next daily sweep sees the directory gone, and also
+covers a removal that is pending or errored. It returns once a live publish is requested
+and the bucket load has read its data.json again.
 
 MIT Learn matches an OCW course on `url`, not `readable_id`; both are unique here.
 
@@ -112,8 +111,7 @@ stores for all 2,587 OCW courses on 2026-10-07.
 ### xPRO
 
 The three xPRO models carry what MIT Learn's xPRO ETL reads from xPRO's catalog API
-(`/api/courses/` and `/api/programs/`), with the API's own rules for what is listed. They
-do not follow the delimited-string columns above.
+(`/api/courses/` and `/api/programs/`), with the API's own rules for what is listed.
 
 `integrations__learn__xpro_courses` has one row per live course with a live CMS page,
 published or not. Beyond the required columns:
@@ -145,6 +143,7 @@ and MIT Learn unpublishes a run that is absent.
 | `price` | decimal | From the latest version of the run's product |
 | `instructors` | array(string) | Names on the course page's faculty page |
 | `published` | boolean | Whether `price` is above zero |
+| `platform_code` | string | MIT Learn's platform code for the course's `platform`, as `XPRO_PLATFORM_TRANSFORM` maps it (`emeritus`, `globalalumni`, `simplilearn`, `susskind`, `whu`, `xpro`). The run's resource's `platform.code`, which a content file's vector point key uses. Null for a platform Learn does not map: its loader skips such a course |
 
 `integrations__learn__xpro_programs` has one row per live program with a live CMS page and a
 product. It has the course columns above, plus `instructors` (array, the program
@@ -157,10 +156,10 @@ order), and the fields of the single run MIT Learn gives a program: `price`, `st
 
 The four MITx Online models carry what MIT Learn's MITx Online ETL
 (`learning_resources/etl/mitxonline.py`) reads from MITx Online's catalog API, with the
-API's rules for what is listed and the ETL's rules for what is published. They do not
-follow the delimited-string columns above. Courses come from `/api/internal/courses/`,
-which lists every course and every run and ignores `?live=true`; programs come from
-`/api/v2/programs/?live=true`, which leaves out B2B-only programs.
+API's rules for what is listed and the ETL's rules for what is published. Courses come
+from `/api/internal/courses/`, which lists every course and every run and ignores
+`?live=true`; programs come from `/api/v2/programs/?live=true`, which leaves out B2B-only
+programs.
 
 Neither catalog model has a `url`: MIT Learn points a MITx Online resource at its own site
 (`/courses/<readable_id>`, `/programs/<readable_id>`, or `/courses/p/<readable_id>` for a
@@ -230,6 +229,7 @@ the program's requirement tree:
 | `child_readable_id` | string | The child course or program |
 | `child_display_mode` | string | A child program's display mode; null for a course |
 | `child_position` | int | Zero-based place in the tree, in the order MIT Learn gives a program's courses. Null for a child program not shown as a course, whose courses are listed under the parent with positions of their own |
+| `child_program_order` | int | Zero-based place of a child program among the program's child programs, by its first node in the tree. MIT Learn's ETL lists child programs in this order and numbers the ones without a `child_position` after the program's other children in it. Null for a course |
 
 A course is listed only when its page is live, so positions have gaps. A required program is
 followed one level down: no required program requires another today.
@@ -314,6 +314,7 @@ pull filters and prunes on; see
 | `extraction_status` | string | `extracted`, or `failed` for a file whose text could not be read |
 | `published` | boolean | Always true |
 | `last_modified` | string | ISO 8601 time the file's text was extracted |
+| `release_date` | string | `ContentFile.release_date`, ISO 8601 UTC (`YYYY-MM-DDTHH:MM:SS.ffffffZ`): the latest OLX `start` on the path from the course down to the file, as Learn's `OlxArchive.release_dates` computes it. Null when undated. Learn hides a file until this date passes, so a future-dated row is present but not yet visible |
 
 `description`, `file_type`, `content_author`, `content_language`, `image_src` and
 `uid` are present and null, as Learn's Open edX ETL leaves them unset.
@@ -398,7 +399,7 @@ columns are described in
 1. All required columns must be `NOT NULL` in catalog models
 2. Content file models are exempt from the resource-level required columns; their non-null columns are `etl_source`, `run_readable_id` and `key`, plus `source_path` and `extraction_status` in `integrations__learn__content_files` and `url` and `content_type` in `integrations__learn__ocw_content_files`
 3. Media models are exempt from the resource-level required columns; their keys and non-null columns are in the table under Media Sources
-4. String-aggregated columns (`topics`, `instructors`, `runs`, `courses`) may be `NULL` when no data exists; consumers should treat `NULL` as empty
+4. Aggregated columns (`topics`, `instructors`, and `courses` in `integrations__learn__xpro_programs`) may be `NULL` when no data exists; consumers should treat `NULL` as empty. `topics` is an array except in `integrations__learn__podcasts`, `integrations__learn__podcast_episodes` and `integrations__learn__mit_climate_articles`, where it is a comma-separated string, as is `courses`
 5. Text columns (`description`, `url`, `image_url`) may be `NULL` when no data exists
 
 ## ETL Source Values
@@ -408,7 +409,7 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 - `ocw` - OCW courses
 - `mitxonline` - MITx Online courses
 - `xpro` - xPRO courses
-- `mit_edx` - MIT edX courses
+- `mit_edx` - MIT edX programs
 - `oll` - Open Learning Library
 - `canvas` - Canvas courses
 - `youtube` - YouTube videos
@@ -431,3 +432,7 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-15 | Tobias Macey | `integrations__learn__oll_courses` rebuilt on what MIT Learn's OLL ETL writes. OCW-offered rows are included under Learn's `{course_number}+{semester}_{year}` id, with `offered_by` `ocw` (else `mitx`); only Learn's `SKIP_OCW_COURSES` run is left out. Added `run_id`, `course_number`, `offered_by`, `level`, `instructors`, `year`, `semester`, `duration`, `min_weeks`, `max_weeks`, `time_commitment`, `min_weekly_hours` and `max_weekly_hours`; `topics` is an array of the sheet's MITx Online topics; `published` follows the sheet; `runs` is gone. |
 | 2026-10-16 | Tobias Macey | `courses_programrequirement` and `courses_program_departments` load by full refresh, so deleted tree nodes and departments leave `integrations__learn__mitxonline_program_children`, the programs' `departments` and `start_date`, and the courses' `certification_type`. No column changes. |
 | 2026-10-20 | Tobias Macey | Added `has_catalog_page`, `about`, `what_you_learn`, `prerequisites` and `faqs` to `integrations__learn__mitxonline_courses` and `integrations__learn__mitxonline_programs` for MIT Learn's `full_description`. |
+| 2026-10-22 | Tobias Macey | Drop MIT edX courses. MIT Learn's `mit_edx` courses are retired rather than moved to a warehouse pull, so no Learn Sync task reads them and `integrations__learn__mit_edx_courses` is gone along with the Course Sources (MIT edX) columns. `mit_edx` stays as the source of `integrations__learn__mit_edx_programs`. The MIT edX programs columns now name what the model has (`course_readable_ids` and `topics` arrays) rather than `courses` and `departments` strings, which it never had. |
+| 2026-10-22 | Tobias Macey | Added `child_program_order` to `integrations__learn__mitxonline_program_children`, so a Sync task can number child programs not shown as courses in requirement tree order, as MIT Learn's ETL does, and not by readable id. |
+| 2026-10-22 | Tobias Macey | Added `release_date` to `integrations__learn__content_files` for MIT Learn's `ContentFile.release_date` (mit-learn#4093). The file exclusions also follow mit-learn#4106: an asset name no longer matches a link that drops one of its separators. |
+| 2026-10-27 | Tobias Macey | Added `platform_code` to `integrations__learn__xpro_runs`, Learn's platform code for the run's course, so the content-file embedding chunks key an xPRO file's points under its course's platform and not always `xpro`. |

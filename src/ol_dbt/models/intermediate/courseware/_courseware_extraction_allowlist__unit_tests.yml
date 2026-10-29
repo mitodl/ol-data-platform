@@ -92,7 +92,11 @@ unit_tests:
         two.}
   - input: ref('int__ocw__live_courses')
     rows: []
-  - input: ref('int__ocw__content_files')
+  - input: ref('int__courseware__ocw_files')
+    rows: []
+  - input: ref('int__courseware__ocw_table_rows')
+    rows: []
+  - input: ref('int__courseware__ocw_resources')
     rows: []
   - input: ref('stg__ocw__s3__course_content')
     rows: []
@@ -132,7 +136,11 @@ unit_tests:
         two.}
   - input: ref('int__ocw__live_courses')
     rows: []
-  - input: ref('int__ocw__content_files')
+  - input: ref('int__courseware__ocw_files')
+    rows: []
+  - input: ref('int__courseware__ocw_table_rows')
+    rows: []
+  - input: ref('int__courseware__ocw_resources')
     rows: []
   - input: ref('stg__ocw__s3__course_content')
     rows: []

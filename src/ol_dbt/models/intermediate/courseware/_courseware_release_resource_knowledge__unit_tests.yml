@@ -1,0 +1,45 @@
+---
+unit_tests:
+- name: test_int__courseware__release_resource_knowledge_only_accepted_concepts_and_claims
+  description: >
+    A course's concept arrays list a concept only when it is accepted and an
+    accepted claim supports the relation, and its statement arrays list only
+    accepted claims. Accepting a concept does not accept the claims naming it, so
+    scikit-learn, accepted but taught only by proposed claims, is left out.
+  model: int__courseware__release_resource_knowledge
+  given:
+  - input: ref('int__courseware__source_eligibility')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", is_source_eligible: true}
+  - input: ref('dim_courseware_extraction')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", courserun_fk: r1,
+      extracted_at: "2026-10-17T00:00:00", is_current: true}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: r1, course_fk: c1, is_current: true}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: c1, course_readable_id: "course-v1:X+Y", course_title: Data Analysis,
+      is_current: true}
+  - input: ref('bridge_courserun_concept')
+    rows:
+    - {courserun_fk: r1, concept_fk: pandas, relation: teaches, claim_count: 2, accepted_claim_count: 1}
+    - {courserun_fk: r1, concept_fk: numpy, relation: teaches, claim_count: 5, accepted_claim_count: 5}
+    - {courserun_fk: r1, concept_fk: sklearn, relation: teaches, claim_count: 3, accepted_claim_count: 0}
+  # int__courseware__release_concepts holds accepted concepts only, so numpy
+  # (proposed) is not in it.
+  - input: ref('int__courseware__release_concepts')
+    rows:
+    - {concept_id: pandas, name: pandas, is_learner_facing: true}
+    - {concept_id: sklearn, name: scikit-learn, is_learner_facing: true}
+  - input: ref('tfact_courseware_claim')
+    rows:
+    - {courserun_fk: r1, claim_kind: skill, label: clean a data frame, is_current: true,
+      is_verified: true, review_status: accepted}
+    - {courserun_fk: r1, claim_kind: skill, label: plot a histogram, is_current: true,
+      is_verified: true, review_status: proposed}
+  expect:
+    rows:
+    - {etl_source: mitxonline, readable_id: "course-v1:X+Y", concepts_taught: [pandas],
+      skills: [clean a data frame]}

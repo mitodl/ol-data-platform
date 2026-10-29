@@ -30,8 +30,9 @@ unit_tests:
     Only accepted, active concepts that a source-eligible run names are released,
     and an ineligible run changes nothing about them: c1's label is the one the
     eligible run uses even though the residential run mentions another more often,
-    and its course counts leave the residential course out. c2 only a residential
-    run names, and c3 is still proposed, so neither is released.
+    and its course counts leave the residential course out, and course a2, whose
+    relation no accepted claim supports. c2 only a residential run names, c3 is
+    still proposed and c4 rejected, so none of them is released.
   model: int__courseware__release_concepts
   given:
   - input: ref('dim_concept')
@@ -39,9 +40,11 @@ unit_tests:
     - {concept_pk: c1, lifecycle_status: active, review_status: accepted}
     - {concept_pk: c2, lifecycle_status: active, review_status: accepted}
     - {concept_pk: c3, lifecycle_status: active, review_status: proposed}
+    - {concept_pk: c4, lifecycle_status: active, review_status: rejected}
   - input: ref('int__courseware__source_eligibility')
     rows:
     - {platform: mitxonline, courserun_readable_id: a1, is_source_eligible: true}
+    - {platform: mitxonline, courserun_readable_id: a2, is_source_eligible: true}
     - {platform: residential, courserun_readable_id: r1, is_source_eligible: false}
   - input: ref('int__courseware__resolved_concept_mentions')
     rows:
@@ -52,6 +55,7 @@ unit_tests:
       courserun_readable_id: r1}
     - {concept_id: c2, concept_label_key: lab kit, platform: residential, courserun_readable_id: r1}
     - {concept_id: c3, concept_label_key: pandas, platform: mitxonline, courserun_readable_id: a1}
+    - {concept_id: c4, concept_label_key: pandas, platform: mitxonline, courserun_readable_id: a1}
   - input: ref('int__courseware__concept_labels')
     rows:
     - {concept_label_key: auc, preferred_label: AUC, concept_kind: concept}
@@ -71,14 +75,17 @@ unit_tests:
   - input: ref('bridge_courserun_concept')
     rows:
     - {concept_fk: c1, platform: mitxonline, courserun_readable_id: a1, courserun_fk: ra,
-      relation: teaches}
+      relation: teaches, accepted_claim_count: 1}
+    - {concept_fk: c1, platform: mitxonline, courserun_readable_id: a2, courserun_fk: ra2,
+      relation: uses, accepted_claim_count: 0}
     - {concept_fk: c1, platform: residential, courserun_readable_id: r1, courserun_fk: rr,
-      relation: teaches}
+      relation: teaches, accepted_claim_count: 1}
     - {concept_fk: c2, platform: residential, courserun_readable_id: r1, courserun_fk: rr,
-      relation: uses}
+      relation: uses, accepted_claim_count: 1}
   - input: ref('dim_course_run')
     rows:
     - {courserun_pk: ra, course_fk: a, is_current: true}
+    - {courserun_pk: ra2, course_fk: a2, is_current: true}
     - {courserun_pk: rr, course_fk: r, is_current: true}
   expect:
     rows:
@@ -163,10 +170,11 @@ unit_tests:
       is_current: true}
   - input: ref('bridge_courserun_concept')
     rows:
-    - {courserun_fk: ra, concept_fk: c1, relation: teaches, claim_count: 2}
-    - {courserun_fk: ra, concept_fk: proposed, relation: teaches, claim_count: 5}
-    - {courserun_fk: ra, concept_fk: dataset, relation: uses, claim_count: 1}
-    - {courserun_fk: rb, concept_fk: c1, relation: teaches, claim_count: 2}
+    - {courserun_fk: ra, concept_fk: c1, relation: teaches, claim_count: 2, accepted_claim_count: 1}
+    - {courserun_fk: ra, concept_fk: proposed, relation: teaches, claim_count: 5,
+      accepted_claim_count: 1}
+    - {courserun_fk: ra, concept_fk: dataset, relation: uses, claim_count: 1, accepted_claim_count: 1}
+    - {courserun_fk: rb, concept_fk: c1, relation: teaches, claim_count: 2, accepted_claim_count: 1}
   - input: ref('int__courseware__release_concepts')
     rows:
     - {concept_id: c1, name: AUC, is_learner_facing: true}

@@ -38,12 +38,8 @@ from ml.lib.courseware.describe import (
     pending_concepts,
 )
 from ml.lib.courseware.extract import DEFAULT_EFFORT, Effort
-from ml.lib.courseware.warehouse import (
-    anthropic_client,
-    read_table,
-    require_table,
-    warehouse_database,
-)
+from ml.lib.courseware.warehouse import anthropic_client
+from ml.lib.warehouse import read_table, require_table, warehouse_database
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import publish_prompt_version
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes

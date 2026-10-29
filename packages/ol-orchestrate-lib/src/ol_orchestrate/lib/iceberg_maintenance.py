@@ -31,7 +31,7 @@ The Airbyte layer cannot use the Dagster event log for timing because
 ``OLAirbyteTranslator`` prefixes asset keys with ``ol_warehouse_raw_data`` and
 sluggifies connection names — there is no reliable programmatic mapping from
 those asset keys back to Glue table names like
-``raw__mitxonline__openedx__api__course_blocks``.  The Iceberg snapshot
+``raw__mitxonline__openedx__tracking_logs``.  The Iceberg snapshot
 timestamp is more accurate anyway: it records exactly when Airbyte last
 committed data.
 """

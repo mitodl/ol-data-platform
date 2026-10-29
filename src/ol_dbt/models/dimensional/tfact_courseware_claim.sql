@@ -1,5 +1,7 @@
 -- One row per extracted claim, as the model stated it. Labels and descriptions are
--- never edited here; concept_fk is the only resolved column.
+-- never edited here; concept_fk is the only resolved column. Every claim is
+-- 'proposed' until a reviewer accepts or rejects it; accepting the concept a claim
+-- names does not accept the claim.
 with claims as (
     select * from {{ ref('int__courseware__claims') }}
 )
@@ -39,6 +41,7 @@ select
     , claims.verified_evidence_count
     , claims.is_verified
     , claims.is_current
+    , claims.review_status
     , claims.extracted_at
 from claims
 inner join extractions
