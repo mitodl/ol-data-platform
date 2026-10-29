@@ -172,7 +172,7 @@ unit_tests:
     rows:
     - {platform: mitxonline, courserun_readable_id: run, scope_id: s1, concept_label_key: random
         module, concept_id: survivor}
-  - input: ref('int__courseware__claims')
+  - input: ref('int__courseware__extractions')
     rows:
     - {platform: mitxonline, courserun_readable_id: run, scope_id: s1, is_current: true}
   - input: ref('int__courseware__cited_concept_sources')
@@ -209,7 +209,7 @@ unit_tests:
     rows: []
   - input: ref('int__courseware__resolved_concept_mentions')
     rows: []
-  - input: ref('int__courseware__claims')
+  - input: ref('int__courseware__extractions')
     rows: []
   - input: ref('int__courseware__cited_concept_sources')
     rows: []
@@ -290,3 +290,85 @@ unit_tests:
   expect:
     rows:
     - {courserun_readable_id: run, concept_id: csv, tagged_concept_id: b_csv, sense_status: course_sense}
+
+- name: test_int__courseware__concept_tags_falls_back_to_another_label_only_when_it_is_unambiguous
+  description: >
+    The os run never used "kernel" but named both of its senses under other labels
+    ("operating system kernel" and "kernel function"), so neither candidate is
+    resolved. The ml run's sense of "kernel" is ml-kernel, which this tagging run
+    has no candidate for; naming os-kernel under another label does not override
+    that, so the os-kernel tag stays a candidate.
+  model: int__courseware__concept_tags
+  given:
+  - input: source('courseware_intermediate', 'courseware_concept_mention')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, source_ref: b1,
+      pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, source_ref: b1,
+      pattern_key: kernel, concept_id: svm-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, source_ref: b2,
+      pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+  - input: ref('int__courseware__concept_tagging_aliases')
+    rows:
+    - {tagging_run_id: r1, pattern_key: kernel, concept_id: os-kernel, tagged_concept_id: os-kernel,
+      concept_label_key: kernel}
+    - {tagging_run_id: r1, pattern_key: kernel, concept_id: svm-kernel, tagged_concept_id: svm-kernel,
+      concept_label_key: kernel}
+  - input: ref('int__courseware__concept_sense_assignments')
+    rows:
+    - {concept_label_key: operating system kernel, platform: mitxonline, courserun_readable_id: os,
+      concept_id: os-kernel, sense_status: assigned}
+    - {concept_label_key: kernel function, platform: mitxonline, courserun_readable_id: os,
+      concept_id: svm-kernel, sense_status: assigned}
+    - {concept_label_key: kernel, platform: mitxonline, courserun_readable_id: ml,
+      concept_id: ml-kernel, sense_status: assigned}
+    - {concept_label_key: operating system kernel, platform: mitxonline, courserun_readable_id: ml,
+      concept_id: os-kernel, sense_status: assigned}
+  expect:
+    rows:
+    - {courserun_readable_id: os, concept_id: os-kernel, sense_status: candidate}
+    - {courserun_readable_id: os, concept_id: svm-kernel, sense_status: candidate}
+    - {courserun_readable_id: ml, concept_id: os-kernel, sense_status: candidate}
+
+- name: test_int__courseware__concept_tagging_fan_out_compares_a_scope_with_no_claims
+  description: >
+    Scope s2's current extraction found no claims. Its tagged source is still
+    compared, as a disagreement, so it lowers both agreement rates instead of
+    leaving the denominators. An extraction that is no longer current compares
+    nothing.
+  model: int__courseware__concept_tagging_fan_out
+  given:
+  - input: ref('int__courseware__concept_tags')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: pandas, concept_id: pandas, tagged_concept_id: pandas}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s2,
+      source_ref: b2, pattern_key: pandas, concept_id: pandas, tagged_concept_id: pandas}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s3,
+      source_ref: b3, pattern_key: pandas, concept_id: pandas, tagged_concept_id: pandas}
+  - input: ref('int__courseware__concept_tagging_aliases')
+    rows:
+    - {tagging_run_id: r1, pattern_key: pandas, concept_id: pandas, tagged_concept_id: pandas,
+      concept_label_key: pandas, variant: label, surface: pandas, match_mode: caseless,
+      is_short: false, is_qualified: false, is_single_word: true, has_multiple_concepts: false,
+      is_ambiguous: false}
+  - input: ref('int__courseware__concept_assignments')
+    rows:
+    - {concept_label_key: pandas, concept_id: pandas}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s1, concept_label_key: pandas,
+      concept_id: pandas}
+  - input: ref('int__courseware__extractions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s1, is_current: true}
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s2, is_current: true}
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s3, is_current: false}
+  - input: ref('int__courseware__cited_concept_sources')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s1, source_ref: b1,
+      concept_id: pandas}
+  expect:
+    rows:
+    - {pattern_key: pandas, concept_id: pandas, tagged_source_count: 3, compared_source_count: 2,
+      source_agreement_rate: 0.5, scope_agreement_rate: 0.5}

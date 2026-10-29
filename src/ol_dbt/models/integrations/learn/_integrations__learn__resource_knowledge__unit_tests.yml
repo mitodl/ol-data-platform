@@ -21,9 +21,12 @@ unit_tests:
       passes_support_rule: true}
   - input: ref('dim_concept')
     rows:
-    - {concept_pk: pandas, preferred_label: pandas, review_status: accepted}
-    - {concept_pk: numpy, preferred_label: numpy, review_status: proposed}
-    - {concept_pk: sklearn, preferred_label: scikit-learn, review_status: accepted}
+    - {concept_pk: pandas, preferred_label: pandas, review_status: accepted, lifecycle_status: active,
+      is_learner_facing: true, label_count: 1}
+    - {concept_pk: numpy, preferred_label: numpy, review_status: proposed, lifecycle_status: active,
+      is_learner_facing: true, label_count: 1}
+    - {concept_pk: sklearn, preferred_label: scikit-learn, review_status: accepted,
+      lifecycle_status: active, is_learner_facing: true, label_count: 1}
   - input: ref('tfact_courseware_claim')
     rows:
     - {courserun_fk: r1, claim_kind: skill, label: clean a data frame, is_current: true,
