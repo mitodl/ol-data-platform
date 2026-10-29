@@ -9,7 +9,8 @@
     course uses, in integrations__learn__resource_concepts, not as label arrays here.
 
     Only accepted concepts and accepted claims are published: a concept appears in a
-    course's document only when it is accepted and an accepted claim supports the
+    course's document only when integrations__learn__concepts publishes it (accepted,
+    active, learner-facing, with current labels) and an accepted claim supports the
     relation, since accepting a concept does not accept the claims naming it.
     Proposed rows stay in dim_concept, bridge_courserun_concept and
     tfact_courseware_claim for review. No review workflow exists
