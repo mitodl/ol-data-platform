@@ -4,6 +4,7 @@ import httpx2
 import polars as pl
 import pytest
 from ml.lib.courseware import extract, local, scopes
+from ml.lib.courseware.describe import _concept_inputs
 from ml.lib.courseware.extract import (
     CLAIM_SCHEMA,
     EVIDENCE_SCHEMA,
@@ -189,6 +190,25 @@ def test_claim_rows_use_statement_as_label():
         "k-means clustering",
         "taught",
     )
+
+
+def test_describe_inputs_group_by_concept_and_checksum_inputs():
+    rows = pl.DataFrame(
+        {
+            "concept_id": ["auc", "auc", "pandas"],
+            "label": ["AUC", "area under the ROC curve (AUC)", "pandas"],
+            "concept_kind": ["concept", None, "tool"],
+            "description": ["Ranks models.", "Summarizes ROC.", "Loads CSVs."],
+            "course_title": ["Course A", "Course B", "Course A"],
+            "context_rank": [1, 2, 1],
+        }
+    )
+    first, second = _concept_inputs(rows)
+    assert first["labels"] == ["AUC", "area under the ROC curve (AUC)"]
+    assert first["notes"] == ["Course A: Ranks models.", "Course B: Summarizes ROC."]
+    assert second["kind"] == "tool"
+    changed = _concept_inputs(rows.with_columns(pl.lit("Other.").alias("description")))
+    assert changed[0]["input_checksum"] != first["input_checksum"]
 
 
 def test_extraction_ignores_extra_keys_the_model_adds():

@@ -1,0 +1,44 @@
+---
+unit_tests:
+- name: test_integrations__learn__concepts_leaves_out_concepts_with_no_current_labels
+  description: >
+    Resolution keeps a concept active, with its labels assigned, after every claim
+    naming it is gone, so the label gets the same id back if it returns. Such a
+    concept has label_count 0 and is not shown to learners.
+  model: integrations__learn__concepts
+  given:
+  - input: ref('dim_concept')
+    rows:
+    - {concept_pk: kept, preferred_label: pandas, lifecycle_status: active, is_learner_facing: true,
+      label_count: 1, review_status: accepted}
+    - {concept_pk: dropped, preferred_label: bluebikes, lifecycle_status: active,
+      is_learner_facing: true, label_count: 0, review_status: accepted}
+  - input: ref('bridge_courserun_concept')
+    rows: []
+  - input: ref('dim_course_run')
+    rows: []
+  expect:
+    rows:
+    - {concept_id: kept, name: pandas}
+
+- name: test_integrations__learn__concepts_publishes_only_accepted_concepts
+  description: >
+    Proposed and rejected concepts are review-only. They stay in dim_concept and
+    never reach Learn; only an accepted concept is published.
+  model: integrations__learn__concepts
+  given:
+  - input: ref('dim_concept')
+    rows:
+    - {concept_pk: accepted, preferred_label: pandas, lifecycle_status: active, is_learner_facing: true,
+      label_count: 1, review_status: accepted}
+    - {concept_pk: proposed, preferred_label: numpy, lifecycle_status: active, is_learner_facing: true,
+      label_count: 1, review_status: proposed}
+    - {concept_pk: rejected, preferred_label: notebook cell, lifecycle_status: active,
+      is_learner_facing: true, label_count: 1, review_status: rejected}
+  - input: ref('bridge_courserun_concept')
+    rows: []
+  - input: ref('dim_course_run')
+    rows: []
+  expect:
+    rows:
+    - {concept_id: accepted, name: pandas, review_status: accepted}

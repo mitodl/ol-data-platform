@@ -1,0 +1,82 @@
+---
+version: 2
+
+models:
+- name: integrations__learn__resource_knowledge
+  description: What each Learn course teaches, assesses and expects, from its most
+    recently extracted run, with a deterministic markdown context document for embedding.
+    Only accepted concepts and claims are included.
+  config:
+    meta:
+      # It reads claims only the courseware extractor writes, which no QA run produces
+      # until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: etl_source
+    description: str, Learn's etl_source for the course (mitxonline, xpro)
+    tests:
+    - not_null
+  - name: readable_id
+    description: str, the course readable_id as Learn keys it
+    tests:
+    - not_null
+  - name: extracted_courserun_readable_id
+    description: str, the run the knowledge was extracted from
+  - name: course_title
+    description: str, the course's title
+  - name: concepts_taught
+    description: array of str, labels of concepts the run teaches, most claimed first
+  - name: concepts_reviewed
+    description: array of str, labels of concepts the run reviews
+  - name: concepts_used
+    description: array of str, labels of concepts the run uses without teaching
+  - name: concepts_assessed
+    description: array of str, labels of concepts the run's assessments name
+  - name: prerequisites_declared
+    description: array of str, labels of prerequisites the course material states
+  - name: prerequisites_inferred
+    description: array of str, labels of concepts the run relies on before or without
+      teaching them
+  - name: skills
+    description: array of str, skill statements
+  - name: learning_outcomes
+    description: array of str, stated learning outcomes
+  - name: audience
+    description: array of str, who the material says the course is for
+  - name: context_document
+    description: str, markdown rendered from the arrays in this row
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [etl_source, readable_id]
+
+- name: integrations__learn__concepts
+  description: Learner-facing concepts with their descriptions and course counts,
+    for concept chips, tooltips and concept pages in Learn. Only accepted concepts
+    are included.
+  config:
+    meta:
+      # Same as integrations__learn__resource_knowledge: no QA form until the Dagster
+      # assets exist.
+      qa_buildable: false
+  columns:
+  - name: concept_id
+    description: str, dim_concept.concept_pk
+    tests:
+    - unique
+    - not_null
+  - name: name
+    description: str, the concept's preferred label
+  - name: concept_kind
+    description: str, concept, method, tool or application
+  - name: short_description
+    description: str, at most 12 words
+  - name: description
+    description: str, one or two course-agnostic sentences
+  - name: review_status
+    description: str, always accepted
+  - name: description_model_id
+    description: str, the model that wrote the descriptions
+  - name: teaching_course_count
+    description: int, courses whose extracted run teaches the concept
+  - name: course_count
+    description: int, courses whose extracted run relates to the concept in any way

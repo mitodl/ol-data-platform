@@ -27,6 +27,7 @@ dependencies = [
     # Gemini embeddings on the Gemini API or Vertex AI.
     "ol-llm[anthropic,bedrock,google,openai]==0.0.5",
     "azure-identity>=1.25.3",
+    "networkit>=11.2",
 ]
 
 [project.entry-points]

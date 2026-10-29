@@ -84,7 +84,7 @@ models:
 - name: tfact_courseware_claim
   description: One row per extracted claim (concept, skill, assumed knowledge, assessment
     expectation, learning outcome, declared prerequisite, audience), as the model
-    stated it, with its evidence counts.
+    stated it, with its evidence counts and resolved concept.
   config:
     meta:
       # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
@@ -109,6 +109,9 @@ models:
   - name: scope_block_fk
     description: str, dim_course_content.content_block_pk of the sequential; null
       for the context and materials scopes
+  - name: concept_fk
+    description: str, dim_concept.concept_pk for concept, assumed knowledge and declared
+      prerequisite claims
   - name: platform
     description: str, mitxonline, mitxpro or residential
   - name: courserun_readable_id
@@ -157,6 +160,12 @@ models:
   - name: is_current
     description: boolean, whether the claim's extraction is the one its scope part
       is read from now (int__courseware__extractions)
+  - name: review_status
+    description: str, proposed, accepted or rejected. Only accepted claims reach learner-facing
+      views; every claim is proposed until review exists.
+    tests:
+    - accepted_values:
+        values: [proposed, accepted, rejected]
   - name: extracted_at
     description: timestamp, when the extraction returned
 
@@ -204,3 +213,320 @@ models:
     description: int, offset of an exact or fuzzy match in the source text
   - name: char_end
     description: int, end offset of an exact or fuzzy match in the source text
+
+- name: dim_concept
+  description: Every concept id the resolver has minted, active or retired, with its
+    display label, descriptions and lifecycle. review_status is 'proposed' until reviewed.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: concept_pk
+    description: str, opaque UUID minted once by the resolver; never derived from
+      a label
+    tests:
+    - unique
+    - not_null
+  - name: preferred_label
+    description: str, the most-mentioned member label, chosen at read time; the minted
+      label for retired concepts
+  - name: concept_kind
+    description: str, concept, method, tool, dataset or application, from the preferred
+      member label
+  - name: short_description
+    description: str, learner-facing phrase of at most 12 words, from the concept
+      describer
+  - name: description
+    description: str, learner-facing, course-agnostic description of one or two sentences
+  - name: is_learner_facing
+    description: boolean, false for datasets, single exercises and course-internal
+      labels; null until described
+  - name: description_model_id
+    description: str, the model that wrote the descriptions
+  - name: described_at
+    description: timestamp, when the descriptions were written
+  - name: extracted_description
+    description: str, one claim's description of how a scope treats the concept (course-specific
+      evidence, not for display)
+  - name: lifecycle_status
+    description: str, active, merged or deprecated
+    tests:
+    - accepted_values:
+        values: [active, merged, deprecated]
+  - name: merged_into_concept_fk
+    description: str, for a merged concept, the active concept it redirects to
+    tests:
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
+  - name: review_status
+    description: str, proposed, accepted or rejected. Only accepted concepts reach
+      learner-facing views; every concept is proposed until review exists.
+    tests:
+    - accepted_values:
+        values: [proposed, accepted, rejected]
+  - name: wikidata_qid
+    description: str, the concept's Wikidata item; null until concept-level linking
+      exists
+  - name: minted_label
+    description: str, the label the concept was minted under
+  - name: minted_run_id
+    description: str, the resolution run that minted the id
+  - name: minted_at
+    description: timestamp, when the id was minted
+  - name: label_count
+    description: int, normalized labels assigned to the concept
+  - name: mention_count
+    description: int, mentions across those labels
+  - name: courserun_count
+    description: int, distinct course runs that mention the concept
+  - name: taught_mention_count
+    description: int, mentions with teaching_status taught or reviewed
+
+- name: dim_concept_alias
+  description: Every normalized label a concept was extracted under.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: concept_alias_pk
+    description: str, surrogate key of the label key
+    tests:
+    - unique
+    - not_null
+  - name: concept_fk
+    description: str, dim_concept.concept_pk
+    tests:
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
+  - name: concept_label_key
+    description: str, the normalized label key
+  - name: alias
+    description: str, the label's most used surface form
+  - name: mention_count
+    description: int, mentions of the label
+  - name: courserun_count
+    description: int, distinct course runs that mention the label
+  - name: assignment_source
+    description: str, carried, exact_match, minted or rebuild_carried
+  - name: assigned_run_id
+    description: str, the resolution run that first assigned the label to the concept
+
+- name: bridge_concept_relation
+  description: Concept-to-concept edges with their accumulated evidence, one row per
+    (from, to, relation). Hierarchy (broader), sequence (builds_on), practice (practiced_with),
+    equivalence (close) and association (complements, related).
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: concept_relation_pk
+    description: str, surrogate key of (from, to, relation)
+    tests:
+    - unique
+    - not_null
+  - name: from_concept_fk
+    description: str, the narrower concept for broader, the dependent concept for
+      builds_on and practiced_with, the lower id otherwise
+    tests:
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
+  - name: to_concept_fk
+    description: str, the broader concept, the concept or tool built on, or the higher
+      id
+    tests:
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
+  - name: relation
+    description: str, the relation
+    tests:
+    - accepted_values:
+        values: [broader, builds_on, practiced_with, close, complements, related]
+  - name: relation_family
+    description: str, hierarchy, sequence, practice, equivalence or association
+  - name: courserun_support
+    description: int, distinct course runs with course evidence for the edge
+  - name: scope_support
+    description: int, units across those runs that showed the edge
+  - name: reverse_courserun_support
+    description: int, builds_on only, course runs showing the opposite direction
+  - name: direction_consistency
+    description: float, builds_on only, support / (support + reverse support)
+  - name: co_taught_lift
+    description: float, complements only, co-taught unit count over the count expected
+      by chance
+  - name: is_adjudicated
+    description: boolean, whether resolution adjudication proposed the edge
+  - name: has_sequence_evidence
+    description: boolean, whether course sequence showed the edge
+  - name: has_co_taught_evidence
+    description: boolean, whether co-taught units showed the edge
+  - name: has_co_assessed_evidence
+    description: boolean, whether co-assessed items showed the edge
+  - name: first_observed_at
+    description: timestamp, the earliest evidence for the edge
+  - name: last_observed_at
+    description: timestamp, the latest evidence for the edge
+  - name: review_status
+    description: str, proposed, accepted or rejected
+
+- name: dim_concept_community
+  description: Neighbourhoods of related concepts from the newest graph run, with
+    ids carried forward across runs by member overlap.
+  columns:
+  - name: community_pk
+    description: str, UUID minted when the community first appeared
+    tests:
+    - unique
+    - not_null
+  - name: concept_count
+    description: int, concepts in the community
+  - name: top_concepts_json
+    description: str, JSON list of the five member labels with the highest weighted
+      degree
+  - name: first_seen_run_id
+    description: str, the graph run the community first appeared in
+  - name: graph_run_id
+    description: str, the graph run these rows come from
+
+- name: afact_concept_graph_position
+  description: Each active concept's community, connectivity, foundation rank, sequence
+    level, hierarchy depth and cycle membership in the newest graph run.
+  columns:
+  - name: concept_fk
+    description: str, dim_concept.concept_pk
+    tests:
+    - unique
+    - not_null
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
+  - name: community_fk
+    description: str, dim_concept_community.community_pk
+    tests:
+    - relationships:
+        to: ref('dim_concept_community')
+        field: community_pk
+  - name: component_index
+    description: int, the concept's connected component in the association graph,
+      valid within one graph run
+  - name: degree
+    description: int, edges on the concept in the association graph
+  - name: weighted_degree
+    description: float, sum of those edges' weights
+  - name: foundation_rank
+    description: float, PageRank over builds_on toward foundations
+  - name: sequence_level
+    description: int, longest chain of concepts beneath this one in builds_on
+  - name: hierarchy_depth
+    description: int, longest chain of broader concepts above this one
+  - name: in_sequence_cycle
+    description: boolean, whether the concept is on a builds_on cycle (a data-quality
+      finding)
+  - name: in_hierarchy_cycle
+    description: boolean, whether the concept is on a broader cycle (a data-quality
+      finding)
+  - name: graph_run_id
+    description: str, the graph run these rows come from
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [concept_fk, graph_run_id]
+
+- name: afact_concept_graph_run
+  description: One row per concept graph run, for tracking size, sparsity, connectivity,
+    community structure and cycles over time.
+  columns:
+  - name: concept_graph_run_pk
+    description: str, the graph run's UUID
+    tests:
+    - unique
+    - not_null
+  - name: graph_version
+    description: str, the graph computation's version
+  - name: computed_at
+    description: timestamp, when the run computed
+  - name: input_checksum
+    description: str, sha256 of the nodes, selected edges and parameters
+  - name: parameters_json
+    description: str, the thresholds and weights the run used
+  - name: node_count
+    description: int, active concepts in the graph
+  - name: edge_count
+    description: int, edges kept after thresholds
+  - name: edges_by_relation_json
+    description: str, JSON object of kept edge counts by relation
+  - name: density
+    description: float, density of the association graph
+  - name: sparsity
+    description: float, 1 - density of the association graph
+  - name: average_degree
+    description: float, 2 * edges / nodes
+  - name: component_count
+    description: int, connected components of the association graph
+  - name: largest_component_share
+    description: float, share of nodes in the largest component
+  - name: isolate_count
+    description: int, concepts with no kept edges
+  - name: community_count
+    description: int, Leiden communities
+  - name: modularity
+    description: float, modularity of the Leiden partition
+  - name: sequence_cycle_node_count
+    description: int, concepts on builds_on cycles
+  - name: hierarchy_cycle_node_count
+    description: int, concepts on broader cycles
+
+- name: bridge_courserun_concept
+  description: How a course run relates to a concept (teaches, reviews, uses, mentions,
+    assesses, requires), from current verified claims; requires is declared or inferred
+    by the prerequisite rule.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: courserun_concept_pk
+    description: str, surrogate key of (platform, run, concept, relation, requirement_source)
+    tests:
+    - unique
+    - not_null
+  - name: courserun_fk
+    description: str, dim_course_run.courserun_pk
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: concept_fk
+    description: str, dim_concept.concept_pk
+    tests:
+    - relationships:
+        to: ref('dim_concept')
+        field: concept_pk
+  - name: relation
+    description: str, the relation
+    tests:
+    - accepted_values:
+        values: [teaches, reviews, uses, mentions, assesses, requires, requires_concurrently,
+          recommends]
+  - name: requirement_source
+    description: str, declared or inferred for requires, declared for requires_concurrently
+      (a stated corequisite) and recommends (stated recommended background); null
+      otherwise. A statement that a run has no prerequisites gives no row
+  - name: first_scope_position
+    description: int, the earliest scope with the relation; for inferred requires,
+      the first scope that relies on the concept
+  - name: claim_count
+    description: int, claims behind the relation, each counted once however many of
+      its labels name the concept
+  - name: accepted_claim_count
+    description: int, accepted claims behind the relation; for an inferred requires,
+      only those made before any scope teaches the concept. Learner-facing views take
+      only relations with at least one
+  - name: scope_count
+    description: int, distinct scopes behind the relation

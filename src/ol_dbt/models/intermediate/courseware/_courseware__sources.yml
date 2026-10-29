@@ -160,6 +160,170 @@ sources:
       description: int, offset of an exact or fuzzy match in the source text
     - name: char_end
       description: int, end offset of an exact or fuzzy match in the source text
+  # Concept identity (ml.lib.courseware.resolve). Registry, assignment and relation
+  # rows are full snapshots per resolution run; the newest run in
+  # courseware_resolution_run is current, and earlier runs are history.
+  - name: courseware_resolution_run
+    description: One row per resolution run, with its mode, models and churn counts.
+    columns:
+    - name: resolution_run_id
+      description: str, UUID of the run
+      tests:
+      - unique
+      - not_null
+    - name: resolver_id
+      description: str, the resolver version, e.g. courseware_resolution_v2
+    - name: prompt_version
+      description: str, hash of the adjudication prompt and schema
+    - name: model_id
+      description: str, the adjudication model
+    - name: embedding_model_id
+      description: str, the blocking embedding model
+    - name: mode
+      description: str, incremental (only unassigned labels) or rebuild
+    - name: label_count
+      description: int, labels in the run's input
+    - name: resolved_label_count
+      description: int, labels the run adjudicated
+    - name: adjudication_calls
+      description: int, model calls made
+    - name: concepts_minted
+      description: int, new concept ids
+    - name: concepts_merged
+      description: int, concepts retired into a survivor
+    - name: concepts_deprecated
+      description: int, concepts retired with no successor
+    - name: concepts_carried_forward
+      description: int, ids a rebuild kept by member overlap
+    - name: rejected_components
+      description: int, exact-match components not merged because they were too large
+        or contained a distinct verdict
+    - name: started_at
+      description: timestamp, when the run started
+  - name: courseware_concept_registry
+    description: Every concept id ever minted, per resolution run.
+    columns:
+    - name: resolution_run_id
+      description: str, the run this snapshot row belongs to
+    - name: concept_id
+      description: str, opaque UUID minted once and never reused
+    - name: concept_status
+      description: str, active, merged or deprecated
+    - name: merged_into_concept_id
+      description: str, the active survivor a merged concept redirects to
+    - name: minted_label
+      description: str, the label the concept was minted under (display labels are
+        chosen downstream)
+    - name: minted_run_id
+      description: str, the run that minted the id
+    - name: minted_at
+      description: timestamp, when the id was minted
+  - name: courseware_concept_assignment
+    description: Which concept each normalized label belongs to, per resolution run.
+    columns:
+    - name: resolution_run_id
+      description: str, the run this snapshot row belongs to
+    - name: concept_label_key
+      description: str, the normalized label key
+    - name: concept_id
+      description: str, the active concept the label belongs to
+    - name: assignment_source
+      description: str, carried, exact_match, minted or rebuild_carried
+    - name: assigned_run_id
+      description: str, the run that first made this assignment
+  - name: courseware_concept_relation
+    description: Concept-to-concept relations proposed by adjudication, per run, carried
+      forward and redirect-resolved.
+    columns:
+    - name: resolution_run_id
+      description: str, the run this snapshot row belongs to
+    - name: from_concept_id
+      description: str, the narrower concept for broader; the lower id otherwise
+    - name: to_concept_id
+      description: str, the broader concept for broader; the higher id otherwise
+    - name: relation
+      description: str, broader, close or related
+    - name: proposed_run_id
+      description: str, the run that first proposed the relation
+  - name: courseware_resolution_decision
+    description: Every adjudication verdict, append-only, for review and evaluation.
+    columns:
+    - name: resolution_run_id
+      description: str, the run that made the decision
+    - name: query_label_key
+      description: str, the label being resolved
+    - name: candidate_label_key
+      description: str, the candidate it was compared with
+    - name: verdict
+      description: str, exact, close, broader, narrower, related or distinct, of the
+        query relative to the candidate
+    - name: model_id
+      description: str, the adjudication model
+  # Concept graph topology (ml.lib.courseware.graph), one set of rows per graph run.
+  - name: courseware_concept_graph_run
+    description: One row per graph run with the graph's size, density, sparsity, components,
+      communities, modularity and cycle counts.
+    columns:
+    - name: graph_run_id
+      description: str, UUID of the run
+      tests:
+      - unique
+      - not_null
+    - name: computed_at
+      description: timestamp, when the run computed
+    - name: input_checksum
+      description: str, sha256 of the nodes, selected edges and parameters
+    - name: parameters_json
+      description: str, the thresholds and weights the run used
+  - name: courseware_concept_graph_node
+    description: Each active concept's position in a graph run.
+    columns:
+    - name: graph_run_id
+      description: str, the run
+    - name: concept_id
+      description: str, the concept
+    - name: community_id
+      description: str, the concept's Leiden community, carried across runs
+  - name: courseware_concept_graph_community
+    description: Communities found in a graph run, with stable ids carried forward
+      by member overlap.
+    columns:
+    - name: graph_run_id
+      description: str, the run
+    - name: community_id
+      description: str, UUID, minted when the community first appeared
+    - name: first_seen_run_id
+      description: str, the graph run the community first appeared in
+  - name: courseware_concept_graph_edge
+    description: The edges a graph run kept after thresholds, with weight and backbone
+      score.
+    columns:
+    - name: graph_run_id
+      description: str, the run
+    - name: backbone_score
+      description: float, local-degree sparsification score; keep edges above a threshold
+        to draw a sparse backbone
+  - name: courseware_concept_description
+    description: Learner-facing descriptions of concepts (ml.lib.courseware.describe),
+      one row per concept per description version and input checksum.
+    columns:
+    - name: concept_id
+      description: str, the concept's UUID
+    - name: short_description
+      description: str, at most 12 words, completing "This is ..."
+    - name: description
+      description: str, one or two course-agnostic sentences, at most 45 words
+    - name: is_learner_facing
+      description: boolean, false for datasets, single exercises and course-internal
+        labels that a catalog should not show as topics
+    - name: input_checksum
+      description: str, sha256 of the labels and claim descriptions the model read
+    - name: description_version
+      description: str, hash of the description prompt, model and effort
+    - name: model_id
+      description: str, the model that wrote the description
+    - name: described_at
+      description: timestamp, when the description was written
   - name: courseware_answer_check
     description: A small model's verdict on whether an extraction source reads as
       an answer key or worked solutions (ml.lib.courseware.answer_check), one row

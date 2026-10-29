@@ -8,7 +8,13 @@
 
     concept_label_key is a string normalization only (the courseware_label_key macro).
     Resolving synonyms and variants across courses ("k-means" and "k-means
-    clustering") is a separate step that will map these keys onto dim_concept.
+    clustering") is a separate step that will map these keys onto dim_concept. A
+    declared "no prerequisites" (prerequisite_kind explicitly_none) gets no key: its
+    label names what is not required, so it is not a mention of that concept.
+
+    review_status is 'proposed' for every claim until a review workflow persists
+    decisions; this is where they will be joined in. Learner-facing views take only
+    accepted claims.
 #}
 with extractions as (
     select * from {{ ref('int__courseware__extractions') }}
@@ -60,12 +66,15 @@ select
     , claims.course_ref
     , claims.related_concept_labels_json
     , case
-        when claims.claim_kind in ('concept', 'assumed_knowledge', 'declared_prerequisite')
+        when
+            claims.claim_kind in ('concept', 'assumed_knowledge', 'declared_prerequisite')
+            and coalesce(claims.prerequisite_kind, '') != 'explicitly_none'
             then {{ courseware_label_key('claims.label') }}
     end as concept_label_key
     , coalesce(evidence_counts.evidence_count, 0) as evidence_count
     , coalesce(evidence_counts.verified_evidence_count, 0) as verified_evidence_count
     , coalesce(evidence_counts.verified_evidence_count, 0) > 0 as is_verified
+    , 'proposed' as review_status
 from claims
 inner join extractions
     on claims.extraction_key = extractions.extraction_key
