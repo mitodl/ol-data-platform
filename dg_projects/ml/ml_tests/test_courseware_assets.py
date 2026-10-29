@@ -63,7 +63,6 @@ from ml.resources import opik_auth
 from ml.resources.llm import LLMClientFactory
 from ml.sensors import courseware as sensor_module
 from ml.sensors.courseware import courseware_extraction_text_sensor
-from ml_tests.test_courseware_resolve import FakeEmbedder
 from ol_orchestrate.lib.failures import (
     RETRY_ON_ASSET_OR_OP_FAILURE_TAG,
     PermanentFailure,
@@ -72,6 +71,8 @@ from ol_orchestrate.lib.failures import (
 from ol_orchestrate.lib.glue_helper import FIXTURE_DIR_VARIABLE
 from pyiceberg.catalog.sql import SqlCatalog
 from pyiceberg.exceptions import CommitFailedException, NoSuchTableError
+
+from .test_courseware_resolve import FakeEmbedder
 
 PLATFORM = "mitxonline"
 COURSERUN = "course-v1:MITx+UAI.4+1T2026"
