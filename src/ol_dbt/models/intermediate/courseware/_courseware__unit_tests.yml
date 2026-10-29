@@ -1,0 +1,50 @@
+---
+version: 2
+
+unit_tests:
+- name: test_adjudicated_concept_relations_count_the_newest_verdict_per_label_pair
+  description: >
+    A < B is broader. lb was judged against la twice, and only the newest verdict
+    (r2, la under lb) counts, not r1's contrary one. la judged narrower than lb
+    agrees, from the other side. la2, also a label of A, was judged distinct from
+    lb and lb narrower than la2, both contrary. C and D tied on direction, so they
+    are related, and both hierarchy verdicts support that. r1's relation snapshot
+    and assignments are ignored, since r2 is the newest run.
+  model: int__courseware__adjudicated_concept_relations
+  given:
+  - input: source('courseware_intermediate', 'courseware_resolution_run')
+    rows:
+    - {resolution_run_id: r1, started_at: '2026-10-01 00:00:00'}
+    - {resolution_run_id: r2, started_at: '2026-10-02 00:00:00'}
+  - input: source('courseware_intermediate', 'courseware_concept_relation')
+    rows:
+    - {resolution_run_id: r1, from_concept_id: A, to_concept_id: B, relation: broader,
+      proposed_run_id: r1}
+    - {resolution_run_id: r2, from_concept_id: A, to_concept_id: B, relation: broader,
+      proposed_run_id: r1}
+    - {resolution_run_id: r2, from_concept_id: C, to_concept_id: D, relation: related,
+      proposed_run_id: r2}
+  - input: source('courseware_intermediate', 'courseware_concept_assignment')
+    rows:
+    - {resolution_run_id: r1, concept_label_key: la, concept_id: Z}
+    - {resolution_run_id: r2, concept_label_key: la, concept_id: A}
+    - {resolution_run_id: r2, concept_label_key: la2, concept_id: A}
+    - {resolution_run_id: r2, concept_label_key: lb, concept_id: B}
+    - {resolution_run_id: r2, concept_label_key: lc, concept_id: C}
+    - {resolution_run_id: r2, concept_label_key: ld, concept_id: D}
+  - input: source('courseware_intermediate', 'courseware_resolution_decision')
+    rows:
+    - {resolution_run_id: r1, query_label_key: lb, candidate_label_key: la, verdict: narrower}
+    - {resolution_run_id: r2, query_label_key: lb, candidate_label_key: la, verdict: broader}
+    - {resolution_run_id: r2, query_label_key: la, candidate_label_key: lb, verdict: narrower}
+    - {resolution_run_id: r2, query_label_key: la2, candidate_label_key: lb, verdict: distinct}
+    - {resolution_run_id: r2, query_label_key: lb, candidate_label_key: la2, verdict: narrower}
+    - {resolution_run_id: r2, query_label_key: lc, candidate_label_key: ld, verdict: narrower}
+    - {resolution_run_id: r2, query_label_key: ld, candidate_label_key: lc, verdict: narrower}
+    - {resolution_run_id: r2, query_label_key: la, candidate_label_key: lc, verdict: distinct}
+  expect:
+    rows:
+    - {from_concept_id: A, to_concept_id: B, relation: broader, proposed_run_id: r1,
+      supporting_verdict_count: 2, contrary_verdict_count: 2, pair_verdict_count: 3}
+    - {from_concept_id: C, to_concept_id: D, relation: related, proposed_run_id: r2,
+      supporting_verdict_count: 2, contrary_verdict_count: 0, pair_verdict_count: 2}
