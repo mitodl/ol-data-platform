@@ -1089,14 +1089,16 @@ def parse_model_sql_at_content(name: str, sql_content: str, macro_sources: Macro
     return parse_model_sql(name, sql_content, macro_sources)
 
 
-def _joins_foreign_relation(select: exp.Select, passthrough_aliases: set[str]) -> bool:
-    """Whether *select* joins any relation besides the ref's passthrough relations.
+def _has_foreign_relation(select: exp.Select, passthrough_aliases: set[str]) -> bool:
+    """Whether *select* reads (FROM or JOIN) any relation besides the ref's passthroughs.
 
     A derived table or an UNNEST is foreign too: it brings column names of its own.
     """
+    from_clause = select.args.get("from_")
+    relations = [from_clause.this] if from_clause is not None else []
+    relations += [join.this for join in select.args.get("joins") or []]
     return any(
-        not (isinstance(j.this, exp.Table) and j.this.name.lower() in passthrough_aliases)
-        for j in select.args.get("joins") or []
+        not (isinstance(relation, exp.Table) and relation.name.lower() in passthrough_aliases) for relation in relations
     )
 
 
@@ -1237,7 +1239,7 @@ def get_columns_read_from_ref(
             # bare ``*`` with no join to another relation (whose columns it would also
             # carry). ``u.*, o.*`` forwards o's columns as well, so it is no passthrough.
             from_qualifiers = passthrough_aliases | {from_source.alias_or_name.lower()}
-            joins_foreign = _joins_foreign_relation(cte_select, passthrough_aliases)
+            joins_foreign = _has_foreign_relation(cte_select, passthrough_aliases)
             stars = [
                 e
                 for e in cte_select.expressions
@@ -1338,6 +1340,16 @@ def get_columns_read_from_ref(
         ):
             if _foreign_relation_columns(scope.expression, passthrough_aliases) is None:
                 return None
+        # A star over the ref and a joined relation (``select * from ref_x join other``)
+        # forwards the ref's columns mixed with the other's, so the CTE is no passthrough
+        # and reads through it are not followed. Without a join, an unaliased star keeps
+        # its previous handling.
+        if (
+            isinstance(scope.expression, exp.Select)
+            and _has_foreign_relation(scope.expression, passthrough_aliases)
+            and _selects_star_outside_passthrough_cte(scope.expression, set(relations), passthrough_aliases)
+        ):
+            return None
         aliases = {alias: relation for alias, relation in relations.items() if alias != relation}
         if not aliases:
             continue

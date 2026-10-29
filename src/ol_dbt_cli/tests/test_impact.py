@@ -743,6 +743,66 @@ class TestColumnReadsAcrossForeignSources:
         """
         assert _reads(tmp_path, sql, {"ref_stg_users": "stg_users"}, "stg_users") == {"user_id", "row_num"}
 
+    @pytest.mark.parametrize(
+        ("sql", "placeholders"),
+        [
+            (
+                "with joined as (select * from ref_x join ref_other on ref_x.id = ref_other.x_id) "
+                "select joined.a, joined.b from joined",
+                {"ref_x": "x", "ref_other": "other"},
+            ),
+            (
+                "with joined as (select * from ref_x join plain_table on ref_x.id = plain_table.x_id) "
+                "select joined.a, joined.b from joined",
+                {"ref_x": "x"},
+            ),
+            (
+                "with joined as (select * from ref_x join (select x_id, b from plain_table) s on ref_x.id = s.x_id) "
+                "select joined.a, joined.b from joined",
+                {"ref_x": "x"},
+            ),
+            (
+                "select j.a, j.b from (select * from ref_x join plain_table on ref_x.id = plain_table.x_id) as j",
+                {"ref_x": "x"},
+            ),
+        ],
+    )
+    def test_unaliased_star_across_a_foreign_join_is_inconclusive(
+        self, tmp_path: Path, sql: str, placeholders: dict[str, str]
+    ) -> None:
+        """``select *`` over the ref and another relation forwards x's columns, mixed in.
+
+        ``joined`` is no passthrough of x (it carries the other side's columns too), so
+        ``joined.a`` is not followed; returning only the join key ``id`` would clear a
+        removed ``a`` as unread.
+        """
+        assert _reads(tmp_path, sql, placeholders, "x") is None
+
+    def test_star_across_two_refs_is_inconclusive_for_the_joined_ref(self, tmp_path: Path) -> None:
+        """For ``other``, the foreign relation is the FROM (``ref_x``), not a join."""
+        sql = (
+            "with joined as (select * from ref_x join ref_other on ref_x.id = ref_other.x_id) "
+            "select joined.a, joined.b from joined"
+        )
+        assert _reads(tmp_path, sql, {"ref_x": "x", "ref_other": "other"}, "other") is None
+
+    @pytest.mark.parametrize(
+        ("sql", "expected"),
+        [
+            # The ref's own star with a joined column: still a passthrough of x.
+            (
+                "with joined as (select ref_x.*, plain_table.b from ref_x "
+                "join plain_table on ref_x.id = plain_table.x_id) select joined.a, joined.b from joined",
+                {"a", "id"},
+            ),
+            ("with src as (select * from ref_x) select src.a, src.b from src", {"a", "b"}),
+            # A star over the ref alone in a subquery keeps the pre-existing behavior.
+            ("select s.a from (select * from ref_x where ref_x.flag) as s", {"flag"}),
+        ],
+    )
+    def test_star_without_a_foreign_join_keeps_its_reads(self, tmp_path: Path, sql: str, expected: set[str]) -> None:
+        assert _reads(tmp_path, sql, {"ref_x": "x"}, "x") == expected
+
 
 class TestOutputColumnPassthrough:
     """Tests for output-column passthrough detection in downstream impact functions."""
