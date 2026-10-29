@@ -6,8 +6,11 @@
     be embedded as a resource's search text (the embedding substrate's
     resource_knowledge_markdown_v1 builder) without another model call.
 
-    Only accepted concepts and accepted claims are published; proposed ones stay in
-    dim_concept and tfact_courseware_claim for review. No review workflow exists
+    Only accepted concepts and accepted claims are published: a concept appears in a
+    course's arrays only when it is accepted and an accepted claim supports the
+    relation, since accepting a concept does not accept the claims naming it.
+    Proposed rows stay in dim_concept, bridge_courserun_concept and
+    tfact_courseware_claim for review. No review workflow exists
     yet, so the concept and statement arrays are null until one does.
 #}
 with extractions as (
@@ -27,6 +30,7 @@ with extractions as (
 
 , run_bridge as (
     select * from {{ ref('bridge_courserun_concept') }}
+    where accepted_claim_count > 0
 )
 
 , concepts as (

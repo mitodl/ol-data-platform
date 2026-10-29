@@ -523,5 +523,8 @@ models:
       the first scope that relies on the concept
   - name: claim_count
     description: int, claims behind the relation
+  - name: accepted_claim_count
+    description: int, accepted claims behind the relation; learner-facing views take
+      only relations with at least one
   - name: scope_count
     description: int, distinct scopes behind the relation

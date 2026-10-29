@@ -382,13 +382,16 @@ models:
     description: str, the label as normalized by the courseware_label_key macro (lowercase,
       plus and hash signs spelled out, separators collapsed), for concept, assumed
       knowledge and declared prerequisite claims; null for a label with no letters
-      or numbers
+      or numbers and for a declared "no prerequisites" (explicitly_none)
   - name: evidence_count
     description: int, evidence passages quoted for the claim
   - name: verified_evidence_count
     description: int, passages found in the source text (exact or fuzzy)
   - name: is_verified
     description: boolean, whether at least one evidence passage was found in the source
+  - name: review_status
+    description: str, proposed, accepted or rejected; proposed until a review workflow
+      records decisions
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [extraction_key, claim_ordinal]
@@ -475,8 +478,10 @@ models:
     - not_null
   - name: prerequisite_kind
     description: str, prerequisite, corequisite or recommended for declared prerequisites;
-      null otherwise. A declared "no prerequisites" (explicitly_none) is not a mention
-      and has no row.
+      null otherwise. A declared "no prerequisites" (explicitly_none) has no concept
+      label key, so it has no row.
+  - name: review_status
+    description: str, the claim's review status
 
 - name: int__courseware__concept_labels
   description: One row per normalized concept label key across every course, with
@@ -624,8 +629,10 @@ models:
     tests:
     - not_null
   - name: prerequisite_kind
-    description: str, prerequisite, corequisite, recommended or explicitly_none for
-      declared prerequisites; null otherwise
+    description: str, prerequisite, corequisite or recommended for declared prerequisites;
+      null otherwise
+  - name: review_status
+    description: str, the claim's review status
 
 - name: int__courseware__adjudicated_concept_relations
   description: Broader, close and related proposals from resolution adjudication,

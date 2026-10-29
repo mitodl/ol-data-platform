@@ -41,7 +41,7 @@ select
     , claims.verified_evidence_count
     , claims.is_verified
     , claims.is_current
-    , 'proposed' as review_status
+    , claims.review_status
     , claims.extracted_at
 from claims
 inner join extractions

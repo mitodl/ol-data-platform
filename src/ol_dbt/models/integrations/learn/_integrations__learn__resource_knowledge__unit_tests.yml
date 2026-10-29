@@ -2,10 +2,10 @@
 unit_tests:
 - name: test_integrations__learn__resource_knowledge_publishes_only_accepted_concepts_and_claims
   description: >
-    A course's concept arrays list only accepted concepts, and its statement arrays
-    only accepted claims. Proposed rows stay in dim_concept and
-    tfact_courseware_claim for review, and accepting a concept does not accept the
-    claims naming it.
+    A course's concept arrays list a concept only when it is accepted and an
+    accepted claim supports the relation, and its statement arrays list only
+    accepted claims. Accepting a concept does not accept the claims naming it, so
+    scikit-learn, accepted but taught only by proposed claims, is left out.
   model: integrations__learn__resource_knowledge
   given:
   - input: ref('dim_courseware_extraction')
@@ -21,12 +21,14 @@ unit_tests:
       is_current: true}
   - input: ref('bridge_courserun_concept')
     rows:
-    - {courserun_fk: r1, concept_fk: pandas, relation: teaches, claim_count: 2}
-    - {courserun_fk: r1, concept_fk: numpy, relation: teaches, claim_count: 5}
+    - {courserun_fk: r1, concept_fk: pandas, relation: teaches, claim_count: 2, accepted_claim_count: 1}
+    - {courserun_fk: r1, concept_fk: numpy, relation: teaches, claim_count: 5, accepted_claim_count: 5}
+    - {courserun_fk: r1, concept_fk: sklearn, relation: teaches, claim_count: 3, accepted_claim_count: 0}
   - input: ref('dim_concept')
     rows:
     - {concept_pk: pandas, preferred_label: pandas, review_status: accepted}
     - {concept_pk: numpy, preferred_label: numpy, review_status: proposed}
+    - {concept_pk: sklearn, preferred_label: scikit-learn, review_status: accepted}
   - input: ref('tfact_courseware_claim')
     rows:
     - {courserun_fk: r1, claim_kind: skill, label: clean a data frame, is_current: true,

@@ -4,7 +4,7 @@ unit_tests:
   description: >
     Only a stated prerequisite is a requires edge. A corequisite and a recommended
     background get their own relations. "No prerequisites" never reaches the bridge;
-    int__courseware__concept_mentions leaves it out.
+    int__courseware__claims gives it no concept label key.
   model: bridge_courserun_concept
   given:
   - input: ref('int__courseware__resolved_concept_mentions')

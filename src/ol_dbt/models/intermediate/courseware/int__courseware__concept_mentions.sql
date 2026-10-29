@@ -3,9 +3,6 @@
     label): the concept, assumed-knowledge and declared-prerequisite claims by their
     own label, and the assessments and learning outcomes by each concept label they
     list. This is what dim_concept and the concept bridges are built from.
-
-    A declared "no prerequisites" (prerequisite_kind explicitly_none) is left out: its
-    label names what is not required, so it is not a mention of that concept.
 #}
 with claims as (
     select * from {{ ref('int__courseware__claims') }}
@@ -29,10 +26,9 @@ with claims as (
         , label
         , concept_label_key
         , prerequisite_kind
+        , review_status
     from claims
-    where
-        concept_label_key is not null
-        and coalesce(prerequisite_kind, '') != 'explicitly_none'
+    where concept_label_key is not null
 )
 
 , referenced_labels as (
@@ -51,6 +47,7 @@ with claims as (
         , cast(null as varchar) as description
         , {{ json_extract_scalar('referenced.concept_label', "'$'") }} as label
         , cast(null as varchar) as prerequisite_kind
+        , claims.review_status
     from claims
     cross join {{ unnest_json_array('claims.related_concept_labels_json', 'referenced', 'concept_label') }} -- noqa
     where claims.claim_kind in ('assessment_expectation', 'learning_outcome')
@@ -72,6 +69,7 @@ select
     , label
     , concept_label_key
     , prerequisite_kind
+    , review_status
 from own_labels
 
 union all
@@ -92,6 +90,7 @@ select
     , label
     , {{ courseware_label_key('label') }} as concept_label_key
     , prerequisite_kind
+    , review_status
 from referenced_labels
 -- a label of only symbols has no key, like the own labels above
 where {{ courseware_label_key('label') }} is not null
