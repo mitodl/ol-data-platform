@@ -162,9 +162,11 @@ def courseware_concept_description(
     pending = {
         entry["concept_id"] for entry in pending_concepts(inputs, existing, version)
     }
+    # The approved version each row was written under, which a knowledge release
+    # selects descriptions by.
     described = describe_concepts(
         inputs, client, model_id=model_id, effort=config.effort, existing=existing
-    )
+    ).with_columns(prompt_version=pl.lit(DESCRIPTION_PROMPT_VERSION))
     failed = len(pending - set(described["concept_id"]))
     concept_count = inputs["concept_id"].n_unique()
     context.log.info(

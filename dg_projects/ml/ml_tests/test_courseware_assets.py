@@ -974,7 +974,12 @@ def test_description_prompt_change_waits_for_promotion(tables, calls, monkeypatc
     assert describe(tables).success
     assert describe(tables).success
     assert calls == ["record_descriptions"]
-    assert tables["courseware_concept_description"].height == 4
+    assert tables["courseware_concept_description"]["prompt_version"].to_list() == [
+        DESCRIPTION_PROMPT_VERSION,
+        DESCRIPTION_PROMPT_VERSION,
+        edited,
+        edited,
+    ]
 
 
 def automation_requests(
