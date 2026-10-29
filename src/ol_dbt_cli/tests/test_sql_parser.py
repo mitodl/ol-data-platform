@@ -888,7 +888,7 @@ class TestConsumedColumnsViaScope:
     traversal can still anchor each column to its source ref.
     """
 
-    def test_attributes_columns_across_a_join_the_heuristic_skips(self, tmp_path: Path) -> None:
+    def test_attributes_columns_across_a_join(self, tmp_path: Path) -> None:
         model = tmp_path / "m.sql"
         model.write_text(
             "select u.user_id, u.email, e.grade "
@@ -901,8 +901,9 @@ class TestConsumedColumnsViaScope:
             "stg_users": {"user_id", "email", "status", "unused"},
             "stg_enroll": {"user_id", "grade"},
         }
-        # The heuristic bails on the JOIN.
-        assert get_columns_read_from_ref(parsed, "stg_users") is None
+        # The heuristic reads the alias-qualified columns too; the scope pass also
+        # resolves what the heuristic cannot (stars, bare columns across a JOIN).
+        assert get_columns_read_from_ref(parsed, "stg_users") == {"user_id", "email", "status"}
         # The scope fallback attributes SELECT/JOIN/WHERE columns to the right ref.
         users = consumed_columns_via_scope(parsed, "stg_users", schema)
         assert users is not None

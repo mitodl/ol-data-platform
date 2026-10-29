@@ -500,6 +500,174 @@ class TestGetColumnsReadFromRef:
         # row_num was added by the deduplicated CTE — not from upstream
         assert "row_num" not in result
 
+    def test_detects_qualified_read_through_ref_table_alias(self, tmp_path: Path) -> None:
+        """``from {{ ref('x') }} as alias`` read as ``alias.col`` is attributed to the ref.
+
+        bridge_program_course reads int__edxorg__mitx_program_courses this way (PR
+        #3179); only the placeholder and passthrough CTE names were matched as
+        qualifiers, so the model read nothing and a removed column went unflagged.
+        """
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
+
+        sql = """
+        with edxorg_program_requirements as (
+            select
+                cast(program_courses.program_uuid as varchar) as program_id
+                , program_courses.mitx_course_readable_id as course_readable_id
+                , mitx_courses.course_title
+            from ref_int__edxorg__mitx_program_courses as program_courses
+            left join ref_int__mitx__courses as mitx_courses
+                on program_courses.course_number = mitx_courses.course_number
+        )
+        select * from edxorg_program_requirements
+        """
+        sql_file = tmp_path / "downstream.sql"
+        sql_file.write_text(sql)
+
+        parsed = parse_model_sql("downstream", sql)
+        parsed.refs = ["int__edxorg__mitx_program_courses", "int__mitx__courses"]
+        parsed.ref_placeholder_map = {
+            "ref_int__edxorg__mitx_program_courses": "int__edxorg__mitx_program_courses",
+            "ref_int__mitx__courses": "int__mitx__courses",
+        }
+        parsed.source_path = sql_file
+
+        result = get_columns_read_from_ref(parsed, "int__edxorg__mitx_program_courses")
+        assert result == {"program_uuid", "mitx_course_readable_id", "course_number"}
+
+    def test_table_alias_is_resolved_per_select(self, tmp_path: Path) -> None:
+        """An alias naming the ref in one CTE does not claim the same alias elsewhere."""
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
+
+        sql = """
+        with users as (
+            select p.user_id from ref_stg_users as p
+        )
+        , orders as (
+            select p.order_total from ref_stg_orders as p
+        )
+        , passthrough as (
+            select * from ref_stg_users
+        )
+        , renamed as (
+            select src.user_email from passthrough as src
+        )
+        select * from users cross join orders cross join renamed
+        """
+        sql_file = tmp_path / "downstream.sql"
+        sql_file.write_text(sql)
+
+        parsed = parse_model_sql("downstream", sql)
+        parsed.refs = ["stg_users", "stg_orders"]
+        parsed.ref_placeholder_map = {"ref_stg_users": "stg_users", "ref_stg_orders": "stg_orders"}
+        parsed.source_path = sql_file
+
+        assert get_columns_read_from_ref(parsed, "stg_users") == {"user_id", "user_email"}
+        assert get_columns_read_from_ref(parsed, "stg_orders") == {"order_total"}
+
+    def test_detects_unqualified_read_from_aliased_ref(self, tmp_path: Path) -> None:
+        """Bare columns selected from an aliased ref with no joins come from that ref."""
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
+
+        sql = "select user_id, user_email from ref_stg_users as users where is_active"
+        sql_file = tmp_path / "downstream.sql"
+        sql_file.write_text(sql)
+
+        parsed = parse_model_sql("downstream", sql)
+        parsed.refs = ["stg_users"]
+        parsed.ref_placeholder_map = {"ref_stg_users": "stg_users"}
+        parsed.source_path = sql_file
+
+        assert get_columns_read_from_ref(parsed, "stg_users") == {"user_id", "user_email", "is_active"}
+
+    def test_star_through_aliased_ref_is_inconclusive(self, tmp_path: Path) -> None:
+        """``alias.*`` in a dedup subquery forwards every column, so the read set is unknown.
+
+        Only the window's ``product_id``/``updated_on`` are qualified by the alias; the
+        outer ``latest.price`` comes through the subquery. Returning those two as the
+        complete read set would clear a removed ``price`` as unread.
+        """
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
+
+        sql = """
+        with latest as (
+            select * from (
+                select
+                    versions.*
+                    , row_number() over (
+                        partition by versions.product_id order by versions.updated_on desc
+                    ) as row_num
+                from ref_stg_versions as versions
+            ) as ranked
+            where row_num = 1
+        )
+        select products.product_id, latest.price
+        from ref_stg_products as products
+        left join latest on products.product_id = latest.product_id
+        """
+        sql_file = tmp_path / "downstream.sql"
+        sql_file.write_text(sql)
+
+        parsed = parse_model_sql("downstream", sql)
+        parsed.refs = ["stg_versions", "stg_products"]
+        parsed.ref_placeholder_map = {"ref_stg_versions": "stg_versions", "ref_stg_products": "stg_products"}
+        parsed.source_path = sql_file
+
+        assert get_columns_read_from_ref(parsed, "stg_versions") is None
+        assert get_columns_read_from_ref(parsed, "stg_products") == {"product_id"}
+
+    @pytest.mark.parametrize(
+        ("projection", "expected"),
+        [("o.*, u.user_id", {"user_id"}), ("*", None)],
+    )
+    def test_cte_star_over_a_join_is_not_a_passthrough(
+        self, tmp_path: Path, projection: str, expected: set[str] | None
+    ) -> None:
+        """A CTE whose star carries a joined table's columns does not pass the ref through.
+
+        Treating ``j`` as a passthrough of stg_users would attribute ``j.grade`` (from
+        stg_enroll) to stg_users, which validate reports as a broken column.
+        """
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
+
+        sql = f"""
+        with j as (
+            select {projection}
+            from ref_stg_users as u
+            inner join ref_stg_enroll as o on u.user_id = o.user_id
+        )
+        select j.user_id, j.grade from j
+        """  # noqa: S608
+        sql_file = tmp_path / "downstream.sql"
+        sql_file.write_text(sql)
+
+        parsed = parse_model_sql("downstream", sql)
+        parsed.refs = ["stg_users", "stg_enroll"]
+        parsed.ref_placeholder_map = {"ref_stg_users": "stg_users", "ref_stg_enroll": "stg_enroll"}
+        parsed.source_path = sql_file
+
+        assert get_columns_read_from_ref(parsed, "stg_users") == expected
+
+    def test_passthrough_cte_over_aliased_ref(self, tmp_path: Path) -> None:
+        """``select * from {{ ref('x') }} as alias`` still makes the CTE a passthrough."""
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
+
+        sql = """
+        with src as (
+            select *, users.user_email from ref_stg_users as users
+        )
+        select src.user_id, src.user_email from src
+        """
+        sql_file = tmp_path / "downstream.sql"
+        sql_file.write_text(sql)
+
+        parsed = parse_model_sql("downstream", sql)
+        parsed.refs = ["stg_users"]
+        parsed.ref_placeholder_map = {"ref_stg_users": "stg_users"}
+        parsed.source_path = sql_file
+
+        assert get_columns_read_from_ref(parsed, "stg_users") == {"user_id", "user_email"}
+
 
 class TestOutputColumnPassthrough:
     """Tests for output-column passthrough detection in downstream impact functions."""

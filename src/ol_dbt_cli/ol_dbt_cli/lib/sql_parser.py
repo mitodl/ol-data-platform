@@ -1089,6 +1089,32 @@ def parse_model_sql_at_content(name: str, sql_content: str, macro_sources: Macro
     return parse_model_sql(name, sql_content, macro_sources)
 
 
+def _selects_star_outside_passthrough_cte(
+    select: exp.Expr,
+    aliases: set[str],
+    passthrough_aliases: set[str],
+) -> bool:
+    """Whether *select* projects ``*`` or ``<alias>.*`` and is not a passthrough CTE body.
+
+    A passthrough CTE's ``*`` is already followed by name (its columns are read as
+    ``cte.col``); any other star forwards the upstream's columns somewhere the
+    column-read passes cannot see.
+    """
+    if not isinstance(select, exp.Select):
+        return False
+    has_star = any(
+        isinstance(e, exp.Star)
+        or (isinstance(e, exp.Column) and isinstance(e.this, exp.Star) and e.table.lower() in aliases)
+        for e in select.expressions
+    )
+    if not has_star:
+        return False
+    body: exp.Expr = select
+    while isinstance(body.parent, exp.SetOperation):
+        body = body.parent
+    return not (isinstance(body.parent, exp.CTE) and body.parent.alias_or_name.lower() in passthrough_aliases)
+
+
 def get_columns_read_from_ref(
     downstream_parsed: ParsedModel,
     upstream_name: str,
@@ -1168,12 +1194,20 @@ def get_columns_read_from_ref(
         from_source = from_clause.this
         if not isinstance(from_source, exp.Table):
             continue
-        from_alias = (from_source.alias or from_source.name).lower()
-        if from_alias in passthrough_aliases:
+        # Match the relation's name, not its alias: ``select * from ref_x as x`` passes ref_x through.
+        if from_source.name.lower() in passthrough_aliases:
             # Check for a top-level SELECT * — use only top-level expressions to avoid
             # matching Star nodes nested inside COUNT(*) or similar aggregate calls.
+            # The star must forward the upstream: ``<ref or its alias>.*``, or a bare
+            # ``*`` with no join to another relation (whose columns it would also carry).
+            from_qualifiers = passthrough_aliases | {from_source.alias_or_name.lower()}
+            joins_foreign = any(
+                (jt := j.find(exp.Table)) is None or jt.name.lower() not in passthrough_aliases
+                for j in cte_select.args.get("joins") or []
+            )
             has_top_level_star = any(
-                isinstance(e, exp.Star) or (isinstance(e, exp.Column) and isinstance(e.this, exp.Star))
+                (isinstance(e, exp.Star) and not joins_foreign)
+                or (isinstance(e, exp.Column) and isinstance(e.this, exp.Star) and e.table.lower() in from_qualifiers)
                 for e in cte_select.expressions
             )
             if has_top_level_star:
@@ -1204,7 +1238,7 @@ def get_columns_read_from_ref(
                         tbl = expr.args.get("table")
                         if tbl is not None:
                             qualifier = tbl.name.lower() if hasattr(tbl, "name") else str(tbl).lower()
-                            if qualifier not in passthrough_aliases:
+                            if qualifier not in from_qualifiers:
                                 added.add(expr.name.lower())
                     else:
                         if hasattr(expr, "alias") and expr.alias:
@@ -1225,23 +1259,47 @@ def get_columns_read_from_ref(
 
     cols_read: set[str] = set()
 
-    # Pass 1: qualified column refs — ``passthrough_alias.col_name``
     # Skip columns that were added by ANY passthrough CTE in the chain (not just the
     # immediate CTE), since a column added two hops up is still not from the upstream.
+    def _is_upstream_column(col_name: str) -> bool:
+        return bool(col_name) and col_name != "*" and col_name not in jinja_placeholders | passthrough_computed
+
+    # Pass 1: qualified column refs — ``passthrough_alias.col_name``
     for col_node in parsed_sql.find_all(exp.Column):
         table = col_node.args.get("table")
         if table is None:
             continue
         table_name = table.name.lower() if hasattr(table, "name") else str(table).lower()
-        if table_name in passthrough_aliases:
-            col_name = col_node.name.lower()
-            if (
-                col_name
-                and col_name != "*"
-                and col_name not in jinja_placeholders
-                and col_name not in passthrough_computed
-            ):
-                cols_read.add(col_name)
+        if table_name in passthrough_aliases and _is_upstream_column(col_node.name.lower()):
+            cols_read.add(col_node.name.lower())
+
+    # Pass 1b: qualified refs through a table alias, e.g. ``program_courses.col`` from
+    # ``from {{ ref('x') }} as program_courses``. A table alias is local to its SELECT
+    # (one CTE may alias the ref ``p`` while another aliases a different table ``p``),
+    # so resolve aliases per scope rather than adding them to passthrough_aliases.
+    try:
+        scopes = traverse_scope(parsed_sql)
+    except Exception:  # noqa: BLE001 — unscopable SQL keeps the name-based passes above
+        scopes = []
+    for scope in scopes:
+        aliases = {
+            alias.lower()
+            for alias, (node, _source) in scope.selected_sources.items()
+            if isinstance(node, exp.Table)
+            and node.name.lower() in passthrough_aliases
+            and alias.lower() != node.name.lower()
+        }
+        if not aliases:
+            continue
+        # ``select alias.*`` (or a bare ``*``) outside a passthrough CTE forwards every
+        # upstream column under a name the passes here do not follow, e.g. a dedup
+        # subquery. The read set is unknowable, so bail as before aliases were resolved
+        # and let callers fall back (validate: scope qualify; impact: manifest columns).
+        if _selects_star_outside_passthrough_cte(scope.expression, aliases, passthrough_aliases):
+            return None
+        for col_node in scope.columns:
+            if col_node.table.lower() in aliases and _is_upstream_column(col_node.name.lower()):
+                cols_read.add(col_node.name.lower())
 
     # Pass 2: unqualified column refs in SELECT/WHERE of passthrough-only sources.
     # Skipped when JOINs to non-passthrough tables are present (ambiguity risk).
@@ -1256,13 +1314,13 @@ def get_columns_read_from_ref(
         from_source = from_clause.this
         if not isinstance(from_source, exp.Table):
             continue
-        from_alias = (from_source.alias or from_source.name).lower()
-        if from_alias not in passthrough_aliases:
+        # Match the relation's name, not its alias: ``from ref_x as r`` reads ref_x.
+        if from_source.name.lower() not in passthrough_aliases:
             continue
         joins = select_node.args.get("joins") or []
         if any(
             # Non-passthrough regular table join — column attribution is ambiguous.
-            ((jt := j.find(exp.Table)) is not None and jt.alias_or_name.lower() not in passthrough_aliases)
+            ((jt := j.find(exp.Table)) is not None and jt.name.lower() not in passthrough_aliases)
             # UNNEST lateral join — produces new column names that are not from the upstream
             # ref and that j.find(exp.Table) would miss (UNNEST is not an exp.Table node).
             or j.find(exp.Unnest) is not None
