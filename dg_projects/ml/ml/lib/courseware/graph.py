@@ -206,18 +206,23 @@ def _longest_chain(graph: nk.Graph, blocked: set[int]) -> dict[int, int]:
 
 
 def prerequisite_closure(
-    graph: nk.Graph, max_depth: int = MAX_PREREQUISITE_DEPTH
+    graph: nk.Graph,
+    max_depth: int = MAX_PREREQUISITE_DEPTH,
+    labels: list[str] | None = None,
 ) -> dict[tuple[int, int], int]:
     """Every node each node builds on, within max_depth hops, at its shortest depth.
 
     :param graph: builds_on, directed from a concept to what it builds on
     :param max_depth: the most hops a pair may be apart
+    :param labels: each node's display label by node index, to name a cycle's
+        concepts in the error
     :returns: (node, prerequisite node) -> fewest builds_on hops between them
     :rtype: dict[tuple[int, int], int]
     :raises PrerequisiteCycleError: when the graph has a directed cycle
     """
     if cycle := _cycle_nodes(graph):
-        msg = f"builds_on has a cycle through nodes {sorted(cycle)}"
+        names = sorted(labels[node] for node in cycle) if labels else sorted(cycle)
+        msg = f"builds_on has a cycle through {names}"
         raise PrerequisiteCycleError(msg)
     if not graph.numberOfNodes():
         return {}
@@ -237,25 +242,6 @@ def prerequisite_closure(
         for node, depths in reachable.items()
         for prerequisite, depth in depths.items()
     }
-
-
-def _approved_closure(
-    approved: nk.Graph, labels: list[str]
-) -> dict[tuple[int, int], int]:
-    """Close over approved builds_on, naming any cycle by its concept labels.
-
-    :param approved: approved builds_on edges, directed from a concept to what it
-        builds on
-    :param labels: each node's display label, by node index
-    :returns: (node, prerequisite node) -> fewest approved builds_on hops
-    :rtype: dict[tuple[int, int], int]
-    :raises PrerequisiteCycleError: when approved edges form a cycle
-    """
-    if cycle_nodes := _cycle_nodes(approved):
-        cycle = sorted(labels[node] for node in cycle_nodes)
-        msg = f"approved builds_on has a cycle through {cycle}"
-        raise PrerequisiteCycleError(msg)
-    return prerequisite_closure(approved)
 
 
 def _carry_forward_communities(
@@ -371,7 +357,9 @@ def compute_graph(  # noqa: PLR0915
         foundation = pagerank.scores()
 
     sequence_cycles = _cycle_nodes(sequence)
-    closure = _approved_closure(approved_sequence, [labels[c] for c in concept_ids])
+    closure = prerequisite_closure(
+        approved_sequence, labels=[labels[concept] for concept in concept_ids]
+    )
     hierarchy_cycles = _cycle_nodes(hierarchy)
     sequence_level = _longest_chain(sequence, sequence_cycles)
     hierarchy_depth = _longest_chain(hierarchy, hierarchy_cycles)

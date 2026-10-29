@@ -28,8 +28,8 @@
     narrower_taught_count from coverage and a null scope count. provider_rank orders
     a prerequisite's providers by match type, then by whichever of the two the match
     type has. provider_prerequisite_count
-    is how many of the run's prerequisites the provider covers, which ranks courses
-    to take first.
+    is how many of the run's prerequisites the provider covers, which ranks candidate
+    courses.
 #}
 with run_concepts as (
     select * from {{ ref('bridge_courserun_concept') }}

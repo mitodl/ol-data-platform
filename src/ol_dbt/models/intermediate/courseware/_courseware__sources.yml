@@ -304,8 +304,9 @@ sources:
       description: float, local-degree sparsification score; keep edges above a threshold
         to draw a sparse backbone
   - name: courseware_concept_graph_prerequisite_closure
-    description: Per graph run, every concept each concept builds on through published
-      builds_on edges, at the fewest hops, up to the run's max_prerequisite_depth.
+    description: Per graph run, every concept each concept builds on through approved
+      builds_on edges (review_status accepted), at the fewest hops, up to the run's
+      max_prerequisite_depth; experimental, and empty until review exists.
     columns:
     - name: graph_run_id
       description: str, the run

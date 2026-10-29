@@ -511,8 +511,8 @@ models:
   - name: modularity
     description: float, modularity of the Leiden partition
   - name: sequence_cycle_node_count
-    description: int, concepts on builds_on cycles; 0 since a published builds_on
-      cycle fails the graph run, so nonzero only in earlier runs
+    description: int, concepts on cycles of builds_on edges passing the support rule,
+      a finding to review; only a cycle among approved edges fails the graph run
   - name: hierarchy_cycle_node_count
     description: int, concepts on broader cycles
 
@@ -808,5 +808,5 @@ models:
     description: int, 1 for the best provider of this prerequisite, by match type
       and then provider_scope_count, or narrower_taught_count for narrower
   - name: provider_prerequisite_count
-    description: int, how many of the run's prerequisites this provider covers; rank
-      courses to take first by it
+    description: int, how many of the run's prerequisites this provider covers, which
+      ranks candidate courses (not advice on what to take first)

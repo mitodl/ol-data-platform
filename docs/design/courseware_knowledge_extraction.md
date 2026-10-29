@@ -400,7 +400,7 @@ Outputs are per graph run:
 | 3 courses | 415 | 5,400 | 0.937 | 9 | 0.59 | 0 | 70 |
 | 5 courses, direction voting | 586 | 8,161 | 0.952 | 8 | 0.63 | 3 | 6 |
 
-Communities read as coherent topics: ML evaluation; Python plotting; chart types; ML theory; descriptive statistics; object-oriented Python; data management; clustering; and, after UAI.1 and UAI.5, Python fundamentals and neural networks. Six of the 3-course communities kept their ids in the 5-course run, two new ones appeared, and 299 of 415 concepts stayed in their community. The foundation rank puts normal distribution, Python programming and arithmetic mean at the top. The broader cycles came from contradictory directions; direction voting cut them from 70 nodes to 6. The broader cycle count is a monitored data-quality signal, with members to send to review; a `builds_on` cycle now fails the run.
+Communities read as coherent topics: ML evaluation; Python plotting; chart types; ML theory; descriptive statistics; object-oriented Python; data management; clustering; and, after UAI.1 and UAI.5, Python fundamentals and neural networks. Six of the 3-course communities kept their ids in the 5-course run, two new ones appeared, and 299 of 415 concepts stayed in their community. The foundation rank puts normal distribution, Python programming and arithmetic mean at the top. The broader cycles came from contradictory directions; direction voting cut them from 70 nodes to 6. The broader cycle count is a monitored data-quality signal, with members to send to review; a cycle among approved `builds_on` edges fails the run, and one among observed edges is counted the same way as broader cycles.
 
 ### Serving: Learn ingest plus an ol-analytics-api tenant
 
