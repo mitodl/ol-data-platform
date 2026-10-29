@@ -20,6 +20,8 @@ from dagster import (
     AssetSelection,
     AssetSpec,
     DagsterInstance,
+    DagsterRun,
+    DagsterRunStatus,
     Definitions,
     IOManager,
     MultiPartitionKey,
@@ -50,6 +52,7 @@ from ml.assets.courseware_release import (
     courseware_release_publication,
 )
 from ml.assets.courseware_resolution import (
+    RUN_KEY,
     assignment_churn,
     courseware_resolution,
 )
@@ -797,6 +800,38 @@ def test_resolution_resolves_only_new_labels(tables, calls):
 
 
 @pytest.mark.usefixtures("embedder")
+def test_resolution_refuses_to_overlap_another_resolution_run(tables, calls):
+    tables["int__courseware__concept_labels"] = labels("auc", "accuracy")
+    instance = DagsterInstance.ephemeral()
+    for run_id, status, selection in (
+        ("other-resolution", DagsterRunStatus.STARTED, frozenset({RUN_KEY})),
+        ("finished-resolution", DagsterRunStatus.SUCCESS, frozenset({RUN_KEY})),
+        ("other-asset", DagsterRunStatus.STARTED, None),
+    ):
+        instance.add_run(
+            DagsterRun(
+                job_name="__ASSET_JOB",
+                run_id=run_id,
+                status=status,
+                asset_selection=selection,
+            )
+        )
+
+    result = resolve(tables, instance=instance)
+
+    assert not result.success
+    error = next(e for e in result.all_events if e.is_step_failure)
+    message = error.step_failure_data.error.message
+    assert "other-resolution" in message
+    assert "finished-resolution" not in message
+    assert calls == []
+    assert "courseware_resolution_run" not in tables
+
+    instance.delete_run("other-resolution")
+    assert resolve(tables, instance=instance).success
+
+
+@pytest.mark.usefixtures("embedder")
 def test_resolution_stores_what_succeeded_and_fails_on_a_failed_batch(tables, calls):
     tables["int__courseware__concept_labels"] = labels("auc", "accuracy", "bias")
     resolve(tables)
@@ -1042,6 +1077,54 @@ def test_description_refuses_a_prompt_that_is_not_approved(
     # before Opik or the model
     assert calls == []
     assert "courseware_concept_description" not in tables
+
+
+def test_description_refuses_inputs_built_before_the_approval_column(tables, calls):
+    # The ml image deployed before lakehouse rebuilt the inputs with the seed.
+    tables[DESCRIPTION_INPUTS] = description_inputs().drop("approved_prompt_version")
+
+    result = describe(tables)
+
+    assert not result.success
+    assert "approves no version" in step_failure(result).description
+    assert calls == []
+    skipped = describe(tables, tags={AUTOMATION_CONDITION_TAG: "true"})
+    assert skipped.success
+    assert skipped.get_asset_materialization_events() == []
+    assert "courseware_concept_description" not in tables
+
+
+def test_description_stamps_the_prompt_version_on_rows_written_before_it(tables, calls):
+    tables[DESCRIPTION_INPUTS] = description_inputs()
+    assert describe(tables).success
+    stored = tables["courseware_concept_description"]
+    # c1 as written before rows carried a prompt_version, and c2 under an older
+    # prompt, which this prompt's version cannot vouch for
+    tables["courseware_concept_description"] = pl.concat(
+        [
+            stored.filter(pl.col("concept_id") == "c1"),
+            stored.filter(pl.col("concept_id") == "c2").with_columns(
+                description_version=pl.lit("0ld0ld0ld0ld")
+            ),
+        ]
+    ).drop("prompt_version")
+    calls.clear()
+
+    assert describe(tables).success
+    assert describe(tables).success
+
+    # c2 is described again, c1 only copied, and neither twice
+    assert calls == ["record_descriptions"]
+    rows = tables["courseware_concept_description"]
+    assert rows.select("concept_id", "prompt_version").rows() == [
+        ("c1", None),
+        ("c2", None),
+        ("c1", DESCRIPTION_PROMPT_VERSION),
+        ("c2", DESCRIPTION_PROMPT_VERSION),
+    ]
+    c1 = rows.filter(pl.col("concept_id") == "c1")
+    assert c1["description"].n_unique() == 1
+    assert c1["described_at"].n_unique() == 1
 
 
 def test_automation_skips_a_description_prompt_that_is_not_approved(
@@ -1792,6 +1875,10 @@ def test_graph_writes_the_closure_of_approved_edges_and_fails_on_an_approved_cyc
     ) == [("a", "b", 1), ("a", "c", 2), ("b", "c", 1)]
     run_id = tables["courseware_concept_graph_run"]["graph_run_id"][0]
     assert closure["graph_run_id"].unique().to_list() == [run_id]
+    # every approved edge joins active concepts, so the run excludes none
+    assert tables["courseware_concept_graph_run"][
+        "prerequisite_closure_excluded_json"
+    ].to_list() == ["[]"]
 
     # approving c -> a closes a cycle: the run fails permanently and writes nothing,
     # so the previous closure stays the newest

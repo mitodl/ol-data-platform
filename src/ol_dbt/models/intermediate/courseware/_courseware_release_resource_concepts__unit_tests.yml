@@ -5,8 +5,9 @@ unit_tests:
     Two courses that use "kernel" for two meanings point at two concepts, so Learn
     gets each course's sense by id, not a shared label. A relation only proposed
     claims support, a concept the release does not publish as learner-facing (numpy
-    is proposed, so it is not a release concept), and an inferred requirement
-    failing the support rule are left out.
+    is proposed, so it is not a release concept; MNIST's description says it is not
+    learner-facing, and Gram matrix has no description yet), and an inferred
+    requirement failing the support rule are left out.
   model: int__courseware__release_resource_concepts
   given:
   - input: ref('int__courseware__learn_course_runs')
@@ -27,11 +28,17 @@ unit_tests:
       claim_count: 1, accepted_claim_count: 1, first_scope_position: 1, passes_support_rule: true}
     - {courserun_fk: ml, concept_fk: os-kernel, relation: requires, requirement_source: inferred,
       claim_count: 1, accepted_claim_count: 1, first_scope_position: 1, passes_support_rule: false}
+    - {courserun_fk: ml, concept_fk: mnist, relation: uses, requirement_source: null,
+      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1, passes_support_rule: true}
+    - {courserun_fk: ml, concept_fk: gram, relation: uses, requirement_source: null,
+      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1, passes_support_rule: true}
   - input: ref('int__courseware__release_concepts')
     rows:
     - {concept_id: os-kernel, name: kernel, is_learner_facing: true}
     - {concept_id: ml-kernel, name: kernel, is_learner_facing: true}
     - {concept_id: svm, name: support vector machine, is_learner_facing: true}
+    - {concept_id: mnist, name: MNIST, is_learner_facing: false}
+    - {concept_id: gram, name: Gram matrix, is_learner_facing: null}
   expect:
     rows:
     - {readable_id: "course-v1:MITx+6.033", concept_id: os-kernel, concept_name: kernel,

@@ -5,9 +5,11 @@
 -- reviewer approved for this purpose, never the observed builds_on candidates. No
 -- review workflow exists yet, so it is empty. ml.lib.courseware.graph computes it with
 -- NetworKit and stops at MAX_PREREQUISITE_DEPTH hops (parameters_json on
--- afact_concept_graph_run), an engineering bound, not evidence of anything. An
--- approved builds_on cycle fails the graph run, so the closure is a strict partial
--- order. Rows reflect bridge_concept_relation as of that run, not the latest build,
+-- afact_concept_graph_run), an engineering bound, not evidence of anything. The
+-- support rule does not gate an approved edge, so a pair approved in both directions
+-- is a cycle, and an approved builds_on cycle fails the graph run, so the closure is a
+-- strict partial order. An approved edge whose concept is no longer active is left
+-- out and listed in afact_concept_graph_run.prerequisite_closure_excluded_json. Rows reflect bridge_concept_relation as of that run, not the latest build,
 -- and are not yet pinned to a knowledge release.
 with closure as (
     select closure.*

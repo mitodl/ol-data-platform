@@ -7,9 +7,10 @@ longer description that hold for any course. It also flags labels that are not
 concepts a learner would look up (a dataset, a course-specific exercise), so
 user-facing surfaces can leave them out.
 
-A concept is described again only when its inputs or the prompt or model change;
-rows are added, never replaced, like the extractions. The Dagster asset describes
-only under a prompt version courseware_description_approval approves.
+A concept is described again only when its inputs or the prompt or model differ
+from its newest description; rows are added, never replaced, like the extractions.
+The Dagster asset describes only under a prompt version
+courseware_description_approval approves.
 """
 
 import hashlib
