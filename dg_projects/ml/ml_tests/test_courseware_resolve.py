@@ -50,7 +50,7 @@ def verdicts(monkeypatch):
         reverse = table.get((candidate, query), "distinct")
         return inverse.get(reverse, reverse)
 
-    def fake_adjudicate(_client, _model_id, candidates, _rows):
+    def fake_adjudicate(_client, _model_id, candidates, _rows, **_kwargs):
         decided = [
             (query, candidate, verdict(query, candidate))
             for query, found in candidates.items()
@@ -185,7 +185,7 @@ def test_rebuild_keeps_a_failed_label_on_its_previous_concept(verdicts, monkeypa
     verdicts[("auc", "area under the curve")] = "exact"
     first = run(labels("auc", "area under the curve", "pandas"))
 
-    def adjudicate_failing_pandas(_client, _model_id, candidates, _rows):
+    def adjudicate_failing_pandas(_client, _model_id, candidates, _rows, **_kwargs):
         decided = [
             (query, candidate, verdicts.get((query, candidate), "distinct"))
             for query, found in candidates.items()
