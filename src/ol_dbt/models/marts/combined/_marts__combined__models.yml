@@ -149,27 +149,28 @@ models:
   - name: num_of_course_enrolled
     description: number, the number of courses learner enrolled based on their emails
       so this counts as same person if they use the email to register on different
-      platforms
+      platforms. Emails are compared lowercased.
   - name: num_of_course_passed
     description: number, the number of courses learner passed based on their emails
       so this counts as same person if they use the email to register on different
-      platforms
+      platforms. Emails are compared lowercased.
   - name: first_course_start_datetime
     description: string, year and term from the users first course enrollment
   - name: last_course_start_datetime
     description: string, year and term from the users latest course enrollment
   - name: number_of_courserun_certificates
-    description: int, number of course run enrollment certificates associated with
-      the user
+    description: int, number of course run enrollment certificates on any platform
+      whose enrollment email matches the user's email, compared lowercased
   - name: total_amount_paid_orders
-    description: int, sum of total orders paid associated with the user
+    description: int, sum of total orders paid on any platform whose order email matches
+      the user's email, compared lowercased
   - name: latest_income_usd
     description: int, the users latest income in usd. Only populated for mitxonline.
   - name: has_program_certificate
     description: boolean, true if any marts__combined_program_enrollment_detail row
-      with the user's email has user_has_completed_program true, otherwise null (never
-      false). A revoked certificate does not count. For which programs the user completed,
-      read marts__combined_program_enrollment_detail.
+      whose email matches the user's email, compared lowercased, has user_has_completed_program
+      true, otherwise null (never false). A revoked certificate does not count. For
+      which programs the user completed, read marts__combined_program_enrollment_detail.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -1463,3 +1464,39 @@ unit_tests:
     rows:
     - {user_hashed_id: "completed", has_program_certificate: true}
     - {user_hashed_id: "revoked", has_program_certificate: null}
+- name: test_marts__combined__users_matches_rows_by_lowercased_email
+  description: >
+    Program, order and course rows match a user whose email differs from theirs
+    only in letter case. Rows under two casings of one email aggregate once onto
+    the user row, so the user is not repeated.
+  model: marts__combined__users
+  given:
+  - input: ref('int__mitx__users')
+    rows: []
+  - input: ref('int__combined__users')
+    rows:
+    - {user_hashed_id: "mixed", user_id: 1, user_email: "Mixed@Example.com", platform: "xPro"}
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('int__combined__courserun_enrollments')
+    rows:
+    - {user_email: "mixed@example.com", course_title: "Course A", courserun_readable_id: "run-a",
+      courserungrade_is_passing: true, courseruncertificate_uuid: "cert-a"}
+    - {user_email: "MIXED@EXAMPLE.COM", course_title: "Course B", courserun_readable_id: "run-b",
+      courserungrade_is_passing: false, courseruncertificate_uuid: null}
+  - input: ref('marts__combined_program_enrollment_detail')
+    rows:
+    - {user_email: "mixed@example.com", programcertificate_uuid: "uuid-1", user_has_completed_program: true}
+    - {user_email: "MIXED@example.com", programcertificate_uuid: null, user_has_completed_program: false}
+  - input: ref('marts__combined__orders')
+    rows:
+    - {user_email: "mixed@example.com", order_total_price_paid: 100.0}
+    - {user_email: "MIXED@EXAMPLE.COM", order_total_price_paid: 50.0}
+  - input: ref('marts__mitxonline_user_profiles')
+    rows: []
+  - input: ref('int__combined__course_runs')
+    rows: []
+  expect:
+    rows:
+    - {user_hashed_id: "mixed", num_of_course_enrolled: 2, num_of_course_passed: 1,
+      number_of_courserun_certificates: 1, total_amount_paid_orders: 150.0, has_program_certificate: true}
