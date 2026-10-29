@@ -40,6 +40,7 @@ vars:
   iceberg_schema_location_roots:
     ol_data_lake_qa: "s3://ol-data-lake-staging-qa/processed"
     ol_data_lake_production: "s3://ol-data-lake-staging-production/processed"
+    ol_data_lake_ci: "s3://ol-data-lake-staging-ci/processed"
     ol_data_lake_local: "s3://ol-data-lake-local/warehouse"
 
   open_learning:
@@ -96,6 +97,14 @@ vars:
     # How far bridge_courserun_prerequisite_coverage walks down passing broader edges
     # to list an umbrella requirement's (e.g. Python programming) narrower concepts.
     courseware_prerequisite_max_narrower_hops: 3
+    # Whether a Dagster asset writes the concept tagging tables
+    # (courseware_concept_tagging_run, _mention, _tagging_alias), and the answer
+    # checks (courseware_answer_check), to the warehouse. Until then only the local
+    # runner writes them, so the sources, the models that read them and those
+    # models' tests are enabled on DuckDB targets only (macro
+    # courseware_local_tables_enabled). Set true once the asset exists.
+    courseware_tagging_in_warehouse: false
+    courseware_answer_check_in_warehouse: false
 
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
@@ -187,7 +196,11 @@ models:
       +grants:
         select: ["read_only_production", "ol_data_analyst", "reverse_etl", "mit_learn_etl"]
     b2b_analytics:
-      +enabled: "{{ target.type == 'starrocks' }}"
+      # StarRocks' own tables, so only on a target writing default_catalog. A
+      # lake target (catalog ol_data_lake_<env>) would put them in
+      # <target.schema>_b2b_analytics in Iceberg, where nothing reads them.
+      +enabled: "{{ target.type == 'starrocks' and target.catalog == 'default_catalog'\
+        \ }}"
       # Every `dbt build` drops and recreates each MV with its current SELECT,
       # with or without --full-refresh (the locked dbt-starrocks; see
       # lakehouse/assets/lakehouse/dbt_starrocks.py). An edited SELECT lands
@@ -229,7 +242,8 @@ models:
     # their own StarRocks database, provisioned in ol-infrastructure
     # substructure/starrocks, and can be granted apart from the aggregate views.
     b2b_learner_records:
-      +enabled: "{{ target.type == 'starrocks' }}"
+      +enabled: "{{ target.type == 'starrocks' and target.catalog == 'default_catalog'\
+        \ }}"
       +materialized: table
       +tags: ["starrocks"]
       +schema: b2b_learner_records

@@ -17,15 +17,43 @@ BloomProcess = Literal[
 ]
 KnowledgeType = Literal["factual", "conceptual", "procedural", "metacognitive"]
 
+_JSON_DECODER = json.JSONDecoder()
 
-def _takes_container(annotation: Any) -> bool:
-    """Whether a field accepts a list, a dict or a nested model."""
+
+def _container_types(annotation: Any) -> tuple[type, ...]:
+    """Return the JSON container types (list, dict) a field accepts."""
     origin = get_origin(annotation)
     if origin in (Union, UnionType):
-        return any(_takes_container(arg) for arg in get_args(annotation))
-    if origin in (list, dict):
-        return True
-    return isinstance(annotation, type) and issubclass(annotation, BaseModel)
+        return tuple(
+            kind for arg in get_args(annotation) for kind in _container_types(arg)
+        )
+    if origin is list:
+        return (list,)
+    if origin is dict or (
+        isinstance(annotation, type) and issubclass(annotation, BaseModel)
+    ):
+        return (dict,)
+    return ()
+
+
+def _decode_json_container(value: str, expected: tuple[type, ...]) -> Any:
+    """Return the list or object a string JSON-encodes, else the string unchanged.
+
+    Closing brackets after the value are dropped: a model that encodes an array as
+    a string sometimes closes the enclosing object inside it too ('[{...}]}').
+
+    :param value: the string the model sent
+    :param expected: the container types the field accepts
+    :returns: the decoded container when it is one of expected, else value
+    """
+    text = value.strip()
+    try:
+        decoded, end = _JSON_DECODER.raw_decode(text)
+    except json.JSONDecodeError:
+        return value
+    if text[end:].strip("]} \t\r\n") or not isinstance(decoded, expected):
+        return value
+    return decoded
 
 
 class Strict(BaseModel):
@@ -42,21 +70,23 @@ class Strict(BaseModel):
         """Decode a list or object the model sent JSON-encoded as a string.
 
         Without strict tools the arguments are not constrained, and a model now and
-        then returns a nested array as the string '[{...}]' instead of the array.
+        then returns a nested array as the string '[{...}]' instead of the array,
+        or an item of an array as the string '{...}'. Every nested model is a
+        Strict, so this covers items as well as the top-level fields.
         """
+        if isinstance(data, str):
+            data = _decode_json_container(data, (dict,))
         if not isinstance(data, dict):
             return data
         decoded = dict(data)
         for key, value in data.items():
             # a string field keeps its text even when that text parses as JSON
             field = cls.model_fields.get(key)
-            if field is None or not _takes_container(field.annotation):
+            if field is None or not isinstance(value, str):
                 continue
-            if isinstance(value, str) and value.lstrip()[:1] in ("[", "{"):
-                try:
-                    decoded[key] = json.loads(value)
-                except json.JSONDecodeError:
-                    continue
+            expected = _container_types(field.annotation)
+            if expected:
+                decoded[key] = _decode_json_container(value, expected)
         return decoded
 
 

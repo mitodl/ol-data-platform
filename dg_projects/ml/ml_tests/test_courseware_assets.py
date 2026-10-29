@@ -56,6 +56,7 @@ from ml.assets.courseware_resolution import (
     assignment_churn,
     courseware_resolution,
 )
+from ml.assets.courseware_tagging import courseware_concept_tagging
 from ml.lib import warehouse
 from ml.lib.courseware import graph
 from ml.lib.courseware.describe import (
@@ -76,6 +77,8 @@ from pyiceberg.catalog.sql import SqlCatalog
 from pyiceberg.exceptions import CommitFailedException, NoSuchTableError
 
 from .test_courseware_resolve import FakeEmbedder
+from .test_courseware_tagging import aliases as tagging_aliases
+from .test_courseware_tagging import sources as tagging_sources
 
 PLATFORM = "mitxonline"
 COURSERUN = "course-v1:MITx+UAI.4+1T2026"
@@ -1424,6 +1427,64 @@ def test_graph_reports_cycles_and_skips_unchanged_input(tables, monkeypatch):
         "res1",
         "res2",
     ]
+
+
+# ----------------------------------------------------------------------- tagging
+def newest_tagging(tables: dict[str, pl.DataFrame]) -> dict[str, Any]:
+    return (
+        tables["courseware_concept_tagging_run"].sort("tagged_at").row(-1, named=True)
+    )
+
+
+def test_tagging_skips_same_inputs_and_retags_only_what_changed(tables):
+    tables["int__courseware__extraction_sources"] = tagging_sources(
+        "a decision tree", "a random forest"
+    )
+    tables["dim_concept_alias"] = tagging_aliases(
+        ("decision tree", "c1"), ("random forest", "c2")
+    )
+    resources = {"io_manager": Warehouse(tables)}
+
+    materialize([courseware_concept_tagging], resources=resources)
+    first = newest_tagging(tables)
+    assert first["retagged_source_count"] == 2
+    assert tables["courseware_concept_mention"].height == 2
+
+    # the newest run has these inputs, so nothing is written
+    materialize([courseware_concept_tagging], resources=resources)
+    assert tables["courseware_concept_tagging_run"].height == 1
+    assert tables["courseware_concept_tagging_source"].height == 2
+
+    # one changed source is the only one tagged
+    tables["int__courseware__extraction_sources"] = tagging_sources(
+        "a decision tree", "a random forest and a decision tree"
+    )
+    materialize([courseware_concept_tagging], resources=resources)
+    second = newest_tagging(tables)
+    assert (second["retagged_source_count"], second["previous_tagging_run_id"]) == (
+        1,
+        first["tagging_run_id"],
+    )
+    new_mentions = tables["courseware_concept_mention"].filter(
+        pl.col("tagging_run_id") == second["tagging_run_id"]
+    )
+    assert set(new_mentions["source_ref"]) == {"block1"}
+    records = tables["courseware_concept_tagging_source"].filter(
+        pl.col("tagging_run_id") == second["tagging_run_id"]
+    )
+    assert dict(records.select("source_ref", "mention_run_id").iter_rows()) == {
+        "block0": first["tagging_run_id"],
+        "block1": second["tagging_run_id"],
+    }
+
+    # a new dictionary tags every source again
+    tables["dim_concept_alias"] = tagging_aliases(
+        ("decision tree", "c1"), ("random forest", "c2"), ("forest", "c3")
+    )
+    materialize([courseware_concept_tagging], resources=resources)
+    third = newest_tagging(tables)
+    assert third["retagged_source_count"] == 2
+    assert third["previous_tagging_run_id"] is None
 
 
 # ----------------------------------------------------------------------- release

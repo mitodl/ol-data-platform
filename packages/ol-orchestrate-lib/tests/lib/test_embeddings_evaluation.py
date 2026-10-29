@@ -1,5 +1,9 @@
 """Retrieval metrics, exact search, and the Opik experiment they are logged as."""
 
+import os
+import subprocess
+import sys
+import textwrap
 from collections.abc import Sequence
 from unittest.mock import MagicMock, patch
 
@@ -214,3 +218,27 @@ def test_query_ids_must_be_unique() -> None:
         evaluate_retrieval(STRATEGY, duplicated, CORPUS, QueryEmbedder())
     with pytest.raises(ValueError, match="unique"):
         eval_set_dataset_name("set", duplicated)
+
+
+def test_import_keeps_the_host_sentry_client() -> None:
+    """Importing the module leaves the process's Sentry client in place.
+
+    In a subprocess, because opik skips its Sentry setup when pytest is imported,
+    and without the OPIK_SENTRY_ENABLE this process already got from ol_llm.
+    """
+    probe = textwrap.dedent(
+        """
+        import sentry_sdk
+
+        sentry_sdk.init(dsn="https://public@example.invalid/1")
+        host = sentry_sdk.get_client()
+
+        import ol_orchestrate.lib.embeddings.evaluation
+
+        assert sentry_sdk.get_client() is host, sentry_sdk.get_client().dsn
+        """
+    )
+    env = {k: v for k, v in os.environ.items() if k != "OPIK_SENTRY_ENABLE"}
+    # So a regression's client reports nowhere instead of to Comet.
+    env["OPIK_SENTRY_DSN"] = "https://public@example.invalid/2"
+    subprocess.run([sys.executable, "-c", probe], check=True, env=env)  # noqa: S603
