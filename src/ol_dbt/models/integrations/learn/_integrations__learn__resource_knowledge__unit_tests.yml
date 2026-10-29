@@ -13,9 +13,12 @@ unit_tests:
       courserun_fk: r1, courserun_readable_id: "course-v1:X+Y+1T2026"}
   - input: ref('bridge_courserun_concept')
     rows:
-    - {courserun_fk: r1, concept_fk: pandas, relation: teaches, claim_count: 2, accepted_claim_count: 1}
-    - {courserun_fk: r1, concept_fk: numpy, relation: teaches, claim_count: 5, accepted_claim_count: 5}
-    - {courserun_fk: r1, concept_fk: sklearn, relation: teaches, claim_count: 3, accepted_claim_count: 0}
+    - {courserun_fk: r1, concept_fk: pandas, relation: teaches, claim_count: 2, accepted_claim_count: 1,
+      passes_support_rule: true}
+    - {courserun_fk: r1, concept_fk: numpy, relation: teaches, claim_count: 5, accepted_claim_count: 5,
+      passes_support_rule: true}
+    - {courserun_fk: r1, concept_fk: sklearn, relation: teaches, claim_count: 3, accepted_claim_count: 0,
+      passes_support_rule: true}
   - input: ref('dim_concept')
     rows:
     - {concept_pk: pandas, preferred_label: pandas, review_status: accepted, lifecycle_status: active,

@@ -331,7 +331,8 @@ models:
     equivalence (close) and association (complements, related).
   config:
     meta:
-      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      # Reads dim_course_run for course keys; no QA form until the Dagster assets
+      # exist, as for bridge_courserun_concept.
       qa_buildable: false
   columns:
   - name: concept_relation_pk
@@ -346,6 +347,13 @@ models:
     - relationships:
         to: ref('dim_concept')
         field: concept_pk
+    # builds_on rows are observations, so a cycle among passing edges is a signal
+    # to review, not a broken contract
+    - acyclic:
+        to_column: to_concept_fk
+        config:
+          severity: warn
+          where: relation = 'builds_on' and passes_support_rule
   - name: to_concept_fk
     description: str, the broader concept, the concept or tool built on, or the higher
       id
@@ -366,8 +374,16 @@ models:
     description: int, units across those runs that showed the edge
   - name: reverse_courserun_support
     description: int, builds_on only, course runs showing the opposite direction
+  - name: course_scope_support
+    description: int, builds_on only, scope_support with each course's reruns counted
+      once (the run with the most units; a run without a course_fk takes another rerun's,
+      else is keyed by the run id less its run segment); the support the support rule
+      reads, since reruns of one course have near-identical text
+  - name: reverse_scope_support
+    description: int, builds_on only, course_scope_support of the opposite direction
   - name: direction_consistency
-    description: float, builds_on only, support / (support + reverse support)
+    description: float, builds_on only, course_scope_support / (course_scope_support
+      + reverse_scope_support)
   - name: co_taught_lift
     description: float, complements only, co-taught unit count over the count expected
       by chance
@@ -385,6 +401,21 @@ models:
     description: timestamp, the latest evidence for the edge
   - name: review_status
     description: str, proposed, accepted or rejected
+  - name: passes_support_rule
+    description: boolean, whether the edge passes the support rule, which filters
+      noise and does not accept the edge (review_status does that); builds_on needs
+      course_scope_support of courseware_prerequisite_min_scope_support and direction_consistency
+      of courseware_prerequisite_min_direction_consistency (no course-count clause,
+      since every supporting course adds at least one unit), every other relation
+      passes. A passing builds_on edge is still a course observation, not a prerequisite
+    tests:
+    - not_null
+  - name: support_rule_failure
+    description: str, builds_on only, insufficient_support or contested_direction
+      when the edge fails the support rule
+    tests:
+    - accepted_values:
+        values: [insufficient_support, contested_direction]
 
 - name: dim_concept_community
   description: Neighbourhoods of related concepts from the newest graph run, with
@@ -433,12 +464,13 @@ models:
   - name: foundation_rank
     description: float, PageRank over builds_on toward foundations
   - name: sequence_level
-    description: int, longest chain of concepts beneath this one in builds_on
+    description: int, longest chain of concepts beneath this one in builds_on (observed
+      instructional order, not a prerequisite chain)
   - name: hierarchy_depth
     description: int, longest chain of broader concepts above this one
   - name: in_sequence_cycle
-    description: boolean, whether the concept is on a builds_on cycle (a data-quality
-      finding)
+    description: boolean, whether the concept is on a builds_on cycle (a finding to
+      review; builds_on edges are observations, so a cycle is not by itself bad data)
   - name: in_hierarchy_cycle
     description: boolean, whether the concept is on a broader cycle (a data-quality
       finding)
@@ -540,6 +572,37 @@ models:
       only relations with at least one
   - name: scope_count
     description: int, distinct scopes behind the relation
+  - name: relied_scope_ids
+    description: array of str, inferred requires only, the units relying on the concept,
+      in course order; join on (platform, courserun_readable_id, scope_id) to dim_courseware_extraction
+      for the extraction version behind each
+  - name: prior_scope_count
+    description: int, inferred requires only, units relying on the concept before
+      the run teaches it
+  - name: taught_scope_count
+    description: int, inferred requires only, scopes of the run that teach the concept
+      (all after the first reliance), the contrary evidence
+  - name: course_support
+    description: int, inferred requires only, distinct courses (course_fk, or for
+      a run without one another rerun's course_fk, else the platform and the run id
+      less its run segment) with a run that declares the concept or infers it with
+      a direction_consistency clearing the threshold, this run included
+  - name: direction_consistency
+    description: float, inferred requires only, prior_scope_count / (prior_scope_count
+      + taught_scope_count)
+  - name: passes_support_rule
+    description: boolean, whether the relation passes the support rule, which filters
+      noise and does not accept it; inferred requires needs the courseware_prerequisite_*
+      support and direction thresholds, every other relation passes. A passing inferred
+      requirement is still an observation of this run, not a reviewed prerequisite
+    tests:
+    - not_null
+  - name: support_rule_failure
+    description: str, inferred requires only, insufficient_support or contested_direction
+      when the requirement fails the support rule
+    tests:
+    - accepted_values:
+        values: [insufficient_support, contested_direction]
 
 - name: bridge_course_content_concept
   description: Which known concepts each courseware block or course document mentions,

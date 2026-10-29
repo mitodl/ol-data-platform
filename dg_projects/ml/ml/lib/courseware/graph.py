@@ -1,17 +1,18 @@
 """Topology of the concept graph: communities, sequencing, hierarchy and sparsity.
 
 Reads bridge_concept_relation (edges with their evidence) and dim_concept (active
-concepts), keeps the edges that clear the support thresholds, and computes on three
-views of the graph with NetworKit:
+concepts), keeps the edges that clear the support thresholds (for builds_on, the ones
+that pass dbt's support rule), and computes on three views of the graph with NetworKit:
 
 - association: undirected and weighted, every relation family. Leiden communities,
   connected components, degree, density and sparsity, and a local-degree backbone
   score per edge for drawing a sparsified graph.
-- sequence: builds_on, directed from a concept to what it builds on. PageRank on it
-  is a foundation rank (rank flows to the concepts many others build on); strongly
-  connected components find cycles, which are data-quality findings, since learning
-  order should be acyclic; sequence_level is the longest chain of prerequisites
-  beneath a concept.
+- sequence: builds_on, directed from a concept to what it builds on. These edges are
+  observed instructional order (units teaching one concept relied on the other), not
+  reviewed prerequisites, so this view is exploratory. PageRank on it is a foundation
+  rank (rank flows to the concepts many others build on); strongly connected
+  components find cycles, which are findings to review; sequence_level is the longest
+  chain of builds_on edges beneath a concept.
 - hierarchy: broader, directed from narrower to broader. hierarchy_depth is the
   longest chain of broader concepts above a concept; cycles are findings too.
 
@@ -31,8 +32,6 @@ import networkit as nk
 import polars as pl
 
 GRAPH_VERSION = "courseware_concept_graph_v1"
-# A builds_on edge needs this share of its course runs to agree on its direction.
-MIN_DIRECTION_CONSISTENCY = 0.6
 # A co-taught complements edge needs at least this lift over chance.
 MIN_CO_TAUGHT_LIFT = 2.0
 MIN_COURSERUN_SUPPORT = 1
@@ -117,11 +116,9 @@ def select_edges(relations: pl.DataFrame) -> pl.DataFrame:
     """
     support = pl.col("courserun_support")
     keep = (
+        # bridge_concept_relation owns the builds_on support and direction rule
         pl.when(pl.col("relation") == "builds_on")
-        .then(
-            (support >= MIN_COURSERUN_SUPPORT)
-            & (pl.col("direction_consistency") >= MIN_DIRECTION_CONSISTENCY)
-        )
+        .then(pl.col("passes_support_rule"))
         .when(pl.col("relation") == "practiced_with")
         .then(support >= MIN_COURSERUN_SUPPORT)
         .when(pl.col("relation") == "complements")
@@ -161,8 +158,8 @@ def _longest_chain(graph: nk.Graph, blocked: set[int]) -> dict[int, int]:
     """Longest path length from each node along out-edges, ignoring cyclic nodes.
 
     For builds_on (concept -> what it builds on) this is the depth of the
-    prerequisite chain beneath a concept; for broader it is the depth of the
-    hierarchy above it.
+    observed instructional order beneath a concept; for broader it is the depth of
+    the hierarchy above it.
     """
     if not graph.numberOfNodes():
         # topologicalSort rejects a graph with no nodes
@@ -354,7 +351,6 @@ def compute_graph(  # noqa: PLR0915
     possible = node_count * (node_count - 1) / 2
     density = edge_count / possible if possible else 0.0
     parameters = {
-        "min_direction_consistency": MIN_DIRECTION_CONSISTENCY,
         "min_co_taught_lift": MIN_CO_TAUGHT_LIFT,
         "min_courserun_support": MIN_COURSERUN_SUPPORT,
         "relation_weights": RELATION_WEIGHTS,

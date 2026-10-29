@@ -1,0 +1,192 @@
+---
+unit_tests:
+- name: test_bridge_concept_relation_counts_a_courses_reruns_once
+  description: >
+    Runs r1 and r2 are reruns of residential course 6.1, which has no course_fk, and
+    each shows a builds_on b in one unit, so the edge has one course of support and
+    fails the support rule. c builds_on d in one unit each of 6.1 and 6.2, two
+    courses, so it passes. e builds_on f in units u1 and u2 of r1 and u1 of r2; the
+    course counts its larger run, two units, so it passes.
+  model: bridge_concept_relation
+  given:
+  - input: ref('int__courseware__concept_relation_evidence')
+    rows:
+    - {from_concept_id: a, to_concept_id: b, relation: builds_on, evidence_source: course_sequence,
+      platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2025_Spring",
+      scope_count: 1}
+    - {from_concept_id: a, to_concept_id: b, relation: builds_on, evidence_source: course_sequence,
+      platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2026_Spring",
+      scope_count: 1}
+    - {from_concept_id: c, to_concept_id: d, relation: builds_on, evidence_source: course_sequence,
+      platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2025_Spring",
+      scope_count: 1}
+    - {from_concept_id: c, to_concept_id: d, relation: builds_on, evidence_source: course_sequence,
+      platform: residential, courserun_readable_id: "course-v1:MITx+6.2+2025_Spring",
+      scope_count: 1}
+    - {from_concept_id: e, to_concept_id: f, relation: builds_on, evidence_source: course_sequence,
+      platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2025_Spring",
+      scope_id: u1, scope_count: 1}
+    - {from_concept_id: e, to_concept_id: f, relation: builds_on, evidence_source: course_sequence,
+      platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2025_Spring",
+      scope_id: u2, scope_count: 1}
+    - {from_concept_id: e, to_concept_id: f, relation: builds_on, evidence_source: course_sequence,
+      platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2026_Spring",
+      scope_id: u1, scope_count: 1}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: r1, course_fk: null, platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2025_Spring",
+      is_current: true}
+    - {courserun_pk: r2, course_fk: null, platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2026_Spring",
+      is_current: true}
+    - {courserun_pk: r3, course_fk: null, platform: residential, courserun_readable_id: "course-v1:MITx+6.2+2025_Spring",
+      is_current: true}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows: []
+  expect:
+    rows:
+    - {from_concept_fk: a, to_concept_fk: b, scope_support: 2, course_scope_support: 1,
+      passes_support_rule: false, support_rule_failure: insufficient_support}
+    - {from_concept_fk: c, to_concept_fk: d, scope_support: 2, course_scope_support: 2,
+      passes_support_rule: true, support_rule_failure: null}
+    - {from_concept_fk: e, to_concept_fk: f, scope_support: 3, course_scope_support: 2,
+      passes_support_rule: true, support_rule_failure: null}
+
+- name: test_bridge_courserun_concept_counts_a_courses_reruns_once
+  description: >
+    x is assumed in one unit of each rerun of residential course 6.1 (no course_fk),
+    one course, so it fails the support rule in both runs. y is assumed in one unit
+    of 6.1 and one of 6.2, two courses, so it passes in both.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2025_Spring",
+      scope_id: u1, scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge,
+      concept_id: x}
+    - {platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2026_Spring",
+      scope_id: u1, scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge,
+      concept_id: x}
+    - {platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2025_Spring",
+      scope_id: u2, scope_kind: unit, scope_position: 2, claim_kind: assumed_knowledge,
+      concept_id: y}
+    - {platform: residential, courserun_readable_id: "course-v1:MITx+6.2+2025_Spring",
+      scope_id: u1, scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge,
+      concept_id: y}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: r1, course_fk: null, platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2025_Spring",
+      is_current: true}
+    - {courserun_pk: r2, course_fk: null, platform: residential, courserun_readable_id: "course-v1:MITx+6.1+2026_Spring",
+      is_current: true}
+    - {courserun_pk: r3, course_fk: null, platform: residential, courserun_readable_id: "course-v1:MITx+6.2+2025_Spring",
+      is_current: true}
+  expect:
+    rows:
+    - {courserun_fk: r1, concept_fk: x, course_support: 1, passes_support_rule: false}
+    - {courserun_fk: r2, concept_fk: x, course_support: 1, passes_support_rule: false}
+    - {courserun_fk: r1, concept_fk: y, course_support: 2, passes_support_rule: true}
+    - {courserun_fk: r3, concept_fk: y, course_support: 2, passes_support_rule: true}
+
+- name: test_bridge_concept_relation_keys_reruns_with_a_missing_course_fk_together
+  description: >
+    r1 and r2 are reruns of course X, but only r2 carries course X's course_fk (r1's
+    dim_course_run row predates the course), so r1 takes r2's. a builds_on b in one
+    unit of each is one course of support and fails the support rule.
+  model: bridge_concept_relation
+  given:
+  - input: ref('int__courseware__concept_relation_evidence')
+    rows:
+    - {from_concept_id: a, to_concept_id: b, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2025", scope_count: 1}
+    - {from_concept_id: a, to_concept_id: b, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2026", scope_count: 1}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: r1, course_fk: null, platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2025",
+      is_current: true}
+    - {courserun_pk: r2, course_fk: cx, platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2026",
+      is_current: true}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows: []
+  expect:
+    rows:
+    - {from_concept_fk: a, to_concept_fk: b, scope_support: 2, course_scope_support: 1,
+      passes_support_rule: false, support_rule_failure: insufficient_support}
+
+- name: test_bridge_courserun_concept_keys_reruns_with_a_missing_course_fk_together
+  description: >
+    r1 and r2 are reruns of course X, but only r2 carries course X's course_fk, so
+    r1
+    takes r2's. x is assumed in one unit of each, one course, so it fails the support
+    rule in both runs. y is assumed in r1 and in Emeritus run r3, which the catalog
+    files under a different course, so it has two courses and passes.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2025", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: x}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, claim_kind: assumed_knowledge, concept_id: x}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2025", scope_id: u2,
+      scope_kind: unit, scope_position: 2, claim_kind: assumed_knowledge, concept_id: y}
+    - {platform: emeritus, courserun_readable_id: "MIT-EM-Y-2026", scope_id: u1, scope_kind: unit,
+      scope_position: 1, claim_kind: assumed_knowledge, concept_id: y}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: r1, course_fk: null, platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2025",
+      is_current: true}
+    - {courserun_pk: r2, course_fk: cx, platform: mitxonline, courserun_readable_id: "course-v1:MITx+X+1T2026",
+      is_current: true}
+    - {courserun_pk: r3, course_fk: cy, platform: emeritus, courserun_readable_id: "MIT-EM-Y-2026",
+      is_current: true}
+  expect:
+    rows:
+    - {courserun_fk: r1, concept_fk: x, course_support: 1, passes_support_rule: false}
+    - {courserun_fk: r2, concept_fk: x, course_support: 1, passes_support_rule: false}
+    - {courserun_fk: r1, concept_fk: y, course_support: 2, passes_support_rule: true}
+    - {courserun_fk: r3, concept_fk: y, course_support: 2, passes_support_rule: true}
+
+- name: test_concept_relation_evidence_keeps_unit_and_extractor_lineage
+  description: >
+    Units u1 and u2 of one run each teach a while using b, so builds_on a -> b is
+    two
+    observations, one per unit, each carrying its scope's extractor version (u2 was
+    read by a newer prompt). Adjudication has no course lineage.
+  model: int__courseware__concept_relation_evidence
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 2, extraction_key: k1, claim_kind: concept,
+      teaching_status: taught, concept_id: a, extracted_at: "2026-10-01 00:00:00"}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 2, extraction_key: k1, claim_kind: concept,
+      teaching_status: used, concept_id: b, extracted_at: "2026-10-01 00:00:00"}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 3, extraction_key: k2, claim_kind: concept,
+      teaching_status: taught, concept_id: a, extracted_at: "2026-10-02 00:00:00"}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 3, extraction_key: k2, claim_kind: concept,
+      teaching_status: used, concept_id: b, extracted_at: "2026-10-02 00:00:00"}
+  - input: ref('int__courseware__extractions')
+    rows:
+    - {extraction_key: k1, extractor_id: courseware_claims_v1, prompt_version: p1,
+      model_id: m1}
+    - {extraction_key: k2, extractor_id: courseware_claims_v1, prompt_version: p2,
+      model_id: m1}
+  - input: ref('int__courseware__adjudicated_concept_relations')
+    rows:
+    - {from_concept_id: a, to_concept_id: c, relation: broader, proposed_at: "2026-10-03\
+        \ 00:00:00"}
+  expect:
+    rows:
+    - {from_concept_id: a, to_concept_id: b, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: u1,
+      extractor_id: courseware_claims_v1, prompt_version: p1, model_id: m1, scope_count: 1}
+    - {from_concept_id: a, to_concept_id: b, relation: builds_on, evidence_source: course_sequence,
+      platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: u2,
+      extractor_id: courseware_claims_v1, prompt_version: p2, model_id: m1, scope_count: 1}
+    - {from_concept_id: a, to_concept_id: c, relation: broader, evidence_source: adjudication,
+      platform: null, courserun_readable_id: null, scope_id: null, extractor_id: null,
+      prompt_version: null, model_id: null, scope_count: 0}

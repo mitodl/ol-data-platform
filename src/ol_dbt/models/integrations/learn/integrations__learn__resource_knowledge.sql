@@ -23,7 +23,8 @@ with learn_runs as (
 
 , run_bridge as (
     select * from {{ ref('bridge_courserun_concept') }}
-    where accepted_claim_count > 0
+    -- accepted claims only, and for inferred requires the support rule as well
+    where accepted_claim_count > 0 and passes_support_rule
 )
 
 , concepts as (

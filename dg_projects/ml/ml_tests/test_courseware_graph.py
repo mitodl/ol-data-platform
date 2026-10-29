@@ -19,7 +19,7 @@ def relation(source, target, kind, **evidence):
         "to_concept_fk": target,
         "relation": kind,
         "courserun_support": evidence.get("support", 2),
-        "direction_consistency": evidence.get("consistency"),
+        "passes_support_rule": evidence.get("passes", True),
         "co_taught_lift": evidence.get("lift"),
         "is_adjudicated": evidence.get("adjudicated", False),
         "has_co_assessed_evidence": False,
@@ -34,7 +34,7 @@ def relations(*rows):
             "to_concept_fk": pl.String,
             "relation": pl.String,
             "courserun_support": pl.Int64,
-            "direction_consistency": pl.Float64,
+            "passes_support_rule": pl.Boolean,
             "co_taught_lift": pl.Float64,
             "is_adjudicated": pl.Boolean,
             "has_co_assessed_evidence": pl.Boolean,
@@ -50,12 +50,12 @@ def test_sequence_levels_foundations_and_cycles():
     result = compute_graph(
         concepts("mean", "variance", "regression", "a", "b"),
         relations(
-            relation("variance", "mean", "builds_on", consistency=1.0),
-            relation("regression", "variance", "builds_on", consistency=1.0),
+            relation("variance", "mean", "builds_on"),
+            relation("regression", "variance", "builds_on"),
             relation("a", "b", "broader", adjudicated=True),
             relation("b", "a", "broader", adjudicated=True),
-            # inconsistent direction across courses: dropped by the threshold
-            relation("mean", "regression", "builds_on", consistency=0.3),
+            # fails bridge_concept_relation's support rule, so it cannot close a cycle
+            relation("mean", "regression", "builds_on", passes=False),
         ),
     )
     nodes = by_concept(result)

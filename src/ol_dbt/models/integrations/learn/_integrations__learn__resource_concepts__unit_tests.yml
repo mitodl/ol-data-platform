@@ -4,8 +4,9 @@ unit_tests:
   description: >
     Two courses that use "kernel" for two meanings point at two concepts, so Learn
     gets each course's sense by id, not a shared label. A relation only proposed
-    claims support, a proposed concept, and a concept integrations__learn__concepts
-    leaves out (not learner-facing, merged, or no current labels) are left out.
+    claims support, a proposed concept, a concept integrations__learn__concepts
+    leaves out (not learner-facing, merged, or no current labels), and an inferred
+    requirement failing the support rule are left out.
   model: integrations__learn__resource_concepts
   given:
   - input: ref('int__courseware__learn_course_runs')
@@ -17,21 +18,23 @@ unit_tests:
   - input: ref('bridge_courserun_concept')
     rows:
     - {courserun_fk: os, concept_fk: os-kernel, relation: teaches, requirement_source: null,
-      claim_count: 2, accepted_claim_count: 2, first_scope_position: 3}
+      claim_count: 2, accepted_claim_count: 2, first_scope_position: 3, passes_support_rule: true}
     - {courserun_fk: ml, concept_fk: ml-kernel, relation: teaches, requirement_source: null,
-      claim_count: 4, accepted_claim_count: 1, first_scope_position: 7}
+      claim_count: 4, accepted_claim_count: 1, first_scope_position: 7, passes_support_rule: true}
     - {courserun_fk: ml, concept_fk: svm, relation: uses, requirement_source: null,
-      claim_count: 1, accepted_claim_count: 0, first_scope_position: 2}
+      claim_count: 1, accepted_claim_count: 0, first_scope_position: 2, passes_support_rule: true}
     - {courserun_fk: ml, concept_fk: numpy, relation: uses, requirement_source: null,
-      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1}
+      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1, passes_support_rule: true}
+    - {courserun_fk: ml, concept_fk: os-kernel, relation: requires, requirement_source: inferred,
+      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1, passes_support_rule: false}
     - {courserun_fk: ml, concept_fk: mnist, relation: uses, requirement_source: null,
-      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1}
+      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1, passes_support_rule: true}
     - {courserun_fk: ml, concept_fk: gram, relation: uses, requirement_source: null,
-      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1}
+      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1, passes_support_rule: true}
     - {courserun_fk: ml, concept_fk: rbf, relation: uses, requirement_source: null,
-      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1}
+      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1, passes_support_rule: true}
     - {courserun_fk: ml, concept_fk: kmeans, relation: teaches, requirement_source: null,
-      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1}
+      claim_count: 1, accepted_claim_count: 1, first_scope_position: 1, passes_support_rule: true}
   - input: ref('dim_concept')
     rows:
     - {concept_pk: os-kernel, preferred_label: kernel, review_status: accepted, lifecycle_status: active,

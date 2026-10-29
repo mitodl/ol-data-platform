@@ -9,8 +9,10 @@
 
     Only concepts integrations__learn__concepts publishes (accepted, active,
     learner-facing, with current labels), and relations at least one accepted claim
-    supports, are published, so every concept_id here has a row there. No review
-    workflow exists yet, so this is empty until one does.
+    supports, are published, so every concept_id here has a row there. An inferred
+    requirement must also pass the support rule, which filters noise and does not
+    make it a reviewed prerequisite. No review workflow exists yet, so this is empty
+    until one does.
 
     The release manifest will add a release id to every row, binding this to the
     resolution run, sense assignments and graph run it was built from; until then
@@ -22,7 +24,8 @@ with learn_runs as (
 
 , run_bridge as (
     select * from {{ ref('bridge_courserun_concept') }}
-    where accepted_claim_count > 0
+    -- accepted claims only, and for inferred requires the support rule as well
+    where accepted_claim_count > 0 and passes_support_rule
 )
 
 , concepts as (

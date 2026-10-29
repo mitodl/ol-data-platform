@@ -790,7 +790,9 @@ models:
 
 - name: int__courseware__concept_relation_evidence
   description: Every observation that two concepts are related, per relation, evidence
-    source (adjudication, course_sequence, co_taught, co_assessed) and course run.
+    source (adjudication, course_sequence, co_taught, co_assessed), course run and
+    scope, with the extractor version of the scope's reading. A course_sequence row
+    is an instructional observation in one unit, not a dependency between the concepts.
   config:
     meta:
       # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
@@ -814,8 +816,18 @@ models:
     description: str, the course run's platform; null for adjudication
   - name: courserun_readable_id
     description: str, the course run that showed the relation; null for adjudication
+  - name: scope_id
+    description: str, the unit that showed the relation; null for adjudication
+  - name: extractor_id
+    description: str, the extractor of the scope's current reading; null for adjudication
+  - name: prompt_version
+    description: str, the prompt version of the scope's current reading; null for
+      adjudication
+  - name: model_id
+    description: str, the model of the scope's current reading; null for adjudication
   - name: scope_count
-    description: int, units in the course run that showed the relation; 0 for adjudication
+    description: int, 1 for course evidence (one row per unit) and 0 for adjudication,
+      so summing it counts units
   - name: observed_at
     description: timestamp, the earliest extraction or resolution that showed it
 
