@@ -284,14 +284,28 @@ def _adjudicate_senses_batch(
     if len(set(query_ids)) < len(query_ids) or len(set(run_ids)) < len(run_ids):
         msg = "a query or course run has more than one sense decision"
         raise ValueError(msg)
+    # A query or run left out, or numbered past the listing, puts the numbering in
+    # doubt (runs numbered from 1 would give each run its neighbour's sense), so the
+    # batch fails and the next run asks about all of it again.
+    if sorted(query_ids) != list(range(len(batch))):
+        msg = (
+            f"sense decisions for queries {sorted(query_ids)}, "
+            f"expected 0 to {len(batch) - 1}"
+        )
+        raise ValueError(msg)
+    for query in decided.queries:
+        returned = sorted(item.run_id for item in query.runs)
+        expected = len(batch[query.query_id].units)
+        if returned != list(range(expected)):
+            msg = (
+                f"sense decisions for Q{query.query_id} runs {returned}, "
+                f"expected 0 to {expected - 1}"
+            )
+            raise ValueError(msg)
     results: list[tuple[UnitKey, SenseDecision, int | None]] = []
     for query in decided.queries:
-        if not 0 <= query.query_id < len(batch):
-            continue
         sense_query = batch[query.query_id]
         for item in query.runs:
-            if not 0 <= item.run_id < len(sense_query.units):
-                continue
             decision, sense = item.decision, item.sense
             # an existing sense that is not listed, or a new one with no group, is
             # not a decision the run can be assigned by
