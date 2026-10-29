@@ -1054,11 +1054,13 @@ models:
     description: str, different types of nodes that exist in a requirement tree -
       program_root (represent a program) - course (represent a reference to a course)
       - program (represent a reference to a program) - operator (represent a logical
-      operation over a set of courses)
+      operation over a set of courses) - track (a named alternative under a top-level
+      min_number_of 1 operator; the program requires any one whole track, and a track
+      holds operators)
     tests:
     - accepted_values:
         arguments:
-          values: ["program_root", "course", "program", "operator"]
+          values: ["program_root", "course", "program", "operator", "track"]
   - name: programrequirement_path
     description: str, the full materialized path for each node (readonly) e.g. 0001
       is root path, 00010001 is the path to a node in this requirement tree
@@ -1407,7 +1409,8 @@ models:
     tests:
     - not_null
   - name: courserungrade_grade
-    description: float, user's grade for the course (range between 0.0 to 1.0)
+    description: float, user's grade for the course (the application accepts 0.0 to
+      2.0)
     tests:
     - not_null
   - name: courserungrade_letter_grade
@@ -3055,7 +3058,7 @@ unit_tests:
     The raw table holds b2 twice at r3, and only one copy is kept.
   model: stg__mitxonline__openedx__api__course_structure
   given:
-  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__api__course_blocks')
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__api__course_structure_blocks')
     rows:
     - {course_id: course-v1:MITx+1.00x+1T2026, block_id: course, course_content_hash: A,
       retrieved_at: '2026-10-01 00:00:00'}
@@ -3099,7 +3102,7 @@ unit_tests:
     the course, so all of its blocks are.
   model: stg__mitxonline__openedx__api__course_structure
   given:
-  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__api__course_blocks')
+  - input: source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__api__course_structure_blocks')
     rows:
     - {course_id: course-v1:MITx+1.00x+1T2026, block_id: course, course_content_hash: A,
       retrieved_at: '2026-10-01 00:00:00'}

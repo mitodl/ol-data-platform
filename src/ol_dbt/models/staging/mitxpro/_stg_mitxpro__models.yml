@@ -1675,8 +1675,7 @@ models:
     tests:
     - not_null
   - name: cms_certificate_ceus
-    description: str, number continuing education units that are earned with the certificate.
-      Text input that is generally a number
+    description: double, number of continuing education units earned with the certificate.
   - name: cms_certificate_signitory_ids
     description: Array, Array of int of wagtail_page_ids associated with cms_signatory
       records
@@ -2789,7 +2788,7 @@ unit_tests:
     The raw table holds b2 twice at r3, and only one copy is kept.
   model: stg__mitxpro__openedx__api__course_structure
   given:
-  - input: source('ol_warehouse_raw_data', 'raw__xpro__openedx__api__course_blocks')
+  - input: source('ol_warehouse_raw_data', 'raw__xpro__openedx__api__course_structure_blocks')
     rows:
     - {course_id: course-v1:xPRO+DSx+R1, block_id: course, course_content_hash: A,
       retrieved_at: '2026-10-01 00:00:00'}
@@ -2833,7 +2832,7 @@ unit_tests:
     the course, so all of its blocks are.
   model: stg__mitxpro__openedx__api__course_structure
   given:
-  - input: source('ol_warehouse_raw_data', 'raw__xpro__openedx__api__course_blocks')
+  - input: source('ol_warehouse_raw_data', 'raw__xpro__openedx__api__course_structure_blocks')
     rows:
     - {course_id: course-v1:xPRO+DSx+R1, block_id: course, course_content_hash: A,
       retrieved_at: '2026-10-01 00:00:00'}

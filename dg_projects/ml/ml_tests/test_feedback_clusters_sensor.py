@@ -84,11 +84,8 @@ def _evaluate(instance: DagsterInstance | None = None, **table_args):
             "ml.sensors.feedback_clusters.get_dbt_model_as_dataframe",
             side_effect=_tables(**table_args),
         ),
-        patch(
-            "ml.sensors.feedback_clusters.default_embedding_model_version",
-            return_value=MODEL,
-        ),
-        patch("ml.sensors.feedback_clusters.EMBEDDING_DIM", 1024),
+        patch("ml.lib.embed.EMBEDDING_MODEL", f"openai:{MODEL}"),
+        patch("ml.lib.embed.EMBEDDING_DIM", 1024),
         # 10 embedded conversations against a baseline of 2: a small trigger
         patch(
             "ml.sensors.feedback_clusters.should_trigger_early_recluster",

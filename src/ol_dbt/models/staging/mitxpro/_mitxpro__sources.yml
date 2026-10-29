@@ -999,8 +999,8 @@ sources:
     - name: product_name
       description: str, name of product associated with the certificate
     - name: CEUs
-      description: str, number continuing education units that are earned with the
-        certificate. Text input that is generally a number
+      description: decimal, number of continuing education units earned with the certificate.
+        Airbyte writes it as ceus, dlt as ce_us.
     - name: signatories
       description: str, Array of json stored as a string list of signatories for the
         certificate format
@@ -2034,24 +2034,10 @@ sources:
     - name: submitter_completed_at
       description: timestamp, specifying when assessment workflow step was completed
 
-  - name: raw__xpro__openedx__api__course_structure
-    description: It contains xPro course content at any point in time - json structure
-    columns:
-    - name: course_id
-      description: str, Open edX Course ID formatted as course-v1:xPRO+{course code}+{run_tag}
-    - name: content_hash
-      description: str, sha256 hashed string for the course content
-    - name: course_structure
-      description: str, json string of the course content
-    - name: course_structure_flattened
-      description: str, flatten json string of the course content. It flattens block's
-        category, metadata and children to same level.
-    - name: retrieved_at
-      description: timestamp, time indicating when this course structure was initially
-        retrieved from REST API.
-
-  - name: raw__xpro__openedx__api__course_blocks
-    description: It contains xPro course content at any point in time - unnested structure
+  - name: raw__xpro__openedx__api__course_structure_blocks
+    description: xPro course structure blocks, one row per block per structure version,
+      loaded by the course_xml_blocks dlt source from xpro/openedx/processed_data/course_blocks/<course_id>/
+      in the landing zone.
     columns:
     - name: block_id
       description: str, Unique ID for a distinct piece of content in a course, formatted
@@ -2086,8 +2072,15 @@ sources:
       description: timestamp, time indicating when the course starts, extracted from
         metadata of the 'course' block
     - name: retrieved_at
-      description: timestamp, time indicating when this block was initially retrieved
-        from REST API.
+      description: str, ISO 8601 time the structure was retrieved from the REST API.
+        A structure retrieved again unchanged overwrites its landing file with a new
+        value, so the landing zone has only the latest retrieval, while this table
+        keeps every copy it loaded
+    - name: _source_file
+      description: str, S3 URL of the structure file the row came from
+    - name: _file_modified_at
+      description: timestamp, last-modified time of the structure file when it was
+        loaded
 
   - name: raw__xpro__openedx__mysql__courseware_studentmodule
     description: It holds the most current course state and score per course section

@@ -24,7 +24,7 @@ OPENAI_KEY = "ok"  # pragma: allowlist secret
 SECRETS = {
     ("secret-data", "pipelines/openai"): {"api_key": OPENAI_KEY},
     ("secret-data", "pipelines/qdrant"): {"host": QDRANT_HOST, "api_key": QDRANT_KEY},
-    ("secret-operations", "sso/opik"): {
+    ("secret-opik", "sdk-client"): {
         "url": "https://sso.example.com/realms/ol",
         "client_id": "opik-client",
         "client_secret": OPIK_CLIENT_SECRET,
@@ -133,12 +133,80 @@ def test_provider_keys_are_copied_from_vault(
     assert os.environ["OPENAI_API_KEY"] == OPENAI_KEY
 
 
+def test_azure_ad_auth_gives_ol_llm_a_token_provider(
+    ol_llm_setup: tuple[MagicMock, MagicMock],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPIK_URL_OVERRIDE", raising=False)
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com")
+    monkeypatch.setenv("OPENAI_API_VERSION", "2024-10-21")
+    configure, _ = ol_llm_setup
+    embeddings._azure_ad_token_provider.cache_clear()
+
+    with (
+        patch.object(embeddings, "DefaultAzureCredential") as credential,
+        patch.object(
+            embeddings, "get_bearer_token_provider", return_value=lambda: "token"
+        ) as token_provider,
+    ):
+        _set_up(
+            EmbeddingsResource(vault=_vault(), environment="ci", azure_ad_auth=True)
+        )
+        _set_up(
+            EmbeddingsResource(vault=_vault(), environment="ci", azure_ad_auth=True)
+        )
+    embeddings._azure_ad_token_provider.cache_clear()
+
+    credential.assert_called_once_with()
+    token_provider.assert_called_once_with(
+        credential.return_value, "https://cognitiveservices.azure.com/.default"
+    )
+    settings = configure.call_args.args[0]
+    assert settings.environment == "ci"
+    assert settings.azure_ad_token_provider() == "token"
+
+
+@pytest.mark.usefixtures("ol_llm_setup")
+def test_azure_ad_auth_needs_the_endpoint_and_api_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPIK_URL_OVERRIDE", raising=False)
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com")
+    monkeypatch.delenv("OPENAI_API_VERSION", raising=False)
+
+    with pytest.raises(ValueError, match="OPENAI_API_VERSION"):
+        _set_up(
+            EmbeddingsResource(vault=_vault(), environment="ci", azure_ad_auth=True)
+        )
+
+
+def test_tracing_is_off_without_the_keycloak_client_location(
+    ol_llm_setup: tuple[MagicMock, MagicMock],
+    vault_client: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An Opik URL without the client's Vault location doesn't trace (or fail)"""
+    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik.example.com/api")
+    monkeypatch.delenv("OPIK_KEYCLOAK_VAULT_MOUNT", raising=False)
+    monkeypatch.delenv("OPIK_KEYCLOAK_VAULT_PATH", raising=False)
+    _, configure_tracing = ol_llm_setup
+
+    _set_up(EmbeddingsResource(vault=_vault(), environment="qa"))
+
+    configure_tracing.assert_called_once_with(
+        TracingConfig(enabled=False, include_content=False)
+    )
+    vault_client.secrets.kv.v1.read_secret.assert_not_called()
+
+
 def test_tracing_authenticates_with_the_vault_keycloak_client(
     ol_llm_setup: tuple[MagicMock, MagicMock],
     vault_client: MagicMock,  # noqa: ARG001
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik.example.com/api")
+    monkeypatch.setenv("OPIK_KEYCLOAK_VAULT_MOUNT", "secret-opik")
+    monkeypatch.setenv("OPIK_KEYCLOAK_VAULT_PATH", "sdk-client")
     _, configure_tracing = ol_llm_setup
 
     _set_up(EmbeddingsResource(vault=_vault(), environment="production"))

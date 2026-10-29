@@ -154,11 +154,8 @@ def test_select_run_to_process_skips_unpromoted_same_model_sweep() -> None:
             "ml.assets.feedback_cluster_identity.get_dbt_model_as_dataframe",
             side_effect=_runs_and_identity_frames(runs_lf),
         ),
-        patch(
-            "ml.assets.feedback_cluster_identity.default_embedding_model_version",
-            return_value="text-embedding-3-large",
-        ),
-        patch("ml.assets.feedback_cluster_identity.EMBEDDING_DIM", 1024),
+        patch("ml.lib.embed.EMBEDDING_MODEL", "openai:text-embedding-3-large"),
+        patch("ml.lib.embed.EMBEDDING_DIM", 1024),
         patch(
             "ml.assets.feedback_cluster_identity.latest_identity_processed_run",
             return_value=None,
@@ -193,11 +190,8 @@ def test_select_run_to_process_skips_runs_older_than_the_live_one() -> None:
                 "ml.assets.feedback_cluster_identity.get_dbt_model_as_dataframe",
                 side_effect=_runs_and_identity_frames(runs, identity_lf),
             ),
-            patch(
-                "ml.assets.feedback_cluster_identity.default_embedding_model_version",
-                return_value="text-embedding-3-large",
-            ),
-            patch("ml.assets.feedback_cluster_identity.EMBEDDING_DIM", 1024),
+            patch("ml.lib.embed.EMBEDDING_MODEL", "openai:text-embedding-3-large"),
+            patch("ml.lib.embed.EMBEDDING_DIM", 1024),
             patch(
                 "ml.assets.feedback_cluster_identity.latest_identity_processed_run",
                 return_value="live",
