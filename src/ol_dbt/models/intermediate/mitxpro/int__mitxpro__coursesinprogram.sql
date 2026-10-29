@@ -24,9 +24,12 @@ with coursesinprogram as (
         , t.coursepage_wagtail_page_id
         , t.course_order
     from coursesinprogram
-    cross join
-        unnest(coursesinprogram.cms_coursesinprogrampage_coursepage_wagtail_page_ids)
-        with ordinality as t(coursepage_wagtail_page_id, course_order) --noqa
+    cross join {{ unnest_with_ordinality(
+        'coursesinprogram.cms_coursesinprogrampage_coursepage_wagtail_page_ids'
+        , 't'
+        , 'coursepage_wagtail_page_id'
+        , 'course_order'
+    ) }}  -- noqa: PRS
 )
 
 , programpageswithpath as (
