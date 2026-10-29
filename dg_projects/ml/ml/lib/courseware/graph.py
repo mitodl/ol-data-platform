@@ -17,8 +17,12 @@ that pass dbt's support rule), and computes on three views of the graph with Net
   others, at its shortest depth, over approved builds_on edges only (review_status
   accepted). It is an experimental projection that keeps the meaning of its input
   edges and validates none of them. No review workflow exists yet, so nothing is
-  approved and the closure is empty. A cycle among approved edges fails the run
-  rather than writing a closure that puts a concept before itself.
+  approved and the closure is empty. The support rule does not gate an approved
+  edge: it filters noise from observations, and approval is the decision it stands
+  in for. A cycle among approved edges (an approved pair in both directions
+  included) fails the run rather than writing a closure that puts a concept before
+  itself. An approved edge whose concept is no longer active is left out and listed
+  in the run's prerequisite_closure_excluded_json.
 - hierarchy: broader, directed from narrower to broader. hierarchy_depth is the
   longest chain of broader concepts above a concept; cycles are findings too.
 
@@ -114,6 +118,7 @@ RUN_SCHEMA = {
     "modularity": pl.Float64,
     "sequence_cycle_node_count": pl.Int64,
     "hierarchy_cycle_node_count": pl.Int64,
+    "prerequisite_closure_excluded_json": pl.String,
 }
 
 
@@ -134,8 +139,7 @@ def select_edges(relations: pl.DataFrame) -> pl.DataFrame:
     """Keep the edges whose evidence clears the thresholds, with a weight each.
 
     :param relations: bridge_concept_relation rows
-    :returns: from_concept_fk, to_concept_fk, relation, weight, and is_approved for
-        a builds_on edge a reviewer accepted, the closure's only input
+    :returns: from_concept_fk, to_concept_fk, relation, weight
     :rtype: pl.DataFrame
     """
     support = pl.col("courserun_support")
@@ -161,13 +165,32 @@ def select_edges(relations: pl.DataFrame) -> pl.DataFrame:
             (
                 pl.col("relation").replace_strict(RELATION_WEIGHTS, default=0.1)
                 * (1 + support.cast(pl.Float64).log1p())
-            ).alias("weight"),
-            (
-                (pl.col("relation") == "builds_on")
-                & (pl.col("review_status") == "accepted")
-            ).alias("is_approved"),
+            ).alias("weight")
         )
-        .select("from_concept_fk", "to_concept_fk", "relation", "weight", "is_approved")
+        .select("from_concept_fk", "to_concept_fk", "relation", "weight")
+    )
+
+
+def approved_prerequisite_edges(relations: pl.DataFrame) -> pl.DataFrame:
+    """Select the builds_on edges a reviewer accepted, the closure's only input.
+
+    passes_support_rule is not applied. It filters noise from observations and lets
+    at most one direction of an observed pair through, so applying it would drop an
+    approval without a trace, and would hide a pair approved in both directions,
+    which is a cycle.
+
+    :param relations: bridge_concept_relation rows
+    :returns: from_concept_fk, to_concept_fk
+    :rtype: pl.DataFrame
+    """
+    return (
+        relations.filter(
+            (pl.col("relation") == "builds_on")
+            & (pl.col("review_status") == "accepted")
+        )
+        .select("from_concept_fk", "to_concept_fk")
+        .unique()
+        .sort(pl.all())
     )
 
 
@@ -220,7 +243,8 @@ def prerequisite_closure(
     :rtype: dict[tuple[int, int], int]
     :raises PrerequisiteCycleError: when the graph has a directed cycle
     """
-    if cycle := _cycle_nodes(graph):
+    self_loops = {source for source, target in graph.iterEdges() if source == target}
+    if cycle := _cycle_nodes(graph) | self_loops:
         names = sorted(labels[node] for node in cycle) if labels else sorted(cycle)
         msg = f"builds_on has a cycle through {names}"
         raise PrerequisiteCycleError(msg)
@@ -311,6 +335,18 @@ def compute_graph(  # noqa: PLR0915
         pl.col("from_concept_fk").is_in(concept_ids)
         & pl.col("to_concept_fk").is_in(concept_ids)
     )
+    approved = approved_prerequisite_edges(relations)
+    approved_is_active = pl.col("from_concept_fk").is_in(concept_ids) & pl.col(
+        "to_concept_fk"
+    ).is_in(concept_ids)
+    excluded_approved = [
+        {
+            "from_concept_id": source,
+            "to_concept_id": target,
+            "reason": "inactive_concept",
+        }
+        for source, target in approved.filter(~approved_is_active).iter_rows()
+    ]
 
     node_count = len(concept_ids)
     association = nk.Graph(node_count, weighted=True, directed=False)
@@ -325,10 +361,10 @@ def compute_graph(  # noqa: PLR0915
             association.addEdge(source, target, row["weight"])
         if row["relation"] == "builds_on" and not sequence.hasEdge(source, target):
             sequence.addEdge(source, target)
-        if row["is_approved"] and not approved_sequence.hasEdge(source, target):
-            approved_sequence.addEdge(source, target)
         if row["relation"] == "broader" and not hierarchy.hasEdge(source, target):
             hierarchy.addEdge(source, target)
+    for source, target in approved.filter(approved_is_active).iter_rows():
+        approved_sequence.addEdge(index[source], index[target])
 
     leiden = nk.community.ParallelLeiden(
         association, randomize=False, gamma=LEIDEN_GAMMA
@@ -439,12 +475,15 @@ def compute_graph(  # noqa: PLR0915
         "relation_weights": RELATION_WEIGHTS,
         "leiden_gamma": LEIDEN_GAMMA,
         "max_prerequisite_depth": MAX_PREREQUISITE_DEPTH,
-        "prerequisite_closure_input": "builds_on with review_status accepted",
+        "prerequisite_closure_input": (
+            "builds_on with review_status accepted, support rule not applied"
+        ),
         "seed": SEED,
     }
     input_checksum = hashlib.sha256(
         json.dumps(
-            [concept_ids, edges.sort(pl.all()).rows(), parameters], default=str
+            [concept_ids, edges.sort(pl.all()).rows(), approved.rows(), parameters],
+            default=str,
         ).encode()
     ).hexdigest()
     run = pl.DataFrame(
@@ -472,6 +511,7 @@ def compute_graph(  # noqa: PLR0915
                 "modularity": modularity if not math.isnan(modularity) else 0.0,
                 "sequence_cycle_node_count": len(sequence_cycles),
                 "hierarchy_cycle_node_count": len(hierarchy_cycles),
+                "prerequisite_closure_excluded_json": json.dumps(excluded_approved),
             }
         ],
         schema=RUN_SCHEMA,

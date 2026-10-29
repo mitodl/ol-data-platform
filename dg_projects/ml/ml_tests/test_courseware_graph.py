@@ -1,3 +1,5 @@
+import json
+
 import networkit as nk
 import polars as pl
 import pytest
@@ -173,7 +175,6 @@ def test_the_closure_reads_only_approved_builds_on():
             # observations that pass the support rule but nobody has approved
             relation("median", "mean", "builds_on"),
             relation("regression", "median", "builds_on"),
-            relation("plot", "mean", "builds_on", passes=False, review="accepted"),
             relation("regression", "plot", "practiced_with"),
         ),
     )
@@ -186,6 +187,7 @@ def test_the_closure_reads_only_approved_builds_on():
         ("regression", "variance"): 1,
         ("regression", "mean"): 2,
     }
+    assert json.loads(result.run["prerequisite_closure_excluded_json"][0]) == []
     assert set(result.prerequisite_closure["graph_run_id"]) == {
         result.run["graph_run_id"][0]
     }
@@ -218,9 +220,80 @@ def test_a_cycle_of_observations_is_a_finding_not_a_failure():
 def test_an_approved_builds_on_cycle_fails_the_graph_run():
     with pytest.raises(PrerequisiteCycleError, match="mean"):
         compute_graph(
+            concepts("mean", "variance", "regression"),
+            relations(
+                relation("variance", "mean", "builds_on", review="accepted"),
+                relation("regression", "variance", "builds_on", review="accepted"),
+                relation("mean", "regression", "builds_on", review="accepted"),
+            ),
+        )
+
+
+def test_a_pair_approved_in_both_directions_fails_the_graph_run():
+    # direction_consistency lets at most one direction of a pair pass the support
+    # rule, so the other approval must not drop out before the cycle check
+    with pytest.raises(PrerequisiteCycleError, match="mean"):
+        compute_graph(
             concepts("mean", "variance"),
             relations(
                 relation("variance", "mean", "builds_on", review="accepted"),
-                relation("mean", "variance", "builds_on", review="accepted"),
+                relation(
+                    "mean", "variance", "builds_on", passes=False, review="accepted"
+                ),
             ),
         )
+
+
+def test_an_approved_builds_on_self_loop_fails_the_graph_run():
+    with pytest.raises(PrerequisiteCycleError, match="mean"):
+        compute_graph(
+            concepts("mean"),
+            relations(relation("mean", "mean", "builds_on", review="accepted")),
+        )
+
+
+def test_an_approved_edge_failing_the_support_rule_is_in_the_closure():
+    result = compute_graph(
+        concepts("mean", "variance", "regression"),
+        relations(
+            relation("variance", "mean", "builds_on", review="accepted"),
+            relation(
+                "regression", "variance", "builds_on", passes=False, review="accepted"
+            ),
+        ),
+    )
+    closure = {
+        (row["from_concept_id"], row["to_concept_id"]): row["min_depth"]
+        for row in result.prerequisite_closure.iter_rows(named=True)
+    }
+    assert closure == {
+        ("variance", "mean"): 1,
+        ("regression", "variance"): 1,
+        ("regression", "mean"): 2,
+    }
+    # the observation view still applies the rule
+    assert by_concept(result)["regression"]["sequence_level"] == 0
+
+
+def test_an_approved_edge_to_an_inactive_concept_is_recorded_on_the_run():
+    concept_rows = concepts("mean", "variance", "regression").with_columns(
+        pl.when(pl.col("concept_pk") == "regression")
+        .then(pl.lit("merged"))
+        .otherwise(pl.col("lifecycle_status"))
+        .alias("lifecycle_status")
+    )
+    result = compute_graph(
+        concept_rows,
+        relations(
+            relation("variance", "mean", "builds_on", review="accepted"),
+            relation("regression", "variance", "builds_on", review="accepted"),
+        ),
+    )
+    assert result.prerequisite_closure["from_concept_id"].to_list() == ["variance"]
+    assert json.loads(result.run["prerequisite_closure_excluded_json"][0]) == [
+        {
+            "from_concept_id": "regression",
+            "to_concept_id": "variance",
+            "reason": "inactive_concept",
+        }
+    ]

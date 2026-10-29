@@ -525,6 +525,10 @@ models:
       a finding to review; only a cycle among approved edges fails the graph run
   - name: hierarchy_cycle_node_count
     description: int, concepts on broader cycles
+  - name: prerequisite_closure_excluded_json
+    description: str, JSON array of approved builds_on edges the prerequisite closure
+      left out, each with from_concept_id, to_concept_id and reason (inactive_concept,
+      a concept merged or without current labels since approval)
 
 - name: bridge_courserun_concept
   description: How a course run relates to a concept (teaches, reviews, uses, mentions,
