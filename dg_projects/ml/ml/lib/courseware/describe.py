@@ -173,6 +173,17 @@ def _describe_batch(
         raise ValueError(msg) from error
 
 
+def current_input_checksums(rows: pl.DataFrame) -> dict[str, str]:
+    """Return each concept's input_checksum as describe_concepts would compute it.
+
+    :param rows: int__courseware__concept_description_inputs rows
+    :rtype: dict[str, str]
+    """
+    return {
+        entry["concept_id"]: entry["input_checksum"] for entry in _concept_inputs(rows)
+    }
+
+
 def description_version(model_id: str, effort: str) -> str:
     """Hash of the prompt, model and effort; a change describes every concept again."""
     return hashlib.sha256(

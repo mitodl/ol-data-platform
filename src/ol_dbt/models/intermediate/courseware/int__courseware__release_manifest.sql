@@ -9,6 +9,10 @@
     whose graph was not computed over its resolution run (is_graph_current), as when
     a resolution run merged concepts and the graph build after it failed.
 
+    It reads both candidate projections and counts their rows, so dbt builds it only
+    after both built in the same run, and the release asset, which runs on this
+    model alone, checks the projections it copies still have those counts.
+
     sense_assignment_version stays null until claim-level sense assignment exists.
 #}
 with registry as (
@@ -63,8 +67,15 @@ with registry as (
 )
 
 , concepts as (
-    select count(case when is_awaiting_description then 1 end) as undescribed_concept_count
+    select
+        count(*) as concept_count
+        , count(case when is_awaiting_description then 1 end) as undescribed_concept_count
     from {{ ref('int__courseware__release_concepts') }}
+)
+
+, resources as (
+    select count(*) as resource_count
+    from {{ ref('int__courseware__release_resource_knowledge') }}
 )
 
 select
@@ -78,6 +89,8 @@ select
     , coalesce(graph.graph_resolution_run_id = registry.resolution_run_id, false) as is_graph_current
     , descriptions.description_prompt_version
     , concepts.undescribed_concept_count
+    , concepts.concept_count
+    , resources.resource_count
     , extractions.extraction_selection_checksum
     , extractions.extraction_count
     , eligibility.source_policy_version
@@ -86,6 +99,7 @@ cross join eligibility
 cross join extractions
 cross join descriptions
 cross join concepts
+cross join resources
 left join resolution
     on registry.resolution_run_id = resolution.resolution_run_id
 left join graph

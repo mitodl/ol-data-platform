@@ -31,17 +31,22 @@ from dagster import (
     AssetKey,
     AssetOut,
     Config,
+    Failure,
     MetadataValue,
     Output,
     asset,
     multi_asset,
 )
+from ml.lib.courseware.describe import current_input_checksums
 from ml.lib.warehouse import read_table, require_table, warehouse_database
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.failures import permanent_failure
 from pydantic import Field
 
 MANIFEST_KEY = AssetKey(["intermediate", "int__courseware__release_manifest"])
+DESCRIPTION_INPUTS_KEY = AssetKey(
+    ["intermediate", "int__courseware__concept_description_inputs"]
+)
 RELEASE_KEY = AssetKey(["intermediate", "courseware_release"])
 PUBLICATION_KEY = AssetKey(["intermediate", "courseware_release_publication"])
 # Each release table and the candidate model it copies, sorted by these keys for
@@ -98,11 +103,20 @@ _OUTPUT_METADATA = {
 }
 
 
-def validate_candidate(manifest: dict[str, Any], concepts: pl.DataFrame) -> list[str]:
+def validate_candidate(
+    manifest: dict[str, Any],
+    concepts: pl.DataFrame,
+    input_checksums: dict[str, str],
+    published_policy_version: str | None,
+) -> list[str]:
     """Say why a candidate cannot be published.
 
     :param manifest: the int__courseware__release_manifest row
     :param concepts: the candidate's int__courseware__release_concepts rows
+    :param input_checksums: each concept's current description input checksum
+        (ml.lib.courseware.describe.current_input_checksums)
+    :param published_policy_version: the published release's source policy version,
+        or None when nothing is published
     :returns: one reason per failed condition; empty when the candidate is valid
     :rtype: list[str]
     """
@@ -122,9 +136,26 @@ def validate_candidate(manifest: dict[str, Any], concepts: pl.DataFrame) -> list
             f"{manifest['undescribed_concept_count']} concepts have no description "
             f"under prompt {manifest['description_prompt_version']}"
         )
-    if not concepts.height:
-        # Most likely a policy or review mistake; publishing it would empty every
-        # learner-facing projection.
+    # A description written from inputs that have since changed (a run made
+    # ineligible, a merge) still says what the old inputs said.
+    stale = sum(
+        1
+        for concept_id, checksum in concepts.select(
+            "concept_id", "description_input_checksum"
+        ).iter_rows()
+        if checksum is not None
+        and concept_id in input_checksums
+        and input_checksums[concept_id] != checksum
+    )
+    if stale:
+        errors.append(f"{stale} concepts' descriptions predate their current inputs")
+    # An empty candidate under the published release's policy is most likely a
+    # review mistake, and would empty every learner-facing projection. Under a
+    # changed policy it is the policy retracting what it no longer allows.
+    if (
+        not concepts.height
+        and published_policy_version == (manifest["source_policy_version"])
+    ):
         errors.append(
             "no accepted concept from a source-eligible run, which would empty the "
             "published release"
@@ -166,6 +197,21 @@ def newest(rows: pl.LazyFrame | None, column: str) -> dict[str, Any] | None:
     return last.row(0, named=True) if last.height else None
 
 
+def published_release() -> dict[str, Any] | None:
+    """Return the courseware_release row the pointer names, or None."""
+    current = newest(
+        read_table("intermediate", PUBLICATION_KEY.path[-1]), "published_at"
+    )
+    if current is None:
+        return None
+    return (
+        require_table("intermediate", RELEASE_KEY.path[-1])
+        .filter(pl.col("release_id") == current["release_id"])
+        .collect()
+        .row(0, named=True)
+    )
+
+
 def release_check(release: dict[str, Any]) -> AssetCheckResult:
     """Pass when the release passed validation, so it may be published."""
     return AssetCheckResult(
@@ -184,7 +230,10 @@ def release_check(release: dict[str, Any]) -> AssetCheckResult:
 
 @multi_asset(
     group_name="courseware",
-    deps=[MANIFEST_KEY, *(key for key, _ in PROJECTIONS.values())],
+    # The manifest alone: dbt builds it only after both projections built in the
+    # same run, so a run that rebuilt one projection and failed the other does not
+    # request a release. The projections and description inputs are read too.
+    deps=[MANIFEST_KEY],
     outs={
         table: AssetOut(
             key=AssetKey(["intermediate", table]),
@@ -226,9 +275,19 @@ def courseware_knowledge_release(context: AssetExecutionContext):
         table: require_table("intermediate", key.path[-1]).collect()
         for table, (key, _) in PROJECTIONS.items()
     }
-    if not projections["courseware_release_concept"].height and not newest(
-        read_table("intermediate", PUBLICATION_KEY.path[-1]), "published_at"
-    ):
+    counts = {
+        "courseware_release_concept": manifest_rows["concept_count"][0],
+        "courseware_release_resource_knowledge": manifest_rows["resource_count"][0],
+    }
+    if any(projections[table].height != count for table, count in counts.items()):
+        msg = (
+            "The candidate projections changed since the manifest was built "
+            f"({ {table: frame.height for table, frame in projections.items()} } rows, "
+            f"manifest {counts}); the next dbt build requests another release"
+        )
+        raise Failure(msg)
+    published = published_release()
+    if not projections["courseware_release_concept"].height and published is None:
         # Until a reviewer accepts a concept every candidate is empty, and failing
         # each automation request for it would only add noise.
         context.log.info("No accepted concept yet and nothing published; no release")
@@ -248,7 +307,14 @@ def courseware_knowledge_release(context: AssetExecutionContext):
         yield release_check(last)
         return
 
-    errors = validate_candidate(manifest, projections["courseware_release_concept"])
+    errors = validate_candidate(
+        manifest,
+        projections["courseware_release_concept"],
+        current_input_checksums(
+            require_table("intermediate", DESCRIPTION_INPUTS_KEY.path[-1]).collect()
+        ),
+        published["source_policy_version"] if published else None,
+    )
     release_id = str(uuid.uuid4())
     for table, frame in projections.items():
         yield Output(
@@ -294,41 +360,60 @@ class ReleasePublicationConfig(Config):
         default=None,
         description=(
             "Publish this release, e.g. an earlier one to roll back. It must have "
-            "passed validation. Unset publishes the newest valid release built "
-            "since the pointer last moved, so a rollback holds until a new "
-            "release is built."
+            "passed validation under the current source policy. Unset publishes "
+            "the newest valid, never-published release built after the published "
+            "one, so a rollback holds until a new release is built."
         ),
     )
 
 
 def release_to_publish(
     releases: pl.DataFrame,
-    current: dict[str, Any] | None,
+    published_ids: list[str],
     requested: str | None,
+    policy_version: str | None,
 ) -> str | None:
     """Choose the release to publish, or None to leave the pointer where it is.
 
+    Automatic publication takes the newest valid release under the current source
+    policy that has never been published and was built after the published one,
+    so a rollback holds until a newer release is built.
+
     :param releases: every courseware_release row
-    :param current: the newest courseware_release_publication row, if any
+    :param published_ids: the release of each publication row, oldest first
     :param requested: a release the run config names
+    :param policy_version: the current source policy version (the manifest's)
     :returns: the release id to publish
     :rtype: str | None
-    :raises PermanentFailure: when the requested release is unknown or invalid
+    :raises PermanentFailure: when the requested release is unknown, invalid or
+        built under another source policy
     """
-    current_id = current["release_id"] if current else None
+    current_id = published_ids[-1] if published_ids else None
     if requested is not None:
         named = releases.filter(pl.col("release_id") == requested)
-        if not named.height or not named["is_valid"][0]:
-            msg = f"Release {requested} does not exist or did not pass validation"
+        if (
+            not named.height
+            or not named["is_valid"][0]
+            or named["source_policy_version"][0] != policy_version
+        ):
+            msg = (
+                f"Release {requested} does not exist, did not pass validation, or "
+                f"was built under another source policy than {policy_version}"
+            )
             raise permanent_failure(msg)
         return None if requested == current_id else requested
-    valid = releases.filter(pl.col("is_valid"))
-    if current is not None:
-        valid = valid.filter(pl.col("built_at") > current["published_at"])
-    target = newest(valid.lazy(), "built_at")
-    if target is None or target["release_id"] == current_id:
-        return None
-    return target["release_id"]
+    candidates = releases.filter(
+        pl.col("is_valid")
+        & (pl.col("source_policy_version") == policy_version)
+        & ~pl.col("release_id").is_in(published_ids)
+    )
+    if current_id is not None:
+        current_built = releases.filter(pl.col("release_id") == current_id)["built_at"][
+            0
+        ]
+        candidates = candidates.filter(pl.col("built_at") > current_built)
+    target = newest(candidates.lazy(), "built_at")
+    return target["release_id"] if target else None
 
 
 @asset(
@@ -354,14 +439,22 @@ def courseware_release_publication(
         context.log.info("No release has been built yet")
         return
     releases = stored.collect()
-    current = newest(
-        read_table("intermediate", PUBLICATION_KEY.path[-1]), "published_at"
+    publications = read_table("intermediate", PUBLICATION_KEY.path[-1])
+    published_ids = (
+        publications.sort("published_at").collect()["release_id"].to_list()
+        if publications is not None
+        else []
     )
-    target = release_to_publish(releases, current, config.release_id)
+    policy_version = require_table("intermediate", MANIFEST_KEY.path[-1]).collect()[
+        "source_policy_version"
+    ][0]
+    target = release_to_publish(
+        releases, published_ids, config.release_id, policy_version
+    )
+    current_id = published_ids[-1] if published_ids else None
     if target is None:
         context.log.info(
-            "No release to publish; %s stays published",
-            current["release_id"] if current else "nothing",
+            "No release to publish; %s stays published", current_id or "nothing"
         )
         return
     publication = pl.DataFrame(
@@ -369,7 +462,7 @@ def courseware_release_publication(
             {
                 "release_id": target,
                 "published_at": datetime.now(tz=UTC),
-                "previous_release_id": current["release_id"] if current else None,
+                "previous_release_id": current_id,
                 "publication_kind": "requested" if config.release_id else "automatic",
             }
         ],
@@ -380,8 +473,6 @@ def courseware_release_publication(
         publication,
         metadata={
             "release_id": MetadataValue.text(target),
-            "previous_release_id": MetadataValue.text(
-                str(current["release_id"]) if current else ""
-            ),
+            "previous_release_id": MetadataValue.text(current_id or ""),
         },
     )

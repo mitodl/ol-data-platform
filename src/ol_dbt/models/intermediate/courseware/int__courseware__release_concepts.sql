@@ -12,7 +12,8 @@
     accept the claims naming it). The description is the newest one written
     under the prompt version courseware_description_approval approves. A concept
     the describer has inputs for but no such description yet is awaiting one, and
-    the release asset refuses a candidate with any. A concept with no description
+    the release asset refuses a candidate with any, or with a description written
+    from inputs that have since changed (description_input_checksum). A concept with no description
     inputs (no eligible claim describes it) is never described, so it is released
     with null descriptions and no learner-facing view shows it.
 #}
@@ -94,6 +95,7 @@ with concepts as (
         , is_learner_facing
         , model_id
         , prompt_version
+        , input_checksum
     from (
         select
             descriptions.*
@@ -144,6 +146,7 @@ select
     , concepts.review_status
     , descriptions.model_id as description_model_id
     , descriptions.prompt_version as description_prompt_version
+    , descriptions.input_checksum as description_input_checksum
     , (
         described_concepts.concept_id is not null
         and descriptions.concept_id is null

@@ -797,6 +797,9 @@ models:
   - name: description_prompt_version
     description: str, the approved prompt version it was written under; null when
       undescribed
+  - name: description_input_checksum
+    description: str, the input_checksum the description was written from; the release
+      asset refuses a candidate whose descriptions predate their current inputs
   - name: is_awaiting_description
     description: boolean, true when the describer has inputs for the concept but no
       description under the approved prompt yet; the release asset refuses a candidate
@@ -886,6 +889,11 @@ models:
       approves
   - name: undescribed_concept_count
     description: int, candidate concepts awaiting a description under that version
+  - name: concept_count
+    description: int, rows in int__courseware__release_concepts when this was built
+  - name: resource_count
+    description: int, rows in int__courseware__release_resource_knowledge when this
+      was built
   - name: extraction_selection_checksum
     description: str, md5 of the current extraction keys of source-eligible runs
   - name: extraction_count

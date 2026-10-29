@@ -246,11 +246,14 @@ unit_tests:
     - {concept_id: c1, is_awaiting_description: false}
     - {concept_id: c2, is_awaiting_description: true}
     - {concept_id: c3, is_awaiting_description: false}
+  - input: ref('int__courseware__release_resource_knowledge')
+    rows:
+    - {etl_source: mitxonline, readable_id: "course-v1:X+A"}
   expect:
     rows:
     - {resolution_run_id: res2, graph_run_id: g1, graph_resolution_run_id: res1, is_graph_current: false,
-      description_prompt_version: v1, undescribed_concept_count: 1, extraction_count: 1,
-      source_policy_version: pol}
+      description_prompt_version: v1, undescribed_concept_count: 1, concept_count: 3,
+      resource_count: 1, extraction_count: 1, source_policy_version: pol}
 
 - name: test_int__courseware__release_manifest_binds_a_graph_over_its_resolution_run
   description: >
@@ -278,6 +281,8 @@ unit_tests:
   - input: ref('int__courseware__concept_description_inputs')
     rows: []
   - input: ref('int__courseware__release_concepts')
+    rows: []
+  - input: ref('int__courseware__release_resource_knowledge')
     rows: []
   expect:
     rows:
