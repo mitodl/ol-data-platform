@@ -141,8 +141,8 @@ def train_test_split_indices(
 
 def score_predictions(
     predictions: list[str | None] | np.ndarray, test_labels: np.ndarray
-) -> dict[str, float | None]:
-    """Accuracy, plus precision and recall on the negative class.
+) -> dict[str, float | int | None]:
+    """Accuracy, plus precision and recall on the negative class, with their counts.
 
     Rated conversations are mostly positive, so an all-positive guess already
     scores high accuracy; negative precision/recall show how well a method
@@ -153,17 +153,20 @@ def score_predictions(
     actual = np.asarray(test_labels, dtype=object)
     predicted_negative = predicted == "negative"
     actual_negative = actual == "negative"
-    true_negative = int((predicted_negative & actual_negative).sum())
+    n_true_negative = int((predicted_negative & actual_negative).sum())
     n_predicted_negative = int(predicted_negative.sum())
-    n_actual_negative = int(actual_negative.sum())
+    n_test_negative = int(actual_negative.sum())
     return {
         "accuracy": float((predicted == actual).mean()),
         "negative_precision": (
-            true_negative / n_predicted_negative if n_predicted_negative else None
+            n_true_negative / n_predicted_negative if n_predicted_negative else None
         ),
         "negative_recall": (
-            true_negative / n_actual_negative if n_actual_negative else None
+            n_true_negative / n_test_negative if n_test_negative else None
         ),
+        "n_test_negative": n_test_negative,
+        "n_predicted_negative": n_predicted_negative,
+        "n_true_negative": n_true_negative,
     }
 
 

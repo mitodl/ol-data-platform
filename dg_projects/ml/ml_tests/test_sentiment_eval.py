@@ -129,6 +129,9 @@ def test_score_predictions_reports_negative_precision_and_recall() -> None:
         "accuracy": 0.7,
         "negative_precision": 2 / 3,
         "negative_recall": 0.5,
+        "n_test_negative": 4,
+        "n_predicted_negative": 3,
+        "n_true_negative": 2,
     }
 
 
