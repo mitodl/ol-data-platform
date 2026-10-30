@@ -1228,6 +1228,18 @@
 
 
 {#
+    text_to_html: plain text as HTML for a Superset cell with allow_render_html. Escapes
+    &, < and > so text such as "x < 5" stays literal, then turns newlines into <br>.
+    &amp; goes first so the & of &lt; is not escaped twice.
+#}
+{% macro text_to_html(string_expr) -%}
+    replace(replace(replace(replace(
+        {{ string_expr }}
+        , '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), {{ codepoint_char(10) }}, '<br>')
+{%- endmacro %}
+
+
+{#
     json_array_field_values: the values of `field` in each object of a JSON array
     string, as an array of `element_type`. '[{"name": "a"}, {"name": "b"}]' -> ['a', 'b'].
 #}
