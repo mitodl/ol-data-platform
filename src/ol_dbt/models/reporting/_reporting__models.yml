@@ -1504,13 +1504,17 @@ models:
     description: string, current playback position in the video
   - name: event_timestamp
     description: timestamp, date and time when the video event was recorded
+  - name: video_block_fk
+    description: string, identifier of the video block, distinguishes videos that
+      share a name
   - name: video_name
     description: string, display name of the video
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["platform", "courserun_readable_id", "user_username", "event_type",
-          "video_position", "event_timestamp", "video_name"]
+          "video_block_fk", "video_duration", "video_position", "event_timestamp",
+          "video_name"]
 
 - name: dedp_financial_assistance
   description: Report of users and their financial assistance status for DEDP programs

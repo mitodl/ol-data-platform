@@ -1,14 +1,18 @@
 with
     video_events as (select * from {{ ref("tfact_video_events") }}),
-    videos as (select * from {{ ref("dim_video") }}),
-    combined__course_runs as (select * from {{ ref("int__combined__course_runs") }})
+    videos as (select * from {{ ref("dim_video") }})
+
+, course_runs as (
+    {{ current_course_titles() }}
+)
 
 select
     video_events.platform,
-    combined__course_runs.course_title,
+    course_runs.course_title,
     video_events.courserun_readable_id,
     video_events.user_username,
     video_events.event_type,
+    video_events.video_block_fk,
     video_events.video_duration,
     video_events.video_position,
     video_events.event_timestamp,
@@ -19,15 +23,16 @@ inner join
     on video_events.courserun_readable_id = videos.courserun_readable_id
     and video_events.video_block_fk = substring(videos.video_block_pk, strpos(videos.video_block_pk, 'block@') + 6)
 inner join
-    combined__course_runs
-    on video_events.courserun_readable_id = combined__course_runs.courserun_readable_id
-    and video_events.platform = combined__course_runs.platform
+    course_runs
+    on video_events.courserun_readable_id = course_runs.courserun_readable_id
+    and video_events.platform = course_runs.platform
 group by
     video_events.platform,
-    combined__course_runs.course_title,
+    course_runs.course_title,
     video_events.courserun_readable_id,
     video_events.user_username,
     video_events.event_type,
+    video_events.video_block_fk,
     video_events.video_duration,
     video_events.video_position,
     video_events.event_timestamp,
