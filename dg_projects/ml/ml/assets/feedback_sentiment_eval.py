@@ -78,7 +78,7 @@ class FeedbackSentimentEvalConfig(Config):
 
 @asset(
     key=AssetKey(["intermediate", "feedback_sentiment_eval"]),
-    code_version="feedback_sentiment_eval_v1",
+    code_version="feedback_sentiment_eval_v2",
     group_name="feedback",
     io_manager_key="io_manager",
     pool="feedback_sentiment_eval",
@@ -93,7 +93,7 @@ def feedback_sentiment_eval(
     One-time bake-off: explicit+embedding-kNN vs. local-classifier vs. LLM.
 
     Not a production sentiment pipeline -- a decision aid, scored against the
-    Zendesk-CSAT-labeled sample. Whichever method wins gets its own production
+    explicitly rated sample. Whichever method wins gets its own production
     asset later; this just records the comparison so the choice is auditable.
     """
     embedding_model = resolve_embedding_model(
@@ -133,7 +133,7 @@ def feedback_sentiment_eval(
 
     if labeled_df.height < 10:  # noqa: PLR2004 -- below this, a train/test split is meaningless
         msg = (
-            f"Only {labeled_df.height} CSAT-labeled conversations have a "
+            f"Only {labeled_df.height} explicitly rated conversations have a "
             f"matching embedding (model_version={embedding_model.model_version}, "
             f"dim={embedding_model.dim}); too few for a meaningful eval."
         )
@@ -147,8 +147,8 @@ def feedback_sentiment_eval(
     if class_counts.height < 2:  # noqa: PLR2004
         msg = (
             f"Only {class_counts.height} distinct sentiment label(s) "
-            f"({class_counts['sentiment'].to_list()}) among the CSAT-labeled sample; "
-            "need both positive and negative examples for a meaningful eval."
+            f"({class_counts['sentiment'].to_list()}) among the explicitly rated "
+            "sample; need both positive and negative examples for a meaningful eval."
         )
         raise Failure(msg)
 

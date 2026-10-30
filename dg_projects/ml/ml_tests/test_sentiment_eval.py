@@ -21,18 +21,36 @@ class _FakeLLM:
         return self._client
 
 
-def test_labeled_sentiment_sample_maps_good_bad_and_drops_the_rest() -> None:
+def test_labeled_sentiment_sample_maps_every_verdict_and_drops_the_rest() -> None:
+    ratings = [
+        "good",
+        "like",
+        "positive",
+        "bad",
+        "dislike",
+        "negative",
+        "offered",
+        "unoffered",
+        "idea",
+    ]
     df = pl.DataFrame(
         {
-            "feedback_conversation_pk": ["1", "2", "3"],
-            "explicit_rating": ["good", "bad", "offered"],
+            "feedback_conversation_pk": [str(i) for i in range(len(ratings))],
+            "explicit_rating": ratings,
         }
     )
 
     result = sentiment_eval.labeled_sentiment_sample(df)
 
-    assert result["feedback_conversation_pk"].to_list() == ["1", "2"]
-    assert result["sentiment"].to_list() == ["positive", "negative"]
+    assert result["feedback_conversation_pk"].to_list() == [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+    ]
+    assert result["sentiment"].to_list() == ["positive"] * 3 + ["negative"] * 3
 
 
 def test_train_test_split_indices_covers_every_row_exactly_once() -> None:
