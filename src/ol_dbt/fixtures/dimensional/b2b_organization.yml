@@ -90,9 +90,11 @@ tables:
     columns:
       program_pk: string
       program_title: string
+      platform_code: string
     rows:
     - program_pk: fixture-program
       program_title: Fixture Program
+      platform_code: mitxonline
   bridge_program_course:
     columns:
       program_fk: string
