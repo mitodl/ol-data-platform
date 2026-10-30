@@ -1,6 +1,6 @@
 """One-time sentiment-method bake-off: explicit+embedding-kNN vs.
-explicit+local-classifier vs. explicit+LLM, scored against the Zendesk-CSAT
-labeled sample.
+explicit+local-classifier vs. explicit+LLM, scored against the explicitly
+rated sample.
 
 Not a production pipeline step -- a decision aid. Run once (or occasionally),
 read the accuracy/cost tradeoff, and pick the tier-2 method by hand; the
@@ -28,10 +28,16 @@ from openai import OpenAI
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 
-# Matches afact_feedback_conversation.sql's mapping of
-# ticket_satisfaction_rating_score -- only 'good'/'bad' are verdicts, everything
-# else stays unlabeled.
-EXPLICIT_RATING_TO_SENTIMENT = {"good": "positive", "bad": "negative"}
+# Matches afact_feedback_conversation.sql's sentiment_fk mapping; any other
+# explicit_rating value stays unlabeled.
+EXPLICIT_RATING_TO_SENTIMENT = {
+    "good": "positive",
+    "like": "positive",
+    "positive": "positive",
+    "bad": "negative",
+    "dislike": "negative",
+    "negative": "negative",
+}
 
 SENTIMENT_LABELS = ("positive", "negative")
 
@@ -69,7 +75,7 @@ def _sentiment_prompt(conversation_text: str) -> str:
 def labeled_sentiment_sample(
     conversation_df: pl.DataFrame,
 ) -> pl.DataFrame:
-    """Filter to the Zendesk-CSAT-labeled rows and map explicit_rating to
+    """Filter to the explicitly rated rows and map explicit_rating to
     sentiment.
 
     Args:
@@ -77,8 +83,9 @@ def labeled_sentiment_sample(
             embedding_vector, conversation_text columns.
 
     Returns:
-        The same rows, restricted to explicit_rating in ('good', 'bad'), with a
-        new `sentiment` column ('positive'/'negative').
+        The same rows, restricted to the explicit_rating values in
+        EXPLICIT_RATING_TO_SENTIMENT, with a new `sentiment` column
+        ('positive'/'negative').
     """
     return conversation_df.filter(
         pl.col("explicit_rating").is_in(list(EXPLICIT_RATING_TO_SENTIMENT))
@@ -95,7 +102,7 @@ def train_test_split_indices(
     """Return (train_idx, test_idx) -- a stratified deterministic holdout split.
 
     Stratified per label value: a plain shuffle can put every example of the
-    minority class in the same partition (real CSAT samples skew heavily
+    minority class in the same partition (real rated samples skew heavily
     positive), leaving LogisticRegression.fit a single-class training set to
     crash on instead of producing the bake-off. A singleton class keeps its
     one example in train rather than losing it to an empty split.
