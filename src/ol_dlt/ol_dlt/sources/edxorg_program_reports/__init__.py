@@ -58,10 +58,12 @@ PIPELINE_NAME = "edxorg_program_learner_report"
 
 # dlt's Iceberg writer holds a whole load in memory: about 0.9 GB + 1.6x the
 # batch on edxorg TSVs (see ol_dlt.sources.edxorg_s3), and 2.58 GB for the
-# largest report (1.02 GB) loaded alone into a local Iceberg table. So a 2 GiB
-# batch should peak near 4.4 GB, inside the data_loading run pod's 8Gi default
-# limit. A day of reports is three batches, and the 4.93 TB backlog about
-# 2,300, which at the 200-batch cap per run is about 12 daily runs.
+# largest report (1.02 GB) loaded alone into a local Iceberg table. That
+# predicted 4.4 GB for a 2 GiB batch, but the first production run (2026-10-27)
+# peaked at 8.06 GB, so the schedule raises its run pod's memory limit (see
+# edxorg_program_reports_ingest_schedule). A day of reports is three batches,
+# and the 4.93 TB backlog about 2,300, which at the 200-batch cap per run is
+# about 12 daily runs.
 BUDGET_BYTES = 2 * 1024**3
 
 # Bytes pyarrow parses per batch. A report row is ~300 bytes, so ~50k rows.

@@ -1,0 +1,78 @@
+[
+  {
+    "conversation_text": "I enrolled in the data science certificate last week but the dashboard still shows 'Not started' for every module, even the two I finished. Will my progress be lost?",
+    "must_not_appear": []
+  },
+  {
+    "conversation_text": "Hi, I'm Priya Raman and my email is priya.raman@example.com. The video in week 3 of the finance course stops at 4:12 every time, on Chrome and Firefox.\n---\nStill happening today after clearing my cache.",
+    "must_not_appear": [
+      "Priya",
+      "Raman",
+      "priya.raman@example.com"
+    ]
+  },
+  {
+    "conversation_text": "Can you recommend a course on reinforcement learning that doesn't assume I already know probability?\n---\nThose all list probability as a prerequisite. Is there anything for beginners?",
+    "must_not_appear": []
+  },
+  {
+    "conversation_text": "The tutor keeps telling me my answer to problem 2 is wrong but it's the same as the solution in the textbook. I don't understand what it wants.",
+    "must_not_appear": []
+  },
+  {
+    "conversation_text": "It would be really helpful if the syllabus bot could tell me the due dates for each assignment. Right now I have to open the course page to find them.",
+    "must_not_appear": []
+  },
+  {
+    "conversation_text": "Hello everyone! I'm a nurse from Ohio and I'm taking this course to understand how hospitals manage supply chains. Looking forward to learning with you all.",
+    "must_not_appear": []
+  },
+  {
+    "conversation_text": "The case study argues that just-in-time inventory reduces costs, but I think it underestimates the risk of supplier disruptions. During a crisis the savings disappear and shortages hurt patients.",
+    "must_not_appear": []
+  },
+  {
+    "conversation_text": "thanks",
+    "must_not_appear": []
+  },
+  {
+    "conversation_text": "## Problem\n- I can't download the lecture slides\n- The link returns a 404\n\n**Please fix this.**",
+    "must_not_appear": []
+  },
+  {
+    "conversation_text": "I was charged twice for the certificate, order 55120. Please refund one of the charges. You can reach me at 617-555-0143.",
+    "must_not_appear": [
+      "617-555-0143"
+    ]
+  },
+  {
+    "conversation_text": "In my reflection on the policy module: carbon taxes are regressive unless the revenue is returned to households as a dividend.",
+    "must_not_appear": []
+  },
+  {
+    "conversation_text": "The transcript for the second lecture is in Spanish but the video is in English. Also, could you add captions to the lab walkthroughs?",
+    "must_not_appear": []
+  },
+  {
+    "conversation_text": "Hi, this is <PERSON>. I can't log in since the password reset. The reset email goes to <EMAIL_ADDRESS> but nothing arrives.\n---\nSupport: We've resent the link, please check your spam folder.\n---\nFound it in spam, thanks, but the link says it has expired.",
+    "must_not_appear": [
+      "<PERSON>",
+      "<EMAIL_ADDRESS>"
+    ]
+  },
+  {
+    "conversation_text": "In 15.401x Foundations of Modern Finance I, the problem set 4 answers don't match the formulas taught in the lecture videos.",
+    "must_not_appear": [
+      "15.401x",
+      "Foundations of Modern Finance"
+    ]
+  },
+  {
+    "conversation_text": "No puedo ver los subtítulos en español en los videos del curso de programación. Antes funcionaban.",
+    "must_not_appear": []
+  },
+  {
+    "conversation_text": "Asked the recommendation bot for a course on climate policy and it suggested one that ended last year and can't be enrolled in.\n---\nIs there a list of courses that are open now?",
+    "must_not_appear": []
+  }
+]

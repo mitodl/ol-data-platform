@@ -5,7 +5,9 @@ from collections.abc import Sequence
 import polars as pl
 import pytest
 from anthropic import Anthropic, AnthropicBedrock
+from anthropic.types import TextBlock, ThinkingBlock
 from ml.lib import categorize
+from ml_tests.fake_anthropic import FakeAnthropicClient, FakeMessage
 from openai import OpenAI
 
 
@@ -85,7 +87,7 @@ def test_build_category_label_client_rejects_claude_model_for_real_openai() -> N
                 OpenAI(api_key="sk-test"),  # pragma: allowlist secret
                 client_class="openai",
             ),
-            model_version="claude-haiku-4-5",
+            model_version="claude-haiku-5-5",
         )
 
 
@@ -100,11 +102,11 @@ def test_build_category_label_client_allows_claude_model_for_openai_compatible()
             ),
             client_class="openai_compatible",
         ),
-        model_version="claude-haiku-4-5",
+        model_version="claude-haiku-5-5",
     )
 
     assert isinstance(client, categorize.OpenAICategoryLabelClient)
-    assert client.model_version == "claude-haiku-4-5"
+    assert client.model_version == "claude-haiku-5-5"
 
 
 def _conversation_row(
@@ -289,3 +291,37 @@ def test_propose_categories_skips_a_cluster_whose_call_fails() -> None:
     )
 
     assert result.height == 0
+
+
+def test_anthropic_category_client_reads_the_json_after_a_thinking_block() -> None:
+    """claude-haiku-5-5 thinks by default, so the reply opens with a thinking block."""
+    fake = FakeAnthropicClient(
+        FakeMessage(
+            [
+                ThinkingBlock(type="thinking", thinking="", signature="sig"),
+                TextBlock(
+                    type="text",
+                    text='{"category_label": "Login", "category_description": "d"}',
+                ),
+            ]
+        )
+    )
+    client = categorize.AnthropicCategoryLabelClient(fake, "claude-haiku-5-5")
+
+    assert client.propose(["login"], ["sample"], trace_metadata={}) == {
+        "category_label": "Login",
+        "category_description": "d",
+    }
+    assert fake.requests[0]["output_config"] == {"effort": categorize.CATEGORY_EFFORT}
+
+
+def test_anthropic_category_client_raises_on_a_refusal() -> None:
+    client = categorize.AnthropicCategoryLabelClient(
+        FakeAnthropicClient(
+            FakeMessage([TextBlock(type="text", text="{")], stop_reason="refusal")
+        ),
+        "claude-haiku-5-5",
+    )
+
+    with pytest.raises(ValueError, match="stop_reason=refusal"):
+        client.propose(["login"], ["sample"], trace_metadata={})

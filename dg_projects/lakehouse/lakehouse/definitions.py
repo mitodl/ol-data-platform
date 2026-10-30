@@ -84,6 +84,11 @@ from lakehouse.assets.superset import (
     build_superset_dataset_assets,
     superset_dataset_keys,
 )
+from lakehouse.lib.automation_targets import (
+    OCW_LEARN_MODELS,
+    dbt_automation_target,
+    ocw_learn_target,
+)
 from lakehouse.lib.contract_freshness import (
     build_freshness_checks,
     contract_freshness_bounds,
@@ -654,24 +659,6 @@ posthog_staging_schedule = ScheduleDefinition(
 # table from an empty load. Building it would fail the whole job every day.
 AWAITING_RAW_TABLE = {"stg__edxorg__discovery__api__programs"}
 
-# The OCW content files, from staging to the two Learn views that read them.
-# ocw_content_publish_sensor (data_loading) loads a course a few minutes after
-# it is published, but staging was built only by non_airbyte_staging_daily, so
-# the publish reached Learn after the next day's 06:00 build and the automation
-# tick after it. ocw_learn_automation_sensor builds these on the tick after any
-# ocw_content load, sweep or scoped. Every model here is unpartitioned, so a
-# tick evaluates five conditions, not one per course.
-OCW_LEARN_MODELS = (
-    "stg__ocw__s3__course_content",
-    "int__ocw__live_courses",
-    "int__ocw__content_files",
-    "integrations__learn__ocw_courses",
-    "integrations__learn__ocw_content_files",
-)
-ocw_learn_selection = build_dbt_asset_selection(
-    [full_dbt_project], dbt_select=" ".join(OCW_LEARN_MODELS)
-)
-
 non_airbyte_staging_models = sorted(
     staging_models_reading(
         json.loads(dbt_project.manifest_path.read_text()),
@@ -722,11 +709,13 @@ non_airbyte_staging_schedules = (
 # one ingestion unit unless it declares every one of them in qa_branches and the
 # committed QA observation shows them held (program_certificates lists the
 # empty mitxonline/mysql auth_user in qa_partial_tables), so a QA build is
-# complete relative to QA's apps rather than a silently partial union. The rest
-# wait on raw tables QA does not have: ocw_courses on the OCW live bucket (the
-# ocw__s3 unit is omitted in QA), and the dlt/API sources (mit_edx_programs on
-# the edX catalog, mitpe, mit_climate, oll, podcasts) whose loaders run in
-# production only.
+# complete relative to QA's apps rather than a silently partial union. The
+# YouTube, podcast, mitpe, mit_climate and oll views read public sources that
+# QA's data_loading schedules load daily, so QA holds close to production's
+# rows. Those schedules set no default status, so they run in QA because they
+# were started in its UI. ocw_courses waits on the OCW live bucket (the ocw__s3 unit is
+# omitted in QA), and mit_edx_programs also reads mitlearn topic tables QA does
+# not hold.
 learn_integrations_qa_schedule = ScheduleDefinition(
     name="learn_integrations_qa_daily",
     job=define_asset_job(
@@ -737,8 +726,13 @@ learn_integrations_qa_schedule = ScheduleDefinition(
         ),
     ),
     # The QA sync_and_stage schedules run at 00:00 (QA renders no inventory
-    # intervals, so every group takes the 24-hour default).
-    cron_schedule="0 3 * * *",
+    # intervals, so every group takes the 24-hour default). The dlt loads these
+    # views read land in QA from 03:00 (oll) to about 05:10 (YouTube), so a
+    # 03:00 build left them a day behind their raw. 05:30 rather than 06:00:
+    # qa_mirror_monthly_schedule drops and recreates the edX mirror tables this
+    # selection reads at 06:00 on the 1st, and their staging models build in
+    # the first minutes of the run.
+    cron_schedule="30 5 * * *",
     execution_timezone="UTC",
     default_status=DefaultScheduleStatus.RUNNING,
 )
@@ -880,31 +874,7 @@ defs = Definitions(
                 if DBT_AUTOMATION_ENABLED
                 else DefaultSensorStatus.STOPPED
             ),
-            # exclude staging as they are already handled by the "sync_and_stage_"
-            # jobs, or by the non-Airbyte staging schedules for dlt/Dagster sources
-            #
-            # Note what that exclusion costs in production, where staging models
-            # DO carry a condition: get_default_automation_condition_sensor_target
-            # takes every conditioned key this selection does not cover and
-            # synthesizes `default_automation_condition_sensor` over
-            # AssetSelection.all() minus this one. So staging is automatable there
-            # via a sensor no one declared. Pre-existing and STOPPED unless
-            # started by hand, but the same invisible instance state
-            # DBT_AUTOMATION_ENVIRONMENTS exists to remove -- see the open
-            # question recorded beside it.
-            #
-            # Where automation is off the question does not arise: no asset
-            # carries a condition, so there is nothing to synthesize over.
-            #
-            # The OCW Learn models are ocw_learn_automation_sensor's. An asset
-            # belongs to one automation sensor, so they are taken out here.
-            target=(
-                AssetSelection.assets(full_dbt_project)
-                - AssetSelection.groups("staging")
-                - ocw_learn_selection
-            )
-            | AssetSelection.groups("superset_dataset")
-            | AssetSelection.groups("superset_starrocks_dataset"),
+            target=dbt_automation_target(full_dbt_project),
         ),
         AutomationConditionSensorDefinition(
             "ocw_learn_automation_sensor",
@@ -919,7 +889,7 @@ defs = Definitions(
                 if DBT_AUTOMATION_ENABLED
                 else DefaultSensorStatus.STOPPED
             ),
-            target=ocw_learn_selection,
+            target=ocw_learn_target(full_dbt_project),
         ),
     ],
     jobs=[

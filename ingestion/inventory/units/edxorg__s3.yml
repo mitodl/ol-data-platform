@@ -62,6 +62,12 @@ tables:
     # Airbyte re-reads the same report files every day (their mtimes stop at
     # 2025-03-13) and appends ~15M rows per sync, 14.4B in all. The last day of
     # syncs is one full report. _airbyte_extracted_at is epoch milliseconds.
+    # That report is still too large for QA's Trino cluster, which runs a stage
+    # as one task with a 4.48GB per-node limit: stg__edxorg__s3__program_learner_report's
+    # dedup exceeded it on the whole report (2026-10-27) and needed 0.93GB on
+    # one learner in ten. The same `user id` sample is taken from the irx/bigquery
+    # learner tables, so a sampled learner's rows are all there.
     where: >-
       _airbyte_extracted_at >=
       (SELECT max(_airbyte_extracted_at) FROM {source}) - 86400000
+      AND cast(`user id` AS bigint) % 10 = 0

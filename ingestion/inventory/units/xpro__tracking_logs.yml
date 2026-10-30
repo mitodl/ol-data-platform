@@ -1,6 +1,14 @@
 ---
 # Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
 # resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+#
+# ol_dlt.sources.tracking_logs loads the same files into
+# raw__xpro__openedx__tracking_log_events, beside the Airbyte table, until it is
+# checked against it and staging is repointed (spec §10.1, step 1). That table
+# is not declared below yet, because an Airbyte unit may only declare the
+# streams its connections carry. It is declared in the cutover change, which
+# disables the connection, moves raw__xpro__openedx__tracking_logs to
+# retired.yml as the archive and flips the unit to `loader: dlt`.
 schema_version: 1
 deployment: xpro
 layer: tracking_logs
@@ -9,7 +17,9 @@ strategies:
   qa: ingest
   local: fixture
 loader: airbyte
-table_prefix: raw__xpro__openedx__tracking_logs
+# Covers both tables: the Airbyte one is ..._tracking_logs and the dlt one
+# ..._tracking_log_events.
+table_prefix: raw__xpro__openedx__tracking_log
 airbyte:
   source_kind: source-s3
   replication_method: n/a
@@ -20,6 +30,9 @@ airbyte:
     sync_interval_hours: 12
     streams:
     - raw__xpro__openedx__tracking_logs
+dlt:
+  source_module: ol_dlt.sources.tracking_logs
+  write_disposition: append
 tables:
 - name: raw__xpro__openedx__tracking_logs
   raw_table: raw__xpro__openedx__tracking_logs

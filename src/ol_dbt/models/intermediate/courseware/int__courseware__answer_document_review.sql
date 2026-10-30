@@ -1,3 +1,5 @@
+{{ config(enabled=courseware_local_tables_enabled('courseware_answer_check_in_warehouse')) }}
+
 {#
     The course documents a person should look at to keep answer keys away from the
     claim extractor, one row per document:

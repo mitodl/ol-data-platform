@@ -1,14 +1,17 @@
 """Run courseware claim extraction outside Dagster, from and to local parquet files.
 
 For proof-of-concept runs against the local DuckDB lake: export
-int__courseware__extraction_sources to parquet, run this, then expose the three
-output files to dbt as the courseware_intermediate sources. Re-running skips every
-scope whose extraction key is already in the output directory.
+int__courseware__extraction_sources to parquet, run this, then expose the output
+files (the extraction, claim, evidence and courseware_scope_input tables) to dbt as
+the courseware_intermediate sources. Re-running skips every scope whose extraction
+key is already in the output directory, and reuses a run's stored text readings
+(courseware_text_extraction).
 
     python -m ml.lib.courseware.local extract sources.parquet out/ --dry-run
 """
 
 import logging
+from collections.abc import Mapping
 from pathlib import Path
 
 import cyclopts
@@ -20,21 +23,63 @@ from ml.lib.courseware.answer_check import (
     check_version,
     pending_sources,
 )
+from ml.lib.courseware.describe import BEDROCK_DESCRIPTION_MODEL, describe_concepts
+from ml.lib.courseware.evaluation.cli import gold
 from ml.lib.courseware.extract import (
     BEDROCK_DEFAULT_MODEL,
+    CLAIM_SCHEMA,
     DEFAULT_EFFORT,
+    EVIDENCE_SCHEMA,
+    EXTRACTION_SCHEMA,
+    SCOPE_INPUT_SCHEMA,
+    TEXT_EXTRACTION_SCHEMA,
     Effort,
+    ReadingKey,
+    TextReading,
     extract_scopes,
-    extraction_key,
+    plan_scopes,
+    scope_inputs,
+    stored_readings,
 )
-from ml.lib.courseware.prompts import SYSTEM_PROMPT, scope_message
-from ml.lib.courseware.scopes import CHARS_PER_TOKEN, build_scopes
+from ml.lib.courseware.graph import compute_graph, previous_membership
+from ml.lib.courseware.prompts import (
+    CONTEXT_SYSTEM_PROMPT,
+    TEXT_SYSTEM_PROMPT,
+    context_message,
+    text_message,
+)
+from ml.lib.courseware.resolve import (
+    BEDROCK_ADJUDICATION_MODEL,
+    ResolutionState,
+    label_embedder,
+    resolve_concepts,
+)
+from ml.lib.courseware.scopes import CHARS_PER_TOKEN, Scope, build_scopes
+from ml.lib.courseware.tagging import (
+    SOURCE_SCHEMA,
+    ConceptDictionary,
+    PreviousRun,
+    newest_run,
+    tag_sources,
+    tagging_input_key,
+)
 from ml.resources.llm import LLMClientFactory
 
 app = cyclopts.App(help=__doc__)
+app.command(gold)
 # Answer checks are short and many; the small model is the default.
 BEDROCK_ANSWER_CHECK_MODEL = "us.anthropic.claude-haiku-5-5"
 EXTRACTION_TABLE = "courseware_claim_extraction"
+TEXT_EXTRACTION_TABLE = "courseware_text_extraction"
+SCOPE_INPUT_TABLE = "courseware_scope_input"
+# The tables extract and observe write, with the schema each must have first.
+OUTPUT_SCHEMAS = {
+    TEXT_EXTRACTION_TABLE: TEXT_EXTRACTION_SCHEMA,
+    "courseware_claim": CLAIM_SCHEMA,
+    "courseware_claim_evidence": EVIDENCE_SCHEMA,
+    EXTRACTION_TABLE: EXTRACTION_SCHEMA,
+    SCOPE_INPUT_TABLE: SCOPE_INPUT_SCHEMA,
+}
 
 
 def _existing(output_dir: Path, table: str) -> pl.DataFrame | None:
@@ -50,13 +95,141 @@ def _write(frame: pl.DataFrame, output_dir: Path, table: str) -> None:
     staged.replace(path)
 
 
+def _require_current(output_dir: Path) -> None:
+    """Refuse a directory that ``local conform`` has to bring up to date first.
+
+    A table under an older schema would fail the append only after every model call
+    had been paid for, storing none of them.
+
+    :param output_dir: the directory holding the extraction tables
+    :raises ValueError: when a stored table's schema is not the current one
+    """
+    for table, schema in OUTPUT_SCHEMAS.items():
+        path = output_dir / f"{table}.parquet"
+        if path.exists() and pl.read_parquet_schema(path) != schema:
+            msg = f"{table} predates the current schema; run `local conform` first"
+            raise ValueError(msg)
+
+
+def _conform(rows: pl.DataFrame, table: str) -> pl.DataFrame:
+    """Bring a table stored under an older schema to the current one.
+
+    Columns added since it was written become typed nulls, in the current column
+    order, so later appends concatenate with new rows. A column whose type changed
+    is refused rather than cast, because a cast can be lossy (a float truncated to
+    an integer) and conform overwrites the only copy.
+
+    :raises ValueError: when the table holds a column the current schema dropped,
+        or one of another type
+    """
+    schema = OUTPUT_SCHEMAS[table]
+    if dropped := sorted(set(rows.columns) - set(schema)):
+        msg = f"{table} holds columns the current schema does not: {dropped}"
+        raise ValueError(msg)
+    if retyped := sorted(
+        column for column, dtype in rows.schema.items() if dtype != schema[column]
+    ):
+        msg = f"{table} holds columns of another type than the schema: {retyped}"
+        raise ValueError(msg)
+    return rows.select(
+        pl.col(column)
+        if column in rows.columns
+        else pl.lit(None, dtype=dtype).alias(column)
+        for column, dtype in schema.items()
+    )
+
+
 def _append(output_dir: Path, table: str, new_rows: pl.DataFrame) -> None:
     previous = _existing(output_dir, table)
+    # diagonal: a column added since the file was written is null in older rows
     _write(
-        new_rows if previous is None else pl.concat([previous, new_rows]),
+        new_rows
+        if previous is None
+        else pl.concat([previous, new_rows], how="diagonal_relaxed"),
         output_dir,
         table,
     )
+
+
+def _read_scopes(sources: Path, courserun: list[str] | None) -> list[Scope]:
+    rows = pl.read_parquet(sources)
+    if courserun:
+        rows = rows.filter(pl.col("courserun_readable_id").is_in(courserun))
+    return [
+        scope
+        for _, run_rows in rows.group_by("platform", "courserun_readable_id")
+        for scope in build_scopes(run_rows)
+    ]
+
+
+def _print_plan(  # noqa: PLR0913
+    scopes: list[Scope],
+    model_id: str,
+    effort: Effort,
+    readings: Mapping[ReadingKey, TextReading],
+    existing_keys: set[str],
+    *,
+    across_runs: bool,
+) -> None:
+    """Print what extract would send for each scope part, and the input it would cost.
+
+    A part marked "stored" is skipped. One marked "context" has a stored text
+    reading, so only the context stage runs, at the size shown; "reused" is the
+    same with a reading made for another run. An unmarked part
+    runs both stages; only its text stage's input is counted, since the context
+    stage's depends on the claims the text stage returns.
+    """
+    text_tokens = len(TEXT_SYSTEM_PROMPT) // CHARS_PER_TOKEN
+    context_tokens = len(CONTEXT_SYSTEM_PROMPT) // CHARS_PER_TOKEN
+    total = 0
+    for planned in plan_scopes(
+        scopes,
+        model_id=model_id,
+        effort=effort,
+        readings=readings,
+        across_runs=across_runs,
+    ):
+        scope, reading = planned.scope, planned.reading
+        if planned.extraction_key in existing_keys:
+            marker, tokens = "stored", 0
+        elif reading is not None:
+            message = context_message(scope, reading.claims, reading.evidence)
+            marker = (
+                "context"
+                if (reading.platform, reading.courserun_readable_id)
+                == (scope.course.platform, scope.course.courserun_readable_id)
+                else "reused"
+            )
+            tokens = context_tokens + len(message) // CHARS_PER_TOKEN
+        else:
+            marker = ""
+            tokens = text_tokens + len(text_message(scope)) // CHARS_PER_TOKEN
+        total += tokens
+        print(  # noqa: T201
+            f"{scope.course.courserun_readable_id} {scope.scope_key:<70.70} "
+            f"{len(scope.sources):>3} sources ~{tokens:>7,} tokens {marker}"
+        )
+    print(f"{len(scopes)} scopes, ~{total:,} input tokens to send")  # noqa: T201
+
+
+@app.command
+def observe(
+    sources: Path, output_dir: Path, *, courserun: list[str] | None = None
+) -> None:
+    """Record every scope part's current input without extracting anything.
+
+    extract records it too; this is for a directory whose extractions are all
+    stored.
+
+    :param sources: int__courseware__extraction_sources exported to parquet
+    :param output_dir: where courseware_scope_input is appended
+    :param courserun: limit to these courserun_readable_ids
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _require_current(output_dir)
+    observed = scope_inputs(_read_scopes(sources, courserun))
+    _append(output_dir, SCOPE_INPUT_TABLE, observed)
+    print(f"{observed.height} scope parts observed")  # noqa: T201
 
 
 @app.command
@@ -70,6 +243,7 @@ def extract(  # noqa: PLR0913
     effort: Effort = DEFAULT_EFFORT,
     aws_region: str = "us-east-1",
     max_workers: int = 6,
+    reuse_text_across_runs: bool = False,
     dry_run: bool = False,
 ) -> None:
     """Extract claims for every scope of the runs in a sources parquet file.
@@ -82,40 +256,41 @@ def extract(  # noqa: PLR0913
     :param effort: output_config.effort
     :param aws_region: Bedrock region
     :param max_workers: concurrent model calls
+    :param reuse_text_across_runs: let a run use another run's stored text reading of
+        identical text (extract_scopes); off until the comparison in the design doc
     :param dry_run: print the scopes and their estimated input size, call nothing
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
-    rows = pl.read_parquet(sources)
-    if courserun:
-        rows = rows.filter(pl.col("courserun_readable_id").is_in(courserun))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _require_current(output_dir)
+    run_scopes = _read_scopes(sources, courserun)
     scopes = [
         scope
-        for _, run_rows in rows.group_by("platform", "courserun_readable_id")
-        for scope in build_scopes(run_rows)
+        for scope in run_scopes
         if not scope_title or scope.scope_title in scope_title
     ]
-    output_dir.mkdir(parents=True, exist_ok=True)
     stored = _existing(output_dir, EXTRACTION_TABLE)
     existing_keys = set(stored["extraction_key"]) if stored is not None else set()
+    stored_text = _existing(output_dir, TEXT_EXTRACTION_TABLE)
+    readings = (
+        stored_readings(stored_text, across_runs=reuse_text_across_runs)
+        if stored_text is not None
+        else {}
+    )
 
     if dry_run:
-        system_tokens = len(SYSTEM_PROMPT) // CHARS_PER_TOKEN
-        total = 0
-        for scope in scopes:
-            tokens = system_tokens + len(scope_message(scope)) // CHARS_PER_TOKEN
-            stored_marker = (
-                "stored"
-                if extraction_key(scope, model_id, effort) in existing_keys
-                else ""
-            )
-            total += 0 if stored_marker else tokens
-            print(  # noqa: T201
-                f"{scope.course.courserun_readable_id} {scope.scope_key:<70.70} "
-                f"{len(scope.sources):>3} sources ~{tokens:>7,} tokens {stored_marker}"
-            )
-        print(f"{len(scopes)} scopes, ~{total:,} input tokens to send")  # noqa: T201
+        _print_plan(
+            scopes,
+            model_id,
+            effort,
+            readings,
+            existing_keys,
+            across_runs=reuse_text_across_runs,
+        )
         return
 
+    # every scope of the runs read, not only the scope_title selection
+    _append(output_dir, SCOPE_INPUT_TABLE, scope_inputs(run_scopes))
     client = LLMClientFactory(
         client_class="bedrock", aws_region=aws_region
     ).get_client()
@@ -128,8 +303,13 @@ def extract(  # noqa: PLR0913
         model_id=model_id,
         effort=effort,
         existing_keys=existing_keys,
+        readings=readings,
         max_workers=max_workers,
+        reuse_text_across_runs=reuse_text_across_runs,
     )
+    # Text readings first: a stored one is reused, so a run cut off later pays only
+    # for the context stage again.
+    _append(output_dir, TEXT_EXTRACTION_TABLE, tables.text_extractions)
     # A stored extraction key is what makes a re-run skip a scope, so the extraction
     # table is written last. A run cut off before it leaves claim and evidence rows
     # with no extraction, which are dropped here and written again.
@@ -147,11 +327,231 @@ def extract(  # noqa: PLR0913
             table,
         )
     print(  # noqa: T201
+        f"{tables.text_extractions.height} text readings, "
         f"{tables.extractions.height} extractions, {tables.claims.height} claims, "
         f"{tables.evidence.height} evidence rows; "
+        f"{tables.text_extractions['input_tokens'].sum():,} + "
         f"{tables.extractions['input_tokens'].sum():,} in / "
-        f"{tables.extractions['output_tokens'].sum():,} out tokens"
+        f"{tables.text_extractions['output_tokens'].sum():,} + "
+        f"{tables.extractions['output_tokens'].sum():,} out tokens (text + context)"
     )
+
+
+def _latest_run(
+    output_dir: Path, table: str, run_id: str | None
+) -> pl.DataFrame | None:
+    rows = _existing(output_dir, table)
+    if rows is None or run_id is None:
+        return None
+    return rows.filter(pl.col("resolution_run_id") == run_id)
+
+
+@app.command
+def resolve(  # noqa: PLR0913
+    concept_labels: Path,
+    sense_inputs: Path,
+    output_dir: Path,
+    *,
+    model_id: str = BEDROCK_ADJUDICATION_MODEL,
+    aws_region: str = "us-east-1",
+    rebuild: bool = False,
+) -> None:
+    """Assign concept labels to stable concept ids, resolving only new labels, then
+    assign each course run's use of a label to one of the label's senses.
+
+    :param concept_labels: int__courseware__concept_labels exported to parquet
+    :param sense_inputs: int__courseware__concept_sense_inputs exported to parquet
+    :param output_dir: where the resolution tables are read and appended
+    :param model_id: Bedrock model or inference profile id for label and sense
+        adjudication
+    :param aws_region: Bedrock region for adjudication; the label embeddings go
+        through ol-llm, which reads AWS_DEFAULT_REGION
+    :param rebuild: re-resolve every label, carrying ids forward by overlap
+    """
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    client = LLMClientFactory(
+        client_class="bedrock", aws_region=aws_region
+    ).get_client()
+    if not isinstance(client, AnthropicBedrock):
+        msg = f"bedrock client_class built a {type(client).__name__}"
+        raise TypeError(msg)
+    embedding_client = label_embedder()
+
+    runs = _existing(output_dir, "courseware_resolution_run")
+    last_run = (
+        runs.sort("started_at")["resolution_run_id"][-1] if runs is not None else None
+    )
+    state = ResolutionState()
+    for attribute, table in (
+        ("registry", "courseware_concept_registry"),
+        ("assignments", "courseware_concept_assignment"),
+        ("relations", "courseware_concept_relation"),
+        ("aliases", "courseware_concept_alias"),
+        ("sense_assignments", "courseware_concept_sense_assignment"),
+    ):
+        snapshot = _latest_run(output_dir, table, last_run)
+        if snapshot is not None:
+            setattr(state, attribute, snapshot)
+    cached = _existing(output_dir, "courseware_concept_label_embedding")
+    if cached is not None:
+        state.embeddings = cached
+
+    result = resolve_concepts(
+        pl.read_parquet(concept_labels),
+        state,
+        client,
+        embedding_client,
+        mentions=pl.read_parquet(sense_inputs),
+        model_id=model_id,
+        rebuild=rebuild,
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for table, new_rows in (
+        ("courseware_concept_registry", result.registry),
+        ("courseware_concept_assignment", result.assignments),
+        ("courseware_concept_relation", result.relations),
+        ("courseware_concept_alias", result.aliases),
+        ("courseware_concept_sense_assignment", result.sense_assignments),
+        ("courseware_resolution_decision", result.decisions),
+        ("courseware_sense_decision", result.sense_decisions),
+        ("courseware_concept_label_embedding", result.embeddings),
+        ("courseware_resolution_run", result.run),
+    ):
+        _append(output_dir, table, new_rows)
+    print(result.run.to_dicts()[0])  # noqa: T201
+
+
+@app.command
+def graph(concepts: Path, relations: Path, output_dir: Path) -> None:
+    """Compute the concept graph's topology and append it to the graph tables.
+
+    :param concepts: dim_concept exported to parquet
+    :param relations: bridge_concept_relation exported to parquet
+    :param output_dir: where the courseware_concept_graph_* tables are appended
+    """
+    runs = _existing(output_dir, "courseware_concept_graph_run")
+    last_run = (
+        runs.sort("computed_at")["graph_run_id"][-1] if runs is not None else None
+    )
+    result = compute_graph(
+        pl.read_parquet(concepts),
+        pl.read_parquet(relations),
+        previous_nodes=previous_membership(
+            _existing(output_dir, "courseware_concept_graph_node"),
+            _existing(output_dir, "courseware_concept_graph_community"),
+            last_run,
+        ),
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for table, new_rows in (
+        ("courseware_concept_graph_node", result.nodes),
+        ("courseware_concept_graph_edge", result.edges),
+        ("courseware_concept_graph_community", result.communities),
+        ("courseware_concept_graph_prerequisite_closure", result.prerequisite_closure),
+        ("courseware_concept_graph_run", result.run),
+    ):
+        _append(output_dir, table, new_rows)
+    print(result.run.to_dicts()[0])  # noqa: T201
+
+
+@app.command
+def describe(
+    description_inputs: Path,
+    output_dir: Path,
+    *,
+    model_id: str = BEDROCK_DESCRIPTION_MODEL,
+    effort: Effort = DEFAULT_EFFORT,
+    aws_region: str = "us-east-1",
+) -> None:
+    """Write learner-facing descriptions for concepts that have none yet.
+
+    :param description_inputs: int__courseware__concept_description_inputs as parquet
+    :param output_dir: where courseware_concept_description is appended
+    :param model_id: Bedrock model or inference profile id
+    :param effort: output_config.effort
+    :param aws_region: Bedrock region
+    """
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    client = LLMClientFactory(
+        client_class="bedrock", aws_region=aws_region
+    ).get_client()
+    if not isinstance(client, AnthropicBedrock):
+        msg = f"bedrock client_class built a {type(client).__name__}"
+        raise TypeError(msg)
+    table = "courseware_concept_description"
+    previous = _existing(output_dir, table)
+    new_rows = describe_concepts(
+        pl.read_parquet(description_inputs),
+        client,
+        model_id=model_id,
+        effort=effort,
+        existing=previous,
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _append(output_dir, table, new_rows)
+    print(f"{new_rows.height} concepts described")  # noqa: T201
+
+
+@app.command
+def conform(output_dir: Path) -> None:
+    """Bring the extraction tables in a directory to their current schemas.
+
+    Columns added since a table was written are added as nulls (_conform), e.g. a
+    v1 extraction's text_extraction_key or an older read's header_version. Keys are
+    left alone, so a re-run after a crash finishes the job. A table the directory
+    lacks is skipped.
+
+    :param output_dir: the directory holding the extraction tables
+    """
+    conformed = 0
+    for table, schema in OUTPUT_SCHEMAS.items():
+        path = output_dir / f"{table}.parquet"
+        if not path.exists():
+            continue
+        rows = pl.read_parquet(path)
+        if rows.schema != pl.Schema(schema):
+            _write(_conform(rows, table), output_dir, table)
+            conformed += 1
+    print(f"{conformed} tables brought to the current schema")  # noqa: T201
+
+
+@app.command
+def tag(sources: Path, aliases: Path, output_dir: Path) -> None:
+    """Tag the sources whose text or dictionary changed with the known concepts
+    their text mentions.
+
+    :param sources: int__courseware__extraction_sources exported to parquet
+    :param aliases: dim_concept_alias exported to parquet
+    :param output_dir: where the courseware_concept_tagging_* and
+        courseware_concept_mention tables are appended
+    """
+    source_rows = pl.read_parquet(sources)
+    alias_rows = pl.read_parquet(aliases)
+    last_run = newest_run(_existing(output_dir, "courseware_concept_tagging_run"))
+    input_key = tagging_input_key(ConceptDictionary(alias_rows), source_rows)
+    # only the newest run counts: after A, B, A the warehouse must move back to A
+    if last_run is not None and last_run["input_key"] == input_key:
+        print("the newest tagging run already has these inputs")  # noqa: T201
+        return
+    previous = None
+    if last_run is not None:
+        records = _existing(output_dir, "courseware_concept_tagging_source")
+        previous = PreviousRun(
+            last_run,
+            records.filter(pl.col("tagging_run_id") == last_run["tagging_run_id"])
+            if records is not None
+            else pl.DataFrame(schema=SOURCE_SCHEMA),
+        )
+    result = tag_sources(source_rows, alias_rows, previous)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for table, new_rows in (
+        ("courseware_concept_mention", result.mentions),
+        ("courseware_concept_tagging_source", result.sources),
+        ("courseware_concept_tagging_alias", result.aliases),
+        ("courseware_concept_tagging_run", result.run),
+    ):
+        _append(output_dir, table, new_rows)
+    print(result.run.to_dicts()[0])  # noqa: T201
 
 
 @app.command(name="answer-check")

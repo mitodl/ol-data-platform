@@ -1,6 +1,6 @@
 """Shared Anthropic/OpenAI call plumbing for the feedback LLM adapters.
 
-summarize.py and sentiment_eval.py each wrap an LLMClientFactory client in an
+categorize.py and sentiment_eval.py each wrap an LLMClientFactory client in an
 Anthropic*Client/OpenAI*Client pair -- only the prompt, max_tokens, and response
 parsing differ between them. This module holds the shared call/usage-attach/
 dispatch logic; each caller keeps its own @traced-decorated public method for
@@ -11,6 +11,7 @@ from typing import Protocol, TypeVar
 
 from anthropic import Anthropic, AnthropicBedrock
 from anthropic.types import Message
+from ml.lib.courseware.extract import Effort
 from ml.resources.llm import LLMClientFactory
 from ml.resources.opik_auth import attach_llm_usage, infer_llm_provider
 from openai import OpenAI
@@ -41,12 +42,14 @@ def call_anthropic(
     model_version: str,
     *,
     max_tokens: int,
+    effort: Effort,
     prompt: str,
 ) -> Message:
-    """messages.create + Opik usage attach. Caller handles content/empty-response."""
+    """messages.create + Opik usage attach. Caller reads the reply with message_text."""
     message = client.messages.create(
         model=model_version,
         max_tokens=max_tokens,
+        output_config={"effort": effort},
         messages=[{"role": "user", "content": prompt}],
     )
     if message.usage is not None:
@@ -61,6 +64,23 @@ def call_anthropic(
             provider="bedrock" if isinstance(client, AnthropicBedrock) else "anthropic",
         )
     return message
+
+
+def message_text(message: Message) -> str | None:
+    """Return the reply's first text block, or None when it has no complete answer.
+
+    Claude Haiku 5.5 thinks by default, so a reply can open with thinking blocks,
+    and thinking shares max_tokens with the answer. A reply cut off at max_tokens
+    or the context window, or a refusal, can carry partial text that is not an
+    answer.
+    """
+    if message.stop_reason in (
+        "refusal",
+        "max_tokens",
+        "model_context_window_exceeded",
+    ):
+        return None
+    return next((block.text for block in message.content if block.type == "text"), None)
 
 
 def call_openai(client: OpenAI, model_version: str, *, prompt: str) -> ChatCompletion:

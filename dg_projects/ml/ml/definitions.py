@@ -10,10 +10,18 @@ from dagster import (
 from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
+from ml.assets.courseware_description import courseware_concept_description
 from ml.assets.courseware_extraction import (
     courseware_extraction,
     courseware_extraction_text,
 )
+from ml.assets.courseware_graph import courseware_concept_graph
+from ml.assets.courseware_release import (
+    courseware_knowledge_release,
+    courseware_release_publication,
+)
+from ml.assets.courseware_resolution import courseware_resolution
+from ml.assets.courseware_tagging import courseware_concept_tagging
 from ml.assets.feedback_category_proposals import feedback_category_proposals
 from ml.assets.feedback_cluster_assignment import feedback_cluster_assignment
 from ml.assets.feedback_cluster_identity import feedback_cluster_identity
@@ -33,7 +41,7 @@ from ml.assets.learn_embeddings import (
 )
 from ml.assets.risk_probability import student_risk_probability
 from ml.resources.llm import LLMClientFactory
-from ml.resources.opik_auth import configure_opik_keycloak_auth
+from ml.resources.opik_auth import configure_ol_llm
 from ml.sensors.courseware import courseware_extraction_text_sensor
 from ml.sensors.feedback_clusters import feedback_clusters_growth_sensor
 from ml.sensors.learn_embeddings import learn_content_file_text_sensor
@@ -66,10 +74,10 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
     vault = unauthenticated_vault(VAULT_ADDRESS)
     vault_authenticated = False
 
-# Must run before any Opik client/tracer/@opik.track call in this process --
-# see ml/resources/opik_auth.py. A no-op (returns False) wherever
+# Must run before any Opik client/tracer/@opik.track call or ol-llm model in this
+# process -- see ml/resources/opik_auth.py. Tracing stays off wherever
 # is_opik_configured() is False for this deployment.
-configure_opik_keycloak_auth(vault)
+configure_ol_llm(vault)
 
 data_export_job = define_asset_job(
     name="student_risk_probability_data_export_job",
@@ -118,11 +126,13 @@ feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
     default_status=DefaultSensorStatus.STOPPED,
 )
 
-# Claim extraction, one run per course run. It runs only for the course runs
-# courseware_extraction_allowlist approves for the deployed extractor version, so
-# the allowlist bounds what a first observation or a promotion launches. Stopped
-# by default, and enabled after courseware_extraction_text_sensor has observed the
-# runs.
+# Claim extraction, one run per course run, and the corpus-wide resolution,
+# description, graph and dictionary tagging steps after it, and the knowledge
+# release that publishes their outputs together. Extraction runs only for the
+# course runs courseware_extraction_allowlist approves for the deployed extractor
+# version, so the allowlist bounds what a first observation or a promotion
+# launches. Stopped by default, and enabled after courseware_extraction_text_sensor
+# has observed the runs.
 #
 # Every run it launches carries COURSEWARE_MODEL_CALLS_TAG, which ol-infrastructure's
 # run_coordinator tag_concurrency_limits caps. Dagster's instance config has no
@@ -132,7 +142,15 @@ feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
 COURSEWARE_MODEL_CALLS_TAG = "courseware/model_calls"
 courseware_automation_sensor = AutomationConditionSensorDefinition(
     name="courseware_automation_sensor",
-    target=AssetSelection.assets(courseware_extraction),
+    target=AssetSelection.assets(
+        courseware_extraction,
+        courseware_resolution,
+        courseware_concept_description,
+        courseware_concept_graph,
+        courseware_concept_tagging,
+        courseware_knowledge_release,
+        courseware_release_publication,
+    ),
     run_tags={COURSEWARE_MODEL_CALLS_TAG: "true"},
     default_status=DefaultSensorStatus.STOPPED,
 )
@@ -216,13 +234,14 @@ defs = Definitions(
         ),
         "vault": vault,
         "s3": S3Resource(),
-        # Bedrock in every deployed env (IAM metadata auth, no API key needed) --
-        # only "dev" lacks the Bedrock IAM role, so it needs an API key there.
-        # SUMMARY_PROVIDER/EMBEDDING_PROVIDER override the client_class picked here.
+        # Category proposals and sentiment eval; feedback_summaries and
+        # feedback_embeddings call models through ol-llm (SUMMARY_MODEL in
+        # ml.lib.summarize, EMBEDDING_MODEL in ml.lib.embed). Bedrock in every
+        # deployed env (IAM metadata auth, no API key needed) -- only "dev" lacks
+        # the Bedrock IAM role, so it needs an API key there.
+        # SUMMARY_PROVIDER overrides the client_class picked here.
         # LLM_BASE_URL/LLM_AZURE_ENDPOINT are only required for
-        # 'openai_compatible'/'azure_openai' -- shared with embedding_llm below on
-        # the assumption local testing points both at the same gateway (e.g.
-        # Parley); set client_class independently per resource if that's not true.
+        # 'openai_compatible'/'azure_openai'.
         "llm": LLMClientFactory(
             client_class=os.environ.get(
                 "SUMMARY_PROVIDER",
@@ -241,20 +260,6 @@ defs = Definitions(
         ),
         # Learn's cluster, read-only, for the learn_v1 smokechecks (not in dev).
         **learn_parity_resources,
-        # Separate resource, not a reused "llm": Anthropic/Bedrock has no embeddings
-        # API, so this needs its own client_class/key. Which Bedrock embedding
-        # model to keep is still open (§B.1's bake-off); bedrock_embeddings is the
-        # default deployed envs need since no OPENAI_API_KEY is provisioned there.
-        "embedding_llm": LLMClientFactory(
-            client_class=os.environ.get(
-                "EMBEDDING_PROVIDER",
-                "openai" if DAGSTER_ENV == "dev" else "bedrock_embeddings",
-            ),
-            # Only required (and only read) when EMBEDDING_PROVIDER='openai_compatible'
-            # -- e.g. a local gateway like Parley that fronts multiple providers
-            # behind one OpenAI-shaped API. Shared var with "llm" above.
-            base_url=os.environ.get("LLM_BASE_URL"),
-        ),
     },
     assets=with_failure_hooks(
         [
@@ -269,6 +274,12 @@ defs = Definitions(
             feedback_sentiment_eval,
             courseware_extraction_text,
             courseware_extraction,
+            courseware_resolution,
+            courseware_concept_description,
+            courseware_concept_graph,
+            courseware_concept_tagging,
+            courseware_knowledge_release,
+            courseware_release_publication,
             learn_content_file_text,
             content_file_embedding_chunks,
             content_file_embedding_vectors,

@@ -10,7 +10,7 @@ from dagster import (
     MetadataValue,
     asset,
 )
-from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
+from ml.lib.embed import resolve_embedding_model
 from ml.lib.sentiment_eval import (
     build_sentiment_client,
     labeled_sentiment_sample,
@@ -55,12 +55,14 @@ class FeedbackSentimentEvalConfig(Config):
         default=0.2,
         description="Fraction of the labeled sample held out for scoring.",
     )
-    embedding_model_version: str | None = Field(
+    embedding_model: str | None = Field(
         default=None,
+        pattern=r"^[a-z0-9-]+:.+$",
         description=(
-            "Which feedback_embeddings model/dim to evaluate against. Unset uses "
-            "whichever model feedback_embeddings' default config would write "
-            "(see default_embedding_model_version, ml.lib.embed)."
+            "Which feedback_embeddings model to evaluate against, in ol-llm's "
+            "provider:model form, as feedback_embeddings' embedding_model takes it. "
+            "Unset uses whichever model feedback_embeddings' default config writes "
+            "(EMBEDDING_MODEL, ml.lib.embed)."
         ),
     )
     embedding_dim: int | None = Field(default=None, description="See above.")
@@ -76,7 +78,7 @@ class FeedbackSentimentEvalConfig(Config):
 
 @asset(
     key=AssetKey(["intermediate", "feedback_sentiment_eval"]),
-    code_version="feedback_sentiment_eval_v1",
+    code_version="feedback_sentiment_eval_v2",
     group_name="feedback",
     io_manager_key="io_manager",
     pool="feedback_sentiment_eval",
@@ -91,13 +93,12 @@ def feedback_sentiment_eval(
     One-time bake-off: explicit+embedding-kNN vs. local-classifier vs. LLM.
 
     Not a production sentiment pipeline -- a decision aid, scored against the
-    Zendesk-CSAT-labeled sample. Whichever method wins gets its own production
+    explicitly rated sample. Whichever method wins gets its own production
     asset later; this just records the comparison so the choice is auditable.
     """
-    embedding_model_version = (
-        config.embedding_model_version or default_embedding_model_version()
+    embedding_model = resolve_embedding_model(
+        config.embedding_model, config.embedding_dim
     )
-    embedding_dim = config.embedding_dim or EMBEDDING_DIM
 
     afact_df = (
         get_dbt_model_as_dataframe(
@@ -112,10 +113,7 @@ def feedback_sentiment_eval(
             database_name=intermediate_database_name,
             table_name="feedback_embeddings",
         )
-        .filter(
-            (pl.col("embedding_model_version") == embedding_model_version)
-            & (pl.col("embedding_dim") == embedding_dim)
-        )
+        .filter(embedding_model.matches())
         .select(["feedback_conversation_pk", "embedding_vector"])
         .collect()
     )
@@ -135,9 +133,9 @@ def feedback_sentiment_eval(
 
     if labeled_df.height < 10:  # noqa: PLR2004 -- below this, a train/test split is meaningless
         msg = (
-            f"Only {labeled_df.height} CSAT-labeled conversations have a "
-            f"matching embedding (model_version={embedding_model_version}, "
-            f"dim={embedding_dim}); too few for a meaningful eval."
+            f"Only {labeled_df.height} explicitly rated conversations have a "
+            f"matching embedding (model_version={embedding_model.model_version}, "
+            f"dim={embedding_model.dim}); too few for a meaningful eval."
         )
         raise Failure(msg)
     # A total-count check alone doesn't guarantee both classes are represented --
@@ -149,8 +147,8 @@ def feedback_sentiment_eval(
     if class_counts.height < 2:  # noqa: PLR2004
         msg = (
             f"Only {class_counts.height} distinct sentiment label(s) "
-            f"({class_counts['sentiment'].to_list()}) among the CSAT-labeled sample; "
-            "need both positive and negative examples for a meaningful eval."
+            f"({class_counts['sentiment'].to_list()}) among the explicitly rated "
+            "sample; need both positive and negative examples for a meaningful eval."
         )
         raise Failure(msg)
 
@@ -162,7 +160,7 @@ def feedback_sentiment_eval(
 
     results = run_sentiment_eval(
         labeled_df,
-        embedding_dim=embedding_dim,
+        embedding_dim=embedding_model.dim,
         sentiment_client=sentiment_client,
         test_fraction=config.test_fraction,
     )

@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from dagster import AssetKey, MaterializeResult
 from data_loading.defs.ingestion import assets
+from ol_dlt.sources import edxorg_s3
 
 
 class _FakeLog:
@@ -168,3 +169,29 @@ def test_row_count_reads_the_last_normalize_step(trace: Any, expected: int) -> N
     pipeline.last_trace = trace
 
     assert assets._normalized_row_count(pipeline, _RESOURCE) == expected
+
+
+def test_a_listing_source_shares_one_listing_per_run() -> None:
+    """Every batch of a run carves from one listing, and the next run lists again."""
+    listings: list[Any] = []
+
+    def build_source(*, listing: Any = None) -> object:
+        listings.append(listing)
+        return object()
+
+    first_run = assets.sources_for_run(build_source, list_once=True)
+    first_run()
+    first_run()
+    second_run = assets.sources_for_run(build_source, list_once=True)
+    second_run()
+
+    assert listings[0] is listings[1]
+    assert listings[2] is not listings[0]
+    assert all(isinstance(listing, edxorg_s3.FileListing) for listing in listings)
+
+
+def test_other_sources_are_built_as_before() -> None:
+    def build_source() -> object:
+        return object()
+
+    assert assets.sources_for_run(build_source, list_once=False) is build_source

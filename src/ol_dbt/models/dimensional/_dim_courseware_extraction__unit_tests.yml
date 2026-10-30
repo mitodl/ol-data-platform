@@ -1,0 +1,26 @@
+---
+unit_tests:
+- name: test_dim_courseware_extraction_carries_version_and_header
+  description: >
+    Each extraction keeps the header and text reading it came from and whether it
+    ran the run's approved
+    version, as int__courseware__extractions marks them.
+  model: dim_courseware_extraction
+  given:
+  - input: ref('int__courseware__extractions')
+    rows:
+    - {extraction_key: e1, platform: mitxonline, courserun_readable_id: r, scope_id: s,
+      header_version: h1, text_extraction_key: t1, text_input_digest: d1, context_input_digest: c1,
+      is_approved_version: true, is_current: true}
+    - {extraction_key: e2, platform: mitxonline, courserun_readable_id: q, scope_id: s,
+      header_version: null, is_approved_version: null, is_current: false}
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_course_content')
+    rows: []
+  expect:
+    rows:
+    - {extraction_key: e1, header_version: h1, text_extraction_key: t1, text_input_digest: d1,
+      context_input_digest: c1, is_approved_version: true, is_current: true}
+    - {extraction_key: e2, header_version: null, text_extraction_key: null, text_input_digest: null,
+      context_input_digest: null, is_approved_version: null, is_current: false}

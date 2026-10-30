@@ -45,6 +45,8 @@ tables:
       full_name: redact
       is_opted_in_for_email: copy
       preference_set_datetime: copy
+    # One learner in ten, as mitx_user_info_combo below.
+    where: user_id % 10 = 0
 - name: mitx_course
   raw_table: raw__irx__edxorg__bigquery__mitx_course
   sync_mode: full_refresh_overwrite
@@ -115,6 +117,8 @@ tables:
       nvideos_total_watched: copy
       nvideos_unique_viewed: copy
       verified_unenroll_time: copy
+    # One learner in ten, as mitx_user_info_combo below.
+    where: user_id % 10 = 0
 - name: mitx_user_info_combo
   raw_table: raw__irx__edxorg__bigquery__mitx_user_info_combo
   sync_mode: full_refresh_overwrite
@@ -156,3 +160,9 @@ tables:
       certificate_download_uuid: hash
       certificate_modified_date: copy
       profile_level_of_education: copy
+    # One learner in ten. QA's Trino cluster runs a stage as one task with a
+    # 4.48GB per-node limit, and stg__edxorg__bigquery__mitx_user_info_combo's
+    # dedup exceeded it on all 15.1M rows (2026-10-27) and needed 0.88GB on this
+    # sample. The other learner tables here and edxorg/s3's program learner
+    # report take the same sample, so a sampled learner's rows are all there.
+    where: user_id % 10 = 0

@@ -5,6 +5,7 @@ dataset_uuid: 8bb67686-3d31-4418-bda9-87fdeb25b665  # int__ocw__resources
 description: null
 params:
   adhoc_filters: []
+  align_pn: false
   all_columns:
   - course_name
   - course_live_url
@@ -40,23 +41,47 @@ params:
   - video_captions_file
   - video_thumbnail_file
   - video_transcript_file
+  allow_rearrange_columns: false
   allow_render_html: true
-  annotation_layers: []
   color_pn: true
+  comparison_color_enabled: false
   comparison_color_scheme: Green
   comparison_type: values
+  conditional_formatting: []
   extra_form_data: {}
   groupby: []
+  include_search: true
+  matrixify_all_sort_by_columns: a_to_z
+  matrixify_all_sort_by_rows: a_to_z
+  matrixify_cell_title_template: ''
+  matrixify_charts_per_row: 3
+  matrixify_dimension_columns:
+    dimension: ''
+    values: []
+  matrixify_dimension_rows:
+    dimension: ''
+    values: []
+  matrixify_dimension_selection_mode_columns: members
+  matrixify_dimension_selection_mode_rows: members
+  matrixify_enable: false
+  matrixify_fit_columns_dynamically: true
+  matrixify_mode_columns: disabled
+  matrixify_mode_rows: disabled
+  matrixify_row_height: 300
+  matrixify_show_column_headers: true
+  matrixify_show_row_labels: true
+  matrixify_topn_order_columns: true
+  matrixify_topn_order_rows: true
+  matrixify_topn_value_columns: 10
+  matrixify_topn_value_rows: 10
   order_by_cols: []
-  order_desc: true
   percent_metrics: []
   query_mode: raw
   row_limit: '200000'
-  server_page_length: 10
+  server_pagination: false
   show_cell_bars: true
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
-  time_grain_sqla: P1D
   viz_type: table
 slice_name: OCW Resources
 uuid: cd72f611-dac4-45a0-99ca-8b3c9e260597

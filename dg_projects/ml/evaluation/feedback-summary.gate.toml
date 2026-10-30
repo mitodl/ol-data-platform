@@ -1,0 +1,37 @@
+# The feedback-summary evaluation gate, run by .github/workflows/evaluation-gate.yaml
+# with ol-llm-eval gate. See https://github.com/mitodl/ol-llm/blob/main/docs/evaluation-gate.md.
+app = "dagster-ml"
+use_case = "feedback-summary"
+mode = "advisory"  # until the thresholds have a few baselines behind them
+suite = "ml.lib.summarize_gate:suite"
+judge_model = "bedrock:us.anthropic.claude-sonnet-5"
+
+# The version production runs. A pull request that promotes the prompt changes
+# this; one that changes the model or the call changes ml/lib/summarize.py.
+[prompts]
+feedback-summary = "v4"
+
+[dataset]
+name = "feedback-summary-golden"
+version = "v1"
+file = "feedback_summary_golden.json"
+
+[[thresholds]]
+metric = "plain_text"
+minimum = 1.0
+
+[[thresholds]]
+metric = "withholds_details"
+minimum = 1.0
+
+[[thresholds]]
+metric = "at_most_three_sentences"
+minimum = 1.0
+
+# Lower is better: the judge scores each summary from 0 (supported by the
+# learner's text) to 1 (adds what the text does not say). With 16 items, 0.15
+# lets two items move between runs, which a judge's noise alone can do.
+[[thresholds]]
+metric = "hallucination_metric"
+maximum = 0.2
+tolerance = 0.15

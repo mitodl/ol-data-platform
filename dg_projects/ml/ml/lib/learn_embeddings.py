@@ -49,19 +49,38 @@ TOPICS_RELATION = (
 class ContentFileSource:
     """Where an etl_source's content files and their runs' resources are.
 
-    :param platform_code: Learn's ``platform.code`` for the source's resources
+    :param platform_code: Learn's ``platform.code`` for every resource of the
+        source, or ``None`` when it varies by course and the runs model's
+        ``platform_code`` column has each run's
     :param files_relation: the integrations model with the source's content files
     :param runs_relation: the integrations model whose ``run_id`` and
         ``readable_id`` give each run's resource
     """
 
-    platform_code: str
+    platform_code: str | None
     files_relation: str
     runs_relation: str
 
+    def run_resources(self, runs: pl.LazyFrame) -> pl.LazyFrame:
+        """Return each run's resource and Learn platform code from the runs model.
 
-# The etl_sources the content-file models carry. Learn's platform code for each is
-# the PlatformType name its ETL sets (learning_resources/constants.py).
+        :param runs: rows of ``runs_relation``
+        :returns: ``run_id``, ``readable_id`` and ``platform_code`` rows
+        :rtype: pl.LazyFrame
+        """
+        platform_code = (
+            pl.col("platform_code")
+            if self.platform_code is None
+            else pl.lit(self.platform_code)
+        )
+        return runs.select(
+            "run_id", "readable_id", platform_code.alias("platform_code")
+        )
+
+
+# The etl_sources the content-file models carry. Learn's platform code is the
+# PlatformType name its ETL sets (learning_resources/constants.py): one per source,
+# except xPRO, whose ETL maps each course's platform (XPRO_PLATFORM_TRANSFORM).
 CONTENT_FILE_SOURCES = {
     "mitxonline": ContentFileSource(
         platform_code="mitxonline",
@@ -74,7 +93,7 @@ CONTENT_FILE_SOURCES = {
         runs_relation="integrations__learn__ocw_courses",
     ),
     "xpro": ContentFileSource(
-        platform_code="xpro",
+        platform_code=None,
         files_relation="integrations__learn__content_files",
         runs_relation="integrations__learn__xpro_runs",
     ),
@@ -206,35 +225,38 @@ def strategies_for_run(
 
 
 def content_file_documents(
-    files: pl.DataFrame, runs: pl.DataFrame, platform_code: str
+    files: pl.DataFrame, runs: pl.DataFrame
 ) -> tuple[list[Document], int]:
     """Return content files as documents keyed as Learn keys their points.
 
-    A file's point key needs its run's resource, which comes from the runs model.
-    Files whose run is not there get no document.
+    A file's point key needs its run's resource and platform code, which come from
+    the runs model. Files whose run is not there, or has no platform code, get no
+    document: Learn loads no resource for a course whose platform it cannot map.
 
     :param files: rows of a content-file model, with ``CONTENT_FILE_COLUMNS``
-    :param runs: ``run_id`` and ``readable_id`` (the run's resource) rows
-    :param platform_code: Learn's platform code for the files' resources
+    :param runs: ``run_id``, ``readable_id`` (the run's resource) and
+        ``platform_code`` rows, from :meth:`ContentFileSource.run_resources`
     :returns: the documents, and how many files had no resource
     :rtype: tuple[list[Document], int]
     :raises ValueError: when a run has more than one resource
     """
-    resources = runs.select("run_id", "readable_id").unique()
+    resources = runs.select("run_id", "readable_id", "platform_code").unique()
     if resources["run_id"].is_duplicated().any():
-        msg = "a run_id has more than one readable_id in the runs model"
+        msg = "a run_id has more than one resource in the runs model"
         raise ValueError(msg)
     joined = files.join(
         resources, left_on="run_readable_id", right_on="run_id", how="left"
     )
-    matched = joined.filter(pl.col("readable_id").is_not_null())
+    matched = joined.filter(
+        pl.col("readable_id").is_not_null() & pl.col("platform_code").is_not_null()
+    )
     documents = [
         ContentFileDocument(
             key=row["key"],
             content=row["content"],
             resource_readable_id=row["readable_id"],
             run_readable_id=row["run_readable_id"],
-            platform_code=platform_code,
+            platform_code=row["platform_code"],
             file_type=row["file_type"],
             file_extension=row["file_extension"],
         ).to_document()

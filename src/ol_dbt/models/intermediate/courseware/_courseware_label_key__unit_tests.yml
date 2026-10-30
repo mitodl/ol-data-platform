@@ -6,7 +6,7 @@ unit_tests:
     out
     and a leading dot is "dot". A + or # standing alone is a separator, letters and
     numbers outside ASCII are kept, and a label with no letters or numbers has no
-    key.
+    key, even one whose dot or + would be spelled out.
   model: int__courseware__claims
   given:
   - input: ref('int__courseware__extractions')
@@ -23,6 +23,10 @@ unit_tests:
     - {extraction_key: k, claim_ordinal: 6, claim_kind: concept, label: adjusted R²}
     - {extraction_key: k, claim_ordinal: 7, claim_kind: concept, label: K-Means  Clustering!}
     - {extraction_key: k, claim_ordinal: 8, claim_kind: concept, label: "+"}
+    - {extraction_key: k, claim_ordinal: 9, claim_kind: concept, label: .}
+    - {extraction_key: k, claim_ordinal: 10, claim_kind: concept, label: ..}
+    - {extraction_key: k, claim_ordinal: 11, claim_kind: concept, label: .+}
+    - {extraction_key: k, claim_ordinal: 12, claim_kind: concept, label: "#."}
   - input: source('courseware_intermediate', 'courseware_claim_evidence')
     rows: []
   expect:
@@ -35,3 +39,32 @@ unit_tests:
     - {claim_ordinal: 6, concept_label_key: adjusted r²}
     - {claim_ordinal: 7, concept_label_key: k means clustering}
     - {claim_ordinal: 8, concept_label_key: null}
+    - {claim_ordinal: 9, concept_label_key: null}
+    - {claim_ordinal: 10, concept_label_key: null}
+    - {claim_ordinal: 11, concept_label_key: null}
+    - {claim_ordinal: 12, concept_label_key: null}
+
+- name: test_int__courseware__claims_no_prerequisites_has_no_label_key
+  description: >
+    A declared "no prerequisites" claim (explicitly_none) labels what is not
+    required, e.g. "programming experience". It gets no concept label key, so it
+    never becomes a mention of that concept, reaches resolution, or gets a
+    concept_fk in tfact_courseware_claim. A stated prerequisite keeps its key.
+  model: int__courseware__claims
+  given:
+  - input: ref('int__courseware__extractions')
+    rows:
+    - {extraction_key: k, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      scope_id: s, scope_part: 1, extracted_at: "2026-10-17T00:00:00"}
+  - input: source('courseware_intermediate', 'courseware_claim')
+    rows:
+    - {extraction_key: k, claim_ordinal: 1, claim_kind: declared_prerequisite, label: calculus,
+      prerequisite_kind: prerequisite}
+    - {extraction_key: k, claim_ordinal: 2, claim_kind: declared_prerequisite, label: programming
+        experience, prerequisite_kind: explicitly_none}
+  - input: source('courseware_intermediate', 'courseware_claim_evidence')
+    rows: []
+  expect:
+    rows:
+    - {claim_ordinal: 1, concept_label_key: calculus}
+    - {claim_ordinal: 2, concept_label_key: null}

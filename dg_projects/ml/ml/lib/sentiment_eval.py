@@ -1,6 +1,6 @@
 """One-time sentiment-method bake-off: explicit+embedding-kNN vs.
-explicit+local-classifier vs. explicit+LLM, scored against the Zendesk-CSAT
-labeled sample.
+explicit+local-classifier vs. explicit+LLM, scored against the explicitly
+rated sample.
 
 Not a production pipeline step -- a decision aid. Run once (or occasionally),
 read the accuracy/cost tradeoff, and pick the tier-2 method by hand; the
@@ -14,10 +14,12 @@ from typing import Any, Protocol
 import numpy as np
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
+from ml.lib.courseware.extract import Effort
 from ml.lib.llm_client_adapters import (
     build_llm_client,
     call_anthropic,
     call_openai,
+    message_text,
     raise_if_claude_model_on_openai,
 )
 from ml.resources.llm import LLMClientFactory
@@ -26,10 +28,16 @@ from openai import OpenAI
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 
-# Matches afact_feedback_conversation.sql's mapping of
-# ticket_satisfaction_rating_score -- only 'good'/'bad' are verdicts, everything
-# else stays unlabeled.
-EXPLICIT_RATING_TO_SENTIMENT = {"good": "positive", "bad": "negative"}
+# Matches afact_feedback_conversation.sql's sentiment_fk mapping; any other
+# explicit_rating value stays unlabeled.
+EXPLICIT_RATING_TO_SENTIMENT = {
+    "good": "positive",
+    "like": "positive",
+    "positive": "positive",
+    "bad": "negative",
+    "dislike": "negative",
+    "negative": "negative",
+}
 
 SENTIMENT_LABELS = ("positive", "negative")
 
@@ -37,12 +45,14 @@ SENTIMENT_LABELS = ("positive", "negative")
 # a binary label) -- this is a bake-off, not the tuned production value.
 EMBEDDING_KNN_NEIGHBORS = int(os.environ.get("EMBEDDING_KNN_NEIGHBORS", "5"))
 
-SENTIMENT_MODEL_VERSION = os.environ.get("SENTIMENT_MODEL_VERSION", "claude-haiku-4-5")
+SENTIMENT_MODEL_VERSION = os.environ.get("SENTIMENT_MODEL_VERSION", "claude-haiku-5-5")
 BEDROCK_SENTIMENT_MODEL_VERSION = os.environ.get(
-    "BEDROCK_SENTIMENT_MODEL_VERSION",
-    "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "BEDROCK_SENTIMENT_MODEL_VERSION", "us.anthropic.claude-haiku-5-5"
 )
-SENTIMENT_MAX_TOKENS = int(os.environ.get("SENTIMENT_MAX_TOKENS", "16"))
+# The answer is one word, but thinking counts toward max_tokens: 16 was enough
+# for claude-haiku-4-5, and claude-haiku-5-5 thinks first by default.
+SENTIMENT_MAX_TOKENS = int(os.environ.get("SENTIMENT_MAX_TOKENS", "1024"))
+SENTIMENT_EFFORT: Effort = "low"
 
 SENTIMENT_PROMPT = (
     "Classify the sentiment of this support conversation from the requester's "
@@ -65,7 +75,7 @@ def _sentiment_prompt(conversation_text: str) -> str:
 def labeled_sentiment_sample(
     conversation_df: pl.DataFrame,
 ) -> pl.DataFrame:
-    """Filter to the Zendesk-CSAT-labeled rows and map explicit_rating to
+    """Filter to the explicitly rated rows and map explicit_rating to
     sentiment.
 
     Args:
@@ -73,8 +83,9 @@ def labeled_sentiment_sample(
             embedding_vector, conversation_text columns.
 
     Returns:
-        The same rows, restricted to explicit_rating in ('good', 'bad'), with a
-        new `sentiment` column ('positive'/'negative').
+        The same rows, restricted to the explicit_rating values in
+        EXPLICIT_RATING_TO_SENTIMENT, with a new `sentiment` column
+        ('positive'/'negative').
     """
     return conversation_df.filter(
         pl.col("explicit_rating").is_in(list(EXPLICIT_RATING_TO_SENTIMENT))
@@ -91,7 +102,7 @@ def train_test_split_indices(
     """Return (train_idx, test_idx) -- a stratified deterministic holdout split.
 
     Stratified per label value: a plain shuffle can put every example of the
-    minority class in the same partition (real CSAT samples skew heavily
+    minority class in the same partition (real rated samples skew heavily
     positive), leaving LogisticRegression.fit a single-class training set to
     crash on instead of producing the bake-off. A singleton class keeps its
     one example in train rather than losing it to an empty split.
@@ -179,11 +190,12 @@ class AnthropicSentimentClient:
             self._client,
             self.model_version,
             max_tokens=SENTIMENT_MAX_TOKENS,
+            effort=SENTIMENT_EFFORT,
             prompt=_sentiment_prompt(conversation_text),
         )
-        if not message.content:
+        if (text := message_text(message)) is None:
             return None
-        return _extract_sentiment_word(message.content[0].text)
+        return _extract_sentiment_word(text)
 
 
 class OpenAISentimentClient:
@@ -222,8 +234,8 @@ def build_sentiment_client(
 ) -> AnthropicSentimentClient | OpenAISentimentClient:
     """Build the client whose model_version comes from run config, else a default.
 
-    Mirrors ml.lib.summarize.build_summary_client's dispatch and
-    model_version/bedrock_model_version split.
+    Bedrock's model id namespace differs from the plain Anthropic/OpenAI one,
+    hence the model_version/bedrock_model_version split.
     """
     return build_llm_client(
         llm,

@@ -17,10 +17,12 @@ from typing import Any
 
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
+from ml.lib.courseware.extract import Effort
 from ml.lib.llm_client_adapters import (
     build_llm_client,
     call_anthropic,
     call_openai,
+    message_text,
     raise_if_claude_model_on_openai,
 )
 from ml.resources.llm import LLMClientFactory
@@ -53,15 +55,15 @@ CATEGORY_PROPOSAL_DOMINANT_TAG_COUNT = int(
     os.environ.get("CATEGORY_PROPOSAL_DOMINANT_TAG_COUNT", "3")
 )
 
-# Same reasoning as SUMMARY_MODEL_VERSION/BEDROCK_SUMMARY_MODEL_VERSION
-# (ml.lib.summarize): a model id is only valid for one vendor's API.
-CATEGORY_MODEL_VERSION = os.environ.get("CATEGORY_MODEL_VERSION", "claude-haiku-4-5")
+# A model id is only valid for one vendor's API, so Bedrock gets its own.
+CATEGORY_MODEL_VERSION = os.environ.get("CATEGORY_MODEL_VERSION", "claude-haiku-5-5")
 BEDROCK_CATEGORY_MODEL_VERSION = os.environ.get(
-    "BEDROCK_CATEGORY_MODEL_VERSION",
-    "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "BEDROCK_CATEGORY_MODEL_VERSION", "us.anthropic.claude-haiku-5-5"
 )
 
-CATEGORY_MAX_TOKENS = int(os.environ.get("CATEGORY_MAX_TOKENS", "512"))
+# Headroom for thinking, which counts toward max_tokens (see SUMMARY_MAX_TOKENS).
+CATEGORY_MAX_TOKENS = int(os.environ.get("CATEGORY_MAX_TOKENS", "1024"))
+CATEGORY_EFFORT: Effort = "low"
 
 CATEGORY_PROMPT_NAME = "feedback-category-proposal"
 # Fallback only: production renders the Opik Prompt Library entry, so editing this
@@ -167,15 +169,16 @@ class AnthropicCategoryLabelClient:
             self._client,
             self.model_version,
             max_tokens=CATEGORY_MAX_TOKENS,
+            effort=CATEGORY_EFFORT,
             prompt=_category_prompt(dominant_tags, samples, taken_labels),
         )
-        if not message.content:
+        if (text := message_text(message)) is None:
             msg = (
-                "Empty response proposing a category label "
-                "(possibly all thinking tokens)."
+                "No text proposing a category label "
+                f"(stop_reason={message.stop_reason})."
             )
             raise ValueError(msg)
-        return _parse_category_response(message.content[0].text)
+        return _parse_category_response(text)
 
 
 class OpenAICategoryLabelClient:
@@ -228,9 +231,8 @@ def build_category_label_client(
 ) -> AnthropicCategoryLabelClient | OpenAICategoryLabelClient:
     """Build the client whose model_version comes from run config, else a default.
 
-    Mirrors ml.lib.summarize.build_summary_client's dispatch and
-    model_version/bedrock_model_version split -- same reasoning: Bedrock's model
-    id namespace differs from the plain Anthropic/OpenAI one.
+    Bedrock's model id namespace differs from the plain Anthropic/OpenAI one,
+    hence the model_version/bedrock_model_version split.
     """
     return build_llm_client(
         llm,

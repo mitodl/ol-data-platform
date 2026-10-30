@@ -103,29 +103,6 @@ services:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
     - ./dagster_home:/opt/dagster/dagster_home
 
-  # Code location: canvas
-  dagster_canvas:
-    container_name: dagster_canvas
-    image: mitodl/dagster-canvas:dev
-    build:
-      context: .
-      dockerfile: dg_projects/canvas/Dockerfile
-    entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4000",
-      "--module-name", "canvas.definitions"]
-    ports:
-    - "4000:4000"
-    environment:
-      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-canvas:dev"
-      VAULT_TOKEN_CACHE_DIR: /vault/token-cache
-      VAULT_OIDC_NONINTERACTIVE: "1"
-      DAGSTER_ENV: dev
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-    volumes:
-    - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ${VAULT_TOKEN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/vault}:/vault/token-cache:ro
-    - ./dg_projects/canvas/canvas:/app/canvas
-
   # Code location: edxorg
   dagster_edxorg:
     container_name: dagster_edxorg

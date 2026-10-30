@@ -1,0 +1,391 @@
+---
+unit_tests:
+- name: test_bridge_courserun_prerequisite_coverage_rolls_up_narrower_concepts
+  description: >
+    Run ra (course A) requires x, y, u, s and z (z fails its support rule). rb
+    (course B) teaches x and z, only reviews y2, an accepted close equivalent of
+    y, and teaches or reviews n1, n2, n3 and n8 under the umbrella u, so it covers
+    those and misses the other four. u's narrower concepts are n1 to n5, n8, n10
+    and n11: n9 is 4 hops down, n6 appears in no course run, n12 only in a run
+    that is not current, n7 hangs on a failing edge, and the u to n2 cycle does
+    not count u as its own part. rc teaches only n4. rd teaches u itself and two
+    of its parts, so it is direct at depth 0. re has no course_fk, is another
+    course, and teaches u but none of its parts. rb covers both of s's two parts;
+    no row turns a count into a verdict. The broader edges are proposed, so
+    narrower matches rest on unreviewed relations. ra2, rf (no course_fk) and rg
+    (an edxorg copy with the same readable id) are course A; rh (no course_fk,
+    A.1_2) is another course.
+  model: bridge_courserun_prerequisite_coverage
+  overrides:
+    vars:
+      courseware_prerequisite_max_narrower_hops: 3
+  given:
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: A, course_readable_id: "course-v1:ORG+A.1", primary_platform: mitxonline,
+      is_current: true}
+    - {course_pk: A_edx, course_readable_id: "course-v1:ORG+A.1", primary_platform: edxorg,
+      is_current: true}
+    - {course_pk: B, course_readable_id: "course-v1:ORG+B.1", primary_platform: mitxonline,
+      is_current: true}
+    - {course_pk: C, course_readable_id: "course-v1:ORG+C.1", primary_platform: mitxonline,
+      is_current: true}
+    - {course_pk: D, course_readable_id: "course-v1:ORG+D.1", primary_platform: mitxonline,
+      is_current: true}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: ra, course_fk: A, platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026",
+      is_current: true}
+    - {courserun_pk: ra2, course_fk: A, platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+2T2026",
+      is_current: true}
+    - {courserun_pk: rf, course_fk: null, platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+3T2026",
+      is_current: true}
+    - {courserun_pk: rg, course_fk: A_edx, platform: edxorg, courserun_readable_id: "course-v1:ORG+A.1+1T2025",
+      is_current: true}
+    - {courserun_pk: rh, course_fk: null, platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1_2+1T2026",
+      is_current: true}
+    - {courserun_pk: rb, course_fk: B, platform: mitxonline, courserun_readable_id: "course-v1:ORG+B.1+1T2026",
+      is_current: true}
+    - {courserun_pk: rc, course_fk: C, platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026",
+      is_current: true}
+    - {courserun_pk: rd, course_fk: D, platform: mitxonline, courserun_readable_id: "course-v1:ORG+D.1+1T2026",
+      is_current: true}
+    - {courserun_pk: re, course_fk: null, platform: edxorg, courserun_readable_id: "ORG/E.1/2013_Spring",
+      is_current: true}
+  - input: ref('bridge_courserun_concept')
+    rows:
+    - {courserun_concept_pk: ra-x, courserun_fk: ra, concept_fk: x, relation: requires,
+      requirement_source: inferred, passes_support_rule: true}
+    - {courserun_concept_pk: ra-y, courserun_fk: ra, concept_fk: y, relation: requires,
+      requirement_source: inferred, passes_support_rule: true}
+    - {courserun_concept_pk: ra-u, courserun_fk: ra, concept_fk: u, relation: requires,
+      requirement_source: inferred, passes_support_rule: true}
+    - {courserun_concept_pk: ra-s, courserun_fk: ra, concept_fk: s, relation: requires,
+      requirement_source: declared, passes_support_rule: true}
+    - {courserun_concept_pk: ra-z, courserun_fk: ra, concept_fk: z, relation: requires,
+      requirement_source: inferred, passes_support_rule: false}
+    - {courserun_concept_pk: ra2-x, courserun_fk: ra2, concept_fk: x, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rf-x, courserun_fk: rf, concept_fk: x, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rg-x, courserun_fk: rg, concept_fk: x, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rh-x, courserun_fk: rh, concept_fk: x, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: re-x, courserun_fk: re, concept_fk: x, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: re-u, courserun_fk: re, concept_fk: u, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rb-x, courserun_fk: rb, concept_fk: x, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rb-z, courserun_fk: rb, concept_fk: z, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rb-y2, courserun_fk: rb, concept_fk: y2, relation: reviews,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rb-n1, courserun_fk: rb, concept_fk: n1, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rb-n2, courserun_fk: rb, concept_fk: n2, relation: reviews,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rb-n3, courserun_fk: rb, concept_fk: n3, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rb-n8, courserun_fk: rb, concept_fk: n8, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rb-n9, courserun_fk: rb, concept_fk: n9, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rb-n7, courserun_fk: rb, concept_fk: n7, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rb-s1, courserun_fk: rb, concept_fk: s1, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rb-s2, courserun_fk: rb, concept_fk: s2, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: old-n12, courserun_fk: null, concept_fk: n12, relation: uses,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rc-n4, courserun_fk: rc, concept_fk: n4, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rc-n5, courserun_fk: rc, concept_fk: n5, relation: uses,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rc-n10, courserun_fk: rc, concept_fk: n10, relation: uses,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rc-n11, courserun_fk: rc, concept_fk: n11, relation: mentions,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rd-u, courserun_fk: rd, concept_fk: u, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rd-n1, courserun_fk: rd, concept_fk: n1, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rd-n4, courserun_fk: rd, concept_fk: n4, relation: reviews,
+      passes_support_rule: true}
+  - input: ref('bridge_concept_relation')
+    rows:
+    - {from_concept_fk: y, to_concept_fk: y2, relation: close, passes_support_rule: true,
+      review_status: accepted}
+    - {from_concept_fk: n1, to_concept_fk: u, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+    - {from_concept_fk: n2, to_concept_fk: u, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+    - {from_concept_fk: n3, to_concept_fk: n1, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+    - {from_concept_fk: n8, to_concept_fk: n3, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+    - {from_concept_fk: n9, to_concept_fk: n8, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+    - {from_concept_fk: n4, to_concept_fk: u, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+    - {from_concept_fk: n5, to_concept_fk: u, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+    - {from_concept_fk: n10, to_concept_fk: u, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+    - {from_concept_fk: n11, to_concept_fk: u, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+    - {from_concept_fk: n6, to_concept_fk: u, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+    - {from_concept_fk: n12, to_concept_fk: u, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+    - {from_concept_fk: n7, to_concept_fk: u, relation: broader, passes_support_rule: false,
+      review_status: proposed}
+    - {from_concept_fk: u, to_concept_fk: n2, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+    - {from_concept_fk: s1, to_concept_fk: s, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+    - {from_concept_fk: s2, to_concept_fk: s, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+  expect:
+    rows:
+    - {courserun_concept_fk: ra-x, provider_courserun_fk: rb, requirement_passes_support_rule: true,
+      match_type: direct, provider_relation: teaches, match_depth: 0, relies_on_unreviewed_relation: false,
+      narrower_concept_count: 0, narrower_taught_count: 0}
+    - {courserun_concept_fk: ra-x, provider_courserun_fk: re, requirement_passes_support_rule: true,
+      match_type: direct, provider_relation: teaches, match_depth: 0, relies_on_unreviewed_relation: false,
+      narrower_concept_count: 0, narrower_taught_count: 0}
+    - {courserun_concept_fk: ra-x, provider_courserun_fk: rh, requirement_passes_support_rule: true,
+      match_type: direct, provider_relation: teaches, match_depth: 0, relies_on_unreviewed_relation: false,
+      narrower_concept_count: 0, narrower_taught_count: 0}
+    - {courserun_concept_fk: ra-y, provider_courserun_fk: rb, requirement_passes_support_rule: true,
+      match_type: close, provider_relation: reviews, match_depth: 0, relies_on_unreviewed_relation: false,
+      narrower_concept_count: 0, narrower_taught_count: 0}
+    - {courserun_concept_fk: ra-u, provider_courserun_fk: rb, requirement_passes_support_rule: true,
+      match_type: narrower, provider_relation: null, match_depth: 1, relies_on_unreviewed_relation: true,
+      narrower_concept_count: 8, narrower_taught_count: 4}
+    - {courserun_concept_fk: ra-u, provider_courserun_fk: rc, requirement_passes_support_rule: true,
+      match_type: narrower, provider_relation: null, match_depth: 1, relies_on_unreviewed_relation: true,
+      narrower_concept_count: 8, narrower_taught_count: 1}
+    - {courserun_concept_fk: ra-u, provider_courserun_fk: rd, requirement_passes_support_rule: true,
+      match_type: direct, provider_relation: teaches, match_depth: 0, relies_on_unreviewed_relation: false,
+      narrower_concept_count: 8, narrower_taught_count: 2}
+    - {courserun_concept_fk: ra-u, provider_courserun_fk: re, requirement_passes_support_rule: true,
+      match_type: direct, provider_relation: teaches, match_depth: 0, relies_on_unreviewed_relation: false,
+      narrower_concept_count: 8, narrower_taught_count: 0}
+    - {courserun_concept_fk: ra-s, provider_courserun_fk: rb, requirement_passes_support_rule: true,
+      match_type: narrower, provider_relation: null, match_depth: 1, relies_on_unreviewed_relation: true,
+      narrower_concept_count: 2, narrower_taught_count: 2}
+    - {courserun_concept_fk: ra-z, provider_courserun_fk: rb, requirement_passes_support_rule: false,
+      match_type: direct, provider_relation: teaches, match_depth: 0, relies_on_unreviewed_relation: false,
+      narrower_concept_count: 0, narrower_taught_count: 0}
+
+- name: test_bridge_courserun_prerequisite_coverage_lists_covered_and_missing_parts
+  description: >
+    Run ra requires the umbrella u, whose narrower concepts n1, n2 and n3 all appear
+    in current runs (n3 two hops down, under n1). rb teaches n1 and reviews n3, so
+    it
+    covers n1 and n3 and misses n2. rc teaches only n3, so its match is at depth 2.
+    The lists stay evidence; nothing turns 2 of 3 into a verdict.
+  model: bridge_courserun_prerequisite_coverage
+  overrides:
+    vars:
+      courseware_prerequisite_max_narrower_hops: 3
+  given:
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: A, course_readable_id: "course-v1:ORG+A.1", primary_platform: mitxonline,
+      is_current: true}
+    - {course_pk: B, course_readable_id: "course-v1:ORG+B.1", primary_platform: mitxonline,
+      is_current: true}
+    - {course_pk: C, course_readable_id: "course-v1:ORG+C.1", primary_platform: mitxonline,
+      is_current: true}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: ra, course_fk: A, platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026",
+      is_current: true}
+    - {courserun_pk: rb, course_fk: B, platform: mitxonline, courserun_readable_id: "course-v1:ORG+B.1+1T2026",
+      is_current: true}
+    - {courserun_pk: rc, course_fk: C, platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026",
+      is_current: true}
+  - input: ref('bridge_courserun_concept')
+    rows:
+    - {courserun_concept_pk: rc-n3, courserun_fk: rc, concept_fk: n3, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: ra-u, courserun_fk: ra, concept_fk: u, relation: requires,
+      requirement_source: inferred, passes_support_rule: true}
+    - {courserun_concept_pk: ra-n2, courserun_fk: ra, concept_fk: n2, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rb-n1, courserun_fk: rb, concept_fk: n1, relation: teaches,
+      passes_support_rule: true}
+    - {courserun_concept_pk: rb-n3, courserun_fk: rb, concept_fk: n3, relation: reviews,
+      passes_support_rule: true}
+  - input: ref('bridge_concept_relation')
+    rows:
+    - {from_concept_fk: n1, to_concept_fk: u, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+    - {from_concept_fk: n2, to_concept_fk: u, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+    - {from_concept_fk: n3, to_concept_fk: n1, relation: broader, passes_support_rule: true,
+      review_status: proposed}
+  expect:
+    format: sql
+    rows: |
+      select
+          md5(concat('ra-u', '-', 'rb')) as courserun_prerequisite_coverage_pk
+          , 'ra-u' as courserun_concept_fk
+          , cast(null as varchar) as platform
+          , cast(null as varchar) as courserun_readable_id
+          , 'ra' as courserun_fk
+          , 'u' as concept_fk
+          , 'inferred' as requirement_source
+          , true as requirement_passes_support_rule
+          , 'mitxonline' as provider_platform
+          , 'course-v1:ORG+B.1+1T2026' as provider_courserun_readable_id
+          , 'rb' as provider_courserun_fk
+          , 'narrower' as match_type
+          , cast(null as varchar) as provider_relation
+          , 1 as match_depth
+          , true as relies_on_unreviewed_relation
+          , 3 as narrower_concept_count
+          , 2 as narrower_taught_count
+          , ['n1', 'n3']::varchar[] as covered_narrower_concept_fks
+          , ['n2']::varchar[] as missing_narrower_concept_fks
+      union all
+      select
+          md5(concat('ra-u', '-', 'rc'))
+          , 'ra-u', cast(null as varchar), cast(null as varchar), 'ra', 'u', 'inferred', true
+          , 'mitxonline', 'course-v1:ORG+C.1+1T2026', 'rc', 'narrower', cast(null as varchar)
+          , 2, true, 3, 1, ['n3']::varchar[], ['n1', 'n2']::varchar[]
+
+- name: test_bridge_courserun_prerequisite_path_walks_requirements_and_ranks_providers
+  description: >
+    Run ra (course A) requires x (declared), y (inferred) and z (failing its support
+    rule),
+    and teaches t. x builds on y and m, y on m and t, m on n. So y is a
+    requirement that x also leads to (two requirements), m is two hops from
+    the run and n three, and t is left out because ra teaches it. rb teaches
+    x in three scopes and reviews m in one; rc teaches and reviews x in the same
+    two scopes, which count once (two, so rb ranks first), and teaches a close
+    equivalent of x and of m (four scopes); the direct match wins for x. y is
+    covered only through narrower matches, rb's (three concepts) ranked above rc's
+    (one), ra2 teaches y but is course A, and n's only taught equivalent hangs on
+    a failing close edge, so n has no provider.
+  model: bridge_courserun_prerequisite_path
+  given:
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: A, course_readable_id: "course-v1:ORG+A.1", is_current: true}
+    - {course_pk: B, course_readable_id: "course-v1:ORG+B.1", is_current: true}
+    - {course_pk: C, course_readable_id: "course-v1:ORG+C.1", is_current: true}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: ra, course_fk: A, platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026",
+      is_current: true}
+    - {courserun_pk: ra2, course_fk: A, platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+2T2026",
+      is_current: true}
+    - {courserun_pk: rb, course_fk: B, platform: mitxonline, courserun_readable_id: "course-v1:ORG+B.1+1T2026",
+      is_current: true}
+    - {courserun_pk: rc, course_fk: C, platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026",
+      is_current: true}
+  - input: ref('bridge_courserun_concept')
+    rows:
+    - {courserun_fk: ra, concept_fk: x, relation: requires, requirement_source: declared,
+      passes_support_rule: true, scope_count: 1}
+    - {courserun_fk: ra, concept_fk: y, relation: requires, requirement_source: inferred,
+      passes_support_rule: true, scope_count: 2}
+    - {courserun_fk: ra, concept_fk: z, relation: requires, requirement_source: inferred,
+      passes_support_rule: false, scope_count: 1}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026", scope_id: s1,
+      claim_kind: concept, teaching_status: taught, concept_id: t}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+1T2026", scope_id: s2,
+      claim_kind: concept, teaching_status: taught, concept_id: t}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+2T2026", scope_id: s1,
+      claim_kind: concept, teaching_status: taught, concept_id: y}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+A.1+2T2026", scope_id: s2,
+      claim_kind: concept, teaching_status: taught, concept_id: y}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+B.1+1T2026", scope_id: s1,
+      claim_kind: concept, teaching_status: taught, concept_id: x}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+B.1+1T2026", scope_id: s2,
+      claim_kind: concept, teaching_status: taught, concept_id: x}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+B.1+1T2026", scope_id: s3,
+      claim_kind: concept, teaching_status: taught, concept_id: x}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+B.1+1T2026", scope_id: s1,
+      claim_kind: concept, teaching_status: reviewed, concept_id: m}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+B.1+1T2026", scope_id: s1,
+      claim_kind: concept, teaching_status: taught, concept_id: z}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: s1,
+      claim_kind: concept, teaching_status: taught, concept_id: x}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: s2,
+      claim_kind: concept, teaching_status: taught, concept_id: x}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: s1,
+      claim_kind: concept, teaching_status: reviewed, concept_id: x}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: s2,
+      claim_kind: concept, teaching_status: reviewed, concept_id: x}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: s1,
+      claim_kind: concept, teaching_status: taught, concept_id: x2}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: s2,
+      claim_kind: concept, teaching_status: taught, concept_id: x2}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: s3,
+      claim_kind: concept, teaching_status: taught, concept_id: x2}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: s4,
+      claim_kind: concept, teaching_status: taught, concept_id: x2}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: s5,
+      claim_kind: concept, teaching_status: taught, concept_id: x2}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: s1,
+      claim_kind: concept, teaching_status: taught, concept_id: m2}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: s2,
+      claim_kind: concept, teaching_status: taught, concept_id: m2}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: s3,
+      claim_kind: concept, teaching_status: taught, concept_id: m2}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: s4,
+      claim_kind: concept, teaching_status: taught, concept_id: m2}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:ORG+C.1+1T2026", scope_id: s1,
+      claim_kind: concept, teaching_status: taught, concept_id: n2}
+  - input: ref('bridge_concept_prerequisite_closure')
+    rows:
+    - {from_concept_fk: x, to_concept_fk: y, min_depth: 1}
+    - {from_concept_fk: x, to_concept_fk: m, min_depth: 1}
+    - {from_concept_fk: x, to_concept_fk: n, min_depth: 2}
+    - {from_concept_fk: x, to_concept_fk: t, min_depth: 2}
+    - {from_concept_fk: y, to_concept_fk: m, min_depth: 1}
+    - {from_concept_fk: y, to_concept_fk: n, min_depth: 2}
+    - {from_concept_fk: y, to_concept_fk: t, min_depth: 1}
+    - {from_concept_fk: m, to_concept_fk: n, min_depth: 1}
+  - input: ref('bridge_concept_relation')
+    rows:
+    - {from_concept_fk: x, to_concept_fk: x2, relation: close, passes_support_rule: true}
+    - {from_concept_fk: m2, to_concept_fk: m, relation: close, passes_support_rule: true}
+    - {from_concept_fk: n, to_concept_fk: n2, relation: close, passes_support_rule: false}
+  - input: ref('bridge_courserun_prerequisite_coverage')
+    rows:
+    - {courserun_fk: ra, concept_fk: y, provider_courserun_fk: rb, requirement_passes_support_rule: true,
+      match_type: narrower, narrower_taught_count: 3}
+    - {courserun_fk: ra, concept_fk: y, provider_courserun_fk: rc, requirement_passes_support_rule: true,
+      match_type: narrower, narrower_taught_count: 1}
+  expect:
+    rows:
+    - {courserun_fk: ra, concept_fk: x, prerequisite_depth: 1, prerequisite_source: declared,
+      required_concept_count: 1, provider_courserun_fk: rb, match_type: direct, provider_scope_count: 3,
+      narrower_taught_count: null, provider_rank: 1, provider_prerequisite_count: 3}
+    - {courserun_fk: ra, concept_fk: x, prerequisite_depth: 1, prerequisite_source: declared,
+      required_concept_count: 1, provider_courserun_fk: rc, match_type: direct, provider_scope_count: 2,
+      narrower_taught_count: null, provider_rank: 2, provider_prerequisite_count: 3}
+    - {courserun_fk: ra, concept_fk: y, prerequisite_depth: 1, prerequisite_source: inferred,
+      required_concept_count: 2, provider_courserun_fk: rb, match_type: narrower,
+      provider_scope_count: null, narrower_taught_count: 3, provider_rank: 1, provider_prerequisite_count: 3}
+    - {courserun_fk: ra, concept_fk: y, prerequisite_depth: 1, prerequisite_source: inferred,
+      required_concept_count: 2, provider_courserun_fk: rc, match_type: narrower,
+      provider_scope_count: null, narrower_taught_count: 1, provider_rank: 2, provider_prerequisite_count: 3}
+    - {courserun_fk: ra, concept_fk: m, prerequisite_depth: 2, prerequisite_source: builds_on,
+      required_concept_count: 2, provider_courserun_fk: rb, match_type: direct, provider_scope_count: 1,
+      narrower_taught_count: null, provider_rank: 1, provider_prerequisite_count: 3}
+    - {courserun_fk: ra, concept_fk: m, prerequisite_depth: 2, prerequisite_source: builds_on,
+      required_concept_count: 2, provider_courserun_fk: rc, match_type: close, provider_scope_count: 4,
+      narrower_taught_count: null, provider_rank: 2, provider_prerequisite_count: 3}
+    - {courserun_fk: ra, concept_fk: n, prerequisite_depth: 3, prerequisite_source: builds_on,
+      required_concept_count: 2, provider_courserun_fk: null, match_type: null, provider_scope_count: null,
+      narrower_taught_count: null, provider_rank: null, provider_prerequisite_count: null}

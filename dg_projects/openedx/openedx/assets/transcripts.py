@@ -188,6 +188,19 @@ def transcript_text(relative_path: str, raw: bytes) -> str | None:
         log.exception("Transcript is not valid UTF-8: %s", relative_path)
         return None
 
+    # Learn strips Tika's output before the SRT transformer runs
+    # (_extract_content_with_tika), and the order changes the text. Without it
+    # an SRT whose last caption ends in a newline or blank line keeps a trailing
+    # newline or space, and a final caption of only digits is dropped where
+    # Learn keeps it. Stripping the parsed text afterwards is not the same:
+    # Learn's text keeps the space an empty cue leaves at either end. Learn's
+    # checksum is md5(content), so each such file reads as changed to a
+    # checksum-based sync. Learn strips before SJSON parsing too, so an SJSON
+    # wrapped in whitespace json.loads rejects (e.g. a no-break space) parses
+    # here as it does there. WebVTT output is unchanged: its blocks are
+    # stripped one by one.
+    content = content.strip()
+
     suffix = Path(relative_path).suffix.lower()
     if suffix == SJSON_SUFFIX:
         return text_from_sjson_content(content)

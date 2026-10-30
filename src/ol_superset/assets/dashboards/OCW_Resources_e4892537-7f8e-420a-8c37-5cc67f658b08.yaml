@@ -1,0 +1,232 @@
+certification_details: ''
+certified_by: ''
+css: ''
+dashboard_title: OCW Resources
+description: null
+metadata:
+  chart_configuration:
+    '155':
+      crossFilters:
+        chartsInScope: []
+        scope: global
+      id: 155
+  chart_customization_config: []
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  default_filters: '{}'
+  expanded_slices: {}
+  global_chart_configuration:
+    chartsInScope:
+    - 155
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors: {}
+  native_filter_configuration:
+  - cascadeParentIds: []
+    chartsInScope:
+    - 155
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-gO5VtfHnhN5YblhhVPEag
+    name: Resource Type
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    sortMetric: null
+    tabsInScope:
+    - TAB-mxy30QX_GkvkwKYR3GMpm
+    targets:
+    - column:
+        name: resource_type
+      datasetUuid: 8bb67686-3d31-4418-bda9-87fdeb25b665
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 155
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-7YEUdq3hZX_9DN5zuIjBA
+    name: Learning Resource Types
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    sortMetric: null
+    tabsInScope:
+    - TAB-mxy30QX_GkvkwKYR3GMpm
+    targets:
+    - column:
+        name: learning_resource_type
+      datasetUuid: 2282307f-f6b9-4c4f-8b5f-0ca074ee9bfa
+    type: NATIVE_FILTER
+  refresh_frequency: 0
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
+position:
+  CHART-uA4gRVvCOr_4xADmT0QEp:
+    children: []
+    id: CHART-uA4gRVvCOr_4xADmT0QEp
+    meta:
+      chartId: 155
+      height: 71
+      sliceName: OCW Resources
+      uuid: cd72f611-dac4-45a0-99ca-8b3c9e260597
+      width: 12
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-jGG3ZQ4jK-yvFjGtRiJx7
+    - TAB-mxy30QX_GkvkwKYR3GMpm
+    - ROW-gGtwLvKKXbBSM1MzJp849
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children:
+    - TABS-jGG3ZQ4jK-yvFjGtRiJx7
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: OCW Resources
+    type: HEADER
+  MARKDOWN-RQHyI10wYE9RJpBk2x0uv:
+    children: []
+    id: MARKDOWN-RQHyI10wYE9RJpBk2x0uv
+    meta:
+      code: data definitions - https://mitodl.github.io/ol-data-platform/#/overview
+      height: 14
+      width: 12
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-jGG3ZQ4jK-yvFjGtRiJx7
+    - TAB-r1kEPV1hkn6hKFvhKB2nL
+    - ROW-6bklnCSk7aBEecMmVfjfw
+    type: MARKDOWN
+  MARKDOWN-Zp82dhs20n_3bKVN-bl0l:
+    children: []
+    id: MARKDOWN-Zp82dhs20n_3bKVN-bl0l
+    meta:
+      code: '### ✨Change Log'
+      height: 24
+      width: 12
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-jGG3ZQ4jK-yvFjGtRiJx7
+    - TAB-r1kEPV1hkn6hKFvhKB2nL
+    - ROW-IzDcIg6ZHnLol-vQXypI3
+    type: MARKDOWN
+  ROOT_ID:
+    children:
+    - GRID_ID
+    id: ROOT_ID
+    type: ROOT
+  ROW-6bklnCSk7aBEecMmVfjfw:
+    children:
+    - MARKDOWN-RQHyI10wYE9RJpBk2x0uv
+    id: ROW-6bklnCSk7aBEecMmVfjfw
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-jGG3ZQ4jK-yvFjGtRiJx7
+    - TAB-r1kEPV1hkn6hKFvhKB2nL
+    type: ROW
+  ROW-IzDcIg6ZHnLol-vQXypI3:
+    children:
+    - MARKDOWN-Zp82dhs20n_3bKVN-bl0l
+    id: ROW-IzDcIg6ZHnLol-vQXypI3
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-jGG3ZQ4jK-yvFjGtRiJx7
+    - TAB-r1kEPV1hkn6hKFvhKB2nL
+    type: ROW
+  ROW-gGtwLvKKXbBSM1MzJp849:
+    children:
+    - CHART-uA4gRVvCOr_4xADmT0QEp
+    id: ROW-gGtwLvKKXbBSM1MzJp849
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-jGG3ZQ4jK-yvFjGtRiJx7
+    - TAB-mxy30QX_GkvkwKYR3GMpm
+    type: ROW
+  TAB-mxy30QX_GkvkwKYR3GMpm:
+    children:
+    - ROW-gGtwLvKKXbBSM1MzJp849
+    id: TAB-mxy30QX_GkvkwKYR3GMpm
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Data
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-jGG3ZQ4jK-yvFjGtRiJx7
+    type: TAB
+  TAB-r1kEPV1hkn6hKFvhKB2nL:
+    children:
+    - ROW-IzDcIg6ZHnLol-vQXypI3
+    - ROW-6bklnCSk7aBEecMmVfjfw
+    id: TAB-r1kEPV1hkn6hKFvhKB2nL
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Help
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-jGG3ZQ4jK-yvFjGtRiJx7
+    type: TAB
+  TABS-jGG3ZQ4jK-yvFjGtRiJx7:
+    children:
+    - TAB-mxy30QX_GkvkwKYR3GMpm
+    - TAB-r1kEPV1hkn6hKFvhKB2nL
+    id: TABS-jGG3ZQ4jK-yvFjGtRiJx7
+    meta: {}
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: TABS
+published: true
+slug: null
+theme_uuid: null
+uuid: e4892537-7f8e-420a-8c37-5cc67f658b08
+version: 1.0.0

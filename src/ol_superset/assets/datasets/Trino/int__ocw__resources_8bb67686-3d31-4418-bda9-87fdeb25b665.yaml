@@ -480,7 +480,19 @@ normalize_columns: false
 offset: 0
 params: null
 schema: ol_warehouse_production_intermediate
-sql: null
+sql: |-
+  {% set learning_resource_type_filter = filter_values('learning_resource_type') %}
+  select resources.*
+  from ol_data_lake_production.ol_warehouse_production_intermediate.int__ocw__resources as resources
+  {% if learning_resource_type_filter %}
+  where exists (
+      select 1
+      from ol_data_lake_production.ol_warehouse_production_intermediate.int__ocw__learning_resource_types as types
+      where types.course_uuid = resources.course_uuid
+          and types.resource_uuid = resources.resource_uuid
+          and types.learning_resource_type in {{ learning_resource_type_filter | where_in }}
+  )
+  {% endif %}
 table_name: int__ocw__resources
 template_params: null
 uuid: 8bb67686-3d31-4418-bda9-87fdeb25b665

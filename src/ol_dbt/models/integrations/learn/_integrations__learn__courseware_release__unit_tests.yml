@@ -1,0 +1,128 @@
+---
+# Release r1 is published. r2 is a later candidate whose graph build failed, so it
+# was written but never published; r3 is the next one, published after r1.
+unit_tests:
+- name: test_integrations__learn__concepts_keeps_the_published_release_over_a_candidate
+  description: >
+    A candidate that was never published (its graph build failed) does not reach
+    Learn: the concepts stay the published release's, and a concept that is not
+    learner-facing is left out.
+  model: integrations__learn__concepts
+  given:
+  - input: ref('int__courseware__published_release')
+    rows:
+    - {release_id: r1}
+  - input: source('courseware_intermediate', 'courseware_release_concept')
+    rows:
+    - {release_id: r1, concept_id: c1, name: AUC, is_learner_facing: true}
+    - {release_id: r1, concept_id: c9, name: wine prices, is_learner_facing: false}
+    - {release_id: r2, concept_id: c1, name: area under the curve, is_learner_facing: true}
+    - {release_id: r2, concept_id: c2, name: pandas, is_learner_facing: true}
+  expect:
+    rows:
+    - {release_id: r1, concept_id: c1, name: AUC}
+
+- name: test_integrations__learn__resource_knowledge_keeps_the_published_release_over_a_candidate
+  description: >
+    The same unpublished candidate leaves the course knowledge on the published
+    release too.
+  model: integrations__learn__resource_knowledge
+  given:
+  - input: ref('int__courseware__published_release')
+    rows:
+    - {release_id: r1}
+  - input: source('courseware_intermediate', 'courseware_release_resource_knowledge')
+    rows:
+    - {release_id: r1, etl_source: mitxonline, readable_id: "course-v1:X+A", context_document: "#\
+        \ Course A r1"}
+    - {release_id: r2, etl_source: mitxonline, readable_id: "course-v1:X+A", context_document: "#\
+        \ Course A r2"}
+  expect:
+    rows:
+    - {release_id: r1, readable_id: "course-v1:X+A", context_document: "# Course A\
+        \ r1"}
+
+- name: test_int__courseware__published_release_is_the_newest_publication
+  description: >
+    The published release is the one the newest publication row names: a promotion
+    to r3 moves it, and a later rollback to r1 moves it back. A release built but
+    never published (r2) is never it.
+  model: int__courseware__published_release
+  given:
+  - input: source('courseware_intermediate', 'courseware_release_publication')
+    rows:
+    - {release_id: r1, published_at: "2026-10-01 00:00:00"}
+    - {release_id: r3, published_at: "2026-10-03 00:00:00"}
+    - {release_id: r1, published_at: "2026-10-04 00:00:00"}
+  - input: source('courseware_intermediate', 'courseware_release')
+    rows:
+    - {release_id: r1, resolution_run_id: res1, graph_run_id: g1}
+    - {release_id: r2, resolution_run_id: res2, graph_run_id: g1}
+    - {release_id: r3, resolution_run_id: res2, graph_run_id: g2}
+  expect:
+    rows:
+    - {release_id: r1, resolution_run_id: res1, graph_run_id: g1}
+
+- name: test_integrations__learn__concepts_moves_with_a_promotion
+  description: >
+    After r3 is promoted, the concepts are r3's. The course knowledge and course
+    concept tests below use the same published row, so all three views move
+    together.
+  model: integrations__learn__concepts
+  given:
+  - input: ref('int__courseware__published_release')
+    rows:
+    - {release_id: r3}
+  - input: source('courseware_intermediate', 'courseware_release_concept')
+    rows:
+    - {release_id: r1, concept_id: c1, name: AUC, is_learner_facing: true}
+    - {release_id: r3, concept_id: c1, name: area under the curve, is_learner_facing: true}
+    - {release_id: r3, concept_id: c2, name: pandas, is_learner_facing: true}
+  expect:
+    rows:
+    - {release_id: r3, concept_id: c1, name: area under the curve}
+    - {release_id: r3, concept_id: c2, name: pandas}
+
+- name: test_integrations__learn__resource_knowledge_moves_with_a_promotion
+  description: >
+    After r3 is promoted, the course knowledge is r3's, as the concepts are.
+  model: integrations__learn__resource_knowledge
+  given:
+  - input: ref('int__courseware__published_release')
+    rows:
+    - {release_id: r3}
+  - input: source('courseware_intermediate', 'courseware_release_resource_knowledge')
+    rows:
+    - {release_id: r1, etl_source: mitxonline, readable_id: "course-v1:X+A", context_document: "#\
+        \ Course A r1"}
+    - {release_id: r3, etl_source: mitxonline, readable_id: "course-v1:X+A", context_document: "#\
+        \ Course A r3"}
+    - {release_id: r3, etl_source: xpro, readable_id: "course-v1:xPRO+B", context_document: "#\
+        \ Course B r3"}
+  expect:
+    rows:
+    - {release_id: r3, readable_id: "course-v1:X+A", context_document: "# Course A\
+        \ r3"}
+    - {release_id: r3, readable_id: "course-v1:xPRO+B", context_document: "# Course\
+        \ B r3"}
+
+- name: test_integrations__learn__resource_concepts_moves_with_a_promotion
+  description: >
+    The course concepts by id follow the same published row: r3's after the
+    promotion, never the unpublished r2's.
+  model: integrations__learn__resource_concepts
+  given:
+  - input: ref('int__courseware__published_release')
+    rows:
+    - {release_id: r3}
+  - input: source('courseware_intermediate', 'courseware_release_resource_concept')
+    rows:
+    - {release_id: r1, etl_source: mitxonline, readable_id: "course-v1:X+A", concept_id: c1,
+      relation: teaches}
+    - {release_id: r2, etl_source: mitxonline, readable_id: "course-v1:X+A", concept_id: c2,
+      relation: teaches}
+    - {release_id: r3, etl_source: mitxonline, readable_id: "course-v1:X+A", concept_id: c1,
+      relation: teaches}
+  expect:
+    rows:
+    - {release_id: r3, readable_id: "course-v1:X+A", concept_id: c1, relation: teaches}

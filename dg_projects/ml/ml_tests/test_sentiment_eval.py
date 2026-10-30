@@ -4,7 +4,9 @@ import numpy as np
 import polars as pl
 import pytest
 from anthropic import Anthropic, AnthropicBedrock
+from anthropic.types import TextBlock, ThinkingBlock
 from ml.lib import sentiment_eval
+from ml_tests.fake_anthropic import FakeAnthropicClient, FakeMessage
 from openai import OpenAI
 
 
@@ -19,18 +21,36 @@ class _FakeLLM:
         return self._client
 
 
-def test_labeled_sentiment_sample_maps_good_bad_and_drops_the_rest() -> None:
+def test_labeled_sentiment_sample_maps_every_verdict_and_drops_the_rest() -> None:
+    ratings = [
+        "good",
+        "like",
+        "positive",
+        "bad",
+        "dislike",
+        "negative",
+        "offered",
+        "unoffered",
+        "idea",
+    ]
     df = pl.DataFrame(
         {
-            "feedback_conversation_pk": ["1", "2", "3"],
-            "explicit_rating": ["good", "bad", "offered"],
+            "feedback_conversation_pk": [str(i) for i in range(len(ratings))],
+            "explicit_rating": ratings,
         }
     )
 
     result = sentiment_eval.labeled_sentiment_sample(df)
 
-    assert result["feedback_conversation_pk"].to_list() == ["1", "2"]
-    assert result["sentiment"].to_list() == ["positive", "negative"]
+    assert result["feedback_conversation_pk"].to_list() == [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+    ]
+    assert result["sentiment"].to_list() == ["positive"] * 3 + ["negative"] * 3
 
 
 def test_train_test_split_indices_covers_every_row_exactly_once() -> None:
@@ -133,7 +153,7 @@ def test_build_sentiment_client_rejects_claude_model_for_real_openai() -> None:
                 OpenAI(api_key="sk-test"),  # pragma: allowlist secret
                 client_class="openai",
             ),
-            model_version="claude-haiku-4-5",
+            model_version="claude-haiku-5-5",
         )
 
 
@@ -146,11 +166,11 @@ def test_build_sentiment_client_allows_claude_model_for_openai_compatible() -> N
             ),
             client_class="openai_compatible",
         ),
-        model_version="claude-haiku-4-5",
+        model_version="claude-haiku-5-5",
     )
 
     assert isinstance(client, sentiment_eval.OpenAISentimentClient)
-    assert client.model_version == "claude-haiku-4-5"
+    assert client.model_version == "claude-haiku-5-5"
 
 
 class _FakeSentimentClient:
@@ -225,3 +245,52 @@ def test_run_sentiment_eval_includes_llm_arm_when_client_given() -> None:
 
     assert "llm" in result["methods"]
     assert result["methods"]["llm"]["call_count"] == result["n_test"]
+
+
+def test_anthropic_sentiment_client_reads_the_word_after_a_thinking_block() -> None:
+    """claude-haiku-5-5 thinks by default, so the reply opens with a thinking block."""
+    fake = FakeAnthropicClient(
+        FakeMessage(
+            [
+                ThinkingBlock(type="thinking", thinking="", signature="sig"),
+                TextBlock(type="text", text="Negative"),
+            ]
+        )
+    )
+    client = sentiment_eval.AnthropicSentimentClient(fake, "claude-haiku-5-5")
+
+    assert client.classify("some conversation text") == "negative"
+    assert fake.requests[0]["output_config"] == {
+        "effort": sentiment_eval.SENTIMENT_EFFORT
+    }
+
+
+def test_anthropic_sentiment_client_leaves_a_cut_off_reply_unlabeled() -> None:
+    client = sentiment_eval.AnthropicSentimentClient(
+        FakeAnthropicClient(
+            FakeMessage(
+                [ThinkingBlock(type="thinking", thinking="", signature="sig")],
+                stop_reason="max_tokens",
+            )
+        ),
+        "claude-haiku-5-5",
+    )
+
+    assert client.classify("some conversation text") is None
+
+
+@pytest.mark.parametrize("stop_reason", ["max_tokens", "model_context_window_exceeded"])
+def test_anthropic_sentiment_client_leaves_partial_text_unlabeled(
+    stop_reason: str,
+) -> None:
+    """A reply cut off mid-answer can still carry a sentiment word."""
+    client = sentiment_eval.AnthropicSentimentClient(
+        FakeAnthropicClient(
+            FakeMessage(
+                [TextBlock(type="text", text="negative")], stop_reason=stop_reason
+            )
+        ),
+        "claude-haiku-5-5",
+    )
+
+    assert client.classify("some conversation text") is None

@@ -39,6 +39,7 @@ from ol_dlt.sources import (
     podcast_rss,
     posthog_events,
     see,
+    tracking_logs,
     xpro_app,
     youtube,
 )
@@ -235,7 +236,9 @@ def load_in_batches(
 
     for batch in range(1, _MAX_BATCHES_PER_RUN + 1):
         # A fresh source per batch: a DltSource's resources are generators,
-        # spent once the batch that consumed them ends.
+        # spent once the batch that consumed them ends. Whatever the batches
+        # of a run share, such as a listing, build_source closes over (see
+        # sources_for_run).
         results = list(
             dlt.run(
                 context=context,
@@ -344,19 +347,35 @@ def drain(
         )
 
 
-def build_batched_assets(
+def sources_for_run(
+    build_source: Callable[..., Any], *, list_once: bool
+) -> Callable[[], Any]:
+    """Return the per-batch source factory for one run.
+
+    With ``list_once``, every batch's source gets the same new
+    ``edxorg_s3.FileListing``, so the run lists its files once and carves each
+    batch from that listing instead of listing again per batch.
+    """
+    if list_once:
+        return partial(build_source, listing=edxorg_s3.FileListing())
+    return build_source
+
+
+def build_batched_assets(  # noqa: PLR0913
     *,
     name: str,
-    build_source: Callable[[], Any],
+    build_source: Callable[..., Any],
     pipeline: Any,
     translator: RawDataDltTranslator,
     pool: str | None = None,
+    list_once: bool = False,
 ) -> AssetsDefinition:
     """Wrap a one-table budgeted source as an ``@dlt_assets`` op that drains it.
 
     ``build_source`` is called once for the asset definition, once per run for
     the table's name and once per batch (see ``drain``). Its single resource
-    names the table.
+    names the table. With ``list_once`` it also takes a ``listing`` keyword,
+    one per run (see ``sources_for_run``).
     """
 
     @dlt_assets(
@@ -371,7 +390,10 @@ def build_batched_assets(
         context: AssetExecutionContext, dlt: DagsterDltResource
     ) -> Iterable[Any]:
         yield from drain(
-            context=context, dlt=dlt, build_source=build_source, pipeline=pipeline
+            context=context,
+            dlt=dlt,
+            build_source=sources_for_run(build_source, list_once=list_once),
+            pipeline=pipeline,
         )
 
     return _asset
@@ -426,6 +448,22 @@ edxorg_program_reports_assets = build_batched_assets(
     build_source=edxorg_program_reports.edxorg_program_reports_source,
     pipeline=edxorg_program_reports.edxorg_program_reports_pipeline(),
     translator=RawDataDltTranslator(),
+)
+
+
+# The xPro tracking log, loaded in full beside the Airbyte-loaded
+# raw__xpro__openedx__tracking_logs until staging is repointed at it. One
+# listing per run: a full listing of the production bucket (264,950 files on
+# 2026-10-27) takes about 50 s, and the first runs walk ~331 batches.
+XPRO_TRACKING_LOGS_TABLE = "raw__xpro__openedx__tracking_log_events"
+xpro_tracking_logs_assets = build_batched_assets(
+    name="xpro_tracking_logs",
+    build_source=partial(
+        tracking_logs.tracking_logs_source, raw_table=XPRO_TRACKING_LOGS_TABLE
+    ),
+    pipeline=tracking_logs.tracking_logs_pipeline_for(XPRO_TRACKING_LOGS_TABLE),
+    translator=RawDataDltTranslator(),
+    list_once=True,
 )
 
 
@@ -513,6 +551,7 @@ defs = Definitions(
             *edxorg_s3_table_assets,
             *course_xml_blocks_assets,
             edxorg_program_reports_assets,
+            xpro_tracking_logs_assets,
         ]
     ),
 )

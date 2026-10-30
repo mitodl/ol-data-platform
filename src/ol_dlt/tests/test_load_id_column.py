@@ -56,6 +56,7 @@ def test_every_source_package_is_covered() -> None:
         "podcast_rss",
         "posthog_events",
         "see",
+        "tracking_logs",
         "xpro_app",
         "youtube",
     }

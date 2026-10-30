@@ -29,6 +29,13 @@ from ruamel.yaml import YAML
 
 from ol_dbt_cli import fixture_factories
 from ol_dbt_cli.lib.cursor_audit import select_units
+from ol_dbt_cli.lib.dimensional_fixtures import (
+    DEFAULT_DIMENSIONAL_FIXTURES_DIR,
+    LOCAL_DIMENSIONAL_SCHEMA,
+    dimensional_fixture_path,
+    parse_dimensional_fixture,
+    resolve_parameters,
+)
 from ol_dbt_cli.lib.glue_schema import DEFAULT_GLUE_DATABASE, column_types_by_table
 from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, Unit, load_units
 from ol_dbt_cli.lib.raw_fixtures import (
@@ -134,6 +141,14 @@ def connect_local_lake(host: str = LOCAL_HOST, port: int = LOCAL_PORT) -> MySQLC
     )
 
 
+def _replace_table(cursor: Any, schema: str, table: TableFixture, parameters: list[tuple[Any, ...]]) -> None:
+    """Drop ``table`` in the local catalog's ``schema``, create it again and insert ``parameters``."""
+    cursor.execute(f"DROP TABLE IF EXISTS {qualified_name(LOCAL_CATALOG, schema, table.raw_table)} FORCE")
+    cursor.execute(create_table_sql(table, LOCAL_CATALOG, schema))
+    for start in range(0, len(parameters), INSERT_BATCH_ROWS):
+        cursor.executemany(insert_sql(table, LOCAL_CATALOG, schema), parameters[start : start + INSERT_BATCH_ROWS])
+
+
 def _select(inventory_dir: Path, unit: list[str] | None) -> list[Unit]:
     units = load_units(inventory_dir)
     if not unit:
@@ -213,16 +228,73 @@ def load(
     cursor.execute(f"CREATE DATABASE IF NOT EXISTS {qualified_name(LOCAL_CATALOG, schema)}")
     for loaded, parameters in prepared:
         table = loaded.table
-        cursor.execute(f"DROP TABLE IF EXISTS {qualified_name(LOCAL_CATALOG, schema, table.raw_table)} FORCE")
-        cursor.execute(create_table_sql(table, LOCAL_CATALOG, schema))
-        for start in range(0, len(parameters), INSERT_BATCH_ROWS):
-            cursor.executemany(insert_sql(table, LOCAL_CATALOG, schema), parameters[start : start + INSERT_BATCH_ROWS])
+        _replace_table(cursor, schema, table, parameters)
         counts = (
             f"{len(loaded.hand_written)} row(s)"
             if loaded.generated is None
             else f"{len(loaded.hand_written)} hand-written + {len(loaded.generated)} generated row(s)"
         )
         console.print(f"{escape(schema)}.{escape(table.raw_table)}: {counts}", soft_wrap=True)
+    connection.close()
+
+
+@fixtures_app.command(name="load-dimensional")
+def load_dimensional(
+    name: Annotated[str, Parameter(help="The fixture, as its file name under --fixtures-dir without .yml.")],
+    *,
+    set_: Annotated[
+        list[str] | None,
+        Parameter(name="--set", help="A value for a parameter the file declares, as NAME=VALUE. Repeatable."),
+    ] = None,
+    fixtures_dir: Annotated[
+        Path, Parameter(help="Directory holding the dimensional fixture files.")
+    ] = DEFAULT_DIMENSIONAL_FIXTURES_DIR,
+    host: Annotated[str, Parameter(help="StarRocks FE host.")] = LOCAL_HOST,
+    port: Annotated[int, Parameter(help="StarRocks query port.")] = LOCAL_PORT,
+) -> None:
+    """Create and fill dimensional tables from a committed fixture, for consumers that read only that layer.
+
+    Writes into ol_warehouse_local_dimensional, where the `dimensional` dbt
+    source resolves under `--env dev`. Each table is dropped and created
+    again, which replaces any dimensional model of the same name you built
+    locally. A file's parameters are ids the local stack assigns (e.g. a
+    Keycloak organization id); the command lists any it is not given.
+    """
+    path = dimensional_fixture_path(fixtures_dir, name)
+    if not path.exists():
+        available = sorted(candidate.stem for candidate in fixtures_dir.glob("*.yml"))
+        err_console.print(f"[bold red]No {escape(str(path))}. Fixtures: {', '.join(available) or 'none'}.")
+        sys.exit(1)
+    fixture = parse_dimensional_fixture(path)
+    values: dict[str, str] = {}
+    for assignment in set_ or []:
+        key, separator, value = assignment.partition("=")
+        # An empty value is most often an unset shell variable, and it would
+        # load views keyed to nothing, which reads as a broken dashboard.
+        if not separator or not key or not value:
+            err_console.print(f"[bold red]--set {escape(assignment)}: expected NAME=VALUE with a non-empty VALUE.")
+            sys.exit(1)
+        if key in values:
+            err_console.print(f"[bold red]--set {escape(key)} is given more than once.")
+            sys.exit(1)
+        values[key] = value
+    try:
+        tables = resolve_parameters(fixture, values)
+    except ValueError as error:
+        err_console.print(f"[bold red]{escape(str(error))}")
+        for parameter in fixture.parameters.values():
+            err_console.print(
+                f"  --set {parameter.name}=<{parameter.fixture_type}>  {escape(parameter.description)}", soft_wrap=True
+            )
+        sys.exit(1)
+    prepared = [(table, row_parameters(table)) for table in tables]
+
+    connection = connect_local_lake(host, port)
+    cursor = connection.cursor()
+    cursor.execute(f"CREATE DATABASE IF NOT EXISTS {qualified_name(LOCAL_CATALOG, LOCAL_DIMENSIONAL_SCHEMA)}")
+    for table, parameters in prepared:
+        _replace_table(cursor, LOCAL_DIMENSIONAL_SCHEMA, table, parameters)
+        console.print(f"{LOCAL_DIMENSIONAL_SCHEMA}.{escape(table.raw_table)}: {len(parameters)} row(s)", soft_wrap=True)
     connection.close()
 
 
