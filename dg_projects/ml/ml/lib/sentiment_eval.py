@@ -3,8 +3,9 @@ explicit+local-classifier vs. explicit+LLM, scored against the explicitly
 rated sample.
 
 Not a production pipeline step -- a decision aid. Run once (or occasionally),
-read the accuracy/cost tradeoff, and pick the tier-2 method by hand; the
-winner then gets its own production asset, same as clustering/categorization.
+read the accuracy, negative precision/recall and cost, and pick the tier-2
+method by hand; the winner then gets its own production asset, same as
+clustering/categorization.
 """
 
 import logging
@@ -54,6 +55,8 @@ BEDROCK_SENTIMENT_MODEL_VERSION = os.environ.get(
 SENTIMENT_MAX_TOKENS = int(os.environ.get("SENTIMENT_MAX_TOKENS", "1024"))
 SENTIMENT_EFFORT: Effort = "low"
 
+SENTIMENT_PROMPT_NAME = "feedback-sentiment-classify"
+CONVERSATION_PLACEHOLDER = "{{conversation_text}}"
 SENTIMENT_PROMPT = (
     "Classify the sentiment of this support conversation from the requester's "
     "point of view, as expressed at the end of the conversation. Respond with "
@@ -63,13 +66,29 @@ SENTIMENT_PROMPT = (
 logger = logging.getLogger(__name__)
 
 
-def _sentiment_prompt(conversation_text: str) -> str:
-    """SENTIMENT_PROMPT rendered, preferring Opik's Prompt Library entry if set up."""
-    return render_prompt(
-        "feedback-sentiment-classify",
-        SENTIMENT_PROMPT,
-        conversation_text=conversation_text,
-    )
+def fetch_sentiment_prompt() -> str:
+    """Return the sentiment prompt template, preferring Opik's Prompt Library entry.
+
+    Fetched once per run, before any LLM call, so every conversation is scored
+    with one text, and a prompt the run can't use fails the run instead of
+    turning each call into a wrong answer.
+
+    :raises PromptLabelMissingError: in Production, when no version of the
+        prompt is labeled production.
+    :raises ValueError: when the template has no conversation placeholder.
+    """
+    template = render_prompt(SENTIMENT_PROMPT_NAME, SENTIMENT_PROMPT)
+    if CONVERSATION_PLACEHOLDER not in template:
+        msg = (
+            f"Opik prompt {SENTIMENT_PROMPT_NAME!r} has no "
+            f"{CONVERSATION_PLACEHOLDER} placeholder"
+        )
+        raise ValueError(msg)
+    return template
+
+
+def _render(template: str, conversation_text: str) -> str:
+    return template.replace(CONVERSATION_PLACEHOLDER, conversation_text)
 
 
 def labeled_sentiment_sample(
@@ -120,14 +139,44 @@ def train_test_split_indices(
     return np.concatenate(train_idx), np.concatenate(test_idx)
 
 
-def embedding_knn_accuracy(
+def score_predictions(
+    predictions: list[str | None] | np.ndarray, test_labels: np.ndarray
+) -> dict[str, float | int | None]:
+    """Accuracy, plus precision and recall on the negative class, with their counts.
+
+    Rated conversations are mostly positive, so an all-positive guess already
+    scores high accuracy; negative precision/recall show how well a method
+    finds the complaints. Each is None when its denominator is zero.
+    A None prediction (a failed LLM call) is wrong and is never a negative.
+    """
+    predicted = np.array(predictions, dtype=object)
+    actual = np.asarray(test_labels, dtype=object)
+    predicted_negative = predicted == "negative"
+    actual_negative = actual == "negative"
+    n_true_negative = int((predicted_negative & actual_negative).sum())
+    n_predicted_negative = int(predicted_negative.sum())
+    n_test_negative = int(actual_negative.sum())
+    return {
+        "accuracy": float((predicted == actual).mean()),
+        "negative_precision": (
+            n_true_negative / n_predicted_negative if n_predicted_negative else None
+        ),
+        "negative_recall": (
+            n_true_negative / n_test_negative if n_test_negative else None
+        ),
+        "n_test_negative": n_test_negative,
+        "n_predicted_negative": n_predicted_negative,
+        "n_true_negative": n_true_negative,
+    }
+
+
+def embedding_knn_predictions(
     train_vectors: np.ndarray,
     train_labels: np.ndarray,
     test_vectors: np.ndarray,
-    test_labels: np.ndarray,
     n_neighbors: int = EMBEDDING_KNN_NEIGHBORS,
-) -> float:
-    """Accuracy of a cosine-distance kNN vote over already-computed embeddings.
+) -> np.ndarray:
+    """Predictions of a cosine-distance kNN vote over already-computed embeddings.
 
     Zero extra model cost (§E) -- reuses the one embedding already computed for
     clustering, just a nearest-neighbour lookup against the labeled sample.
@@ -136,18 +185,16 @@ def embedding_knn_accuracy(
         n_neighbors=min(n_neighbors, len(train_labels)), metric="cosine"
     )
     classifier.fit(train_vectors, train_labels)
-    predictions = classifier.predict(test_vectors)
-    return float((predictions == test_labels).mean())
+    return classifier.predict(test_vectors)
 
 
-def local_classifier_accuracy(
+def local_classifier_predictions(
     train_vectors: np.ndarray,
     train_labels: np.ndarray,
     test_vectors: np.ndarray,
-    test_labels: np.ndarray,
     random_state: int = 42,
-) -> float:
-    """Accuracy of a logistic regression trained on the labeled embeddings.
+) -> np.ndarray:
+    """Predictions of a logistic regression trained on the labeled embeddings.
 
     CPU-cheap, no per-record API cost (§E's local-classifier option) -- a
     simple linear model over the same embeddings kNN uses, rather than a
@@ -155,8 +202,7 @@ def local_classifier_accuracy(
     """
     classifier = LogisticRegression(max_iter=1000, random_state=random_state)
     classifier.fit(train_vectors, train_labels)
-    predictions = classifier.predict(test_vectors)
-    return float((predictions == test_labels).mean())
+    return classifier.predict(test_vectors)
 
 
 class SentimentClient(Protocol):
@@ -167,10 +213,9 @@ class SentimentClient(Protocol):
 
 def _extract_sentiment_word(text: str) -> str | None:
     lowered = text.strip().lower()
-    for label in SENTIMENT_LABELS:
-        if label in lowered:
-            return label
-    return None
+    found = [label for label in SENTIMENT_LABELS if label in lowered]
+    # A word match can't tell which word is the answer when the reply has both.
+    return found[0] if len(found) == 1 else None
 
 
 class AnthropicSentimentClient:
@@ -183,6 +228,7 @@ class AnthropicSentimentClient:
     ) -> None:
         self._client = client
         self.model_version = model_version
+        self.prompt_template = SENTIMENT_PROMPT
 
     @traced("feedback_sentiment_classify_anthropic", tags=["feedback_sentiment"])
     def classify(self, conversation_text: str) -> str | None:
@@ -191,7 +237,7 @@ class AnthropicSentimentClient:
             self.model_version,
             max_tokens=SENTIMENT_MAX_TOKENS,
             effort=SENTIMENT_EFFORT,
-            prompt=_sentiment_prompt(conversation_text),
+            prompt=_render(self.prompt_template, conversation_text),
         )
         if (text := message_text(message)) is None:
             return None
@@ -213,13 +259,14 @@ class OpenAISentimentClient:
         )
         self._client = client
         self.model_version = model_version
+        self.prompt_template = SENTIMENT_PROMPT
 
     @traced("feedback_sentiment_classify_openai", tags=["feedback_sentiment"])
     def classify(self, conversation_text: str) -> str | None:
         response = call_openai(
             self._client,
             self.model_version,
-            prompt=_sentiment_prompt(conversation_text),
+            prompt=_render(self.prompt_template, conversation_text),
         )
         content = response.choices[0].message.content
         if not content:
@@ -237,7 +284,7 @@ def build_sentiment_client(
     Bedrock's model id namespace differs from the plain Anthropic/OpenAI one,
     hence the model_version/bedrock_model_version split.
     """
-    return build_llm_client(
+    client = build_llm_client(
         llm,
         anthropic_client_cls=AnthropicSentimentClient,
         openai_client_cls=OpenAISentimentClient,
@@ -246,20 +293,21 @@ def build_sentiment_client(
         default_model_version=SENTIMENT_MODEL_VERSION,
         default_bedrock_model_version=BEDROCK_SENTIMENT_MODEL_VERSION,
     )
+    client.prompt_template = fetch_sentiment_prompt()
+    return client
 
 
-def llm_classifier_accuracy(
+def llm_classifier_predictions(
     client: SentimentClient,
     test_texts: list[str],
-    test_labels: np.ndarray,
-) -> tuple[float, int]:
-    """Accuracy of one LLM call per test conversation.
+) -> list[str | None]:
+    """Predictions of one LLM call per test conversation; None where a call failed.
 
-    Returns (accuracy, call_count) -- call_count is the actual cost driver
-    callers should weigh against the other two methods' near-zero marginal
-    cost, per §E's accuracy-vs-cost framing.
+    The call count (one per text) is the actual cost driver callers should weigh
+    against the other two methods' near-zero marginal cost, per §E's
+    accuracy-vs-cost framing.
     """
-    predictions = []
+    predictions: list[str | None] = []
     for text in test_texts:
         try:
             predictions.append(client.classify(text))
@@ -268,12 +316,7 @@ def llm_classifier_accuracy(
                 "LLM sentiment call failed for one conversation", exc_info=True
             )
             predictions.append(None)
-    correct = sum(
-        1
-        for pred, actual in zip(predictions, test_labels, strict=True)
-        if pred == actual
-    )
-    return correct / len(test_labels), len(test_texts)
+    return predictions
 
 
 def run_sentiment_eval(  # noqa: PLR0913 -- one independently meaningful eval knob per arg
@@ -301,33 +344,33 @@ def run_sentiment_eval(  # noqa: PLR0913 -- one independently meaningful eval kn
         labels, test_fraction=test_fraction, random_state=random_state
     )
 
+    test_labels = labels[test_idx]
     methods: dict[str, dict[str, Any]] = {
-        "embedding_knn": {
-            "accuracy": embedding_knn_accuracy(
+        "embedding_knn": score_predictions(
+            embedding_knn_predictions(
                 vectors[train_idx],
                 labels[train_idx],
                 vectors[test_idx],
-                labels[test_idx],
                 n_neighbors=n_neighbors,
             ),
-            "call_count": 0,
-        },
-        "local_classifier": {
-            "accuracy": local_classifier_accuracy(
+            test_labels,
+        )
+        | {"call_count": 0},
+        "local_classifier": score_predictions(
+            local_classifier_predictions(
                 vectors[train_idx],
                 labels[train_idx],
                 vectors[test_idx],
-                labels[test_idx],
                 random_state=random_state,
             ),
-            "call_count": 0,
-        },
+            test_labels,
+        )
+        | {"call_count": 0},
     }
     if sentiment_client is not None:
         test_texts = [texts[i] for i in test_idx]
-        accuracy, call_count = llm_classifier_accuracy(
-            sentiment_client, test_texts, labels[test_idx]
-        )
-        methods["llm"] = {"accuracy": accuracy, "call_count": call_count}
+        methods["llm"] = score_predictions(
+            llm_classifier_predictions(sentiment_client, test_texts), test_labels
+        ) | {"call_count": len(test_texts)}
 
     return {"methods": methods, "n_train": len(train_idx), "n_test": len(test_idx)}
