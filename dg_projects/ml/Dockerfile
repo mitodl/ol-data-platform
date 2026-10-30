@@ -83,7 +83,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         opentelemetry-instrumentation-urllib3==0.66b1
 
 # Then, use a final image without uv
-FROM python:3.14-slim-bookworm
+FROM python:3.15-slim-bookworm
 # It is important to use the image that matches the builder, as the path to the
 # Python executable must be the same.
 
