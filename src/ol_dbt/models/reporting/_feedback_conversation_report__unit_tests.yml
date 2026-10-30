@@ -1,0 +1,36 @@
+---
+unit_tests:
+- name: test_feedback_conversation_report_renders_conversation_text_as_html
+  description: >
+    The Feedback Cluster Conversations chart renders conversation_text as HTML. The
+    text is unescaped from the source, then &, < and > are escaped again so learner
+    code stays literal. Newlines become <br> and the turn separator a blank line.
+  model: feedback_conversation_report
+  given:
+  - input: ref('afact_feedback_conversation')
+    rows:
+    - {cluster_key: c1, category_fk: cat1, feedback_source_fk: s1, conversation_id: conv1,
+      opened_date_fk: 20261014, courserun_fk: null, conversation_summary: null, is_in_cluster_scope: true,
+      conversation_text: "is x < 5 &amp; y?\n---\nyes\nline two"}
+  - input: ref('dim_feedback_category')
+    rows:
+    - {feedback_category_pk: cat1, category_label: Code questions}
+  - input: ref('dim_feedback_cluster')
+    rows:
+    - {cluster_key: c1, category_fk: cat1, category_description: null}
+  - input: ref('dim_feedback_source')
+    rows:
+    - {feedback_source_pk: s1, source_name: AskTIM}
+  - input: ref('tfact_feedback')
+    rows:
+    - {conversation_id: conv1, feedback_source_fk: s1, is_conversation_opening: true,
+      source_metadata: null, source_url: null}
+  - input: ref('dim_date')
+    format: sql
+    rows: select 20261014 as date_key, date '2026-10-14' as date
+  - input: ref('dim_course_run')
+    rows: []
+  expect:
+    rows:
+    - {conversation_id: conv1, conversation_text: "is x &lt; 5 &amp; y?<br><br>yes<br>line\
+        \ two"}
