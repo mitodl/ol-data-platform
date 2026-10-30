@@ -35,6 +35,8 @@ SENTIMENT_EVAL_RESULT_SCHEMA = {
     "eval_run_id": pl.String,
     "method": pl.String,
     "accuracy": pl.Float64,
+    "negative_precision": pl.Float64,
+    "negative_recall": pl.Float64,
     "call_count": pl.Int64,
     "n_train": pl.Int64,
     "n_test": pl.Int64,
@@ -172,6 +174,8 @@ def feedback_sentiment_eval(
             "eval_run_id": eval_run_id,
             "method": method,
             "accuracy": metrics["accuracy"],
+            "negative_precision": metrics["negative_precision"],
+            "negative_recall": metrics["negative_recall"],
             "call_count": metrics["call_count"],
             "n_train": results["n_train"],
             "n_test": results["n_test"],
@@ -180,18 +184,21 @@ def feedback_sentiment_eval(
         for method, metrics in results["methods"].items()
     ]
 
+    scores = {
+        f"{method}_{metric}": round(metrics[metric], 4)
+        for method, metrics in results["methods"].items()
+        for metric in ("accuracy", "negative_precision", "negative_recall")
+        if metrics[metric] is not None
+    }
     context.log.info(
         "Sentiment eval %s (n_train=%d, n_test=%d): %s",
         eval_run_id,
         results["n_train"],
         results["n_test"],
-        {m: round(v["accuracy"], 4) for m, v in results["methods"].items()},
+        scores,
     )
     context.add_output_metadata(
-        {
-            method: MetadataValue.float(round(metrics["accuracy"], 4))
-            for method, metrics in results["methods"].items()
-        }
+        {name: MetadataValue.float(value) for name, value in scores.items()}
         | {
             "n_train": MetadataValue.int(results["n_train"]),
             "n_test": MetadataValue.int(results["n_test"]),
