@@ -559,7 +559,10 @@ models:
         column_list: ["user_mitxonline_username", "user_edxorg_username", "courserun_readable_id"]
 
 - name: int__mitx__program_certificates
-  description: MITx program certificates combined from MicroMasters and MITx Online
+  description: MITx program certificates combined from MicroMasters and MITx Online.
+    DEDP certificates come through int__micromasters__program_certificates, which
+    drops revoked MITx Online DEDP certificates. The non-DEDP MITx Online certificates
+    are read with no revoked filter, so revoked ones are included.
   config:
     meta:
       qa_branches:
