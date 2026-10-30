@@ -84,7 +84,11 @@ class FeedbackSentimentEvalConfig(Config):
     group_name="feedback",
     io_manager_key="io_manager",
     pool="feedback_sentiment_eval",
-    metadata={"schema": intermediate_database_name, "write_mode": "append"},
+    metadata={
+        "schema": intermediate_database_name,
+        "write_mode": "append",
+        "schema_update_mode": "update",
+    },
 )
 def feedback_sentiment_eval(
     context: AssetExecutionContext,
@@ -101,6 +105,12 @@ def feedback_sentiment_eval(
     embedding_model = resolve_embedding_model(
         config.embedding_model, config.embedding_dim
     )
+    # Before the reads, so a missing Opik prompt fails in seconds.
+    sentiment_client = None
+    if config.include_llm:
+        sentiment_client = build_sentiment_client(
+            llm, config.model_version, config.bedrock_model_version
+        )
 
     afact_df = (
         get_dbt_model_as_dataframe(
@@ -153,12 +163,6 @@ def feedback_sentiment_eval(
             "sample; need both positive and negative examples for a meaningful eval."
         )
         raise Failure(msg)
-
-    sentiment_client = None
-    if config.include_llm:
-        sentiment_client = build_sentiment_client(
-            llm, config.model_version, config.bedrock_model_version
-        )
 
     results = run_sentiment_eval(
         labeled_df,

@@ -210,10 +210,9 @@ class SentimentClient(Protocol):
 
 def _extract_sentiment_word(text: str) -> str | None:
     lowered = text.strip().lower()
-    for label in SENTIMENT_LABELS:
-        if label in lowered:
-            return label
-    return None
+    found = [label for label in SENTIMENT_LABELS if label in lowered]
+    # A reply naming both ("negative, nothing positive") has no clear answer.
+    return found[0] if len(found) == 1 else None
 
 
 class AnthropicSentimentClient:

@@ -290,6 +290,19 @@ def test_run_sentiment_eval_includes_llm_arm_when_client_given() -> None:
     assert result["methods"]["llm"]["call_count"] == result["n_test"]
 
 
+def test_anthropic_sentiment_client_leaves_a_reply_naming_both_words_unlabeled() -> (
+    None
+):
+    client = sentiment_eval.AnthropicSentimentClient(
+        FakeAnthropicClient(
+            FakeMessage([TextBlock(type="text", text="Negative, nothing positive")])
+        ),
+        "claude-haiku-5-5",
+    )
+
+    assert client.classify("some conversation text") is None
+
+
 def test_anthropic_sentiment_client_reads_the_word_after_a_thinking_block() -> None:
     """claude-haiku-5-5 thinks by default, so the reply opens with a thinking block."""
     fake = FakeAnthropicClient(
