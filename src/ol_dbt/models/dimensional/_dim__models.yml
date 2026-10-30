@@ -571,9 +571,15 @@ models:
           - open-learning.identifiability.direct-identifier
           - open-learning.ferpa-classification.directory-information
   - name: full_name
-    description: str, user full name. Very small number of edX.org users have blank
-      full name, their name couldn't be populated from other sources if they don't
-      have their accounts linked on MicroMasters.
+    description: str, user full name. Null when no linked account has one, so it is
+      never an empty string, a string of spaces, or a Learn dict string. Some edX.org
+      users have no name unless their accounts are linked on MicroMasters or MIT Learn.
+    tests:
+    - dbt_utils.expression_is_true:
+        expression: is null or (trim(full_name) <> '' and full_name not like '{''givenName%'
+          and full_name not like '{"givenName%')
+        config:
+          error_if: '>0'
     config:
       meta:
         openmetadata:
@@ -2322,6 +2328,78 @@ unit_tests:
       mitlearn_user_id:
       mitxpro_application_user_id: 7
       bootcamps_application_user_id: 3
+- name: test_dim_user_full_name_parses_learn_dict_names_and_keeps_other_names
+  description: >
+    A Learn profile name that is a Python dict repr is read as given and
+    family name, and a part that is None is left out. When both are None the
+    first and last name are used. A display name that merely starts with a
+    brace or contains familyName is kept as typed, and a blank name with no
+    first or last name is null.
+  model: dim_user
+  given:
+  - input: ref('stg__mitlearn__app__postgres__users_user')
+    rows:
+    - {user_id: 1, user_global_id: gid-1, user_email: dict@example.com, user_is_active: true,
+      user_joined_on: '2024-01-01T00:00:00', user_created_on: '2024-01-01T00:00:00'}
+    - {user_id: 2, user_global_id: gid-2, user_email: brace@example.com, user_first_name: Wrong,
+      user_last_name: Fallback, user_is_active: true, user_joined_on: '2024-01-01T00:00:00',
+      user_created_on: '2024-01-01T00:00:00'}
+    - {user_id: 3, user_global_id: gid-3, user_email: blank@example.com, user_is_active: true,
+      user_joined_on: '2024-01-01T00:00:00', user_created_on: '2024-01-01T00:00:00'}
+    - {user_id: 4, user_global_id: gid-4, user_email: nogiven@example.com, user_first_name: Wrong,
+      user_last_name: Fallback, user_is_active: true, user_joined_on: '2024-01-01T00:00:00',
+      user_created_on: '2024-01-01T00:00:00'}
+    - {user_id: 5, user_global_id: gid-5, user_email: nonames@example.com, user_first_name: Right,
+      user_last_name: Fallback, user_is_active: true, user_joined_on: '2024-01-01T00:00:00',
+      user_created_on: '2024-01-01T00:00:00'}
+    - {user_id: 6, user_global_id: gid-6, user_email: token@example.com, user_is_active: true,
+      user_joined_on: '2024-01-01T00:00:00', user_created_on: '2024-01-01T00:00:00'}
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile')
+    rows:
+    - {user_id: 1, user_name: "{'givenName': 'Ada', 'familyName': 'Lovelace'}"}
+    - {user_id: 2, user_name: '{Gaurav} Gaming'}
+    - {user_id: 3, user_name: ' '}
+    - {user_id: 4, user_name: "{'givenName': None, 'familyName': 'Lovelace'}"}
+    - {user_id: 5, user_name: "{'givenName': None, 'familyName': None}"}
+    - {user_id: 6, user_name: 'My familyName'}
+  - input: ref('stg__mitxpro__app__postgres__users_user')
+    rows: []
+  - input: ref('int__bootcamps__users')
+    rows: []
+  - input: ref('int__mitx__users')
+    rows: []
+  - input: ref('int__mitxonline__flexiblepricing_flexiblepriceapplication')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopic')
+    rows: []
+  - input: ref('stg__mitlearn__app__postgres__profiles_profile_topic_interests')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__openedx_openedxuser')
+    rows: []
+  - input: ref('stg__mitxonline__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_legaladdress')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__users_profile')
+    rows: []
+  - input: ref('stg__mitxpro__openedx__mysql__auth_user')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__auth_user')
+    rows: []
+  - input: ref('stg__mitxresidential__openedx__auth_userprofile')
+    rows: []
+  expect:
+    rows:
+    - {email: dict@example.com, full_name: Ada Lovelace}
+    - {email: brace@example.com, full_name: '{Gaurav} Gaming'}
+    - {email: blank@example.com, full_name: null}
+    - {email: nogiven@example.com, full_name: Lovelace}
+    - {email: nonames@example.com, full_name: Right Fallback}
+    - {email: token@example.com, full_name: My familyName}
 - name: test_afact_learner_courserun_progress_status_and_needs_attention
   description: >
     Pins completion_status and needs_attention_since, one learner per case.

@@ -291,15 +291,33 @@ with mitx_users as (
 
 )
 
+-- Some Learn profile names are a Python dict repr, {'givenName': 'A', 'familyName': 'B'},
+-- where a missing part is None. Only a name that starts like that dict is parsed, so a display
+-- name like {Gaurav} Gaming is kept. A part that is None or not quoted extracts as null.
+{% set learn_dict_name = "'^[ ]*[{][''\"]givenName[''\"]: '" %}
+{% set learn_dict_given_name = "'[''\"]givenName[''\"]: [''\"](.*?)[''\"], [''\"]familyName[''\"]'" %}
+{% set learn_dict_family_name = "'[''\"]familyName[''\"]: [''\"](.*)[''\"][}]$'" %}
+
 , learn_user_view as(
     select
         learn_user.user_global_id
         , learn_user.user_id as mitlearn_user_id
         , learn_user.user_email as email
-        , case when learn_profile.user_name is not null and trim(learn_profile.user_name) <> ''
-            then learn_profile.user_name
-            else concat(learn_user.user_first_name, ' ', learn_user.user_last_name)
-        end as full_name
+        -- A blank name is null, not ' ', so the coalesce with the MITx name below can fall through.
+        , coalesce(
+            nullif(trim(
+                case
+                    when {{ regexp_like('learn_profile.user_name', learn_dict_name) }}
+                    then concat(
+                        coalesce({{ regexp_extract_or_null('learn_profile.user_name', learn_dict_given_name, 1) }}, '')
+                        , ' '
+                        , coalesce({{ regexp_extract_or_null('learn_profile.user_name', learn_dict_family_name, 1) }}, '')
+                    )
+                    else learn_profile.user_name
+                end
+            ), '')
+            , nullif(trim(concat(coalesce(learn_user.user_first_name, ''), ' ', coalesce(learn_user.user_last_name, ''))), '')
+        ) as full_name
         , learn_profile.user_current_education as highest_education
         , learn_user.user_is_active as user_is_active_on_mitlearn
         , learn_user.user_joined_on as user_joined_on_mitlearn
@@ -836,8 +854,8 @@ with mitx_users as (
         , max(user_joined_on_bootcamps) as user_joined_on_bootcamps
         -- Fallback full_name in case the base row (most recent platform) has a null name.
         -- Cross-platform users may have their base row on a platform with null full_name.
-        -- Takes the next account in base-row order that has one, so the pick is stable.
-        , min_by(full_name, row_num) filter (where full_name is not null) as agg_full_name
+        -- Takes the next account in base-row order that has a non-blank one, so the pick is stable.
+        , min_by(trim(full_name), row_num) filter (where trim(full_name) <> '') as agg_full_name
         -- Fallback address_state for cross-platform users whose base row is from a platform
         -- that null-codes address_state (e.g. Emeritus, Global Alumni, Residential).
         , min_by(address_state, row_num) filter (where address_state is not null) as agg_address_state
@@ -872,7 +890,7 @@ select
     , agg.global_alumni_identity_key
     , agg.micromasters_user_id
     , base.email
-    , coalesce(base.full_name, agg.agg_full_name) as full_name
+    , coalesce(nullif(trim(base.full_name), ''), agg.agg_full_name) as full_name
     , base.address_country
     , base.highest_education
     , base.gender
