@@ -2009,7 +2009,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28" },
     { name = "httpx2", specifier = ">=2.2.0" },
     { name = "networkit", specifier = ">=11.2" },
-    { name = "ol-llm", extras = ["anthropic", "bedrock", "google", "openai"], specifier = "==0.0.5" },
+    { name = "ol-llm", extras = ["anthropic", "bedrock", "google", "openai"], specifier = "==0.0.6" },
     { name = "ol-orchestrate-lib", extras = ["embeddings"], editable = "../../packages/ol-orchestrate-lib" },
     { name = "openai" },
     { name = "opik", specifier = ">=2.2.58" },
@@ -2293,7 +2293,7 @@ wheels = [
 
 [[package]]
 name = "ol-llm"
-version = "0.0.5"
+version = "0.0.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -2304,9 +2304,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e8/f5/9dd3860b1e3534b93ee6d92a14993450251b968cefbfbfc75e550a18dc55/ol_llm-0.0.5.tar.gz", hash = "sha256:90727b46b2065e316c1886947bdab4473e11cbbf0c0bf986872b2b44d9c95696", size = 225997, upload-time = "2026-10-23T18:24:00.75Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/95/a4/9f93ed474df5c0ae4b3f4b240e90fac76e56e49dd74734c079ea04ae9096/ol_llm-0.0.6.tar.gz", hash = "sha256:64d086d595c9b8259c17187fc47684cc6956f3e6fc475988e0f7b71c11091003", size = 244267, upload-time = "2026-10-27T13:33:21.846Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/16/8f/b6d16ab5452433d5ff4156949d23d9a697cc29589850328a2519ef12c4d8/ol_llm-0.0.5-py3-none-any.whl", hash = "sha256:71f9c4457364909d0b18450621f5e91bb18fc71e2d3991c7e1f8b86a9a9b8784", size = 98872, upload-time = "2026-10-23T18:23:59.223Z" },
+    { url = "https://files.pythonhosted.org/packages/84/a8/aa34d540698d1b3f62c679f216f62f38d4da064411f23f94cdb91ec4683e/ol_llm-0.0.6-py3-none-any.whl", hash = "sha256:ee338565d8b13ff7a6cff949b5d9cd04782e4ab08ed4ce1e0c31023cc78a10a6", size = 110203, upload-time = "2026-10-27T13:33:20.318Z" },
 ]
 
 [package.optional-dependencies]
@@ -2377,7 +2377,7 @@ requires-dist = [
     { name = "httpx2", specifier = ">=2.2.0" },
     { name = "hvac", specifier = "~=2.4.0" },
     { name = "langchain-text-splitters", marker = "extra == 'embeddings'", specifier = "==1.1.3" },
-    { name = "ol-llm", extras = ["bedrock", "google", "openai"], marker = "extra == 'embeddings'", specifier = "==0.0.5" },
+    { name = "ol-llm", extras = ["bedrock", "google", "openai"], marker = "extra == 'embeddings'", specifier = "==0.0.6" },
     { name = "pandas", specifier = "~=3.1.0" },
     { name = "polars", specifier = ">=1.35.1" },
     { name = "psycopg2-binary", specifier = "~=2.9.10" },
