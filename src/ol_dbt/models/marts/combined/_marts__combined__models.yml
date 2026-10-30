@@ -35,6 +35,21 @@ models:
   - name: program_readable_id
     description: str, readable ID from xpro or mitxonline formatted as program-v1:{org}+{program
       code} e.g.program-v1:xPRO+MLx
+  - name: program_report_key
+    description: str, the program the row counts toward in program reports, from dim_program_report_key.
+      A row with a MITx Online or xPRO program_readable_id looks it up by that id.
+      Any other row looks up its program_title, so an edX.org or MicroMasters program
+      takes the MITx Online program its title maps to, or else keys on its own title.
+      Same key as marts__combined_program_enrollment_detail.program_report_key.
+    tests:
+    - not_null
+  - name: report_program_readable_id
+    description: str, readable id of the program_report_key program, null for an edX.org
+      or MicroMasters program that maps to no MITx Online program
+  - name: report_program_title
+    description: str, title of the program_report_key program
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -661,30 +676,61 @@ models:
       edX.org or certificates that have been revoked.
   - name: unique_courses_taken_in_program
     description: int, count of unique courses in the program the learner enrolled
-      in, in any enrollment mode. Courses are matched on the row's program_readable_id,
-      which only MITx Online and xPRO programs share with their courses. edX.org rows
-      carry a generated program_readable_id, so the count is 0 for edX.org MicroMasters
-      and XSeries rows alike. The exception is MicroMasters learners missing from
-      2U's program report. Those rows take the MITx Online program's program_readable_id
-      and can count courses, matched to enrollments by user_id with no platform condition.
-      program_enrollment_with_user_report.courses_taken_in_program counts verified
-      enrollments only, matched through bridge_program_course, so the two differ.
+      in, in any enrollment mode. Program courses, required and elective, come from
+      bridge_program_course. An edX.org or MicroMasters row whose program maps to
+      a MITx Online program (a MicroMasters row through int__mitx__programs, else
+      by title through dim_program_report_key) takes that program's courses and its
+      own edX.org or MicroMasters program's, counting a course both list once. These
+      are the MicroMasters programs, DEDP, and the XSeries programs with a MITx Online
+      program of the same title. The program's own courses add the ones the MITx Online
+      program doesn't list, e.g. 18.03x's 18.031x, which MITx Online lists as 18.03.1x,
+      or a capstone exam it dropped. Any other edX.org row takes its own edX.org program's
+      courses. Enrollments match on the row's own platform and user_id (edX.org for
+      MicroMasters rows), because user ids repeat across platforms. A course keeps
+      one readable id across platforms, so an edX.org enrollment in a course that
+      moved to MITx Online still matches. Enrollments the learner holds on another
+      platform do not count. program_enrollment_with_user_report.courses_taken_in_program
+      counts verified enrollments only, so the two differ.
   - name: capstone_indicator
     description: str, Y if the learner has an enrollment, in any mode, in a program
-      course with the word capstone in the title, otherwise N. Program courses are
-      matched as for unique_courses_taken_in_program, so most edX.org rows are N.
-      program_enrollment_with_user_report.capstone_ind counts verified enrollments
-      only.
+      course with the word capstone in the title, otherwise N. Program courses and
+      enrollments are matched as for unique_courses_taken_in_program. program_enrollment_with_user_report.capstone_ind
+      counts verified enrollments only.
   - name: program_completion_days
     description: int, number of days from the start date of the earliest course run
       the learner holds a verified enrollment in to the program certificate's creation
       date. Ignores unverified/audit enrollments when determining the start date.
       It is null unless both dates exist, a certificate creation date and a matched
-      verified enrollment in a course run with a start date. Program courses are matched
-      as for unique_courses_taken_in_program, so it is null on most edX.org rows.
-      A revoked certificate keeps its creation date, so it can be set on a revoked
-      MITx Online or xPRO row where user_has_completed_program is false. program_enrollment_with_user_report
-      carries the same value as program_complete_days.
+      verified enrollment in a course run with a start date. Program courses and enrollments
+      are matched as for unique_courses_taken_in_program. A revoked certificate keeps
+      its creation date, so it can be set on a revoked MITx Online or xPRO row where
+      user_has_completed_program is false. program_enrollment_with_user_report carries
+      the same value as program_complete_days.
+  - name: program_report_key
+    description: str, the program the row counts toward in program reports, from dim_program_report_key.
+      A row whose program_readable_id is a MITx Online or xPRO program's looks it
+      up by that id, including a MicroMasters row that carries its MITx Online program's
+      id (e.g. program-v1:MITx+DEDP). Any other row looks up its program_title. That
+      is an edX.org row, whose program_readable_id is generated, or a MicroMasters
+      row with no MITx Online program, whose program_readable_id is null. It takes
+      the MITx Online program the title maps to, or else keys on its own title. program_summary_report
+      groups on it.
+    tests:
+    - not_null
+  - name: report_program_readable_id
+    description: str, readable id of the program_report_key program, null for an edX.org
+      program that maps to no MITx Online program
+  - name: report_program_title
+    description: str, title of the program_report_key program, the MITx Online program's
+      title for a mapped edX.org row
+    tests:
+    - not_null
+  - name: report_program_name
+    description: str, name of the program_report_key program, shared by the tracks
+      of a MITx Online program split into tracks
+  - name: report_program_type
+    description: str, type of the program_report_key program, e.g. MicroMasters, Series,
+      XSeries, Professional Certificate
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -1216,3 +1262,176 @@ models:
       arguments:
         column_list: ["b2bcoupon_id", "discount_id", "platform", "couponpaymentversion_id",
           "b2b_contract_number", "product_readable_id"]
+
+unit_tests:
+- name: test_coursesinprogram_keeps_edxorg_program_courses
+  description: >
+    Every edX.org program keeps its own courses. One whose title dim_program_report_key
+    maps to a MITx Online program, by the seed or by title, keys them to that
+    program. One whose title maps to nothing, e.g. a title two MITx Online programs
+    share, keys them to its own title. An edX.org program course that the program's
+    requirements already list is one row. A MITx Online row whose readable id and
+    title match different dim rows is keyed by its readable id.
+  model: marts__combined_coursesinprogram
+  given:
+  - input: ref('int__mitx__program_requirements')
+    rows:
+    - {program_title: Program Title, course_number: X1, mitxonline_program_id: 45}
+    - {program_title: Finance, course_number: F2, micromasters_program_id: 7}
+  - input: ref('int__mitx__courses')
+    rows:
+    - {course_number: X1, course_readable_id: "course-v1:MITxT+X1", course_title: X
+        One, is_on_mitxonline: true}
+    - {course_number: F2, course_readable_id: "course-v1:MITxT+F2", course_title: Finance
+        Two, is_on_mitxonline: false}
+  - input: ref('int__mitxpro__courses')
+    rows: []
+  - input: ref('int__mitxpro__programs')
+    rows: []
+  - input: ref('int__mitxonline__programs')
+    rows:
+    - {program_id: 45, program_readable_id: "program-v1:MITxT+P", program_name: Program
+        Title}
+  - input: ref('int__edxorg__mitx_program_courses')
+    rows:
+    - {program_title: Shared, program_name: Shared, course_title: Shared One, course_readable_id: "MITx/SH1"}
+    - {program_title: Circuits, program_name: Circuits, course_title: Circuits One,
+      course_readable_id: "MITx/C1"}
+    - {program_title: Finance, program_name: Finance, course_title: Finance One, course_readable_id: "MITx/F1"}
+    - {program_title: Finance, program_name: Finance, course_title: Finance Two, course_readable_id: "MITx/F2"}
+    - {program_title: Retired Old Version, program_name: Finance, course_title: Retired
+        One, course_readable_id: "MITx/R1"}
+  - input: ref('dim_program_report_key')
+    rows:
+    - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+P", program_key: "program-v1:MITxT+P",
+      mapped_by: own}
+    - {lookup_type: title, lookup_value: Program Title, program_key: Program Title,
+      mapped_by: none}
+    - {lookup_type: title, lookup_value: Shared, program_key: Shared, mapped_by: none}
+    - {lookup_type: title, lookup_value: Circuits, program_key: "program-v1:MITxT+XS-MCE",
+      mapped_by: title}
+    - {lookup_type: title, lookup_value: Finance, program_key: "program-v1:MITxT+FIN",
+      mapped_by: seed}
+    - {lookup_type: title, lookup_value: Retired Old Version, program_key: Retired
+        Old Version, mapped_by: none}
+  expect:
+    rows:
+    - {platform: MITx Online, program_title: Program Title, course_readable_id: "course-v1:MITxT+X1",
+      program_report_key: "program-v1:MITxT+P"}
+    - {platform: edX.org, program_title: Finance, course_readable_id: "course-v1:MITxT+F2",
+      program_report_key: "program-v1:MITxT+FIN"}
+    - {platform: edX.org, program_title: Shared, course_readable_id: "MITx/SH1", program_report_key: Shared}
+    - {platform: edX.org, program_title: Circuits, course_readable_id: "MITx/C1",
+      program_report_key: "program-v1:MITxT+XS-MCE"}
+    - {platform: edX.org, program_title: Finance, course_readable_id: "MITx/F1", program_report_key: "program-v1:MITxT+FIN"}
+    - {platform: edX.org, program_title: Retired Old Version, course_readable_id: "MITx/R1",
+      program_report_key: Retired Old Version}
+
+- name: test_program_enrollment_detail_matches_courses_on_own_platform
+  description: >
+    A MITx Online learner and an edX.org learner share user_id 7. Each row
+    counts only its own platform's enrollments. The edX.org program maps to
+    the MITx Online program, so it takes its courses from that program's
+    bridge_program_course rows and from its own edX.org program's, counting a course
+    both list once. A course only the edX.org program lists counts for the edX.org
+    row, not for the MITx Online row. The program enrollments carry the edX.org
+    program uuid without hyphens and dim_program with them. A non-current dim_course
+    version of C under
+    an
+    older key adds no course, and an audit enrollment in an earlier run of C
+    does not move the start date program_completion_days counts from. The
+    MITx Online row's readable id and title match different dim_program_report_key
+    rows, and the readable id wins; the edX.org row's generated readable id
+    matches none, so its title maps it to the MITx Online program.
+  model: marts__combined_program_enrollment_detail
+  given:
+  - input: ref('int__mitxpro__programenrollments')
+    rows: []
+  - input: ref('int__mitxpro__programs')
+    rows: []
+  - input: ref('int__mitxpro__program_certificates')
+    rows: []
+  - input: ref('int__mitxpro__users')
+    rows: []
+  - input: ref('int__mitx__programs')
+    rows: []
+  - input: ref('int__mitxonline__programenrollments')
+    rows:
+    - {program_id: 45, user_id: 7, user_email: online@example.com, user_username: online7}
+  - input: ref('int__mitxonline__programs')
+    rows:
+    - {program_id: 45, program_readable_id: "program-v1:MITxT+SDS-General-Track",
+      program_title: "SDS General Track", program_name: "SDS General Track", program_type: MicroMasters}
+  - input: ref('int__mitxonline__users')
+    rows: []
+  - input: ref('int__mitxonline__program_certificates')
+    rows: []
+  - input: ref('int__edxorg__mitx_program_enrollments')
+    rows:
+    - {micromasters_program_id: 4, program_uuid: sdsgeneral, program_title: "Statistics\
+        \ and Data Science (General Track)", program_type: MicroMasters, user_id: 7,
+      user_username: edx7}
+  - input: ref('int__edxorg__mitx_program_certificates')
+    rows:
+    - {program_uuid: sdsgeneral, user_id: 7, program_certificate_awarded_on: "2020-06-30T00:00:00Z",
+      program_certificate_hashed_id: h7, user_has_completed_program: true}
+  - input: ref('int__edxorg__mitx_users')
+    rows:
+    - {user_id: 7, user_email: edx@example.com}
+  - input: ref('int__micromasters__program_enrollments')
+    rows: []
+  - input: ref('dim_program_report_key')
+    rows:
+    - {lookup_type: title, lookup_value: "Statistics and Data Science (General Track)",
+      mitxonline_program_id: 45, program_key: "program-v1:MITxT+SDS-General-Track",
+      program_title: "SDS General Track"}
+    - {lookup_type: readable_id, lookup_value: "program-v1:MITxT+SDS-General-Track",
+      mitxonline_program_id: 45, program_key: "program-v1:MITxT+SDS-General-Track",
+      program_title: "SDS General Track"}
+    - {lookup_type: title, lookup_value: "SDS General Track", program_key: "SDS General\
+        \ Track", program_title: "SDS General Track"}
+  - input: ref('bridge_program_course')
+    rows:
+    - {program_fk: p45, course_fk: ca}
+    - {program_fk: p45, course_fk: cb}
+    - {program_fk: p45, course_fk: cc}
+    - {program_fk: psds, course_fk: cc}
+    - {program_fk: psds, course_fk: cd}
+  - input: ref('dim_program')
+    rows:
+    - {program_pk: p45, source_id: "45", platform_code: mitxonline}
+    - {program_pk: psds, source_id: sds-general, platform_code: edxorg}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: ca, course_readable_id: "course-v1:MITxT+A", is_current: true}
+    - {course_pk: cb, course_readable_id: "course-v1:MITxT+B", is_current: true}
+    - {course_pk: cc, course_readable_id: "course-v1:MITxT+C", is_current: true}
+    - {course_pk: cc, course_readable_id: "course-v1:MITxT+C-OLD", is_current: false}
+    - {course_pk: cd, course_readable_id: "course-v1:MITxT+D-EDX", is_current: true}
+  - input: ref('int__combined__courserun_enrollments')
+    rows:
+    - {platform: MITx Online, user_id: "7", course_readable_id: "course-v1:MITxT+A",
+      courserun_readable_id: "course-v1:MITxT+A+1T2020", course_title: A, courserunenrollment_enrollment_mode: audit}
+    - {platform: MITx Online, user_id: "7", course_readable_id: "course-v1:MITxT+B",
+      courserun_readable_id: "course-v1:MITxT+B+1T2020", course_title: B, courserunenrollment_enrollment_mode: audit}
+    - {platform: MITx Online, user_id: "7", course_readable_id: "course-v1:MITxT+D-EDX",
+      courserun_readable_id: "course-v1:MITxT+D-EDX+1T2020", course_title: D, courserunenrollment_enrollment_mode: audit}
+    - {platform: edX.org, user_id: "7", course_readable_id: "course-v1:MITxT+D-EDX",
+      courserun_readable_id: "course-v1:MITxT+D-EDX+2T2019", course_title: D, courserunenrollment_enrollment_mode: audit}
+    - {platform: edX.org, user_id: "7", course_readable_id: "course-v1:MITxT+C", courserun_readable_id: "course-v1:MITxT+C+1T2020",
+      course_title: C Capstone, courserunenrollment_enrollment_mode: verified}
+    - {platform: edX.org, user_id: "7", course_readable_id: "course-v1:MITxT+C", courserun_readable_id: "course-v1:MITxT+C+3T2019",
+      course_title: C Capstone, courserunenrollment_enrollment_mode: audit}
+    - {platform: edX.org, user_id: "7", course_readable_id: "course-v1:MITxT+C-OLD",
+      courserun_readable_id: "course-v1:MITxT+C-OLD+1T2018", course_title: C Old,
+      courserunenrollment_enrollment_mode: audit}
+  - input: ref('int__combined__course_runs')
+    rows:
+    - {courserun_readable_id: "course-v1:MITxT+C+1T2020", courserun_start_on: "2020-01-01T00:00:00Z"}
+    - {courserun_readable_id: "course-v1:MITxT+C+3T2019", courserun_start_on: "2019-09-01T00:00:00Z"}
+  expect:
+    rows:
+    - {platform_name: MITx Online, user_id: 7, unique_courses_taken_in_program: 2,
+      capstone_indicator: N, program_completion_days: null, program_report_key: "program-v1:MITxT+SDS-General-Track"}
+    - {platform_name: edX.org, user_id: 7, unique_courses_taken_in_program: 2, capstone_indicator: Y,
+      program_completion_days: 181, program_report_key: "program-v1:MITxT+SDS-General-Track"}

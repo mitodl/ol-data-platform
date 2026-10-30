@@ -3,8 +3,19 @@ version: 2
 models:
 - name: program_summary_report
   description: MITx and xPro Program Summary report. A count of all users, enrollments
-    (audit and verified), certificates and program credentials aggregated for each
-    program.
+    (audit and verified), certificates and program credentials, one row per program.
+    MITx Online programs are the key, so each DEDP and Statistics and Data Science
+    track is its own row. An edX.org program row counts toward the MITx Online program
+    that dim_program_report_key maps its title to, through edxorg_to_mitxonline_program_mapping
+    for the MicroMasters programs or an identical MITx Online title for the XSeries
+    programs that have one. An edX.org or MicroMasters program with no MITx Online
+    program keeps its own row, keyed on its title, with a null program_readable_id.
+    A MicroMasters row the mart gives its MITx Online program's readable id keeps
+    that program. xPRO programs keep their own rows. Course membership is keyed by
+    the same lookup, from marts__combined_coursesinprogram. A program has a row only
+    when it has both program enrollments and enrollments in its courses. Every learner
+    count is a count of distinct lowercased user_email, so one person with different
+    emails on edX.org and MITx Online counts twice.
   config:
     meta:
       qa_branches:
@@ -14,62 +25,82 @@ models:
       - mitxonline/mysql
       - xpro/app_postgres
       - xpro/mysql
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - program_readable_id
+        - program_title
   columns:
+  - name: program_readable_id
+    description: str, readable id of the program, formatted as program-v1:{org}+{code},
+      from MITx Online for MITx Online programs and the edX.org programs mapped to
+      them, from xPRO for xPRO programs. Null for an edX.org program with no MITx
+      Online program, e.g. the Computer Science XSeries.
+    tests:
+    - unique
+  - name: program_title
+    description: str, title of the program, which names the track for a DEDP or Statistics
+      and Data Science track. It is the MITx Online program's title for a mapped edX.org
+      program.
+    tests:
+    - not_null
   - name: program_name
     description: str, name of the program. If program is split over multiple tracks,
       the program name is the same for all tracks. e.g. Data, Economics, and Design
-      of Policy
+      of Policy. Since rows are per program, the three DEDP rows share one program_name;
+      use program_title or program_readable_id to tell them apart.
     tests:
     - not_null
   - name: program_type
     description: str, type of the program, e.g. MicroMasters, Series, Professional
-      Certificate, etc.
+      Certificate, etc. It is the MITx Online program's type for a mapped edX.org
+      program.
     tests:
     - not_null
   - name: total_enrollments
-    description: int, count of course enrollments in the program, aggregated by user_email
-      and courserun_readable_id
+    description: int, count of course enrollments in the program, aggregated by lowercased
+      user_email and courserun_readable_id
     tests:
     - not_null
   - name: unique_users
     description: int, count of unique users who took courses in the program, aggregated
-      by user_email
+      by lowercased user_email
     tests:
     - not_null
   - name: unique_countries
-    description: int, count of unique countries of enrolled users, aggregated by user_email
+    description: int, count of unique countries of enrolled users, aggregated by lowercased
+      user_email
     tests:
     - not_null
   - name: verified_enrollments
     description: int, count of verified (paid) enrollments in the program's courses,
-      aggregated by user_email and courserun_readable_id
+      aggregated by lowercased user_email and courserun_readable_id
     tests:
     - not_null
   - name: unique_verified_users
     description: int, count of unique verified users enrolled in the program's courses,
-      aggregated by user_email
+      aggregated by lowercased user_email
     tests:
     - not_null
   - name: course_certificates
     description: int, count of course certificate earned for the courses in the program,
-      aggregated by user_email and courserun_readable_id
+      aggregated by lowercased user_email and courserun_readable_id
     tests:
     - not_null
   - name: unique_course_certificate_earners
     description: int, count of unique users who earned a certificate for one of the
-      program's courses, aggregated by user_email
+      program's courses, aggregated by lowercased user_email
     tests:
     - not_null
   - name: program_certificates
-    description: int, count of distinct user_email per program whose marts__combined_program_enrollment_detail
+    description: int, count of distinct lowercased user_email per program whose marts__combined_program_enrollment_detail
       row has user_has_completed_program, so revoked certificates are not counted.
-      Rows are per program_name, which does not separate tracks the same way on every
-      platform. Both DEDP tracks and the DEDP program share the program_name 'Data,
-      Economics, and Design of Policy', so DEDP is one row and a learner with both
-      track certificates counts once. On edX.org every Statistics and Data Science
-      track has the program_name 'Statistics and Data Science', while on MITx Online
-      each track has its own program_name and row, so a learner certified in a track
-      on both platforms counts in both rows.
+      Certificates from edX.org and MITx Online are counted together, so a learner
+      certified on both platforms under the same email, in any letter case, is one
+      certificate. Under two different emails the learner is two. A learner certified
+      in two tracks is in each track's row, so summing the DEDP or Statistics and
+      Data Science rows counts that learner more than once.
 
 - name: learner_engagement_report
   description: Engagement report by learner, course, courserun, section and subsection.
@@ -1897,3 +1928,106 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["source", "conversation_id"]
+
+unit_tests:
+- name: test_program_summary_report_groups_on_mart_program_key
+  description: >
+    The report groups on the program_report_key both marts carry. Rows from two
+    platforms with the same key are one program row, with one certificate per
+    distinct lowercased email in both halves. A program with no readable id
+    keeps its own row, keyed on its title.
+  model: program_summary_report
+  given:
+  - input: ref('marts__combined_program_enrollment_detail')
+    rows:
+    - {platform_name: MITx Online, program_readable_id: "program-v1:MITxT+SDS", program_title: SDS,
+      user_email: a@example.com, user_has_completed_program: true, program_report_key: "program-v1:MITxT+SDS",
+      report_program_readable_id: "program-v1:MITxT+SDS", report_program_title: SDS,
+      report_program_name: SDS, report_program_type: MicroMasters}
+    - {platform_name: edX.org, program_readable_id: "program-v1:MITx+SDS", program_title: SDS
+        on edX, user_email: A@Example.com, user_has_completed_program: true, program_report_key: "program-v1:MITxT+SDS",
+      report_program_readable_id: "program-v1:MITxT+SDS", report_program_title: SDS,
+      report_program_name: SDS, report_program_type: MicroMasters}
+    - {platform_name: edX.org, program_readable_id: "program-v1:MITx+SDS", program_title: SDS
+        on edX, user_email: b@example.com, user_has_completed_program: true, program_report_key: "program-v1:MITxT+SDS",
+      report_program_readable_id: "program-v1:MITxT+SDS", report_program_title: SDS,
+      report_program_name: SDS, report_program_type: MicroMasters}
+    - {platform_name: edX.org, program_readable_id: null, program_title: Computer
+        Science, user_email: c@example.com, user_has_completed_program: true, program_report_key: Computer
+        Science, report_program_readable_id: null, report_program_title: Computer
+        Science, report_program_name: Computer Science, report_program_type: XSeries}
+  - input: ref('marts__combined_coursesinprogram')
+    rows:
+    - {program_readable_id: "program-v1:MITxT+SDS", program_title: SDS, course_readable_id: "course-v1:MITxT+A",
+      program_report_key: "program-v1:MITxT+SDS"}
+    - {program_readable_id: null, program_title: Statistics and Data Science, course_readable_id: "MITx/B",
+      program_report_key: "program-v1:MITxT+SDS"}
+    - {program_readable_id: null, program_title: Computer Science, course_readable_id: "MITx/CS1",
+      program_report_key: Computer Science}
+  - input: ref('marts__combined_course_enrollment_detail')
+    rows:
+    - {course_readable_id: "course-v1:MITxT+A", courserun_readable_id: "course-v1:MITxT+A+1T2020",
+      user_email: a@example.com, user_country_code: US, courserunenrollment_enrollment_mode: verified,
+      courseruncertificate_is_earned: false}
+    - {course_readable_id: "course-v1:MITxT+A", courserun_readable_id: "course-v1:MITxT+A+1T2020",
+      user_email: A@EXAMPLE.COM, user_country_code: US, courserunenrollment_enrollment_mode: verified,
+      courseruncertificate_is_earned: false}
+    - {course_readable_id: "MITx/B", courserun_readable_id: "MITx/B/1T2015", user_email: b@example.com,
+      user_country_code: FR, courserunenrollment_enrollment_mode: audit, courseruncertificate_is_earned: true}
+    - {course_readable_id: "MITx/CS1", courserun_readable_id: "MITx/CS1/1T2016", user_email: c@example.com,
+      user_country_code: IN, courserunenrollment_enrollment_mode: audit, courseruncertificate_is_earned: false}
+  expect:
+    rows:
+    - {program_readable_id: "program-v1:MITxT+SDS", program_title: SDS, program_type: MicroMasters,
+      total_enrollments: 2, unique_users: 2, verified_enrollments: 1, course_certificates: 1,
+      program_certificates: 2}
+    - {program_readable_id: null, program_title: Computer Science, program_type: XSeries,
+      total_enrollments: 1, unique_users: 1, verified_enrollments: 0, course_certificates: 0,
+      program_certificates: 1}
+
+- name: test_program_enrollment_with_user_report_matches_one_course_set_per_row
+  description: >
+    An edX.org XSeries row has no readable id, so it matches every program with
+    its title: the edX.org program and the MITx Online program it moved to. It
+    stays one row and counts the courses of both, a course they share once. A
+    MITx Online row matches its program by readable id only.
+  model: program_enrollment_with_user_report
+  given:
+  - input: ref('marts__combined_program_enrollment_detail')
+    rows:
+    - {platform_name: edX.org, program_title: Series, program_readable_id: null, user_id: 7,
+      user_hashed_id: e7, user_email: learner@example.com}
+    - {platform_name: MITx Online, program_title: Series, program_readable_id: "program-v1:MITxT+S",
+      user_id: 8, user_hashed_id: m8, user_email: learner@example.com}
+  - input: ref('marts__combined__users')
+    rows: []
+  - input: ref('dim_program')
+    rows:
+    - {program_pk: pm, program_title: Series, program_readable_id: "program-v1:MITxT+S"}
+    - {program_pk: pe, program_title: Series, program_readable_id: null}
+  - input: ref('bridge_program_course')
+    rows:
+    - {program_fk: pm, course_fk: ca}
+    - {program_fk: pm, course_fk: cb}
+    - {program_fk: pe, course_fk: cb}
+    - {program_fk: pe, course_fk: cc}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: ca, course_readable_id: "course-v1:MITxT+A", course_title: A, is_current: true}
+    - {course_pk: cb, course_readable_id: "course-v1:MITxT+B", course_title: B Capstone,
+      is_current: true}
+    - {course_pk: cc, course_readable_id: "course-v1:MITxT+C", course_title: C, is_current: true}
+  - input: ref('marts__combined_course_enrollment_detail')
+    rows:
+    - {platform: edX.org, user_email: learner@example.com, course_readable_id: "course-v1:MITxT+A",
+      courserunenrollment_enrollment_mode: verified}
+    - {platform: edX.org, user_email: learner@example.com, course_readable_id: "course-v1:MITxT+B",
+      courserunenrollment_enrollment_mode: verified}
+    - {platform: edX.org, user_email: learner@example.com, course_readable_id: "course-v1:MITxT+C",
+      courserunenrollment_enrollment_mode: verified}
+    - {platform: MITx Online, user_email: learner@example.com, course_readable_id: "course-v1:MITxT+C",
+      courserunenrollment_enrollment_mode: verified}
+  expect:
+    rows:
+    - {platform_name: edX.org, verified_courses_taken_in_program: 3, capstone_ind: Y}
+    - {platform_name: MITx Online, verified_courses_taken_in_program: 0, capstone_ind: N}
