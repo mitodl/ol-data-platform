@@ -1,3 +1,5 @@
+-- enrollment_key is tfact_enrollment.enrollment_key: each branch hashes that model's
+-- enrollment_id for the platform with its platform code and the 'course' scope.
 with mitx_enrollments as (
     select * from {{ ref('int__mitx__courserun_enrollments') }}
 )
@@ -22,8 +24,15 @@ with mitx_enrollments as (
     select * from {{ ref('int__mitxresidential__courserun_enrollments') }}
 )
 
+-- Two grade rows can exist for one learner and run. The latest updated is the grade.
 , residential_grades as (
-    select * from {{ ref('int__mitxresidential__courserun_grades') }}
+    select
+        *
+        , row_number() over (
+            partition by user_id, courserun_readable_id
+            order by courserungrade_updated_on desc, courserungrade_id desc
+        ) as row_num
+    from {{ ref('int__mitxresidential__courserun_grades') }}
 )
 
 , mitx_grades as (
@@ -34,8 +43,15 @@ with mitx_enrollments as (
     select * from {{ ref('int__mitxpro__courserun_grades') }}
 )
 
+-- Two unrevoked certificates can exist for one learner and run. The enrollment keeps the latest.
 , combined_certificates as (
-    select * from {{ ref('int__combined__courserun_certificates') }}
+    select
+        *
+        , row_number() over (
+            partition by platform, user_username, courserun_readable_id
+            order by courseruncertificate_created_on desc, courseruncertificate_uuid desc
+        ) as row_num
+    from {{ ref('int__combined__courserun_certificates') }}
 )
 
 , combined_courseruns as (
@@ -51,6 +67,11 @@ with mitx_enrollments as (
 , combined_enrollments as (
     select
         mitx_enrollments.platform
+        , {{ dbt_utils.generate_surrogate_key([
+            'cast(mitx_enrollments.courserunenrollment_id as varchar)'
+            , "'mitxonline'"
+            , "'course'"
+        ]) }} as enrollment_key
         , mitx_enrollments.courserunenrollment_id
         , mitx_enrollments.courserunenrollment_is_active
         , mitx_enrollments.courserunenrollment_created_on
@@ -78,6 +99,11 @@ with mitx_enrollments as (
 
     select
         mitx_enrollments.platform
+        , {{ dbt_utils.generate_surrogate_key([
+            dbt_utils.generate_surrogate_key(['cast(mitx_enrollments.user_id as varchar)', 'mitx_enrollments.courserun_readable_id'])
+            , "'edxorg'"
+            , "'course'"
+        ]) }} as enrollment_key
         , mitx_enrollments.courserunenrollment_id
         , mitx_enrollments.courserunenrollment_is_active
         , mitx_enrollments.courserunenrollment_created_on
@@ -105,6 +131,11 @@ with mitx_enrollments as (
 
     select
         '{{ var("mitxpro") }}' as platform
+        , {{ dbt_utils.generate_surrogate_key([
+            'cast(mitxpro_enrollments.courserunenrollment_id as varchar)'
+            , "'mitxpro'"
+            , "'course'"
+        ]) }} as enrollment_key
         , mitxpro_enrollments.courserunenrollment_id
         , mitxpro_enrollments.courserunenrollment_is_active
         , mitxpro_enrollments.courserunenrollment_created_on
@@ -131,6 +162,16 @@ with mitx_enrollments as (
 
     select
         '{{ var("emeritus") }}' as platform
+        , {{ dbt_utils.generate_surrogate_key([
+            dbt_utils.generate_surrogate_key([
+                'emeritus_enrollments.courserun_external_readable_id'
+                , 'emeritus_enrollments.user_email'
+                , 'emeritus_enrollments.user_first_name'
+                , 'emeritus_enrollments.user_last_name'
+            ])
+            , "'emeritus'"
+            , "'course'"
+        ]) }} as enrollment_key
         , null as courserunenrollment_id
         , emeritus_enrollments.is_enrolled as courserunenrollment_is_active
         , emeritus_enrollments.enrollment_created_on as courserunenrollment_created_on
@@ -157,6 +198,14 @@ with mitx_enrollments as (
 
     select
         '{{ var("global_alumni") }}' as platform
+        , {{ dbt_utils.generate_surrogate_key([
+            dbt_utils.generate_surrogate_key([
+                'coalesce(global_alumni_enrollments.user_email, cast(global_alumni_enrollments.user_id as varchar))'
+                , 'global_alumni_enrollments.courserun_external_readable_id'
+            ])
+            , "'global_alumni'"
+            , "'course'"
+        ]) }} as enrollment_key
         , null as courserunenrollment_id
         , global_alumni_enrollments.is_enrolled as courserunenrollment_is_active
         , null as courserunenrollment_created_on
@@ -183,6 +232,11 @@ with mitx_enrollments as (
 
     select
         '{{ var("bootcamps") }}' as platform
+        , {{ dbt_utils.generate_surrogate_key([
+            'cast(courserunenrollment_id as varchar)'
+            , "'bootcamps'"
+            , "'course'"
+        ]) }} as enrollment_key
         , courserunenrollment_id
         , courserunenrollment_is_active
         , courserunenrollment_created_on
@@ -205,6 +259,11 @@ with mitx_enrollments as (
 
     select
         '{{ var("residential") }}' as platform
+        , {{ dbt_utils.generate_surrogate_key([
+            'cast(residential_enrollments.courserunenrollment_id as varchar)'
+            , "'residential'"
+            , "'course'"
+        ]) }} as enrollment_key
         , residential_enrollments.courserunenrollment_id
         , residential_enrollments.courserunenrollment_is_active
         , residential_enrollments.courserunenrollment_created_on
@@ -226,10 +285,12 @@ with mitx_enrollments as (
         on
             residential_enrollments.courserun_readable_id = residential_grades.courserun_readable_id
             and residential_enrollments.user_id = residential_grades.user_id
+            and residential_grades.row_num = 1
 )
 
 select
     combined_enrollments.platform
+    , combined_enrollments.enrollment_key
     , combined_enrollments.courserunenrollment_id
     , combined_enrollments.courserunenrollment_is_active
     , combined_enrollments.courserunenrollment_created_on
@@ -266,3 +327,4 @@ left join combined_certificates
         combined_enrollments.platform = combined_certificates.platform
         and combined_enrollments.user_username = combined_certificates.user_username
         and combined_enrollments.courserun_readable_id = combined_certificates.courserun_readable_id
+        and combined_certificates.row_num = 1
