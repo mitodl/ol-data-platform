@@ -65,6 +65,8 @@ vars:
     ocw_production_url: "https://ocw.mit.edu/"
     # MIT PE feed paths are root-relative (/courses/...), so no trailing slash
     mitpe_url: "https://professional.mit.edu"
+    # MIT Learn site, no trailing slash. MITx Online certificate URLs are built on it.
+    mitlearn_url: "https://learn.mit.edu"
     mitxonline_openedx_url: "https://courses.learn.mit.edu"
     mitxpro_openedx_url: "https://courses.xpro.mit.edu"
     # xPRO marketing site, no trailing slash. Course and program page URLs are built on it.
