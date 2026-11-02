@@ -739,8 +739,101 @@ models:
     description: str, user's birth year from user's profile on MITx Online or MicroMasters.
   - name: platform_name
     description: str, a field indicating if the data is pulled from MITx Online or
-      edx.org.
+      edx.org. A DEDP enrollment from MicroMasters on an account linked by email is
+      edX.org, because the link doesn't mean the enrollment reached MITx Online.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["user_edxorg_username", "program_title", "user_email"]
+
+unit_tests:
+- name: test_int__micromasters__program_enrollments_email_link_stays_on_edxorg
+  description: >
+    The combined program enrollment mart keeps only edX.org rows from mm_dedp_records.
+    An email
+    link gives a learner a MITx Online account without moving the enrollment there,
+    so the row
+    stays edX.org. A link through social auth or edX.org still reads as MITx Online.
+  model: int__micromasters__program_enrollments
+  given:
+  - input: ref('int__edxorg__mitx_program_enrollments')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__dashboard_programenrollment')
+    rows:
+    - {user_id: 100, program_id: 1}
+    - {user_id: 101, program_id: 1}
+    - {user_id: 102, program_id: 1}
+  - input: ref('int__mitxonline__programenrollments')
+    rows: []
+  - input: ref('int__mitx__programs')
+    rows:
+    - {micromasters_program_id: 1, mitxonline_program_id: 2, program_title: DEDP,
+      is_dedp_program: true}
+  - input: ref('int__mitx__users')
+    rows:
+    - {user_micromasters_id: 100, user_micromasters_email: linked@example.com, is_mitxonline_user: true,
+      is_micromasters_linked_by_email: true}
+    - {user_micromasters_id: 101, user_micromasters_email: social@example.com, is_mitxonline_user: true,
+      is_micromasters_linked_by_email: false}
+    - {user_micromasters_id: 102, user_micromasters_email: alone@example.com, is_mitxonline_user: false,
+      is_micromasters_linked_by_email: false}
+  expect:
+    rows:
+    - {micromasters_user_id: 100, platform_name: edX.org}
+    - {micromasters_user_id: 101, platform_name: MITx Online}
+    - {micromasters_user_id: 102, platform_name: edX.org}
+
+- name: test_int__micromasters__course_certificates_edxorg_username_from_micromasters
+  description: >
+    A MicroMasters certificate on an edX.org run keeps the MicroMasters account's
+    own edX.org
+    username when the email link put that id on a MITx Online account with no edX.org
+    link.
+    int__combined__courserun_enrollments joins the certificate to the edX.org enrollment
+    on it.
+  model: int__micromasters__course_certificates
+  given:
+  - input: ref('__micromasters_course_certificates_dedp_from_micromasters')
+    rows:
+    - {user_micromasters_id: 100, courserun_platform: edX.org, courserun_readable_id: MITx/14.100x/1T2020,
+      coursecertificate_hash: abc, coursecertificate_created_on: '2020-06-01'}
+  - input: ref('__micromasters_course_certificates_dedp_from_mitxonline')
+    rows: []
+  - input: ref('__micromasters_course_certificates_non_dedp_from_edxorg')
+    rows: []
+  - input: ref('int__mitx__users')
+    rows:
+    - {user_micromasters_id: 100, user_mitxonline_username: m1, user_edxorg_username: null,
+      user_micromasters_email: learner@example.com}
+  - input: ref('int__micromasters__users')
+    rows:
+    - {user_id: 100, user_edxorg_username: edx_learner}
+  expect:
+    rows:
+    - {user_edxorg_username: edx_learner, user_mitxonline_username: m1, user_email: learner@example.com}
+
+- name: test_int__micromasters__course_grades_edxorg_username_from_micromasters
+  description: >
+    A MicroMasters grade on an edX.org run keeps the MicroMasters account's own edX.org
+    username
+    when the email link put that id on a MITx Online account with no edX.org link.
+  model: int__micromasters__course_grades
+  given:
+  - input: ref('__micromasters_course_grades_dedp_from_micromasters')
+    rows:
+    - {user_micromasters_id: 100, courserun_platform: edX.org, courserun_readable_id: MITx/14.100x/1T2020,
+      coursegrade_grade: 0.9, coursegrade_created_on: '2020-06-01'}
+  - input: ref('__micromasters_course_grades_dedp_from_mitxonline')
+    rows: []
+  - input: ref('__micromasters_course_grades_non_dedp_from_edxorg')
+    rows: []
+  - input: ref('int__mitx__users')
+    rows:
+    - {user_micromasters_id: 100, user_mitxonline_username: m1, user_edxorg_username: null,
+      user_micromasters_email: learner@example.com}
+  - input: ref('int__micromasters__users')
+    rows:
+    - {user_id: 100, user_edxorg_username: edx_learner}
+  expect:
+    rows:
+    - {user_edxorg_username: edx_learner, user_mitxonline_username: m1, user_email: learner@example.com}

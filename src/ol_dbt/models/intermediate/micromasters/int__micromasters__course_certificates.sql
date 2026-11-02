@@ -17,6 +17,10 @@ with course_certificates_dedp_from_micromasters as (
     select * from {{ ref('int__mitx__users') }}
 )
 
+, micromasters_users as (
+    select * from {{ ref('int__micromasters__users') }}
+)
+
 -- DEDP course certificates come from MicroMasters and MITxOnline. We've migrated some learners data from
 -- MicroMasters to MITxOnline around Oct 2022, but only for those users who have MITxOnline account.
 -- To avoid data overlapping, we deduplicate based on their social auth account linked on MicroMasters.
@@ -32,7 +36,9 @@ with course_certificates_dedp_from_micromasters as (
         , course_certificates_dedp_from_micromasters.courserun_readable_id
         , course_certificates_dedp_from_micromasters.courserun_platform
         , course_certificates_dedp_from_micromasters.course_number
-        , mitx_users.user_edxorg_username
+        -- The edX.org run is on the MicroMasters account's own edX.org login, which an email
+        -- link can leave on a different int__mitx__users row.
+        , coalesce(micromasters_users.user_edxorg_username, mitx_users.user_edxorg_username) as user_edxorg_username
         , mitx_users.user_mitxonline_username
         , mitx_users.user_full_name
         , mitx_users.user_address_country as user_country
@@ -43,6 +49,8 @@ with course_certificates_dedp_from_micromasters as (
     from course_certificates_dedp_from_micromasters
     left join mitx_users
         on course_certificates_dedp_from_micromasters.user_micromasters_id = mitx_users.user_micromasters_id
+    left join micromasters_users
+        on course_certificates_dedp_from_micromasters.user_micromasters_id = micromasters_users.user_id
     where course_certificates_dedp_from_micromasters.courserun_platform = '{{ var("edxorg") }}'
 
     union all

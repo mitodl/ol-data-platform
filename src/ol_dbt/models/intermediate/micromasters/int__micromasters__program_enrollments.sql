@@ -81,7 +81,13 @@ with micromasters_program_enrollments as (
         , mitx_users.user_full_name
         , mitx_users.user_micromasters_id as micromasters_user_id
         , mitx_users.user_birth_year as user_year_of_birth
-        , if(mitx_users.is_mitxonline_user = true, '{{ var("mitxonline") }}', '{{ var("edxorg") }}') as platform_name
+        -- marts__combined_program_enrollment_detail keeps only the edX.org rows here, and an
+        -- email link doesn't mean the enrollment reached MITx Online, so those learners stay.
+        , if(
+            mitx_users.is_mitxonline_user = true and mitx_users.is_micromasters_linked_by_email = false
+            , '{{ var("mitxonline") }}'
+            , '{{ var("edxorg") }}'
+        ) as platform_name
     from mm_program_enrollments
     inner join programs
         on mm_program_enrollments.program_id = programs.micromasters_program_id
