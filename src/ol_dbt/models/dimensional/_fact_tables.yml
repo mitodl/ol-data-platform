@@ -171,6 +171,21 @@ models:
       that was never itself purchased. Not a unique key on tfact_order (whose grain
       is
       order_id + line_id + platform), so no relationships test is applied here.
+  - name: is_verified
+    data_type: boolean
+    description: >
+      The enrollment counts as verified: enrollment_mode is verified and
+      enrollment_status is not refunded, deferred, transferred or unenrolled
+      (https://github.com/mitodl/hq/issues/14160). This measures verified and still
+      enrolled, not paid. A deferral or transfer leaves the learner's verified
+      enrollment on the new run or account, which counts there. The rule reads the
+      status alone, so edX.org and Residential enrollments, which have no status,
+      keep
+      their mode whether or not they are active, and a refund recorded without the
+      downgrade still counts here (is_paid on the order is what catches that one).
+    tests:
+    - not_null:
+        where: "enrollment_mode = 'verified'"
 
 - name: tfact_enrollment_order
   description: >
@@ -1528,6 +1543,7 @@ unit_tests:
       enrollment_created_on: "2024-01-15T00:00:00"
       enrollment_updated_on: "2024-01-15T00:00:00"
       enrollment_is_edx_enrolled: true
+      is_verified: true
     - enrollment_key: "unrelated-later-enrollment"
       enrollment_id: "9999"
       enrollment_type: "course"
@@ -1745,6 +1761,7 @@ unit_tests:
       enrollment_mode: "audit"
       enrollment_created_on: "2020-01-10T00:00:00"
       enrollment_is_edx_enrolled: true
+      is_verified: false
     - enrollment_key: "unrelated-later-enrollment"
       enrollment_id: "unrelated"
       enrollment_type: "course"
@@ -1766,6 +1783,204 @@ unit_tests:
       enrollment_is_active: false
       enrollment_mode: "audit"
       enrollment_created_on: "2019-04-01T00:00:00"
+- name: test_tfact_enrollment_is_verified_excludes_changed_statuses
+  description: >
+    is_verified is mode verified and status not refunded, deferred, transferred or
+    unenrolled (https://github.com/mitodl/hq/issues/14160). The rule reads the status
+    alone: an edX.org enrollment has none, so it keeps its mode whether or not it
+    is
+    active. An enrollment with no mode is false, not null.
+  model: tfact_enrollment
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__courserunenrollments')
+    rows:
+    - {courserunenrollment_id: 1, courserunenrollment_is_active: true, courserunenrollment_enrollment_mode: "verified",
+      courserunenrollment_enrollment_status: null}
+    - {courserunenrollment_id: 2, courserunenrollment_is_active: true, courserunenrollment_enrollment_mode: "verified",
+      courserunenrollment_enrollment_status: ""}
+    - {courserunenrollment_id: 3, courserunenrollment_is_active: false, courserunenrollment_enrollment_mode: "verified",
+      courserunenrollment_enrollment_status: "refunded"}
+    - {courserunenrollment_id: 4, courserunenrollment_is_active: true, courserunenrollment_enrollment_mode: "verified",
+      courserunenrollment_enrollment_status: "deferred"}
+    - {courserunenrollment_id: 5, courserunenrollment_is_active: false, courserunenrollment_enrollment_mode: "verified",
+      courserunenrollment_enrollment_status: "transferred"}
+    - {courserunenrollment_id: 6, courserunenrollment_is_active: false, courserunenrollment_enrollment_mode: "verified",
+      courserunenrollment_enrollment_status: "unenrolled"}
+    - {courserunenrollment_id: 7, courserunenrollment_is_active: true, courserunenrollment_enrollment_mode: "audit",
+      courserunenrollment_enrollment_status: null}
+  - input: ref('int__mitxpro__programenrollments')
+    rows: []
+  - input: ref('int__mitxpro__courserunenrollments')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_enrollments')
+    rows:
+    - {user_id: 777, courserun_readable_id: "MITx/6.00x/2T2019", courserunenrollment_is_active: false,
+      courserunenrollment_enrollment_mode: "verified"}
+  - input: ref('int__mitxonline__programenrollments')
+    rows:
+    - {programenrollment_id: 8, programenrollment_is_active: false, programenrollment_enrollment_mode: "verified",
+      programenrollment_enrollment_status: "unenrolled"}
+  - input: ref('int__mitxresidential__courserun_enrollments')
+    rows: []
+  - input: ref('int__bootcamps__courserunenrollments')
+    rows:
+    - {courserunenrollment_id: 9, courserunenrollment_is_active: true, courserunenrollment_enrollment_status: null}
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('int__micromasters__course_enrollments')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_contract')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  expect:
+    rows:
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_is_active: true,
+      enrollment_mode: "verified", enrollment_status: null, is_verified: true}
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_is_active: true,
+      enrollment_mode: "verified", enrollment_status: "", is_verified: true}
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_is_active: false,
+      enrollment_mode: "verified", enrollment_status: "refunded", is_verified: false}
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_is_active: true,
+      enrollment_mode: "verified", enrollment_status: "deferred", is_verified: false}
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_is_active: false,
+      enrollment_mode: "verified", enrollment_status: "transferred", is_verified: false}
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_is_active: false,
+      enrollment_mode: "verified", enrollment_status: "unenrolled", is_verified: false}
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_is_active: true,
+      enrollment_mode: "audit", enrollment_status: null, is_verified: false}
+    - {platform: "edxorg", enrollment_type: "course", enrollment_is_active: false,
+      enrollment_mode: "verified", enrollment_status: null, is_verified: true}
+    - {platform: "mitxonline", enrollment_type: "program", enrollment_is_active: false,
+      enrollment_mode: "verified", enrollment_status: "unenrolled", is_verified: false}
+    - {platform: "bootcamps", enrollment_type: "course", enrollment_is_active: true,
+      enrollment_mode: null, enrollment_status: null, is_verified: false}
+- name: test_tfact_enrollment_fills_is_verified_on_existing_rows
+  description: >
+    is_verified arrives as a new column, which append_new_columns leaves null on every
+    stored row. The incremental filter must re-select a stored enrollment whose
+    is_verified differs from the rule, so the column fills without a full refresh,
+    and
+    leave one that already matches alone.
+  model: tfact_enrollment
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__courserunenrollments')
+    rows:
+    - courserunenrollment_id: 7001
+      user_id: 555
+      courserun_readable_id: "course-v1:MITxT+1"
+      courserunenrollment_created_on: "2024-01-15T00:00:00"
+      courserunenrollment_updated_on: "2024-01-15T00:00:00"
+      courserunenrollment_is_active: true
+      courserunenrollment_enrollment_mode: "verified"
+    - courserunenrollment_id: 7002
+      user_id: 556
+      courserun_readable_id: "course-v1:MITxT+1"
+      courserunenrollment_created_on: "2024-01-15T00:00:00"
+      courserunenrollment_updated_on: "2024-01-15T00:00:00"
+      courserunenrollment_is_active: false
+      courserunenrollment_enrollment_mode: "verified"
+      courserunenrollment_enrollment_status: "unenrolled"
+    - courserunenrollment_id: 7003
+      user_id: 557
+      courserun_readable_id: "course-v1:MITxT+1"
+      courserunenrollment_created_on: "2024-01-15T00:00:00"
+      courserunenrollment_updated_on: "2024-01-15T00:00:00"
+      courserunenrollment_is_active: true
+      courserunenrollment_enrollment_mode: "verified"
+  - input: ref('int__mitxpro__programenrollments')
+    rows: []
+  - input: ref('int__mitxpro__courserunenrollments')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_enrollments')
+    rows: []
+  - input: ref('int__mitxonline__programenrollments')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_enrollments')
+    rows: []
+  - input: ref('int__bootcamps__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('int__micromasters__course_enrollments')
+    rows: []
+  - input: ref('dim_user')
+    rows:
+    - {user_pk: "USER_555", mitxonline_application_user_id: 555}
+    - {user_pk: "USER_556", mitxonline_application_user_id: 556}
+    - {user_pk: "USER_557", mitxonline_application_user_id: 557}
+  - input: ref('dim_course_run')
+    rows: []
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_contract')
+    rows: []
+  - input: ref('dim_platform')
+    rows:
+    - {platform_pk: "PLATFORM_MITXONLINE", platform_readable_id: "mitxonline"}
+  # 7001 and 7002 are stored before the column existed; 7003 already holds its value. A later-dated enrollment holds the watermark past all three.
+  - input: this
+    rows:
+    - enrollment_key: "620e1b663a486b06165f0865ebe68a40"  # pragma: allowlist secret
+      enrollment_id: "7001"
+      enrollment_type: "course"
+      user_fk: "USER_555"
+      platform: "mitxonline"
+      enrollment_is_active: true
+      enrollment_mode: "verified"
+      enrollment_created_on: "2024-01-15T00:00:00"
+      enrollment_updated_on: "2024-01-15T00:00:00"
+    - enrollment_key: "980c4bf1390cab01f4197eba2e5dfa5a"  # pragma: allowlist secret
+      enrollment_id: "7002"
+      enrollment_type: "course"
+      user_fk: "USER_556"
+      platform: "mitxonline"
+      enrollment_is_active: false
+      enrollment_mode: "verified"
+      enrollment_status: "unenrolled"
+      enrollment_created_on: "2024-01-15T00:00:00"
+      enrollment_updated_on: "2024-01-15T00:00:00"
+    - enrollment_key: "952a504d166ce2580870898b8308ae91"  # pragma: allowlist secret
+      enrollment_id: "7003"
+      enrollment_type: "course"
+      user_fk: "USER_557"
+      platform: "mitxonline"
+      enrollment_is_active: true
+      enrollment_mode: "verified"
+      enrollment_created_on: "2024-01-15T00:00:00"
+      enrollment_updated_on: "2024-01-15T00:00:00"
+      is_verified: true
+    - enrollment_key: "unrelated-later-enrollment"
+      enrollment_id: "9999"
+      enrollment_type: "course"
+      platform: "mitxonline"
+      enrollment_is_active: true
+      enrollment_created_on: "2024-02-01T00:00:00"
+      enrollment_updated_on: "2024-02-01T00:00:00"
+  expect:
+    rows:
+    - {enrollment_id: "7001", is_verified: true}
+    - {enrollment_id: "7002", is_verified: false}
 - name: test_tfact_enrollment_resolves_emeritus_global_alumni_fks
   description: >
     Emeritus learners match dim_user by student id, falling back to email; Global
