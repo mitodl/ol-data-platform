@@ -269,6 +269,9 @@ sources:
       description: timestamp, specifying when the line was most recently updated
     - name: quantity
       description: int, quantitiy ordered, currently always 1
+    - name: discounted_unit_price
+      description: double, the price of the line after any discount, as recorded at
+        purchase
     - name: order_id
       description: int, foreign key in the orders_order table for the order that contains
         the line Currently orders have exactly one line

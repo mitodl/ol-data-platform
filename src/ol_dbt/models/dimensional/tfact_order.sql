@@ -8,7 +8,8 @@
 -- E-commerce order line fact table. Grain: one row per (order_id, line_id, platform).
 -- All source models are natively at line grain (one product per line).
 -- order_total_price_paid is a repeated order-header value — NOT additive across lines
--- of the same order. Use line_price for revenue aggregations.
+-- of the same order. line_price is the list price at purchase; subtract discount_amount
+-- for what the line was charged.
 with mitxonline_orders as (
     -- int__mitxonline__ecommerce_order grain: (order_id, line_id)
     select
@@ -16,7 +17,8 @@ with mitxonline_orders as (
         , order_id
         , user_id
         , product_id
-        , product_price as line_price
+        , line_price
+        , discount_amount
         , order_state
         , order_total_price_paid
           --- placeholder for tax information on MITx Online orders, which is not currently implemented.
@@ -48,6 +50,9 @@ with mitxonline_orders as (
         , orders.order_purchaser_user_id as user_id
         , lines.product_id
         , lines.product_price as line_price
+        -- Every multi-line xPRO order has a total of 0 today, so the header total is
+        -- each line's price paid
+        , lines.product_price - orders.order_total_price_paid as discount_amount
         , orders.order_state
         , orders.order_total_price_paid
         , orders.order_total_price_paid_plus_tax
@@ -79,6 +84,7 @@ with mitxonline_orders as (
         , order_purchaser_user_id as user_id
         , cast(null as bigint) as product_id  -- no dim_product coverage for bootcamps
         , line_price
+        , cast(null as decimal(38, 2)) as discount_amount
         , order_state
         , order_total_price_paid
         , order_total_price_paid as order_total_price_paid_plus_tax
@@ -103,6 +109,7 @@ with mitxonline_orders as (
         , user_id
         , cast(null as bigint) as product_id  -- no dim_product coverage for micromasters
         , line_price
+        , cast(null as decimal(38, 2)) as discount_amount  -- line_price is already post-coupon
         , order_state
         , order_total_price_paid
         , order_total_price_paid as order_total_price_paid_plus_tax
@@ -261,6 +268,7 @@ with mitxonline_orders as (
         , owf.platform
         , owf.order_state
         , owf.line_price
+        , owf.discount_amount
         , owf.order_total_price_paid
         , owf.tax_rate_fk
         , owf.order_total_price_paid_plus_tax
@@ -309,6 +317,7 @@ select
     , platform
     , order_state
     , line_price
+    , discount_amount
     , order_total_price_paid
     , tax_rate_fk
     , order_total_price_paid_plus_tax
