@@ -310,7 +310,7 @@ def llm_classifier_predictions(
     """
     log = get_dagster_logger()
     predictions: list[str | None] = []
-    failed = 0
+    traceback_logged = False
     start = time.monotonic()
     for done, text in enumerate(test_texts, start=1):
         try:
@@ -318,17 +318,17 @@ def llm_classifier_predictions(
         except Exception:
             # Only the first: the progress line counts the rest, and an outage
             # would otherwise log one warning per call.
-            if failed == 0:
+            if not traceback_logged:
                 log.warning("LLM sentiment call failed", exc_info=True)
+                traceback_logged = True
             predictions.append(None)
-            failed += 1
         if done % LLM_PROGRESS_EVERY == 0 or done == len(test_texts):
             log.info(
-                "LLM sentiment %d/%d (%.0fs, %d failed)",
+                "LLM sentiment %d/%d (%.0fs, %d without an answer)",
                 done,
                 len(test_texts),
                 time.monotonic() - start,
-                failed,
+                predictions.count(None),
             )
     return predictions
 
