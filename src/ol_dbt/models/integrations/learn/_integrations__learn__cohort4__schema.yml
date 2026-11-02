@@ -231,7 +231,7 @@ models:
     quote: true
     description: str, ContentFile.key, block-v1:<run>+type@<file's folder>+block@<file
       name without its extension>. The extension is not part of it, so when a folder
-      holds a.pdf and a.docx they are one row, for the last path in sort order.
+      holds a.pdf and a.docx they are one row, for the last path with text.
     tests: [not_null]
   - name: edx_module_id
     description: str, same value as key.

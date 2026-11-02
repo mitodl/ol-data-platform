@@ -2,6 +2,8 @@
 
 import io
 import json
+import runpy
+import time
 import zipfile
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -11,7 +13,7 @@ import pytest
 import requests
 
 from ol_dlt import config
-from ol_dlt.extraction import FAILURES_BEFORE_PROBE, PROBE_DOCUMENT
+from ol_dlt.extraction import FAILURES_BEFORE_PROBE, PROBE_DOCUMENT, collect
 from ol_dlt.sources import canvas_content
 from ol_dlt.sources.canvas_content import cartridge
 
@@ -301,6 +303,19 @@ def test_the_checksum_ignores_export_noise_and_follows_the_published_set() -> No
     assert checksum("", item) != checksum("", item, ["A new course code"])
 
 
+def test_the_checksum_covers_a_published_member_under_the_settings_folder() -> None:
+    syllabus = "course_settings/syllabus.html"
+
+    def checksum(body: str, published: dict[str, dict[str, Any]]) -> str:
+        archive = _open(_archive({syllabus: body}))
+        return cartridge.course_checksum(archive, published, {}, [])
+
+    item = {syllabus: {"title": "Syllabus"}}
+    assert checksum("<p>Old</p>", item) != checksum("<p>New</p>", item)
+    # Not published, so it is noise like the rest of the folder.
+    assert checksum("<p>Old</p>", {}) == checksum("<p>New</p>", {})
+
+
 @pytest.mark.parametrize(
     ("path", "expected"),
     [
@@ -324,7 +339,7 @@ def test_derived_title() -> None:
     assert canvas_content.derived_title("a/lecture-1_notes.pdf") == "Lecture 1 Notes"
 
 
-def test_documents_takes_published_text_files_and_one_per_key() -> None:
+def test_documents_takes_published_text_files_and_groups_them_by_key() -> None:
     names = [
         "web_resources/a.pdf",
         "web_resources/a.docx",
@@ -337,7 +352,9 @@ def test_documents_takes_published_text_files_and_one_per_key() -> None:
     }
     archive = _open(_archive(dict.fromkeys(names, "x")))
     members = canvas_content.documents(archive, published, "1-A+canvas")
-    assert {info.filename for info in members.values()} == {"web_resources/a.pdf"}
+    assert [
+        [info.filename for info in candidates] for candidates in members.values()
+    ] == [["web_resources/a.docx", "web_resources/a.pdf"]]
 
 
 @pytest.mark.parametrize(
@@ -612,7 +629,18 @@ def test_a_run_of_failures_is_probed_before_the_rest_of_the_course() -> None:
     names = [f"web_resources/{number}.txt" for number in range(40)]
     archive = _open(_archive(dict.fromkeys(names, "x")))
     published: dict[str, dict[str, Any]] = {name: {} for name in names}
-    fake = FakeTika(fail=True)
+
+    class SlowsAfterTheProbePoint(FakeTika):
+        """Hold the worker back, so it cannot finish before the load gives up."""
+
+        def extract_text(
+            self, body: bytes, timeout: float = 0, content_type: str | None = None
+        ) -> str | None:
+            if len(self.calls) >= FAILURES_BEFORE_PROBE:
+                time.sleep(0.2)
+            return super().extract_text(body, timeout, content_type)
+
+    fake = SlowsAfterTheProbePoint(fail=True)
     pool = canvas_content.ThreadPoolExecutor(max_workers=1)
     with pytest.raises(RuntimeError, match="Tika failed"):
         canvas_content.read_course(
@@ -629,6 +657,135 @@ def test_a_run_of_failures_is_probed_before_the_rest_of_the_course() -> None:
     assert len(fake.calls) < len(names)
 
 
+def _read(
+    members: dict[str, str], tika_client: FakeTika, course_id: str = "42"
+) -> list[dict[str, Any]]:
+    """Read a course with every member published, and return its file rows."""
+    archive = _open(_archive(members))
+    pool = canvas_content.ThreadPoolExecutor(max_workers=1)
+    rows, _bytes, _retry = canvas_content.read_course(
+        pool=pool,
+        client=tika_client,
+        archive=archive,
+        course_id=course_id,
+        archive_key="k",
+        published={name: {} for name in members},
+        config_by_key={},
+        version="v",
+    )
+    pool.shutdown(wait=False, cancel_futures=True)
+    return [row for row in rows if row["content_kind"] == "file"]
+
+
+@pytest.mark.parametrize(
+    ("members", "kept"),
+    [
+        # The PDF sorts last and cannot be read, so the docx is the one with text.
+        ({"web_resources/a.docx": "x", "web_resources/a.pdf": "bad"}, ".docx"),
+        ({"web_resources/a.docx": "x", "web_resources/a.txt": "y"}, ".txt"),
+    ],
+)
+def test_the_last_file_with_text_is_the_one_a_key_keeps(
+    members: dict[str, str], kept: str
+) -> None:
+    (row,) = _read(members, FakeTika())
+    assert row["file_extension"] == kept
+    assert row["extraction_status"] == "extracted"
+
+
+def test_a_key_with_no_readable_file_is_failed() -> None:
+    (row,) = _read(
+        {"web_resources/a.pdf": "bad", "web_resources/a.txt": ""}, FakeTika()
+    )
+    assert row["file_extension"] == ".pdf"
+    assert row["extraction_status"] == "failed"
+
+
+def test_files_that_never_reach_tika_are_no_reason_to_probe_it() -> None:
+    members = {f"web_resources/{number}.pdf": "bad" for number in range(10)}
+    fake = FakeTika(fail=True)
+    rows = _read(members, fake)
+    assert fake.calls == []
+    assert {row["extraction_status"] for row in rows} == {"failed"}
+
+
+def test_an_unreadable_file_does_not_hide_a_tika_outage() -> None:
+    """A course of failures with one bad PDF among them still looks like one."""
+    failed = (None, "failed", False)
+    half = [failed] * (FAILURES_BEFORE_PROBE // 2)
+    results = [*half, (None, "unreadable", False), *half]
+    with pytest.raises(RuntimeError, match="Tika failed"):
+        collect(FakeTika(fail=True), "42", results)
+
+
+@pytest.mark.parametrize("error", [RuntimeError, NotImplementedError])
+def test_a_member_zipfile_refuses_is_failed(
+    monkeypatch: pytest.MonkeyPatch, error: type[Exception]
+) -> None:
+    def refuse(*_args: Any) -> bytes:
+        msg = "File is encrypted, password required for extraction"
+        raise error(msg)
+
+    monkeypatch.setattr(zipfile.ZipFile, "read", refuse, raising=True)
+    archive = zipfile.ZipFile(io.BytesIO(_zip_of({"web_resources/a.txt": "x"})))
+    extraction = canvas_content._read_member(  # noqa: SLF001
+        FakeTika(), archive, archive.getinfo("web_resources/a.txt"), {}
+    )
+    assert extraction == (None, "unreadable", False)
+
+
+def _zip_of(members: dict[str, str]) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for name, body in members.items():
+            archive.writestr(name, body)
+    return buffer.getvalue()
+
+
+@pytest.mark.usefixtures("test_profile", "fake_tika")
+def test_a_runtime_error_parsing_a_course_skips_only_that_course(
+    bucket: FakeS3, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bucket.objects.update(_export("43", "v1", _MEMBERS))
+    real = cartridge.parse_settings
+    calls: list[int] = []
+
+    def fail_once(archive: zipfile.ZipFile) -> dict[str, Any]:
+        calls.append(1)
+        if len(calls) == 1:
+            msg = "File is encrypted, password required for extraction"
+            raise RuntimeError(msg)
+        return real(archive)
+
+    monkeypatch.setattr(cartridge, "parse_settings", fail_once)
+    rows = _load()
+    assert {row["course_id"] for row in rows} == {"43"}
+
+
+@pytest.mark.usefixtures("test_profile", "bucket")
+def test_a_tika_client_that_cannot_be_built_fails_the_load(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def no_token() -> FakeTika:
+        msg = "Vault refused the token"
+        raise KeyError(msg)
+
+    monkeypatch.setattr(canvas_content.tika, "client_for_profile", no_token)
+    with pytest.raises(Exception, match="Vault refused the token"):
+        _load()
+
+
+def test_python_dash_m_runs_one_load(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[Any] = []
+    monkeypatch.setattr(
+        canvas_content.canvas_content_pipeline,
+        "run",
+        lambda source: calls.append(source),
+    )
+    runpy.run_module("ol_dlt.sources.canvas_content", run_name="__main__")
+    assert len(calls) == 1
+
+
 def test_an_oversized_file_is_failed_without_being_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -642,7 +799,7 @@ def test_an_oversized_file_is_failed_without_being_read(
         archive.getinfo("web_resources/big.txt"),
         md5s,
     )
-    assert extraction == (None, "failed", False)
+    assert extraction == (None, "unreadable", False)
     assert md5s == {}
     assert tika_client.calls == []
 
@@ -657,5 +814,5 @@ def test_an_unreadable_pdf_is_failed_without_going_to_tika() -> None:
             archive.getinfo("web_resources/bad.pdf"),
             {},
         )
-        assert extraction == (None, "failed", False)
+        assert extraction == (None, "unreadable", False)
     assert tika_client.calls == []

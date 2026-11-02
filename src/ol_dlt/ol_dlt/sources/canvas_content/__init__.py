@@ -39,7 +39,7 @@ not hold back the courses after it, and is tried again by the next load.
 
 Tika credentials: see ``ol_dlt.tika``.
 
-Run standalone, as a sweep:
+Run standalone, as a sweep (``__main__``):
     DLT_PROFILE=dev TIKA_ACCESS_TOKEN=... python -m ol_dlt.sources.canvas_content
 """
 
@@ -65,8 +65,11 @@ import s3fs
 from ol_dlt import config, tika
 from ol_dlt.extraction import (
     STATUS_EMPTY,
+    STATUS_EXTRACTED,
     STATUS_FAILED,
+    STATUS_UNREADABLE,
     Extraction,
+    TikaUnavailableError,
     collect,
     extract,
     needs_read,
@@ -239,18 +242,18 @@ def pdf_is_valid(body: bytes) -> bool:
 
 def documents(
     archive: zipfile.ZipFile, published: dict[str, dict[str, Any]], run: str
-) -> dict[str, zipfile.ZipInfo]:
+) -> dict[str, list[zipfile.ZipInfo]]:
     """Return the archive members Learn would extract text from, by key.
 
-    Of members sharing a key Learn keeps whichever its walk of the tree reached
-    last, which is arbitrary. The last by path is kept here.
+    A key can have several: the extension is not part of it. ``chosen`` picks
+    one once they have been read.
 
     :param archive: The course's ``.imscc``.
     :param published: The course's ``cartridge.published_items``.
     :param run: The course's run id.
-    :returns: The members, keyed by ``ContentFile.key``.
+    :returns: The members of each ``ContentFile.key``, sorted by path.
     """
-    members = {}
+    members: dict[str, list[zipfile.ZipInfo]] = {}
     for info in sorted(archive.infolist(), key=lambda info: info.filename):
         path = PurePosixPath(info.filename)
         if (
@@ -259,8 +262,28 @@ def documents(
             and DRAFT_MARKER not in str(path.parent)
             and path.suffix.lower() in VALID_TEXT_FILE_TYPES
         ):
-            members[file_key(source_path(info.filename), run)] = info
+            key = file_key(source_path(info.filename), run)
+            members.setdefault(key, []).append(info)
     return members
+
+
+def chosen(
+    candidates: list[tuple[zipfile.ZipInfo, Extraction]],
+) -> tuple[zipfile.ZipInfo, Extraction]:
+    """Return the file of a key that becomes its ContentFile.
+
+    Learn loads each file of a key in turn, so the last it read text from is the
+    one that stays (which is arbitrary there, and the last by path here). A file
+    with no text loads nothing, so one only counts when no file has text.
+
+    :param candidates: The key's files and how each was read, sorted by path.
+    :returns: The file to keep, with how it was read.
+    """
+    for status in (STATUS_EXTRACTED, STATUS_FAILED, STATUS_UNREADABLE):
+        matching = [pair for pair in candidates if pair[1][1] == status]
+        if matching:
+            return matching[-1]
+    return candidates[-1]
 
 
 def source_path(member: str) -> str:
@@ -289,16 +312,18 @@ def _read_member(
     """Return a member's extraction, noting the MD5 of its bytes in ``md5s``."""
     if info.file_size > MAX_FILE_BYTES:
         logger.warning("%s is over the limit; not extracted", info.filename)
-        return None, STATUS_FAILED, False
+        return None, STATUS_UNREADABLE, False
     try:
         body = archive.read(info)
-    except (zipfile.BadZipFile, zlib.error, EOFError):
+    # zipfile raises RuntimeError for an encrypted member, and its subclass
+    # NotImplementedError for a compression method it does not have.
+    except (zipfile.BadZipFile, zlib.error, EOFError, RuntimeError):
         logger.exception("Could not read %s from its archive", info.filename)
-        return None, STATUS_FAILED, False
+        return None, STATUS_UNREADABLE, False
     md5s[info.filename] = hashlib.md5(body, usedforsecurity=False).hexdigest()
     extension = PurePosixPath(info.filename).suffix.lower()
     if extension == ".pdf" and not pdf_is_valid(body):
-        return None, STATUS_FAILED, False
+        return None, STATUS_UNREADABLE, False
     text, status, retry = extract(
         client,
         body,
@@ -358,7 +383,7 @@ def read_course(  # noqa: PLR0913
 
     :returns: The course's rows, how many member bytes they were read from, and
         whether a file failed in a way another read might not.
-    :raises RuntimeError: Tika is down.
+    :raises TikaUnavailableError: Tika is down.
     """
     retrieved_at = datetime.now(tz=UTC)
     course = course_row(
@@ -371,19 +396,20 @@ def read_course(  # noqa: PLR0913
     )
     run = course["run_readable_id"]
     members = documents(archive, published, run)
+    infos = [info for candidates in members.values() for info in candidates]
     md5s: dict[str, str] = {}
     extractions = collect(
         client,
         course_id,
-        pool.map(
-            lambda info: _read_member(client, archive, info, md5s), members.values()
-        ),
+        pool.map(lambda info: _read_member(client, archive, info, md5s), infos),
     )
+    by_member = dict(zip(infos, extractions, strict=True))
 
     rows = [course]
-    for (key, info), (text, status, _retry) in zip(
-        members.items(), extractions, strict=True
-    ):
+    for key, candidates in members.items():
+        info, (text, status, _retry) = chosen(
+            [(candidate, by_member[candidate]) for candidate in candidates]
+        )
         path = source_path(info.filename)
         item = published.get(path, {})
         rows.append(
@@ -404,13 +430,17 @@ def read_course(  # noqa: PLR0913
                 "file_md5": md5s.get(info.filename),
                 "file_size_bytes": info.file_size,
                 "content": text,
-                "extraction_status": status,
+                # Only a read needs to tell these apart. Downstream both are a
+                # file with no text whose row keeps a prune from taking it.
+                "extraction_status": (
+                    STATUS_FAILED if status == STATUS_UNREADABLE else status
+                ),
                 "course_version": version,
                 "course_retrieved_at": retrieved_at,
             }
         )
     retry = any(may_pass for _text, _status, may_pass in extractions)
-    return rows, sum(info.compress_size for info in members.values()), retry
+    return rows, sum(info.compress_size for info in infos), retry
 
 
 def _unpublished_row(course_id: str, retrieved_at: datetime) -> dict[str, Any]:
@@ -494,7 +524,7 @@ def canvas_content_source(
         ]
         # Built on this thread: the workers must not touch dlt's config, whose
         # injectable context is not thread-safe (see .dlt/config.toml).
-        client: tika.TikaClient | None = None
+        client = tika.client_for_profile()
         spent = 0
         unreadable = 0
         pool = ThreadPoolExecutor(max_workers=WORKERS)
@@ -523,7 +553,6 @@ def canvas_content_source(
                         recorded = versions.get(course_id)
                         if not needs_read(recorded, version, now):
                             continue
-                        client = client or tika.client_for_profile()
                         rows, read_bytes, retry = read_course(
                             pool=pool,
                             client=client,
@@ -539,8 +568,7 @@ def canvas_content_source(
                     # finds it.
                     logger.warning("%s has no metadata yet; skipped", key)
                     continue
-                except RuntimeError:
-                    # Tika is down, which no other course would get past.
+                except TikaUnavailableError:
                     raise
                 except Exception:
                     # A failed extract throws away every course this load read,
@@ -573,7 +601,3 @@ canvas_content_pipeline = config.pipeline_for("canvas", pipeline_name="canvas_co
 def build_source() -> Any:  # noqa: ANN401
     """Instantiate the source for the active profile."""
     return config.with_nullable_load_id(canvas_content_source())
-
-
-if __name__ == "__main__":
-    print(canvas_content_pipeline.run(build_source()))  # noqa: T201

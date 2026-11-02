@@ -56,6 +56,8 @@ FILES_TAB_ID = 11
 # Canvas rewrites these on every export without changing the course: the
 # manifest embeds the export time and reshuffles its resources. What a read takes
 # from them is digested instead: the published set, and the course's own fields.
+# A published member under them is digested as any other, which is
+# course_settings/syllabus.html. It did not change in any of 66 export pairs.
 CHECKSUM_EXCLUDED = (MANIFEST, "course_settings/")
 
 # Part of every course version, so that changing it reads every course again.
@@ -479,7 +481,9 @@ def course_checksum(
     digest.update(f"parse_rule\t{PARSE_RULE}\n".encode())
     digest.update(json.dumps(course_fields).encode())
     for info in sorted(archive.infolist(), key=lambda info: info.filename):
-        if not info.filename.startswith(CHECKSUM_EXCLUDED):
+        if info.filename in published or not info.filename.startswith(
+            CHECKSUM_EXCLUDED
+        ):
             digest.update(f"{info.filename}\0{info.file_size}\0{info.CRC}\0".encode())
     for path in sorted(published):
         digest.update(f"{path}\0{published[path].get('title') or ''}\0".encode())

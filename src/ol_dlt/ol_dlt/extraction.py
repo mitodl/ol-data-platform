@@ -20,6 +20,8 @@ STATUS_EXTRACTED = "extracted"
 STATUS_EMPTY = "empty"
 STATUS_FAILED = "failed"
 STATUS_MISSING = "missing"
+# A file that never reached Tika because it cannot be read at all.
+STATUS_UNREADABLE = "unreadable"
 
 # This many files of a course failing in a row, or all of them, may mean Tika
 # is down. A probe document settles it.
@@ -42,8 +44,15 @@ WAIT_BETWEEN_READS = timedelta(hours=20)
 # files stay failed until the course changes.
 MAX_ATTEMPTS = 3
 
+# These say nothing about Tika, so a run of them is no reason to probe it.
+NOT_SENT_TO_TIKA = frozenset({STATUS_MISSING, STATUS_UNREADABLE})
+
 # A file's text, how the extraction went, and whether another read may do better.
 type Extraction = tuple[str | None, str, bool]
+
+
+class TikaUnavailableError(RuntimeError):
+    """Tika cannot be used, so no other file or course would get past it."""
 
 
 def may_pass(error: requests.RequestException) -> bool:
@@ -59,7 +68,7 @@ def raise_if_token_rejected(error: requests.RequestException, reading: str) -> N
     status = error.response.status_code if error.response is not None else None
     if status in AUTH_FAILURES:
         msg = f"Tika rejected the access token ({status}) reading {reading}."
-        raise RuntimeError(msg) from error
+        raise TikaUnavailableError(msg) from error
 
 
 def extract(
@@ -75,7 +84,7 @@ def extract(
     :param reading: What to call the file in logs and errors.
     :param content_type: The file's MIME type; Tika detects it when None.
     :returns: The text, its status, and whether to read the file again.
-    :raises RuntimeError: Tika rejected the access token.
+    :raises TikaUnavailableError: Tika rejected the access token.
     """
     if not body:
         return None, STATUS_EMPTY, False
@@ -108,7 +117,7 @@ def raise_if_tika_is_down(client: tika.TikaClient, course: str, failed: int) -> 
                 "document. Treating it as a Tika outage, so the course is not "
                 "recorded as read."
             )
-            raise RuntimeError(msg) from error
+            raise TikaUnavailableError(msg) from error
         return
 
 
@@ -121,22 +130,24 @@ def collect(
     :param course: What to call the course in errors.
     :param results: The extractions, in the order they finish being read.
     :returns: The extractions.
-    :raises RuntimeError: Tika is down.
+    :raises TikaUnavailableError: Tika is down.
     """
     collected = []
     failed_in_a_row = 0
     probed = False
     for result in results:
         collected.append(result)
-        # A file gone from the bucket was never sent to Tika, so it neither
-        # counts as a failure nor breaks a run of them.
-        if result[1] == STATUS_MISSING:
+        # A file that was never sent to Tika neither counts as a failure nor
+        # breaks a run of them.
+        if result[1] in NOT_SENT_TO_TIKA:
             continue
         failed_in_a_row = failed_in_a_row + 1 if result[1] == STATUS_FAILED else 0
         if failed_in_a_row >= FAILURES_BEFORE_PROBE and not probed:
             raise_if_tika_is_down(client, course, failed_in_a_row)
             probed = True
-    read = [status for _text, status, _retry in collected if status != STATUS_MISSING]
+    read = [
+        status for _text, status, _retry in collected if status not in NOT_SENT_TO_TIKA
+    ]
     if read and not probed and all(status == STATUS_FAILED for status in read):
         raise_if_tika_is_down(client, course, len(read))
     return collected
