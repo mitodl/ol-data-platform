@@ -7,7 +7,11 @@ with lines as (
 )
 
 , versions as (
-    select *
+    select
+        *
+        , cast(
+            {{ json_query_string('version_object_serialized_data', "'$[0].fields.price'") }} as decimal(38, 2)
+        ) as product_version_price
     from {{ ref('stg__mitxonline__app__postgres__reversion_version') }}
     where
         contenttype_id in (
@@ -76,9 +80,14 @@ select
     , lines.line_id
     , lines.product_version_id
     , intermediate_products_view.product_price
-    , cast(
-        {{ json_query_string('versions.version_object_serialized_data', "'$[0].fields.price'") }} as decimal(38, 2)
-    ) as line_price
+    -- A migrated MicroMasters order points at a $1,000 product version created at the
+    -- October 2022 migration, not a price it was sold at, and MicroMasters records no list
+    -- price. So the order carries what its MicroMasters copy carried: the price paid, and
+    -- no amount off.
+    , case
+        when orders.order_reference_number like 'MM-%' then lines.line_discounted_unit_price
+        else versions.product_version_price
+    end as line_price
     , lines.line_discounted_unit_price
     , intermediate_products_view.product_type
     , intermediate_products_view.product_id
@@ -102,9 +111,10 @@ select
         when orders.order_state in ('fulfilled', 'refunded')
             then discountredemptions.discountredemption_timestamp
     end as discountredemption_timestamp
-    , cast(
-        {{ json_query_string('versions.version_object_serialized_data', "'$[0].fields.price'") }} as decimal(38, 2)
-    ) - lines.line_discounted_unit_price as discount_amount
+    , case
+        when orders.order_reference_number like 'MM-%' then null
+        else versions.product_version_price - lines.line_discounted_unit_price
+    end as discount_amount
 from lines
 inner join orders on lines.order_id = orders.order_id
 inner join users on orders.order_purchaser_user_id = users.user_id

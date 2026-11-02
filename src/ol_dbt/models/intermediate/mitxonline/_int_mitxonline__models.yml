@@ -579,7 +579,9 @@ models:
     - not_null
   - name: line_price
     description: numeric, the list price at purchase, read from the product version
-      on the line
+      on the line. A migrated MicroMasters order (MM- reference number) has no list
+      price, as its version is a $1,000 placeholder from the October 2022 migration,
+      so this is the price paid, matching MicroMasters' own line_price.
     tests:
     - not_null
   - name: line_discounted_unit_price
@@ -618,7 +620,8 @@ models:
       It reads what the line was charged, so it holds for every discount type and
       does not move when a product or a discount changes later. Non-zero on a line
       with no discount_id when the price was reduced without a redemption, e.g. a
-      migrated MicroMasters order.
+      discount not yet redeemed on a pending order. Null on a migrated MicroMasters
+      order, which has no list price to subtract from.
   - name: discount_redemption_type
     description: str, one of  "one-time",  "one-time-per-user" and "unlimited"
   - name: discount_id
@@ -2960,6 +2963,8 @@ unit_tests:
     discount's type or its amount today. The product now costs 2000.00. Line 1 was
     sold at 1000.00 with no discount, line 2 at 1000.00 for 750.00 on a discount now
     worth 50%, and line 3 at 900.00 for 300.00 on a fixed-price discount now at 200.00.
+    Line 4 is a migrated MicroMasters order, whose version price is not a list price,
+    so it carries the 300.00 it paid and no amount off.
   model: int__mitxonline__ecommerce_order
   given:
   - input: ref('stg__mitxonline__app__postgres__ecommerce_line')
@@ -2967,6 +2972,7 @@ unit_tests:
     - {line_id: 1, order_id: 1, product_version_id: 100, line_discounted_unit_price: 1000.00}
     - {line_id: 2, order_id: 2, product_version_id: 100, line_discounted_unit_price: 750.00}
     - {line_id: 3, order_id: 3, product_version_id: 101, line_discounted_unit_price: 300.00}
+    - {line_id: 4, order_id: 4, product_version_id: 100, line_discounted_unit_price: 300.00}
   - input: ref('stg__mitxonline__app__postgres__django_contenttype')
     rows:
     - {contenttype_id: 9, contenttype_full_name: ecommerce_product}
@@ -2985,6 +2991,7 @@ unit_tests:
     - {order_id: 1, order_state: fulfilled, order_purchaser_user_id: 7}
     - {order_id: 2, order_state: fulfilled, order_purchaser_user_id: 7}
     - {order_id: 3, order_state: fulfilled, order_purchaser_user_id: 7}
+    - {order_id: 4, order_state: fulfilled, order_purchaser_user_id: 7, order_reference_number: MM-prod-4}
   - input: ref('int__mitxonline__users')
     rows:
     - {user_id: 7}
@@ -3006,3 +3013,4 @@ unit_tests:
     - {line_id: 1, product_price: 2000.00, line_price: 1000.00, discount_amount: 0.00}
     - {line_id: 2, product_price: 2000.00, line_price: 1000.00, discount_amount: 250.00}
     - {line_id: 3, product_price: 2000.00, line_price: 900.00, discount_amount: 600.00}
+    - {line_id: 4, product_price: 2000.00, line_price: 300.00, discount_amount: null}

@@ -237,8 +237,8 @@ models:
       it can disagree with discount_amount when the price changed after purchase.
   - name: discount_amount
     description: numeric, dollar amount off the order line, unit_price minus what
-      the line was charged. Null for Bootcamps and edX.org, which have no list price
-      to subtract from.
+      the line was charged. Null for Bootcamps, edX.org and migrated MicroMasters
+      orders under MITx Online, which have no list price to subtract from.
   - name: order_created_on
     description: timestamp, specifying when the order was initially created. If this
       is a b2b order it will be the timestamp that order was created otherwise it
@@ -342,8 +342,8 @@ models:
       transaction, e.g., mitxonline-production-1
   - name: unit_price
     description: numeric, list price at purchase for the order line item, before discount.
-      For edX.org it is the price after any coupon, as MicroMasters records no list
-      price.
+      For edX.org and migrated MicroMasters orders under MITx Online it is the price
+      after any coupon, as MicroMasters records no list price.
   - name: user_email
     description: str, user email associated with their account on the corresponding
       platform

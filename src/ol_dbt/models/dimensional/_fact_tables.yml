@@ -397,15 +397,16 @@ models:
     description: >
       List price of the product at purchase, additive across lines. MITx Online and
       xPRO read the product version on the line. MicroMasters records only the price
-      after any coupon, so its line_price is what the line paid.
+      after any coupon, so its line_price is what the line paid, and that holds for
+      a
+      migrated MicroMasters order under mitxonline too.
   - name: discount_amount
     description: >
       Dollar amount off the line, line_price minus what the line was charged. Null
-      for
-      Bootcamps, which has no modeled discounts, and for MicroMasters, which has no
-      list price to subtract from. Non-zero on a MITx Online line with no discount
-      when the price was reduced without a redemption, e.g. a migrated MicroMasters
-      order, or an unredeemed discount on a pending order.
+      for Bootcamps, which has no modeled discounts, and for MicroMasters, including
+      an order migrated to mitxonline, which has no list price to subtract from.
+      Non-zero on a MITx Online line with no discount when the price was reduced
+      without a redemption, e.g. an unredeemed discount on a pending order.
   - name: order_total_price_paid
     description: >
       Total amount paid for the entire order. Repeated across all lines of the same
