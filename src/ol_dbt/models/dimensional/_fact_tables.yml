@@ -414,8 +414,11 @@ models:
   - name: order_updated_on
     description: Order last update timestamp (for incremental processing)
   - name: discount_type_fk
-    description: Foreign key to dim_discount_type; null when no discount was applied
-      to this order line
+    description: >
+      Foreign key to dim_discount_type. free on any line whose price paid is 0, with
+      or without a discount. Otherwise the mechanism of the line's discount, from
+      dim_discount.discount_type_code. Null when the line paid something and has no
+      discount, or a discount with no code (paid-amount-off).
 
 - name: tfact_payment
   description: >
@@ -2450,6 +2453,79 @@ unit_tests:
     - {platform: mitxpro, line_id: "2", line_price: 1000.00, discount_amount: 200.00}
     - {platform: bootcamps, line_id: "3", line_price: 1000.00, discount_amount: null}
     - {platform: micromasters, line_id: "4", line_price: 500.00, discount_amount: null}
+- name: test_tfact_order_classifies_lines_by_discount_type
+  description: >
+    A line takes its discount's mechanism from dim_discount, on every platform, and
+    any line that paid 0 is free, whether by a 100% discount, a fixed price of 0 or
+    no discount at all. A paid line with no discount or an unmapped one has no type.
+  model: tfact_order
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows:
+    - {line_id: 1, order_id: 1, discount_id: 11, line_discounted_unit_price: 750.00,
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 2, order_id: 2, discount_id: 12, line_discounted_unit_price: 800.00,
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 3, order_id: 3, discount_id: 13, line_discounted_unit_price: 300.00,
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 4, order_id: 4, discount_id: 13, line_discounted_unit_price: 0.00,
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 5, order_id: 5, discount_id: 11, line_discounted_unit_price: 0.00,
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 6, order_id: 6, discount_id: 14, line_discounted_unit_price: 500.00,
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 7, order_id: 7, discount_id: null, line_discounted_unit_price: 1000.00,
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 8, order_id: 8, discount_id: null, line_discounted_unit_price: 0.00,
+      order_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__mitxpro__ecommerce_order')
+    rows:
+    - {order_id: 9, coupon_id: 21, order_total_price_paid: 500.00, order_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__mitxpro__ecommerce_line')
+    rows:
+    - {line_id: 9, order_id: 9}
+  - input: ref('int__bootcamps__ecommerce_order')
+    rows: []
+  - input: ref('int__micromasters__orders')
+    rows:
+    - {line_id: 10, order_id: 10, coupon_id: 31, order_total_price_paid: 300.00, order_created_on: "2024-01-15T00:00:00"}
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_discount_type')
+    rows:
+    - {discount_type_pk: 1, discount_type_code: percentage}
+    - {discount_type_pk: 2, discount_type_code: fixed_amount}
+    - {discount_type_pk: 3, discount_type_code: free}
+    - {discount_type_pk: 4, discount_type_code: fixed_price}
+  - input: ref('dim_product')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: ref('dim_discount')
+    rows:
+    - {discount_pk: d11, source_discount_id: 11, platform_code: mitxonline, discount_type_code: percentage}
+    - {discount_pk: d12, source_discount_id: 12, platform_code: mitxonline, discount_type_code: fixed_amount}
+    - {discount_pk: d13, source_discount_id: 13, platform_code: mitxonline, discount_type_code: fixed_price}
+    - {discount_pk: d14, source_discount_id: 14, platform_code: mitxonline, discount_type_code: null}
+    - {discount_pk: d21, source_discount_id: 21, platform_code: mitxpro, discount_type_code: percentage}
+    - {discount_pk: d31, source_discount_id: 31, platform_code: micromasters, discount_type_code: fixed_amount}
+  - input: ref('dim_tax_rate')
+    rows: []
+  expect:
+    rows:
+    - {line_id: "1", discount_type_fk: 1}
+    - {line_id: "2", discount_type_fk: 2}
+    - {line_id: "3", discount_type_fk: 4}
+    - {line_id: "4", discount_type_fk: 3}
+    - {line_id: "5", discount_type_fk: 3}
+    - {line_id: "6", discount_type_fk: null}
+    - {line_id: "7", discount_type_fk: null}
+    - {line_id: "8", discount_type_fk: 3}
+    - {line_id: "9", discount_type_fk: 1}
+    - {line_id: "10", discount_type_fk: 2}
 - name: test_tfact_enrollment_order_resolves_program_order_id
   description: >
     An xPRO enrollment on a program order carries that order as its program order,
