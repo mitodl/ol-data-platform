@@ -23,6 +23,7 @@ Examples:
 - `integrations__learn__mitxonline_programs`
 - `integrations__learn__content_files`
 - `integrations__learn__ocw_content_files`
+- `integrations__learn__canvas_content_files`
 
 ## Required Columns
 
@@ -391,13 +392,13 @@ columns are described in
 ## Grain Expectations
 
 - **Catalog models** (`integrations__learn__<source>_courses`, `integrations__learn__<source>_programs`): One row per resource
-- **Content file models** (`integrations__learn__content_files`, `integrations__learn__ocw_content_files`): One row per content file
+- **Content file models** (`integrations__learn__content_files`, `integrations__learn__ocw_content_files`, `integrations__learn__canvas_content_files`): One row per content file
 - **Media models**: One row per channel, playlist, video, podcast or episode; `integrations__learn__youtube_playlist_videos` is one row per video in a playlist
 
 ## Nullability Rules
 
 1. All required columns must be `NOT NULL` in catalog models
-2. Content file models are exempt from the resource-level required columns; their non-null columns are `etl_source`, `run_readable_id` and `key`, plus `source_path` and `extraction_status` in `integrations__learn__content_files` and `url` and `content_type` in `integrations__learn__ocw_content_files`
+2. Content file models are exempt from the resource-level required columns; their non-null columns are `etl_source`, `run_readable_id` and `key`, plus `source_path` and `extraction_status` in `integrations__learn__content_files` and `integrations__learn__canvas_content_files`, and `url` and `content_type` in `integrations__learn__ocw_content_files`
 3. Media models are exempt from the resource-level required columns; their keys and non-null columns are in the table under Media Sources
 4. Aggregated columns (`topics`, `instructors`, and `courses` in `integrations__learn__xpro_programs`) may be `NULL` when no data exists; consumers should treat `NULL` as empty. `topics` is an array except in `integrations__learn__podcasts`, `integrations__learn__podcast_episodes` and `integrations__learn__mit_climate_articles`, where it is a comma-separated string, as is `courses`
 5. Text columns (`description`, `url`, `image_url`) may be `NULL` when no data exists
@@ -427,6 +428,7 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-05 | Tobias Macey | YouTube and podcasts are pulled from the warehouse, not pushed by webhook. Added the media sources section. `etl_source` for podcasts is `podcast`, as the models and MIT Learn's `ETLSource` have it. |
 | 2026-10-06 | Tobias Macey | xPRO models rebuilt on what MIT Learn's xPRO ETL reads from the xPRO catalog API. Added `integrations__learn__xpro_runs` with prices and enrollment dates. `runs`, `page_slug`, `length`, `effort` and the course `instructors` string are gone from the xPRO models; `topics` is an array; `url` is absolute; `published` follows price. |
 | 2026-10-07 | Tobias Macey | `integrations__learn__ocw_courses` rebuilt on each course's published `data.json`, which MIT Learn's OCW ETL reads, in place of ocw-studio's database. `readable_id` takes Learn's form; added `run_id`, `slug`, `image_alt`, `image_description`, `ocw_topics`, `content_tags`, `hide_download`; `level`, `extra_course_numbers`, `departments` and `topics` are arrays; `departments` holds numbers; `instructors` is JSON; `description` is HTML; `url` ends in a slash. |
+| 2026-11-02 | Tobias Macey | Added `integrations__learn__canvas_content_files` and `integrations__learn__canvas_courses`. |
 | 2026-10-09 | Tobias Macey | The OCW models leave out a bucket directory that no ocw-studio site has as its `url_path` (the old path of a renamed site), which had put two rows with one `readable_id` and `run_id` in `integrations__learn__ocw_courses`. |
 | 2026-10-13 | Tobias Macey | MITx Online models rebuilt on what MIT Learn's MITx Online ETL reads from the MITx Online catalog API. Added `integrations__learn__mitxonline_runs` and `integrations__learn__mitxonline_program_children`. `runs`, `courses`, `url`, `page_slug`, `price`, `length`, `effort`, `instructors` and `program_type` are gone from the courses and programs models; `topics` and `departments` are arrays; `published` follows MIT Learn's rule; B2B-only programs are left out and courses that are not live are included. |
 | 2026-10-15 | Tobias Macey | `integrations__learn__oll_courses` rebuilt on what MIT Learn's OLL ETL writes. OCW-offered rows are included under Learn's `{course_number}+{semester}_{year}` id, with `offered_by` `ocw` (else `mitx`); only Learn's `SKIP_OCW_COURSES` run is left out. Added `run_id`, `course_number`, `offered_by`, `level`, `instructors`, `year`, `semester`, `duration`, `min_weeks`, `max_weeks`, `time_commitment`, `min_weekly_hours` and `max_weekly_hours`; `topics` is an array of the sheet's MITx Online topics; `published` follows the sheet; `runs` is gone. |

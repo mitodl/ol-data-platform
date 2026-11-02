@@ -56,17 +56,26 @@ import logging
 import sys
 from collections.abc import Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from typing import Any
 from urllib.parse import unquote
 
 import dlt
 import pyarrow as pa
-import requests
 import s3fs
 
 from ol_dlt import config, tika
+from ol_dlt.extraction import (
+    STATUS_FAILED,
+    STATUS_MISSING,
+    Extraction,
+    collect,
+    extract,
+    needs_read,
+    record_read,
+    waited,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -137,41 +146,15 @@ PUBLISH_CHECK_WORKERS = 32
 MAX_UNPUBLISH_FRACTION = 0.1
 MIN_COURSES_FOR_UNPUBLISH_GUARD = 20
 
-# This many files of a course failing in a row, or all of them, may mean Tika
-# is down. A probe document settles it.
-FAILURES_BEFORE_PROBE = 8
-PROBE_DOCUMENT = b"OCW content extraction probe."
-# Two tries, so a Tika busy with this course's own files gets a second chance
-# to answer before the load is failed.
-PROBE_ATTEMPTS = 2
-PROBE_TIMEOUT_SECONDS = 60
-AUTH_FAILURES = frozenset({401, 403})
-
 # A larger file is recorded as failed without being read: eight are held in
 # memory at once. The largest of 800 MB sampled across 60 courses was under
 # 100 MB.
 MAX_FILE_BYTES = 256 * 1024**2
 
-# The least time between two reads of a course that is waiting on something:
-# a retry of a failed file, or a second look at an empty prefix. Under a day,
-# so the daily run counts, and long enough that one run crossing midnight
-# does not.
-WAIT_BETWEEN_READS = timedelta(hours=20)
-
-# How many daily reads a course gets while Tika keeps failing on one of its
-# files for a reason that may pass (a timeout, a 5xx). After that the failed
-# files stay failed until the course changes.
-MAX_ATTEMPTS = 3
-
 KIND_COURSE = "course"
 KIND_PAGE = "page"
 KIND_RESOURCE = "resource"
 KIND_UNPUBLISHED = "unpublished"
-
-STATUS_EXTRACTED = "extracted"
-STATUS_EMPTY = "empty"
-STATUS_FAILED = "failed"
-STATUS_MISSING = "missing"
 
 # State of a known course whose prefix was last seen with no data.json, with
 # the day it was seen.
@@ -354,29 +337,13 @@ def _etag(info: dict[str, Any]) -> str:
     return info["ETag"].strip('"')
 
 
-def _may_pass(error: requests.RequestException) -> bool:
-    """Tell a failure worth another read from Tika refusing the document."""
-    response = error.response
-    if response is None:
-        return True
-    return response.status_code >= 500 or response.status_code == 429  # noqa: PLR2004
-
-
-def _raise_if_token_rejected(error: requests.RequestException, reading: str) -> None:
-    """Fail the load on a rejected token, which no file or probe can get past."""
-    status = error.response.status_code if error.response is not None else None
-    if status in AUTH_FAILURES:
-        msg = f"Tika rejected the access token ({status}) reading {reading}."
-        raise RuntimeError(msg) from error
-
-
 def _extract_text(
     fs: s3fs.S3FileSystem,
     client: tika.TikaClient,
     bucket: str,
     key: str,
     size: int,
-) -> tuple[str | None, str, bool]:
+) -> Extraction:
     """Return a file's text, how the extraction went, and whether to retry it."""
     if size > MAX_FILE_BYTES:
         logger.warning("%s is %s bytes, over the limit; not extracted", key, size)
@@ -388,39 +355,7 @@ def _extract_text(
         # same bytes come back the ETags will not show it, so the course is
         # read again.
         return None, STATUS_MISSING, True
-    if not body:
-        return None, STATUS_EMPTY, False
-    try:
-        text = client.extract_text(body)
-    except requests.RequestException as error:
-        # Not about this file: every other one would fail the same way and be
-        # recorded as unreadable.
-        _raise_if_token_rejected(error, key)
-        logger.exception("Tika could not read %s", key)
-        return None, STATUS_FAILED, _may_pass(error)
-    return (text, STATUS_EXTRACTED, False) if text else (None, STATUS_EMPTY, False)
-
-
-def _raise_if_tika_is_down(client: tika.TikaClient, slug: str, failed: int) -> None:
-    """Fail the load when Tika cannot read a document known to be readable.
-
-    Without the probe, a course whose files Tika really cannot read would fail
-    every load at the same place, and no course sorted after it would load.
-    """
-    for attempt in range(1, PROBE_ATTEMPTS + 1):
-        try:
-            client.extract_text(PROBE_DOCUMENT, timeout=PROBE_TIMEOUT_SECONDS)
-        except requests.RequestException as error:
-            _raise_if_token_rejected(error, "the probe document")
-            if attempt < PROBE_ATTEMPTS:
-                continue
-            msg = (
-                f"Tika failed {failed} files of {slug} and then a probe "
-                "document. Treating it as a Tika outage, so the course is not "
-                "recorded as read."
-            )
-            raise RuntimeError(msg) from error
-        return
+    return extract(client, body, key)
 
 
 def _object_info(fs: s3fs.S3FileSystem, bucket: str, key: str) -> dict[str, Any] | None:
@@ -486,28 +421,11 @@ def read_course(  # noqa: PLR0913
         if info is not None:
             files[key] = info
 
-    texts: dict[str, tuple[str | None, str, bool]] = {}
-    failed_in_a_row = 0
-    probed = False
     results = pool.map(
         lambda key: _extract_text(fs, client, bucket, key, files[key]["size"]),
         files,
     )
-    for key, result in zip(files, results, strict=True):
-        texts[key] = result
-        # A file gone from the bucket was never sent to Tika, so it neither
-        # counts as a failure nor breaks a run of them.
-        if result[1] == STATUS_MISSING:
-            continue
-        failed_in_a_row = failed_in_a_row + 1 if result[1] == STATUS_FAILED else 0
-        if failed_in_a_row >= FAILURES_BEFORE_PROBE and not probed:
-            _raise_if_tika_is_down(client, slug, failed_in_a_row)
-            probed = True
-    read = [
-        status for _text, status, _retry in texts.values() if status != STATUS_MISSING
-    ]
-    if read and not probed and all(status == STATUS_FAILED for status in read):
-        _raise_if_tika_is_down(client, slug, len(read))
+    texts = dict(zip(files, collect(client, slug, results), strict=True))
 
     for row in rows:
         file_key = row["file_key"]
@@ -547,13 +465,6 @@ def external_files_changed(
     return False
 
 
-def _waited(since: str, now: datetime) -> bool:
-    then = datetime.fromisoformat(since)
-    if then.tzinfo is None:
-        then = then.replace(tzinfo=UTC)
-    return now - then >= WAIT_BETWEEN_READS
-
-
 def _unpublished_row(slug: str, retrieved_at: datetime) -> dict[str, Any]:
     return {
         **dict.fromkeys(SCHEMA.names),
@@ -561,23 +472,6 @@ def _unpublished_row(slug: str, retrieved_at: datetime) -> dict[str, Any]:
         "content_kind": KIND_UNPUBLISHED,
         "course_retrieved_at": retrieved_at,
     }
-
-
-def needs_read(recorded: str | None, version: str, now: datetime) -> bool:
-    """Tell whether a course's recorded state calls for reading it again.
-
-    The state is the version, or ``version|attempts|time`` while a file of
-    that version is failing in a way that may pass.
-    """
-    if recorded is None:
-        return True
-    recorded_version, _, retry = recorded.partition("|")
-    if recorded_version != version:
-        return True
-    if not retry:
-        return False
-    attempts, _, last_read = retry.partition("|")
-    return int(attempts) < MAX_ATTEMPTS and _waited(last_read, now)
 
 
 def settle_empty_course(
@@ -596,22 +490,10 @@ def settle_empty_course(
         return False, version
     recorded_version, _, first_seen = recorded.partition("|")
     if recorded_version == EMPTY_MARK:
-        return (True, version) if _waited(first_seen, now) else (False, recorded)
+        return (True, version) if waited(first_seen, now) else (False, recorded)
     if recorded_version == version:
         return False, recorded
     return False, f"{EMPTY_MARK}|{now.isoformat(timespec='seconds')}"
-
-
-def record_read(
-    recorded: str | None, version: str, now: datetime, *, retry: bool
-) -> str:
-    """Return the state to hold for a course that was just read."""
-    if not retry:
-        return version
-    attempts = 0
-    if recorded is not None and recorded.startswith(f"{version}|"):
-        attempts = int(recorded.split("|")[1])
-    return f"{version}|{attempts + 1}|{now.isoformat(timespec='seconds')}"
 
 
 def count_unpublished(
@@ -623,7 +505,7 @@ def count_unpublished(
     one sweep is split across loads wherever the byte budget falls.
     """
     window = state.get("unpublish_window")
-    if window is None or _waited(window["since"], now):
+    if window is None or waited(window["since"], now):
         window = {"since": now.isoformat(timespec="seconds"), "count": 0}
     count = window["count"] + added
     if (

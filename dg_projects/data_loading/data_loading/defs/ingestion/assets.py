@@ -24,6 +24,7 @@ from dagster import (
 from dagster._core.definitions.data_version import DATA_VERSION_TAG
 from dagster_dlt import DagsterDltResource, dlt_assets
 from ol_dlt.sources import (
+    canvas_content,
     course_xml_blocks,
     edxorg_program_reports,
     edxorg_s3,
@@ -467,6 +468,17 @@ xpro_tracking_logs_assets = build_batched_assets(
 )
 
 
+# Canvas course files and text for MIT Learn's ContentFiles. One load covers at
+# most canvas_content.BUDGET_BYTES of archive members, and the first run extracts
+# every course (~9,100 files through Tika).
+canvas_content_assets = build_batched_assets(
+    name="canvas_content_ingest",
+    build_source=canvas_content.build_source,
+    pipeline=canvas_content.canvas_content_pipeline,
+    translator=RawDataDltTranslator(),
+)
+
+
 # Resumes from the dlt cursor every run. A backfill is a deliberate
 # `posthog_events_source(start_date=...)` invocation (see the source's
 # __main__), not something a scheduled run can fall into.
@@ -548,6 +560,7 @@ defs = Definitions(
             medium_assets,
             posthog_events_assets,
             ocw_content_assets,
+            canvas_content_assets,
             *edxorg_s3_table_assets,
             *course_xml_blocks_assets,
             edxorg_program_reports_assets,

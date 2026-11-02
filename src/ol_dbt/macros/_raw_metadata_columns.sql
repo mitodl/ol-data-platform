@@ -11,6 +11,7 @@
 -#}
 {% macro raw_metadata_column_map() %}
     {% do return({
+        'raw__canvas__s3__course_content': 'course_retrieved_at',
         'raw__edxorg__discovery__api__mitx_course': '_dlt_load_id',
         'raw__edxorg__discovery__api__mitx_course_run': '_dlt_load_id',
         'raw__edxorg__discovery__api__program': '_dlt_load_id',
