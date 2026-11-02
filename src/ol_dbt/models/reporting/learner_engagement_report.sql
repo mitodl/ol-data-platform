@@ -278,7 +278,7 @@ with video_pre_query as (
                 then a.problem_block_fk
         end) as decimal(30, 10))
         / cast(max(c.problem_numb) as decimal(30, 10)
-        ) as percetage_problems_attempted
+        ) as percent_problems_attempted
     from {{ ref('afact_problem_engagement') }} as a
     inner join {{ ref('dim_problem') }} as problem
         on a.problem_block_fk = problem.problem_block_pk
@@ -363,7 +363,7 @@ with video_pre_query as (
         , page_and_video.video_duration
         , problems_table.problems_with_attempt
         , problems_table.number_of_problems
-        , problems_table.percetage_problems_attempted
+        , problems_table.percent_problems_attempted
         , problems_table.num_of_problems_correct
         , problems_table.avg_percent_grade
         , problems_table.max_possible_grade
@@ -400,7 +400,9 @@ select
     -- Old name, removed once the Superset charts read problems_with_attempt.
     , page_video_problems.problems_with_attempt as problems_attempted
     , page_video_problems.number_of_problems
-    , page_video_problems.percetage_problems_attempted
+    , page_video_problems.percent_problems_attempted
+    -- Old name, removed once the Superset charts read percent_problems_attempted.
+    , page_video_problems.percent_problems_attempted as percetage_problems_attempted
     , page_video_problems.num_of_problems_correct
     , page_video_problems.avg_percent_grade
     , page_video_problems.max_possible_grade
