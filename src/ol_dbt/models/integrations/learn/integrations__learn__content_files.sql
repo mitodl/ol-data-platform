@@ -32,11 +32,11 @@
   future-dated row is here but hidden in Learn until that date.
 
   Partitioned so a read of one run opens one bucket of files: the ml chunks asset
-  and Learn's pull both scope to (etl_source, run_readable_id). sorted_by would
-  not do it: it orders rows within each file, not across files. Two sources by 48
-  buckets stays under Trino's default limit of 100 partitions per writer. A table
-  model is replaced whole on every build, so changing the spec needs no
-  --full-refresh.
+  reads one (etl_source, run_readable_id) at a time, as the contract's scoped pull
+  will. sorted_by would not do it: it orders rows within each file, not across
+  files. Two sources by 48 buckets stays under Trino's default limit of 100
+  partitions per writer. A table model is replaced whole on every build, so
+  changing the spec needs no --full-refresh.
 #}
 
 with content_files as (
