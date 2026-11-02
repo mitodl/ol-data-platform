@@ -1867,8 +1867,9 @@ models:
     description: str, LLM summary of the conversation. Null if the conversation is
       not summarized.
   - name: conversation_text
-    description: str, the redacted conversation text with HTML entities unescaped,
-      including quoted email history. Turns are separated by a line of em dashes.
+    description: str, the redacted conversation text as HTML, including quoted email
+      history. &, < and > are escaped, line breaks are <br>, and turns are separated
+      by a blank line (<br><br>).
   - name: courserun_readable_id
     description: str, readable ID of the course run the conversation is about. Null
       if the conversation has no course run.
