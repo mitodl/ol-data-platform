@@ -16,6 +16,7 @@ Scheduling: once a day, after its integrations models have materialized since
 """
 
 import logging
+from collections.abc import Iterable, Mapping
 from typing import Any, cast
 
 import httpx2 as httpx
@@ -42,20 +43,26 @@ _GLUE_DB = (
 _TABLE = "integrations__learn__mit_climate_articles"
 
 
-def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
+def _row_to_resource(row: Mapping[str, Any]) -> dict[str, Any]:
     """Map an integrations table row to the MIT Learn LearningResource shape."""
-    image_url = row.get("image_url")
-    image_alt = row.get("image_alt") or ""
-    topics_raw = row.get("topics") or ""
-    topics = [{"name": t.strip()} for t in topics_raw.split(",") if t.strip()]
+    image_url = row["image_url"]
+    description = row["description"]
 
     return {
         "readable_id": row["readable_id"],
         "title": row["title"],
-        "url": row.get("url"),
-        "description": row.get("description"),
-        "image": {"url": image_url, "alt": image_alt} if image_url else None,
-        "topics": topics,
+        "url": row["url"],
+        "description": description,
+        # MIT Learn's update only writes keys it is sent, so leaving this out would
+        # keep the stored text forever and give a new article none.
+        "full_description": "\n".join(
+            [description or "", row["footnotes"] or "", row["byline"] or ""]
+        ),
+        "image": {"url": image_url, "alt": row["image_alt"] or ""}
+        if image_url
+        else None,
+        # [] sends the article to MIT Learn's similar-topic lookup, as legacy ETL did
+        "topics": [{"name": topic} for topic in row["topics"] or []],
         "published": True,
         "etl_source": "mit_climate",
         "offered_by": {"code": "climate"},
@@ -65,8 +72,13 @@ def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
         # resource_category, so match that contract for the webhook path too.
         "resource_type": "document",
         "resource_category": "Article",
-        "created_on": row.get("last_modified"),
+        "created_on": row["last_modified"],
     }
+
+
+def build_resources(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Build the webhook batch, one document per integrations row."""
+    return [_row_to_resource(row) for row in rows]
 
 
 @asset(
@@ -92,7 +104,7 @@ def mit_climate_webhook(
     ).collect()
     context.log.info("Loaded %d MIT Climate articles from Iceberg", len(df))
 
-    resources = [_row_to_resource(row) for row in df.iter_rows(named=True)]
+    resources = build_resources(df.iter_rows(named=True))
 
     context.log.info(
         "Delivering %d MIT Climate articles to MIT Learn webhook", len(resources)
