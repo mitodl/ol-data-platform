@@ -13,7 +13,13 @@ from dlt.pipeline.exceptions import PipelineStepFailed
 from pyiceberg.exceptions import NoSuchTableError
 
 from ol_dlt import config
-from ol_dlt.extraction import FAILURES_BEFORE_PROBE, PROBE_DOCUMENT, needs_read
+from ol_dlt.extraction import (
+    FAILURES_BEFORE_PROBE,
+    PROBE_DOCUMENT,
+    TikaUnavailableError,
+    collect,
+    needs_read,
+)
 from ol_dlt.sources import ocw_content
 
 _BUCKET = "ocw-test"
@@ -1213,3 +1219,24 @@ def test_probe_refused_for_its_token_is_not_reported_as_an_outage(
 
     with pytest.raises(PipelineStepFailed, match="rejected the access token"):
         _load()
+
+
+def test_a_rejected_token_is_tika_unavailable(bucket: FakeS3) -> None:
+    class RejectsTheToken(FakeTika):
+        def extract_text(
+            self, body: bytes, timeout: float = 0, content_type: str | None = None
+        ) -> str | None:
+            response = requests.Response()
+            response.status_code = 403
+            raise requests.HTTPError(response=response)
+
+    with pytest.raises(TikaUnavailableError, match="rejected the access token"):
+        ocw_content._extract_text(  # noqa: SLF001
+            bucket, RejectsTheToken(), _BUCKET, "courses/a-course/abc_notes0.pdf", 1
+        )
+
+
+def test_a_tika_outage_is_tika_unavailable() -> None:
+    failed = (None, "failed", False)
+    with pytest.raises(TikaUnavailableError, match="Tika failed"):
+        collect(FakeTika(fail=True), "a-course", [failed] * FAILURES_BEFORE_PROBE)
