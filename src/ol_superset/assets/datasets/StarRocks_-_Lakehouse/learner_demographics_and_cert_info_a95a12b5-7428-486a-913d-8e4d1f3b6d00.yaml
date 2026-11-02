@@ -3,7 +3,7 @@ cache_timeout: null
 catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
-  column_name: dedp_public_policy_program_cert_ind
+  column_name: program_enroll_ind
   datetime_format: null
   description: null
   expression: ''
@@ -16,7 +16,7 @@ columns:
   type: VARCHAR(1073741824)
   verbose_name: null
 - advanced_data_type: null
-  column_name: dedp_international_program_cert_ind
+  column_name: program_title
   datetime_format: null
   description: null
   expression: ''
@@ -29,7 +29,7 @@ columns:
   type: VARCHAR(1073741824)
   verbose_name: null
 - advanced_data_type: null
-  column_name: any_dedp_program_cert_ind
+  column_name: program_cert_ind
   datetime_format: null
   description: null
   expression: ''
@@ -224,7 +224,7 @@ columns:
   type: VARCHAR(1073741824)
   verbose_name: null
 - advanced_data_type: null
-  column_name: dedp_course_cert_count
+  column_name: program_course_cert_count
   datetime_format: null
   description: null
   expression: ''
@@ -274,6 +274,32 @@ columns:
   is_dttm: false
   python_date_format: null
   type: DOUBLE
+  verbose_name: null
+- advanced_data_type: null
+  column_name: program_readable_id
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR(1073741824)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: program_name_course_cert_count
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT(20)
   verbose_name: null
 currency_code_column: null
 database_uuid: d5ed5344-297b-43af-ba38-4bc04744f1ef  # StarRocks - Lakehouse
