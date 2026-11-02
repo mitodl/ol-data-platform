@@ -541,8 +541,8 @@ class OcwCourseLoadTranslator(RawDataDltTranslator):
 
 
 # One partition per course: its load history, and a retry or backfill of it from
-# the UI. A backfill of many is one run, so a re-read of hundreds of courses does
-# not start a pod for each. ocw_content_publish_sensor requests these.
+# the UI. A backfill of a contiguous range is one run, so a re-read of hundreds of
+# courses does not start a pod for each. ocw_content_publish_sensor requests these.
 @dlt_assets(
     dlt_source=ocw_content.build_source(),
     dlt_pipeline=ocw_content.ocw_course_pipeline,
@@ -564,8 +564,9 @@ def ocw_course_load_assets(
         pipeline=ocw_content.ocw_course_pipeline,
     ):
         yield result
-        # What the models below the table watch.
-        if result.metadata["rows_loaded"]:
+        # What the models below the table watch. An empty load with no version
+        # to keep follows an attempt that may have committed rows and died.
+        if result.metadata["rows_loaded"] or result.data_version is None:
             context.log_event(
                 AssetMaterialization(
                     asset_key=AssetKey(

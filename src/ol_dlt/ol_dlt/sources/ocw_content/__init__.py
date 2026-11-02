@@ -71,8 +71,10 @@ import dlt
 import pyarrow as pa
 import s3fs
 from dlt.common.destination.exceptions import DestinationUndefinedEntity
+from dlt.common.libs import pyiceberg as dlt_pyiceberg
 from dlt.common.libs.pyarrow import py_arrow_to_table_schema_columns
 from dlt.common.schema.utils import new_table
+from pyiceberg.exceptions import NoSuchTableError
 
 from ol_dlt import config, tika
 from ol_dlt.extraction import (
@@ -156,6 +158,9 @@ PUBLISH_CHECK_WORKERS = 32
 # instead: an unpublished course loses its ContentFiles in MIT Learn.
 MAX_UNPUBLISH_FRACTION = 0.1
 MIN_COURSES_FOR_UNPUBLISH_GUARD = 20
+# A sweep may find this share of the courses the last one knew, and no less. It
+# unpublishes at most MAX_UNPUBLISH_FRACTION of them, so less means a bad read.
+MIN_RECORDED_FRACTION = 0.5
 
 # A larger file is recorded as failed without being read: eight are held in
 # memory at once. The largest of 800 MB sampled across 60 courses was under
@@ -208,10 +213,12 @@ class CourseRecord:
 
     :param state: The course's version, or ``version|attempts|time`` while a
         file of that version is failing in a way that may pass.
+    :param read_at: When that read happened.
     :param external: The ETag of each file read that the version does not cover.
     """
 
     state: str
+    read_at: datetime
     external: dict[str, str] = field(default_factory=dict)
 
 
@@ -531,6 +538,7 @@ def course_records(rows: Sequence[dict[str, Any]]) -> dict[str, CourseRecord]:
             state = f"{version}|{attempts}|{newest.isoformat(timespec='seconds')}"
         records[slug] = CourseRecord(
             state,
+            newest,
             {
                 row["file_key"]: row["file_etag"]
                 for row in latest
@@ -545,15 +553,37 @@ def course_records(rows: Sequence[dict[str, Any]]) -> dict[str, CourseRecord]:
     return records
 
 
+def _iceberg_records() -> dict[str, CourseRecord]:
+    """Read the records through the catalog.
+
+    Not through ``dlt.dataset``, which finds the newest metadata file by listing
+    the table's directory. That can be one a failed commit left behind, and a
+    directory that is not where dlt expects reads as no table, which would read
+    every course again.
+    """
+    destination = config.destination_for(PIPELINE_SOURCE)
+    catalog = dlt_pyiceberg.get_catalog(
+        credentials=destination.config_params.get("credentials")
+    )
+    try:
+        table = catalog.load_table((config.dataset_name(), RAW_TABLE))
+    except NoSuchTableError:
+        return {}
+    return course_records(
+        table.scan(selected_fields=RECORD_COLUMNS).to_arrow().to_pylist()
+    )
+
+
 def recorded_courses() -> dict[str, CourseRecord]:
     """Read what the raw table holds about every course.
 
     :returns: A record for each known course, by slug; empty when the table does
         not exist yet.
     """
+    if config.active_table_format() == "iceberg":
+        return _iceberg_records()
     # Declared here, not the stored schema dlt would pick. That is the newest
     # one, and a pipeline's first load, if empty, stores one without this table.
-    # Reading that as "no table" would read every course again.
     schema = dlt.Schema(SOURCE_NAME)
     table = new_table(
         RAW_TABLE,
@@ -607,12 +637,45 @@ def settle_empty_course(
 def migrate_course_versions(state: dict[str, Any], empty: dict[str, str]) -> None:
     """Drop the per-course state a load kept before it read the raw table.
 
-    The rows hold everything it held except a prefix's empty mark.
+    The rows hold everything it held except a prefix's empty mark. How many
+    courses it knew stays, for ``refuse_lost_records`` to check the rows against.
     """
-    for slug, recorded in state.pop("course_versions", {}).items():
+    versions = state.pop("course_versions", {})
+    for slug, recorded in versions.items():
         if recorded.startswith(EMPTY_MARK):
             empty[slug] = recorded
     state.pop("external_files", None)
+    if versions:
+        state["known_courses"] = len(versions)
+
+
+def refuse_lost_records(state: dict[str, Any], recorded: int) -> None:
+    """Fail a sweep that finds far fewer courses in the table than the last one.
+
+    Every course it does not find is read again through Tika. Without this, a
+    read that came back short would cost ~70,000 Tika calls and a second copy of
+    the table, and nothing would say why.
+    """
+    known = state.get("known_courses", 0)
+    if recorded < known * MIN_RECORDED_FRACTION:
+        msg = (
+            f"The raw table holds {recorded} courses and the last sweep knew "
+            f"{known}. Refusing to read them all again."
+        )
+        raise RuntimeError(msg)
+    state["known_courses"] = recorded
+
+
+def read_since(mark: str, record: CourseRecord | None) -> bool:
+    """Tell whether a course was read after its prefix was seen empty.
+
+    If so the prefix was a publish in progress, and the mark says nothing now.
+    """
+    _, _, first_seen = mark.partition("|")
+    if record is None:
+        return False
+    # The mark holds whole seconds, and a read in the same second came before it.
+    return record.read_at.replace(microsecond=0) > datetime.fromisoformat(first_seen)
 
 
 def count_unpublished(
@@ -696,6 +759,7 @@ def ocw_content_source(  # noqa: PLR0913
         live = list_courses(fs, bucket)
 
         if courses is None:
+            refuse_lost_records(state, known)
             unpublished = _unpublished_rows(recorded, live, now)
             if unpublished:
                 count_unpublished(state, now, len(unpublished), known)
@@ -729,10 +793,11 @@ def ocw_content_source(  # noqa: PLR0913
                         if courses is not None:
                             logger.info("%s has no data.json; left to the sweep", slug)
                             continue
+                        mark = empty_prefixes.get(slug)
+                        if mark and read_since(mark, record):
+                            mark = None
                         unpublish, held = settle_empty_course(
-                            empty_prefixes.get(slug) or read_state,
-                            version,
-                            now,
+                            mark or read_state, version, now
                         )
                         if held.startswith(EMPTY_MARK):
                             empty_prefixes[slug] = held

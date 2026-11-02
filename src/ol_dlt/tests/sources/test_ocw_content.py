@@ -6,9 +6,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import pyarrow as pa
 import pytest
 import requests
 from dlt.pipeline.exceptions import PipelineStepFailed
+from pyiceberg.exceptions import NoSuchTableError
 
 from ol_dlt import config
 from ol_dlt.extraction import FAILURES_BEFORE_PROBE, PROBE_DOCUMENT, needs_read
@@ -842,6 +844,54 @@ def test_course_records_hold_only_the_files_the_version_does_not_cover() -> None
     }
 
 
+def test_a_course_read_since_its_prefix_was_seen_empty_is_not_gone() -> None:
+    mark = f"{ocw_content.EMPTY_MARK}|{_at(2).isoformat(timespec='seconds')}"
+    record = ocw_content.CourseRecord("v1", _at(3))
+    assert ocw_content.read_since(mark, record)
+    assert not ocw_content.read_since(mark, ocw_content.CourseRecord("v1", _at(1)))
+    assert not ocw_content.read_since(mark, None)
+
+
+def test_a_sweep_refuses_a_table_that_lost_its_courses() -> None:
+    state = {"known_courses": 2588}
+    ocw_content.refuse_lost_records(state, 2500)
+    assert state["known_courses"] == 2500
+    with pytest.raises(RuntimeError, match="Refusing to read them all again"):
+        ocw_content.refuse_lost_records(state, 0)
+    # A first load, with nothing known.
+    ocw_content.refuse_lost_records({}, 0)
+
+
+def test_recorded_courses_read_iceberg_through_the_catalog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Scan:
+        def to_arrow(self) -> pa.Table:
+            return pa.Table.from_pylist(_read("v1", _at(1)))
+
+    class Table:
+        def scan(self, selected_fields: tuple[str, ...]) -> Scan:
+            assert selected_fields == ocw_content.RECORD_COLUMNS
+            return Scan()
+
+    class Catalog:
+        def __init__(self, *, exists: bool) -> None:
+            self.exists = exists
+
+        def load_table(self, identifier: tuple[str, str]) -> Table:
+            assert identifier[1] == ocw_content.RAW_TABLE
+            if not self.exists:
+                raise NoSuchTableError(identifier)
+            return Table()
+
+    monkeypatch.setattr(ocw_content.config, "active_table_format", lambda: "iceberg")
+    get_catalog = ocw_content.dlt_pyiceberg
+    monkeypatch.setattr(get_catalog, "get_catalog", lambda **_: Catalog(exists=True))
+    assert ocw_content.recorded_courses()["a-course"].state == "v1"
+    monkeypatch.setattr(get_catalog, "get_catalog", lambda **_: Catalog(exists=False))
+    assert ocw_content.recorded_courses() == {}
+
+
 def test_old_state_keeps_only_the_empty_marks() -> None:
     state = {
         "course_versions": {"a-course": "v1", "b-course": "!empty|2026-10-01"},
@@ -851,7 +901,7 @@ def test_old_state_keeps_only_the_empty_marks() -> None:
     empty: dict[str, str] = {}
     ocw_content.migrate_course_versions(state, empty)
     assert empty == {"b-course": "!empty|2026-10-01"}
-    assert state == {"resume_after": "a-course"}
+    assert state == {"resume_after": "a-course", "known_courses": 2}
 
 
 @pytest.mark.integration

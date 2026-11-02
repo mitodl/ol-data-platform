@@ -48,6 +48,9 @@ SETTLE_SECONDS = 2 * 60
 # interval rather than per tick: a tick that waited an hour on a running load
 # covers twelve intervals of ordinary publishes.
 MAX_COURSES_PER_POLL = 50
+# However long the window, since each course is a run and a listing in this tick.
+# Runs go one at a time and hold the sweep back until they finish.
+MAX_COURSES_PER_TICK = 100
 
 
 def courses_published_between(
@@ -91,9 +94,8 @@ def ocw_content_publish_sensor(
     or backfilled from the UI. The cursor is the end of the window the last tick
     covered. It does not move while a load is in flight, so the courses published
     meanwhile are requested once it ends; the load skips any the sweep already
-    read. It does
-    move once a run is requested, so the courses of a run that fails wait for
-    the next sweep.
+    read. It does move once a run is requested, so the courses of a run that
+    fails wait for the next sweep.
     """
     until = datetime.now(tz=UTC) - timedelta(seconds=SETTLE_SECONDS)
     if context.cursor is None:
@@ -127,7 +129,8 @@ def ocw_content_publish_sensor(
             dynamic_partitions_requests=new_partitions,
         )
     intervals = round((until - since) / timedelta(seconds=POLL_INTERVAL_SECONDS))
-    if len(courses) > MAX_COURSES_PER_POLL * max(intervals, 1):
+    limit = min(MAX_COURSES_PER_POLL * max(intervals, 1), MAX_COURSES_PER_TICK)
+    if len(courses) > limit:
         context.log.warning(
             "%s courses were written between %s and %s, more than publishes "
             "write; leaving them to the daily sweep.",

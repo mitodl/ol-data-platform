@@ -14,6 +14,7 @@ from data_loading.defs.ingestion.assets import (
 )
 from data_loading.defs.ingestion.ocw_content_sensor import (
     MAX_COURSES_PER_POLL,
+    MAX_COURSES_PER_TICK,
     POLL_INTERVAL_SECONDS,
     SETTLE_SECONDS,
     courses_published_between,
@@ -180,6 +181,16 @@ def test_window_held_open_by_a_long_load_is_not_taken_for_a_rebuild(
     requests = _tick(instance, since.isoformat()).run_requests or []
 
     assert len(requests) == MAX_COURSES_PER_POLL + 1
+
+
+def test_a_long_window_still_has_a_ceiling(
+    instance: dg.DagsterInstance, published: dict[str, datetime]
+) -> None:
+    since = datetime.now(tz=UTC) - timedelta(hours=12)
+    for number in range(1, MAX_COURSES_PER_TICK + 2):
+        published[f"course-{number}"] = since + timedelta(minutes=number)
+
+    assert not _tick(instance, since.isoformat()).run_requests
 
 
 @pytest.mark.parametrize(
