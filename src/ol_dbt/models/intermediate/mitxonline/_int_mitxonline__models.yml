@@ -656,6 +656,12 @@ models:
     order's line on the old one, so these are the order lines with no paid record
     on their run when the order has one on another run. One row per (order, course
     run).
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
   columns:
   - name: order_id
     description: int, foreign key to ecommerce_order
