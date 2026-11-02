@@ -3,20 +3,21 @@
 The rows are what the platform stores: chunks keyed by ``(doc_key, chunker_id,
 chunk_number)`` and vectors keyed by ``(chunk_key, strategy_id)``, each vector
 with the checksum of the exact text that was embedded. A text whose checksum
-already has a vector under the same model is not sent again, so re-running a
-strategy after a few documents changed pays only for the changed chunks, and two
-strategies that embed the same text with the same model share the cost.
+already has a vector in the model's vector space is not sent again, so re-running
+a strategy after a few documents changed pays only for the changed chunks, and two
+strategies that embed the same text in the same space share the cost.
 """
 
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
+from typing import NamedTuple
 
 from pydantic import BaseModel, ConfigDict
 
 from ol_orchestrate.lib.embeddings.chunking import Chunk, Chunker
 from ol_orchestrate.lib.embeddings.documents import Document, md5_hex
-from ol_orchestrate.lib.embeddings.models import Embedder
+from ol_orchestrate.lib.embeddings.models import Embedder, EmbeddingBatch
 from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy
 
 
@@ -56,6 +57,11 @@ class ChunkRow(BaseModel):
 class VectorRow(BaseModel):
     """The vector of one chunk under one strategy.
 
+    :param model_id: the model that produced the vector: the strategy's for a
+        vector it embedded, the stored row's for one it reused, which may be
+        another model of the same vector space
+    :param vector_space: the space the vector is reused in, the model's
+        ``vector_space_id``
     :param input_checksum: MD5 of the text the model was sent, which is the
         chunk text after the strategy's context template
     """
@@ -65,9 +71,17 @@ class VectorRow(BaseModel):
     chunk_key: str
     strategy_id: str
     model_id: str
+    vector_space: str
     input_checksum: str
     vector: list[float]
     embedded_at: datetime
+
+
+class StoredVector(NamedTuple):
+    """A vector already computed, and the model that computed it."""
+
+    vector: list[float]
+    model_id: str
 
 
 class EmbedOutcome(BaseModel):
@@ -121,7 +135,7 @@ def embed_chunks(
     chunks: Sequence[tuple[Document, ChunkRow]],
     embedder: Embedder,
     *,
-    known_vectors: Mapping[str, list[float]] | None = None,
+    known_vectors: Mapping[str, StoredVector] | None = None,
     embedded_at: datetime | None = None,
 ) -> EmbedOutcome:
     """Embed chunks under a strategy, sending each distinct new text once.
@@ -130,8 +144,8 @@ def embed_chunks(
     :param chunks: chunk rows with their documents, from :func:`chunk_documents`
         with the strategy's chunker
     :param embedder: an embedder for the strategy's model
-    :param known_vectors: vectors already computed with the strategy's model at
-        its vector length, by the MD5 of the text they were computed from
+    :param known_vectors: vectors already computed in the strategy model's
+        vector space, by the MD5 of the text they were computed from
     :param embedded_at: the time to stamp on new rows; now when omitted
     :returns: one vector row per chunk, in order
     :rtype: EmbedOutcome
@@ -156,9 +170,10 @@ def embed_chunks(
     checksums = [md5_hex(text) for text in texts]
     known = dict(known_vectors or {})
     vector_length = strategy.model.vector_length
-    if any(len(vector) != vector_length for vector in known.values()):
+    if any(len(stored.vector) != vector_length for stored in known.values()):
         msg = (
-            f"known_vectors must be {vector_length} long, as {strategy.model.model_id}"
+            f"known_vectors must be {vector_length} long, as "
+            f"{strategy.model.vector_space_id}"
         )
         raise ValueError(msg)
     reused = len(set(checksums) & set(known))
@@ -167,17 +182,27 @@ def embed_chunks(
         for checksum, text in zip(checksums, texts, strict=True)
         if checksum not in known
     }
-    batch = embedder.embed(list(new_texts.values()), input_type="document")
-    known.update(zip(new_texts, batch.vectors, strict=True))
+    # No call at all when every text is known, so an embedder that counts or
+    # traces requests records none for a run that embeds nothing.
+    batch = (
+        embedder.embed(list(new_texts.values()), input_type="document")
+        if new_texts
+        else EmbeddingBatch(vectors=[], input_tokens=0)
+    )
+    known.update(
+        (checksum, StoredVector(vector, strategy.model.model_id))
+        for checksum, vector in zip(new_texts, batch.vectors, strict=True)
+    )
 
     stamp = embedded_at or datetime.now(tz=UTC)
     rows = [
         VectorRow(
             chunk_key=row.chunk_key,
             strategy_id=strategy.strategy_id,
-            model_id=strategy.model.model_id,
+            model_id=known[checksum].model_id,
+            vector_space=strategy.model.vector_space_id,
             input_checksum=checksum,
-            vector=known[checksum],
+            vector=known[checksum].vector,
             embedded_at=stamp,
         )
         for (_, row), checksum in zip(chunks, checksums, strict=True)

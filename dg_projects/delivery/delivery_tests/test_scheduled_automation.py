@@ -233,6 +233,56 @@ def test_b2b_organization_export_registers_running_in_production_only(environmen
             assert "b2b_organization_list_sensor" not in sensors
 
 
+CANVAS_WEBHOOK_KEY = AssetKey(["canvas", "course_content_metadata"])
+
+
+@pytest.mark.parametrize("environment", VALID_DAGSTER_ENVS)
+def test_canvas_webhook_is_automated_in_production_only(environment):
+    """The canvas location's default automation sensor sent these; this one must.
+
+    That sensor was RUNNING in production, so the replacement registers RUNNING
+    there and targets exactly the webhook. Anywhere else the asset carries no
+    condition, which keeps it out of the synthesized default sensor too.
+    """
+    with _repository_for(environment) as repo:
+        sensors = {sensor.name: sensor for sensor in repo.sensor_defs}
+        node = repo.asset_graph.get(CANVAS_WEBHOOK_KEY)
+
+        if environment != "production":
+            assert "canvas_course_export_webhook_sensor" not in sensors
+            assert node.automation_condition is None
+            return
+
+        sensor = sensors["canvas_course_export_webhook_sensor"]
+        assert sensor.default_status == DefaultSensorStatus.RUNNING
+        assert sensor.asset_selection.resolve(repo.asset_graph) == {CANVAS_WEBHOOK_KEY}
+        assert node.automation_condition is not None
+        default = sensors.get("default_automation_condition_sensor")
+        if default is not None:
+            assert CANVAS_WEBHOOK_KEY not in default.asset_selection.resolve(
+                repo.asset_graph
+            )
+
+
+def test_canvas_webhook_loads_exports_through_the_file_io_manager():
+    """The exports are materialized in data_loading, not here.
+
+    So the inputs must name the file object IO manager, which looks the path up
+    from the latest materialization. The location's default io_manager would
+    try to unpickle an object that was never written.
+    """
+    with _repository_for("production") as repo:
+        job = repo.get_implicit_job_def_for_assets([CANVAS_WEBHOOK_KEY])
+        node_def = job.asset_layer.get(CANVAS_WEBHOOK_KEY).assets_def.node_def
+        assert {
+            input_def.name: input_def.input_manager_key
+            for input_def in node_def.input_defs
+        } == {
+            "canvas_content_export": "s3file_io_manager",
+            "course_metadata_export": "s3file_io_manager",
+        }
+
+
 WEBHOOK_DELIVERY_SENSOR_NAMES = frozenset(
     {
         "mit_climate_delivery_sensor",

@@ -22,7 +22,9 @@ with contract_stats as (
         c.b2b_contract_is_active,
         c.b2b_contract_start_date,
         c.b2b_contract_end_date,
-        c.b2b_contract_max_learners                                                     as seat_limit,
+        -- MITx Online documents max_learners 0 and null both as unlimited; null carries
+        -- it here, as in mv_b2b_contract_courserun.
+        nullif(c.b2b_contract_max_learners, 0)                                          as seat_limit,
         c.b2b_contract_membership_type,
         count(distinct p.user_fk)                                                       as seats_consumed,
         count(distinct case when p.enrollment_is_active then p.user_fk end)             as active_learners,

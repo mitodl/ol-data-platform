@@ -3,6 +3,8 @@
   Runs of the courses in integrations__learn__xpro_courses, as xPRO's catalog API lists them
   under a course: live, started or scheduled, not past their end or enrollment window, and
   with an active product. Runs that drop out of this set are ones MIT Learn unpublishes.
+  platform_code is the course's platform as MIT Learn's XPRO_PLATFORM_TRANSFORM
+  (learning_resources/etl/xpro.py) maps it, the platform.code of the run's resource.
   Contract: docs/learn_marts_contract.md
 #}
 
@@ -12,7 +14,10 @@ with runs as (
 )
 
 , courses as (
-    select readable_id from {{ ref('integrations__learn__xpro_courses') }}
+    select
+        readable_id
+        , platform
+    from {{ ref('integrations__learn__xpro_courses') }}
 )
 
 , course_ids as (
@@ -41,6 +46,16 @@ select
     , runs.courserun_current_price as price
     , pages.page_instructors as instructors
     , coalesce(runs.courserun_current_price > 0, false) as published
+    -- Learn's loader skips a course whose platform it does not map, so null means the
+    -- run has no resource in Learn.
+    , case courses.platform
+        when 'Emeritus' then 'emeritus'
+        when 'Global Alumni' then 'globalalumni'
+        when 'Simplilearn' then 'simplilearn'
+        when 'Susskind' then 'susskind'
+        when 'WHU' then 'whu'
+        when 'xPRO' then 'xpro'
+    end as platform_code
 from runs
 inner join course_ids on runs.course_id = course_ids.course_id
 inner join courses on course_ids.course_readable_id = courses.readable_id

@@ -17,7 +17,7 @@ the ``mitxonline`` database in the local-dev CloudNativePG cluster (see
 the QA app database or nothing joins.
 
 Every table is loaded with ``write_disposition="replace"``; none declares a
-``cursor_column``. Airbyte replicated 36 of these incrementally by ``xmin``,
+``cursor_column``. Airbyte replicated 38 of these incrementally by ``xmin``,
 which dlt has no practical equivalent for (INGESTION_INVENTORY_SPEC.md §3.4),
 so each of them needed either a replacement cursor or a decision to re-read it
 whole. They are all re-read whole, for three measured reasons:
@@ -82,7 +82,9 @@ MITXONLINE_APP_SPEC = DatabaseSourceSpec(
             name="b2b_discountcontractattachmentredemption", primary_key="id"
         ),
         DatabaseTable(name="b2b_organizationindexpage", primary_key="page_ptr_id"),
+        DatabaseTable(name="b2b_organizationonboarding", primary_key="id"),
         DatabaseTable(name="b2b_organizationpage", primary_key="page_ptr_id"),
+        DatabaseTable(name="b2b_organizationprovisioningaudit", primary_key="id"),
         DatabaseTable(name="b2b_userorganization", primary_key="id"),
         # Per-learner contract membership, carrying the learner's data-sharing
         # consent. Replaced users_user_b2b_contracts as User.b2b_contracts' through

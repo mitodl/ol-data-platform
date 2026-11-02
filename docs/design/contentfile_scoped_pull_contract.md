@@ -17,14 +17,14 @@ Today three Dagster locations already POST to `/api/v1/webhooks/content_files/`:
 |---|---|
 | `dg_projects/openedx/openedx/assets/openedx.py:731` | `partitions_def` (per deployment, per course) |
 | `dg_projects/edxorg/edxorg/assets/openedx_course_archives.py:332` | `course_and_source_partitions` |
-| `dg_projects/canvas/canvas/assets/canvas.py:294` | `canvas_course_ids` (`DynamicPartitionsDefinition`) |
+| `dg_projects/delivery/delivery/assets/canvas.py:96` | `canvas_course_ids` (`DynamicPartitionsDefinition`) |
 
 All three send a **pointer**: `{course_id, course_readable_id, content_path, source}`. On receipt
 MIT Learn fires `ingest_edx_run_archive` (or `ingest_canvas_course` for Canvas) — i.e. the message
 means *"a new archive is at this path, go extract it yourself."* **MIT Learn does the extraction.**
 
 **Known gap in the current Canvas sender:** `course_readable_id` is only set when Canvas's
-`sis_course_id` is truthy (`dg_projects/canvas/canvas/assets/canvas.py:283-286`) — Learn rejects a
+`sis_course_id` is truthy (`dg_projects/delivery/delivery/assets/canvas.py:85-88`) — Learn rejects a
 null value, so some Canvas courses never carry this field today. The new endpoint closes this gap
 rather than inheriting it: §2 has the Canvas sender compute `readable_id` itself from
 `course_id`/`course_code`, so it no longer depends on `sis_course_id` being set.
@@ -350,10 +350,21 @@ How the sensor and the sweep share the state:
 - The cursor moves when a run is requested, so the courses of a scoped run that fails wait for the
   next sweep.
 
-It ends at the raw load. `integrations__learn__ocw_content_files` still rebuilds with the daily
-lakehouse run, and telling Learn a course changed is the sender this section is about, which is
-still not built. Publish-to-row latency (target: one poll plus the settle time plus the run) is
-only measurable once the sensor runs in production.
+The load does not reach the Learn views by itself. `stg__ocw__s3__course_content` was built only by
+the 06:00 `non_airbyte_staging_daily` job, so a scoped load measured on 2026-10-23 sat in raw until
+the next day's build. `ocw_learn_automation_sensor` (lakehouse, 1-minute tick) now owns the staging
+model, both OCW intermediates and both Learn views (`integrations__learn__ocw_courses`,
+`integrations__learn__ocw_content_files`), and requests all five in one dbt run on the tick after
+any `ocw_content` load. Telling Learn a course changed is the sender this section is about, which is
+still not built; Learn picks up the rebuilt views on its own sync schedule.
+
+`int__ocw__live_courses` keeps a course only when ocw-studio's database has a site at its path with no
+`unpublish_status`, and that database reaches staging through the Airbyte sync. ocw-studio sets
+`url_path` on a site's first publish request (draft or live) and clears `unpublish_status` on a live
+publish request. So a course whose first publish is a live one, or a course republished after an
+unpublish, stays out of the views until the next ocw-studio staging build, and the sensor rebuilds
+the views on the tick after it. That build ran at 00:08, 06:06 and 18:06 UTC on 2026-10-25, so the
+wait can be up to 12 hours. Updates to a course that is already published are not affected.
 
 Unpublish is unchanged: the platform learns of it from the sweep, up to a day late. Learn's own
 webhook still unpublishes immediately.

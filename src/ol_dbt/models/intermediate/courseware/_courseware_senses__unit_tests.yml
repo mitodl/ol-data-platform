@@ -1,0 +1,32 @@
+---
+unit_tests:
+- name: test_int__courseware__resolved_concept_mentions_join_by_the_course_runs_sense
+  description: >
+    "kernel" is one label but two concepts: the operating systems course's mentions
+    resolve to its sense and the machine learning course's to the one split off it.
+    A course run whose sense is queued for review, and one no run has assigned yet,
+    resolve to nothing rather than to the label's first sense.
+  model: int__courseware__resolved_concept_mentions
+  given:
+  - input: ref('int__courseware__concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: os, extraction_key: k1, claim_ordinal: 1,
+      concept_label_key: kernel, label: kernel}
+    - {platform: mitxonline, courserun_readable_id: ml, extraction_key: k2, claim_ordinal: 1,
+      concept_label_key: kernel, label: kernel}
+    - {platform: mitxonline, courserun_readable_id: linalg, extraction_key: k3, claim_ordinal: 1,
+      concept_label_key: kernel, label: kernel}
+    - {platform: mitxonline, courserun_readable_id: new, extraction_key: k4, claim_ordinal: 1,
+      concept_label_key: kernel, label: kernel}
+  - input: ref('int__courseware__concept_sense_assignments')
+    rows:
+    - {concept_label_key: kernel, platform: mitxonline, courserun_readable_id: os,
+      concept_id: os-kernel, sense_status: assigned}
+    - {concept_label_key: kernel, platform: mitxonline, courserun_readable_id: ml,
+      concept_id: ml-kernel, sense_status: assigned}
+    - {concept_label_key: kernel, platform: mitxonline, courserun_readable_id: linalg,
+      concept_id: null, sense_status: needs_review}
+  expect:
+    rows:
+    - {courserun_readable_id: os, concept_id: os-kernel}
+    - {courserun_readable_id: ml, concept_id: ml-kernel}

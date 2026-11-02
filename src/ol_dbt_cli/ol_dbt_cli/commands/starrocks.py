@@ -28,6 +28,12 @@ Workflow::
     # The local lake in the ol-infrastructure local-dev cluster: no Vault
     ol-dbt starrocks run --env dev --select +integrations__learn__oll_courses
 
+    # Your own copy of the QA warehouse in ol_data_lake_qa
+    ol-dbt starrocks run --target starrocks_dev_qa --vars '{schema_suffix: alice}' --select +my_model
+
+    # A PR build in the CI lake
+    ol-dbt starrocks run --env ci --target ci --vars '{schema_suffix: pr_123}' --select my_model+
+
 dbt ``profiles.yml`` must reference the env vars this command injects::
 
     starrocks:
@@ -45,14 +51,17 @@ from __future__ import annotations
 import atexit
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 
 import cyclopts
+import yaml
 from cyclopts import Parameter
 from rich.console import Console
 
@@ -148,12 +157,14 @@ _ENVS: dict[str, dict[str, Any]] = {
         "dbt_target": "starrocks_production",
         "data_lake_env": "production",
     },
+    # The b2b default stays starrocks_production, reading the QA lake. CI's own
+    # lake, ol_data_lake_ci, is the `ci` target in _LAKE_TARGETS.
     "ci": {
         "host": "lakehouse.ci.starrocks.ol.mit.edu",
         "eks_context": "data-ci",
         "k8s_namespace": "starrocks",
         "fe_service": "lakehouse-starrocks-fe-service",
-        "vault_addr": "https://vault-qa.odl.mit.edu",
+        "vault_addr": "https://vault-ci.odl.mit.edu",
         "vault_mount": _VAULT_MOUNT,
         "dbt_target": "starrocks_production",
         # Matches trino_catalog_map["ci"] in the lakehouse definitions.
@@ -161,6 +172,116 @@ _ENVS: dict[str, dict[str, Any]] = {
         "port_forward": False,
     },
 }
+
+
+# Glue's database name rule as Iceberg's GlueCatalog enforces it. The same check
+# generate_schema_name.sql makes on every layer schema.
+_GLUE_DATABASE_NAME = re.compile(r"[a-z0-9_]{1,252}")
+
+
+@dataclass(frozen=True)
+class _LakeTarget:
+    """A profile that writes the layered warehouse into an Iceberg catalog.
+
+    :param env: The one ``_ENVS`` entry whose cluster can write ``catalog``.
+    :param catalog: The profile's ``catalog``.
+    :param schema: The profile's ``schema`` before any ``_<schema_suffix>``.
+    :param suffix: Whether the profile appends the ``schema_suffix`` var:
+        always, only when one is passed, or never.
+    :param can_defer: Whether ``--defer`` may be used. dbt-starrocks records a
+        lake relation as ``schema.table``, with no catalog, so a deferred parent
+        resolves in this target's catalog whatever manifest it came from. A
+        target whose catalog no other manifest describes (``ci``: the deferred
+        parents would be QA's) builds its parents instead.
+    """
+
+    env: str
+    catalog: str
+    schema: str
+    suffix: Literal["required", "optional", "none"]
+    can_defer: bool = True
+
+
+# Every lake profile in profiles.yml except starrocks_local, whose schema the
+# local-dev stack creates. dbt-starrocks connects to <catalog>.<schema> and, if
+# that fails for any reason, runs a bare CREATE DATABASE for it before any macro
+# can give it a location. Seeds build into that schema, so it has to exist with a
+# location before dbt connects. _ensure_profile_schema makes it.
+_LAKE_TARGETS: dict[str, _LakeTarget] = {
+    "starrocks_qa_lake": _LakeTarget("qa", "ol_data_lake_qa", "ol_warehouse_qa", "none"),
+    "starrocks_dev_qa": _LakeTarget("qa", "ol_data_lake_qa", "ol_warehouse_qa", "required"),
+    "starrocks_production_lake": _LakeTarget(
+        "production", "ol_data_lake_production", "ol_warehouse_production", "none"
+    ),
+    # CI builds the parents of what it builds from the fixtures in its own raw
+    # schema rather than reading QA's tables through ol_data_lake_ci.
+    "ci": _LakeTarget("ci", "ol_data_lake_ci", "ol_warehouse_ci", "optional", can_defer=False),
+}
+
+
+def _profile_schema(target: str, lake: _LakeTarget, cli_vars: dict[str, Any]) -> str:
+    """Return the schema the *target* profile renders for these ``--vars``.
+
+    :raises SystemExit: when the profile needs a ``schema_suffix`` and none was
+        passed, or the result is not a name Iceberg can load from Glue.
+    """
+    suffix = cli_vars.get("schema_suffix")
+    if lake.suffix == "required" and not suffix:
+        err_console.print(f"[red]--target {target} needs a schema suffix:[/] pass --vars '{{schema_suffix: <name>}}'.")
+        sys.exit(1)
+    schema = f"{lake.schema}_{suffix}" if suffix and lake.suffix != "none" else lake.schema
+    if not _GLUE_DATABASE_NAME.fullmatch(schema):
+        err_console.print(
+            f"[red]Schema {schema!r} is not one Iceberg can load from Glue:[/] "
+            "use 1-252 lowercase letters, digits and underscores in schema_suffix."
+        )
+        sys.exit(1)
+    return schema
+
+
+def _ensure_profile_schema(lake: _LakeTarget, schema: str, host: str, dbt_dir: Path, cli_vars: dict[str, Any]) -> None:
+    """Create the profile's schema in *lake*'s catalog, with a location, if it is missing.
+
+    The location follows starrocks__create_schema: ``<root>/<schema>``, with the
+    root from the ``iceberg_schema_location_roots`` var. A ``--vars`` value for it
+    replaces dbt_project.yml's whole map, as it does for dbt, so the root is read
+    from the same place the macro reads it.
+    ``IF NOT EXISTS`` leaves an existing database as it is, location or not.
+    """
+    import mysql.connector  # noqa: PLC0415
+    from mysql.connector import errors  # noqa: PLC0415
+
+    roots = (
+        cli_vars.get("iceberg_schema_location_roots")
+        or yaml.safe_load((dbt_dir / "dbt_project.yml").read_text())["vars"]["iceberg_schema_location_roots"]
+    )
+    if lake.catalog not in roots:
+        err_console.print(
+            f"[red]No entry for catalog {lake.catalog!r} in the iceberg_schema_location_roots var,[/] "
+            f"so {schema!r} cannot be given a location."
+        )
+        sys.exit(1)
+    location = f"{roots[lake.catalog]}/{schema}"
+    try:
+        connection = mysql.connector.connect(
+            host=host,
+            port=_STARROCKS_PORT,
+            user=os.environ["DBT_STARROCKS_USERNAME"],
+            password=os.environ["DBT_STARROCKS_PASSWORD"],
+            autocommit=True,
+        )
+        try:
+            connection.cursor().execute(
+                f"CREATE DATABASE IF NOT EXISTS {qualified_name(lake.catalog, schema)} "
+                f'PROPERTIES ("location" = "{location}")'
+            )
+        finally:
+            connection.close()
+    except errors.Error as exc:
+        # Starting dbt anyway would have it create the database with no location.
+        err_console.print(f"[red]Could not create {lake.catalog}.{schema}:[/] {exc}")
+        sys.exit(1)
+    console.print(f"[dim]Profile schema:[/] {lake.catalog}.{schema} ({location})")
 
 
 def _port_is_free(port: int) -> bool:
@@ -302,9 +423,14 @@ def run(  # noqa: PLR0913
         ),
     ] = "qa",
     vault_role: Annotated[
-        str,
-        Parameter(name="--vault-role", help="Vault database role: readonly, app (default), admin."),
-    ] = "app",
+        str | None,
+        Parameter(
+            name="--vault-role",
+            help="Vault database role: readonly, app, admin. Default: admin for a lake target "
+            "(app cannot create databases in a lake catalog), app otherwise.",
+            show_default=False,
+        ),
+    ] = None,
     vault_oidc_role: Annotated[
         str,
         Parameter(
@@ -334,9 +460,14 @@ def run(  # noqa: PLR0913
         Parameter(name="--full-refresh", help="Force a complete rebuild of all models, ignoring state."),
     ] = False,
     defer: Annotated[
-        bool,
-        Parameter(name="--defer", help="Defer upstream refs to state manifest. Default: enabled."),
-    ] = True,
+        bool | None,
+        Parameter(
+            name="--defer",
+            help="Defer upstream refs to state manifest. Default: enabled, except on the `ci` "
+            "target, which refuses it.",
+            show_default=False,
+        ),
+    ] = None,
     save_state: Annotated[
         bool,
         Parameter(name="--save-state", help="Save state artifacts after run. Default: enabled."),
@@ -393,10 +524,40 @@ def run(  # noqa: PLR0913
             "and they only work there."
         )
         sys.exit(1)
+    # Default to the env-appropriate dbt target if the caller didn't specify one.
+    effective_target = target or env_cfg["dbt_target"]
+    lake = _LAKE_TARGETS.get(effective_target)
+    if lake is not None and not lake.can_defer:
+        if defer:
+            err_console.print(
+                f"[red]--target {effective_target} cannot --defer:[/] a state manifest records "
+                f"lake relations without their catalog, so its parents would be read from "
+                f"{lake.catalog} under another environment's schema names. Build the parents "
+                "from fixtures instead (e.g. --select +my_model)."
+            )
+            sys.exit(1)
+        defer = False
+    elif defer is None:
+        defer = True
+    if lake is not None and lake.env != env:
+        err_console.print(
+            f"[red]--target {effective_target} cannot be used with --env {env}:[/] it writes "
+            f"{lake.catalog}, which only the {lake.env} cluster can write. Use --env {lake.env}."
+        )
+        sys.exit(1)
+    # dbt reads --vars as YAML too.
+    cli_vars: dict[str, Any] = (yaml.safe_load(vars) or {}) if vars else {}
+    lake_schema = _profile_schema(effective_target, lake, cli_vars) if lake is not None else None
+    # substructure/starrocks grants `app` only USAGE on a lake catalog and DML on
+    # its tables. Building one takes CREATE DATABASE and CREATE TABLE.
+    if vault_role is None:
+        vault_role = "admin" if lake is not None else "app"
     console.print(
         f"[bold]ol-dbt starrocks[/] — env: [cyan]{env}[/], "
         f"cluster: [cyan]{env_cfg['host']}[/], "
         f"reading: [cyan]ol_data_lake_{env_cfg['data_lake_env']}[/], "
+        + (f"writing: [cyan]{lake.catalog}.{lake_schema}_<layer>[/], " if lake is not None else "")
+        + f"target: [cyan]{effective_target}[/], "
         f"role: [cyan]{vault_role if uses_vault else 'root (no Vault)'}[/], "
         f"port-forward: [cyan]{port_forward}[/]"
     )
@@ -424,8 +585,8 @@ def run(  # noqa: PLR0913
     # inferred from a target name.
     os.environ["DBT_DATA_LAKE_ENV"] = env_cfg["data_lake_env"]
 
-    # Default to the env-appropriate dbt target if the caller didn't specify one.
-    effective_target = target or env_cfg["dbt_target"]
+    if lake is not None and lake_schema is not None:
+        _ensure_profile_schema(lake, lake_schema, host, _find_dbt_dir(project_dir), cli_vars)
 
     started = time.time()
     try:

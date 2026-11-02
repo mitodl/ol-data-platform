@@ -1,6 +1,7 @@
 certification_details: null
 certified_by: null
-css: ".search-select,\n.search-select .ant-select-selector {\n  min-width: 220px !important;\n}\n"
+css: ".search-select,\n.search-select .ant-select-selector {\n  min-width: 220px !important;\n\
+  }\n"
 dashboard_title: Learner Feedback Categories
 description: null
 metadata:
@@ -245,8 +246,8 @@ position:
         - Category labels, descriptions and summaries are AI-generated. The **Conversation**
         column has the full text, with personal information removed.
 
-        - For Zendesk, **Conversation ID** is the ticket ID. Open the ticket at
-        https://odl.zendesk.com/agent/tickets/ followed by the ID.'
+        - For Zendesk, **Conversation ID** is the ticket ID. Open the ticket at https://odl.zendesk.com/agent/tickets/
+        followed by the ID.'
       height: 30
       width: 12
     parents:

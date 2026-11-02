@@ -1,27 +1,37 @@
 """Tests for ml.lib.summarize."""
 
-import logging
-import time
-from typing import Any, Self
+from typing import Any
 
+import boto3
 import polars as pl
 import pytest
-from anthropic import Anthropic, AnthropicBedrock
-from ml.lib import llm_client_adapters, summarize
-from openai import OpenAI
+from botocore.stub import Stubber
+from ml.lib import summarize
+from ml.lib.iceberg_helpers import upsert_chunk
+from ml.resources import opik_auth
+from ol_llm import (
+    BatchFailed,
+    BatchKeys,
+    LLMInvalidOutput,
+    ManagedPrompt,
+    TextTemplate,
+)
+from ol_llm.testing import override_models
+from pydantic_ai.exceptions import ModelHTTPError
+from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, UserPromptPart
+from pydantic_ai.models import override_allow_model_requests
+from pydantic_ai.models.bedrock import BedrockConverseModel
+from pydantic_ai.models.function import AgentInfo, FunctionModel
+from pydantic_ai.providers.bedrock import BedrockProvider
+from pyiceberg.catalog.sql import SqlCatalog
 
-
-class _FakeSummaryClient:
-    model_version = "test-model"
-
-    def __init__(self) -> None:
-        self.trace_metadata_calls: list[dict[str, object]] = []
-
-    def summarize(
-        self, conversation_text: str, *, trace_metadata: dict[str, object]
-    ) -> str:
-        self.trace_metadata_calls.append(trace_metadata)
-        return f"summary of: {conversation_text}"
+MODEL = "anthropic:claude-haiku-4-5"
+TEXT = "turn one\n---\nturn two"
+TEMPLATE = TextTemplate(template="Summarize: {{conversation_text}}", version="v4")
+PROMPT = ManagedPrompt(name="feedback-summary", template=TEMPLATE, source="opik")
+SUMMARIZER = summarize.Summarizer(
+    use_case=summarize.summary_use_case(MODEL), prompt=PROMPT, run_id="run-1"
+)
 
 
 def _conversation_row(**overrides: object) -> dict[str, object]:
@@ -33,11 +43,28 @@ def _conversation_row(**overrides: object) -> dict[str, object]:
         "source_slug": "zendesk",
         "conversation_ref": conversation_ref,
         "turn_count": 2,
-        "conversation_text": "turn one\n---\nturn two",
+        "conversation_text": TEXT,
         "conversation_text_chars": 600,
     }
     row.update(overrides)
     return row
+
+
+def _sent_text(messages: list[ModelMessage]) -> str:
+    return next(
+        part.content
+        for message in messages
+        for part in getattr(message, "parts", ())
+        if isinstance(part, UserPromptPart) and isinstance(part.content, str)
+    )
+
+
+def _summarize(messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+    """Echo the conversation back, and reject any containing "too long"."""
+    text = _sent_text(messages)
+    if "too long" in text:
+        raise ModelHTTPError(400, "claude-haiku-4-5", body="prompt is too long")
+    return ModelResponse(parts=[TextPart(f"summary of: {text}")])
 
 
 def test_needs_summary_summarizes_any_conversation_with_text() -> None:
@@ -55,757 +82,600 @@ def test_needs_summary_rejects_null_conversation_text() -> None:
     assert summarize.needs_summary(row) is False
 
 
-def test_summarize_conversations_skips_rows_without_text() -> None:
-    df = pl.DataFrame(
-        [
-            _conversation_row(conversation_ref="1"),
-            _conversation_row(
-                conversation_ref="2", turn_count=1, conversation_text=None
-            ),
-        ]
+def test_summary_use_case_is_on_the_batch_profile_in_the_ml_project() -> None:
+    use_case = summarize.summary_use_case(MODEL)
+
+    assert use_case.app == "dagster-ml"
+    assert use_case.name == "feedback-summary"
+    assert use_case.profile == "batch"
+    assert use_case.model == MODEL
+
+
+def test_fetch_summary_prompt_uses_the_embedded_default_with_tracing_off() -> None:
+    prompt = summarize.fetch_summary_prompt()
+
+    assert prompt.source == "embedded"
+    assert prompt.version is None
+    assert prompt.template.template == summarize.SUMMARY_PROMPT
+
+
+def _stored(**columns: list[object]) -> pl.DataFrame:
+    """feedback_summaries rows, by default written by this run's model at turn 2."""
+    rows = len(columns["feedback_conversation_pk"])
+    columns = {
+        "turn_count": [2] * rows,
+        "summary_model_version": [MODEL] * rows,
+        **columns,
+    }
+    return pl.DataFrame(
+        columns,
+        schema_overrides={
+            "idempotency_key": pl.String,
+            "summary_model_version": pl.String,
+        },
     )
 
-    result = summarize.summarize_conversations(df, _FakeSummaryClient())
 
-    summarized = result.filter(pl.col("conversation_ref") == "1").row(0, named=True)
-    assert summarized["conversation_summary"] == "summary of: turn one\n---\nturn two"
-    assert summarized["summary_model_version"] == "test-model"
-    # "local": no OPIK_URL_OVERRIDE in tests, so get_prompt_version always falls
-    # back rather than trying to reach a real Opik instance.
-    assert summarized["prompt_version"] == "local"
-    assert summarized["embedding_input"] == "summary"
-    assert summarized["turn_count"] == 2
-
-    skipped = result.filter(pl.col("conversation_ref") == "2").row(0, named=True)
-    assert skipped["conversation_summary"] is None
-    assert skipped["summary_model_version"] is None
-    assert skipped["prompt_version"] is None
-    assert skipped["embedding_input"] == "concatenated_turns"
-    assert skipped["turn_count"] == 1
+def _key(text: str, keys: Any = None) -> str:
+    return (keys or SUMMARIZER.keys).key(text)
 
 
-def test_summarize_conversations_passes_identifying_trace_metadata() -> None:
-    """The Opik span for a summarize() call must carry enough to trace it back
-    to its source conversation -- regression guard for the metadata itself,
-    not just that a call happened.
-    """
-    client = _FakeSummaryClient()
-    df = pl.DataFrame([_conversation_row(conversation_ref="1")])
-
-    summarize.summarize_conversations(df, client)
-
-    assert client.trace_metadata_calls == [
-        {
-            "feedback_conversation_pk": "pk-1",
-            "source_slug": "zendesk",
-            "conversation_ref": "1",
-            "turn_count": 2,
-            "conversation_text_chars": 600,
-        }
-    ]
-
-
-def test_summarize_conversations_runs_calls_concurrently() -> None:
-    """max_concurrency > 1 should let several summarize() calls overlap, not
-    run strictly one after another.
-    """
-    call_delay = 0.2
-
-    class _SlowSummaryClient:
-        model_version = "test-model"
-
-        def summarize(
-            self,
-            conversation_text: str,
-            *,
-            trace_metadata: dict[str, object],  # noqa: ARG002
-        ) -> str:
-            time.sleep(call_delay)
-            return f"summary of: {conversation_text}"
-
-    row_count = 8
-    df = pl.DataFrame(
-        [_conversation_row(conversation_ref=str(i)) for i in range(row_count)]
-    )
-
-    start = time.monotonic()
-    result = summarize.summarize_conversations(
-        df, _SlowSummaryClient(), max_concurrency=row_count
-    )
-    elapsed = time.monotonic() - start
-
-    assert result.height == row_count
-    # Serial would take row_count * call_delay (1.6s); running them all at once
-    # should land close to one call_delay, with generous headroom for CI jitter.
-    assert elapsed < row_count * call_delay / 2
-
-
-def test_summarize_conversations_preserves_row_order_and_error_handling() -> None:
-    """Concurrent execution must not scramble row order or the per-row error
-    handling (a raising call is dropped; the rest still succeed).
-    """
-
-    class _FlakySummaryClient:
-        model_version = "test-model"
-
-        def summarize(
-            self,
-            conversation_text: str,
-            *,
-            trace_metadata: dict[str, object],  # noqa: ARG002
-        ) -> str:
-            if "2" in conversation_text:
-                msg = "simulated failure"
-                raise ValueError(msg)
-            return f"summary of: {conversation_text}"
-
-    df = pl.DataFrame(
-        [
-            _conversation_row(conversation_ref=str(i), conversation_text=f"text {i}")
-            for i in range(5)
-        ]
-    )
-    errors: list[str] = []
-
-    result = summarize.summarize_conversations(
-        df, _FlakySummaryClient(), errors=errors, max_concurrency=5
-    )
-
-    assert result["conversation_ref"].to_list() == ["0", "1", "3", "4"]
-    assert result["conversation_summary"].to_list() == [
-        "summary of: text 0",
-        "summary of: text 1",
-        "summary of: text 3",
-        "summary of: text 4",
-    ]
-    assert len(errors) == 1
-    assert "simulated failure" in errors[0]
-
-
-def test_summarize_conversations_types_null_columns_when_batch_is_all_skipped() -> None:
-    """An all-skipped batch must not produce a Null-typed column.
-
-    Regression: Polars infers dtype=Null for an all-None Series, which Iceberg
-    (format v2) rejects outright when writing the table.
-    """
-    df = pl.DataFrame([_conversation_row(conversation_ref="1", conversation_text=None)])
-
-    result = summarize.summarize_conversations(df, _FakeSummaryClient())
-
-    assert result["conversation_summary"].null_count() == result.height
-    assert result.schema["conversation_summary"] == pl.String
-    assert result.schema["summary_model_version"] == pl.String
-    assert result.schema["prompt_version"] == pl.String
-
-
-def test_filter_unsummarized_drops_already_summarized_rows_with_same_turn_count() -> (
-    None
-):
+def test_filter_unsummarized_keeps_new_conversations_with_or_without_text() -> None:
     source_df = pl.DataFrame(
         [
-            _conversation_row(conversation_ref="1", turn_count=2),
-            _conversation_row(conversation_ref="2", turn_count=2),
-        ]
-    )
-    already_summarized_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [2],
-        }
-    )
-
-    result = summarize.filter_unsummarized(source_df, already_summarized_df)
-
-    assert result["conversation_ref"].to_list() == ["2"]
-
-
-class _FakeLLM:
-    """Stands in for LLMClientFactory: building a real one needs real credentials."""
-
-    def __init__(self, client: object, client_class: str = "openai") -> None:
-        self._client = client
-        self.client_class = client_class
-
-    def get_client(self) -> object:
-        return self._client
-
-
-def test_build_summary_client_uses_default_model_for_anthropic() -> None:
-    client = summarize.build_summary_client(
-        _FakeLLM(Anthropic(api_key="sk-ant-test"))  # pragma: allowlist secret
-    )
-
-    assert isinstance(client, summarize.AnthropicSummaryClient)
-    assert client.model_version == summarize.SUMMARY_MODEL_VERSION
-
-
-def test_build_summary_client_uses_bedrock_default_for_bedrock() -> None:
-    """A plain Anthropic API id (SUMMARY_MODEL_VERSION) is never valid on
-    Bedrock -- the bedrock client must get BEDROCK_SUMMARY_MODEL_VERSION instead.
-    """
-    client = summarize.build_summary_client(
-        _FakeLLM(AnthropicBedrock(aws_region="us-east-1"))
-    )
-
-    assert isinstance(client, summarize.AnthropicSummaryClient)
-    assert client.model_version == summarize.BEDROCK_SUMMARY_MODEL_VERSION
-
-
-def test_build_summary_client_honors_model_version_override_for_openai() -> None:
-    """FeedbackSummariesConfig.model_version (passed through as model_version here)
-    overrides SUMMARY_MODEL_VERSION -- how a run tries a different model.
-    """
-    client = summarize.build_summary_client(
-        _FakeLLM(OpenAI(api_key="sk-test")),  # pragma: allowlist secret
-        model_version="gpt-4o-mini",
-    )
-
-    assert isinstance(client, summarize.OpenAISummaryClient)
-    assert client.model_version == "gpt-4o-mini"
-
-
-def test_build_summary_client_honors_model_version_override_for_anthropic() -> None:
-    client = summarize.build_summary_client(
-        _FakeLLM(Anthropic(api_key="sk-ant-test")),  # pragma: allowlist secret
-        model_version="claude-sonnet-5",
-    )
-
-    assert isinstance(client, summarize.AnthropicSummaryClient)
-    assert client.model_version == "claude-sonnet-5"
-
-
-def test_build_summary_client_rejects_claude_model_for_real_openai() -> None:
-    """client_class="openai" is the real api.openai.com -- it can never serve a
-    Claude-namespaced model id, so a left-unset SUMMARY_MODEL_VERSION default is
-    caught here rather than failing later with an opaque 404 from OpenAI.
-    """
-    with pytest.raises(ValueError, match="looks like an Anthropic model id"):
-        summarize.build_summary_client(
-            _FakeLLM(
-                OpenAI(api_key="sk-test"),  # pragma: allowlist secret
-                client_class="openai",
-            ),
-            model_version="claude-haiku-4-5",
-        )
-
-
-def test_build_summary_client_allows_claude_model_for_openai_compatible() -> None:
-    """client_class="openai_compatible" is a configurable base_url (e.g. Parley)
-    that may legitimately proxy Claude models under this same id -- unlike plain
-    "openai", it gets no such guarantee to reject on.
-    """
-    client = summarize.build_summary_client(
-        _FakeLLM(
-            OpenAI(
-                api_key="sk-test",  # pragma: allowlist secret
-                base_url="https://parley.example.com",
-            ),
-            client_class="openai_compatible",
-        ),
-        model_version="claude-haiku-4-5",
-    )
-
-    assert isinstance(client, summarize.OpenAISummaryClient)
-    assert client.model_version == "claude-haiku-4-5"
-
-
-def test_build_summary_client_honors_bedrock_model_version_override() -> None:
-    client = summarize.build_summary_client(
-        _FakeLLM(AnthropicBedrock(aws_region="us-east-1")),
-        bedrock_model_version="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    )
-
-    assert isinstance(client, summarize.AnthropicSummaryClient)
-    assert client.model_version == "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
-
-
-class _FakeMessage:
-    def __init__(self, content: list[object]) -> None:
-        self.content = content
-        self.usage = None
-
-
-class _FakeAnthropicClient:
-    """Stands in for the anthropic SDK client: only messages.create is used."""
-
-    def __init__(self, content: list[object]) -> None:
-        self._content = content
-        self.messages = type(
-            "_Messages", (), {"create": lambda _self, **_kwargs: self._response()}
-        )()
-
-    def _response(self) -> _FakeMessage:
-        return _FakeMessage(self._content)
-
-
-def test_anthropic_summary_client_treats_empty_content_as_no_summary() -> None:
-    """A model with thinking on by default can spend the whole max_tokens budget
-    on hidden thinking and return content=[] rather than erroring -- this must
-    come back as None (like a refusal), not raise IndexError.
-    """
-    client = summarize.AnthropicSummaryClient(
-        _FakeAnthropicClient(content=[]), "claude-sonnet-5"
-    )
-
-    assert client.summarize("some conversation text", trace_metadata={}) is None
-
-
-class _FakeUsage:
-    def __init__(self, input_tokens: int, output_tokens: int) -> None:
-        self.input_tokens = input_tokens
-        self.output_tokens = output_tokens
-
-
-class _FakeMessageWithUsage:
-    def __init__(self, content: list[object], usage: _FakeUsage) -> None:
-        self.content = content
-        self.usage = usage
-
-
-class _FakeContentBlock:
-    def __init__(self, text: str) -> None:
-        self.text = text
-
-
-def test_anthropic_summary_client_attaches_usage_to_the_opik_span(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[dict[str, object]] = []
-    monkeypatch.setattr(
-        llm_client_adapters, "attach_llm_usage", lambda **kwargs: calls.append(kwargs)
-    )
-
-    class _Client:
-        def __init__(self) -> None:
-            self.messages = type(
-                "_Messages",
-                (),
-                {
-                    "create": lambda _self, **_kwargs: _FakeMessageWithUsage(
-                        [_FakeContentBlock("a summary")], _FakeUsage(10, 5)
-                    )
-                },
-            )()
-
-    client = summarize.AnthropicSummaryClient(_Client(), "claude-haiku-4-5")
-
-    result = client.summarize("some conversation text", trace_metadata={})
-
-    assert result == "a summary"
-    assert calls == [
-        {
-            "usage": {
-                "prompt_tokens": 10,
-                "completion_tokens": 5,
-                "total_tokens": 15,
-            },
-            "model": "claude-haiku-4-5",
-            "provider": "anthropic",
-        }
-    ]
-
-
-def test_filter_unsummarized_resubmits_conversations_with_new_turns() -> None:
-    """A ticket that gained a comment since it was summarized is re-submitted."""
-    source_df = pl.DataFrame([_conversation_row(conversation_ref="1", turn_count=3)])
-    already_summarized_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [2],
-        }
-    )
-
-    result = summarize.filter_unsummarized(source_df, already_summarized_df)
-
-    assert result["conversation_ref"].to_list() == ["1"]
-
-
-def test_filter_unsummarized_resubmits_on_stale_model_version() -> None:
-    """A conversation LLM-summarized under an old model/prompt is re-submitted."""
-    source_df = pl.DataFrame([_conversation_row(conversation_ref="1", turn_count=2)])
-    already_summarized_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [2],
-            "summary_model_version": ["old-model"],
-        }
-    )
-
-    result = summarize.filter_unsummarized(
-        source_df, already_summarized_df, current_model_version="new-model"
-    )
-
-    assert result["conversation_ref"].to_list() == ["1"]
-
-
-def test_filter_unsummarized_resubmits_on_stale_prompt_version() -> None:
-    """A conversation summarized under an old Opik prompt revision is
-    re-submitted even though the model id is unchanged.
-    """
-    source_df = pl.DataFrame([_conversation_row(conversation_ref="1", turn_count=2)])
-    already_summarized_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [2],
-            "prompt_version": ["v1"],
-        }
-    )
-
-    result = summarize.filter_unsummarized(
-        source_df, already_summarized_df, current_prompt_version="v2"
-    )
-
-    assert result["conversation_ref"].to_list() == ["1"]
-
-
-def test_filter_unsummarized_does_not_resubmit_skipped_rows_on_prompt_change() -> None:
-    """A row skipped last time (null prompt_version) isn't touched by a prompt
-    change -- the skip decision was never prompt-dependent.
-    """
-    source_df = pl.DataFrame([_conversation_row(conversation_ref="1", turn_count=1)])
-    already_summarized_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [1],
-            "prompt_version": [None],
-        }
-    )
-
-    result = summarize.filter_unsummarized(
-        source_df, already_summarized_df, current_prompt_version="v2"
-    )
-
-    assert result.height == 0
-
-
-class _FailingSummaryClient:
-    model_version = "test-model"
-
-    def summarize(
-        self,
-        conversation_text: str,  # noqa: ARG002
-        *,
-        trace_metadata: dict[str, object],  # noqa: ARG002
-    ) -> str:
-        msg = "simulated API failure"
-        raise RuntimeError(msg)
-
-
-def test_summarize_conversations_drops_failed_conversations_without_losing_batch() -> (
-    None
-):
-    """One LLM failure must not cost the rest of the batch (#2542 checkpointing)."""
-    df = pl.DataFrame(
-        [
             _conversation_row(conversation_ref="1"),
-            _conversation_row(conversation_ref="2"),
+            _conversation_row(conversation_ref="2", conversation_text=None),
         ]
     )
-
-    result = summarize.summarize_conversations(df, _FailingSummaryClient())
-
-    assert result.height == 0
-
-
-def test_summarize_conversations_keeps_successful_rows_when_one_fails() -> None:
-    class _PartiallyFailingClient:
-        model_version = "test-model"
-
-        def summarize(
-            self,
-            conversation_text: str,
-            *,
-            trace_metadata: dict[str, object],  # noqa: ARG002
-        ) -> str:
-            if conversation_text == "fail me":
-                msg = "simulated API failure"
-                raise RuntimeError(msg)
-            return f"summary of: {conversation_text}"
-
-    df = pl.DataFrame(
-        [
-            _conversation_row(conversation_ref="1", conversation_text="fail me"),
-            _conversation_row(conversation_ref="2"),
-        ]
-    )
-
-    result = summarize.summarize_conversations(df, _PartiallyFailingClient())
-
-    assert result["conversation_ref"].to_list() == ["2"]
-    assert result.row(0, named=True)["conversation_summary"] == (
-        "summary of: turn one\n---\nturn two"
-    )
-
-
-def test_summarize_conversations_treats_a_none_summary_as_a_failure() -> None:
-    """A refusal/content-filter finish (message.content is None) must not be
-    recorded as a success -- it would never be retried otherwise.
-    """
-
-    class _RefusingClient:
-        model_version = "test-model"
-
-        def summarize(
-            self,
-            conversation_text: str,  # noqa: ARG002
-            *,
-            trace_metadata: dict[str, object],  # noqa: ARG002
-        ) -> str | None:
-            return None
-
-    df = pl.DataFrame([_conversation_row(conversation_ref="1")])
-
-    result = summarize.summarize_conversations(df, _RefusingClient())
-
-    assert result.height == 0
-
-
-def _summary_row(**overrides: object) -> dict[str, object]:
-    conversation_ref = overrides.get("conversation_ref", "1")
-    row = {
-        "feedback_conversation_pk": f"pk-{conversation_ref}",
-        "source_slug": "zendesk",
-        "conversation_ref": conversation_ref,
-        "turn_count": 3,
-        "conversation_summary": "a summary",
-        "summary_model_version": "claude-haiku-4-5",
-        "embedding_input": "summary",
-    }
-    row.update(overrides)
-    return row
-
-
-class _FakeField:
-    def __init__(self, name: str) -> None:
-        self.name = name
-
-
-class _FakeSchema:
-    def __init__(self, column_names: list[str]) -> None:
-        self.column_names = column_names
-        self.fields = [_FakeField(name) for name in column_names]
-
-
-class _FakeSchemaUpdate:
-    def __init__(self, table: "_FakeTable") -> None:
-        self._table = table
-
-    def union_by_name(self, schema: Any) -> None:
-        # Mirrors real union_by_name: appends any not-yet-seen field at the end
-        # of the table's column order, never inserting it where the incoming
-        # schema happens to place it.
-        for name in schema.names:
-            if name not in self._table._column_names:
-                self._table._column_names.append(name)
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(self, *args: object) -> None:
-        pass
-
-
-class _FakeTable:
-    def __init__(self) -> None:
-        self.upserts: list[dict[str, object]] = []
-        self._column_names: list[str] = []
-
-    def update_schema(self) -> _FakeSchemaUpdate:
-        return _FakeSchemaUpdate(self)
-
-    def schema(self) -> _FakeSchema:
-        return _FakeSchema(self._column_names)
-
-    def upsert(self, **kwargs: object) -> None:
-        self.upserts.append(kwargs)
-
-
-class _FakeCatalog:
-    def __init__(self, table: _FakeTable) -> None:
-        self._table = table
-        self.create_calls: list[str] = []
-
-    def create_table_if_not_exists(
-        self,
-        identifier: str,
-        **kwargs: Any,
-    ) -> _FakeTable:
-        self.create_calls.append(identifier)
-        if not self._table._column_names:
-            schema = kwargs.get("schema")
-            if schema is not None:
-                self._table._column_names = list(schema.names)
-        return self._table
-
-
-def test_checkpoint_chunk_upserts_a_non_empty_chunk() -> None:
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    chunk_df = pl.DataFrame([_summary_row(), _summary_row(conversation_ref="2")])
-
-    summarize.checkpoint_chunk(catalog, "some_db.feedback_summaries", chunk_df)
-
-    assert catalog.create_calls == ["some_db.feedback_summaries"]
-    assert len(table.upserts) == 1
-    assert table.upserts[0]["join_cols"] == summarize.JOIN_COLS
-
-
-def test_checkpoint_chunk_skips_empty_chunks_without_touching_the_catalog() -> None:
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    empty_df = pl.DataFrame(
+    already_summarized_df = pl.DataFrame(
         schema={
             "feedback_conversation_pk": pl.String,
-            "source_slug": pl.String,
-            "conversation_ref": pl.String,
+            "turn_count": pl.Int64,
+            "summary_model_version": pl.String,
         }
     )
 
-    summarize.checkpoint_chunk(catalog, "some_db.feedback_summaries", empty_df)
-
-    assert catalog.create_calls == []
-    assert table.upserts == []
-
-
-def test_summarize_and_checkpoint_upserts_each_chunk() -> None:
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    df = pl.DataFrame([_conversation_row(conversation_ref=str(i)) for i in range(5)])
-
-    result = summarize.summarize_and_checkpoint(
-        df,
-        _FakeSummaryClient(),
-        (catalog, "some_db.feedback_summaries"),
-        batch_size=2,
+    result = summarize.filter_unsummarized(
+        source_df, already_summarized_df, SUMMARIZER.keys
     )
 
-    assert result.height == 5
-    # 3 chunks of size 2, 2, 1 -- one upsert call per chunk
-    assert len(table.upserts) == 3
+    assert result["conversation_ref"].to_list() == ["1", "2"]
+    assert result.columns == source_df.columns
 
 
-class _FakeLog:
-    def __init__(self) -> None:
-        self.info_calls: list[tuple[object, ...]] = []
-
-    def info(self, *args: object) -> None:
-        self.info_calls.append(args)
-
-
-class _FakeContext:
-    def __init__(self) -> None:
-        self.log = _FakeLog()
-
-
-def test_summarize_and_checkpoint_logs_via_context_when_given() -> None:
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    df = pl.DataFrame([_conversation_row(conversation_ref=str(i)) for i in range(5)])
-    context = _FakeContext()
-
-    summarize.summarize_and_checkpoint(
-        df,
-        _FakeSummaryClient(),
-        (catalog, "some_db.feedback_summaries"),
-        batch_size=2,
-        context=context,
+def test_filter_unsummarized_drops_conversations_summarized_with_the_same_key() -> None:
+    row = _conversation_row(conversation_ref="1")
+    source_df = pl.DataFrame([row])
+    already_summarized_df = _stored(
+        feedback_conversation_pk=["pk-1"],
+        idempotency_key=[_key(TEXT)],
     )
 
-    # 3 chunks of size 2, 2, 1 -- one context.log.info call per chunk
-    assert len(context.log.info_calls) == 3
-
-
-def test_summarize_and_checkpoint_falls_back_to_module_logger_without_context(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    df = pl.DataFrame([_conversation_row(conversation_ref=str(i)) for i in range(5)])
-
-    with caplog.at_level(logging.INFO, logger="ml.lib.summarize"):
-        summarize.summarize_and_checkpoint(
-            df,
-            _FakeSummaryClient(),
-            (catalog, "some_db.feedback_summaries"),
-            batch_size=2,
-        )
-
-    upserted_logs = [r for r in caplog.records if "Upserted chunk" in r.message]
-    assert len(upserted_logs) == 3
-
-
-def test_summarize_and_checkpoint_aborts_early_on_a_systemic_failure() -> None:
-    """A credential-type failure shouldn't burn through every remaining chunk with
-    the same error -- a whole chunk with zero successes should abort the run
-    instead of trying every chunk.
-    """
-
-    class _AlwaysFailingClient:
-        model_version = "test-model"
-
-        def summarize(
-            self,
-            conversation_text: str,  # noqa: ARG002
-            *,
-            trace_metadata: dict[str, object],  # noqa: ARG002
-        ) -> str:
-            msg = "simulated auth failure"
-            raise RuntimeError(msg)
-
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    batch_size = 2
-    df = pl.DataFrame([_conversation_row(conversation_ref=str(i)) for i in range(10)])
-    errors: list[str] = []
-
-    result = summarize.summarize_and_checkpoint(
-        df,
-        _AlwaysFailingClient(),
-        (catalog, "some_db.feedback_summaries"),
-        batch_size=batch_size,
-        errors=errors,
+    result = summarize.filter_unsummarized(
+        source_df, already_summarized_df, SUMMARIZER.keys
     )
 
     assert result.height == 0
-    # Aborted after the first fully-failed chunk, not all 10 rows.
-    assert len(errors) == batch_size
-    assert len(errors) < df.height
 
 
-def test_filter_unsummarized_resubmits_skipped_rows_that_have_text() -> None:
+def test_filter_unsummarized_resubmits_when_the_text_prompt_or_model_changes() -> None:
+    """A new turn, a prompt edit, and a model change each change the key."""
+    row = _conversation_row(conversation_ref="1")
+    source_df = pl.DataFrame([row])
+    edited = ManagedPrompt(
+        name="feedback-summary",
+        template=TextTemplate(template="Summarize briefly: {{conversation_text}}"),
+        source="opik",
+    )
+    stale_keys = [
+        _key("an earlier version of the conversation"),
+        _key(TEXT, BatchKeys(model=MODEL, prompt=edited)),
+        _key(TEXT, BatchKeys(model="anthropic:claude-sonnet-5", prompt=PROMPT)),
+    ]
+
+    for stale_key in stale_keys:
+        already_summarized_df = _stored(
+            feedback_conversation_pk=["pk-1"], idempotency_key=[stale_key]
+        )
+
+        result = summarize.filter_unsummarized(
+            source_df, already_summarized_df, SUMMARIZER.keys
+        )
+
+        assert result["conversation_ref"].to_list() == ["1"]
+
+
+def test_filter_unsummarized_ignores_whether_the_prompt_came_from_opik() -> None:
+    """An Opik outage at the start of a run must not re-summarize every row."""
+    row = _conversation_row(conversation_ref="1")
+    embedded = ManagedPrompt(
+        name="feedback-summary",
+        template=TextTemplate(template=TEMPLATE.template),
+        source="embedded",
+        degraded_reasons=("embedded_prompt",),
+    )
+    already_summarized_df = _stored(
+        feedback_conversation_pk=["pk-1"],
+        idempotency_key=[_key(TEXT)],
+    )
+
+    result = summarize.filter_unsummarized(
+        pl.DataFrame([row]),
+        already_summarized_df,
+        BatchKeys(model=MODEL, prompt=embedded),
+    )
+
+    assert result.height == 0
+
+
+def test_filter_unsummarized_resubmits_skipped_rows_once_they_have_text() -> None:
     source_df = pl.DataFrame(
         [
-            _conversation_row(conversation_ref="1", turn_count=1),
-            _conversation_row(
-                feedback_conversation_pk="pk-2",
-                conversation_ref="2",
-                turn_count=1,
-                conversation_text=None,
-            ),
+            _conversation_row(conversation_ref="1"),
+            _conversation_row(conversation_ref="2", conversation_text=None),
         ]
     )
-    # Both stored as skipped last run: summary_model_version is null.
+    already_summarized_df = _stored(
+        feedback_conversation_pk=["pk-1", "pk-2"],
+        summary_model_version=[None, None],
+        idempotency_key=[None, None],
+    )
+
+    result = summarize.filter_unsummarized(
+        source_df, already_summarized_df, SUMMARIZER.keys
+    )
+
+    assert result["conversation_ref"].to_list() == ["1"]
+
+
+def test_filter_unsummarized_reads_a_table_from_before_the_key() -> None:
+    source_df = pl.DataFrame(
+        [
+            _conversation_row(conversation_ref="1"),
+            _conversation_row(conversation_ref="2", turn_count=3),
+        ]
+    )
     already_summarized_df = pl.DataFrame(
         {
             "feedback_conversation_pk": ["pk-1", "pk-2"],
-            "source_slug": ["zendesk", "zendesk"],
-            "conversation_ref": ["1", "2"],
-            "turn_count": [1, 1],
-            "summary_model_version": [None, None],
-        },
-        schema_overrides={"summary_model_version": pl.String},
+            "turn_count": [2, 2],
+            "summary_model_version": ["claude-haiku-4-5", "claude-haiku-4-5"],
+        }
     )
 
-    result = summarize.filter_unsummarized(source_df, already_summarized_df)
+    result = summarize.filter_unsummarized(
+        source_df, already_summarized_df, SUMMARIZER.keys
+    )
 
+    assert result["conversation_ref"].to_list() == ["2"]
+
+
+def test_filter_unsummarized_keeps_keyless_rows_with_the_same_turns() -> None:
+    """Rows summarized before the key existed are not all redone on deploy or on
+    a model change: neither their prompt_version nor their model is compared.
+    """
+    source_df = pl.DataFrame(
+        [
+            _conversation_row(conversation_ref="1"),
+            _conversation_row(conversation_ref="2", turn_count=3),
+            _conversation_row(conversation_ref="3"),
+        ]
+    )
+    already_summarized_df = _stored(
+        feedback_conversation_pk=["pk-1", "pk-2", "pk-3"],
+        summary_model_version=[
+            "claude-haiku-4-5",
+            "claude-haiku-4-5",
+            "claude-sonnet-4-5",
+        ],
+        prompt_version=["v2", "v2", "v2"],
+        idempotency_key=[None, None, None],
+    )
+
+    result = summarize.filter_unsummarized(
+        source_df, already_summarized_df, SUMMARIZER.keys
+    )
+
+    assert result["conversation_ref"].to_list() == ["2"]
+
+
+def test_filter_unsummarized_keeps_a_summary_whose_text_went_missing() -> None:
+    source_df = pl.DataFrame(
+        [_conversation_row(conversation_ref="1", conversation_text=None)]
+    )
+    already_summarized_df = _stored(
+        feedback_conversation_pk=["pk-1"], idempotency_key=[_key("the old text")]
+    )
+
+    result = summarize.filter_unsummarized(
+        source_df, already_summarized_df, SUMMARIZER.keys
+    )
+
+    assert result.height == 0
+
+
+def test_summarizer_sends_the_rendered_prompt_and_returns_the_summary() -> None:
+    with override_models(FunctionModel(_summarize)):
+        result = SUMMARIZER.summarize(_conversation_row(conversation_text="help"))
+
+    assert result.output == "summary of: Summarize: help"
+    assert result.model == MODEL
+    assert result.prompt_version == "v4"
+
+
+def test_summarizer_caps_the_summary_length_and_thinking() -> None:
+    sent: list[AgentInfo] = []
+
+    def record(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        sent.append(info)
+        return _summarize(messages, info)
+
+    with override_models(FunctionModel(record)):
+        SUMMARIZER.summarize(_conversation_row())
+
+    [info] = sent
+    assert info.model_settings is not None
+    assert info.model_settings["max_tokens"] == summarize.SUMMARY_MAX_TOKENS
+
+
+def test_summarizer_sends_bedrock_haiku_low_effort() -> None:
+    """The thinking setting reaches Bedrock as Anthropic's effort. FunctionModel
+    drops it (its profile has no thinking), so this stubs Bedrock's Converse.
+    """
+    client = boto3.client(
+        "bedrock-runtime",
+        region_name="us-east-1",
+        aws_access_key_id="test",  # pragma: allowlist secret
+        aws_secret_access_key="test",  # pragma: allowlist secret
+    )
+    sent: list[dict[str, Any]] = []
+    client.meta.events.register(
+        "provide-client-params.bedrock-runtime.Converse",
+        lambda params, **_: sent.append(params),
+    )
+    stubber = Stubber(client)
+    stubber.add_response(
+        "converse",
+        {
+            "output": {
+                "message": {"role": "assistant", "content": [{"text": "A summary."}]}
+            },
+            "stopReason": "end_turn",
+            "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+            "metrics": {"latencyMs": 1},
+        },
+    )
+    model = BedrockConverseModel(
+        "us.anthropic.claude-haiku-5-5",
+        provider=BedrockProvider(bedrock_client=client),
+    )
+    summarizer = summarize.Summarizer(
+        use_case=summarize.summary_use_case("bedrock:us.anthropic.claude-haiku-5-5"),
+        prompt=SUMMARIZER.prompt,
+    )
+
+    with (
+        stubber,
+        override_models(model),
+        override_allow_model_requests(allow_model_requests=True),
+    ):
+        summarizer.summarize(_conversation_row())
+
+    [params] = sent
+    assert params["additionalModelRequestFields"]["output_config"] == {"effort": "low"}
+
+
+def test_summarizer_fails_a_summary_that_stays_empty() -> None:
+    """A thinking model can return no text at all; that row fails, not succeeds."""
+    calls: list[int] = []
+
+    def empty(_messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+        calls.append(1)
+        return ModelResponse(parts=[TextPart("  ")])
+
+    with override_models(FunctionModel(empty)), pytest.raises(LLMInvalidOutput):
+        SUMMARIZER.summarize(_conversation_row())
+
+    # Sent back once (output_retries=1) before failing.
+    assert len(calls) == 2
+
+
+def test_summarizer_retries_a_summary_cut_off_at_max_tokens() -> None:
+    """Thinking shares max_tokens, so a reply can stop mid-summary; the partial
+    text is sent back, not stored.
+    """
+    replies = [
+        ModelResponse(parts=[TextPart("The learner wanted")], finish_reason="length"),
+        ModelResponse(parts=[TextPart("The learner wanted a refund.")]),
+    ]
+
+    def cut_off_once(_messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+        return replies.pop(0)
+
+    with override_models(FunctionModel(cut_off_once)):
+        result = SUMMARIZER.summarize(_conversation_row())
+
+    assert result.output == "The learner wanted a refund."
+
+
+def test_summarizer_retries_a_summary_bedrock_marked_malformed() -> None:
+    """Bedrock's malformed_model_output arrives as finish_reason "error"."""
+    replies = [
+        ModelResponse(parts=[TextPart("The learner")], finish_reason="error"),
+        ModelResponse(parts=[TextPart("The learner wanted a refund.")]),
+    ]
+
+    def malformed_once(
+        _messages: list[ModelMessage], _info: AgentInfo
+    ) -> ModelResponse:
+        return replies.pop(0)
+
+    with override_models(FunctionModel(malformed_once)):
+        result = SUMMARIZER.summarize(_conversation_row())
+
+    assert result.output == "The learner wanted a refund."
+
+
+def test_summarizer_fails_a_summary_cut_off_twice() -> None:
+    def cut_off(_messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+        return ModelResponse(parts=[TextPart("The learner")], finish_reason="length")
+
+    with override_models(FunctionModel(cut_off)), pytest.raises(LLMInvalidOutput):
+        SUMMARIZER.summarize(_conversation_row())
+
+
+def test_summarized_frame_records_the_key_and_provenance() -> None:
+    row = _conversation_row(conversation_ref="1")
+    with override_models(FunctionModel(_summarize)):
+        result = SUMMARIZER.summarize(row)
+
+    frame = SUMMARIZER.summarized_frame([(row, result)])
+
+    record = frame.row(0, named=True)
+    assert frame.schema == pl.Schema(summarize.SUMMARIZE_CHECKPOINT_SCHEMA)
+    assert record["conversation_summary"] == result.output
+    assert record["summary_model_version"] == MODEL
+    assert record["prompt_version"] == "v4"
+    assert record["prompt_template_hash"] == PROMPT.template_hash
+    assert record["idempotency_key"] == _key(TEXT)
+    assert record["embedding_input"] == "summary"
+    assert record["summarized_at"] is not None
+
+
+def test_skipped_frame_types_its_null_columns() -> None:
+    """Regression: Polars infers dtype=Null for an all-None Series, which Iceberg
+    (format v2) rejects outright when writing the table.
+    """
+    frame = summarize.skipped_frame([_conversation_row(conversation_text=None)])
+
+    record = frame.row(0, named=True)
+    assert frame.schema == pl.Schema(summarize.SUMMARIZE_CHECKPOINT_SCHEMA)
+    assert record["conversation_summary"] is None
+    assert record["summary_model_version"] is None
+    assert record["idempotency_key"] is None
+    assert record["embedding_input"] == "concatenated_turns"
+
+
+TABLE = "some_db.feedback_summaries"
+
+
+def _stored_rows(catalog: SqlCatalog) -> pl.DataFrame:
+    return catalog.load_table(TABLE).scan().to_polars().sort("conversation_ref")
+
+
+def test_summarize_and_checkpoint_upserts_skipped_rows_then_each_chunk(
+    iceberg_catalog: SqlCatalog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    written: list[pl.DataFrame] = []
+
+    def recording_upsert_chunk(*args: Any) -> pl.DataFrame:
+        written.append(args[2])
+        return upsert_chunk(*args)
+
+    monkeypatch.setattr(summarize, "upsert_chunk", recording_upsert_chunk)
+    df = pl.DataFrame(
+        [
+            *(_conversation_row(conversation_ref=str(i)) for i in range(5)),
+            _conversation_row(conversation_ref="5", conversation_text=None),
+        ]
+    )
+
+    with override_models(FunctionModel(_summarize)):
+        result, report = summarize.summarize_and_checkpoint(
+            df,
+            SUMMARIZER,
+            (iceberg_catalog, TABLE),
+            batch_size=2,
+            max_concurrency=1,
+        )
+
+    assert result.height == 6
+    assert report.succeeded == 5
+    # The skipped row, then chunks of 2, 2, and 1.
+    assert [chunk.height for chunk in written] == [1, 2, 2, 1]
+    assert written[0]["conversation_ref"].to_list() == ["5"]
+    stored = _stored_rows(iceberg_catalog)
+    assert stored["conversation_ref"].to_list() == [str(i) for i in range(6)]
+    assert stored["embedding_input"].to_list() == ["summary"] * 5 + [
+        "concatenated_turns"
+    ]
+
+
+def test_summarize_and_checkpoint_leaves_a_failed_conversation_out(
+    iceberg_catalog: SqlCatalog,
+) -> None:
+    """A conversation that fails is not upserted, so the next run tries it again."""
+    df = pl.DataFrame(
+        [
+            _conversation_row(conversation_ref="1", conversation_text="too long"),
+            _conversation_row(conversation_ref="2"),
+        ]
+    )
+
+    with override_models(FunctionModel(_summarize)):
+        result, report = summarize.summarize_and_checkpoint(
+            df,
+            SUMMARIZER,
+            (iceberg_catalog, TABLE),
+            max_concurrency=1,
+        )
+
+    assert result["conversation_ref"].to_list() == ["2"]
+    assert _stored_rows(iceberg_catalog)["conversation_ref"].to_list() == ["2"]
+    assert len(report.failures) == 1
+    assert report.failures[0].row["conversation_ref"] == "1"
+
+
+def test_summarize_and_checkpoint_raises_when_every_call_fails(
+    iceberg_catalog: SqlCatalog,
+) -> None:
+    """100% failure must not look like "nothing new to summarize"."""
+    df = pl.DataFrame(
+        [
+            _conversation_row(conversation_ref=str(i), conversation_text="too long")
+            for i in range(3)
+        ]
+    )
+
+    with (
+        override_models(FunctionModel(_summarize)),
+        pytest.raises(BatchFailed, match="3 of 3 rows failed"),
+    ):
+        summarize.summarize_and_checkpoint(
+            df,
+            SUMMARIZER,
+            (iceberg_catalog, TABLE),
+            max_concurrency=1,
+        )
+
+
+def test_fetch_summary_prompt_warns_when_opik_differs_from_the_embedded_copy(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(summarize, "get_prompt", lambda *_args, **_kwargs: PROMPT)
+
+    with caplog.at_level("WARNING", logger="ml.lib.summarize"):
+        prompt = summarize.fetch_summary_prompt()
+
+    assert prompt is PROMPT
+    assert "differs from SUMMARY_PROMPT" in caplog.text
+
+
+def test_fetch_summary_prompt_seeds_a_missing_label_then_fetches_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    labeled: list[tuple[str, str]] = []
+
+    def _get_prompt(*_args: Any, **_kwargs: Any) -> ManagedPrompt[TextTemplate]:
+        if not labeled:
+            msg = "no qa label"
+            raise LookupError(msg)
+        return PROMPT
+
+    monkeypatch.setattr(summarize, "get_prompt", _get_prompt)
+    monkeypatch.setattr(
+        summarize,
+        "seed_prompt_environment",
+        lambda name, template: labeled.append((name, template)),
+    )
+
+    assert summarize.fetch_summary_prompt() is PROMPT
+    assert labeled == [("feedback-summary", summarize.SUMMARY_PROMPT)]
+
+
+def test_fetch_summary_prompt_raises_when_production_has_no_label(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _missing(*_args: Any, **_kwargs: Any) -> ManagedPrompt[TextTemplate]:
+        msg = "no production label"
+        raise LookupError(msg)
+
+    monkeypatch.setattr(summarize, "get_prompt", _missing)
+    monkeypatch.setattr(opik_auth, "PROMPT_ENVIRONMENT", "production")
+    monkeypatch.setattr(opik_auth, "get_opik_client", object)
+
+    with pytest.raises(opik_auth.PromptLabelMissingError, match="labeled production"):
+        summarize.fetch_summary_prompt()
+
+
+def test_summarize_and_checkpoint_updates_a_table_from_before_the_key_columns(
+    iceberg_catalog: SqlCatalog,
+) -> None:
+    """A table created before idempotency_key and prompt_template_hash existed gets
+    both appended, its stored conversations are replaced, and the returned frame
+    is in the table's column order, which the io_manager's upsert casts by.
+    """
+    old_columns = [
+        name
+        for name in summarize.SUMMARIZE_CHECKPOINT_SCHEMA
+        if name not in {"prompt_template_hash", "idempotency_key"}
+    ]
+    existing = pl.DataFrame(
+        [
+            {
+                **summarize._identity(_conversation_row(conversation_ref=ref)),
+                "conversation_summary": "an old summary",
+                "embedding_input": "summary",
+            }
+            for ref in ("1", "2")
+        ],
+        schema={
+            name: summarize.SUMMARIZE_CHECKPOINT_SCHEMA[name] for name in old_columns
+        },
+    )
+    iceberg_catalog.create_table(TABLE, schema=existing.to_arrow().schema).append(
+        existing.to_arrow()
+    )
+    df = pl.DataFrame(
+        [
+            _conversation_row(conversation_ref="1"),
+            _conversation_row(conversation_ref="3"),
+        ]
+    )
+
+    with override_models(FunctionModel(_summarize)):
+        result, _ = summarize.summarize_and_checkpoint(
+            df,
+            SUMMARIZER,
+            (iceberg_catalog, TABLE),
+            max_concurrency=1,
+        )
+
+    table_columns = iceberg_catalog.load_table(TABLE).schema().column_names
+    assert table_columns == [*old_columns, "prompt_template_hash", "idempotency_key"]
+    assert result.columns == table_columns
+    stored = _stored_rows(iceberg_catalog)
+    assert stored["conversation_ref"].to_list() == ["1", "2", "3"]
+    assert stored["idempotency_key"].is_null().to_list() == [False, True, False]
+
+
+def test_summarize_and_checkpoint_handles_a_table_in_another_column_order(
+    iceberg_catalog: SqlCatalog,
+) -> None:
+    """Every conversation needs a summary, so the skipped frame is empty and keeps
+    SUMMARIZE_CHECKPOINT_SCHEMA's order, while the written chunk comes back in the
+    table's order. The empty frame must not reach the concat.
+    """
+    columns = list(reversed(summarize.SUMMARIZE_CHECKPOINT_SCHEMA))
+    iceberg_catalog.create_table(
+        TABLE,
+        schema=pl.DataFrame(
+            schema={
+                name: summarize.SUMMARIZE_CHECKPOINT_SCHEMA[name] for name in columns
+            }
+        )
+        .to_arrow()
+        .schema,
+    )
+    df = pl.DataFrame([_conversation_row(conversation_ref="1")])
+
+    with override_models(FunctionModel(_summarize)):
+        result, _ = summarize.summarize_and_checkpoint(
+            df,
+            SUMMARIZER,
+            (iceberg_catalog, TABLE),
+            max_concurrency=1,
+        )
+
+    assert result.columns == columns
     assert result["conversation_ref"].to_list() == ["1"]

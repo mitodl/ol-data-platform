@@ -1,4 +1,4 @@
-"""Tests for writing a unit's base factories from a dump of its Django models."""
+"""Tests for writing a unit's base factories from a dump of its Django models, or from its staging tests."""
 
 from __future__ import annotations
 
@@ -15,8 +15,15 @@ import pytest
 import yaml
 
 from ol_dbt_cli.commands import fixtures as fixtures_command
-from ol_dbt_cli.lib.fixture_generation import generate_rows
-from ol_dbt_cli.lib.fixture_scaffold import scaffold, starter_package, trimmed_models
+from ol_dbt_cli.lib.fixture_generation import generate_rows, value
+from ol_dbt_cli.lib.fixture_scaffold import (
+    _FIELD_PROVIDERS,
+    _NAME_PROVIDERS,
+    scaffold,
+    scaffold_from_tests,
+    starter_package,
+    trimmed_models,
+)
 from ol_dbt_cli.lib.fixture_trees import Tree
 from ol_dbt_cli.lib.inventory import load_units
 from ol_dbt_cli.lib.raw_fixtures import load_fixtures
@@ -24,6 +31,7 @@ from ol_dbt_cli.lib.raw_fixtures import load_fixtures
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from ol_dbt_cli.lib.fixture_scaffold import Scaffold
     from ol_dbt_cli.lib.inventory import Unit
     from ol_dbt_cli.lib.raw_fixtures import UnitFixture
 
@@ -230,8 +238,13 @@ FIXTURE_TABLES: dict[str, tuple[str, dict[str, str]]] = {
 }
 
 
-def _unit(tmp_path: Path, keys: Mapping[str, str] | None = None) -> tuple[UnitFixture, Unit]:
-    keys = {**{name: key for name, (key, _) in FIXTURE_TABLES.items()}, **(keys or {})}
+def _unit(
+    tmp_path: Path,
+    keys: Mapping[str, str | tuple[str, ...]] | None = None,
+    tables: Mapping[str, tuple[str, dict[str, str]]] = FIXTURE_TABLES,
+    rows: Mapping[str, list[dict[str, Any]]] | None = None,
+) -> tuple[UnitFixture, Unit]:
+    keys = {**{name: key for name, (key, _) in tables.items()}, **(keys or {})}
     unit = {
         "schema_version": 1,
         "deployment": "demo",
@@ -246,14 +259,17 @@ def _unit(tmp_path: Path, keys: Mapping[str, str] | None = None) -> tuple[UnitFi
                 "raw_table": PREFIX + name,
                 "sync_mode": "full_refresh_overwrite",
                 "modeled": True,
-                "primary_key": [[keys[name]]],
+                "primary_key": [[column] for column in _key_columns(keys[name])],
             }
-            for name in FIXTURE_TABLES
+            for name in tables
         ],
     }
     fixture = {
         "schema_version": 1,
-        "tables": {PREFIX + name: {"columns": columns, "rows": []} for name, (_, columns) in FIXTURE_TABLES.items()},
+        "tables": {
+            PREFIX + name: {"columns": columns, "rows": (rows or {}).get(name, [])}
+            for name, (_, columns) in tables.items()
+        },
     }
     (tmp_path / "units").mkdir()
     (tmp_path / "units" / "demo__app_postgres.yml").write_text(yaml.safe_dump(unit))
@@ -262,6 +278,10 @@ def _unit(tmp_path: Path, keys: Mapping[str, str] | None = None) -> tuple[UnitFi
     (loaded_unit,) = load_units(tmp_path)
     (loaded_fixture,) = load_fixtures(tmp_path, [loaded_unit])
     return loaded_fixture, loaded_unit
+
+
+def _key_columns(key: str | tuple[str, ...]) -> tuple[str, ...]:
+    return (key,) if isinstance(key, str) else key
 
 
 def _class_body(source: str, name: str) -> str:
@@ -339,6 +359,15 @@ def test_nullable_unique_and_case_rules(scaffolded: str) -> None:
     assert 'amount = fg.value("numeric.decimal_number", start=0, end=999999)' in _class_body(
         scaffolded, "ThingsUnmodeledBase"
     )
+
+
+@pytest.mark.parametrize(
+    "provider",
+    sorted(({provider for _, provider in _NAME_PROVIDERS} | set(_FIELD_PROVIDERS.values())) - {None}),
+)
+def test_every_rule_names_a_provider_value_takes(provider: str) -> None:
+    # A refused provider would make the scaffolded module fail to import.
+    value(provider)
 
 
 def test_field_classes_and_short_unique_text(scaffolded: str) -> None:
@@ -480,6 +509,9 @@ def _import_scaffolded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source: 
     (package / "__init__.py").write_text("")
     (package / "_generated.py").write_text(source)
     monkeypatch.syspath_prepend(str(tmp_path))
+    # Another test's module of the same name would be imported again otherwise.
+    for name in [name for name in sys.modules if name.split(".")[0] == "scaffolded"]:
+        monkeypatch.delitem(sys.modules, name)
     return importlib.import_module("scaffolded.demo__app_postgres._generated")
 
 
@@ -539,7 +571,12 @@ def test_the_starter_package_adds_no_rows(tmp_path: Path, monkeypatch: pytest.Mo
 
 def _scaffold_command(tmp_path: Path, **options: Any) -> Path:
     factories_dir = tmp_path / "factories"
-    fixtures_command.scaffold(unit="demo/app_postgres", inventory_dir=tmp_path, factories_dir=factories_dir, **options)
+    fixtures_command.scaffold(
+        unit="demo/app_postgres",
+        inventory_dir=tmp_path,
+        factories_dir=factories_dir,
+        **{"dbt_dir": tmp_path / "dbt", **options},
+    )
     return factories_dir / "demo__app_postgres"
 
 
@@ -562,8 +599,333 @@ def test_scaffold_writes_the_package_and_keeps_a_hand_written_init(tmp_path: Pat
     assert (package / "_generated.py").read_text() == first
 
 
-def test_scaffold_without_a_dump_exits(tmp_path: Path) -> None:
+def test_scaffold_without_a_dump_or_a_staging_model_exits(tmp_path: Path) -> None:
     _unit(tmp_path)
 
     with pytest.raises(SystemExit):
         _scaffold_command(tmp_path)
+
+
+def test_scaffold_with_a_missing_dump_exits_though_tests_could_draft(tmp_path: Path) -> None:
+    _unit(tmp_path, tables=TESTED_TABLES)
+    _staging_project(tmp_path / "dbt")
+
+    with pytest.raises(SystemExit):
+        _scaffold_command(tmp_path, models=tmp_path / "missing.json")
+
+
+# A unit with no Django app: its staging models' tests say what the dump would.
+TESTED_TABLES: dict[str, tuple[str, dict[str, str]]] = {
+    "courses_courserun": (
+        "id",
+        {"id": "long", "course_id": "long", "run_tag": "string", "year": "string", "status_id": "long"},
+    ),
+    "courses_course": (
+        "id",
+        {
+            "id": "long",
+            "readable_id": "string",
+            "rank": "long",
+            "code": "string",
+            "kind": "string",
+            "title": "string",
+            "price": "decimal(7,2)",
+            "details": "string",
+            "_dlt_load_id": "string",
+        },
+    ),
+    "courses_unread": ("id", {"id": "long", "note": "string"}),
+}
+# A hand-written row holding a mapping makes the column JSON, and two rows
+# sharing a code say the raw table repeats what staging tests unique.
+TESTED_ROWS = {
+    "courses_course": [
+        {"id": 1, "readable_id": "course-v1:demo", "code": "D1", "details": {"level": "intro"}},
+        {"id": 2, "readable_id": "course-v1:demo2", "code": "D1"},
+    ]
+}
+STAGING_YAML = """
+version: 2
+models:
+- name: stg__demo__courses
+  columns:
+  - name: course_id
+    tests: [not_null, unique]
+  - name: course_readable_id
+    data_tests:
+    - not_null
+    - unique:
+        config:
+          severity: warn
+  - name: course_rank
+    tests: [unique]
+  - name: course_code
+    tests: [unique]
+  - name: course_kind
+    tests:
+    - accepted_values:
+        arguments:
+          values: [online, hybrid]
+  - name: course_title
+    tests: [not_null]
+- name: stg__demo__courseruns
+  tests:
+  - dbt_utils.recency:
+      arguments:
+        datepart: day
+        field: courserun_year
+        interval: 1
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns: [course_id, courserun_tag]
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [course_id, courserun_tag_upper]
+  columns:
+  - name: courserun_id
+    tests: [not_null, unique, json_array]
+  - name: course_id
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__demo__courses')
+          field: course_id
+  - name: courserun_year
+    tests:
+    # The legacy form, and numbers YAML reads from a string column's values.
+    - accepted_values:
+        values: [2025, 2026]
+  - name: status_id
+    tests:
+    - relationships:
+        to: ref('stg__demo__statuses')
+        field: status_id
+"""
+
+
+def _staging_project(dbt_dir: Path) -> None:
+    """Write a dbt project whose two staging models read the tested tables, one through a macro's CTE."""
+    staging = dbt_dir / "models" / "staging" / "demo"
+    staging.mkdir(parents=True)
+    (dbt_dir / "macros").mkdir()
+    # `do`, as deduplicate_raw_table uses it.
+    (dbt_dir / "macros" / "keep_newest.sql").write_text(
+        "{% macro keep_newest(source_cte) %}\n"
+        "    {%- set names = [] -%}\n"
+        "    {%- do names.append('newest_' ~ source_cte) -%}\n"
+        "    , {{ names[0] }} as (\n"
+        "        select * from {{ source_cte }}\n"
+        "    )\n"
+        "{% endmacro %}\n"
+    )
+    (staging / "stg__demo__courses.sql").write_text(
+        "with source as (\n"
+        "    select * from {{ source('ol_warehouse_raw_data', 'raw__demo__app__postgres__courses_course') }}\n"
+        ")\n\n"
+        "{{ keep_newest('source') }}\n\n"
+        "select\n"
+        "    id as course_id\n"
+        "    , readable_id as course_readable_id\n"
+        "    , cast(rank as bigint) as course_rank\n"
+        "    , code as course_code\n"
+        "    , kind as course_kind\n"
+        "    , lower(title) as course_title\n"
+        "from newest_source\n"
+    )
+    (staging / "stg__demo__courseruns.sql").write_text(
+        "select\n"
+        "    id as courserun_id\n"
+        "    , course_id\n"
+        "    , run_tag as courserun_tag\n"
+        "    , upper(run_tag) as courserun_tag_upper\n"
+        "    , year as courserun_year\n"
+        "    , status_id\n"
+        "from {{ source('ol_warehouse_raw_data', 'raw__demo__app__postgres__courses_courserun') }}\n"
+    )
+    (staging / "_stg_demo__models.yml").write_text(STAGING_YAML)
+
+
+@pytest.fixture
+def tested_unit(tmp_path: Path) -> tuple[UnitFixture, Unit]:
+    _staging_project(tmp_path / "dbt")
+    return _unit(tmp_path, tables=TESTED_TABLES, rows=TESTED_ROWS)
+
+
+@pytest.fixture
+def drafted(tmp_path: Path, tested_unit: tuple[UnitFixture, Unit]) -> Scaffold:
+    return scaffold_from_tests(*tested_unit, tmp_path / "dbt")
+
+
+def test_staging_tests_map_back_to_the_raw_columns_they_pass(drafted: Scaffold) -> None:
+    course = _class_body(drafted.source, "CoursesCourseBase")
+
+    assert "id = factory.Sequence(lambda n: n)" in course
+    # Renamed, with not_null and unique.
+    assert 'readable_id = factory.Sequence(lambda n: f"readable-{n}")' in course
+    # Cast, unique and not tested not_null.
+    assert "rank = fg.or_null(factory.Sequence(lambda n: n))" in course
+    assert 'code = fg.or_null(fg.value("text.word"))' in course
+    assert 'kind = fg.or_null(factory.Iterator(["online", "hybrid"]))' in course
+    # Derived, so its not_null is not mapped.
+    assert 'title = fg.or_null(fg.value("text.title"))' in course
+    # Read by no staging model: drawn by its fixture type, NULL in a share of rows.
+    assert 'price = fg.or_null(fg.value("numeric.decimal_number", start=0, end=99999))' in course
+    assert "# details: JSON whose shape the model does not say" in course
+    assert "details =" not in course
+    assert "_dlt_load_id" not in course
+
+
+def test_relationships_and_compound_unique_map_where_the_writer_has_an_equivalent(drafted: Scaffold) -> None:
+    run = _class_body(drafted.source, "CoursesCourserunBase")
+
+    assert 'course_id = fg.parent("course", "id")' in run
+    assert "course = None" in run
+    assert "# Unique together: course_id, run_tag." in run
+    assert 'year = fg.or_null(factory.Iterator(["2025", "2026"]))' in run
+    # Its relationship is to a model that reads no fixture table.
+    assert 'status_id = fg.or_null(fg.value("numeric.integer_number", start=0, end=1000))' in run
+    # The parent comes first, as it does from a dump.
+    assert drafted.source.index("class CoursesCourseBase(") < drafted.source.index("class CoursesCourserunBase(")
+    assert '"""Base factories of the `demo/app_postgres` unit, drafted from its staging models\' tests.' in (
+        drafted.source
+    )
+
+
+def test_what_does_not_map_is_noted(drafted: Scaffold) -> None:
+    assert drafted.notes == [
+        f"{PREFIX}courses_unread: no staging model reads it; every column is drawn by its fixture type",
+        "stg__demo__courseruns.courserun_id: json_array not mapped; the writer has no equivalent",
+        "stg__demo__courseruns.status_id: relationships to ref('stg__demo__statuses') not mapped; "
+        "its status_id is not a column of a fixture table renamed or cast",
+        "stg__demo__courseruns: dbt_utils.recency not mapped; the writer has no equivalent",
+        "stg__demo__courseruns: dbt_expectations.expect_compound_columns_to_be_unique on course_id, "
+        "courserun_tag_upper not mapped; its columns are not all passed through from one table",
+        f"stg__demo__courses.course_code: unique not mapped; the fixture's rows repeat a value of "
+        f"{PREFIX}courses_course.code",
+        "stg__demo__courses.course_title: not_null not mapped; the column is derived, not a raw column renamed or cast",
+    ]
+
+
+def test_the_drafted_document_is_what_a_dump_would_say(
+    drafted: Scaffold, tested_unit: tuple[UnitFixture, Unit], tmp_path: Path
+) -> None:
+    fixture, unit = tested_unit
+    document = drafted.models
+
+    assert document["tables"]["courses_course"]["model"] is None
+    assert document["tables"]["courses_courserun"]["columns"]["course_id"] == {
+        "field": "BigIntegerField",
+        "internal_type": "BigIntegerField",
+        "null": False,
+        "primary_key": False,
+        "unique": False,
+        "foreign_key": {"table": "courses_course", "column": "id"},
+    }
+    assert document["tables"]["courses_courserun"]["unique_together"] == [["course_id", "run_tag"]]
+    # The writer reads it as it reads a dump, and a second run drafts the same.
+    assert (
+        scaffold(fixture, unit, {**document, "app": "demo", "commit": "git:0123abc"}).source.split('"""', 2)[2]
+        == (drafted.source.split('"""', 2)[2])
+    )
+    assert scaffold_from_tests(fixture, unit, tmp_path / "dbt").source == drafted.source
+
+
+def test_the_drafted_factories_generate_rows_that_pass_validation(
+    drafted: Scaffold, tested_unit: tuple[UnitFixture, Unit], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, unit = tested_unit
+    generated = _import_scaffolded(tmp_path / "package", monkeypatch, drafted.source)
+
+    def generate(hand_written: Mapping[str, list[dict[str, Any]]], scale: float) -> dict[str, list[dict[str, Any]]]:
+        courses = generated.CoursesCourseBase.build_batch(4)
+        return {
+            generated.CoursesCourseBase.raw_table: courses,
+            generated.CoursesCourserunBase.raw_table: generated.CoursesCourserunBase.build_batch(
+                8, course=factory.Iterator(courses)
+            ),
+            generated.CoursesUnreadBase.raw_table: generated.CoursesUnreadBase.build_batch(2),
+        }
+
+    package: Any = SimpleNamespace(SEED=1, generate=generate)
+    rows = generate_rows(fixture, unit, package)
+
+    runs = rows.generated[f"{PREFIX}courses_courserun"]
+    assert {row["course_id"] for row in runs} <= {row["id"] for row in rows.generated[f"{PREFIX}courses_course"]}
+    assert {row["year"] for row in runs} <= {"2025", "2026", None}
+
+
+def test_a_composite_key_is_unique_together_not_by_column(tmp_path: Path) -> None:
+    _staging_project(tmp_path / "dbt")
+    fixture, unit = _unit(
+        tmp_path,
+        keys={"courses_courserun": ("course_id", "run_tag")},
+        tables=TESTED_TABLES,
+        # Two runs of one course, as two videos of one playlist.
+        rows={
+            **TESTED_ROWS,
+            "courses_courserun": [{"course_id": 1, "run_tag": "R1"}, {"course_id": 1, "run_tag": "R2"}],
+        },
+    )
+
+    run = scaffold_from_tests(fixture, unit, tmp_path / "dbt").models["tables"]["courses_courserun"]
+
+    assert {column: run["columns"][column]["unique"] for column in ["course_id", "run_tag"]} == {
+        "course_id": False,
+        "run_tag": False,
+    }
+    assert all(run["columns"][column]["primary_key"] for column in ["course_id", "run_tag"])
+    # The key and the staging test name one pair, kept once.
+    assert run["unique_together"] == [["course_id", "run_tag"]]
+
+
+ACCEPTED_VALUES_YAML = """
+version: 2
+models:
+- name: stg__demo__courses
+  columns:
+  - name: course_kind
+    tests:
+    - accepted_values:
+        arguments:
+          values: [online, hybrid]
+    - accepted_values:
+        arguments:
+          values: [classroom]
+  - name: course_code
+    tests:
+    - accepted_values:
+        arguments:
+          values: '{{ course_codes() }}'
+"""
+
+
+def test_accepted_values_that_are_disjoint_or_templated_are_noted(tmp_path: Path) -> None:
+    _staging_project(tmp_path / "dbt")
+    (tmp_path / "dbt" / "models" / "staging" / "demo" / "_stg_demo__models.yml").write_text(ACCEPTED_VALUES_YAML)
+    fixture, unit = _unit(tmp_path, tables=TESTED_TABLES, rows=TESTED_ROWS)
+
+    drafted = scaffold_from_tests(fixture, unit, tmp_path / "dbt")
+    course = _class_body(drafted.source, "CoursesCourseBase")
+
+    # The first test's choices pass it, where none would pass either.
+    assert 'kind = fg.or_null(factory.Iterator(["online", "hybrid"]))' in course
+    # Not one choice per character of the expression.
+    assert 'code = fg.or_null(fg.value("text.word"))' in course
+    assert (
+        f"stg__demo__courses.course_kind: accepted_values not mapped; another test on {PREFIX}courses_course.kind "
+        "accepts none of its values"
+    ) in drafted.notes
+    assert (
+        "stg__demo__courses.course_code: accepted_values not mapped; its values are '{{ course_codes() }}', not a list"
+    ) in drafted.notes
+
+
+def test_scaffold_drafts_from_tests_when_the_unit_has_no_dump(tmp_path: Path) -> None:
+    _unit(tmp_path, tables=TESTED_TABLES, rows=TESTED_ROWS)
+    _staging_project(tmp_path / "dbt")
+
+    package = _scaffold_command(tmp_path)
+
+    # No models.json: the next run drafts from the tests again.
+    assert sorted(path.name for path in package.iterdir()) == ["__init__.py", "_generated.py"]
+    assert "drafted from its staging models' tests" in (package / "_generated.py").read_text()

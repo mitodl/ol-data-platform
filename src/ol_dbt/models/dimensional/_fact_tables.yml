@@ -1653,6 +1653,119 @@ unit_tests:
       enrollment_created_on: "2024-01-15T00:00:00"
       enrollment_updated_on: "2024-01-15T00:00:00"
       enrollment_is_edx_enrolled: true
+- name: test_tfact_enrollment_refreshes_stale_enrollment_state
+  description: >
+    An edX.org enrollment has no updated_on, so an unenrollment made after the 7-day
+    lookback moves no watermark. The incremental filter must re-select a stored
+    enrollment whose is_active (or mode or status) differs from the source and write
+    the source's value, and leave an enrollment whose stored state still matches alone.
+  model: tfact_enrollment
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__programenrollments')
+    rows: []
+  - input: ref('int__mitxpro__courserunenrollments')
+    rows: []
+  - input: ref('int__edxorg__mitx_courserun_enrollments')
+    rows:
+    - user_id: 777
+      courserun_readable_id: "MITx/6.00x/2T2019"
+      courserunenrollment_created_on: "2019-04-01T00:00:00"
+      courserunenrollment_is_active: false
+      courserunenrollment_enrollment_mode: "audit"
+    - user_id: 778
+      courserun_readable_id: "MITx/6.00x/1T2020"
+      courserunenrollment_created_on: "2020-01-10T00:00:00"
+      courserunenrollment_is_active: true
+      courserunenrollment_enrollment_mode: "audit"
+  - input: ref('int__mitxonline__programenrollments')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_enrollments')
+    rows: []
+  - input: ref('int__bootcamps__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('int__micromasters__course_enrollments')
+    rows: []
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "USER_PK_777"
+      edxorg_openedx_user_id: 777
+    - user_pk: "USER_PK_778"
+      edxorg_openedx_user_id: 778
+  - input: ref('dim_course_run')
+    rows:
+    - courserun_pk: "RUN_2T2019"
+      courserun_readable_id: "MITx/6.00x/2T2019"
+      platform: "edxorg"
+      is_current: true
+    - courserun_pk: "RUN_1T2020"
+      courserun_readable_id: "MITx/6.00x/1T2020"
+      platform: "edxorg"
+      is_current: true
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_contract')
+    rows: []
+  - input: ref('dim_platform')
+    rows:
+    - platform_pk: "PLATFORM_EDXORG"
+      platform_readable_id: "edxorg"
+      # The stored rows keep their FKs, and a later-dated edX.org enrollment holds the watermark past both, so only the stored-state check can re-select the deactivated one.
+  - input: this
+    rows:
+    - enrollment_key: "b878c482a04e8138b592a50982edd96b"  # pragma: allowlist secret
+      enrollment_id: "d2c262edd935f1303dc150a525096fe5"  # pragma: allowlist secret
+      enrollment_type: "course"
+      enrollment_date_key: 20190401
+      user_fk: "USER_PK_777"
+      courserun_fk: "RUN_2T2019"
+      platform: "edxorg"
+      enrollment_is_active: true
+      enrollment_mode: "audit"
+      enrollment_created_on: "2019-04-01T00:00:00"
+      enrollment_is_edx_enrolled: true
+    - enrollment_key: "97403d1256e08932b660fd47d724e4a4"  # pragma: allowlist secret
+      enrollment_id: "f06edfd255c34d6aa0d5c991adc9b17d"  # pragma: allowlist secret
+      enrollment_type: "course"
+      enrollment_date_key: 20200110
+      user_fk: "USER_PK_778"
+      courserun_fk: "RUN_1T2020"
+      platform: "edxorg"
+      enrollment_is_active: true
+      enrollment_mode: "audit"
+      enrollment_created_on: "2020-01-10T00:00:00"
+      enrollment_is_edx_enrolled: true
+    - enrollment_key: "unrelated-later-enrollment"
+      enrollment_id: "unrelated"
+      enrollment_type: "course"
+      enrollment_date_key: 20240201
+      user_fk: "USER_PK_778"
+      courserun_fk: "RUN_1T2020"
+      platform: "edxorg"
+      enrollment_is_active: true
+      enrollment_mode: "audit"
+      enrollment_created_on: "2024-02-01T00:00:00"
+      enrollment_is_edx_enrolled: true
+  expect:
+    rows:
+    - enrollment_key: "b878c482a04e8138b592a50982edd96b"  # pragma: allowlist secret
+      enrollment_id: "d2c262edd935f1303dc150a525096fe5"  # pragma: allowlist secret
+      user_fk: "USER_PK_777"
+      courserun_fk: "RUN_2T2019"
+      platform: "edxorg"
+      enrollment_is_active: false
+      enrollment_mode: "audit"
+      enrollment_created_on: "2019-04-01T00:00:00"
 - name: test_tfact_enrollment_resolves_emeritus_global_alumni_fks
   description: >
     Emeritus learners match dim_user by student id, falling back to email; Global

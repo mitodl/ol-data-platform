@@ -120,6 +120,52 @@ is set, and posts it to the MIT Learn of the same cluster. See "Delivering what 
 dbt build made" in
 [dg_projects/delivery/CONTRIBUTING.md](../dg_projects/delivery/CONTRIBUTING.md).
 
+## B2B views
+
+The b2b materialized views (`models/b2b_analytics`, `models/b2b_learner_records`) read
+thirteen dimensional tables, and the facts among them are built from Open edX grades and
+tracking logs that have no local source. So they are not built from raw fixtures. A
+dimensional fixture writes those tables straight into
+`ol_data_lake_local.ol_warehouse_local_dimensional`, where the views' `dimensional`
+source resolves under `--env dev`:
+
+```bash
+ol-dbt fixtures load-dimensional b2b_organization \
+    --set sso_organization_id=<Keycloak organization id> --set contract_id=<MITx Online contract id>
+ol-dbt starrocks build --env dev --target starrocks_local_b2b --select tag:starrocks
+
+# The views refresh manually, and a build leaves them empty until they do.
+for view in $(mysql -h 127.0.0.1 -P 9030 -u root -N -e \
+    "SELECT CONCAT(TABLE_SCHEMA, '.', TABLE_NAME) FROM information_schema.materialized_views
+     WHERE TABLE_SCHEMA IN ('b2b_analytics', 'b2b_learner_records')"); do
+  mysql -h 127.0.0.1 -P 9030 -u root -e "REFRESH MATERIALIZED VIEW ${view} WITH SYNC MODE"
+done
+```
+
+The two parameters are ids the local stack assigns, and the views are only useful when
+they match. ol-analytics-api authorizes a request against the Keycloak organization in
+the user's token and MITx Online's manager check, and MIT Learn's dashboard reads the
+organization and its contracts from MITx Online. So `sso_organization_id` is the
+organization's Keycloak id (MITx Online's `OrganizationPage.sso_organization_id`, which
+Keycloak picks; its admin API ignores an id in the request), and `contract_id` is the
+id of a contract MITx Online holds under that organization. A run without them lists
+what the file needs.
+
+`src/ol_dbt/fixtures/dimensional/b2b_organization.yml` holds one organization, one
+contract, two course runs in one program and eight learners: enough that every
+per-run and per-month cohort the dashboard shows is at or above ol-analytics-api's
+anonymization floor of 5, with each completion status and consent state present.
+`test_dimensional_fixtures.py` runs every b2b view over it in DuckDB and fails if a view
+comes back empty or entirely under the floor, so a view that starts reading another
+dimensional table or column needs the fixture to follow.
+
+- The format is the raw fixture format below, with a `parameters:` block. A row value
+  that is exactly `$name` takes the value given with `--set name=...`, and a parameter's
+  type has to match every column it fills.
+- Each table holds only the columns the views read, and `load-dimensional` drops and
+  recreates it. A dimensional model you built locally under the same name is replaced.
+- Reloading drops the tables the views are built on. Build and refresh again afterwards.
+
 ## Raw fixtures
 
 The lake starts with an empty raw schema. A unit with `strategies.local: fixture` in
@@ -227,6 +273,39 @@ A nullable foreign key is NULL in a row `generate` builds without that parent. C
 names are matched without case, since Airbyte lowercases them. A column the fixture and
 the models disagree on (Airbyte drops and adds columns) is printed and drawn by its
 fixture type.
+
+A unit with no Django app (an S3 or API unit such as `ocw/s3`) has no dump. With no
+`--models` and no `models.json` in its package, `scaffold` drafts `_generated.py` from the
+fixture's column types and the dbt tests of the staging models that `source()` each table
+(read from the schema YAML under `src/ol_dbt/models/staging/`, so no warehouse or
+manifest is needed; `--dbt-dir` points elsewhere):
+
+```bash
+ol-dbt fixtures scaffold --unit ocw/s3
+```
+
+A test on a staging column applies to the raw column the model passes through it,
+renamed or cast and nothing more, so `page_ptr_id as wagtail_page_id` carries the tests
+of `wagtail_page_id` back to `page_ptr_id`:
+
+- `not_null` makes the column always set; a column without one is NULL in a share of rows.
+  The inventory's primary key is never NULL and counts on the sequence.
+- `unique` comes from the sequence, unless the column is a union of several raw columns
+  (their sequences would collide) or the fixture's hand-written rows already repeat a
+  value (a staging model that keeps each record's newest load tests unique what the raw
+  history repeats).
+- `accepted_values` cycles through the values.
+- `relationships` to a model that passes the field through from another table of the
+  fixture is a foreign key, drawn from its parent as a dump's would be.
+- `dbt_utils.unique_combination_of_columns` and
+  `dbt_expectations.expect_compound_columns_to_be_unique` become the same
+  "unique together" comment a dump's `unique_together` gives.
+- A string column a hand-written row holds a mapping or list in is JSON, left unset.
+
+The tests of a derived column (`lower(title)`, a JSON extraction, a `coalesce`), a
+relationship to a table the fixture leaves out, and a compound test over a derived
+column are not mapped, and each is printed. No `models.json` is written: the next
+`scaffold` drafts again from the tests as they are then.
 
 ### Adding a fixture
 

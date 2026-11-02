@@ -516,6 +516,10 @@ against the inventory, and report any difference. Same read-only path `bin/airby
 already uses. This is what makes the inventory trustworthy between changes, and it is the only
 part of the Airbyte-as-code story that needs to run on a timer.
 
+Retiring a connection disables it in Airbyte rather than deleting it, as a production cutover
+does (§10.1), so the check stays silent about a connection no unit declares while that
+connection is `inactive`. Resuming one brings the warning back.
+
 ---
 
 ## 5. What the inventory generates
@@ -773,9 +777,57 @@ retired:
   layer: app_postgres
   raw_tables:                       # a list, so retiring a whole unit is one
   - raw__bootcamps__app__postgres__applications_bootcampapplication   # dated, reasoned entry
-  retired_on: "2026-08-14"          # when loading stopped, not when this was written
-  reason: The Bootcamps application is no longer deployed.            # ≥20 chars; "not needed" is not a reason
+  retired_on: "2026-02-12"          # when loading stopped, not when this was written
+  reason: The bootcamps application is decommissioned.                # ≥20 chars; "not needed" is not a reason
+  frozen: true                      # optional: the tables stay, and dbt still models them
 ```
+
+Retiring a source does not always mean its data goes. `frozen: true` records the other case:
+the source is gone, so nothing will load the tables again, but they stay in the raw layer,
+read-only, because dbt still models their history. Bootcamps is the worked example. The app
+was decommissioned, its last data landed on 2026-02-12 (the newest Airbyte commit across its
+19 modeled tables, measured 2026-10-23), and its learners reach `dim_user`, `tfact_enrollment`
+and `tfact_order` through those models, so on 2026-10-23 we kept the tables instead of
+retiring the models with them. A reader of the raw layer finds the record twice: in this
+entry, and in the description of the dbt sources block that declares the tables.
+
+`reconcile` reads the flag in both directions. A frozen table that dbt declares is expected,
+not a model going stale, so it is not reported. A frozen table dbt no longer declares, or the
+warehouse no longer holds, is a `WARNING`: the first means the reason to keep the data has
+gone, the second that history nothing can reload has. `drift` needs no exception, because a
+graveyard entry declares no connection.
+
+Iceberg maintenance needs none either. Snapshot expiry keeps the current snapshot and every
+ref head whatever their age, except stale `airbyte_staging*` branches, which it removes. The
+orphan-file pass deletes only files that no retained snapshot reaches, and the lake sweep
+deletes only dbt-suffixed directories that no Glue table references. None of them drops a
+table or a file a frozen table reads.
+
+A frozen entry can also keep tables dbt never modeled. `modeled: false` says so and reverses
+the dbt half: dbt not declaring them is expected, and dbt declaring one is the `WARNING`.
+Bootcamps has one: `applications_bootcampapplicationline`, 44,102 rows dbt never read. It was
+one of 93 such tables frozen on 2026-10-26 because nobody had decided to drop them. The other
+92 held no rows, and on 2026-10-27 the owner decided to drop them from Glue, so their entries
+lost `frozen:` (the two that shared an entry with `applications_bootcampapplicationline` moved
+to an entry of their own, since the flag is per entry). The same decision kept the 19 JSONL
+directories the pre-Iceberg connection left under `raw/bootcamps/app/postgres/public/`, which
+no Glue table references; the 90-table entry's reason records them. A retired table *without*
+`frozen:` that the warehouse still holds is reported as retired, not as undeclared: nothing
+loads it and its entry does not say to keep it, so it is waiting to be dropped.
+
+Not every stop is a removal. Bootcamps' `profiles_profile` stopped loading on 2025-02-25,
+almost a year before the unit was retired on 2026-02-12. That day its siblings moved to an
+Airbyte connection writing Iceberg, and it was not among the streams that moved: its Glue entry
+stayed the JSONL table of that morning's load until `bin/migrate-raw-jsonl-to-iceberg.py`
+converted it on 2026-09-11. Nothing flagged it. Trino kept reading the old JSON, so the dbt
+models built without error on profiles as of 2025-02-24, and the check above had nothing to
+catch, because the table and its dbt source both stayed. The unit's retirement was deliberate.
+This was a silent per-table stall, and it is recorded as its own frozen entry dated when it
+stopped (#3140).
+Either of two checks would have caught it: an expected sync cadence per table, reporting a
+table whose newest load is older than that cadence, or a check that every table a
+`*__sources.yml` declares is `table_type=ICEBERG` in Glue, since a table still on JSON after its
+connection moved to Iceberg is one nothing writes.
 
 Three details the mechanism above does not spell out, each of which is a rule in the checker:
 
@@ -1040,9 +1092,9 @@ Local app is the directory under `ol-infrastructure/local-dev/apps/` that runs t
 | 13 | `mitx/tracking_logs` | none | 44 | 0 | |
 | 14 | `xpro/tracking_logs` | none | 44 | 0 | |
 | 15 | `edxorg/tracking_logs` | none | 44 | 0 | |
-| 16 | `mitxonline/api` | none | 39 | 0 | |
-| 17 | `xpro/api` | none | 34 | 0 | |
-| 18 | `mitx/api` | none | 33 | 0 | |
+| 16 | `mitxonline/api` | none | 39 | 0 | Retired. Blocks load through dlt as `mitxonline/course_structure`; the whole-document table had no reader (`retired.yml`) |
+| 17 | `xpro/api` | none | 34 | 0 | Retired. Blocks load through dlt as `xpro/course_structure`; the whole-document table had no reader (`retired.yml`) |
+| 18 | `mitx/api` | none | 33 | 0 | Retired. Blocks load through dlt as `mitx/course_structure`; the whole-document table had no reader (`retired.yml`) |
 | 19 | `edxorg/google_sheets` | none | 3 | 0 | |
 | 20 | `irx/bigquery` | none | 144 | 1 | |
 | 21 | `emeritus/bigquery` | none | 59 | 0 | |

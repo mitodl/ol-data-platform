@@ -77,8 +77,10 @@ def _metadata(config: LakeOrphanSweepConfig) -> dict[str, Any]:
     return {key: value.value for key, value in output.metadata.items()}
 
 
-def test_only_qa_deletes():
-    assert frozenset({"qa"}) == module.LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS
+def test_deletes_in_qa_and_production_only():
+    assert (
+        frozenset({"qa", "production"}) == module.LAKE_ORPHAN_SWEEP_DELETE_ENVIRONMENTS
+    )
 
 
 def test_config_has_no_default_minimum_age():
@@ -87,6 +89,8 @@ def test_config_has_no_default_minimum_age():
 
 
 def test_delete_is_refused_where_it_is_not_enabled(monkeypatch: pytest.MonkeyPatch):
+    # Pinned so the test doesn't depend on the environment it runs in.
+    monkeypatch.setattr(module, "DAGSTER_ENV", "dev")
     calls = _returning(monkeypatch, _result(None))
 
     with pytest.raises(ValueError, match="Deletion is not enabled"):

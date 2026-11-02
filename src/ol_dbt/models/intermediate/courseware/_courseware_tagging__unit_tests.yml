@@ -1,0 +1,451 @@
+---
+unit_tests:
+- name: test_int__courseware__concept_tagging_aliases_follow_merges_and_recompute_flags
+  description: >
+    A dictionary row tagged under a concept merged since the run reads as the
+    survivor and keeps the id it was tagged with. has_multiple_concepts and
+    is_ambiguous are recomputed for the current concepts: "csv", given to two
+    concepts that have since merged, belongs to one concept now, while "kernel"
+    still names two.
+  model: int__courseware__concept_tagging_aliases
+  given:
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_run')
+    rows:
+    - {tagging_run_id: r0, tagged_at: '2026-09-01T00:00:00'}
+    - {tagging_run_id: r1, tagged_at: '2026-10-01T00:00:00'}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_alias')
+    rows:
+    - {tagging_run_id: r1, pattern_key: random library, concept_id: merged, concept_label_key: random
+        library, variant: label, is_short: false, is_qualified: false, is_single_word: false,
+      has_multiple_concepts: false, is_ambiguous: false}
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: a_csv, concept_label_key: comma
+        separated values csv, variant: abbreviation, is_short: false, is_qualified: false,
+      is_single_word: false, has_multiple_concepts: true, is_ambiguous: true}
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: b_csv, concept_label_key: csv
+        file csv, variant: abbreviation, is_short: false, is_qualified: false, is_single_word: false,
+      has_multiple_concepts: true, is_ambiguous: true}
+    - {tagging_run_id: r1, pattern_key: kernel, concept_id: os-kernel, concept_label_key: kernel,
+      variant: label, is_short: false, is_qualified: false, is_single_word: false,
+      has_multiple_concepts: true, is_ambiguous: true}
+    - {tagging_run_id: r1, pattern_key: kernel, concept_id: ml-kernel, concept_label_key: kernel,
+      variant: label, is_short: false, is_qualified: false, is_single_word: false,
+      has_multiple_concepts: true, is_ambiguous: true}
+    - {tagging_run_id: r0, pattern_key: pandas, concept_id: pandas, concept_label_key: pandas,
+      variant: label, is_short: false, is_qualified: false, is_single_word: false,
+      has_multiple_concepts: false, is_ambiguous: false}
+  - input: ref('int__courseware__concept_registry')
+    rows:
+    - {concept_id: merged, concept_status: merged, merged_into_concept_id: survivor}
+    - {concept_id: a_csv, concept_status: merged, merged_into_concept_id: csv}
+    - {concept_id: b_csv, concept_status: merged, merged_into_concept_id: csv}
+  expect:
+    rows:
+    - {pattern_key: random library, concept_id: survivor, tagged_concept_id: merged,
+      has_multiple_concepts: false, is_ambiguous: false}
+    - {pattern_key: csv, concept_id: csv, tagged_concept_id: a_csv, has_multiple_concepts: false,
+      is_ambiguous: false}
+    - {pattern_key: csv, concept_id: csv, tagged_concept_id: b_csv, has_multiple_concepts: false,
+      is_ambiguous: false}
+    - {pattern_key: kernel, concept_id: os-kernel, tagged_concept_id: os-kernel, has_multiple_concepts: true,
+      is_ambiguous: true}
+    - {pattern_key: kernel, concept_id: ml-kernel, tagged_concept_id: ml-kernel, has_multiple_concepts: true,
+      is_ambiguous: true}
+
+- name: test_int__courseware__concept_tags_takes_the_course_runs_sense
+  description: >
+    "kernel" names two concepts, and the dictionary tags every occurrence as a
+    candidate for both. Where the extractor named the label in the run, the run's
+    sense keeps its candidate and the other is dropped, so the operating systems
+    sense does not spread to the machine learning course. Where the run's sense is
+    in the review queue, or nothing decided it, both stay candidates.
+  model: int__courseware__concept_tags
+  given:
+  - input: source('courseware_intermediate', 'courseware_concept_mention')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, scope_id: s1,
+      source_ref: b1, pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, scope_id: s1,
+      source_ref: b1, pattern_key: kernel, concept_id: ml-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, scope_id: s1,
+      source_ref: b2, pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, scope_id: s1,
+      source_ref: b2, pattern_key: kernel, concept_id: ml-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: queued, scope_id: s1,
+      source_ref: b3, pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: unseen, scope_id: s1,
+      source_ref: b4, pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_source')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, scope_id: s1,
+      source_ref: b1, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, scope_id: s1,
+      source_ref: b2, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: queued, scope_id: s1,
+      source_ref: b3, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: unseen, scope_id: s1,
+      source_ref: b4, mention_run_id: r1}
+  - input: ref('int__courseware__concept_tagging_aliases')
+    rows:
+    - {tagging_run_id: r1, pattern_key: kernel, concept_id: os-kernel, tagged_concept_id: os-kernel,
+      concept_label_key: kernel}
+    - {tagging_run_id: r1, pattern_key: kernel, concept_id: ml-kernel, tagged_concept_id: ml-kernel,
+      concept_label_key: kernel}
+  - input: ref('int__courseware__concept_sense_assignments')
+    rows:
+    - {concept_label_key: kernel, platform: mitxonline, courserun_readable_id: os,
+      concept_id: os-kernel, sense_status: assigned}
+    - {concept_label_key: kernel, platform: mitxonline, courserun_readable_id: ml,
+      concept_id: ml-kernel, sense_status: assigned}
+    - {concept_label_key: kernel, platform: mitxonline, courserun_readable_id: queued,
+      concept_id: null, sense_status: needs_review}
+  expect:
+    rows:
+    - {courserun_readable_id: os, concept_id: os-kernel, sense_status: course_sense}
+    - {courserun_readable_id: ml, concept_id: ml-kernel, sense_status: course_sense}
+    - {courserun_readable_id: queued, concept_id: os-kernel, sense_status: needs_review}
+    - {courserun_readable_id: unseen, concept_id: os-kernel, sense_status: candidate}
+
+- name: test_int__courseware__concept_tags_keeps_one_span_per_merged_concept
+  description: >
+    A phrase the run gave to two concepts that have since merged into one keeps a
+    single row per span, under the lower tagged id.
+  model: int__courseware__concept_tags
+  given:
+  - input: source('courseware_intermediate', 'courseware_concept_mention')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      scope_kind: unit, source_ref: b1, source_kind: html, pattern_key: csv, concept_id: b_csv,
+      matched_text: CSV, char_start: 0, char_end: 3}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      scope_kind: unit, source_ref: b1, source_kind: html, pattern_key: csv, concept_id: a_csv,
+      matched_text: CSV, char_start: 0, char_end: 3}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_source')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, mention_run_id: r1}
+  - input: ref('int__courseware__concept_tagging_aliases')
+    rows:
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: csv, tagged_concept_id: a_csv,
+      concept_label_key: comma separated values csv}
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: csv, tagged_concept_id: b_csv,
+      concept_label_key: csv file csv}
+  - input: ref('int__courseware__concept_sense_assignments')
+    rows: []
+  expect:
+    rows:
+    - {source_ref: b1, char_start: 0, concept_id: csv, tagged_concept_id: a_csv, sense_status: candidate}
+
+- name: test_bridge_course_content_concept_counts_a_merged_span_once
+  description: >
+    With the tags of two merged concepts deduplicated, the bridge counts the span
+    once under the survivor. One mention through the course run's sense resolves it.
+  model: bridge_course_content_concept
+  given:
+  - input: ref('int__courseware__concept_tags')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      scope_kind: unit, source_ref: b1, source_kind: html, concept_id: csv, tagged_concept_id: a_csv,
+      pattern_key: csv, is_ambiguous: true, sense_status: candidate, char_start: 0,
+      char_end: 3}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      scope_kind: unit, source_ref: b1, source_kind: html, concept_id: csv, tagged_concept_id: a_csv,
+      pattern_key: comma separated values, is_ambiguous: false, sense_status: course_sense,
+      char_start: 10, char_end: 32}
+  - input: ref('int__courseware__cited_concept_sources')
+    rows: []
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows: []
+  - input: ref('dim_course_content')
+    rows: []
+  expect:
+    rows:
+    - {source_ref: b1, concept_fk: csv, mention_count: 2, phrase_count: 2, first_char_start: 0,
+      is_ambiguous: false, is_sense_resolved: true}
+
+- name: test_int__courseware__concept_tagging_fan_out_agrees_through_a_later_merge
+  description: >
+    A phrase tagged under a concept merged since the run counts the extractor's
+    claims about the survivor as agreement, and its label count is the survivor's.
+  model: int__courseware__concept_tagging_fan_out
+  given:
+  - input: ref('int__courseware__concept_tags')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: random library, concept_id: survivor, tagged_concept_id: merged}
+  - input: ref('int__courseware__concept_tagging_aliases')
+    rows:
+    - {tagging_run_id: r1, pattern_key: random library, concept_id: survivor, tagged_concept_id: merged,
+      concept_label_key: random library, variant: label, surface: random library,
+      match_mode: caseless, is_short: false, is_qualified: false, is_single_word: false,
+      has_multiple_concepts: false, is_ambiguous: false}
+  - input: ref('int__courseware__concept_assignments')
+    rows:
+    - {concept_label_key: random module, concept_id: survivor}
+    - {concept_label_key: random library, concept_id: survivor}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s1, concept_label_key: random
+        module, concept_id: survivor}
+  - input: ref('int__courseware__extractions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s1, is_current: true}
+  - input: ref('int__courseware__cited_concept_sources')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s1, source_ref: b1,
+      concept_id: survivor}
+  expect:
+    rows:
+    - {pattern_key: random library, concept_id: survivor, tagged_concept_id: merged,
+      is_merged_label: true, tagged_source_count: 1, compared_source_count: 1, source_agreement_rate: 1.0,
+      scope_agreement_rate: 1.0}
+
+- name: test_int__courseware__concept_tagging_fan_out_folds_merged_dictionary_rows
+  description: >
+    Two dictionary rows of one phrase whose concepts have since merged give one
+    fan-out row under the survivor, carrying the phrase's mentions.
+  model: int__courseware__concept_tagging_fan_out
+  given:
+  - input: ref('int__courseware__concept_tags')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: csv, concept_id: csv, tagged_concept_id: a_csv}
+  - input: ref('int__courseware__concept_tagging_aliases')
+    rows:
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: csv, tagged_concept_id: a_csv,
+      concept_label_key: comma separated values csv, variant: abbreviation, surface: CSV,
+      match_mode: case_sensitive, is_short: true, is_qualified: false, is_single_word: false,
+      has_multiple_concepts: false, is_ambiguous: true}
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: csv, tagged_concept_id: b_csv,
+      concept_label_key: csv file csv, variant: abbreviation, surface: CSV, match_mode: case_sensitive,
+      is_short: true, is_qualified: false, is_single_word: false, has_multiple_concepts: false,
+      is_ambiguous: true}
+  - input: ref('int__courseware__concept_assignments')
+    rows: []
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows: []
+  - input: ref('int__courseware__extractions')
+    rows: []
+  - input: ref('int__courseware__cited_concept_sources')
+    rows: []
+  expect:
+    rows:
+    - {pattern_key: csv, concept_id: csv, tagged_concept_id: a_csv, tagged_mention_count: 1,
+      tagged_source_count: 1, share_of_tagged_mentions: 1.0}
+
+- name: test_int__courseware__concept_tags_resolves_through_any_label_of_the_concept
+  description: >
+    The dictionary records "csv" under one label of concept csv, but a run can name
+    the concept by another, and two merged dictionary rows can disagree. A span
+    whose concept the run assigned under any label is resolved, so both merged rows
+    of the span resolve and one is kept. In the ml run, whose sense of "kernel" is
+    a
+    concept split off since this tagging run, the stale os-kernel tag stays a
+    candidate rather than vanishing.
+  model: int__courseware__concept_tags
+  given:
+  - input: source('courseware_intermediate', 'courseware_concept_mention')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: csv, concept_id: a_csv, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: csv, concept_id: b_csv, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: other, scope_id: s1,
+      source_ref: b2, pattern_key: csv, concept_id: a_csv, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, scope_id: s1,
+      source_ref: b3, pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_source')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: other, scope_id: s1,
+      source_ref: b2, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, scope_id: s1,
+      source_ref: b3, mention_run_id: r1}
+  - input: ref('int__courseware__concept_tagging_aliases')
+    rows:
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: csv, tagged_concept_id: a_csv,
+      concept_label_key: comma separated values csv}
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: csv, tagged_concept_id: b_csv,
+      concept_label_key: csv file csv}
+    - {tagging_run_id: r1, pattern_key: kernel, concept_id: os-kernel, tagged_concept_id: os-kernel,
+      concept_label_key: kernel}
+  - input: ref('int__courseware__concept_sense_assignments')
+    rows:
+    - {concept_label_key: csv file csv, platform: mitxonline, courserun_readable_id: run,
+      concept_id: csv, sense_status: assigned}
+    - {concept_label_key: csv data, platform: mitxonline, courserun_readable_id: other,
+      concept_id: csv, sense_status: assigned}
+    - {concept_label_key: kernel, platform: mitxonline, courserun_readable_id: ml,
+      concept_id: ml-kernel, sense_status: assigned}
+  expect:
+    rows:
+    - {courserun_readable_id: run, concept_id: csv, tagged_concept_id: a_csv, sense_status: course_sense}
+    - {courserun_readable_id: other, concept_id: csv, tagged_concept_id: a_csv, sense_status: course_sense}
+    - {courserun_readable_id: ml, concept_id: os-kernel, tagged_concept_id: os-kernel,
+      sense_status: candidate}
+
+- name: test_int__courseware__concept_tags_keeps_the_resolved_row_of_a_merged_span
+  description: >
+    Two dictionary rows of one span whose concepts have since merged can disagree:
+    the run's sense of one label is queued for review while it named the concept
+    under the other. The resolved row is kept, whatever its tagged id.
+  model: int__courseware__concept_tags
+  given:
+  - input: source('courseware_intermediate', 'courseware_concept_mention')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: csv, concept_id: a_csv, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: csv, concept_id: b_csv, char_start: 0}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_source')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, mention_run_id: r1}
+  - input: ref('int__courseware__concept_tagging_aliases')
+    rows:
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: csv, tagged_concept_id: a_csv,
+      concept_label_key: comma separated values csv}
+    - {tagging_run_id: r1, pattern_key: csv, concept_id: csv, tagged_concept_id: b_csv,
+      concept_label_key: csv file csv}
+  - input: ref('int__courseware__concept_sense_assignments')
+    rows:
+    - {concept_label_key: comma separated values csv, platform: mitxonline, courserun_readable_id: run,
+      concept_id: null, sense_status: needs_review}
+    - {concept_label_key: csv file csv, platform: mitxonline, courserun_readable_id: run,
+      concept_id: csv, sense_status: assigned}
+  expect:
+    rows:
+    - {courserun_readable_id: run, concept_id: csv, tagged_concept_id: b_csv, sense_status: course_sense}
+
+- name: test_int__courseware__concept_tags_falls_back_to_another_label_only_when_it_is_unambiguous
+  description: >
+    The os run never used "kernel" but named both of its senses under other labels
+    ("operating system kernel" and "kernel function"), so neither candidate is
+    resolved. The ml run's sense of "kernel" is ml-kernel, which this tagging run
+    has no candidate for; naming os-kernel under another label does not override
+    that, so the os-kernel tag stays a candidate.
+  model: int__courseware__concept_tags
+  given:
+  - input: source('courseware_intermediate', 'courseware_concept_mention')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, scope_id: s1,
+      source_ref: b1, pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, scope_id: s1,
+      source_ref: b1, pattern_key: kernel, concept_id: svm-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, scope_id: s1,
+      source_ref: b2, pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_source')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, scope_id: s1,
+      source_ref: b1, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, scope_id: s1,
+      source_ref: b2, mention_run_id: r1}
+  - input: ref('int__courseware__concept_tagging_aliases')
+    rows:
+    - {tagging_run_id: r1, pattern_key: kernel, concept_id: os-kernel, tagged_concept_id: os-kernel,
+      concept_label_key: kernel}
+    - {tagging_run_id: r1, pattern_key: kernel, concept_id: svm-kernel, tagged_concept_id: svm-kernel,
+      concept_label_key: kernel}
+  - input: ref('int__courseware__concept_sense_assignments')
+    rows:
+    - {concept_label_key: operating system kernel, platform: mitxonline, courserun_readable_id: os,
+      concept_id: os-kernel, sense_status: assigned}
+    - {concept_label_key: kernel function, platform: mitxonline, courserun_readable_id: os,
+      concept_id: svm-kernel, sense_status: assigned}
+    - {concept_label_key: kernel, platform: mitxonline, courserun_readable_id: ml,
+      concept_id: ml-kernel, sense_status: assigned}
+    - {concept_label_key: operating system kernel, platform: mitxonline, courserun_readable_id: ml,
+      concept_id: os-kernel, sense_status: assigned}
+  expect:
+    rows:
+    - {courserun_readable_id: os, concept_id: os-kernel, sense_status: candidate}
+    - {courserun_readable_id: os, concept_id: svm-kernel, sense_status: candidate}
+    - {courserun_readable_id: ml, concept_id: os-kernel, sense_status: candidate}
+
+- name: test_int__courseware__concept_tagging_fan_out_compares_a_scope_with_no_claims
+  description: >
+    Scope s2's current extraction found no claims. Its tagged source is still
+    compared, as a disagreement, so it lowers both agreement rates instead of
+    leaving the denominators. An extraction that is no longer current compares
+    nothing.
+  model: int__courseware__concept_tagging_fan_out
+  given:
+  - input: ref('int__courseware__concept_tags')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: pandas, concept_id: pandas, tagged_concept_id: pandas}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s2,
+      source_ref: b2, pattern_key: pandas, concept_id: pandas, tagged_concept_id: pandas}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s3,
+      source_ref: b3, pattern_key: pandas, concept_id: pandas, tagged_concept_id: pandas}
+  - input: ref('int__courseware__concept_tagging_aliases')
+    rows:
+    - {tagging_run_id: r1, pattern_key: pandas, concept_id: pandas, tagged_concept_id: pandas,
+      concept_label_key: pandas, variant: label, surface: pandas, match_mode: caseless,
+      is_short: false, is_qualified: false, is_single_word: true, has_multiple_concepts: false,
+      is_ambiguous: false}
+  - input: ref('int__courseware__concept_assignments')
+    rows:
+    - {concept_label_key: pandas, concept_id: pandas}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s1, concept_label_key: pandas,
+      concept_id: pandas}
+  - input: ref('int__courseware__extractions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s1, is_current: true}
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s2, is_current: true}
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s3, is_current: false}
+  - input: ref('int__courseware__cited_concept_sources')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: run, scope_id: s1, source_ref: b1,
+      concept_id: pandas}
+  expect:
+    rows:
+    - {pattern_key: pandas, concept_id: pandas, tagged_source_count: 3, compared_source_count: 2,
+      source_agreement_rate: 0.5, scope_agreement_rate: 0.5}
+
+- name: test_int__courseware__concept_tags_reads_each_source_from_its_mention_run
+  description: >
+    Run r2 re-tagged only b2, whose text changed and now mentions nothing, and the
+    new source b4, and kept r1's mentions of b1. b3 was removed before r2. So b1 is
+    read from r1 and b4 from r2, while r1's rows for b2 and b3 and the rows of r3,
+    which never wrote its run row, are not read.
+  model: int__courseware__concept_tags
+  given:
+  - input: source('courseware_intermediate', 'courseware_concept_mention')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: kernel, concept_id: kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b2, pattern_key: kernel, concept_id: kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b3, pattern_key: kernel, concept_id: kernel, char_start: 0}
+    - {tagging_run_id: r2, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b4, pattern_key: kernel, concept_id: kernel, char_start: 5}
+    - {tagging_run_id: r3, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: kernel, concept_id: kernel, char_start: 9}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_source')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b2, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b3, mention_run_id: r1}
+    - {tagging_run_id: r2, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, mention_run_id: r1}
+    - {tagging_run_id: r2, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b2, mention_run_id: r2}
+    - {tagging_run_id: r2, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b4, mention_run_id: r2}
+  - input: ref('int__courseware__concept_tagging_aliases')
+    rows:
+    - {tagging_run_id: r2, pattern_key: kernel, concept_id: kernel, tagged_concept_id: kernel,
+      concept_label_key: kernel}
+  - input: ref('int__courseware__concept_sense_assignments')
+    rows: []
+  expect:
+    rows:
+    - {tagging_run_id: r1, source_ref: b1, char_start: 0, sense_status: candidate}
+    - {tagging_run_id: r2, source_ref: b4, char_start: 5, sense_status: candidate}

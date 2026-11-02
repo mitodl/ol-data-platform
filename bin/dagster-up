@@ -8,7 +8,7 @@ valid, so a browser only opens when the token has actually expired.
     bin/dagster-up                     # vault-login (if needed) + compose up --build
     bin/dagster-up --detach
     bin/dagster-up --env production
-    bin/dagster-up -- dagster_canvas   # extra args go to `docker compose up`
+    bin/dagster-up -- dagster_delivery # extra args go to `docker compose up`
 """
 
 from __future__ import annotations

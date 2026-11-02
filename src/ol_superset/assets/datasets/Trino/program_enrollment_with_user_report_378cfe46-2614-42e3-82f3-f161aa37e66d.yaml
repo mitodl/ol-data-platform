@@ -8,7 +8,7 @@ columns:
   description: Program enrollment mode (audit/verified). Only MITx Online tracks a
     program-level enrollment mode; null for edX.org, MicroMasters and xPRO.
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -21,7 +21,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -34,7 +34,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -47,7 +47,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -60,7 +60,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -73,7 +73,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -86,7 +86,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -99,7 +99,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -112,7 +112,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -125,7 +125,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -138,7 +138,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -151,7 +151,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -164,7 +164,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -177,7 +177,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -190,7 +190,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -203,7 +203,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -216,7 +216,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -229,7 +229,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -242,7 +242,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -255,7 +255,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -268,7 +268,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -281,7 +281,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -294,7 +294,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -307,7 +307,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -320,7 +320,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -333,7 +333,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -346,7 +346,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -359,7 +359,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -372,7 +372,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -385,7 +385,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -398,7 +398,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -411,7 +411,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -424,7 +424,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -437,7 +437,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -450,7 +450,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -463,7 +463,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -476,7 +476,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -489,7 +489,7 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -502,7 +502,20 @@ columns:
   datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT
+  verbose_name: null
+- advanced_data_type: null
+  column_name: course_certificate_sum
+  datetime_format: null
+  description: null
+  expression: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -513,7 +526,7 @@ columns:
 currency_code_column: null
 database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
 default_endpoint: null
-description: Auto refreshed at 2026-10-13T19:02:54.622915+00:00
+description: Auto refreshed at 2026-03-13T15:46:37.086929+00:00
 extra: null
 fetch_values_predicate: null
 filter_select_enabled: true
@@ -524,7 +537,8 @@ metrics:
   d3format: null
   description: null
   expression: COUNT(*)
-  extra: null
+  extra:
+    warning_markdown: ''
   metric_name: count
   metric_type: count
   verbose_name: COUNT(*)
@@ -533,7 +547,7 @@ normalize_columns: false
 offset: 0
 params: null
 schema: ol_warehouse_production_reporting
-sql: null
+sql: ''
 table_name: program_enrollment_with_user_report
 template_params: null
 uuid: 378cfe46-2614-42e3-82f3-f161aa37e66d

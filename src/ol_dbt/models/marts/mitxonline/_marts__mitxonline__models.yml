@@ -233,8 +233,8 @@ models:
     meta:
       qa_branches:
       - micromasters/app_postgres
-      - mitxonline/api
       - mitxonline/app_postgres
+      - mitxonline/course_structure
       - mitxonline/mysql
       - mitxonline/tracking_logs
       - ovs/app_postgres

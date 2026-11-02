@@ -1,0 +1,66 @@
+---
+# Embedding strategies: how each kind of document is chunked and embedded.
+# Read by ml.lib.learn_embeddings through
+# ol_orchestrate.lib.embeddings.strategy.load_strategies, and copied into the
+# embedding_strategies table. Design:
+# docs/design/embedding_substrate_and_search_engine.md, section 2.
+#
+# A new strategy is a new row. The vector assets refresh only `serving`
+# strategies on their own; a `candidate` is embedded when a run names it in its
+# config, and a `retired` one keeps its stored vectors.
+#
+# learn_v1 is MIT Learn's deployed configuration (see
+# docs/learn_embedding_config.md), except that it calls text-embedding-3-large
+# through Azure OpenAI where Learn calls OpenAI. Both serve the same model, so
+# the rows declare one vector space with Learn's vectors. Its chunks and point
+# ids are what the platform's copy is compared with, so do not change these rows;
+# add a new strategy instead.
+#
+# vector_space names the models whose vectors are interchangeable, and stored
+# vectors are reused across a space. A model with none is a space of its own, so
+# declare one only for models known to return the same vectors.
+strategies:
+- strategy_id: learn_v1_content_files
+  doc_kind: content_file
+  chunker:
+    kind: token
+    encoding: cl100k_base
+    chunk_size: 512
+    chunk_overlap: 51
+    markdown_header_levels: 4
+  model:
+    model: azure:text-embedding-3-large
+    vector_space: text-embedding-3-large@3072
+  role: serving
+  qdrant:
+    collection: platform_content_files
+    dense_vector_name: text-embedding-3-large
+    sparse_model: qdrant/bm25
+    sparse_vector_name: bm25
+  notes: >-
+    MIT Learn's content-file configuration at mit-learn 2662d01e4:
+    LiteLLMEncoder with text-embedding-3-large at its default length,
+    RecursiveCharacterTextSplitter.from_tiktoken_encoder(cl100k_base, 512, 51),
+    markdown header splitting to level 4, BM25 by Qdrant cloud inference.
+- strategy_id: learn_v1_topics
+  doc_kind: topic
+  # Learn embeds the topic name with no cut. The cap is the model's input
+  # limit, which no topic name comes near, so the text is Learn's.
+  chunker:
+    kind: whole
+    encoding: cl100k_base
+    max_tokens: 8191
+  model:
+    model: azure:text-embedding-3-large
+    vector_space: text-embedding-3-large@3072
+  role: serving
+  qdrant:
+    collection: platform_topics
+    dense_vector_name: text-embedding-3-large
+    sparse_model: qdrant/bm25
+    sparse_vector_name: bm25
+  notes: >-
+    MIT Learn's topic configuration (vector_search/utils.py embed_topics at
+    mit-learn 2f612aaff): each LearningResourceTopic name embedded whole with
+    text-embedding-3-large, point id the topic's topic_uuid, BM25 by Qdrant
+    cloud inference.

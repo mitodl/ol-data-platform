@@ -1,0 +1,48 @@
+---
+name: Evaluation gate
+
+# The paths are the changes that require an evaluation (ol-infrastructure
+# docs/plans/llm-opik-lifecycle-spec.md section 5.1): the prompt version pinned in
+# the gate, the model and call in summarize.py and the asset, and the locked
+# versions of the libraries that make the call.
+on:
+  pull_request:
+    paths:
+    - "dg_projects/ml/ml/lib/summarize.py"
+    - "dg_projects/ml/ml/lib/summarize_gate.py"
+    - "dg_projects/ml/evaluation/**"
+    - "dg_projects/ml/ml/assets/feedback_summaries.py"
+    - "dg_projects/ml/pyproject.toml"
+    - "dg_projects/ml/uv.lock"
+    - ".github/workflows/evaluation-gate.yaml"
+  push:
+    branches:
+    - main
+    paths:
+    - "dg_projects/ml/ml/lib/summarize.py"
+    - "dg_projects/ml/ml/lib/summarize_gate.py"
+    - "dg_projects/ml/evaluation/**"
+    - "dg_projects/ml/ml/assets/feedback_summaries.py"
+    - "dg_projects/ml/pyproject.toml"
+    - "dg_projects/ml/uv.lock"
+    - ".github/workflows/evaluation-gate.yaml"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  feedback-summary:
+    uses: mitodl/ol-llm/.github/workflows/evaluation-gate.yml@d9d8decc655ceabb21068361ca9d81df3aed9d7c # ol-llm-v0.0.6
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    with:
+      gate: evaluation/feedback-summary.gate.toml
+      working-directory: dg_projects/ml
+      opik-url: ${{ vars.OPIK_URL }}
+      keycloak-token-url: ${{ vars.OPIK_KEYCLOAK_TOKEN_URL }}
+      aws-role-arn: ${{ vars.EVALUATION_AWS_ROLE_ARN }}
+    secrets:
+      OPIK_KEYCLOAK_CLIENT_ID: ${{ secrets.OPIK_EVALUATION_CLIENT_ID }}
+      OPIK_KEYCLOAK_CLIENT_SECRET: ${{ secrets.OPIK_EVALUATION_CLIENT_SECRET }}

@@ -8,11 +8,11 @@ models:
     meta:
       qa_branches:
       - learn_ai/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/tracking_logs
-      - mitxonline/api
+      - mitxonline/course_structure
       - mitxonline/tracking_logs
-      - xpro/api
+      - xpro/course_structure
       - xpro/tracking_logs
   columns:
   - name: tutorbotoutput_id
@@ -62,11 +62,11 @@ models:
     meta:
       qa_branches:
       - learn_ai/app_postgres
-      - mitx/api
+      - mitx/course_structure
       - mitx/tracking_logs
-      - mitxonline/api
+      - mitxonline/course_structure
       - mitxonline/tracking_logs
-      - xpro/api
+      - xpro/course_structure
       - xpro/tracking_logs
   columns:
   - name: djangocheckpoint_id

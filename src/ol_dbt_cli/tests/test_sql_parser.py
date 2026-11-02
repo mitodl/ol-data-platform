@@ -12,6 +12,7 @@ from ol_dbt_cli.lib.sql_parser import (
     get_columns_read_from_ref,
     parse_model_file,
     parse_model_sql,
+    passthrough_columns_via_scope,
     resolve_star_columns,
     strip_jinja,
 )
@@ -887,7 +888,7 @@ class TestConsumedColumnsViaScope:
     traversal can still anchor each column to its source ref.
     """
 
-    def test_attributes_columns_across_a_join_the_heuristic_skips(self, tmp_path: Path) -> None:
+    def test_attributes_columns_across_a_join(self, tmp_path: Path) -> None:
         model = tmp_path / "m.sql"
         model.write_text(
             "select u.user_id, u.email, e.grade "
@@ -900,8 +901,9 @@ class TestConsumedColumnsViaScope:
             "stg_users": {"user_id", "email", "status", "unused"},
             "stg_enroll": {"user_id", "grade"},
         }
-        # The heuristic bails on the JOIN.
-        assert get_columns_read_from_ref(parsed, "stg_users") is None
+        # The heuristic reads the alias-qualified columns too; the scope pass also
+        # resolves what the heuristic cannot (stars, bare columns across a JOIN).
+        assert get_columns_read_from_ref(parsed, "stg_users") == {"user_id", "email", "status"}
         # The scope fallback attributes SELECT/JOIN/WHERE columns to the right ref.
         users = consumed_columns_via_scope(parsed, "stg_users", schema)
         assert users is not None
@@ -996,3 +998,66 @@ class TestConsumedColumnsViaScope:
         model.write_text("select user_id from {{ ref('stg_users') }}")
         parsed = parse_model_file(model)
         assert consumed_columns_by_ref_via_scope(parsed, {}) == {}
+
+
+class TestPassthroughColumnsViaScope:
+    RAW = "raw.users"
+    SCHEMA = {RAW: {"id", "email", "rank", "title"}}  # noqa: RUF012
+
+    def _passed(
+        self, tmp_path: Path, sql: str, macros: dict[str, str] | None = None
+    ) -> dict[str, list[tuple[str, str]]]:
+        model = tmp_path / "m.sql"
+        model.write_text(sql)
+        return passthrough_columns_via_scope(parse_model_file(model, macro_sources=macros), self.SCHEMA)
+
+    def test_renames_and_casts_pass_and_derived_columns_do_not(self, tmp_path: Path) -> None:
+        passed = self._passed(
+            tmp_path,
+            "with source as (select * from {{ source('raw', 'users') }})\n"
+            ", renamed as (\n"
+            "    select id as user_id, cast(rank as bigint) as user_rank, lower(email) as email from source\n"
+            ")\n"
+            "select user_id, try_cast(user_rank as varchar) as user_rank, email, title from renamed "
+            "cross join (select 1 as one) as constant",
+        )
+
+        assert passed == {"user_id": [(self.RAW, "id")], "user_rank": [(self.RAW, "rank")]}
+
+    def test_a_union_passes_every_branch_and_an_except_only_its_left(self, tmp_path: Path) -> None:
+        union = self._passed(
+            tmp_path,
+            "select id as user_id, email from {{ source('raw', 'users') }}\n"
+            "union all\n"
+            "select rank, null from {{ source('raw', 'users') }}",
+        )
+        except_ = self._passed(
+            tmp_path,
+            "select id as user_id from {{ source('raw', 'users') }}\n"
+            "except\n"
+            "select rank from {{ source('raw', 'users') }}",
+        )
+
+        assert union == {"user_id": [(self.RAW, "id"), (self.RAW, "rank")], "email": [(self.RAW, "email")]}
+        assert except_ == {"user_id": [(self.RAW, "id")]}
+
+    def test_a_macro_using_do_expands_to_the_cte_the_model_reads(self, tmp_path: Path) -> None:
+        macros = {
+            "macros/newest.sql": "{% macro newest(cte) %}{% set names = [] %}{% do names.append('newest_' ~ cte) %}"
+            ", {{ names[0] }} as (select * from {{ cte }}){% endmacro %}"
+        }
+
+        passed = self._passed(
+            tmp_path,
+            "with source as (select * from {{ source('raw', 'users') }})\n{{ newest('source') }}\n"
+            "select email as user_email from newest_source",
+            macros,
+        )
+
+        assert passed == {"user_email": [(self.RAW, "email")]}
+
+    def test_returns_empty_when_no_schema_known(self, tmp_path: Path) -> None:
+        model = tmp_path / "m.sql"
+        model.write_text("select id from {{ source('raw', 'other') }}")
+
+        assert passthrough_columns_via_scope(parse_model_file(model), self.SCHEMA) == {}

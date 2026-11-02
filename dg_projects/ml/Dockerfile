@@ -31,6 +31,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
 
+# tiktoken downloads an encoding on first use. The embedding assets count chunk and
+# request sizes in cl100k_base, so it is fetched here into a cache the final image
+# points TIKTOKEN_CACHE_DIR at, and a run does not depend on reaching the download.
+RUN TIKTOKEN_CACHE_DIR=/app/dg_projects/ml/.tiktoken_cache \
+    .venv/bin/python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
+
 # OpenTelemetry auto-instrumentation agent, activated by PYTHONPATH (see the
 # /opt/otel symlink in the final stage).
 #
@@ -86,6 +92,7 @@ COPY --from=builder /app/dg_projects/ml /app
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
+ENV TIKTOKEN_CACHE_DIR=/app/.tiktoken_cache
 
 # A stable path to the auto-instrumentation agent directory, so ol-infrastructure
 # can switch tracing on with PYTHONPATH without encoding this image's Python

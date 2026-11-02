@@ -5,7 +5,7 @@
 --- To get the course structure at any give time, use course_id + block_id + the last retrieved_at
 
 with course_block_source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__api__course_blocks') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__api__course_structure_blocks') }}
 )
 
 -- A retrieval is kept when the course's content hash differs from its previous retrieval's. The hash covers the

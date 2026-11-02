@@ -20,14 +20,14 @@ from ml.lib.summarize import (
     JOIN_COLS,
     SUMMARIZE_CHECKPOINT_BATCH_SIZE,
     SUMMARIZE_MAX_CONCURRENCY,
-    SUMMARY_PROMPT,
-    SUMMARY_PROMPT_NAME,
-    build_summary_client,
+    SUMMARY_MODEL,
+    Summarizer,
+    fetch_summary_prompt,
     filter_unsummarized,
     summarize_and_checkpoint,
+    summary_use_case,
 )
-from ml.resources.llm import LLMClientFactory
-from ml.resources.opik_auth import LOCAL_PROMPT_VERSION, get_prompt_version
+from ol_llm import BatchFailed
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import (
@@ -94,32 +94,26 @@ class FeedbackSummariesConfig(Config):
             "both."
         ),
     )
-    model_version: str | None = Field(
-        default=None,
+    model: str = Field(
+        default=SUMMARY_MODEL,
+        pattern=r"^[a-z0-9-]+:.+$",
         description=(
-            "Override the model id sent to the anthropic/openai/openai_compatible/"
-            "azure_openai client classes, e.g. to try a different model's cost/"
-            "quality without a code change. Unset uses SUMMARY_MODEL_VERSION "
-            "(ml.lib.summarize). Ignored when the llm resource's client_class is "
-            "'bedrock' -- see bedrock_model_version."
-        ),
-    )
-    bedrock_model_version: str | None = Field(
-        default=None,
-        description=(
-            "Same as model_version, but for client_class='bedrock' -- Bedrock has "
-            "its own model/inference-profile id namespace (e.g. "
-            "'global.anthropic.claude-haiku-4-5-20251001-v1:0'), never a plain "
-            "Anthropic API id. Unset uses BEDROCK_SUMMARY_MODEL_VERSION."
+            "The model in ol-llm's provider:model form, e.g. "
+            "'bedrock:us.anthropic.claude-haiku-5-5' or "
+            "'anthropic:claude-sonnet-5', to try a different model's cost/quality "
+            "without a code change. A different model re-summarizes every "
+            "conversation summarized since the idempotency key, which includes the "
+            "model; one summarized before it is redone only when its turns change. "
+            "Unset uses SUMMARY_MODEL (ml.lib.summarize)."
         ),
     )
     max_concurrency: int = Field(
         default=SUMMARIZE_MAX_CONCURRENCY,
         ge=1,
         description=(
-            "How many summarize() calls run at once -- each is an independent "
-            "blocking network request, so this is the lever for wall-clock time "
-            "at scale. Unset uses SUMMARIZE_MAX_CONCURRENCY (ml.lib.summarize)."
+            "How many conversations are summarized at once -- each is an "
+            "independent blocking request, so this is the lever for wall-clock "
+            "time at scale. Unset uses SUMMARIZE_MAX_CONCURRENCY (ml.lib.summarize)."
         ),
     )
     batch_size: int = Field(
@@ -135,7 +129,7 @@ class FeedbackSummariesConfig(Config):
 
 
 @asset(
-    code_version="feedback_summaries_v5",
+    code_version="feedback_summaries_v7",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_summaries"]),
     deps=[AssetKey(["intermediate", "int__feedback__conversation"])],
@@ -152,7 +146,6 @@ class FeedbackSummariesConfig(Config):
 def feedback_summaries(
     context: AssetExecutionContext,
     config: FeedbackSummariesConfig,
-    llm: LLMClientFactory,
 ) -> pl.DataFrame:
     """
     Summarize every in-scope conversation that has text via LLM.
@@ -188,7 +181,6 @@ def feedback_summaries(
             **dict.fromkeys(JOIN_COLS, pl.String),
             "turn_count": pl.Int64,
             "summary_model_version": pl.String,
-            "prompt_version": pl.String,
         }
     )
     if not config.full_refresh:
@@ -197,59 +189,58 @@ def feedback_summaries(
                 database_name=database_name,
                 table_name="feedback_summaries",
             )
-            # prompt_version is a newer column -- a table upserted before it
-            # existed won't have it until the asset's own schema-evolution step
-            # (checkpoint_chunk) next runs; select only what's actually there.
-            select_cols = [*JOIN_COLS, "turn_count", "summary_model_version"]
-            if "prompt_version" in already_summarized_lazy.collect_schema().names():
-                select_cols.append("prompt_version")
+            # idempotency_key is a newer column -- a table upserted before it
+            # existed won't have it until upsert_chunk's schema evolution
+            # next runs; select only what's actually there.
+            select_cols = [
+                col
+                for col in [
+                    *JOIN_COLS,
+                    "turn_count",
+                    "summary_model_version",
+                    "idempotency_key",
+                ]
+                if col in already_summarized_lazy.collect_schema().names()
+            ]
             already_summarized_df = already_summarized_lazy.select(
                 select_cols
             ).collect()
 
-    # Built before filtering: filter_unsummarized needs the model/prompt actually
-    # in use to re-submit a conversation whose stored summary_model_version or
-    # prompt_version has since gone stale, not just a turn_count change.
-    client = build_summary_client(
-        llm, config.model_version, config.bedrock_model_version
+    # Fetched once: the whole run uses one prompt version, and its template hash
+    # is part of every row's key.
+    summarizer = Summarizer(
+        use_case=summary_use_case(config.model),
+        prompt=fetch_summary_prompt(),
+        run_id=context.run_id,
     )
-    prompt_version = get_prompt_version(SUMMARY_PROMPT_NAME, SUMMARY_PROMPT)
     unsummarized_df = filter_unsummarized(
-        source_df,
-        already_summarized_df,
-        current_model_version=client.model_version,
-        # "local" means Opik was unreachable, not a prompt edit; comparing it would
-        # re-summarize the whole corpus.
-        current_prompt_version=None
-        if prompt_version == LOCAL_PROMPT_VERSION
-        else prompt_version,
+        source_df, already_summarized_df, summarizer.keys
+    )
+    context.log.info(
+        "Summarizing with %s and prompt %s %s (%s source)",
+        config.model,
+        summarizer.prompt.name,
+        summarizer.prompt.version,
+        summarizer.prompt.source,
     )
 
-    errors: list[str] = []
-    catalog = get_glue_catalog()
     table_identifier = f"{database_name}.feedback_summaries"
-    summaries_df = summarize_and_checkpoint(
-        unsummarized_df,
-        client,
-        (catalog, table_identifier),
-        batch_size=config.batch_size,
-        errors=errors,
-        max_concurrency=config.max_concurrency,
-        context=context,
-    )
+    try:
+        summaries_df, report = summarize_and_checkpoint(
+            unsummarized_df,
+            summarizer,
+            (get_glue_catalog(), table_identifier),
+            batch_size=config.batch_size,
+            max_concurrency=config.max_concurrency,
+            log=context.log,
+        )
+    except BatchFailed as exc:
+        # Every chunk before the stop is already upserted into the table.
+        msg = f"feedback_summaries stopped with model {config.model!r}: {exc}"
+        raise Failure(msg) from exc
 
-    llm_call_count = summaries_df.filter(
-        pl.col("summary_model_version").is_not_null()
-    ).height
-    # A failed conversation is dropped from summaries_df entirely (unlike a
-    # row with no text, which is kept with a null summary), so this
-    # difference is exactly the failure count -- including rows never attempted
-    # because of an early abort.
-    failed_count = unsummarized_df.height - summaries_df.height
-    # len(errors) rather than failed_count: on an early abort, failed_count also
-    # counts never-attempted rows, overstating how many calls actually ran.
-    attempted_count = llm_call_count + len(errors)
-
+    llm_call_count = report.succeeded
+    failed_count = len(report.failures)
     context.log.info(
         "Processed %d conversations (%d LLM calls, %d skipped for no text, "
         "%d failed, %d already summarized, %d total upstream)",
@@ -260,28 +251,18 @@ def feedback_summaries(
         already_summarized_df.height,
         source_df.height,
     )
-
-    # 100% failure would otherwise look identical to "nothing new to summarize".
-    if attempted_count > 0 and llm_call_count == 0:
-        sample_errors = "; ".join(errors[:3])
-        msg = (
-            f"All {attempted_count} attempted LLM calls failed via "
-            f"client_class={llm.client_class!r}, "
-            f"model_version={client.model_version!r}, base_url={llm.base_url!r} -- "
-            f"check these resolved to what you intended (a stale/mismatched "
-            f"client_class is a common cause). Sample errors: {sample_errors}"
-        )
-        raise Failure(msg)
-
     if failed_count:
         context.log.warning(
-            "%d conversation(s) failed to summarize this run; will retry next run",
+            "%d conversation(s) failed to summarize this run; will retry next run. %s",
             failed_count,
+            report.describe(),
         )
 
     context.add_output_metadata(
         {
-            "model_version": MetadataValue.text(client.model_version),
+            "model": MetadataValue.text(config.model),
+            "prompt_version": MetadataValue.text(str(summarizer.prompt.version)),
+            "prompt_source": MetadataValue.text(summarizer.prompt.source),
             "llm_call_count": MetadataValue.int(llm_call_count),
             "failed_count": MetadataValue.int(failed_count),
             "already_summarized_count": MetadataValue.int(already_summarized_df.height),

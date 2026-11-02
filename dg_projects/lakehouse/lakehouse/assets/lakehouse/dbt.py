@@ -52,6 +52,8 @@ DBT_REPO_DIR = (
 )
 
 OPENMETADATA_DOMAINS_PATH = DBT_REPO_DIR / "openmetadata_domains.yml"
+# ol-infrastructure's om-ingest-domains job reads this name.
+OPENMETADATA_DOMAIN_RULES_ARTIFACT = "openmetadata_domains.json"
 
 dbt_project = DbtProject(project_dir=DBT_REPO_DIR, target=DBT_TARGET)
 dbt_project.prepare_if_dev()
@@ -203,19 +205,26 @@ def _repair_surrogate_key_drift(
 
 
 def assign_openmetadata_domains(
-    context: AssetExecutionContext | OpExecutionContext, target_path: Path
+    context: AssetExecutionContext | OpExecutionContext,
+    target_path: Path,
+    dbt_s3_artifacts: DbtS3ArtifactsResource,
 ) -> None:
     """Fill in each node's OpenMetadata domain in target_path/manifest.json.
 
     Rewrites the file in place, so call it only on an invocation's own target
     directory, and only before uploading the manifest for OpenMetadata.
+
+    Also uploads the rules beside it, for ol-infrastructure's om-ingest-domains
+    job, which applies them to the lake tables dbt does not declare.
     """
+    rules = load_domain_rules(OPENMETADATA_DOMAINS_PATH)
     manifest_path = target_path / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
-    counts, unassigned = assign_domains(
-        manifest, load_domain_rules(OPENMETADATA_DOMAINS_PATH)
-    )
+    counts, unassigned = assign_domains(manifest, rules)
     manifest_path.write_text(json.dumps(manifest))
+    dbt_s3_artifacts.write_json_artifact(
+        OPENMETADATA_DOMAIN_RULES_ARTIFACT, rules.model_dump(), context
+    )
     context.log.info(
         "OpenMetadata domains in the manifest: %s",
         ", ".join(f"{domain}={n}" for domain, n in sorted(counts.items())),
@@ -270,7 +279,7 @@ def upload_build_artifacts(
     dbt_s3_artifacts.upload_artifacts(invocation.target_path, results, context)
     # Last, so a broken domain rules file cannot cost the run its test results.
     if "manifest.json" in written:
-        assign_openmetadata_domains(context, invocation.target_path)
+        assign_openmetadata_domains(context, invocation.target_path, dbt_s3_artifacts)
         dbt_s3_artifacts.upload_artifacts(
             invocation.target_path, ["manifest.json"], context
         )
@@ -375,7 +384,7 @@ def generate_dbt_docs_artifacts(
             "it will be omitted from the OpenMetadata artifact upload"
         )
 
-    assign_openmetadata_domains(context, docs_invocation.target_path)
+    assign_openmetadata_domains(context, docs_invocation.target_path, dbt_s3_artifacts)
     dbt_s3_artifacts.upload_artifacts(docs_invocation.target_path, artifacts, context)
 
 

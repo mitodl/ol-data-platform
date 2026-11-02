@@ -175,12 +175,14 @@ metric file may contain in a reviewed commit.
 
 `ol-dbt metrics sync` makes each Metric entity in OpenMetadata match its file
 and adds a lineage edge from each `implemented_by` table to it. It stops before
-the first file when the server's version is not the one stamped in the schema
-snapshot. For each file it:
+the first file when the server's major or minor version differs from the one
+stamped in the schema snapshot. A patch-level difference (e.g. 2.0.5 against
+2.0.6) prints a `version` warning and the sync goes on; refresh the snapshot
+when you see it. For each file it:
 
 1. resolves `owners`, `reviewers`, glossary and classification `tags` and the
    `implemented_by` tables by name, and writes nothing for that metric when one
-   is missing;
+   is missing (except a StarRocks view, which is skipped; see "StarRocks views");
 2. reads the live metric and checks for drift: when someone other than the sync
    bot changed the description, owners, reviewers or status since the bot last
    wrote the metric (the newest version in its history whose `updatedBy` is the
@@ -197,7 +199,9 @@ snapshot. For each file it:
    description, existing owners and custom properties and resets the status,
    so these land only by PATCH;
 5. PUTs a table-to-metric lineage edge per `implemented_by` table. OpenMetadata
-   stores no column lineage for a Metric, so the columns stay in this file.
+   stores no column lineage for a Metric, so the columns stay in this file;
+6. deletes each edge into the metric that sync created and whose table the
+   file no longer lists (below).
 
 Sync records a SHA-256 of what the file declares (`metric`, `status` and
 `implemented_by`) in the metric's `metricFileSha256` custom property, and
@@ -213,14 +217,65 @@ it would PATCH. It is not part of the drift check, and a file cannot set it
 (`extension` is not allowed).
 
 An unchanged file writes only the lineage edges, which OpenMetadata upserts.
-OpenMetadata stores descriptions HTML-encoded (`learner's` as `learner&#39;s`),
-so sync compares them with the encoding undone. Markup the server's sanitizer
-removes cannot compare equal, and sync warns that the file needs fixing.
+OpenMetadata 2.0.6 stores a description with no `<` as written, not counting
+the `<` of an entity link (`<#E::...>`), which it sets aside first. Any other
+description goes through its HTML sanitizer, which encodes the text
+(`learner's` as `learner&#39;s`), drops markup it does not allow and control
+characters, and rewrites some markup it keeps (`<br>` as `<br />`; an
+`<https://...>` autolink is dropped; `x<y` loses everything from `<y`). Sync compares descriptions with the encoding undone, so
+encoding alone is not a difference. Dropped or rewritten markup is: sync prints
+a `rewritten` line with what OpenMetadata stored, and PATCHes the description
+again on every run until the file matches it (or writes a literal `<` as
+`&lt;`).
+
 Fields the file does not set are left as OpenMetadata has them, except
 `displayName`: a file without one, for a metric that has one in OpenMetadata,
 is reported as `stale` like any other difference (see above). Deleting a tag
 from a file removes it from the metric only if sync applied it (the tag's
 `appliedBy` is the bot); a tag someone added in OpenMetadata stays, even if the
-file listed it too. Lineage from a StarRocks view is skipped with a warning until
-OpenMetadata has a StarRocks service, and an edge whose `implemented_by` entry
-was removed is not deleted.
+file listed it too.
+
+Lineage works the same way. Deleting an `implemented_by` entry deletes that
+table's edge to the metric only if sync created it. OpenMetadata records the
+caller who first stored an edge as its `lineageDetails.createdBy` and keeps
+that on every later PUT or PATCH of the edge
+(`LineageRepository.applyTemporalFields`), so an edge someone drew in
+OpenMetadata stays, even if the file listed the same table too, and an edge
+sync created is still sync's after someone edits its description. `createdBy`
+is only the user name, so an edge drawn in OpenMetadata while logged in with
+the bot's token is recorded as sync's and is removed like one. `--dry-run`
+lists the edges it would remove. A metric that is In Review or Rejected keeps
+them, like every other write.
+
+Sync removes nothing for a metric when any of its StarRocks views was skipped
+for a 404 in that run, because a view not catalogued yet and a
+`--starrocks-service` that names the wrong service look the same, and the
+second would make every view's edge look stale. It removes nothing at all when
+`OM_BOT_JWT_TOKEN` belongs to a user who is not a bot, since that user's
+hand-drawn edges would carry the same name. Both cases print a warning and
+leave the rest of the sync unchanged.
+
+Drift is read from who wrote each version, so an edit made in the UI or the
+API with the sync bot's own token counts as the bot's last write. Sync cannot
+see it as drift: the next run PATCHes a field the file sets back to it without
+reporting anything. Edit metrics in OpenMetadata as yourself, never with the
+bot's token.
+
+### StarRocks views
+
+An `implemented_by` model tagged `starrocks` (the `b2b_analytics` and
+`b2b_learner_records` views) is a table in OpenMetadata's StarRocks service,
+named `StarRocks.default_catalog.<+schema>.<model>`, e.g.
+`StarRocks.default_catalog.b2b_learner_records.mv_b2b_learner_enrollment`.
+The production manifest lists these models under `disabled`, and the `schema`
+it gives them is what Trino would build (`ol_warehouse_production_b2b_analytics`),
+so sync reads the model's `+schema` instead. On StarRocks that is the database
+name as written (`macros/generate_schema_name.sql`). OpenMetadata also holds
+copies under doubled names such as `b2b_analytics_b2b_analytics`, from builds
+before that macro, and sync never links those. `--starrocks-service` names the
+service (default `StarRocks`).
+
+A view OpenMetadata does not have yet (a 404, e.g. a new view before the
+StarRocks ingestion has catalogued it) is skipped with a warning and does not
+fail the metric. Its edge lands on the first sync after it is catalogued. A
+Trino table OpenMetadata lacks still leaves the metric unresolved.

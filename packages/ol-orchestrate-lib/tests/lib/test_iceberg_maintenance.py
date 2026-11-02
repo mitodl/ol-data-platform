@@ -349,7 +349,9 @@ class TestRawConfigForTable:
 
     def test_non_matching_mitxonline_prefix(self) -> None:
         """raw__mitxonline__openedx does not start with raw__mitxonline__app."""
-        cfg = raw_config_for_table("raw__mitxonline__openedx__api__course_blocks")
+        cfg = raw_config_for_table(
+            "raw__mitxonline__openedx__api__course_structure_blocks"
+        )
         assert cfg == RAW_LAYER_GROUP_CONFIGS["_default"]
 
     def test_empty_string_returns_default(self) -> None:

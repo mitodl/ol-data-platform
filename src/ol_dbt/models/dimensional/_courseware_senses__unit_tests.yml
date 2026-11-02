@@ -1,0 +1,135 @@
+---
+unit_tests:
+- name: test_tfact_courseware_claim_resolves_a_claim_to_its_course_runs_sense
+  description: >
+    A claim's concept_fk is the sense its course run uses, not the label's first
+    concept; a claim whose run is queued for review has none.
+  model: tfact_courseware_claim
+  given:
+  - input: ref('int__courseware__claims')
+    rows:
+    - {extraction_key: k1, claim_ordinal: 1, platform: mitxonline, courserun_readable_id: os,
+      claim_kind: concept, label: kernel, concept_label_key: kernel}
+    - {extraction_key: k2, claim_ordinal: 1, platform: mitxonline, courserun_readable_id: ml,
+      claim_kind: concept, label: kernel, concept_label_key: kernel}
+    - {extraction_key: k3, claim_ordinal: 1, platform: mitxonline, courserun_readable_id: linalg,
+      claim_kind: concept, label: kernel, concept_label_key: kernel}
+  - input: ref('dim_courseware_extraction')
+    rows:
+    - {extraction_key: k1, courseware_extraction_pk: e1}
+    - {extraction_key: k2, courseware_extraction_pk: e2}
+    - {extraction_key: k3, courseware_extraction_pk: e3}
+  - input: ref('int__courseware__concept_sense_assignments')
+    rows:
+    - {concept_label_key: kernel, platform: mitxonline, courserun_readable_id: os,
+      concept_id: os-kernel, sense_status: assigned}
+    - {concept_label_key: kernel, platform: mitxonline, courserun_readable_id: ml,
+      concept_id: ml-kernel, sense_status: assigned}
+    - {concept_label_key: kernel, platform: mitxonline, courserun_readable_id: linalg,
+      concept_id: null, sense_status: needs_review}
+  expect:
+    rows:
+    - {courserun_readable_id: os, concept_fk: os-kernel}
+    - {courserun_readable_id: ml, concept_fk: ml-kernel}
+    - {courserun_readable_id: linalg, concept_fk: null}
+
+- name: test_dim_concept_counts_each_sense_from_its_own_course_runs
+  description: >
+    The split-off machine learning "kernel" records the operating systems concept
+    it
+    was split from, and each sense counts only the mentions and course runs assigned
+    to it, with its own claim description, not the label's.
+  model: dim_concept
+  given:
+  - input: ref('int__courseware__concept_registry')
+    rows:
+    - {concept_id: os-kernel, concept_status: active, minted_label: kernel, split_from_concept_id: null}
+    - {concept_id: ml-kernel, concept_status: active, minted_label: kernel, split_from_concept_id: os-kernel}
+  - input: ref('int__courseware__concept_aliases')
+    rows:
+    - {concept_label_key: kernel, concept_id: os-kernel, sense_role: primary}
+    - {concept_label_key: kernel, concept_id: ml-kernel, sense_role: split}
+  - input: ref('int__courseware__concept_labels')
+    rows:
+    - {concept_label_key: kernel, preferred_label: kernel}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {concept_id: os-kernel, concept_label_key: kernel, platform: mitxonline, courserun_readable_id: os,
+      teaching_status: taught, concept_kind: concept, description: the core of an
+        operating system}
+    - {concept_id: os-kernel, concept_label_key: kernel, platform: mitxonline, courserun_readable_id: os,
+      teaching_status: used, concept_kind: concept, description: runs in privileged
+        mode}
+    - {concept_id: ml-kernel, concept_label_key: kernel, platform: mitxonline, courserun_readable_id: ml,
+      teaching_status: taught, concept_kind: method, description: a similarity function
+        between inputs}
+  - input: source('courseware_intermediate', 'courseware_concept_description')
+    rows: []
+  expect:
+    rows:
+    - {concept_pk: os-kernel, split_from_concept_fk: null, mention_count: 2, courserun_count: 1,
+      label_count: 1, concept_kind: concept, extracted_description: the core of an
+        operating system}
+    - {concept_pk: ml-kernel, split_from_concept_fk: os-kernel, mention_count: 1,
+      courserun_count: 1, label_count: 1, concept_kind: method, extracted_description: a
+        similarity function between inputs}
+
+- name: test_dim_concept_counts_no_label_for_a_sense_with_no_mentions
+  description: >
+    Every course run that uses "kernel" is assigned to the operating systems sense,
+    so the linear algebra sense, still an alias of the current label, has no label,
+    mention or course run and Learn leaves it out.
+  model: dim_concept
+  given:
+  - input: ref('int__courseware__concept_registry')
+    rows:
+    - {concept_id: os-kernel, concept_status: active, minted_label: kernel, split_from_concept_id: null}
+    - {concept_id: linalg-kernel, concept_status: active, minted_label: kernel, split_from_concept_id: os-kernel}
+  - input: ref('int__courseware__concept_aliases')
+    rows:
+    - {concept_label_key: kernel, concept_id: os-kernel, sense_role: primary}
+    - {concept_label_key: kernel, concept_id: linalg-kernel, sense_role: split}
+  - input: ref('int__courseware__concept_labels')
+    rows:
+    - {concept_label_key: kernel, preferred_label: kernel}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {concept_id: os-kernel, concept_label_key: kernel, platform: mitxonline, courserun_readable_id: os,
+      teaching_status: taught, concept_kind: concept, description: the core of an
+        operating system}
+  - input: source('courseware_intermediate', 'courseware_concept_description')
+    rows: []
+  expect:
+    rows:
+    - {concept_pk: os-kernel, label_count: 1, mention_count: 1, courserun_count: 1}
+    - {concept_pk: linalg-kernel, label_count: 0, mention_count: 0, courserun_count: 0}
+
+- name: test_dim_concept_takes_its_kind_from_the_mentions_that_have_one
+  description: >
+    The longest description of calculus comes from an assumed-knowledge claim, which
+    has no kind; the concept's kind still comes from the concept claim that has one.
+  model: dim_concept
+  given:
+  - input: ref('int__courseware__concept_registry')
+    rows:
+    - {concept_id: calc, concept_status: active, minted_label: calculus, split_from_concept_id: null}
+  - input: ref('int__courseware__concept_aliases')
+    rows:
+    - {concept_label_key: calculus, concept_id: calc, sense_role: primary}
+  - input: ref('int__courseware__concept_labels')
+    rows:
+    - {concept_label_key: calculus, preferred_label: calculus}
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {concept_id: calc, concept_label_key: calculus, platform: mitxonline, courserun_readable_id: ml,
+      claim_kind: assumed_knowledge, teaching_status: null, concept_kind: null, description: derivatives
+        and integrals of functions of one variable}
+    - {concept_id: calc, concept_label_key: calculus, platform: mitxonline, courserun_readable_id: ml,
+      claim_kind: concept, teaching_status: used, concept_kind: concept, description: used
+        to fit models}
+  - input: source('courseware_intermediate', 'courseware_concept_description')
+    rows: []
+  expect:
+    rows:
+    - {concept_pk: calc, concept_kind: concept, extracted_description: derivatives
+        and integrals of functions of one variable}

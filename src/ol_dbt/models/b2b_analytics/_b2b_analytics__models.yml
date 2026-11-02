@@ -119,7 +119,7 @@ models:
         cohort:
           role: dimension
   - name: seat_limit
-    description: b2b_contract_max_learners.
+    description: b2b_contract_max_learners, with 0 (unlimited) published as null.
     config:
       meta:
         api_description: How many seats the contract includes. Empty or zero means
@@ -956,7 +956,7 @@ models:
         cohort:
           role: dimension
   - name: seat_limit
-    description: b2b_contract_max_learners.
+    description: b2b_contract_max_learners, with 0 (unlimited) published as null.
     config:
       meta:
         api_description: How many seats the contract includes. Empty or zero means

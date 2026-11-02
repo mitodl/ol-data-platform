@@ -651,6 +651,20 @@ def retired_pairs(entries: list[dict[str, Any]]) -> set[tuple[str, str]]:
     return pairs
 
 
+def frozen_tables(entries: list[dict[str, Any]], *, modeled_only: bool = False) -> frozenset[str]:
+    """Raw tables the graveyard keeps in the raw layer (`frozen: true`, §7.2).
+
+    :param modeled_only: Leave out entries marked `modeled: false`, whose tables
+        dbt never read.
+    """
+    return frozenset(
+        str(raw_table)
+        for entry in entries
+        if entry.get("frozen", False) and (entry.get("modeled", True) or not modeled_only)
+        for raw_table in entry["raw_tables"]
+    )
+
+
 def declared_pairs(units: list[Unit]) -> set[tuple[str, str]]:
     """`(unit_key, raw_table)` for every table the inventory currently declares."""
     return {(unit.key, str(table.get("raw_table", ""))) for unit in units for table in unit.tables}
@@ -1039,6 +1053,9 @@ def reconcile_warehouse(
     units: list[Unit],
     warehouse_tables: set[str],
     report: ValidationReport,
+    *,
+    frozen: frozenset[str] = frozenset(),
+    retired: frozenset[str] = frozenset(),
 ) -> Reconciliation:
     """Report the inventory against the tables the warehouse actually holds.
 
@@ -1048,9 +1065,25 @@ def reconcile_warehouse(
     is usually drift, but is also what a table loaded for years and never
     declared looks like. Neither is fixable by editing the pull request in front
     of you, which is the line §7.2 draws for what may be an ERROR.
+
+    *frozen* tables (`frozen_tables`) belong in the warehouse although no unit
+    declares them, so they are left out of the buckets. One that has gone
+    missing is reported instead: nothing can reload it. Any other *retired*
+    table the warehouse still holds is named as retired, not as unclaimed.
     """
     owners = tables_by_raw_name(units)
-    result = reconcile_tables(set(owners), warehouse_tables)
+    result = reconcile_tables(set(owners), warehouse_tables - frozen)
+
+    for raw_table in sorted(frozen - warehouse_tables):
+        report.add(
+            RECONCILE_CHECK,
+            Severity.WARNING,
+            RETIRED_FILENAME,
+            f"{raw_table} is frozen but the warehouse does not hold it",
+            "Its source is decommissioned, so no loader can bring it back, and any "
+            "dbt model reading it as history will fail or build empty. If its "
+            "files are still in S3, re-register the table from its last metadata.json.",
+        )
 
     for raw_table in sorted(result.declared_not_observed):
         report.add(
@@ -1065,6 +1098,17 @@ def reconcile_warehouse(
         )
 
     for raw_table in sorted(result.observed_not_declared):
+        if raw_table in retired:
+            report.add(
+                RECONCILE_CHECK,
+                Severity.WARNING,
+                RETIRED_FILENAME,
+                f"{raw_table} is retired but the warehouse still holds it",
+                "Nothing loads it, and the entry does not say to keep it. Drop the "
+                "table, or set `frozen: true` on its entry if its history stays "
+                "(with `modeled: false` if dbt never read it).",
+            )
+            continue
         candidates = units_for_table(units, raw_table)
         if not candidates:
             model, detail = (
@@ -1113,10 +1157,37 @@ def reconcile_dbt(
     * a `modeled: true` table dbt does not declare: that flag is what step 7
       generates the sources YAML from, so a wrong one silently drops a table
       from the generation.
+
+    A frozen graveyard table is meant to be a dbt source, so it is left out of
+    the buckets; what is reported is a frozen table dbt no longer reads. An
+    entry marked `modeled: false` says the opposite, so dbt declaring one of
+    its tables is what is reported there.
     """
+    entries = load_retired(inventory_dir)
+    retired = {raw_table for _, raw_table in retired_pairs(entries)}
+    frozen = frozen_tables(entries)
+    frozen_modeled = frozen_tables(entries, modeled_only=True)
     owners = tables_by_raw_name(units)
-    result = reconcile_tables(set(owners), dbt_tables)
-    retired = {raw_table for _, raw_table in retired_pairs(load_retired(inventory_dir))}
+    result = reconcile_tables(set(owners), dbt_tables - frozen)
+
+    for raw_table in sorted((frozen - frozen_modeled) & dbt_tables):
+        report.add(
+            RECONCILE_CHECK,
+            Severity.WARNING,
+            RETIRED_FILENAME,
+            f"{raw_table} is frozen with modeled: false but dbt declares a source for it",
+            "The entry says dbt never read this table. Drop `modeled: false` if a model reads it now.",
+        )
+
+    for raw_table in sorted(frozen_modeled - dbt_tables):
+        report.add(
+            RECONCILE_CHECK,
+            Severity.WARNING,
+            RETIRED_FILENAME,
+            f"{raw_table} is frozen but dbt declares no source for it",
+            "`frozen: true` says dbt still models this table's history, which is "
+            "the reason to keep it. Drop the flag if the models went on purpose.",
+        )
 
     for raw_table in sorted(result.observed_not_declared):
         if raw_table in retired:
@@ -1184,6 +1255,7 @@ def reconcile_dbt(
 DRIFT_CHECK = "inventory_drift"
 
 MANUAL_SCHEDULE = "manual"
+STOPPED_CONNECTION_STATUSES = frozenset({"inactive", "deprecated"})
 
 # How Airbyte spells a Postgres replication method, mapped to the inventory's
 # vocabulary. Mirrors `bin/airbyte-inventory.py`, which cannot be imported from
@@ -1269,8 +1341,10 @@ def check_drift(snapshot: dict[str, Any], units: list[Unit], report: ValidationR
     Severity follows what the finding says about the inventory. A declaration
     the workspace does not honour means the inventory is *wrong* — a model may
     be reading a table nothing loads — and is an ERROR. Something live the
-    inventory does not cover is a WARNING: it is usually config that should
-    have been deleted, and it costs nothing until somebody depends on it.
+    inventory does not cover is a WARNING: it is usually config created in the
+    UI, or a retired connection someone resumed, and it costs nothing until
+    somebody depends on it. A retired connection that stays disabled is the
+    expected end state and is not reported.
     """
     rendered = render_airbyte(units)
     live = _live_connections(snapshot)
@@ -1302,14 +1376,20 @@ def check_drift(snapshot: dict[str, Any], units: list[Unit], report: ValidationR
         )
 
     for name in sorted(set(live) - set(declared)):
+        # A retired connection is disabled, not deleted (§10.1), so one that
+        # loads nothing is the expected end state. Resuming it makes it active
+        # and brings the warning back.
+        status = live[name].get("status")
+        if status in STOPPED_CONNECTION_STATUSES:
+            continue
         report.add(
             DRIFT_CHECK,
             Severity.WARNING,
             "(undeclared)",
-            f"connection {name!r} exists in Airbyte but no unit declares it",
-            "Either it was created in the UI, or it is config we meant to "
-            "delete and did not. Retiring a connection means deleting it in "
-            "Airbyte as well as recording its tables in retired.yml.",
+            f"connection {name!r} is {status!r} in Airbyte but no unit declares it",
+            "Either it was created in the UI, or it is retired config that "
+            "was resumed. Retiring a connection means disabling it in Airbyte "
+            "as well as recording its tables in retired.yml.",
         )
 
     for name in sorted(set(live) & set(declared)):

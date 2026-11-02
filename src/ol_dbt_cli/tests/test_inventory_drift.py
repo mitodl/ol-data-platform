@@ -124,13 +124,31 @@ class TestConnectionDrift:
         assert "is declared but no longer exists in Airbyte" in _messages(report, Severity.ERROR)[0]
 
     def test_an_undeclared_live_connection_is_a_warning(self, units: list[Any]) -> None:
-        # Usually config someone forgot to delete, and it costs nothing until
-        # something depends on it — unlike a declaration that has gone missing.
+        # Usually config made in the UI or a retired connection someone
+        # resumed, and it costs nothing until something depends on it, unlike
+        # a declaration that has gone missing.
         snapshot = live()
-        snapshot["connections"].append({"name": "Something Someone Made In The UI", "configurations": {}})
+        snapshot["connections"].append(
+            {"name": "Something Someone Made In The UI", "status": "active", "configurations": {}}
+        )
         report = _run(snapshot, units)
         assert report.errors == []
         assert "no unit declares it" in _messages(report, Severity.WARNING)[0]
+
+    @pytest.mark.parametrize("status", ["inactive", "deprecated"])
+    def test_a_disabled_undeclared_connection_is_silent(self, units: list[Any], status: str) -> None:
+        # Retiring a connection disables it rather than deleting it, so a
+        # retired connection that loads nothing is the end state.
+        snapshot = live()
+        snapshot["connections"].append({"name": "S3 Retired → S3 Data Lake", "status": status, "configurations": {}})
+        assert _run(snapshot, units).issues == []
+
+    def test_an_undeclared_connection_without_a_status_still_warns(self, units: list[Any]) -> None:
+        # A snapshot row with no status says nothing about whether it loads,
+        # so it must not be read as disabled.
+        snapshot = live()
+        snapshot["connections"].append({"name": "Something Someone Made In The UI", "configurations": {}})
+        assert "no unit declares it" in _messages(_run(snapshot, units), Severity.WARNING)[0]
 
     def test_a_paused_connection_is_reported(self, units: list[Any]) -> None:
         report = _run(live(status="inactive"), units)

@@ -31,6 +31,11 @@ class EmbeddingModelSpec(BaseModel):
     :param max_request_tokens: most tokens per request, counted with
         ``token_encoding``
     :param token_encoding: the tiktoken encoding that estimates request size
+    :param vector_space: a name shared by the models whose vectors are
+        interchangeable, e.g. ``text-embedding-3-large@3072`` for OpenAI's model
+        and an Azure OpenAI deployment of it. Stored vectors are reused within a
+        space. ``None`` puts the model in a space of its own, ``model_id``, so
+        that two providers' vectors are only ever mixed by declaring it.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -40,6 +45,7 @@ class EmbeddingModelSpec(BaseModel):
     batch_size: int = Field(default=DEFAULT_BATCH_SIZE, gt=0)
     max_request_tokens: int = Field(default=DEFAULT_MAX_REQUEST_TOKENS, gt=0)
     token_encoding: str = "cl100k_base"  # noqa: S105
+    vector_space: str | None = Field(default=None, min_length=1)
 
     def request_batches(self, texts: Sequence[str]) -> Iterator[list[str]]:
         """Split texts into requests within ``batch_size`` and ``max_request_tokens``.
@@ -89,7 +95,7 @@ class EmbeddingModelSpec(BaseModel):
 
     @property
     def model_id(self) -> str:
-        """``{model}@{vector length}``: what a stored vector is keyed by.
+        """``{model}@{vector length}``: which model produced a stored vector.
 
         Vectors from another model, or the same model at another length, are not
         comparable, so both are in the id.
@@ -97,6 +103,14 @@ class EmbeddingModelSpec(BaseModel):
         :rtype: str
         """
         return f"{self.model}@{self.vector_length}"
+
+    @property
+    def vector_space_id(self) -> str:
+        """The space a stored vector is reused in: ``vector_space``, else ``model_id``.
+
+        :rtype: str
+        """
+        return self.vector_space or self.model_id
 
 
 class EmbeddingBatch(BaseModel):

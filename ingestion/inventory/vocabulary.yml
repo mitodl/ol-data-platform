@@ -102,6 +102,10 @@ layers:
 - course_xml            # every block of a course's XML, one row per block, parsed
                         # out of the same archives as course_structure but loaded
                         # into raw by dlt, so it fails independently of it
+- program_reports       # edX.org's daily program learner reports, copied into
+                        # the landing zone by the edxorg code location and
+                        # loaded by dlt, split from the Airbyte-loaded `s3`
+                        # unit that loaded them before
 - hubspot               # HubSpot, which is per-deployment rather than shared,
                         # so it cannot be a `hubspot` deployment + `api` layer
 

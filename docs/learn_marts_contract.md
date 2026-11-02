@@ -1,6 +1,6 @@
 # Learn Integration Schema Contract
 
-This document defines the stable interface that MIT Learn's Trino-pull ETL tasks depend on. All Learn-facing dbt integration models follow the naming convention and column requirements specified here.
+This document defines the stable interface that MIT Learn's warehouse-pull ETL tasks depend on. Learn reads these models from StarRocks over the MySQL protocol. All Learn-facing dbt integration models follow the naming convention and column requirements specified here.
 
 ## Model Location
 
@@ -143,6 +143,7 @@ and MIT Learn unpublishes a run that is absent.
 | `price` | decimal | From the latest version of the run's product |
 | `instructors` | array(string) | Names on the course page's faculty page |
 | `published` | boolean | Whether `price` is above zero |
+| `platform_code` | string | MIT Learn's platform code for the course's `platform`, as `XPRO_PLATFORM_TRANSFORM` maps it (`emeritus`, `globalalumni`, `simplilearn`, `susskind`, `whu`, `xpro`). The run's resource's `platform.code`, which a content file's vector point key uses. Null for a platform Learn does not map: its loader skips such a course |
 
 `integrations__learn__xpro_programs` has one row per live program with a live CMS page and a
 product. It has the course columns above, plus `instructors` (array, the program
@@ -434,3 +435,4 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-22 | Tobias Macey | Drop MIT edX courses. MIT Learn's `mit_edx` courses are retired rather than moved to a warehouse pull, so no Learn Sync task reads them and `integrations__learn__mit_edx_courses` is gone along with the Course Sources (MIT edX) columns. `mit_edx` stays as the source of `integrations__learn__mit_edx_programs`. The MIT edX programs columns now name what the model has (`course_readable_ids` and `topics` arrays) rather than `courses` and `departments` strings, which it never had. |
 | 2026-10-22 | Tobias Macey | Added `child_program_order` to `integrations__learn__mitxonline_program_children`, so a Sync task can number child programs not shown as courses in requirement tree order, as MIT Learn's ETL does, and not by readable id. |
 | 2026-10-22 | Tobias Macey | Added `release_date` to `integrations__learn__content_files` for MIT Learn's `ContentFile.release_date` (mit-learn#4093). The file exclusions also follow mit-learn#4106: an asset name no longer matches a link that drops one of its separators. |
+| 2026-10-27 | Tobias Macey | Added `platform_code` to `integrations__learn__xpro_runs`, Learn's platform code for the run's course, so the content-file embedding chunks key an xPRO file's points under its course's platform and not always `xpro`. |

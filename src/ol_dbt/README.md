@@ -4,6 +4,11 @@ This project is configured to use Trino as the warehouse engine (QA and Producti
 and DuckDB for local development. Profile information is defined in `profiles.yml`
 with environment variables for credentials. The default target is `dev_local` (DuckDB).
 
+StarRocks replaces Trino as the warehouse engine before the Starburst Galaxy contract
+ends. Until the cutover, models have to build on Trino as well.
+[docs/STARROCKS_MIGRATION.md](../../docs/STARROCKS_MIGRATION.md) covers what changes
+for model authors.
+
 ### Models Structure
 
 dbt models (SQL files) are structured into layers under `ol_dbt/models/`, organised by

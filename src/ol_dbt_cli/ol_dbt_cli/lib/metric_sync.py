@@ -42,15 +42,27 @@ definition fixed). Moved out with no file change, a file that says Approved
 shows status drift, and ``--force`` would approve it again.
 
 The server stores ``DescriptionSanitizer.sanitize(description)`` on create,
-PUT and PATCH. That is the OWASP HTML sanitizer, which decodes the text and
-re-encodes ``& < > " ' + = @ ` `` as entities (``learner's`` is stored as
-``learner&#39;s``), so descriptions are compared after unescaping both sides.
+PUT and PATCH. In 2.0.6 a description with no ``<`` outside its ``<#E::...>``
+entity links is stored as written (``sanitizeWith`` sets the links aside
+before it looks for a ``<``). Any other goes through the OWASP HTML sanitizer,
+which keeps the entity links, drops markup it does not allow and control
+characters, rewrites some markup it keeps (``<br>`` as ``<br />``), reads a
+bare ``<`` as the start of a tag (``x<y`` loses everything from ``<y``) and
+re-encodes ``& < > " ' + = @ ` `` in text as entities (``learner's`` as
+``learner&#39;s``). 2.0.5 sanitized every description, so a metric written
+before the upgrade can hold entities without markup. Descriptions are
+therefore compared after unescaping both sides; dropped or rewritten markup
+never compares equal, and sync reports it as ``rewritten``. The tests'
+``fixtures/description_sanitizer.json`` is real 2.0.6 sanitizer output.
 
 Drift is a field sync owns that someone else changed since the bot last wrote
 the metric: the live value is compared with the newest version in
 ``GET /v1/metrics/{id}/versions`` whose ``updatedBy`` is the bot. Each version
 there is a full snapshot of the entity, owners and reviewers included
-(``EntityRepository.listVersions``, ``storeEntityHistory``).
+(``EntityRepository.listVersions``, ``storeEntityHistory``). An edit made in
+the UI or API with the bot's own token is recorded with the bot as
+``updatedBy``, so it is the bot's last write: drift cannot see it, and the next
+sync PATCHes a field the file sets back to the file without reporting it.
 
 A file that adopts an edit made in OpenMetadata changes no field, so without
 a write the bot's newest version would keep the old value, and the next file
@@ -81,7 +93,7 @@ from typing import TYPE_CHECKING, Any
 from ol_dbt_cli.lib.data_contracts import om_fqn
 
 if TYPE_CHECKING:
-    from ol_dbt_cli.lib.manifest import ManifestRegistry
+    from ol_dbt_cli.lib.manifest import ManifestModel, ManifestRegistry
     from ol_dbt_cli.lib.metric_registry import MetricDefinition
 
 METRIC_ENTITY_TYPE = "metric"
@@ -112,6 +124,9 @@ EXTENSION_FIELD = "extension"
 # type that ol-infrastructure defines (om_server_config).
 FILE_DIGEST_PROPERTY = "metricFileSha256"
 STARROCKS_TAG = "starrocks"
+# The StarRocks catalog dbt builds the b2b views in (the starrocks_* profiles'
+# `database`), which OpenMetadata names as the database.
+STARROCKS_CATALOG = "default_catalog"
 TAG_COLLECTIONS = {"Glossary": "glossaryTerms", "Classification": "tags"}
 
 _PATCHED_FIELDS = ("description", "owners", "reviewers")
@@ -135,34 +150,69 @@ DISPLAY_NAME_FIELD = "displayName"
 
 @dataclass(frozen=True)
 class LineageSource:
-    """An OpenMetadata entity that implements a metric, the upstream end of a lineage edge."""
+    """An OpenMetadata entity that implements a metric, the upstream end of a lineage edge.
+
+    ``starrocks`` marks a StarRocks view, which OpenMetadata catalogs only once
+    its StarRocks ingestion has run after the view was built, so sync skips one
+    it does not have yet instead of failing the metric.
+    """
 
     entity_type: str
     fqn: str
+    starrocks: bool = False
+
+
+def starrocks_fqn(node: ManifestModel, service: str) -> str:
+    """OpenMetadata's FQN for a StarRocks view dbt builds, ``service.default_catalog.<schema>.<alias>``.
+
+    The schema is the model's ``+schema`` as written: on a StarRocks target
+    writing to default_catalog, ``generate_schema_name`` uses it as the
+    database name (src/ol_dbt/macros/generate_schema_name.sql). The ``schema``
+    a Trino manifest resolves for the disabled model
+    (``ol_warehouse_production_b2b_analytics``) is not one StarRocks has, and
+    the doubled ``b2b_analytics_b2b_analytics`` copies in OpenMetadata predate
+    the macro. dbt-starrocks leaves ``database`` empty in its manifest, so the
+    catalog is the profiles' ``default_catalog``.
+
+    :raises ValueError: when the model sets no ``+schema``, so its database
+        would come from the profile and cannot be read from the manifest.
+    """
+    if not node.custom_schema:
+        msg = (
+            f"StarRocks model {node.name!r} sets no +schema, so its StarRocks database comes from the profile "
+            "and sync cannot name it. Set +schema on it (e.g. in dbt_project.yml)."
+        )
+        raise ValueError(msg)
+    return ".".join((service, STARROCKS_CATALOG, node.custom_schema, node.alias or node.name))
 
 
 def lineage_sources(
-    metric: MetricDefinition, manifest: ManifestRegistry, service: str
-) -> tuple[list[LineageSource], list[str]]:
+    metric: MetricDefinition, manifest: ManifestRegistry, service: str, starrocks_service: str
+) -> list[LineageSource]:
     """Resolve each ``implemented_by`` entry to the entity OpenMetadata catalogs.
 
-    :returns: the entities to link, and the StarRocks-only models skipped
-        because OpenMetadata has no StarRocks service yet.
-    :rtype: tuple[list[LineageSource], list[str]]
+    A dbt model tagged ``starrocks`` is a StarRocks view under
+    *starrocks_service* (``starrocks_fqn``); a production (Trino) manifest
+    lists it under ``disabled``. Every other dbt binding is a relation under
+    *service*.
+
+    :returns: the entities to link, each StarRocks view marked ``starrocks``.
+    :rtype: list[LineageSource]
     :raises ValueError: when a dbt binding is in neither the manifest's nodes
         nor its StarRocks-only disabled models.
     """
     sources: list[LineageSource] = []
-    skipped: list[str] = []
     for implementation in metric.implemented_by:
         binding = implementation.binding
         if binding.kind == "dbt_model":
             node = manifest.get_model(binding.target) or manifest.disabled.get(binding.target)
             if node is not None and STARROCKS_TAG in node.tags:
-                skipped.append(binding.target)
+                sources.append(
+                    LineageSource(binding.entity_type, starrocks_fqn(node, starrocks_service), starrocks=True)
+                )
                 continue
         sources.append(LineageSource(binding.entity_type, om_fqn(binding, manifest, service)))
-    return sources, skipped
+    return sources
 
 
 def _live_refs(refs: list[dict[str, Any]] | None) -> list[dict[str, str]]:
@@ -176,8 +226,9 @@ def _ref_set(refs: list[dict[str, Any]] | None) -> set[tuple[str, str]]:
 def same_description(a: str | None, b: str | None) -> bool:
     """Whether two descriptions read the same once the server's entity encoding is undone.
 
-    Markup the sanitizer strips (e.g. a ``<script>`` or an unknown tag) is not
-    restored, so a description holding it never compares equal.
+    Markup the sanitizer drops or rewrites (e.g. a ``<script>``, or ``<br>``
+    stored as ``<br />``) is not restored, so a description holding it never
+    compares equal.
     """
     return html.unescape(a or "") == html.unescape(b or "")
 
@@ -423,3 +474,33 @@ def lineage_edge(source_id: str, source: LineageSource, metric_id: str, file_nam
             "lineageDetails": {"description": f"implemented_by in metrics/{file_name}"},
         }
     }
+
+
+def stale_edges(lineage: dict[str, Any], metric_id: str, keep_ids: set[str], bot: str) -> list[dict[str, Any]]:
+    """List the upstream entities whose edge to the metric the bot created and the file no longer declares.
+
+    OpenMetadata 2.0.6 stamps each edge's ``lineageDetails.createdBy`` when the
+    edge is first stored and keeps it on every later PUT or PATCH of that
+    edge (``LineageRepository.applyTemporalFields``, ``resolveCreatedBy``). So
+    an edge a person added in OpenMetadata is never stale, even when the file
+    lists the same table too, and one sync created stays sync's after someone
+    edits its details. ``createdBy`` is the caller's user name, so an edge drawn
+    in the UI by someone logged in with the bot's token reads as the bot's.
+
+    :param lineage: the body of ``GET /v1/lineage/metric/{id}`` with
+        ``upstreamDepth=1``.
+    :param keep_ids: ids of the entities the file declares. The caller prunes
+        only when every one of them resolved (see ``_sync_one``).
+    :returns: the upstream node references (``id``, ``type``,
+        ``fullyQualifiedName``), in the order OpenMetadata lists their edges.
+    """
+    nodes = {n["id"]: n for n in lineage.get("nodes") or []}
+    stale = []
+    for edge in lineage.get("upstreamEdges") or []:
+        if edge["toEntity"] != metric_id or (edge.get("lineageDetails") or {}).get("createdBy") != bot:
+            continue
+        node = nodes[edge["fromEntity"]]
+        if node["id"] in keep_ids:
+            continue
+        stale.append(node)
+    return stale

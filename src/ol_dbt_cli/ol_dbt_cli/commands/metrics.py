@@ -35,10 +35,12 @@ from ol_dbt_cli.lib.metric_registry import (
 )
 from ol_dbt_cli.lib.metric_sync import (
     FILE_DIGEST_PROPERTY,
+    METRIC_ENTITY_TYPE,
     METRIC_FIELDS,
     REVIEW_HOLD_STATUSES,
     STATUS_FIELD,
     TAG_COLLECTIONS,
+    LineageSource,
     after_put,
     create_body,
     display_name_conflict,
@@ -48,6 +50,7 @@ from ol_dbt_cli.lib.metric_sync import (
     lineage_sources,
     patch_ops,
     same_description,
+    stale_edges,
     structural_changes,
 )
 from ol_dbt_cli.lib.openmetadata import (
@@ -101,6 +104,10 @@ _SERVICE = Parameter(
     name=["--service"],
     help='OpenMetadata database service that dbt relations live under, e.g. "Starburst Galaxy".',
 )
+_STARROCKS_SERVICE = Parameter(
+    name=["--starrocks-service"],
+    help="OpenMetadata database service that the StarRocks views (dbt models tagged starrocks) live under.",
+)
 
 
 def _load(
@@ -127,16 +134,28 @@ def _load(
 
 
 def _check_server_version(client: OpenMetadataClient) -> None:
-    """Stop when the server is not the version the metric files were validated against."""
+    """Stop when the server's major or minor version is not the snapshot's.
+
+    A patch release only warns. Stopping on one cost three failed nightly syncs
+    when the server moved from 2.0.5 to 2.0.6 with an identical CreateMetric.
+    """
     server = client.request("GET", "/v1/system/version")["version"]
     snapshot = json.loads(SCHEMA_SNAPSHOT.read_text())[SCHEMA_VERSION_KEY]
-    if server != snapshot:
+    if server == snapshot:
+        return
+    refresh = (
+        "Run `ol-dbt metrics refresh-schema`, check `ol-dbt validate --only metric_registry` and commit the snapshot"
+    )
+    if server.split(".")[:2] != snapshot.split(".")[:2]:
         err_console.print(
             f"[red]Error:[/] OpenMetadata is {escape(server)} but the CreateMetric snapshot is from "
-            f"{escape(snapshot)}. Run `ol-dbt metrics refresh-schema`, check `ol-dbt validate --only "
-            "metric_registry` and commit the snapshot first."
+            f"{escape(snapshot)}. {refresh} first."
         )
         sys.exit(1)
+    console.print(
+        f"[yellow]{'version'.ljust(_LABEL_WIDTH)}[/]OpenMetadata is {escape(server)} but the CreateMetric snapshot "
+        f"is from {escape(snapshot)}, the same major and minor version, so sync goes on. {refresh}."
+    )
 
 
 # Sync output labels are padded to this many columns.
@@ -171,15 +190,24 @@ def _report_display_name(name: str, file_value: str | None, stored: str) -> None
     )
 
 
+def _stale_edges(client: OpenMetadataClient, metric_id: str, declared_ids: list[str], bot: str) -> list[dict[str, Any]]:
+    lineage = client.request(
+        "GET", f"/v1/lineage/{METRIC_ENTITY_TYPE}/{metric_id}", query={"upstreamDepth": "1", "downstreamDepth": "0"}
+    )
+    return stale_edges(lineage, metric_id, set(declared_ids), bot)
+
+
 def _sync_one(
     client: OpenMetadataClient,
     metric: MetricDefinition,
     manifest: ManifestRegistry,
     service: str,
+    starrocks_service: str,
     bot: str,
     *,
     dry_run: bool,
     force: bool,
+    prune: bool,
 ) -> bool:
     """Make OpenMetadata's copy of one metric match its file. Returns False when it did not."""
     name = escape(metric.name)
@@ -204,15 +232,27 @@ def _sync_one(
                 msg = f"tag {tag['tagFQN']} has source {tag['source']!r}, not {' or '.join(TAG_COLLECTIONS)}"
                 raise ValueError(msg)
             client.request("GET", f"/v1/{collection}/name/{quote_fqn(tag['tagFQN'])}")
-        sources, skipped = lineage_sources(metric, manifest, service)
-        source_ids = [client.entity_id(s.entity_type, s.fqn) for s in sources]
+        sources: list[LineageSource] = []
+        source_ids: list[str] = []
+        skipped: list[LineageSource] = []
+        for source in lineage_sources(metric, manifest, service, starrocks_service):
+            if source.starrocks:
+                source_id = client.entity_id_or_none(source.entity_type, source.fqn)
+                if source_id is None:
+                    skipped.append(source)
+                    continue
+            else:
+                source_id = client.entity_id(source.entity_type, source.fqn)
+            sources.append(source)
+            source_ids.append(source_id)
     except (ValueError, RuntimeError) as exc:
         console.print(f"[bold red]unresolved[/] {name}: {escape(str(exc))}")
         return False
-    for model in skipped:
+    for source in skipped:
         console.print(
-            f"[yellow]skipped[/]   {name}: lineage from {escape(model)}, a StarRocks view "
-            "OpenMetadata has no service for"
+            f"[yellow]skipped[/]   {name}: lineage from {escape(source.fqn)}, a StarRocks view OpenMetadata "
+            "does not have (404). The edge lands on the first sync after OpenMetadata's StarRocks ingestion "
+            "catalogs it."
         )
 
     try:
@@ -247,13 +287,30 @@ def _sync_one(
     changes = structural_changes(body, live) if live is not None else []
     needs_put = live is None or bool(changes)
     action = "create" if live is None else f"update {', '.join(changes)}" if changes else "no field changes"
+    # A metric this run creates has no edge sync did not just write.
+    prune_edges = prune and live is not None and not skipped
+    if prune and live is not None and skipped:
+        # A view that is not catalogued yet and a wrong --starrocks-service both
+        # answer 404, and the second would make every view's edge look stale.
+        console.print(
+            f"[yellow]{'kept'.ljust(_LABEL_WIDTH)}[/]{name}: removes no lineage edge this run, because OpenMetadata "
+            f"did not have {len(skipped)} of its StarRocks views (skipped above), and sync cannot tell a view not "
+            "catalogued yet from a --starrocks-service that names the wrong service."
+        )
     if dry_run:
+        try:
+            stale = _stale_edges(client, live["id"], source_ids, bot) if live is not None and prune_edges else []
+        except RuntimeError as exc:
+            console.print(f"[bold red]failed[/]    {name}: {escape(str(exc))}")
+            return False
         ops = patch_ops(metric, body, after_put(body, live) if needs_put else live or {}, bot)
         console.print(f"[green]would[/]     {name}: {escape(action)}")
         if ops:
             console.print(f"  then PATCH {', '.join(op['path'].lstrip('/') for op in ops)}")
         for source in sources:
             console.print(f"  lineage {escape(source.fqn)} -> {name}")
+        for node in stale:
+            console.print(f"  remove lineage {escape(node['fullyQualifiedName'])} -> {name}")
         if stored_name is not None:
             _report_display_name(name, body.get("displayName"), stored_name)
         return stored_name is None
@@ -269,6 +326,13 @@ def _sync_one(
             current = client.request("PATCH", f"/v1/metrics/{current['id']}", ops, content_type=JSON_PATCH_CONTENT_TYPE)
         for source, source_id in zip(sources, source_ids, strict=True):
             client.request("PUT", "/v1/lineage", lineage_edge(source_id, source, current["id"], metric.path.name))
+        for node in _stale_edges(client, current["id"], source_ids, bot) if prune_edges else []:
+            client.request("DELETE", f"/v1/lineage/{node['type']}/{node['id']}/{METRIC_ENTITY_TYPE}/{current['id']}")
+            # Reported as each lands, so a later failure does not hide it.
+            console.print(
+                f"[green]{'removed'.ljust(_LABEL_WIDTH)}[/]{name}: lineage from {escape(node['fullyQualifiedName'])}, "
+                "which sync created and the file no longer lists"
+            )
     except RuntimeError as exc:
         console.print(f"[bold red]failed[/]    {name}: {escape(_write_failure(exc))}")
         return False
@@ -276,8 +340,12 @@ def _sync_one(
     console.print(f"[green]synced[/]    {name} (v{current['version']}): {escape(action + patched)}")
     if "description" in body and not same_description(current.get("description"), body["description"]):
         console.print(
-            f"[yellow]rewritten[/] {name}: OpenMetadata's sanitizer changed the description (it drops markup "
-            "and control characters it does not allow), so every sync will PATCH it again. Fix the file."
+            f"[yellow]rewritten[/] {name}: OpenMetadata stored the description as "
+            f"{escape(repr(current.get('description')))}, which differs from the file's, so every sync will PATCH "
+            "it again. Its sanitizer runs on any description with a `<` outside its `<#E::...>` entity links: it "
+            "drops markup it does not allow and control characters, and rewrites some markup it keeps, e.g. `<br>` "
+            "becomes `<br />`, an `<https://...>` autolink is dropped, and `x<y` loses everything from `<y`. Change "
+            "the file to what OpenMetadata stored, or write a literal `<` as `&lt;`."
         )
     if stored_name is not None:
         _report_display_name(name, body.get("displayName"), stored_name)
@@ -288,6 +356,7 @@ def _sync_one(
 def sync(
     *,
     service: Annotated[str, _SERVICE],
+    starrocks_service: Annotated[str, _STARROCKS_SERVICE] = "StarRocks",
     dry_run: Annotated[
         bool,
         Parameter(name=["--dry-run"], help="Resolve every file and report what would change; write nothing."),
@@ -334,15 +403,28 @@ def sync(
     digest is recorded in the metric's metricFileSha256 custom property, which
     ol-infrastructure defines on the metric type. A stored displayName that
     differs from the file is reported as stale, because OpenMetadata keeps it
-    against a bot's change; the rest of that metric still syncs. Exits non-zero
+    against a bot's change; the rest of that metric still syncs. A lineage edge
+    sync created from a table the file no longer lists is deleted; one a person
+    added stays. Exits non-zero
     when any metric did not sync or has a stale displayName.
     """
     metrics, manifest = _load(dbt_dir_path, metrics_dir_path, manifest_path, names)
     client = OpenMetadataClient.from_env()
     _check_server_version(client)
-    bot = client.request("GET", "/v1/users/loggedInUser")["name"]
+    caller = client.request("GET", "/v1/users/loggedInUser")
+    bot = caller["name"]
+    # The only check that the token is a bot's: edges sync created carry its name.
+    prune = caller["isBot"]
+    if not prune:
+        console.print(
+            f"[yellow]no prune[/]  OM_BOT_JWT_TOKEN belongs to {escape(bot)}, who is not a bot, so sync removes no "
+            "lineage edge this run: an edge that user drew in OpenMetadata would read as one sync created."
+        )
     failures = sum(
-        not _sync_one(client, metric, manifest, service, bot, dry_run=dry_run, force=force) for metric in metrics
+        not _sync_one(
+            client, metric, manifest, service, starrocks_service, bot, dry_run=dry_run, force=force, prune=prune
+        )
+        for metric in metrics
     )
     if failures:
         sys.exit(1)

@@ -42,6 +42,7 @@ airbyte:
     - ticket_metrics
     - ticket_skips
     - tickets
+    - tickets_search
     - topics
     - user_fields
     - user_identities
@@ -337,6 +338,17 @@ tables:
         - reason
       sharing_agreement_ids: copy
       from_messaging_channel: copy
+# The connector's opt-in copy of `tickets`, read from Zendesk's search index.
+# Its manifest warns that it misses updates that do not bump updated_at and can
+# return stale indexed values, so `tickets` stays the modeled one.
+- name: tickets_search
+  raw_table: raw__thirdparty__zendesk_support__tickets_search
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: false
 - name: topics
   raw_table: raw__thirdparty__zendesk_support__topics
   sync_mode: full_refresh_overwrite

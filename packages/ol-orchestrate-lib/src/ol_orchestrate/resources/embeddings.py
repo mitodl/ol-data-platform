@@ -3,9 +3,13 @@
 Requires the ``embeddings`` extra.
 """
 
+import dataclasses
 import os
+from collections.abc import Callable
+from functools import cache
 from typing import Any
 
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from dagster import (
     Config,
     ConfigurableResource,
@@ -26,16 +30,29 @@ from qdrant_client import QdrantClient
 
 from ol_orchestrate.lib.embeddings.models import OlLlmEmbedder
 from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy, QdrantTarget
+from ol_orchestrate.lib.opik import opik_keycloak_vault_location
 from ol_orchestrate.resources.secrets.vault import Vault
 
 QDRANT_GRPC_PORT = 6334
 QDRANT_TIMEOUT_SECONDS = 10
+AZURE_COGNITIVE_SERVICES_SCOPE = "https://cognitiveservices.azure.com/.default"
+# ol-llm's Azure OpenAI client reads these from the environment itself.
+AZURE_OPENAI_ENV_VARS = ("AZURE_OPENAI_ENDPOINT", "OPENAI_API_VERSION")
 
 
 def _read_kv1_secret(vault: Vault, mount_point: str, path: str) -> dict[str, Any]:
     return vault.client.secrets.kv.v1.read_secret(mount_point=mount_point, path=path)[
         "data"
     ]
+
+
+@cache
+def _azure_ad_token_provider() -> Callable[[], str]:
+    # One credential per process: it caches its token, and every resource setup
+    # and event loop can share it because the provider is synchronous.
+    return get_bearer_token_provider(
+        DefaultAzureCredential(), AZURE_COGNITIVE_SERVICES_SCOPE
+    )
 
 
 class QdrantResource(ConfigurableResource[None]):
@@ -104,10 +121,12 @@ class EmbeddingsResource(ConfigurableResource[None]):
     Each strategy gets its own ol-llm use case, ``embed-{strategy id}``, so its
     requests and their cost can be told apart in Opik. Provider keys come from
     Vault (``provider_keys``); Bedrock needs none, as it authenticates with the
-    pod's IAM role.
+    pod's IAM role, and neither does Azure OpenAI with ``azure_ad_auth`` set.
 
-    Tracing to Opik is on when ``OPIK_URL_OVERRIDE`` is set, as for the ml code
-    location. The Keycloak client that authenticates to it is read from Vault.
+    Tracing to Opik is on when ``OPIK_URL_OVERRIDE`` is set together with the Vault
+    location of the Keycloak client that authenticates to it
+    (``OPIK_KEYCLOAK_VAULT_MOUNT``/``OPIK_KEYCLOAK_VAULT_PATH``), as for the ml
+    code location.
     Traces leave out the embedded texts unless ``trace_content`` is set, since
     a backfill would otherwise copy the corpus into Opik.
     """
@@ -119,13 +138,13 @@ class EmbeddingsResource(ConfigurableResource[None]):
         description="the ol-llm app, which is the Opik project",
     )
     provider_keys: list[ProviderKeySecret] = Field(default_factory=list)
-    trace_content: bool = False
-    opik_vault_mount_point: str = "secret-operations"
-    opik_vault_path: str = Field(
-        default="sso/opik",
-        description="KV v1 path of the Keycloak client with url, client_id, "
-        "client_secret",
+    azure_ad_auth: bool = Field(
+        default=False,
+        description="Authenticate to Azure OpenAI with an Entra ID token from "
+        "DefaultAzureCredential (e.g. workload identity), not an API key. "
+        "AZURE_OPENAI_ENDPOINT and OPENAI_API_VERSION must be set.",
     )
+    trace_content: bool = False
 
     _run_id: str | None = PrivateAttr(default=None)
 
@@ -139,18 +158,28 @@ class EmbeddingsResource(ConfigurableResource[None]):
                 self.vault, secret.vault_mount_point, secret.vault_path
             )[secret.key]
         # Read the rest of the settings (gateway routes) from OL_LLM_* as usual.
-        configure(
-            Settings.from_env({**os.environ, "OL_LLM_ENVIRONMENT": self.environment})
+        settings = Settings.from_env(
+            {**os.environ, "OL_LLM_ENVIRONMENT": self.environment}
         )
+        if self.azure_ad_auth:
+            # Checked here so a missing one fails the setup, not every request.
+            if missing := [
+                name for name in AZURE_OPENAI_ENV_VARS if not os.environ.get(name)
+            ]:
+                msg = f"azure_ad_auth needs {', '.join(missing)} set"
+                raise ValueError(msg)
+            settings = dataclasses.replace(
+                settings, azure_ad_token_provider=_azure_ad_token_provider()
+            )
+        configure(settings)
         configure_tracing(self._tracing_config())
         self._run_id = context.run_id
 
     def _tracing_config(self) -> TracingConfig:
-        if not os.environ.get("OPIK_URL_OVERRIDE"):
+        location = opik_keycloak_vault_location()
+        if not os.environ.get("OPIK_URL_OVERRIDE") or location is None:
             return TracingConfig(enabled=False, include_content=self.trace_content)
-        secret = _read_kv1_secret(
-            self.vault, self.opik_vault_mount_point, self.opik_vault_path
-        )
+        secret = _read_kv1_secret(self.vault, *location)
         return TracingConfig(
             keycloak=KeycloakClient(
                 token_url=f"{secret['url']}/protocol/openid-connect/token",

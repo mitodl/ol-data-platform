@@ -10,8 +10,9 @@ A unit package has two modules:
 ``_generated.py``
     Base factories scaffolded from the source application's Django models by
     ``ol-dbt fixtures scaffold`` (:mod:`ol_dbt_cli.lib.fixture_scaffold`),
-    from the ``models.json`` beside it. Regenerated wholesale, so never edited
-    by hand.
+    from the ``models.json`` beside it, or for a unit with no Django app
+    drafted from its staging models' tests. Regenerated wholesale, so never
+    edited by hand.
 
 ``__init__.py``
     Written by hand. Subclasses the base factories for what the models cannot
@@ -39,7 +40,20 @@ and exposes what :class:`ol_dbt_cli.lib.raw_fixtures.UnitFactories` describes:
 
 Tables that reference themselves use :mod:`ol_dbt_cli.lib.fixture_trees`:
 ``Tree`` for a django-treebeard ``MP_Node`` (``path``, ``depth``,
-``numchild``) and ``attach`` for a ``parent_id`` column.
+``numchild``) and ``attach`` for a ``parent_id`` column. A unit with a
+treebeard table also exposes:
+
+``TREE_ALPHABETS``
+    Imported from ``_generated.py``, where the scaffold writes one for each
+    table whose model the dump records as an ``MP_Node``. ``generate_rows``
+    checks each of these tables whole with ``check_tree``: one row to a path,
+    and every row under a row of the table or a stand-in.
+
+``TREE_STAND_INS``
+    The parents a tree's rows sit under that the fixture leaves out (wagtail's
+    root, home and index pages), by raw table, each a stand-in mapping with its
+    ``path``. A stand-in ``generate`` places rows under is one of these, so a
+    mistyped path fails the check. A tree with nothing left out has no entry.
 
 Each factory is a :class:`ol_dbt_cli.lib.fixture_generation.RowFactory` that
 names the table it fills and how many rows it makes at scale 1 with
@@ -48,6 +62,16 @@ attributes ``raw_table`` and ``default_count``. They cannot be written in the
 class body: factory_boy would read them as columns. Default counts are tens of
 rows per table, enough for the dbt tests to have something to fail on. Volume
 comes from ``scale`` and nowhere else.
+
+A table has one factory and its subclasses: ``@table`` refuses a second
+factory of a table that does not subclass the first, whose keys would count
+from the same start. Values come from ``value`` and ``draw``, which refuse a
+mimesis provider that can make up a real hostname, IP address or phone number
+or whose rows change with the date, and ``@table`` refuses a ``factory.Faker``
+column, which neither sees. A column that needs an address takes one from a
+reserved range by hand (e.g. ``192.0.2.0/24``, ``555-0100``). Not checked: a
+subclass not passed through ``@table``, the factory a ``factory.SubFactory``
+builds, and what a ``LazyFunction`` calls.
 
 :mod:`ol_dbt_cli.lib.fixture_generation` holds what the packages share (seeded
 values, parent columns, per-table sequences, the draws ``generate`` wires

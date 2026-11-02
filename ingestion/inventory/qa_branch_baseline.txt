@@ -22,7 +22,7 @@ mitlearn/app_postgres raw__mitlearn__app__postgres__learning_resources_learningr
 mitlearn/app_postgres raw__mitlearn__app__postgres__profiles_profile: empty
 mitlearn/app_postgres raw__mitlearn__app__postgres__profiles_profile_topic_interests: empty
 mitlearn/app_postgres raw__mitlearn__app__postgres__users_user: empty
-mitx/api raw__mitx__openedx__api__course_blocks: empty
+mitx/course_structure raw__mitx__openedx__api__course_structure_blocks: empty
 mitx/mysql raw__mitx__openedx__mysql__auth_user: empty
 mitx/mysql raw__mitx__openedx__mysql__auth_userprofile: empty
 mitx/mysql raw__mitx__openedx__mysql__completion_blockcompletion: empty
@@ -34,7 +34,7 @@ mitx/mysql raw__mitx__openedx__mysql__edxval_video: empty
 mitx/mysql raw__mitx__openedx__mysql__student_courseaccessrole: empty
 mitx/mysql raw__mitx__openedx__mysql__student_courseenrollment: empty
 mitx/tracking_logs raw__mitx__openedx__tracking_logs: empty
-mitxonline/api raw__mitxonline__openedx__api__course_blocks: empty
+mitxonline/course_structure raw__mitxonline__openedx__api__course_structure_blocks: empty
 mitxonline/mysql raw__mitxonline__openedx__mysql__auth_user: empty
 mitxonline/mysql raw__mitxonline__openedx__mysql__bulk_email_optout: empty
 mitxonline/mysql raw__mitxonline__openedx__mysql__completion_blockcompletion: empty
@@ -58,7 +58,7 @@ ovs/app_postgres raw__ovs__postgres__ui_collectionedxendpoint: empty
 ovs/app_postgres raw__ovs__postgres__ui_edxendpoint: empty
 ovs/app_postgres raw__ovs__postgres__ui_encodejob: empty
 ovs/app_postgres raw__ovs__postgres__ui_video: empty
-xpro/api raw__xpro__openedx__api__course_blocks: empty
+xpro/course_structure raw__xpro__openedx__api__course_structure_blocks: empty
 xpro/mysql raw__xpro__openedx__mysql__auth_user: empty
 xpro/mysql raw__xpro__openedx__mysql__completion_blockcompletion: empty
 xpro/mysql raw__xpro__openedx__mysql__courseware_studentmodule: empty

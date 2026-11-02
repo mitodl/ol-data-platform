@@ -61,10 +61,14 @@ if TYPE_CHECKING:
 
 SEED = 311373020
 
-# The wagtail index pages the course and program pages sit under. The fixture
-# leaves them out, as it does the root and home pages above them.
+# The wagtail pages the fixture leaves out: the root and home pages, and the
+# index pages the course and program pages sit under.
+ROOT_PAGE = {"path": "0001", "url_path": "/"}
+HOME_PAGE = {"path": "00010001", "url_path": "/home/"}
 COURSES_INDEX = {"path": "000100010001", "url_path": "/home/courses/"}
 PROGRAMS_INDEX = {"path": "000100010002", "url_path": "/home/programs/"}
+# Every page sits under a page of the table or one of these.
+TREE_STAND_INS = {PageBase.raw_table: [ROOT_PAGE, HOME_PAGE, COURSES_INDEX, PROGRAMS_INDEX]}
 # The content type of each page type, as the hand-written pages have them.
 # Nothing reads them, and django_content_type holds only the two a product
 # points through.

@@ -395,6 +395,78 @@ def test_srt_blank_lines_between_blocks_collapse_to_a_space():
     assert "\n\n" not in text
 
 
+# --- whitespace around the timing lines ------------------------------------
+#
+# Learn strips Tika's output and then runs text_from_srt_content
+# (_extract_content_with_tika in learning_resources/etl/utils.py). Expected
+# values are that pipeline's output, and its md5 is Learn's ContentFile.checksum.
+
+
+def test_srt_opening_on_an_empty_cue_keeps_learns_leading_space():
+    """Open edX often writes an empty cue 0, followed by blank lines.
+
+    Learn's text keeps the space it leaves, so the fix cannot be a strip of the
+    parsed text: that removes it and breaks the checksum the other way.
+    """
+    srt = (
+        "0\n"
+        "00:00:00,000 --> 00:00:01,560\n"
+        "\n"
+        "\n"
+        "1\n"
+        "00:00:01,560 --> 00:00:04,000\n"
+        "First caption.\n"
+    )
+
+    assert transcript_text("static/x-en.srt", srt.encode()) == " First caption."
+
+
+def test_srt_leading_blank_lines_leave_no_leading_whitespace():
+    srt = "\n \n1\n00:00:00,000 --> 00:00:02,000\nFirst caption.\n"
+
+    assert transcript_text("static/x-en.srt", srt.encode()) == "First caption."
+
+
+def test_srt_trailing_blank_lines_leave_no_trailing_whitespace():
+    srt = (
+        "1\n"
+        "00:00:00,000 --> 00:00:02,000\n"
+        "First caption.\n"
+        "\n"
+        "2\n"
+        "00:05:36,000 --> 00:05:36,520\n"
+        "is driving protein folding.\n"
+        "\n"
+    )
+
+    assert (
+        transcript_text("static/x-en.srt", srt.encode())
+        == "First caption. is driving protein folding."
+    )
+
+
+def test_srt_ending_on_an_empty_cue_keeps_learns_trailing_space():
+    srt = (
+        "1\n"
+        "00:00:00,000 --> 00:00:02,000\n"
+        "Last words.\n"
+        "\n"
+        "54\n"
+        "00:02:22,640 --> 00:02:28,394\n"
+        "\n"
+        "\n"
+    )
+
+    assert transcript_text("static/x-en.srt", srt.encode()) == "Last words. "
+
+
+def test_srt_final_digit_only_caption_survives_as_in_learn():
+    """With the trailing newline stripped first, the sequence rule cannot match it."""
+    srt = "1\n00:00:00,000 --> 00:00:02,000\nThe year was\n1984\n"
+
+    assert transcript_text("static/x-en.srt", srt.encode()) == "The year was\n1984"
+
+
 # --- WebVTT ----------------------------------------------------------------
 #
 # The one deliberate divergence from mit-learn, which has no VTT transformer

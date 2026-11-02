@@ -153,10 +153,19 @@ sources:
     - name: feedback_conversation_pk
       description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
     - name: prompt_version
-      description: str, the Opik Prompt Library version of feedback-summary active
-        when this row was summarized (or "local" if Opik wasn't configured).
+      description: str, the Opik version of the feedback-summary prompt that produced
+        this row's summary. Null when the run used the prompt embedded in the code
+        (tracing off, or Opik unreachable at the start of the run), and for a row
+        with no summary.
     - name: summarized_at
       description: timestamp, when this row's summary was generated.
+    - name: prompt_template_hash
+      description: str, SHA-256 of the prompt template that produced this row's summary,
+        the same whether the run fetched it from Opik or used the embedded copy.
+    - name: idempotency_key
+      description: str, ol-llm's batch key over the conversation text, prompt template,
+        and model. The asset re-summarizes a conversation when its current key differs.
+        Null for a row with no summary.
   - name: feedback_embeddings
     config:
       meta:
@@ -172,3 +181,8 @@ sources:
       description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
     - name: embedded_at
       description: timestamp, when this row's embedding was generated.
+    - name: idempotency_key
+      description: str, a hash of the text embedded (the summary or the concatenated
+        turns, per embedding_input), the ol-llm model id, and the dimension. The asset
+        re-embeds a conversation when its current key differs. Null for a row embedded
+        before the column existed.

@@ -618,19 +618,186 @@ retired:
   - raw__bootcamps__app__postgres__klasses_installment
   - raw__bootcamps__app__postgres__klasses_personalprice
   - raw__bootcamps__app__postgres__profiles_legaladdress
+  retired_on: '2026-02-12'
+  reason: >-
+    The bootcamps application is decommissioned (confirmed 2026-08-14, §8.1) and
+    its Airbyte sources carry no connections. The date is when the last data
+    landed: auth_user's current Iceberg snapshot, 2026-02-12T00:07Z, is the
+    newest Airbyte commit across these tables. Most stopped changing earlier as
+    the app wound down. Nine hold only the initial load of 2025-02-25 (the five
+    ecommerce tables, django_content_type, klasses_bootcampruncertificate,
+    klasses_bootcamprunenrollment and klasses_personalprice) and five last
+    changed on 2025-06-10. profiles_profile stopped a year before the rest and
+    has its own entry below. Measured in production raw on 2026-10-23. Frozen
+    rather than dropped, decided 2026-10-23: dbt models all of these and
+    profiles_profile, and through them historical bootcamps learners reach
+    dim_user, dim_course, dim_course_run, tfact_enrollment, tfact_certificate,
+    tfact_order and the combined marts
+    (tk-bootcamps-ingestion-has-disappeared-while-dbt-st-25d016).
+  frozen: true
+- deployment: bootcamps
+  layer: app_postgres
+  raw_tables:
+  - raw__bootcamps__app__postgres__applications_bootcampapplicationline
+  retired_on: '2026-02-12'
+  reason: >-
+    This table was in the Iceberg connection with the tables above, but dbt
+    never modeled it, so it is kept as raw history nothing reads. It stopped
+    with that connection. It holds 44,102 rows, and its only retained snapshot
+    was committed 2026-01-28T00:08Z. Measured in production raw on 2026-10-26.
+    Kept by the owner's decision of 2026-10-27, which dropped the two empty
+    tables that shared this entry until then (see the next entry)
+    (tk-decide-what-to-do-with-the-93-raw-bootcamps-app--ddd6f0).
+  frozen: true
+  modeled: false
+- deployment: bootcamps
+  layer: app_postgres
+  raw_tables:
+  - raw__bootcamps__app__postgres__klasses_bootcamprunenrollmentaudit
+  - raw__bootcamps__app__postgres__profiles_changeemailrequest
+  retired_on: '2026-02-12'
+  reason: >-
+    These two were in the Iceberg connection with the tables above and stopped
+    with it. dbt never modeled them. Neither held a row: each had one snapshot,
+    the empty initial load of 2025-02-25 (measured in production raw on
+    2026-10-26 and again on 2026-10-27). They were frozen with
+    applications_bootcampapplicationline on 2026-10-26 until someone decided
+    what to do with them, and were dropped from Glue on 2026-10-27 by the
+    owner's decision, with the 90 empty tables of the 2025-02-25 entry below
+    (tk-decide-what-to-do-with-the-93-raw-bootcamps-app--ddd6f0).
+- deployment: bootcamps
+  layer: app_postgres
+  raw_tables:
   - raw__bootcamps__app__postgres__profiles_profile
-  retired_on: '2026-08-25'
-  reason: The bootcamps application is no longer deployed (confirmed 2026-08-14, §8.1).
-    Its Airbyte source still exists but carries zero connections, and its Dagster
-    interval-map entry `bootcamps_production_app_db__s3_data_lake` matches nothing.
-    Nothing was lost when ingestion stopped, but nothing was written down either,
-    so these 19 tables read as current to anyone who does not already know — which
-    is exactly what this file exists to prevent. dbt still models all 19; retiring
-    them here does not remove those models, it makes them findable (tk-bootcamps-ingestion-has-disappeared-while-dbt-st-25d016).
-    Note that profiles_profile stopped earlier than the rest, on 2025-02-24, having
-    never been migrated to Iceberg (tk-bootcamps-profiles-profile-froze-2025-02-24-neve-7fbf5a)
-    — so this date is when the retirement was recorded, not one date on which all
-    19 stopped arriving.
+  retired_on: '2025-02-25'
+  reason: >-
+    This table stopped loading a year before the rest of bootcamps. The date is
+    when its only Airbyte load landed, the JSONL file of 2025-02-25T02:01Z (max
+    updated_on 2025-02-24T22:17Z, 66,447 rows), which was converted to Iceberg
+    on 2026-09-11. auth_user kept syncing until 2026-02-12. 1,166 users have no
+    profile row (1,165 joined after 2025-02-25, one in 2019 never had one), so
+    int__bootcamps__users carries null profile fields for them. dim_user takes
+    profile fields from the person's account with the newest join date, so it
+    carries the nulls when that is the bootcamps account, and only full_name
+    falls back to another account. Everyone else's profile is as of
+    2025-02-24. Served as is, decided 2026-10-26: the app is decommissioned, so
+    the missing profiles cannot be loaded, and the older ones are still the best
+    record we have
+    (tk-bootcamps-profiles-profile-froze-2025-02-24-neve-7fbf5a).
+  frozen: true
+- deployment: bootcamps
+  layer: app_postgres
+  raw_tables:
+  - raw__bootcamps__app__postgres__applications_applicantletter
+  - raw__bootcamps__app__postgres__applications_quizsubmission
+  - raw__bootcamps__app__postgres__applications_videointerviewsubmission
+  - raw__bootcamps__app__postgres__auth_group
+  - raw__bootcamps__app__postgres__auth_group_permissions
+  - raw__bootcamps__app__postgres__auth_permission
+  - raw__bootcamps__app__postgres__auth_user_groups
+  - raw__bootcamps__app__postgres__auth_user_user_permissions
+  - raw__bootcamps__app__postgres__authtoken_token
+  - raw__bootcamps__app__postgres__cms_admissionssection
+  - raw__bootcamps__app__postgres__cms_alumnisection
+  - raw__bootcamps__app__postgres__cms_bootcampindexpage
+  - raw__bootcamps__app__postgres__cms_bootcamprunpage
+  - raw__bootcamps__app__postgres__cms_cataloggridsection
+  - raw__bootcamps__app__postgres__cms_certificateindexpage
+  - raw__bootcamps__app__postgres__cms_certificatepage
+  - raw__bootcamps__app__postgres__cms_homealumnisection
+  - raw__bootcamps__app__postgres__cms_homepage
+  - raw__bootcamps__app__postgres__cms_instructorssection
+  - raw__bootcamps__app__postgres__cms_learningresourcesection
+  - raw__bootcamps__app__postgres__cms_lettertemplatepage
+  - raw__bootcamps__app__postgres__cms_programdescriptionsection
+  - raw__bootcamps__app__postgres__cms_resourcepage
+  - raw__bootcamps__app__postgres__cms_resourcepagessettings
+  - raw__bootcamps__app__postgres__cms_signatoryindexpage
+  - raw__bootcamps__app__postgres__cms_signatorypage
+  - raw__bootcamps__app__postgres__cms_sitenotification
+  - raw__bootcamps__app__postgres__cms_threecolumnimagetextsection
+  - raw__bootcamps__app__postgres__compliance_exportsinquirylog
+  - raw__bootcamps__app__postgres__django_admin_log
+  - raw__bootcamps__app__postgres__django_migrations
+  - raw__bootcamps__app__postgres__django_session
+  - raw__bootcamps__app__postgres__djangosaml2idp_persistentid
+  - raw__bootcamps__app__postgres__djangosaml2idp_serviceprovider
+  - raw__bootcamps__app__postgres__fluidreview_oauthtoken
+  - raw__bootcamps__app__postgres__fluidreview_webhookrequest
+  - raw__bootcamps__app__postgres__hubspot_api_hubspotobject
+  - raw__bootcamps__app__postgres__hubspot_hubspoterrorcheck
+  - raw__bootcamps__app__postgres__hubspot_hubspotlineresync
+  - raw__bootcamps__app__postgres__jobma_interview
+  - raw__bootcamps__app__postgres__jobma_interviewaudit
+  - raw__bootcamps__app__postgres__jobma_job
+  - raw__bootcamps__app__postgres__jobma_jobaudit
+  - raw__bootcamps__app__postgres__smapply_oauthtokensma
+  - raw__bootcamps__app__postgres__smapply_webhookrequestsma
+  - raw__bootcamps__app__postgres__social_auth_association
+  - raw__bootcamps__app__postgres__social_auth_code
+  - raw__bootcamps__app__postgres__social_auth_nonce
+  - raw__bootcamps__app__postgres__social_auth_partial
+  - raw__bootcamps__app__postgres__social_auth_usersocialauth
+  - raw__bootcamps__app__postgres__taggit_tag
+  - raw__bootcamps__app__postgres__taggit_taggeditem
+  - raw__bootcamps__app__postgres__wagtailadmin_admin
+  - raw__bootcamps__app__postgres__wagtailcore_collection
+  - raw__bootcamps__app__postgres__wagtailcore_collectionviewrestriction
+  - raw__bootcamps__app__postgres__wagtailcore_collectionviewrestriction_groups
+  - raw__bootcamps__app__postgres__wagtailcore_comment
+  - raw__bootcamps__app__postgres__wagtailcore_commentreply
+  - raw__bootcamps__app__postgres__wagtailcore_groupapprovaltask
+  - raw__bootcamps__app__postgres__wagtailcore_groupapprovaltask_groups
+  - raw__bootcamps__app__postgres__wagtailcore_groupcollectionpermission
+  - raw__bootcamps__app__postgres__wagtailcore_grouppagepermission
+  - raw__bootcamps__app__postgres__wagtailcore_locale
+  - raw__bootcamps__app__postgres__wagtailcore_modellogentry
+  - raw__bootcamps__app__postgres__wagtailcore_page
+  - raw__bootcamps__app__postgres__wagtailcore_pagelogentry
+  - raw__bootcamps__app__postgres__wagtailcore_pagerevision
+  - raw__bootcamps__app__postgres__wagtailcore_pagesubscription
+  - raw__bootcamps__app__postgres__wagtailcore_pageviewrestriction
+  - raw__bootcamps__app__postgres__wagtailcore_pageviewrestriction_groups
+  - raw__bootcamps__app__postgres__wagtailcore_site
+  - raw__bootcamps__app__postgres__wagtailcore_task
+  - raw__bootcamps__app__postgres__wagtailcore_taskstate
+  - raw__bootcamps__app__postgres__wagtailcore_workflow
+  - raw__bootcamps__app__postgres__wagtailcore_workflowpage
+  - raw__bootcamps__app__postgres__wagtailcore_workflowstate
+  - raw__bootcamps__app__postgres__wagtailcore_workflowtask
+  - raw__bootcamps__app__postgres__wagtaildocs_document
+  - raw__bootcamps__app__postgres__wagtaildocs_uploadeddocument
+  - raw__bootcamps__app__postgres__wagtailembeds_embed
+  - raw__bootcamps__app__postgres__wagtailforms_formsubmission
+  - raw__bootcamps__app__postgres__wagtailimages_image
+  - raw__bootcamps__app__postgres__wagtailimages_rendition
+  - raw__bootcamps__app__postgres__wagtailimages_uploadedimage
+  - raw__bootcamps__app__postgres__wagtailredirects_redirect
+  - raw__bootcamps__app__postgres__wagtailsearch_editorspick
+  - raw__bootcamps__app__postgres__wagtailsearch_indexentry
+  - raw__bootcamps__app__postgres__wagtailsearch_query
+  - raw__bootcamps__app__postgres__wagtailsearch_querydailyhits
+  - raw__bootcamps__app__postgres__wagtailusers_userprofile
+  retired_on: '2025-02-25'
+  reason: >-
+    These came from the JSONL connection profiles_profile came from, and stopped
+    when it did. Its last files landed on 2025-02-25, and the Iceberg connection
+    that replaced it the same day never wrote these streams. None of them held a
+    row. Each Glue location under raw/bootcamps/app/postgres/public/ held only the
+    metadata.json that bin/migrate-raw-jsonl-to-iceberg.py wrote on 2026-09-11,
+    when it rebuilt the table as an empty Iceberg table from its Glue columns, and
+    S3 keeps no older version of any file there. dbt never modeled them. Measured
+    in production raw on 2026-10-26 and again on 2026-10-27. They were frozen on
+    2026-10-26 until someone decided what to do with them, and were dropped from
+    Glue on 2026-10-27 by the owner's decision
+    (tk-decide-what-to-do-with-the-93-raw-bootcamps-app--ddd6f0). The same
+    decision keeps, on purpose, the 19 JSONL directories under
+    s3://ol-data-lake-raw-production/raw/bootcamps/app/postgres/public/ that this
+    connection wrote for the tables that do hold rows (the 18 of the first
+    2026-02-12 entry above and applications_bootcampapplicationline;
+    profiles_profile's directory there is its Glue location). Last written
+    2025-02-25, 24.2 MB in all, they are the pre-Iceberg copies of those tables.
+    No Glue table references them.
 - deployment: github
   layer: api
   raw_tables:
@@ -775,13 +942,17 @@ retired:
   - raw__bootcamps__hubspot__workflows
   retired_on: '2026-10-01'
   reason: >-
-    The bootcamps application is no longer deployed (see the bootcamps
+    The bootcamps application is no longer deployed (see the first bootcamps
     app_postgres entry). The "HubSpot Bootcamps → S3" connection was inactive
     when the inventory was snapshotted on 2026-08-14 and was deleted from
     Airbyte before 2026-09-29, when the drift check started reporting it. No
-    data for these tables exists in the current lake: the 7 that are
-    registered in Glue (under raw/, created 2026-09-11) hold metadata only.
+    data for these tables exists in the current lake: the 7 that were
+    registered in Glue (under raw/, created 2026-09-11) held metadata only.
     This date is when the retirement was recorded. dbt modeled none of them.
+    Those 7 (contacts_merged_audit, contacts_property_history, form_submissions,
+    goals, owners, owners_archived and tickets) had no snapshot when measured on
+    2026-10-27 and were dropped from Glue that day, with the empty bootcamps
+    app_postgres tables (tk-decide-what-to-do-with-the-93-raw-bootcamps-app--ddd6f0).
 - deployment: mitxonline
   layer: app_postgres
   raw_tables:
@@ -862,3 +1033,100 @@ retired:
     The landing zone keeps only the newest copy of a re-materialized structure,
     so earlier copies of 1,918 files exist only in this table. They were not
     backfilled. The table stays in place, read-only.
+- deployment: mitx
+  layer: api
+  raw_tables:
+  - raw__mitx__openedx__api__course_blocks
+  retired_on: '2026-10-27'
+  reason: >-
+    Replaced by mitx/course_structure's
+    raw__mitx__openedx__api__course_structure_blocks, which the
+    course_xml_blocks dlt source loads from the same landing files (#2845).
+    This table was first loaded on 2025-03-03 and never held the 717 files
+    that landed before then (2024-09 to 2025-03), so 190 course runs exist
+    only in the dlt table. The landing zone keeps only the newest copy of a
+    re-materialized structure, so earlier copies of 393 files exist only in
+    this table. They were not backfilled. Airbyte kept appending to it until
+    2026-10-27 12:04Z, when "S3 MITx Open edX Extracts → S3 Data Lake" was
+    disabled. The table stays in place, read-only.
+- deployment: mitxonline
+  layer: api
+  raw_tables:
+  - raw__mitxonline__openedx__api__course_blocks
+  retired_on: '2026-10-27'
+  reason: >-
+    Replaced by mitxonline/course_structure's
+    raw__mitxonline__openedx__api__course_structure_blocks, which the
+    course_xml_blocks dlt source loads from the same landing files (#2845).
+    Both tables held the same 30,858 files on 2026-10-23. The landing zone
+    keeps only the newest copy of a re-materialized structure, so earlier
+    copies of 6,210 files exist only in this table. They were not backfilled.
+    Airbyte kept appending to it until 2026-10-27 12:04Z, when "S3 MITx Online
+    Open edX Extracts → S3 Data Lake" was disabled. The table stays in place,
+    read-only.
+- deployment: xpro
+  layer: api
+  raw_tables:
+  - raw__xpro__openedx__api__course_blocks
+  retired_on: '2026-10-27'
+  reason: >-
+    Replaced by xpro/course_structure's
+    raw__xpro__openedx__api__course_structure_blocks, which the
+    course_xml_blocks dlt source loads from the same landing files (#2845).
+    Both tables held the same 2,723 files on 2026-10-23. The landing zone
+    keeps only the newest copy of a re-materialized structure, so earlier
+    copies of 946 files exist only in this table. They were not backfilled.
+    Airbyte kept appending to it until 2026-10-27 00:05Z, and "S3 xPRO Open edX
+    Extracts → S3 Data Lake" was disabled later that day. The table stays in
+    place, read-only.
+- deployment: mitx
+  layer: api
+  raw_tables:
+  - raw__mitx__openedx__api__course_structure
+  retired_on: '2026-10-26'
+  reason: >-
+    Nothing reads it. No dbt source declared it, and
+    stg__mitxresidential__openedx__api__course_structure reads
+    raw__mitx__openedx__api__course_structure_blocks, which course_xml_blocks
+    loads from the blocks files the same Dagster asset run writes from the same
+    structure document. Galaxy query history from 2026-09-26 to 2026-10-26 shows
+    only OpenMetadata's metadata bot reading it. Airbyte loaded it until
+    2026-10-26, when the stream was deselected on "S3 MITx Open edX Extracts → S3
+    Data Lake". That connection was disabled on 2026-10-27 and is kept disabled,
+    not deleted. The landing files under
+    mitx/openedx/processed_data/course_structure/ stay in S3, and the table
+    stays in place, read-only.
+- deployment: mitxonline
+  layer: api
+  raw_tables:
+  - raw__mitxonline__openedx__api__course_structure
+  retired_on: '2026-10-26'
+  reason: >-
+    Nothing reads it. Its dbt source declaration had no source() caller, and
+    stg__mitxonline__openedx__api__course_structure reads
+    raw__mitxonline__openedx__api__course_structure_blocks, which
+    course_xml_blocks loads from the blocks files the same Dagster asset run
+    writes from the same structure document. Galaxy query history from
+    2026-09-26 to 2026-10-26 shows only OpenMetadata's metadata bot reading it.
+    Airbyte loaded it until 2026-10-26, when the stream was deselected on "S3
+    MITx Online Open edX Extracts → S3 Data Lake". That connection was disabled
+    on 2026-10-27 and is kept disabled, not deleted. The landing files under
+    mitxonline/openedx/processed_data/course_structure/ stay in S3, and the
+    table stays in place, read-only.
+- deployment: xpro
+  layer: api
+  raw_tables:
+  - raw__xpro__openedx__api__course_structure
+  retired_on: '2026-10-26'
+  reason: >-
+    Nothing reads it. Its dbt source declaration had no source() caller, and
+    stg__mitxpro__openedx__api__course_structure reads
+    raw__xpro__openedx__api__course_structure_blocks, which course_xml_blocks
+    loads from the blocks files the same Dagster asset run writes from the same
+    structure document. Galaxy query history from 2026-09-26 to 2026-10-26 shows
+    only OpenMetadata's metadata bot reading it. Airbyte loaded it until
+    2026-10-26, when the stream was deselected on "S3 xPRO Open edX Extracts → S3
+    Data Lake". That connection was disabled on 2026-10-27 and is kept disabled,
+    not deleted. The landing files under
+    xpro/openedx/processed_data/course_structure/ stay in S3, and the table
+    stays in place, read-only.
