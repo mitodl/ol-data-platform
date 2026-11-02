@@ -16,11 +16,12 @@ from ml.lib.sentiment_eval import (
     build_sentiment_client,
     labeled_sentiment_sample,
     run_sentiment_eval,
+    validate_negative_thresholds,
 )
 from ml.resources.llm import LLMClientFactory
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
-from pydantic import Field
+from pydantic import Field, field_validator
 
 if DAGSTER_ENV == "dev":
     _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
@@ -66,9 +67,18 @@ class FeedbackSentimentEvalConfig(Config):
         description=(
             "The classifier is scored once per threshold: a conversation is "
             "negative when P(negative) is at least the threshold. Lower values "
-            "find more complaints and add more false alarms."
+            "find more complaints and add more false alarms. 0.5 is always "
+            "scored too."
         ),
     )
+
+    @field_validator("classifier_negative_thresholds")
+    @classmethod
+    def thresholds_between_zero_and_one(cls, thresholds: list[float]) -> list[float]:
+        """Reject a bad threshold at launch, before the warehouse reads."""
+        validate_negative_thresholds(thresholds)
+        return thresholds
+
     embedding_model: str | None = Field(
         default=None,
         pattern=r"^[a-z0-9-]+:.+$",

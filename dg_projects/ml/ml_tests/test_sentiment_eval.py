@@ -5,6 +5,7 @@ import polars as pl
 import pytest
 from anthropic import Anthropic, AnthropicBedrock
 from anthropic.types import TextBlock, ThinkingBlock
+from ml.assets.feedback_sentiment_eval import FeedbackSentimentEvalConfig
 from ml.lib import sentiment_eval
 from ml.resources.opik_auth import PromptLabelMissingError
 from ml_tests.fake_anthropic import FakeAnthropicClient, FakeMessage
@@ -137,7 +138,7 @@ def test_run_sentiment_eval_scores_the_classifier_at_each_threshold() -> None:
         df,
         embedding_dim=4,
         sentiment_client=None,
-        classifier_negative_thresholds=(0.5, 0.3, 0.2),
+        classifier_negative_thresholds=(0.3, 0.2),
     )["methods"]
 
     assert list(methods) == [
@@ -151,6 +152,11 @@ def test_run_sentiment_eval_scores_the_classifier_at_each_threshold() -> None:
         for m in ("local_classifier", "local_classifier@0.3", "local_classifier@0.2")
     ]
     assert predicted == sorted(predicted)
+
+
+def test_feedback_sentiment_eval_config_rejects_a_threshold_at_launch() -> None:
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        FeedbackSentimentEvalConfig(classifier_negative_thresholds=[50])
 
 
 def test_run_sentiment_eval_rejects_a_threshold_outside_zero_and_one() -> None:
@@ -323,7 +329,8 @@ def test_run_sentiment_eval_skips_llm_arm_when_client_is_none() -> None:
         df, embedding_dim=4, sentiment_client=None
     )
 
-    assert set(result["methods"].keys()) == {"embedding_knn", "local_classifier"}
+    assert "llm" not in result["methods"]
+    assert {"embedding_knn", "local_classifier"} <= set(result["methods"])
     assert result["n_train"] + result["n_test"] == len(labels)
 
 

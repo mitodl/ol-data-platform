@@ -220,6 +220,13 @@ def predictions_at_threshold(
     return np.where(negative_probabilities >= threshold, "negative", "positive")
 
 
+def validate_negative_thresholds(thresholds: Sequence[float]) -> None:
+    """Raise ValueError unless every threshold is between 0 and 1."""
+    if not all(0 < threshold < 1 for threshold in thresholds):
+        msg = f"Thresholds must be between 0 and 1: {list(thresholds)}"
+        raise ValueError(msg)
+
+
 def classifier_method_name(threshold: float) -> str:
     if threshold == DEFAULT_NEGATIVE_THRESHOLD:
         return "local_classifier"
@@ -371,7 +378,7 @@ def run_sentiment_eval(  # noqa: PLR0913 -- one independently meaningful eval kn
     test_fraction: float = 0.2,
     n_neighbors: int = EMBEDDING_KNN_NEIGHBORS,
     random_state: int = 42,
-    classifier_negative_thresholds: Sequence[float] = (DEFAULT_NEGATIVE_THRESHOLD,),
+    classifier_negative_thresholds: Sequence[float] = CLASSIFIER_NEGATIVE_THRESHOLDS,
 ) -> dict[str, Any]:
     """Run the three-way bake-off on one labeled sample; return per-method results.
 
@@ -383,13 +390,12 @@ def run_sentiment_eval(  # noqa: PLR0913 -- one independently meaningful eval kn
             (it's the only one with a real per-call cost -- worth being able to
             run the other two without incurring it).
         classifier_negative_thresholds: one local_classifier result per value;
-            each must be between 0 and 1.
+            each must be between 0 and 1. DEFAULT_NEGATIVE_THRESHOLD is always
+            scored too, so every run has a local_classifier row to compare.
 
     :raises ValueError: when a threshold is not between 0 and 1.
     """
-    if not all(0 < threshold < 1 for threshold in classifier_negative_thresholds):
-        msg = f"Thresholds must be between 0 and 1: {classifier_negative_thresholds}"
-        raise ValueError(msg)
+    validate_negative_thresholds(classifier_negative_thresholds)
     vectors = labeled_df["embedding_vector"].list.to_array(embedding_dim).to_numpy()
     labels = labeled_df["sentiment"].to_numpy()
     texts = labeled_df["conversation_text"].to_list()
@@ -423,7 +429,8 @@ def run_sentiment_eval(  # noqa: PLR0913 -- one independently meaningful eval kn
         vectors[test_idx],
         random_state=random_state,
     )
-    for threshold in sorted(set(classifier_negative_thresholds), reverse=True):
+    thresholds = set(classifier_negative_thresholds) | {DEFAULT_NEGATIVE_THRESHOLD}
+    for threshold in sorted(thresholds, reverse=True):
         methods[classifier_method_name(threshold)] = score_predictions(
             predictions_at_threshold(negative_probabilities, threshold), test_labels
         ) | {"call_count": 0}
