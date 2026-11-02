@@ -231,7 +231,13 @@ models:
   - name: discount
     description: str, discount applied to the order in a readable format. The value
       is always an amount taken off the list price of the order, e.g., "$100" means
-      $100 was taken off the price. "30%" means the price was reduced by 30%.
+      $100 was taken off the price. "30%" means the price was reduced by 30%. A MITx
+      Online fixed-price discount is worked out from the product's price today, so
+      it can disagree with discount_amount when the price changed after purchase.
+  - name: discount_amount
+    description: numeric, dollar amount off the order line, unit_price minus what
+      the line was charged. Null for Bootcamps and edX.org, which have no list price
+      to subtract from.
   - name: order_created_on
     description: timestamp, specifying when the order was initially created. If this
       is a b2b order it will be the timestamp that order was created otherwise it
@@ -334,7 +340,9 @@ models:
     description: string, cybersource req_reference_number from cybersource payment
       transaction, e.g., mitxonline-production-1
   - name: unit_price
-    description: numeric, price for the order line item before discount
+    description: numeric, list price at purchase for the order line item, before discount.
+      For edX.org it is the price after any coupon, as MicroMasters records no list
+      price.
   - name: user_email
     description: str, user email associated with their account on the corresponding
       platform

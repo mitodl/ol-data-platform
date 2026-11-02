@@ -76,6 +76,10 @@ select
     , lines.line_id
     , lines.product_version_id
     , intermediate_products_view.product_price
+    , cast(
+        {{ json_query_string('versions.version_object_serialized_data', "'$[0].fields.price'") }} as decimal(38, 2)
+    ) as line_price
+    , lines.line_discounted_unit_price
     , intermediate_products_view.product_type
     , intermediate_products_view.product_id
     , intermediate_products_view.courserun_id
@@ -98,21 +102,9 @@ select
         when orders.order_state in ('fulfilled', 'refunded')
             then discountredemptions.discountredemption_timestamp
     end as discountredemption_timestamp
-    -- A fixed-price discount's amount is the price the learner pays, not an amount off,
-    -- and MITx Online charges the lower of it and the product price.
-    -- paid-amount-off stores 0 and is resolved at checkout, so it has no amount here.
-    -- Multiply before dividing: Trino keeps a decimal quotient at the dividend's scale,
-    -- so amount / 100 would round 12.5% to 0.13.
-    , case
-        when discounts.discount_type = 'percent-off'
-            then cast(intermediate_products_view.product_price * discounts.discount_amount / 100 as decimal(38, 2))
-        when discounts.discount_type = 'dollars-off'
-            then cast(least(discounts.discount_amount, intermediate_products_view.product_price) as decimal(38, 2))
-        when discounts.discount_type = 'fixed-price'
-            then cast(
-                greatest(intermediate_products_view.product_price - discounts.discount_amount, 0) as decimal(38, 2)
-            )
-    end as discount_amount
+    , cast(
+        {{ json_query_string('versions.version_object_serialized_data', "'$[0].fields.price'") }} as decimal(38, 2)
+    ) - lines.line_discounted_unit_price as discount_amount
 from lines
 inner join orders on lines.order_id = orders.order_id
 inner join users on orders.order_purchaser_user_id = users.user_id
