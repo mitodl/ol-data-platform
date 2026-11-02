@@ -705,7 +705,7 @@ models:
       are matched as for unique_courses_taken_in_program. A revoked certificate keeps
       its creation date, so it can be set on a revoked MITx Online or xPRO row where
       user_has_completed_program is false. program_enrollment_with_user_report carries
-      the same value as program_complete_days.
+      this column under the same name.
   - name: program_report_key
     description: str, the program the row counts toward in program reports, from dim_program_report_key.
       A row whose program_readable_id is a MITx Online or xPRO program's looks it
