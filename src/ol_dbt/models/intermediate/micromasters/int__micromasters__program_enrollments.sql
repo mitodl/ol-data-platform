@@ -63,13 +63,14 @@ with micromasters_program_enrollments as (
 
 , mm_dedp_records as (
     select
-        mitx_users.user_edxorg_username
+        coalesce(mitx_users.user_micromasters_edxorg_username, mitx_users.user_edxorg_username)
+            as user_edxorg_username
         , mitx_users.user_mitxonline_username
         , mitx_users.user_micromasters_email as user_email
         , programs.micromasters_program_id
         , programs.program_title
         , programs.mitxonline_program_id
-        , mitx_users.user_edxorg_id
+        , coalesce(mitx_users.user_micromasters_edxorg_id, mitx_users.user_edxorg_id) as user_edxorg_id
         , mitx_users.user_gender
         , mitx_users.user_address_country as user_country
         , mitx_users.user_address_city
