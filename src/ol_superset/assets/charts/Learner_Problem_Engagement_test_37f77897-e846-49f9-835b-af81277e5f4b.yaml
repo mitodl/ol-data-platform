@@ -12,7 +12,7 @@ params:
   - section_title
   - subsection_title
   - problem_name
-  - problems_attempted
+  - problems_with_attempt
   - num_of_problems_correct
   - max_possible_grade
   - max_learner_grade

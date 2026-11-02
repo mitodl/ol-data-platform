@@ -50,7 +50,7 @@ params:
   truncateXAxis: true
   truncate_metric: true
   viz_type: echarts_timeseries_bar
-  x_axis: user_watched_video_count
+  x_axis: distinct_video_titles_played
   x_axis_sort_asc: true
   x_axis_sort_series: name
   x_axis_sort_series_ascending: true

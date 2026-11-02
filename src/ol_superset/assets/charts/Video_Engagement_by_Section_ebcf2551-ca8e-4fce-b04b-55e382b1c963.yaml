@@ -29,7 +29,7 @@ params:
       hasCustomLabel: true
       label: Viewed at least one Video
       optionName: metric_jizlug4ic8o_u1gjok3yr5
-      sqlExpression: count(distinct(case when user_watched_video_count > 0 then user_email
+      sqlExpression: count(distinct(case when distinct_video_titles_played > 0 then user_email
         else null end))
     - aggregate: null
       column: null
@@ -38,7 +38,7 @@ params:
       hasCustomLabel: true
       label: Viewed All Videos
       optionName: metric_xhjwxh5mzl_e422ptihyqu
-      sqlExpression: count(distinct(case when user_watched_video_count = total_video_count
+      sqlExpression: count(distinct(case when distinct_video_titles_played = total_video_count
         then user_email else null end))
     order_desc: false
     rich_tooltip: true
@@ -86,7 +86,7 @@ params:
     hasCustomLabel: true
     label: Viewed at least one Video
     optionName: metric_jizlug4ic8o_u1gjok3yr5
-    sqlExpression: count(distinct(case when user_watched_video_count > 0 then user_email
+    sqlExpression: count(distinct(case when distinct_video_titles_played > 0 then user_email
       else null end))
   - aggregate: null
     column: null
@@ -95,7 +95,7 @@ params:
     hasCustomLabel: true
     label: Viewed All Videos
     optionName: metric_xhjwxh5mzl_e422ptihyqu
-    sqlExpression: count(distinct(case when user_watched_video_count = total_video_count
+    sqlExpression: count(distinct(case when distinct_video_titles_played = total_video_count
       then user_email else null end))
   order_desc: false
   queries_bak:
@@ -117,7 +117,7 @@ params:
       hasCustomLabel: true
       label: Viewed at least one Video
       optionName: metric_jizlug4ic8o_u1gjok3yr5
-      sqlExpression: count(distinct(case when user_watched_video_count > 0 then user_email
+      sqlExpression: count(distinct(case when distinct_video_titles_played > 0 then user_email
         else null end))
     - aggregate: null
       column: null
@@ -126,7 +126,7 @@ params:
       hasCustomLabel: true
       label: Viewed All Videos
       optionName: metric_xhjwxh5mzl_e422ptihyqu
-      sqlExpression: count(distinct(case when user_watched_video_count = total_video_count
+      sqlExpression: count(distinct(case when distinct_video_titles_played = total_video_count
         then user_email else null end))
     order_desc: false
     row_limit: 10000

@@ -207,7 +207,7 @@ columns:
   type: BIGINT
   verbose_name: null
 - advanced_data_type: null
-  column_name: num_video_played
+  column_name: video_play_events
   description: null
   expression: ''
   extra: null
@@ -219,7 +219,7 @@ columns:
   type: BIGINT
   verbose_name: null
 - advanced_data_type: null
-  column_name: num_problem_submitted
+  column_name: problem_submitted_events
   description: null
   expression: ''
   extra: null

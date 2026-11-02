@@ -120,7 +120,7 @@ columns:
   type: BIGINT(20)
   verbose_name: null
 - advanced_data_type: null
-  column_name: num_video_played
+  column_name: video_play_events
   datetime_format: null
   description: null
   expression: ''
@@ -133,7 +133,7 @@ columns:
   type: BIGINT(20)
   verbose_name: null
 - advanced_data_type: null
-  column_name: num_problem_submitted
+  column_name: problem_submitted_events
   datetime_format: null
   description: null
   expression: ''
