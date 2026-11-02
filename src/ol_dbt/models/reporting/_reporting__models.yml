@@ -1918,21 +1918,21 @@ unit_tests:
     - {enrollment_key: e-pro-declined, order_id: 12}
   - input: ref('tfact_payment')
     rows:
-    - {payment_id: 1, order_id: 10, platform_fk: p-pro, transaction_type: sale, transaction_status: ACCEPT,
+    - {payment_id: 1, order_id: 10, platform_fk: p-pro, transaction_type: sale, is_successful: true,
       transaction_amount: 900.00, transaction_created_on: '2026-01-01T00:00:00'}
-    - {payment_id: 2, order_id: 10, platform_fk: p-pro, transaction_type: sale, transaction_status: CANCEL,
+    - {payment_id: 2, order_id: 10, platform_fk: p-pro, transaction_type: sale, is_successful: false,
       transaction_amount: 900.00, transaction_created_on: '2026-01-02T00:00:00'}
-    - {payment_id: 3, order_id: 10, platform_fk: p-pro, transaction_type: sale, transaction_status: DECLINE,
+    - {payment_id: 3, order_id: 10, platform_fk: p-pro, transaction_type: sale, is_successful: false,
       transaction_amount: 900.00, transaction_created_on: '2026-01-03T00:00:00'}
     - {payment_id: 4, order_id: 20, platform_fk: p-online, transaction_type: payment,
-      transaction_status: ACCEPT, transaction_amount: 250.00, transaction_created_on: '2026-01-01T00:00:00'}
+      is_successful: true, transaction_amount: 250.00, transaction_created_on: '2026-01-01T00:00:00'}
     - {payment_id: 5, order_id: 20, platform_fk: p-online, transaction_type: refund,
-      transaction_status: null, transaction_amount: 250.00, transaction_created_on: '2026-01-05T00:00:00'}
-    - {payment_id: 6, order_id: 11, platform_fk: p-pro, transaction_type: sale, transaction_status: ACCEPT,
+      is_successful: false, transaction_amount: 250.00, transaction_created_on: '2026-01-05T00:00:00'}
+    - {payment_id: 6, order_id: 11, platform_fk: p-pro, transaction_type: sale, is_successful: true,
       transaction_amount: 400.00, transaction_created_on: '2026-02-01T00:00:00'}
-    - {payment_id: 7, order_id: 11, platform_fk: p-pro, transaction_type: sale, transaction_status: ACCEPT,
+    - {payment_id: 7, order_id: 11, platform_fk: p-pro, transaction_type: sale, is_successful: true,
       transaction_amount: 450.00, transaction_created_on: '2026-02-02T00:00:00'}
-    - {payment_id: 8, order_id: 12, platform_fk: p-pro, transaction_type: sale, transaction_status: DECLINE,
+    - {payment_id: 8, order_id: 12, platform_fk: p-pro, transaction_type: sale, is_successful: false,
       transaction_amount: 900.00, transaction_created_on: '2026-03-01T00:00:00'}
   - input: ref('dim_contract')
     rows: []

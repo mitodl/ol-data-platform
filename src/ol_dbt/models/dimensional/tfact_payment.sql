@@ -143,6 +143,7 @@ with mitxonline_payments as (
         , pwf.transaction_amount
         , pwf.transaction_type
         , pwf.transaction_status
+        , coalesce(pwf.transaction_status = 'ACCEPT', false) as is_successful
         , pwf.transaction_created_on
     from payments_with_fks as pwf
 
