@@ -62,18 +62,28 @@ unit_tests:
   given:
   - input: source('courseware_intermediate', 'courseware_concept_mention')
     rows:
-    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, source_ref: b1,
-      pattern_key: kernel, concept_id: os-kernel, char_start: 0}
-    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, source_ref: b1,
-      pattern_key: kernel, concept_id: ml-kernel, char_start: 0}
-    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, source_ref: b2,
-      pattern_key: kernel, concept_id: os-kernel, char_start: 0}
-    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, source_ref: b2,
-      pattern_key: kernel, concept_id: ml-kernel, char_start: 0}
-    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: queued, source_ref: b3,
-      pattern_key: kernel, concept_id: os-kernel, char_start: 0}
-    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: unseen, source_ref: b4,
-      pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, scope_id: s1,
+      source_ref: b1, pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, scope_id: s1,
+      source_ref: b1, pattern_key: kernel, concept_id: ml-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, scope_id: s1,
+      source_ref: b2, pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, scope_id: s1,
+      source_ref: b2, pattern_key: kernel, concept_id: ml-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: queued, scope_id: s1,
+      source_ref: b3, pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: unseen, scope_id: s1,
+      source_ref: b4, pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_source')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, scope_id: s1,
+      source_ref: b1, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, scope_id: s1,
+      source_ref: b2, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: queued, scope_id: s1,
+      source_ref: b3, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: unseen, scope_id: s1,
+      source_ref: b4, mention_run_id: r1}
   - input: ref('int__courseware__concept_tagging_aliases')
     rows:
     - {tagging_run_id: r1, pattern_key: kernel, concept_id: os-kernel, tagged_concept_id: os-kernel,
@@ -109,6 +119,10 @@ unit_tests:
     - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
       scope_kind: unit, source_ref: b1, source_kind: html, pattern_key: csv, concept_id: a_csv,
       matched_text: CSV, char_start: 0, char_end: 3}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_source')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, mention_run_id: r1}
   - input: ref('int__courseware__concept_tagging_aliases')
     rows:
     - {tagging_run_id: r1, pattern_key: csv, concept_id: csv, tagged_concept_id: a_csv,
@@ -231,14 +245,22 @@ unit_tests:
   given:
   - input: source('courseware_intermediate', 'courseware_concept_mention')
     rows:
-    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, source_ref: b1,
-      pattern_key: csv, concept_id: a_csv, char_start: 0}
-    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, source_ref: b1,
-      pattern_key: csv, concept_id: b_csv, char_start: 0}
-    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: other, source_ref: b2,
-      pattern_key: csv, concept_id: a_csv, char_start: 0}
-    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, source_ref: b3,
-      pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: csv, concept_id: a_csv, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: csv, concept_id: b_csv, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: other, scope_id: s1,
+      source_ref: b2, pattern_key: csv, concept_id: a_csv, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, scope_id: s1,
+      source_ref: b3, pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_source')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: other, scope_id: s1,
+      source_ref: b2, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, scope_id: s1,
+      source_ref: b3, mention_run_id: r1}
   - input: ref('int__courseware__concept_tagging_aliases')
     rows:
     - {tagging_run_id: r1, pattern_key: csv, concept_id: csv, tagged_concept_id: a_csv,
@@ -271,10 +293,14 @@ unit_tests:
   given:
   - input: source('courseware_intermediate', 'courseware_concept_mention')
     rows:
-    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, source_ref: b1,
-      pattern_key: csv, concept_id: a_csv, char_start: 0}
-    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, source_ref: b1,
-      pattern_key: csv, concept_id: b_csv, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: csv, concept_id: a_csv, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: csv, concept_id: b_csv, char_start: 0}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_source')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, mention_run_id: r1}
   - input: ref('int__courseware__concept_tagging_aliases')
     rows:
     - {tagging_run_id: r1, pattern_key: csv, concept_id: csv, tagged_concept_id: a_csv,
@@ -302,12 +328,18 @@ unit_tests:
   given:
   - input: source('courseware_intermediate', 'courseware_concept_mention')
     rows:
-    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, source_ref: b1,
-      pattern_key: kernel, concept_id: os-kernel, char_start: 0}
-    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, source_ref: b1,
-      pattern_key: kernel, concept_id: svm-kernel, char_start: 0}
-    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, source_ref: b2,
-      pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, scope_id: s1,
+      source_ref: b1, pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, scope_id: s1,
+      source_ref: b1, pattern_key: kernel, concept_id: svm-kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, scope_id: s1,
+      source_ref: b2, pattern_key: kernel, concept_id: os-kernel, char_start: 0}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_source')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: os, scope_id: s1,
+      source_ref: b1, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: ml, scope_id: s1,
+      source_ref: b2, mention_run_id: r1}
   - input: ref('int__courseware__concept_tagging_aliases')
     rows:
     - {tagging_run_id: r1, pattern_key: kernel, concept_id: os-kernel, tagged_concept_id: os-kernel,
@@ -372,3 +404,48 @@ unit_tests:
     rows:
     - {pattern_key: pandas, concept_id: pandas, tagged_source_count: 3, compared_source_count: 2,
       source_agreement_rate: 0.5, scope_agreement_rate: 0.5}
+
+- name: test_int__courseware__concept_tags_reads_each_source_from_its_mention_run
+  description: >
+    Run r2 re-tagged only b2, whose text changed and now mentions nothing, and the
+    new source b4, and kept r1's mentions of b1. b3 was removed before r2. So b1 is
+    read from r1 and b4 from r2, while r1's rows for b2 and b3 and the rows of r3,
+    which never wrote its run row, are not read.
+  model: int__courseware__concept_tags
+  given:
+  - input: source('courseware_intermediate', 'courseware_concept_mention')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: kernel, concept_id: kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b2, pattern_key: kernel, concept_id: kernel, char_start: 0}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b3, pattern_key: kernel, concept_id: kernel, char_start: 0}
+    - {tagging_run_id: r2, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b4, pattern_key: kernel, concept_id: kernel, char_start: 5}
+    - {tagging_run_id: r3, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, pattern_key: kernel, concept_id: kernel, char_start: 9}
+  - input: source('courseware_intermediate', 'courseware_concept_tagging_source')
+    rows:
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b2, mention_run_id: r1}
+    - {tagging_run_id: r1, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b3, mention_run_id: r1}
+    - {tagging_run_id: r2, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b1, mention_run_id: r1}
+    - {tagging_run_id: r2, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b2, mention_run_id: r2}
+    - {tagging_run_id: r2, platform: mitxonline, courserun_readable_id: run, scope_id: s1,
+      source_ref: b4, mention_run_id: r2}
+  - input: ref('int__courseware__concept_tagging_aliases')
+    rows:
+    - {tagging_run_id: r2, pattern_key: kernel, concept_id: kernel, tagged_concept_id: kernel,
+      concept_label_key: kernel}
+  - input: ref('int__courseware__concept_sense_assignments')
+    rows: []
+  expect:
+    rows:
+    - {tagging_run_id: r1, source_ref: b1, char_start: 0, sense_status: candidate}
+    - {tagging_run_id: r2, source_ref: b4, char_start: 5, sense_status: candidate}

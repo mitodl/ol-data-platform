@@ -1,6 +1,6 @@
 # Learn Integration Schema Contract
 
-This document defines the stable interface that MIT Learn's Trino-pull ETL tasks depend on. All Learn-facing dbt integration models follow the naming convention and column requirements specified here.
+This document defines the stable interface that MIT Learn's warehouse-pull ETL tasks depend on. Learn reads these models from StarRocks over the MySQL protocol. All Learn-facing dbt integration models follow the naming convention and column requirements specified here.
 
 ## Model Location
 

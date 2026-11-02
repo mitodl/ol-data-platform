@@ -825,7 +825,7 @@
 {%- endmacro %}
 
 {% macro duckdb__array_filter_nonempty(array_expr) -%}
-    list_filter({{ array_expr }}, x -> x is not null and x != '')
+    list_filter({{ array_expr }}, lambda x: x is not null and x != '')
 {%- endmacro %}
 
 {% macro starrocks__array_filter_nonempty(array_expr) -%}
@@ -1187,7 +1187,7 @@
     case when {{ string_expr }} = '' then '' else array_to_string(
         list_transform(
             range(1, length({{ string_expr }}) + 1)
-            , i -> case
+            , lambda i: case
                 when i = 1 or not regexp_matches(substr({{ string_expr }}, i - 1, 1), '\p{L}')
                     then upper(substr({{ string_expr }}, i, 1))
                 else lower(substr({{ string_expr }}, i, 1))
@@ -1357,7 +1357,7 @@
 {%- endmacro %}
 
 {% macro duckdb__array_transform(array_expr, element_name, lambda_body) -%}
-    list_transform({{ array_expr }}, {{ element_name }} -> {{ lambda_body }})
+    list_transform({{ array_expr }}, lambda {{ element_name }}: {{ lambda_body }})
 {%- endmacro %}
 
 {% macro starrocks__array_transform(array_expr, element_name, lambda_body) -%}

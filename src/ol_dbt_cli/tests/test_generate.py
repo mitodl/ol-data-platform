@@ -17,6 +17,7 @@ from ol_dbt_cli.commands.generate import (
     _extract_domain,
     _merge_sources_content,
 )
+from ol_dbt_cli.lib.duckdb_aws import USE_AWS_CREDENTIAL_CHAIN_SQL
 
 
 class TestExtractDomain:
@@ -315,13 +316,13 @@ class TestDescribeLocalView:
         assert "aws" in loaded
         assert "iceberg" in loaded
 
-    def test_calls_load_aws_credentials(self, tmp_path: Path) -> None:
+    def test_creates_aws_credential_chain_secret(self, tmp_path: Path) -> None:
         db = tmp_path / "local.duckdb"
         db.touch()
         with patch("ol_dbt_cli.commands.generate.duckdb.connect") as mock_connect:
             mock_conn = self._mock_duckdb_connect(mock_connect, [])
             _describe_local_view(db, "my_db", "orders")
-        mock_conn.execute.assert_any_call("CALL load_aws_credentials()")
+        mock_conn.execute.assert_any_call(USE_AWS_CREDENTIAL_CHAIN_SQL)
 
 
 class TestBuildSourcesContentFromLocal:

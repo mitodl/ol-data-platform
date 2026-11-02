@@ -99,10 +99,11 @@ class FeedbackSummariesConfig(Config):
         pattern=r"^[a-z0-9-]+:.+$",
         description=(
             "The model in ol-llm's provider:model form, e.g. "
-            "'bedrock:global.anthropic.claude-haiku-4-5-20251001-v1:0' or "
+            "'bedrock:us.anthropic.claude-haiku-5-5' or "
             "'anthropic:claude-sonnet-5', to try a different model's cost/quality "
             "without a code change. A different model re-summarizes every "
-            "conversation, since the model is part of each row's idempotency key. "
+            "conversation summarized since the idempotency key, which includes the "
+            "model; one summarized before it is redone only when its turns change. "
             "Unset uses SUMMARY_MODEL (ml.lib.summarize)."
         ),
     )
@@ -128,7 +129,7 @@ class FeedbackSummariesConfig(Config):
 
 
 @asset(
-    code_version="feedback_summaries_v6",
+    code_version="feedback_summaries_v7",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_summaries"]),
     deps=[AssetKey(["intermediate", "int__feedback__conversation"])],

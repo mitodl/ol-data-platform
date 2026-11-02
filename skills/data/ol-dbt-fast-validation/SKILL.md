@@ -48,7 +48,8 @@ ol-dbt impact --format json          # BREAKING/WARNING/INFO alerts for CI
 ol-dbt impact --auto-compile         # dbt compile on dev_local first for precise columns
 ```
 Alert levels: 🔴 `BREAKING` (removed/renamed column is consumed downstream) ·
-⚠️ `WARNING` (impact indeterminate) · ℹ️ `INFO` (additive only). Exits non-zero
+⚠️ `WARNING` (impact indeterminate) · ℹ️ `INFO` (additive only; readers of an
+added column are not listed, since it breaks none). Exits non-zero
 on any `BREAKING`. For the most accurate lineage, run `dbt parse` (or
 `--auto-compile`) first so a `manifest.json` exists.
 

@@ -14,7 +14,10 @@ dependencies = [
     "pyiceberg[glue]>=0.9",
     "requests>=2.32",
     # >=1.2 for the CSV reader's `strict_mode` argument (edxorg_s3 source).
-    "duckdb>=1.2,!=1.5.0,!=1.5.1",
+    # <2 since 2026-10-29: dlt through 1.31.0 calls
+    # DuckDBPyConnection.fetch_arrow_table(), which DuckDB 2.0 removed. Drop the
+    # cap once a dlt release fixes https://github.com/dlt-hub/dlt/issues/4595.
+    "duckdb>=1.2,!=1.5.0,!=1.5.1,<2",
     "defusedxml>=0.7",
     # Relational sources (ol_dlt.database) and their Vault-issued credentials.
     "psycopg2-binary>=2.9",

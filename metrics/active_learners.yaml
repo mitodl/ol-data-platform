@@ -1,0 +1,47 @@
+---
+metric:
+  name: active_learners
+  displayName: Active learners
+  description: >-
+    Distinct learners who did course work in a period: learners (user_fk) with
+    at least one row in afact_learner_courserun_daily_activity in that day,
+    month or course run. A row is a video play, problem check, course
+    navigation event, discussion forum event or Open edX chatbot submit, on
+    activity_date_key. Enrolling and being issued a certificate are not course
+    work, so neither makes a learner active (decided with ol-data-platform#2881).
+    The fact is built from events, so a count of enrolled learners must join to
+    their enrollments. MITx Online, xPRO, Residential and edX.org.
+
+    This is the behavioural meaning of "active" (glossary term Active learner).
+    The b2b_analytics views publish it for MITx Online as monthly_active_learners
+    per month and as engaged_learners per course run, both counting learners
+    with an active enrollment under a contract.
+    afact_learner_courserun_progress.last_active_on is a learner's latest such
+    day in a run. It is not the active_learners column of
+    mv_b2b_enrollment_completion_funnel, mv_b2b_contract_utilization and
+    mv_b2b_mit_admin_contract_health, which counts active enrollments (metric
+    actively_enrolled_learners). organization_administration_report's
+    active_count also counts the day a certificate is issued.
+  metricType: COUNT
+  unitOfMeasurement: COUNT
+  owners: [{type: team, name: data-platform}]
+  reviewers: [{type: team, name: b2b}]
+  tags:
+  - {tagFQN: open-learning.active-learner, source: Glossary, labelType: Manual, state: Confirmed}
+  metricExpression:
+    language: SQL
+    code: >-
+      count(distinct user_fk) over afact_learner_courserun_daily_activity rows
+      whose activity_date_key falls in the period
+status: Draft
+implemented_by:
+- dbt_model: afact_learner_courserun_daily_activity
+  columns: [user_fk, activity_date_key]
+- dbt_model: mv_b2b_monthly_engagement_trend
+  columns: [monthly_active_learners]
+- dbt_model: mv_b2b_contract_monthly_engagement_trend
+  columns: [monthly_active_learners]
+- dbt_model: mv_b2b_content_engagement_depth
+  columns: [engaged_learners]
+- dbt_model: mv_b2b_contract_content_engagement_depth
+  columns: [engaged_learners]

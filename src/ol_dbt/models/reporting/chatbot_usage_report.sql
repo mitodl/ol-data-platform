@@ -8,7 +8,7 @@ with chatbot as (
     from (
         select * from {{ ref("int__learn_ai__chatbot") }}
         where coalesce(agent_message, '') != '' or human_message is not null
-    )
+    ) as chatbot_messages
 )
 
 , tutorbot as (
@@ -18,9 +18,16 @@ with chatbot as (
     from {{ ref("int__learn_ai__tutorbot") }}
 )
 
+, tutorbot_history as (
+    select
+        *
+        , {{ json_extract_json_array('chat_json', "'$.chat_history'") }} as chat_history
+    from tutorbot
+)
+
 , tutorbot_flatten as (
     select
-        tutorbot.*
+        tutorbot_history.*
         -- noqa: disable=RF01
         -- t is the unnest alias below, which the duckdb parser can't read.
         , t.idx as message_index
@@ -33,10 +40,8 @@ with chatbot as (
                 then {{ json_extract_scalar('t.element', "'$.content'") }}
         end as agent_message
         -- noqa: enable=RF01
-    from tutorbot
-    cross join
-        unnest({{ json_extract_json_array('tutorbot.chat_json', "'$.chat_history'") }})  -- noqa: PRS
-    with ordinality as t(element, idx)
+    from tutorbot_history
+    cross join {{ unnest_with_ordinality('tutorbot_history.chat_history', 't', 'element', 'idx') }}  -- noqa: PRS
 )
 
 , tutorbot_deduplicated as (
@@ -61,7 +66,7 @@ with chatbot as (
                 order by tutorbotoutput_id, message_index
             ) as message_occurrence
         from tutorbot_flatten
-    )
+    ) as tutorbot_occurrences
     where message_occurrence = 1
 )
 

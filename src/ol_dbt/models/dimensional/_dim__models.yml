@@ -1682,7 +1682,18 @@ models:
     course run when a row exists for it. That is a different thing from an
     active enrollment (tfact_enrollment.enrollment_is_active). The
     b2b_analytics engagement views and the b2b_learner_records views both
-    aggregate this table.
+    aggregate this table. metrics/ registers each counter column as a metric,
+    and "active" as active_learners.
+
+    Every counter is per learner (user_fk) per day (activity_date_key). The
+    tracking-log event facts resolve user_fk by joining the event's Open edX
+    user id and username to dim_user. The chatbot fact, and the studentmodule
+    rows of tfact_problem_events, join on the user id alone. Events whose user
+    does not resolve are left out. A row exists when the learner has a
+    play_video, problem_check, navigation, discussion or Open edX chatbot
+    submit event that day, so a row can carry 0 in every counter (e.g. a
+    play_video event with no video id). Rows also exist for users with no
+    enrollment in the run (e.g. staff previewing it).
 
     Keyed on user_fk instead of email, unlike organization_administration_report,
     so a learner's rows don't split or drop when their account email changes.
@@ -1768,21 +1779,54 @@ models:
           glossary:
           - open-learning.active-learner
   - name: videos_played
-    description: int, distinct video blocks with a play_video event that day. Same
-      definition as the report's videos_watched.
+    description: >
+      int, distinct videos the learner played that day. Events: play_video in
+      tfact_video_events (not load, seek, pause or complete). Distinct key:
+      video_block_fk (the event's video id), so replaying one video the same day
+      counts once and playing it on two days counts twice when summed. Day:
+      activity_date_key. Learner: user_fk. Platforms: mitxonline, mitxpro,
+      residential, edxorg. organization_administration_report's videos_watched
+      uses the same event and distinct key but buckets by
+      cast(event_timestamp as date) and keys learners on email.
   - name: problems_attempted
-    description: int, distinct problem blocks with a problem_check event that day.
-      Excludes showanswer, which the report's problems_count includes.
+    description: >
+      int, distinct problems the learner checked that day. Events: problem_check
+      rows in tfact_problem_events, which are tracking-log problem_check events
+      plus submissions from courseware studentmodule history (mitxonline,
+      mitxpro, residential). The studentmodule rows are dated from the database
+      timestamp, not a tracking-log offset. showanswer is viewing a solution and
+      does not count, unlike organization_administration_report's
+      problems_count. Distinct key: problem_block_fk, so several checks of one
+      problem the same day count once. Day:
+      activity_date_key. Learner: user_fk. Platforms: mitxonline, mitxpro,
+      residential, edxorg.
   - name: navigation_events
-    description: int, course navigation events that day (a count of events, not of
-      distinct pages), including events with no block.
+    description: >
+      int, course navigation events that day, a count of events, not of distinct
+      pages. Events: every row of tfact_course_navigation_events, i.e.
+      edx.ui.lms.jump_nav.selected, .link_clicked, .outline.selected,
+      .sequence.next_selected, .sequence.previous_selected and
+      .sequence.tab_selected, including events with no block (which
+      afact_course_page_engagement drops). Distinct key: none (count(*)). Day:
+      activity_date_key. Learner: user_fk. Platforms: mitxonline, mitxpro,
+      residential, edxorg.
   - name: discussion_events
-    description: int, discussion forum events that day (every edx.forum.% event, so
-      viewing a thread counts as well as posting).
+    description: >
+      int, discussion forum events that day. Events: every row of
+      tfact_discussion_events, i.e. every edx.forum.% event, so viewing or
+      searching a thread counts as well as posting or voting. Distinct key: none
+      (count(*)). Not the number of posts, which counts edx.forum.%.created
+      events or distinct post_id. Day: activity_date_key. Learner: user_fk.
+      Platforms: mitxonline, mitxpro, residential, edxorg.
   - name: chatbot_interactions
-    description: int, distinct (session, block) pairs with an ol_openedx_chat.drawer.submit
-      event that day, Open edX chatbot only. Unlike the report, submits with no block_id
-      count.
+    description: >
+      int, chatbot questions the learner asked that day. Events:
+      ol_openedx_chat.drawer.submit in tfact_chatbot_events. The Canvas chatbot's
+      events have other event types (ol_openedx_chat_xblock.OLChat.*), so they
+      never count. Distinct key: (session_id, block_id), with a
+      missing block_id read as '' so submits with no block count, unlike
+      organization_administration_report's session_id || block_id. Day:
+      activity_date_key. Learner: user_fk. Platform: mitxonline only.
 
 - name: afact_learner_courserun_progress
   description: >

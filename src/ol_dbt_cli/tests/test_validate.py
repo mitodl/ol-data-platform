@@ -624,14 +624,20 @@ class TestBrokenRefColumns:
         assert not report_obj.issues  # no warning or error — skip silently
 
     def test_detects_broken_column_through_join_via_scope_fallback(self, tmp_path: Path) -> None:
-        """A broken column read through a JOIN (heuristic skips) is caught by the scope fallback."""
+        """A broken column the heuristic cannot attribute is caught by the scope fallback.
+
+        ``u.*`` forwards every upstream column through the ``ranked`` subquery, so the
+        heuristic bails; the scope fallback still anchors ``u.deleted_col`` to stg_users.
+        """
         from ol_dbt_cli.commands.validate import _check_broken_ref_columns
         from ol_dbt_cli.lib.sql_parser import ParsedModel, get_columns_read_from_ref
         from ol_dbt_cli.lib.yaml_registry import YamlRegistry
 
         sql = (
-            "select u.user_id, u.deleted_col, e.grade "
-            "from ref_stg_users u join ref_stg_enroll e on u.user_id = e.user_id"
+            "select ranked.user_id, e.grade "
+            "from (select u.*, row_number() over (partition by u.deleted_col order by u.user_id) as rn "
+            "from ref_stg_users u) as ranked "
+            "join ref_stg_enroll e on ranked.user_id = e.user_id"
         )
         downstream = self._make_parsed(
             "downstream",
@@ -640,7 +646,7 @@ class TestBrokenRefColumns:
             placeholder_map={"ref_stg_users": "stg_users", "ref_stg_enroll": "stg_enroll"},
             sql=sql,
         )
-        # The heuristic bails on the JOIN — without the fallback this would go unchecked.
+        # The heuristic bails on the star — without the fallback this would go unchecked.
         assert get_columns_read_from_ref(downstream, "stg_users") is None
         users = ParsedModel(name="stg_users", output_columns={"user_id"})
         enroll = ParsedModel(name="stg_enroll", output_columns={"user_id", "grade"})

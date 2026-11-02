@@ -1,0 +1,27 @@
+---
+metric:
+  name: discussion_events
+  displayName: Discussion forum events
+  description: >-
+    Discussion forum events by a learner in a course run on a day: every row of
+    tfact_discussion_events, i.e. every edx.forum.% event, per learner (user_fk)
+    per day (activity_date_key, the event's date in the source's timezone).
+    Viewing or searching a thread counts as well as posting or voting, so this
+    is forum activity, not participation. MITx Online, xPRO, Residential and
+    edX.org.
+
+    No view publishes it yet. organization_administration_report counts the
+    same events internally (keyed on email and cast(event_timestamp as date))
+    to set active_count, and does not publish the count. Counts of posts
+    (edx.forum.%.created events, or distinct post_id) are a different measure.
+  metricType: COUNT
+  unitOfMeasurement: EVENTS
+  granularity: DAY
+  owners: [{type: team, name: data-platform}]
+  metricExpression:
+    language: SQL
+    code: count(*), grouped by platform, user_fk, courserun_readable_id, date_fk
+status: Draft
+implemented_by:
+- dbt_model: afact_learner_courserun_daily_activity
+  columns: [discussion_events]

@@ -1,3 +1,5 @@
+{{ config(enabled=courseware_local_tables_enabled('courseware_tagging_in_warehouse')) }}
+
 {#
     What each dictionary phrase of the newest tagging run produced, and how often the
     extractor agrees, one row per (phrase, concept). This is the review queue for the

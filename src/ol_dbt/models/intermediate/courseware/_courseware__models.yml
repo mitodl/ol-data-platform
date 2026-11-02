@@ -1004,7 +1004,8 @@ models:
   - name: is_qualified
     description: boolean, the phrase is a label's head without its qualifier
   - name: is_single_word
-    description: boolean, the phrase is one lowercase word
+    description: boolean, the phrase is one common English word, or its plural, in
+      any case (e.g. data, None)
   - name: has_multiple_concepts
     description: boolean, the phrase belongs to more than one current concept
   - name: is_ambiguous
@@ -1015,11 +1016,12 @@ models:
 
 - name: int__courseware__concept_tags
   description: Every dictionary mention candidate of a known concept in courseware
-    text, from the newest tagging run, with the matched phrase's mode, ambiguity flags
-    and whether the course run's sense of the label is this concept.
+    text, as of the newest tagging run, with the matched phrase's mode, ambiguity
+    flags and whether the course run's sense of the label is this concept.
   columns:
   - name: tagging_run_id
-    description: str, the newest tagging run
+    description: str, the run that tagged the source, the newest run or an earlier
+      one with the same dictionary and tagger whose mentions the newest run kept
   - name: platform
     description: str, mitxonline, mitxpro or residential
   - name: courserun_readable_id
@@ -1059,7 +1061,8 @@ models:
   - name: is_qualified
     description: boolean, the phrase is a label's head without its qualifier
   - name: is_single_word
-    description: boolean, the phrase is one lowercase word
+    description: boolean, the phrase is one common English word, or its plural, in
+      any case (e.g. data, None)
   - name: has_multiple_concepts
     description: boolean, the phrase belongs to more than one concept as of the newest
       resolution run
@@ -1134,7 +1137,8 @@ models:
   - name: is_qualified
     description: boolean, the phrase is a label's head without its qualifier
   - name: is_single_word
-    description: boolean, the phrase is one lowercase word
+    description: boolean, the phrase is one common English word, or its plural, in
+      any case (e.g. data, None)
   - name: has_multiple_concepts
     description: boolean, the phrase belongs to more than one concept
   - name: is_ambiguous

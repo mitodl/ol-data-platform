@@ -21,6 +21,7 @@ from ml.assets.courseware_release import (
     courseware_release_publication,
 )
 from ml.assets.courseware_resolution import courseware_resolution
+from ml.assets.courseware_tagging import courseware_concept_tagging
 from ml.assets.feedback_category_proposals import feedback_category_proposals
 from ml.assets.feedback_cluster_assignment import feedback_cluster_assignment
 from ml.assets.feedback_cluster_identity import feedback_cluster_identity
@@ -126,12 +127,12 @@ feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
 )
 
 # Claim extraction, one run per course run, and the corpus-wide resolution,
-# description and graph steps after it, and the knowledge release that publishes
-# their outputs together. Extraction runs only for the course runs
-# courseware_extraction_allowlist approves for the deployed extractor version, so
-# the allowlist bounds what a first observation or a promotion launches. Stopped
-# by default, and enabled after courseware_extraction_text_sensor has observed the
-# runs.
+# description, graph and dictionary tagging steps after it, and the knowledge
+# release that publishes their outputs together. Extraction runs only for the
+# course runs courseware_extraction_allowlist approves for the deployed extractor
+# version, so the allowlist bounds what a first observation or a promotion
+# launches. Stopped by default, and enabled after courseware_extraction_text_sensor
+# has observed the runs.
 #
 # Every run it launches carries COURSEWARE_MODEL_CALLS_TAG, which ol-infrastructure's
 # run_coordinator tag_concurrency_limits caps. Dagster's instance config has no
@@ -146,6 +147,7 @@ courseware_automation_sensor = AutomationConditionSensorDefinition(
         courseware_resolution,
         courseware_concept_description,
         courseware_concept_graph,
+        courseware_concept_tagging,
         courseware_knowledge_release,
         courseware_release_publication,
     ),
@@ -275,6 +277,7 @@ defs = Definitions(
             courseware_resolution,
             courseware_concept_description,
             courseware_concept_graph,
+            courseware_concept_tagging,
             courseware_knowledge_release,
             courseware_release_publication,
             learn_content_file_text,

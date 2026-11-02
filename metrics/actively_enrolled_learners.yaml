@@ -1,0 +1,47 @@
+---
+metric:
+  name: actively_enrolled_learners
+  displayName: Actively enrolled learners
+  description: >-
+    Distinct learners with a course enrollment they have not left:
+    tfact_enrollment.enrollment_is_active, the platform's own flag, carried to
+    afact_learner_courserun_progress for the one enrollment it keeps per learner
+    and course run. tfact_enrollment also holds program enrollments, so a count
+    over it needs enrollment_type = 'course'. Says nothing about whether the
+    learner did any course work.
+
+    This is the enrollment meaning of "active" (glossary term Active
+    enrollment), not the behavioural one (metric active_learners).
+    mv_b2b_enrollment_completion_funnel, mv_b2b_contract_utilization and
+    mv_b2b_mit_admin_contract_health publish it as active_learners, and the
+    content engagement depth views as total_enrolled_learners. The funnel's
+    enrolled_learners and the contract views' seats_consumed count learners
+    with an enrollment whether or not it is still active.
+  metricType: COUNT
+  unitOfMeasurement: COUNT
+  owners: [{type: team, name: data-platform}]
+  reviewers: [{type: team, name: b2b}]
+  tags:
+  - {tagFQN: open-learning.active-enrollment, source: Glossary, labelType: Manual,
+    state: Confirmed}
+  metricExpression:
+    language: SQL
+    code: count(distinct case when enrollment_is_active then user_fk end)
+status: Draft
+implemented_by:
+- dbt_model: afact_learner_courserun_progress
+  columns: [enrollment_is_active]
+- dbt_model: tfact_enrollment
+  columns: [enrollment_is_active]
+- dbt_model: mv_b2b_learner_enrollment
+  columns: [enrollment_is_active]
+- dbt_model: mv_b2b_enrollment_completion_funnel
+  columns: [active_learners]
+- dbt_model: mv_b2b_contract_utilization
+  columns: [active_learners]
+- dbt_model: mv_b2b_mit_admin_contract_health
+  columns: [active_learners]
+- dbt_model: mv_b2b_content_engagement_depth
+  columns: [total_enrolled_learners]
+- dbt_model: mv_b2b_contract_content_engagement_depth
+  columns: [total_enrolled_learners]

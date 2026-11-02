@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 
 import polars as pl
@@ -535,3 +536,27 @@ def test_a_synonym_of_a_label_adjudicated_in_the_same_run_is_not_shortcut(
     assert (
         sense_of(result, "kernel function", LINALG)["assignment_source"] == "new_sense"
     )
+
+
+def test_decisions_sent_as_json_strings_are_decoded():
+    query = SenseQuery(
+        "kernel",
+        [Alias("k-os", "primary", "kernel: the core of an operating system", "r")],
+        [
+            Unit(("kernel", "mitxonline", OS), "kernel", TITLES[OS], ()),
+            Unit(("kernel", "mitxonline", ML), "kernel", TITLES[ML], ()),
+        ],
+    )
+    # the queries array, one query's runs and one run each arrive JSON-encoded
+    runs = [
+        {"run_id": 0, "decision": "existing", "sense": 0},
+        json.dumps({"run_id": 1, "decision": "new", "sense": 1}),
+    ]
+    queries = [{"query_id": 0, "runs": json.dumps(runs)}]
+    client = FakeClient({"queries": json.dumps(queries) + "}"})
+    assert _adjudicate_senses_batch(
+        client, "fake-model", [query], trace_metadata={}
+    ) == [
+        (("kernel", "mitxonline", OS), "existing", 0),
+        (("kernel", "mitxonline", ML), "new", 1),
+    ]

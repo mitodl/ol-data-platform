@@ -1,3 +1,5 @@
+{{ config(enabled=courseware_local_tables_enabled('courseware_tagging_in_warehouse')) }}
+
 {#
     The newest tagging run's dictionary, one row per (phrase, concept the run tagged
     it with), with the concept as of the newest resolution run (concept_id follows

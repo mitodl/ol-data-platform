@@ -13,6 +13,10 @@ from typing import Any
 
 import numpy as np
 import numpy.typing as npt
+
+# Imported for its side effect, ahead of opik: ol_llm sets OPIK_SENTRY_ENABLE=false,
+# without which importing opik replaces the process's Sentry client with Comet's.
+import ol_llm  # noqa: F401
 import opik
 from opik.evaluation.metrics import base_metric, score_result
 from pydantic import BaseModel, ConfigDict, Field

@@ -25,7 +25,7 @@ dependencies = [
     # anthropic for local runs on an API key, bedrock in deployed environments,
     # openai for OpenAI, Azure, and an OpenAI-compatible gateway, google for
     # Gemini embeddings on the Gemini API or Vertex AI.
-    "ol-llm[anthropic,bedrock,google,openai]==0.0.5",
+    "ol-llm[anthropic,bedrock,google,openai]==0.0.6",
     "azure-identity>=1.25.3",
     "networkit>=11.2",
     "ahocorasick-rs>=1.0.3",
@@ -44,6 +44,8 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["ml_tests"]
+# Lets the tests import shared helpers as ml_tests.<module>.
+pythonpath = ["."]
 
 [build-system]
 requires = ["setuptools"]
@@ -62,10 +64,10 @@ root_module = "ml"
 [tool.setuptools.packages.find]
 exclude=["ml_tests"]
 
-# The embedding strategies are read from the installed package, and the image
-# installs the project as a wheel.
+# The embedding strategies and the common-word list are read from the installed
+# package, and the image installs the project as a wheel.
 [tool.setuptools.package-data]
-ml = ["embedding_strategies.yaml"]
+ml = ["embedding_strategies.yaml", "lib/courseware/common_words.txt"]
 
 [tool.uv.sources]
 ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }

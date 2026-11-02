@@ -1,3 +1,4 @@
+import json
 import re
 from contextlib import contextmanager
 from types import SimpleNamespace
@@ -11,8 +12,9 @@ MODEL = "haiku"
 class _Client:
     """Stands in for an Anthropic client: describes every concept in the listing."""
 
-    def __init__(self):
+    def __init__(self, *, encode: bool = False):
         self.calls = 0
+        self.encode = encode
         self.messages = self
 
     @contextmanager
@@ -20,16 +22,21 @@ class _Client:
         self.calls += 1
         listing = kwargs["messages"][0]["content"]
         indexes = re.findall(r"(?m)^(\d+) \|", listing)
+        descriptions = [
+            {
+                "concept_id": int(index),
+                "short_description": f"call {self.calls}",
+                "description": f"call {self.calls}",
+                "is_learner_facing": True,
+            }
+            for index in indexes
+        ]
+        # encode: as Haiku sent it in production, the array JSON-encoded as a
+        # string, with the enclosing object closed inside it
         tool_input = {
-            "descriptions": [
-                {
-                    "concept_id": int(index),
-                    "short_description": f"call {self.calls}",
-                    "description": f"call {self.calls}",
-                    "is_learner_facing": True,
-                }
-                for index in indexes
-            ]
+            "descriptions": json.dumps(descriptions) + "}"
+            if self.encode
+            else descriptions
         }
         response = SimpleNamespace(
             stop_reason="tool_use",
@@ -86,3 +93,10 @@ def test_unchanged_inputs_are_not_described_again():
     )
     assert again.is_empty()
     assert client.calls == 1
+
+
+def test_descriptions_sent_as_a_json_string_are_decoded():
+    described = describe_concepts(
+        _inputs("the OS core"), _Client(encode=True), model_id=MODEL
+    )
+    assert described["concept_id"].to_list() == ["kernel"]

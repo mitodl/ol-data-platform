@@ -23,7 +23,9 @@ from ol_llm import (
     process_batch,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
-from pydantic_ai import ModelRetry, TextOutput
+from pydantic_ai import ModelRetry, RunContext, TextOutput
+from pydantic_ai.messages import ModelResponse
+from pydantic_ai.settings import ThinkingEffort
 from pyiceberg.catalog import Catalog
 
 JOIN_COLS = ["feedback_conversation_pk"]
@@ -55,21 +57,22 @@ SUMMARIZE_MAX_CONCURRENCY = int(os.environ.get("SUMMARIZE_MAX_CONCURRENCY", "20"
 # A model id in ol-llm's provider:model form. Dev has no Bedrock IAM role, so it
 # calls Anthropic with ANTHROPIC_API_KEY; every deployed environment uses Bedrock,
 # whose ids are inference profiles. FeedbackSummariesConfig.model overrides this
-# per run.
+# per run. The evaluation gate (ml.lib.summarize_gate) tests the deployed model.
+DEPLOYED_SUMMARY_MODEL = "bedrock:us.anthropic.claude-haiku-5-5"
 SUMMARY_MODEL = os.environ.get(
     "SUMMARY_MODEL",
-    "anthropic:claude-haiku-4-5"
-    if DAGSTER_ENV == "dev"
-    else "bedrock:global.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "anthropic:claude-haiku-5-5" if DAGSTER_ENV == "dev" else DEPLOYED_SUMMARY_MODEL,
 )
 
-# 200 was enough for claude-haiku-4-5 (no thinking), but a model with adaptive
-# thinking on by default (e.g. claude-sonnet-5/claude-opus-5) can spend the whole
-# budget on hidden thinking before any visible output, so this leaves headroom for
-# thinking plus the summary. Without a cap, pydantic-ai-slim 2.60 sends a Bedrock
-# Claude model its maximum output (64,000 for Haiku 4.5), and Bedrock reserves that
-# much of the tokens-per-minute quota for every concurrent request.
+# 200 was enough for claude-haiku-4-5 (no thinking), but claude-haiku-5-5 thinks by
+# default and thinking counts toward max_tokens, so it can spend the whole budget
+# on hidden thinking before any visible output. This leaves headroom for thinking
+# plus the summary. Without a cap, pydantic-ai-slim 2.60 sends a Bedrock Claude
+# model its maximum output, and Bedrock reserves that much of the
+# tokens-per-minute quota for every concurrent request.
 SUMMARY_MAX_TOKENS = int(os.environ.get("SUMMARY_MAX_TOKENS", "1024"))
+# A 1-3 sentence summary needs little reasoning; low keeps thinking short.
+SUMMARY_THINKING: ThinkingEffort = "low"
 
 SUMMARY_PROMPT_NAME = "feedback-summary"
 
@@ -179,21 +182,23 @@ def filter_unsummarized(
 
     The idempotency key covers the conversation text, the prompt's template hash,
     and the model, so a new turn, a prompt edit, or a model change re-submits a
-    conversation. A run that fell back to the embedded prompt computes the same
-    key as one that fetched the same text, so an Opik outage re-submits nothing.
+    conversation that has a key (see below for one that doesn't). A run that
+    fell back to the embedded prompt computes the same key as one that fetched
+    the same text, so an Opik outage re-submits nothing.
 
     A conversation not stored yet is always kept, with or without text, so a
     skipped one gets its row. A stored one without text is dropped, which leaves
     a summary in place if its text later goes missing. A skipped row has no key
     and is re-submitted once it has text.
 
-    A row summarized before the key existed keeps the rule it was written under:
-    it is re-submitted when its turn_count or its model changed. Re-submitting
-    every one of them would rewrite every summary and, through the embeddings,
-    move every conversation's cluster assignment. Its prompt_version is not
-    compared, because it names an Opik version from before the key and the
-    deploy creates a new version of the same text. The row gets a key the next
-    time it is summarized.
+    A row summarized before the key existed is re-submitted only when its
+    turn_count changed. Re-submitting every one of them, for a deploy or a model
+    change, would rewrite every summary and, through the embeddings, move every
+    conversation's cluster assignment. Its prompt_version is not compared,
+    because it names an Opik version from before the key and the deploy creates
+    a new version of the same text, and its model is not, so a model change
+    reaches it with its next new turn. The row gets a key the next time it is
+    summarized.
 
     :param source_df: the in-scope conversations.
     :param already_summarized_df: feedback_summaries' join columns, turn_count,
@@ -217,11 +222,9 @@ def filter_unsummarized(
     current_key = pl.col("conversation_text").map_elements(
         keys.key, return_dtype=pl.String
     )
-    # Rows written before the key stored the model id without its provider.
-    keyless_changed = (
-        pl.col("_stored_model").is_null()
-        | pl.col("_stored_model").ne_missing(pl.lit(keys.model.partition(":")[2]))
-        | pl.col("turn_count").ne_missing(pl.col("_stored_turn_count"))
+    # A keyless row with no model was skipped, not summarized.
+    keyless_changed = pl.col("_stored_model").is_null() | (
+        pl.col("turn_count").ne_missing(pl.col("_stored_turn_count"))
     )
     return (
         source_df.with_columns(current_key.alias("_current_key"))
@@ -239,12 +242,26 @@ def filter_unsummarized(
     )
 
 
-def _non_empty(summary: str) -> str:
-    """Send an empty summary back to the model once before the row fails.
+# Finish reasons that can come with partial text: max_tokens (thinking shares it
+# with the answer) and Bedrock's malformed_model_output.
+_CUT_OFF_FINISH_REASONS = frozenset({"length", "error"})
 
-    A model with thinking on can spend its whole output on hidden thinking and
-    return no text rather than raising.
+
+def _complete_summary(ctx: RunContext[None], summary: str) -> str:
+    """Send a cut-off or blank summary back to the model once before the row fails.
+
+    A partial summary stored under the current key is never re-submitted. A reply
+    with no text at all doesn't reach this: PydanticAI fails it at once when it
+    stopped at max_tokens (thinking used the whole budget) and otherwise asks
+    again itself.
     """
+    response = ctx.messages[-1]
+    if (
+        isinstance(response, ModelResponse)
+        and response.finish_reason in _CUT_OFF_FINISH_REASONS
+    ):
+        msg = "The summary was cut off. Write the 1-3 sentence summary."
+        raise ModelRetry(msg)
     if not summary.strip():
         msg = "The summary was empty. Write the 1-3 sentence summary."
         raise ModelRetry(msg)
@@ -278,14 +295,18 @@ class Summarizer:
         :param row: a conversation with text.
         :returns: the result.
         :rtype: LLMResult[str]
-        :raises LLMError: on a model failure, a content filter, or a summary that
-            was still empty after one retry.
+        :raises LLMError: on a model failure, a content filter, a reply whose
+            thinking used the whole max_tokens, or a summary that was still cut
+            off or blank after one retry.
         """
         return complete_sync(
             self.use_case,
             self.prompt.format(conversation_text=row["conversation_text"]),
-            output_type=TextOutput(_non_empty),
-            model_settings={"max_tokens": SUMMARY_MAX_TOKENS},
+            output_type=TextOutput(_complete_summary),
+            model_settings={
+                "max_tokens": SUMMARY_MAX_TOKENS,
+                "thinking": SUMMARY_THINKING,
+            },
             attribution=Attribution(
                 thread_id=row["feedback_conversation_pk"], run_id=self.run_id
             ),

@@ -850,7 +850,7 @@ requires-dist = [
     { name = "cyclopts", specifier = "~=5.3.2" },
     { name = "defusedxml", specifier = ">=0.7" },
     { name = "dlt", extras = ["filesystem", "parquet", "pyiceberg", "sql-database"], specifier = ">=1.28,<2" },
-    { name = "duckdb", specifier = ">=1.2,!=1.5.0,!=1.5.1" },
+    { name = "duckdb", specifier = ">=1.2,!=1.5.0,!=1.5.1,<2" },
     { name = "hvac", specifier = ">=2.3" },
     { name = "psycopg2-binary", specifier = ">=2.9" },
     { name = "pyiceberg", extras = ["glue"], specifier = ">=0.9" },

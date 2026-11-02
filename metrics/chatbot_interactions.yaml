@@ -1,0 +1,44 @@
+---
+metric:
+  name: chatbot_interactions
+  displayName: Chatbot interactions
+  description: >-
+    Questions a learner asked the Open edX course chatbot in a course run on a
+    day: ol_openedx_chat.drawer.submit events in tfact_chatbot_events, counted
+    once per (session_id, block_id) with a missing block_id read as '', per
+    learner (user_fk) per day (activity_date_key, the event's date in the
+    source's timezone). MITx Online only. The Canvas chatbot's events have
+    other event types (ol_openedx_chat_xblock.OLChat.*), so they never count.
+
+    The b2b_analytics engagement views publish the monthly and all-time sums as
+    total_chatbot_interactions, and mv_b2b_learner_enrollment publishes the
+    all-time sum per enrollment as chatbot_interactions. Both cover enrollments
+    under a contract; the views count activity in active enrollments only, the
+    enrollment view every enrollment. organization_administration_report and
+    instructor_module_report count distinct session_id || block_id, which drops
+    submits with no block_id.
+  metricType: COUNT
+  unitOfMeasurement: COUNT
+  granularity: DAY
+  owners: [{type: team, name: data-platform}]
+  reviewers: [{type: team, name: b2b}]
+  metricExpression:
+    language: SQL
+    code: >-
+      count(distinct concat(session_id, '|', coalesce(block_id, ''))) filter
+      (where event_type = 'ol_openedx_chat.drawer.submit' and chatbot_source =
+      'open_edx'), grouped by user_fk, courserun_readable_id, date_fk
+status: Draft
+implemented_by:
+- dbt_model: afact_learner_courserun_daily_activity
+  columns: [chatbot_interactions]
+- dbt_model: mv_b2b_learner_enrollment
+  columns: [chatbot_interactions]
+- dbt_model: mv_b2b_monthly_engagement_trend
+  columns: [total_chatbot_interactions]
+- dbt_model: mv_b2b_contract_monthly_engagement_trend
+  columns: [total_chatbot_interactions]
+- dbt_model: mv_b2b_content_engagement_depth
+  columns: [total_chatbot_interactions]
+- dbt_model: mv_b2b_contract_content_engagement_depth
+  columns: [total_chatbot_interactions]

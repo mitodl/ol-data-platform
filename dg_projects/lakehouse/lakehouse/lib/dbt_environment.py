@@ -52,9 +52,14 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 # in definitions.py have pointed "qa" at the QA Starburst cluster and
 # ol_data_lake_qa all along. Only this map disagreed.
 #
-# NOTE: profiles.yml has no "ci" output, so that entry does not name a real
-# target. Pre-existing, and inert today because nothing runs dbt under
-# DAGSTER_ENVIRONMENT=ci; left alone rather than guessed at.
+# "ci" is not Trino. It is the StarRocks output that writes CI's own lake,
+# ol_data_lake_ci, as ol_warehouse_ci_<layer> (ol-infrastructure#6533), and the
+# `ci` lake target in ol_dbt_cli/commands/starrocks.py. Nothing runs this
+# project under DAGSTER_ENVIRONMENT=ci yet. Two things come before the first run
+# there: the "dbt" resource fetches no StarRocks credentials of its own (only
+# the StarRocks project's does), and ol_warehouse_ci does not exist in Glue.
+# `ol-dbt starrocks` creates it with a location; dbt run from here would create
+# it bare (see the profile's comment), and seeds would then fail.
 DBT_TARGET_MAP: Mapping[str, str] = {
     "dev": "dev_production",
     "ci": "ci",

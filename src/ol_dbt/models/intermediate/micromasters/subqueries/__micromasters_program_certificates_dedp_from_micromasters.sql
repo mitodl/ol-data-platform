@@ -1,5 +1,3 @@
-{{ config(materialized='view') }}
-
 with mm_program_certificates as (
     select *
     from {{ ref('stg__micromasters__app__postgres__grades_programcertificate') }}

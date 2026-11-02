@@ -1,0 +1,53 @@
+---
+metric:
+  name: problems_attempted
+  displayName: Problems attempted
+  description: >-
+    Distinct problems a learner checked in a course run on a day: problem_check
+    rows in tfact_problem_events, counted once per problem_block_fk, per learner
+    (user_fk) per day (activity_date_key). Those rows are tracking-log
+    problem_check events, dated in the source's timezone, plus submissions from
+    courseware studentmodule history on MITx Online, xPRO and Residential, which
+    tfact_studentmodule_problems dates from the database timestamp and keys on
+    the Open edX user id alone. showanswer is viewing a solution and does not
+    count. Over
+    a longer period it is the sum of the daily counts, so several checks of one
+    problem on the same day count once and checks on two days count twice. MITx
+    Online, xPRO, Residential and edX.org.
+
+    The b2b_analytics engagement views publish the monthly and all-time sums as
+    total_problems_attempted, and mv_b2b_learner_enrollment publishes the
+    all-time sum per enrollment as problems_attempted. Both cover MITx Online
+    enrollments under a contract; the views count activity in active
+    enrollments only, the enrollment view every enrollment.
+    organization_administration_report's problems_count also counts showanswer,
+    and keys learners on email and days on cast(event_timestamp as date).
+    learner_engagement_report's and engagement_problem_completion_raw's
+    problems_attempted count distinct problems with a problem_check attempt over
+    all time, grouped by course structure instead of by day, and are a
+    different measure under the same name. num_problem_submitted and
+    problems_user_submitted count edx.grades.problem.submitted events.
+  metricType: COUNT
+  unitOfMeasurement: COUNT
+  granularity: DAY
+  owners: [{type: team, name: data-platform}]
+  reviewers: [{type: team, name: b2b}]
+  metricExpression:
+    language: SQL
+    code: >-
+      count(distinct problem_block_fk) filter (where event_type = 'problem_check'),
+      grouped by platform, user_fk, courserun_readable_id, date_fk
+status: Draft
+implemented_by:
+- dbt_model: afact_learner_courserun_daily_activity
+  columns: [problems_attempted]
+- dbt_model: mv_b2b_learner_enrollment
+  columns: [problems_attempted]
+- dbt_model: mv_b2b_monthly_engagement_trend
+  columns: [total_problems_attempted]
+- dbt_model: mv_b2b_contract_monthly_engagement_trend
+  columns: [total_problems_attempted]
+- dbt_model: mv_b2b_content_engagement_depth
+  columns: [total_problems_attempted]
+- dbt_model: mv_b2b_contract_content_engagement_depth
+  columns: [total_problems_attempted]
