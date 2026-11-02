@@ -30,14 +30,14 @@ with enrollment_detail as (
         , course_enrollment_detail.user_email
         , count(
             distinct case
-                when course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
+                when verified_course_enrollments.is_verified
                 then course.course_readable_id
             end
         ) as verified_courses_taken_in_program
         , count(
             distinct case
                 when
-                    course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
+                    verified_course_enrollments.is_verified
                     and course_enrollment_detail.courserungrade_is_passing = true
                 then course.course_readable_id
             end
@@ -51,7 +51,7 @@ with enrollment_detail as (
         , sum(
             case
                 when upper(course.course_title) like '%CAPSTONE%'
-                and course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
+                and verified_course_enrollments.is_verified
                 then 1
                 else 0
             end
@@ -71,6 +71,7 @@ with enrollment_detail as (
             on course.course_pk = program_course.course_fk
         inner join program
             on program_course.program_fk = program.program_pk
+        {{ join_verified_course_enrollments('course_enrollment_detail') }}
     group by
         course_enrollment_detail.platform
         , program.program_title

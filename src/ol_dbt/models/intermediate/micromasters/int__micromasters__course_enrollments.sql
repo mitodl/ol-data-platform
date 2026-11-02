@@ -20,6 +20,7 @@ select
     , mitx_enrollments.courserun_readable_id
     , mitx_enrollments.course_number
     , mitx_enrollments.platform
+    , mitx_enrollments.courserunenrollment_id
     , mitx_enrollments.courserunenrollment_created_on
     , mitx_enrollments.courserunenrollment_is_active
     , mitx_enrollments.courserun_title

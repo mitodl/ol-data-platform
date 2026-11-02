@@ -29,11 +29,11 @@ with micromasters_enrollments as (
         , count(distinct micromasters_enrollments.user_email) as unique_users
         , count(distinct micromasters_enrollments.user_address_country) as unique_countries
         , count(distinct case
-            when micromasters_enrollments.courserunenrollment_enrollment_mode = 'verified'
+            when verified_course_enrollments.is_verified
                 then {{ dbt.concat(["micromasters_enrollments.courserun_readable_id", "micromasters_enrollments.user_email"]) }}
         end) as verified_enrollments
         , count(distinct case
-            when micromasters_enrollments.courserunenrollment_enrollment_mode = 'verified'
+            when verified_course_enrollments.is_verified
                 then micromasters_enrollments.user_email
         end) as unique_verified_users
     from micromasters_enrollments
@@ -41,6 +41,7 @@ with micromasters_enrollments as (
         on
             micromasters_enrollments.micromasters_program_id = mitx_programs.micromasters_program_id
             or micromasters_enrollments.mitxonline_program_id = mitx_programs.mitxonline_program_id
+    {{ join_verified_course_enrollments('micromasters_enrollments') }}
     group by 1
 )
 

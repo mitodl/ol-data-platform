@@ -134,6 +134,9 @@ models:
     description: str, the platform of the course. Either 'MITx Online' or 'edX.org'
     tests:
     - not_null
+  - name: courserunenrollment_id
+    description: int, primary key of the enrollment in MITx Online. Null for edX.org
+      enrollments, which have no id of their own
   - name: courserunenrollment_created_on
     description: timestamp, timestamp of user's enrollment in the course
   - name: courserunenrollment_is_active
