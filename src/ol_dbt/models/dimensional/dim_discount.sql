@@ -102,6 +102,12 @@ select
     , source_discount_id
     , discount_code
     , discount_type
+    -- paid-amount-off stays unmapped until MITx Online confirms what it means
+    , case
+        when discount_type in ('percent-off', 'percent-discount') then 'percentage'
+        when discount_type in ('dollars-off', 'fixed-discount') then 'fixed_amount'
+        when discount_type = 'fixed-price' then 'fixed_price'
+    end as discount_type_code
     , discount_amount
     , discount_source
     , max_redemptions

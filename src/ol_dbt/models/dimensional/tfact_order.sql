@@ -32,12 +32,7 @@ with mitxonline_orders as (
         , 'mitxonline' as platform
         , discount_id
         , discount_code
-        , case
-            when discount_amount_text like 'Fixed Price: 0%' then 'free'
-            when substr(discount_amount_text, length(discount_amount_text), 1) = '%' then 'percentage'
-            when substr(discount_amount_text, 1, 1) = '$' then 'fixed_amount'
-            else null
-          end as discount_type_code
+        , line_discounted_unit_price as line_price_paid
     from {{ ref('int__mitxonline__ecommerce_order') }}
 )
 
@@ -65,11 +60,7 @@ with mitxonline_orders as (
         , 'mitxpro' as platform
         , orders.coupon_id as discount_id
         , orders.coupon_code as discount_code
-        , case
-            when orders.couponpaymentversion_discount_type = 'percent-off' then 'percentage'
-            when orders.couponpaymentversion_discount_type = 'dollars-off' then 'fixed_amount'
-            else null
-          end as discount_type_code
+        , orders.order_total_price_paid as line_price_paid
     from {{ ref('int__mitxpro__ecommerce_order') }} as orders
     inner join {{ ref('int__mitxpro__ecommerce_line') }} as lines
         on orders.order_id = lines.order_id
@@ -97,7 +88,7 @@ with mitxonline_orders as (
         , 'bootcamps' as platform
         , cast(null as bigint) as discount_id
         , cast(null as varchar) as discount_code
-        , cast(null as varchar) as discount_type_code
+        , order_total_price_paid as line_price_paid
     from {{ ref('int__bootcamps__ecommerce_order') }}
 )
 
@@ -122,7 +113,7 @@ with mitxonline_orders as (
         , 'micromasters' as platform
         , coupon_id as discount_id
         , coupon_code as discount_code
-        , null as discount_type_code
+        , order_total_price_paid as line_price_paid
     from {{ ref('int__micromasters__orders') }}
 )
 
@@ -164,7 +155,7 @@ with mitxonline_orders as (
 )
 
 , dim_discount as (
-    select discount_pk, source_discount_id, platform_code
+    select discount_pk, source_discount_id, platform_code, discount_type_code
     from {{ ref('dim_discount') }}
 )
 
@@ -212,14 +203,19 @@ with mitxonline_orders as (
         and combined_orders.user_id = ul_micromasters.micromasters_user_id
     left join dim_platform_lookup
         on combined_orders.platform = dim_platform_lookup.platform_readable_id
-    left join dim_discount_type
-        on combined_orders.discount_type_code = dim_discount_type.discount_type_code
-    left join dim_product
-        on cast(combined_orders.product_id as varchar) = cast(dim_product.source_product_id as varchar)
-        and combined_orders.platform = dim_product.platform
     left join dim_discount
         on combined_orders.discount_id = dim_discount.source_discount_id
         and combined_orders.platform = dim_discount.platform_code
+    -- free describes the line, not the discount, so a 100% discount and a fixed price
+    -- of 0 count the same way
+    left join dim_discount_type
+        on case
+            when combined_orders.line_price_paid = 0 then 'free'
+            else dim_discount.discount_type_code
+        end = dim_discount_type.discount_type_code
+    left join dim_product
+        on cast(combined_orders.product_id as varchar) = cast(dim_product.source_product_id as varchar)
+        and combined_orders.platform = dim_product.platform
     left join dim_tax_rate
         on combined_orders.order_tax_country_code = dim_tax_rate.country_code
 )
