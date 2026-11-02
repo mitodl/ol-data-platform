@@ -940,6 +940,56 @@ unit_tests:
       user_edxorg_username: edx_social}
     - {micromasters_user_id: 102, platform_name: edX.org, user_edxorg_id: null, user_edxorg_username: null}
 
+- name: test_int__micromasters__program_enrollments_skips_mitxonline_duplicates
+  description: >
+    A MicroMasters DEDP enrollment is left out when the learner has the MITx Online
+    one: on
+    the account on their row whatever its email (103), on the account the email link
+    moved
+    their id from (104), or on an account with their email in any case (105). 107
+    has none.
+  model: int__micromasters__program_enrollments
+  given:
+  - input: ref('int__edxorg__mitx_program_enrollments')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__dashboard_programenrollment')
+    rows:
+    - {user_id: 103, program_id: 1}
+    - {user_id: 104, program_id: 1}
+    - {user_id: 105, program_id: 1}
+    - {user_id: 107, program_id: 1}
+  - input: ref('int__mitxonline__programenrollments')
+    rows:
+    - {user_id: 10, program_id: 2, user_email: renamed@example.com}
+    - {user_id: 11, program_id: 2, user_email: old-account@example.com}
+    - {user_id: 13, program_id: 2, user_email: case@example.com}
+  - input: ref('int__mitx__programs')
+    rows:
+    - {micromasters_program_id: 1, mitxonline_program_id: 2, program_title: DEDP,
+      is_dedp_program: true}
+  - input: ref('int__mitx__users')
+    rows:
+    - {user_micromasters_id: 103, user_mitxonline_id: 10, user_edxorg_id: null, user_micromasters_edxorg_id: null,
+      user_micromasters_email: own@example.com, is_mitxonline_user: true, is_micromasters_linked_by_email: false}
+    - {user_micromasters_id: null, user_mitxonline_id: 11, user_edxorg_id: 30, user_micromasters_edxorg_id: null,
+      user_micromasters_email: null, is_mitxonline_user: true, is_micromasters_linked_by_email: false}
+    - {user_micromasters_id: 104, user_mitxonline_id: 12, user_edxorg_id: null, user_micromasters_edxorg_id: 30,
+      user_micromasters_email: moved@example.com, is_mitxonline_user: true, is_micromasters_linked_by_email: true}
+    - {user_micromasters_id: 105, user_mitxonline_id: null, user_edxorg_id: null,
+      user_micromasters_edxorg_id: null, user_micromasters_email: Case@Example.com,
+      is_mitxonline_user: false, is_micromasters_linked_by_email: false}
+    - {user_micromasters_id: 106, user_mitxonline_id: 13, user_edxorg_id: null, user_micromasters_edxorg_id: null,
+      user_micromasters_email: other@example.com, is_mitxonline_user: true, is_micromasters_linked_by_email: false}
+    - {user_micromasters_id: 107, user_mitxonline_id: null, user_edxorg_id: null,
+      user_micromasters_edxorg_id: null, user_micromasters_email: none@example.com,
+      is_mitxonline_user: false, is_micromasters_linked_by_email: false}
+  expect:
+    rows:
+    - {micromasters_user_id: 103, platform_name: MITx Online, user_email: renamed@example.com}
+    - {micromasters_user_id: null, platform_name: MITx Online, user_email: old-account@example.com}
+    - {micromasters_user_id: 106, platform_name: MITx Online, user_email: case@example.com}
+    - {micromasters_user_id: 107, platform_name: edX.org, user_email: none@example.com}
+
 - name: test_int__micromasters__course_certificates_edxorg_username_from_micromasters
   description: >
     A MicroMasters certificate on an edX.org run keeps the MicroMasters account's
