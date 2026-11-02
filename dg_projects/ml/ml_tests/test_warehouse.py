@@ -50,11 +50,14 @@ def test_require_rows_without_a_column_value_refuses_to_read_the_table():
         warehouse.require_rows("integrations", "content_files", ["key"])
 
 
-def test_require_rows_of_a_missing_table_fails(monkeypatch):
+def test_a_missing_table_reads_as_none_and_fails_a_required_read(monkeypatch):
     def missing(_database_name: str, table_name: str):
         raise NoSuchTableError(table_name)
 
     monkeypatch.setattr(warehouse, "load_dbt_model_table", missing)
 
+    assert (
+        warehouse.read_rows("integrations", "content_files", ["key"], key="a") is None
+    )
     with pytest.raises(Failure, match="has not been built yet"):
         warehouse.require_rows("integrations", "content_files", ["key"], key="a")
