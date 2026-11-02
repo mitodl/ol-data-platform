@@ -515,6 +515,12 @@ models:
       and
       on most of its refunds.
   - name: is_successful
+    tests:
+    # A null here is a row the incremental filter failed to repair, and readers filter
+    # on the flag, so one row fails the build and stops them.
+    - not_null:
+        config:
+          error_if: "!=0"
     description: >
       True when the processor's decision is ACCEPT. REVIEW is not successful: no
       REVIEW attempt on either platform has an accepted payment on its order, and
@@ -976,6 +982,62 @@ unit_tests:
     - {payment_id: 1, transaction_amount: 500.00}
     - {payment_id: 2, transaction_amount: 300.00}
     - {payment_id: 3, transaction_amount: 0.00}
+- name: test_tfact_payment_repairs_stored_rows_on_a_plain_build
+  description: >
+    Rows written before a rule changed are behind the created_on watermark, so the
+    incremental filter has to find them. A row with no is_successful, or an amount
+    that no longer matches, is re-selected and rewritten, which is what lets a plain
+    dbt build deploy these columns with no full refresh. A row that already matches
+    is left alone.
+  model: tfact_payment
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__ecommerce_transaction')
+    rows:
+    - {transaction_id: 1, transaction_amount: 900.00, transaction_type: payment, transaction_status: ACCEPT,
+      transaction_created_on: "2024-01-15T00:00:00"}
+    - {transaction_id: 2, transaction_amount: 0.00, transaction_payment_amount: 500.00,
+      transaction_type: payment, transaction_status: ACCEPT, transaction_created_on: "2024-01-15T00:00:00"}
+    - {transaction_id: 3, transaction_amount: 900.00, transaction_type: payment, transaction_status: ACCEPT,
+      transaction_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__mitxpro__ecommerce_receipt')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__ecommerce_order')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__ecommerce_order')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: ref('dim_payment_method')
+    rows: []
+  - input: this
+    rows:
+    - payment_key: "1b16c8768900a8d2fb97398ef90eb5f9"  # pragma: allowlist secret
+      payment_id: 1
+      platform: mitxonline
+      transaction_amount: 900.00
+      is_successful:
+      transaction_created_on: "2024-01-15T00:00:00"
+    - payment_key: "a9361ca8be319129734a0845d02580d1"  # pragma: allowlist secret
+      payment_id: 2
+      platform: mitxonline
+      transaction_amount: 0.00
+      is_successful: true
+      transaction_created_on: "2024-01-15T00:00:00"
+    - payment_key: "1e614ca8f988484a59e0ed224b649893"  # pragma: allowlist secret
+      payment_id: 3
+      platform: mitxonline
+      transaction_amount: 900.00
+      is_successful: true
+      transaction_created_on: "2024-01-15T00:00:00"
+  expect:
+    rows:
+    - {payment_id: 1, transaction_amount: 900.00, is_successful: true}
+    - {payment_id: 2, transaction_amount: 500.00, is_successful: true}
 - name: test_tfact_certificate_refreshes_stale_user_fk_after_dim_user_rekey
   description: >
     Regression test for the dim_user re-key incident: when dim_user.user_pk changes
