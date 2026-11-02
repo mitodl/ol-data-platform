@@ -97,7 +97,8 @@ with tfact_enrollment as (
 )
 
 -- An installment plan is one order per payment. The enrollment keeps the latest created, so
--- the plan's other payments are only in marts__combined__orders.
+-- the plan's other payments are only in marts__combined__orders. A refund is its own fulfilled
+-- order with a negative total, so it is left out or it would replace the order it refunds.
 , bootcamps_completed_orders as (
     select
         *
@@ -106,7 +107,9 @@ with tfact_enrollment as (
             order by order_created_on desc, order_id desc
         ) as row_num
     from {{ ref('int__bootcamps__ecommerce_order') }}
-    where order_state in ('fulfilled', 'refunded')
+    where
+        order_state in ('fulfilled', 'refunded')
+        and order_payment_type != 'refund'
 )
 
 , bootcamps_receipts as (
