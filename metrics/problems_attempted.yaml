@@ -23,9 +23,10 @@ metric:
     organization_administration_report's problems_count also counts showanswer,
     and keys learners on email and days on cast(event_timestamp as date).
     learner_engagement_report's and engagement_problem_completion_raw's
-    problems_attempted count distinct problems with a problem_check attempt over
-    all time, grouped by course structure instead of by day, and are a
-    different measure under the same name. num_problem_submitted and
+    problems_with_attempt count distinct problems with a problem_check attempt
+    over all time, grouped by course structure instead of by day, and are a
+    different measure. Their problems_attempted columns are deprecated names for
+    problems_with_attempt. num_problem_submitted and
     problems_user_submitted count edx.grades.problem.submitted events.
   metricType: COUNT
   unitOfMeasurement: COUNT

@@ -270,7 +270,7 @@ with video_pre_query as (
         , max(g.max_learner_grade) as max_learner_grade
         , min(g.min_learner_grade) as min_learner_grade
         , avg(g.avg_percent_grade) as avg_percent_grade
-        , count(distinct case when cast(a.num_of_attempts as int) > 0 then a.problem_block_fk end) as problems_attempted
+        , count(distinct case when cast(a.num_of_attempts as int) > 0 then a.problem_block_fk end) as problems_with_attempt
         , count(distinct case when cast(a.num_of_correct_attempts as int) > 0 then a.problem_block_fk end) as num_of_problems_correct
         , max(c.problem_numb) as number_of_problems
         , cast(count(distinct case
@@ -361,7 +361,7 @@ with video_pre_query as (
         page_and_video.num_of_page_views
         , page_and_video.estimated_time_played
         , page_and_video.video_duration
-        , problems_table.problems_attempted
+        , problems_table.problems_with_attempt
         , problems_table.number_of_problems
         , problems_table.percetage_problems_attempted
         , problems_table.num_of_problems_correct
@@ -396,7 +396,9 @@ select
     page_video_problems.num_of_page_views
     , page_video_problems.estimated_time_played
     , page_video_problems.video_duration
-    , page_video_problems.problems_attempted
+    , page_video_problems.problems_with_attempt
+    -- Old name, removed once the Superset charts read problems_with_attempt.
+    , page_video_problems.problems_with_attempt as problems_attempted
     , page_video_problems.number_of_problems
     , page_video_problems.percetage_problems_attempted
     , page_video_problems.num_of_problems_correct

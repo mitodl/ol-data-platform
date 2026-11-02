@@ -113,8 +113,12 @@ models:
     description: int, seconds that a user played a video
   - name: video_duration
     description: int, duration of the video in seconds
+  - name: problems_with_attempt
+    description: int, count of distinct problems the user attempted at least once,
+      over all time (not the metric problems_attempted, which is per day)
   - name: problems_attempted
-    description: int, count of problems attempted
+    description: Deprecated, the old name for problems_with_attempt and always equal
+      to it. Removed once the Superset charts read problems_with_attempt.
   - name: number_of_problems
     description: int, total number of problems regardless of whether they were attempted
   - name: num_of_problems_correct
@@ -1009,8 +1013,12 @@ models:
       the course
   - name: problems_correct
     description: int, count of the number of correct problem attempts
+  - name: problems_with_attempt
+    description: int, count of distinct problems the user attempted at least once,
+      over all time (not the metric problems_attempted, which is per day)
   - name: problems_attempted
-    description: int, count of the number of problem attempted
+    description: Deprecated, the old name for problems_with_attempt and always equal
+      to it. Removed once the Superset charts read problems_with_attempt.
   - name: number_of_problems
     description: int, count of the total number of problems
   - name: number_of_total_attempts
