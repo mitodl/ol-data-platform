@@ -262,7 +262,9 @@ with users as (
         , coalesce(email_linked_micromasters.user_address_city, edxorg_users_view.user_address_city)
             as user_address_city
         , coalesce(mitxonline_users_view.is_mitxonline_user is not null, false) as is_mitxonline_user
-        , coalesce(edxorg_users_view.is_edxorg_user is not null, false) as is_edxorg_user
+        , edxorg_users_view.is_edxorg_user is not null
+            or (email_linked_edxorg.user_edxorg_id is null and email_linked_micromasters.user_edxorg_username is not null)
+            as is_edxorg_user
         -- nullif because the MITx Online legaladdress and name fields store blanks, not
         -- nulls, and a blank would win the coalesce and mask a populated edX.org value.
         , coalesce(
