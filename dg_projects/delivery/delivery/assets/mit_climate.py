@@ -32,6 +32,8 @@ from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient, webhook_status
 
+from delivery.lib.learn_webhook import LearnDeliveryConfig, webhook_failure
+
 log = logging.getLogger(__name__)
 
 _GLUE_DB = (
@@ -82,6 +84,7 @@ def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
 )
 def mit_climate_webhook(
     context: AssetExecutionContext,
+    config: LearnDeliveryConfig,
     learn_api: ApiClientFactory,
 ) -> dict[str, Any]:
     """Deliver MIT Climate articles to MIT Learn via signed webhook."""
@@ -99,14 +102,12 @@ def mit_climate_webhook(
     )
     try:
         response = cast(MITLearnApiClient, learn_api.client).notify_learning_resources(
-            resources
+            resources, allow_mass_unpublish=config.allow_mass_unpublish
         )
     except httpx.HTTPStatusError as exc:
-        msg = (
-            f"MIT Climate webhook failed with status {exc.response.status_code}: {exc}"
-        )
-        context.log.exception(msg)
-        raise RuntimeError(msg) from exc
+        failure = webhook_failure("MIT Climate", exc)
+        context.log.exception(failure.description)
+        raise failure from exc
 
     status = webhook_status(response)
     context.add_output_metadata(
