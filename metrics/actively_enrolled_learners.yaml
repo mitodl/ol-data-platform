@@ -12,11 +12,14 @@ metric:
 
     This is the enrollment meaning of "active" (glossary term Active
     enrollment), not the behavioural one (metric active_learners).
-    mv_b2b_enrollment_completion_funnel, mv_b2b_contract_utilization and
-    mv_b2b_mit_admin_contract_health publish it as active_learners, and the
-    content engagement depth views as total_enrolled_learners. The funnel's
-    enrolled_learners and the contract views' seats_consumed count learners
-    with an enrollment whether or not it is still active.
+    mv_b2b_enrollment_completion_funnel, mv_b2b_contract_utilization,
+    mv_b2b_mit_admin_contract_health and the content engagement depth views
+    publish it as actively_enrolled_learners. The first three also publish it
+    under the deprecated name active_learners, and the depth views under the
+    deprecated name total_enrolled_learners, until ol-analytics-api and mit-learn
+    read the new name. The funnel's enrolled_learners and the contract views'
+    seats_consumed count learners with an enrollment whether or not it is still
+    active.
   metricType: COUNT
   unitOfMeasurement: COUNT
   owners: [{type: team, name: data-platform}]
@@ -36,12 +39,12 @@ implemented_by:
 - dbt_model: mv_b2b_learner_enrollment
   columns: [enrollment_is_active]
 - dbt_model: mv_b2b_enrollment_completion_funnel
-  columns: [active_learners]
+  columns: [actively_enrolled_learners]
 - dbt_model: mv_b2b_contract_utilization
-  columns: [active_learners]
+  columns: [actively_enrolled_learners]
 - dbt_model: mv_b2b_mit_admin_contract_health
-  columns: [active_learners]
+  columns: [actively_enrolled_learners]
 - dbt_model: mv_b2b_content_engagement_depth
-  columns: [total_enrolled_learners]
+  columns: [actively_enrolled_learners]
 - dbt_model: mv_b2b_contract_content_engagement_depth
-  columns: [total_enrolled_learners]
+  columns: [actively_enrolled_learners]

@@ -11,6 +11,8 @@
 -- Seats and certificates are counted as in mv_b2b_contract_utilization: course enrollments
 -- made under the contract, and certificates for those enrollments' runs. Every contract
 -- has a row, as there, including one with no enrollments yet.
+-- active_learners is the old name for actively_enrolled_learners, kept until
+-- ol-analytics-api and mit-learn read the new one.
 with contract_stats as (
     select
         org.organization_key,
@@ -28,6 +30,7 @@ with contract_stats as (
         c.b2b_contract_membership_type,
         count(distinct p.user_fk)                                                       as seats_consumed,
         count(distinct case when p.enrollment_is_active then p.user_fk end)             as active_learners,
+        count(distinct case when p.enrollment_is_active then p.user_fk end)             as actively_enrolled_learners,
         count(distinct case when p.is_certified then p.user_fk end)                     as certified_learners
     from {{ source('dimensional', 'dim_contract') }} c
     join {{ source('dimensional', 'dim_organization') }} org

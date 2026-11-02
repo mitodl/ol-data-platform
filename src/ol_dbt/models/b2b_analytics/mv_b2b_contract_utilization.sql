@@ -11,8 +11,9 @@
 -- certified_learners counts those learners who hold the run's certificate (is_certified),
 -- as mv_b2b_mit_admin_contract_health's certified_learners does. A program enrollment
 -- also carries the contract, but takes no seat until the learner enrolls in a course.
--- learners_certified is the old name for certified_learners, kept until ol-analytics-api
--- and mit-learn read the new one.
+-- learners_certified is the old name for certified_learners, and active_learners for
+-- actively_enrolled_learners, each kept until ol-analytics-api and mit-learn read the new
+-- one.
 with enrollments as (
     select
         p.contract_fk,
@@ -39,6 +40,7 @@ select
     c.b2b_contract_membership_type,
     count(distinct e.user_fk)                                                          as seats_consumed,
     count(distinct case when e.enrollment_is_active then e.user_fk end)                as active_learners,
+    count(distinct case when e.enrollment_is_active then e.user_fk end)                as actively_enrolled_learners,
     count(distinct case when e.is_certified then e.user_fk end)                        as learners_certified,
     count(distinct case when e.is_certified then e.user_fk end)                        as certified_learners,
     round(100.0 * count(distinct e.user_fk)

@@ -8,6 +8,8 @@
 -- Grain: org x contract x course_run. Refreshed by the Dagster b2b_organization MV-refresh asset.
 -- Learners are attributed to the contract they enrolled under
 -- (afact_learner_courserun_progress.contract_fk), not to every contract that offers the run.
+-- active_learners and active_rate_pct are the old names for actively_enrolled_learners and
+-- actively_enrolled_rate_pct, kept until ol-analytics-api and mit-learn read the new ones.
 select
     org.organization_key,
     org.sso_organization_id,
@@ -20,10 +22,13 @@ select
     cr.courserun_title,
     count(distinct p.user_fk)                                                           as enrolled_learners,
     count(distinct case when p.enrollment_is_active then p.user_fk end)                 as active_learners,
+    count(distinct case when p.enrollment_is_active then p.user_fk end)                 as actively_enrolled_learners,
     count(distinct case when p.is_passing then p.user_fk end)                           as passing_learners,
     count(distinct case when p.is_certified then p.user_fk end)                         as certified_learners,
     round(100.0 * count(distinct case when p.enrollment_is_active then p.user_fk end)
         / nullif(count(distinct p.user_fk), 0), 1)                                     as active_rate_pct,
+    round(100.0 * count(distinct case when p.enrollment_is_active then p.user_fk end)
+        / nullif(count(distinct p.user_fk), 0), 1)                                     as actively_enrolled_rate_pct,
     round(100.0 * count(distinct case when p.is_certified then p.user_fk end)
         / nullif(count(distinct p.user_fk), 0), 1)                                     as completion_rate_pct
 from {{ source('dimensional', 'afact_learner_courserun_progress') }} p
