@@ -76,4 +76,6 @@ left join micromasters_programs
         programs.program_title like {{ dbt.concat(["micromasters_programs.program_title", "'%'"]) }}
         or programs.program_title like {{ dbt.concat(["'%'", "micromasters_programs.program_title"]) }}
     )
-where programs.program_organization = 'MITx'
+where
+    programs.program_organization = 'MITx'
+    and program_courses.course_readable_id != '{{ var("edxorg_demo_course_readable_id") }}'

@@ -578,8 +578,10 @@ models:
         column_list: ["courserunenrollment_id"]
         row_condition: "platform ='Residential MITx'"
 - name: marts__combined_program_enrollment_detail
-  description: Mart model for program enrollments and certificates from different
-    platforms
+  description: >
+    Mart model for program enrollments and certificates from different platforms.
+    An edX.org program whose only course is edX's demo course has no rows, see
+    int__edxorg__mitx_program_enrollments.
   config:
     meta:
       qa_branches:
