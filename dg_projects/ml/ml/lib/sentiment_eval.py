@@ -220,6 +220,37 @@ def predictions_at_threshold(
     return np.where(negative_probabilities >= threshold, "negative", "positive")
 
 
+def predict_unrated_sentiment(
+    labeled_df: pl.DataFrame,
+    unrated_df: pl.DataFrame,
+    embedding_dim: int,
+    negative_threshold: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Train the local classifier on every labeled row and score the unrated ones.
+
+    The production use of the classifier feedback_sentiment_eval scores, so the
+    two stay the same model.
+
+    Args:
+        labeled_df: output of labeled_sentiment_sample -- needs embedding_vector
+            and sentiment columns, with both labels present.
+        unrated_df: rows to predict -- needs embedding_vector.
+
+    Returns:
+        (P(negative), sentiment label) per unrated_df row, in its order.
+    """
+    if unrated_df.is_empty():
+        return np.empty(0), np.empty(0, dtype=object)
+    negative_probabilities = local_classifier_negative_probabilities(
+        labeled_df["embedding_vector"].list.to_array(embedding_dim).to_numpy(),
+        labeled_df["sentiment"].to_numpy(),
+        unrated_df["embedding_vector"].list.to_array(embedding_dim).to_numpy(),
+    )
+    return negative_probabilities, predictions_at_threshold(
+        negative_probabilities, negative_threshold
+    )
+
+
 def validate_negative_thresholds(thresholds: Sequence[float]) -> None:
     """Raise ValueError unless every threshold is between 0 and 1."""
     if not all(0 < threshold < 1 for threshold in thresholds):

@@ -28,6 +28,7 @@ from ml.assets.feedback_cluster_identity import feedback_cluster_identity
 from ml.assets.feedback_clusters import feedback_clusters
 from ml.assets.feedback_embeddings import feedback_embeddings
 from ml.assets.feedback_redacted import feedback_redacted
+from ml.assets.feedback_sentiment import feedback_sentiment
 from ml.assets.feedback_sentiment_eval import feedback_sentiment_eval
 from ml.assets.feedback_summaries import feedback_summaries
 from ml.assets.learn_embedding_checks import learn_parity_definitions
@@ -122,6 +123,7 @@ feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
         feedback_cluster_identity,
         feedback_cluster_assignment,
         feedback_category_proposals,
+        feedback_sentiment,
     ),
     default_status=DefaultSensorStatus.STOPPED,
 )
@@ -271,6 +273,7 @@ defs = Definitions(
             feedback_cluster_identity,
             feedback_cluster_assignment,
             feedback_category_proposals,
+            feedback_sentiment,
             feedback_sentiment_eval,
             courseware_extraction_text,
             courseware_extraction,

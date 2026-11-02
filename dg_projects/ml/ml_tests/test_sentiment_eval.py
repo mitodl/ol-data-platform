@@ -5,8 +5,11 @@ import polars as pl
 import pytest
 from anthropic import Anthropic, AnthropicBedrock
 from anthropic.types import TextBlock, ThinkingBlock
+from dagster import build_asset_context
+from ml.assets import feedback_sentiment as asset_module
 from ml.assets.feedback_sentiment_eval import FeedbackSentimentEvalConfig
 from ml.lib import sentiment_eval
+from ml.lib.embed import resolve_embedding_model
 from ml.resources.opik_auth import PromptLabelMissingError
 from ml_tests.fake_anthropic import FakeAnthropicClient, FakeMessage
 from openai import OpenAI
@@ -413,3 +416,59 @@ def test_anthropic_sentiment_client_leaves_partial_text_unlabeled(
     )
 
     assert client.classify("some conversation text") is None
+
+
+def test_feedback_sentiment_predicts_only_unrated_zendesk_conversations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = resolve_embedding_model(None, 4)
+    vectors, labels = _separable_dataset(n_per_class=10)
+    rated = [("good" if label == "positive" else "bad") for label in labels]
+    # The last two are out of scope: a tutor conversation and a content idea.
+    unrated = [
+        ("zendesk", None, [5.0] * 4),
+        ("zendesk", "offered", [-5.0] * 4),
+        ("zendesk", "unoffered", [5.0] * 4),
+        ("learn_ai_tutor", None, [-5.0] * 4),
+        ("content_feedback", "idea", [-5.0] * 4),
+    ]
+    pks = [f"pk{i}" for i in range(len(rated) + len(unrated))]
+    tables = {
+        "int__feedback__conversation": pl.DataFrame(
+            {
+                "feedback_conversation_pk": pks,
+                "source_slug": ["zendesk"] * len(rated) + [u[0] for u in unrated],
+                "explicit_rating": rated + [u[1] for u in unrated],
+            }
+        ),
+        "feedback_embeddings": pl.DataFrame(
+            {
+                "feedback_conversation_pk": [*pks, "other_model"],
+                "embedding_vector": [
+                    *vectors.tolist(),
+                    *[u[2] for u in unrated],
+                    [0.0] * 4,
+                ],
+                "embedding_model_version": [model.model_version] * len(pks)
+                + ["another-model"],
+                "embedding_dim": [4] * (len(pks) + 1),
+            }
+        ),
+    }
+    monkeypatch.setattr(
+        asset_module,
+        "get_dbt_model_as_dataframe",
+        lambda **kwargs: tables[kwargs["table_name"]].lazy(),
+    )
+
+    result = asset_module.feedback_sentiment(
+        build_asset_context(),
+        asset_module.FeedbackSentimentConfig(embedding_dim=4),
+    )
+
+    assert result["feedback_conversation_pk"].to_list() == pks[len(rated) : -2]
+    assert result["sentiment_slug"].to_list() == ["positive", "negative", "positive"]
+    assert result["sentiment_model_version"].unique().to_list() == [
+        "local_classifier@0.25"
+    ]
+    assert result.schema == asset_module.SENTIMENT_ASSIGNMENT_SCHEMA
