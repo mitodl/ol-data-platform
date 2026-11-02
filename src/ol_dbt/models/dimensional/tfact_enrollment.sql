@@ -3,7 +3,7 @@
     unique_key='enrollment_key',
     incremental_strategy='delete+insert',
     on_schema_change='append_new_columns',
-    post_hook="delete from {{ this }} where {{ tfact_enrollment_gone_from_source() }}"
+    post_hook="{{ delete_tfact_enrollment_gone_from_source() }}"
 ) }}
 
 {#- The first incremental run after contract_fk is added reads a target without the column.

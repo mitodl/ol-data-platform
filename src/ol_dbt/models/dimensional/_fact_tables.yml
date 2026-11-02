@@ -6,9 +6,11 @@ models:
   description: >
     Transaction fact table capturing enrollment events across all platforms.
     Grain: One row per enrollment (course run or program), discriminated by enrollment_type.
-    Emeritus and Global Alumni have no enrollment id, so their keys are hashed from
-    learner
-    details. A post_hook deletes the rows whose key is gone from staging.
+    Emeritus and Global Alumni have no enrollment id, so their keys hash details
+    the source can edit, such as the Emeritus run code. A post_hook deletes the
+    rows whose key is gone from staging. If staging holds under 99% of the fact's
+    rows for a platform it skips that platform, and
+    assert_tfact_enrollment_has_no_keys_gone_from_source fails.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
