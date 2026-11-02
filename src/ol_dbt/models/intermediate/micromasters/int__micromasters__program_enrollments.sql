@@ -71,7 +71,13 @@ with micromasters_program_enrollments as (
         , programs.micromasters_program_id
         , programs.program_title
         , programs.mitxonline_program_id
-        , coalesce(mitx_users.user_micromasters_edxorg_id, mitx_users.user_edxorg_id) as user_edxorg_id
+        -- Follows the username above, so a MicroMasters login with no edX.org row keeps a null
+        -- id and doesn't pick up another account on this row.
+        , case
+            when mitx_users.user_micromasters_edxorg_username is not null
+                then mitx_users.user_micromasters_edxorg_id
+            else mitx_users.user_edxorg_id
+        end as user_edxorg_id
         , mitx_users.user_gender
         , mitx_users.user_address_country as user_country
         , mitx_users.user_address_city

@@ -195,9 +195,10 @@ models:
       account's edX.org username when that account has no row of its own.
   - name: user_micromasters_edxorg_id
     description: int, on an email-linked row, the edX.org user ID the MicroMasters
-      account reached through social auth. That account can sit on another row, so
-      models keyed on user_micromasters_id read this before user_edxorg_id. Null on
-      other rows.
+      account reached through social auth, or null when that login has no edX.org
+      row. That account can sit on another row, so models keyed on user_micromasters_id
+      read this in place of user_edxorg_id whenever user_micromasters_edxorg_username
+      is set, so the id and username name one account.
   - name: user_micromasters_edxorg_username
     description: str, on an email-linked row, the MicroMasters account's edX.org username,
       read before user_edxorg_username for the same reason. Null on other rows.
