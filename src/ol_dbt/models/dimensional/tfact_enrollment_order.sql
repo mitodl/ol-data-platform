@@ -71,6 +71,15 @@ with enrollment as (
             and course_run.platform = 'mitxonline'
 )
 
+-- tfact_enrollment's mode is derived: a second order or a MicroMasters order can verify a
+-- run the app has as audit, and that doesn't bring a moved order back to it.
+, mitxonline_app_enrollment as (
+    select
+        cast(courserunenrollment_id as varchar) as enrollment_id
+        , courserunenrollment_enrollment_mode as app_enrollment_mode
+    from {{ ref('stg__mitxonline__app__postgres__courses_courserunenrollment') }}
+)
+
 -- The run on each order line. dim_product has no run for some products whose run exists.
 , mitxonline_order_lines as (
     select
@@ -181,6 +190,11 @@ with enrollment as (
         on
             order_fact.order_id = mitxonline_deferred_orders.order_id
             and enrollment.courserun_fk = mitxonline_deferred_orders.courserun_fk
+    left join mitxonline_app_enrollment
+        on
+            enrollment.platform = 'mitxonline'
+            and enrollment.enrollment_type = 'course'
+            and enrollment.enrollment_id = mitxonline_app_enrollment.enrollment_id
     where
         not exists (
             select 1 from order_via_direct_fk as d where d.enrollment_key = enrollment.enrollment_key
@@ -188,11 +202,9 @@ with enrollment as (
         and not (enrollment.platform = 'mitxpro' and enrollment.order_id is null)
         -- Once a deferral moves the order to another run, the enrollment it was bought
         -- for no longer holds it, unless the app itself kept that enrollment verified.
-        -- This is the app's mode: a deferred order doesn't verify a DEDP run, see
-        -- int__mitxonline__courserunenrollments.
         and (
             mitxonline_deferred_orders.order_id is null
-            or coalesce(enrollment.enrollment_mode, '') = 'verified'
+            or mitxonline_app_enrollment.app_enrollment_mode = 'verified'
         )
 )
 
