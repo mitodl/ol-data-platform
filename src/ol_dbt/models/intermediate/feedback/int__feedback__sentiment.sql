@@ -1,5 +1,5 @@
--- feedback_sentiment_assignments' output, one row per conversation with no explicit
--- verdict. Empty until the feedback_sentiment asset has materialized in this schema.
+-- feedback_sentiment_assignments' output, one row per Zendesk conversation the model
+-- scored. Empty until the feedback_sentiment asset has materialized in this schema.
 {% set sentiment = dev_schema_source('feedback_intermediate', 'feedback_sentiment_assignments') %}
 
 {% if not sentiment.is_unit_test and execute and not sentiment.resolved_relation %}

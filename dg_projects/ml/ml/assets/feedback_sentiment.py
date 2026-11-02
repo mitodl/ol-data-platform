@@ -27,8 +27,9 @@ if DAGSTER_ENV == "dev":
 else:
     database_name = "ol_warehouse_production_intermediate"
 
-# On the production eval (#3232) this found 113 of 267 complaints at precision 0.70.
-PRODUCTION_NEGATIVE_THRESHOLD = 0.25
+# Repeated 5-fold CV on the rated conversations: precision 0.83 (0.77-0.89 across
+# folds), recall 0.33. Lower thresholds lose much more precision than they gain recall.
+PRODUCTION_NEGATIVE_THRESHOLD = 0.35
 
 # Every training label is Zendesk or content feedback, so tutor and forum course
 # questions are out of distribution: about half came out negative, mostly wrongly.
@@ -93,7 +94,10 @@ class FeedbackSentimentConfig(Config):
     pool="feedback_sentiment",
     metadata={
         "schema": database_name,
-        "write_mode": "overwrite",
+        # A run that sees only some conversations (an embedding model backfill)
+        # must not delete the other predictions.
+        "write_mode": "upsert",
+        "upsert_options": {"join_cols": ["feedback_conversation_pk"]},
         "schema_update_mode": "update",
     },
 )
@@ -105,10 +109,10 @@ def feedback_sentiment(
 
     Tier 2 of the sentiment ladder (feedback_ml_approach.md §E): a logistic
     regression on the embeddings, trained on the explicitly rated conversations.
-    Each run retrains on every rated row and overwrites the table, so a new
-    rating or embedding reaches every prediction. afact_feedback_conversation
-    uses the result only where it has no verdict. Only config.sources are
-    predicted, and never an idea.
+    Each run retrains on every rated row and rewrites the prediction of each
+    conversation it scores. afact_feedback_conversation uses the result only
+    where it has no verdict, so a row left from before a rating is ignored.
+    Only config.sources are predicted, and never an idea.
     """
     embedding_model = resolve_embedding_model(
         config.embedding_model, config.embedding_dim

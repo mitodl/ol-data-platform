@@ -102,7 +102,7 @@ class FeedbackSentimentEvalConfig(Config):
 
 @asset(
     key=AssetKey(["intermediate", "feedback_sentiment_eval"]),
-    code_version="feedback_sentiment_eval_v3",
+    code_version="feedback_sentiment_eval_v4",
     group_name="feedback",
     io_manager_key="io_manager",
     pool="feedback_sentiment_eval",

@@ -162,8 +162,8 @@ select
     -- Tier 1 of the sentiment ladder. Zendesk 'good'/'bad', tutor 'like'/'dislike'
     -- and content feedback 'positive'/'negative' are verdicts; Zendesk's 'unoffered'
     -- (no survey sent) and 'offered' (sent, unanswered) are kinds of absence, and
-    -- content feedback's 'idea' is a suggestion, not a verdict, so all three fall
-    -- through to the model tier (feedback_sentiment).
+    -- content feedback's 'idea' is a suggestion, not a verdict. The first two fall
+    -- through to the model tier (feedback_sentiment); 'idea' stays null.
     , case turn_aggregates.explicit_rating
         when 'good' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
         when 'like' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}

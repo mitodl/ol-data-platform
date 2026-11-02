@@ -549,8 +549,8 @@ models:
     description: ISO8601 varchar, when embedding_vector was generated.
 
 - name: int__feedback__sentiment
-  description: feedback_sentiment_assignments' output, one row per conversation with
-    no explicit verdict -- the model tier of the sentiment. Empty until the feedback_sentiment
+  description: feedback_sentiment_assignments' output, one row per Zendesk conversation
+    the model scored -- the model tier of the sentiment. Empty until the feedback_sentiment
     asset has materialized in this schema.
   columns:
   - name: feedback_conversation_pk
@@ -577,7 +577,7 @@ models:
       when this is at least the threshold in sentiment_model_version.
   - name: sentiment_model_version
     description: str, the method and threshold that produced sentiment_slug, e.g.
-      'local_classifier@0.25'.
+      'local_classifier@0.35'.
   - name: embedding_model_version
     description: str, which embedding model the classifier used.
   - name: predicted_at

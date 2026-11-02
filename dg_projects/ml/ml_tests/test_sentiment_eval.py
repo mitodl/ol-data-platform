@@ -469,6 +469,6 @@ def test_feedback_sentiment_predicts_only_unrated_zendesk_conversations(
     assert result["feedback_conversation_pk"].to_list() == pks[len(rated) : -2]
     assert result["sentiment_slug"].to_list() == ["positive", "negative", "positive"]
     assert result["sentiment_model_version"].unique().to_list() == [
-        "local_classifier@0.25"
+        "local_classifier@0.35"
     ]
     assert result.schema == asset_module.SENTIMENT_ASSIGNMENT_SCHEMA

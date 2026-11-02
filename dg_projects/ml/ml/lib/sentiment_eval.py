@@ -47,7 +47,7 @@ SENTIMENT_LABELS = ("positive", "negative")
 # The classifier labels a conversation negative when P(negative) >= threshold. Rows
 # below 0.5 trade precision for recall; 0.5 is the plain predict() decision.
 DEFAULT_NEGATIVE_THRESHOLD = 0.5
-CLASSIFIER_NEGATIVE_THRESHOLDS = (0.5, 0.4, 0.3, 0.25, 0.2)
+CLASSIFIER_NEGATIVE_THRESHOLDS = (0.5, 0.4, 0.35, 0.3, 0.25, 0.2)
 
 # How many neighbours the kNN candidate votes across. Small and odd (no ties on
 # a binary label) -- this is a bake-off, not the tuned production value.

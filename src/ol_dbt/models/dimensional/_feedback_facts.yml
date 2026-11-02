@@ -254,8 +254,9 @@ models:
   - name: sentiment_fk
     description: str, foreign key to dim_sentiment. A verdict ('good'/'bad' for Zendesk,
       'like'/'dislike' for AskTIM, 'positive'/'negative' for content feedback) sets
-      it directly. Every other conversation takes the feedback_sentiment asset's prediction,
-      and stays null when the asset has none (no embedding yet).
+      it directly. A Zendesk conversation with no verdict takes the feedback_sentiment
+      asset's prediction once it has an embedding. Other sources with no verdict,
+      and content feedback's 'idea', stay null.
     tests:
     - relationships:
         arguments:
@@ -272,7 +273,7 @@ models:
         arguments:
           values: ['explicit_rating', 'model']
   - name: sentiment_model_version
-    description: str, the method and threshold behind a 'model' sentiment, e.g. 'local_classifier@0.25'.
+    description: str, the method and threshold behind a 'model' sentiment, e.g. 'local_classifier@0.35'.
       Null for any other sentiment_source.
   - name: conversation_summary
     description: str, LLM abstract of the assembled redacted turns. Null until feedback_summaries
