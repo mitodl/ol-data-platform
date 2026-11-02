@@ -145,6 +145,11 @@ def feedback_sentiment_eval(
         embeddings_df, on="feedback_conversation_pk", how="inner"
     ).join(conversation_df, on="feedback_conversation_pk", how="left")
     labeled_df = labeled_sentiment_sample(joined)
+    context.log.info(
+        "Loaded %d explicitly rated conversations with an embedding (%d negative)",
+        labeled_df.height,
+        labeled_df.filter(pl.col("sentiment") == "negative").height,
+    )
 
     if labeled_df.height < 10:  # noqa: PLR2004 -- below this, a train/test split is meaningless
         msg = (
