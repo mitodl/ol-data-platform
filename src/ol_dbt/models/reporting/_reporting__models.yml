@@ -1171,6 +1171,11 @@ models:
     description: string, name of the platform (e.g. edX.org, MITx Online, xPRO)
     tests:
     - not_null
+    # The course join sends everything but MITx Online and edX.org to the xPRO course
+    # enrollments, so a new platform here has to be placed there before it can count.
+    - accepted_values:
+        arguments:
+          values: ["MITx Online", "edX.org", "xPRO", "Simplilearn"]
   - name: program_id
     description: int, id representing a single program on a particular platform
   - name: program_title
