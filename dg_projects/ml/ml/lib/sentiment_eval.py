@@ -230,7 +230,8 @@ def validate_negative_thresholds(thresholds: Sequence[float]) -> None:
 def classifier_method_name(threshold: float) -> str:
     if threshold == DEFAULT_NEGATIVE_THRESHOLD:
         return "local_classifier"
-    return f"local_classifier@{threshold:g}"
+    # repr is the shortest exact form, so distinct thresholds never share a name.
+    return f"local_classifier@{threshold!r}"
 
 
 class SentimentClient(Protocol):
