@@ -682,8 +682,12 @@ models:
   - name: courserun_is_current
     description: boolean, true if the current date is between the course run start
       and end dates otherwise false
+  - name: distinct_video_titles_played
+    description: int, number of distinct video titles the user played in this section.
+      Two videos with one title count once
   - name: user_watched_video_count
-    description: int, count of videos a user watched
+    description: Deprecated, the old name for distinct_video_titles_played and always
+      equal to it. Removed once the Superset charts read distinct_video_titles_played.
   - name: max_coursestructure_block_index
     description: int, max position of the course content block within a course
   tests:
@@ -1301,11 +1305,14 @@ models:
   - name: course_readable_id
     description: string, course ID without the run tag, formatted as course-v1:{org}+{course
       code}
-  - name: user_watched_video_count
-    description: int, number of distinct videos the user has watched (play_video events)
-      in this chapter
+  - name: distinct_video_titles_played
+    description: int, number of distinct video titles the user played (play_video
+      events) in this chapter. Two videos with one title count once
     tests:
     - not_null
+  - name: user_watched_video_count
+    description: Deprecated, the old name for distinct_video_titles_played and always
+      equal to it. Removed once the Superset charts read distinct_video_titles_played.
   - name: max_video_index
     description: int, maximum video sequence index number within the chapter that
       the user has watched

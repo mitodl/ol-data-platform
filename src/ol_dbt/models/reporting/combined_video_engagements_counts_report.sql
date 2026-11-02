@@ -21,6 +21,8 @@ select
     , combined_video_engagements.platform
     , combined_video_engagements.courserun_is_current
     , combined_video_engagements.course_readable_id
+    , count(distinct combined_video_engagements.video_title) as distinct_video_titles_played
+    -- Old name, removed once the Superset charts read distinct_video_titles_played.
     , count(distinct combined_video_engagements.video_title) as user_watched_video_count
     , max(combined_video_engagements.video_index) as max_video_index
 from combined_video_engagements

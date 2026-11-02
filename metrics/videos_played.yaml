@@ -19,8 +19,9 @@ metric:
     videos_watched uses the same events and distinct key but keys learners on
     email and days on cast(event_timestamp as date). The other models that count
     video plays (video_play_events, video_played_count, videos_user_watched,
-    user_watched_video_count, video_watched_count) are different measures.
-    num_video_played is a deprecated name for video_play_events.
+    distinct_video_titles_played, video_watched_count) are different measures.
+    num_video_played is a deprecated name for video_play_events, and
+    user_watched_video_count for distinct_video_titles_played.
   metricType: COUNT
   unitOfMeasurement: COUNT
   granularity: DAY
