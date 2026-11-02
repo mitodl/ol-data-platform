@@ -514,7 +514,9 @@ models:
         field: payment_method_pk
         where: "payment_method_fk is not null"
   - name: transaction_amount
-    description: Transaction amount (additive measure)
+    description: >
+      Transaction amount (additive measure). xPRO reads the processor's req_amount.
+      MITx Online reads the app's amount, and req_amount where the app wrote 0.
   - name: transaction_type
     description: Type of transaction (payment, refund, etc.)
   - name: transaction_status
@@ -950,6 +952,41 @@ unit_tests:
     - {payment_id: 6, platform: mitxpro, is_successful: false}
     - {payment_id: 7, platform: mitxpro, is_successful: false}
     - {payment_id: 8, platform: mitxpro, is_successful: false}
+- name: test_tfact_payment_fills_zero_mitxonline_amounts_from_req_amount
+  description: >
+    A MITx Online payment takes req_amount only where the app wrote 0. Where the app
+    wrote an amount it stands, even if req_amount disagrees. A zero-dollar order has
+    no req_amount, and stays at 0 rather than going null.
+  model: tfact_payment
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__ecommerce_transaction')
+    rows:
+    - {transaction_id: 1, transaction_amount: 0.00, transaction_payment_amount: 500.00,
+      transaction_created_on: "2024-01-15T00:00:00"}
+    - {transaction_id: 2, transaction_amount: 300.00, transaction_payment_amount: 350.00,
+      transaction_created_on: "2024-01-15T00:00:00"}
+    - {transaction_id: 3, transaction_amount: 0.00, transaction_payment_amount: null,
+      transaction_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__mitxpro__ecommerce_receipt')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__ecommerce_order')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__ecommerce_order')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: ref('dim_payment_method')
+    rows: []
+  expect:
+    rows:
+    - {payment_id: 1, transaction_amount: 500.00}
+    - {payment_id: 2, transaction_amount: 300.00}
+    - {payment_id: 3, transaction_amount: 0.00}
 - name: test_tfact_certificate_refreshes_stale_user_fk_after_dim_user_rekey
   description: >
     Regression test for the dim_user re-key incident: when dim_user.user_pk changes
