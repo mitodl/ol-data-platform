@@ -12,6 +12,7 @@ from dagster import (
 )
 from ml.lib.embed import resolve_embedding_model
 from ml.lib.sentiment_eval import (
+    CLASSIFIER_NEGATIVE_THRESHOLDS,
     build_sentiment_client,
     labeled_sentiment_sample,
     run_sentiment_eval,
@@ -60,6 +61,14 @@ class FeedbackSentimentEvalConfig(Config):
         default=0.2,
         description="Fraction of the labeled sample held out for scoring.",
     )
+    classifier_negative_thresholds: list[float] = Field(
+        default=list(CLASSIFIER_NEGATIVE_THRESHOLDS),
+        description=(
+            "The classifier is scored once per threshold: a conversation is "
+            "negative when P(negative) is at least the threshold. Lower values "
+            "find more complaints and add more false alarms."
+        ),
+    )
     embedding_model: str | None = Field(
         default=None,
         pattern=r"^[a-z0-9-]+:.+$",
@@ -83,7 +92,7 @@ class FeedbackSentimentEvalConfig(Config):
 
 @asset(
     key=AssetKey(["intermediate", "feedback_sentiment_eval"]),
-    code_version="feedback_sentiment_eval_v2",
+    code_version="feedback_sentiment_eval_v3",
     group_name="feedback",
     io_manager_key="io_manager",
     pool="feedback_sentiment_eval",
@@ -172,6 +181,7 @@ def feedback_sentiment_eval(
         embedding_dim=embedding_model.dim,
         sentiment_client=sentiment_client,
         test_fraction=config.test_fraction,
+        classifier_negative_thresholds=config.classifier_negative_thresholds,
     )
 
     eval_run_id = context.run.root_run_id or context.run.run_id

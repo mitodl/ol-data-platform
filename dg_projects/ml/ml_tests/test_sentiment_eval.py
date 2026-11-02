@@ -112,11 +112,64 @@ def test_local_classifier_predictions_are_right_on_separable_classes() -> None:
     vectors, labels = _separable_dataset()
     train_idx, test_idx = sentiment_eval.train_test_split_indices(labels)
 
-    predictions = sentiment_eval.local_classifier_predictions(
+    probabilities = sentiment_eval.local_classifier_negative_probabilities(
         vectors[train_idx], labels[train_idx], vectors[test_idx]
     )
+    predictions = sentiment_eval.predictions_at_threshold(probabilities, 0.5)
 
     assert predictions.tolist() == labels[test_idx].tolist()
+
+
+def test_run_sentiment_eval_scores_the_classifier_at_each_threshold() -> None:
+    rng = np.random.default_rng(0)
+    # Overlapping classes, so a lower threshold has negatives left to find.
+    vectors = np.vstack([rng.normal(0.5, 1, (80, 4)), rng.normal(-0.5, 1, (20, 4))])
+    labels = ["positive"] * 80 + ["negative"] * 20
+    df = pl.DataFrame(
+        {
+            "embedding_vector": vectors.tolist(),
+            "sentiment": labels,
+            "conversation_text": [f"text {i}" for i in range(len(labels))],
+        }
+    )
+
+    methods = sentiment_eval.run_sentiment_eval(
+        df,
+        embedding_dim=4,
+        sentiment_client=None,
+        classifier_negative_thresholds=(0.5, 0.3, 0.2),
+    )["methods"]
+
+    assert list(methods) == [
+        "embedding_knn",
+        "local_classifier",
+        "local_classifier@0.3",
+        "local_classifier@0.2",
+    ]
+    predicted = [
+        methods[m]["n_predicted_negative"]
+        for m in ("local_classifier", "local_classifier@0.3", "local_classifier@0.2")
+    ]
+    assert predicted == sorted(predicted)
+
+
+def test_run_sentiment_eval_rejects_a_threshold_outside_zero_and_one() -> None:
+    vectors, labels = _separable_dataset(n_per_class=10)
+    df = pl.DataFrame(
+        {
+            "embedding_vector": vectors.tolist(),
+            "sentiment": labels.tolist(),
+            "conversation_text": [f"text {i}" for i in range(len(labels))],
+        }
+    )
+
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        sentiment_eval.run_sentiment_eval(
+            df,
+            embedding_dim=4,
+            sentiment_client=None,
+            classifier_negative_thresholds=(1.5,),
+        )
 
 
 def test_score_predictions_reports_negative_precision_and_recall() -> None:

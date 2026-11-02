@@ -10,6 +10,7 @@ clustering/categorization.
 
 import logging
 import os
+from collections.abc import Sequence
 from typing import Any, Protocol
 
 import numpy as np
@@ -41,6 +42,11 @@ EXPLICIT_RATING_TO_SENTIMENT = {
 }
 
 SENTIMENT_LABELS = ("positive", "negative")
+
+# The classifier labels a conversation negative when P(negative) >= threshold. Rows
+# below 0.5 trade precision for recall; 0.5 is the plain predict() decision.
+DEFAULT_NEGATIVE_THRESHOLD = 0.5
+CLASSIFIER_NEGATIVE_THRESHOLDS = (0.5, 0.4, 0.3, 0.25, 0.2)
 
 # How many neighbours the kNN candidate votes across. Small and odd (no ties on
 # a binary label) -- this is a bake-off, not the tuned production value.
@@ -188,13 +194,13 @@ def embedding_knn_predictions(
     return classifier.predict(test_vectors)
 
 
-def local_classifier_predictions(
+def local_classifier_negative_probabilities(
     train_vectors: np.ndarray,
     train_labels: np.ndarray,
     test_vectors: np.ndarray,
     random_state: int = 42,
 ) -> np.ndarray:
-    """Predictions of a logistic regression trained on the labeled embeddings.
+    """P(negative) per test row from a logistic regression on the labeled embeddings.
 
     CPU-cheap, no per-record API cost (§E's local-classifier option) -- a
     simple linear model over the same embeddings kNN uses, rather than a
@@ -202,7 +208,21 @@ def local_classifier_predictions(
     """
     classifier = LogisticRegression(max_iter=1000, random_state=random_state)
     classifier.fit(train_vectors, train_labels)
-    return classifier.predict(test_vectors)
+    negative_column = list(classifier.classes_).index("negative")
+    return classifier.predict_proba(test_vectors)[:, negative_column]
+
+
+def predictions_at_threshold(
+    negative_probabilities: np.ndarray, threshold: float
+) -> np.ndarray:
+    """Label each row negative when its P(negative) is at least threshold."""
+    return np.where(negative_probabilities >= threshold, "negative", "positive")
+
+
+def classifier_method_name(threshold: float) -> str:
+    if threshold == DEFAULT_NEGATIVE_THRESHOLD:
+        return "local_classifier"
+    return f"local_classifier@{threshold:g}"
 
 
 class SentimentClient(Protocol):
@@ -326,6 +346,7 @@ def run_sentiment_eval(  # noqa: PLR0913 -- one independently meaningful eval kn
     test_fraction: float = 0.2,
     n_neighbors: int = EMBEDDING_KNN_NEIGHBORS,
     random_state: int = 42,
+    classifier_negative_thresholds: Sequence[float] = (DEFAULT_NEGATIVE_THRESHOLD,),
 ) -> dict[str, Any]:
     """Run the three-way bake-off on one labeled sample; return per-method results.
 
@@ -336,7 +357,14 @@ def run_sentiment_eval(  # noqa: PLR0913 -- one independently meaningful eval kn
         sentiment_client: an LLM sentiment client, or None to skip that arm
             (it's the only one with a real per-call cost -- worth being able to
             run the other two without incurring it).
+        classifier_negative_thresholds: one local_classifier result per value;
+            each must be between 0 and 1.
+
+    :raises ValueError: when a threshold is not between 0 and 1.
     """
+    if not all(0 < threshold < 1 for threshold in classifier_negative_thresholds):
+        msg = f"Thresholds must be between 0 and 1: {classifier_negative_thresholds}"
+        raise ValueError(msg)
     vectors = labeled_df["embedding_vector"].list.to_array(embedding_dim).to_numpy()
     labels = labeled_df["sentiment"].to_numpy()
     texts = labeled_df["conversation_text"].to_list()
@@ -356,17 +384,17 @@ def run_sentiment_eval(  # noqa: PLR0913 -- one independently meaningful eval kn
             test_labels,
         )
         | {"call_count": 0},
-        "local_classifier": score_predictions(
-            local_classifier_predictions(
-                vectors[train_idx],
-                labels[train_idx],
-                vectors[test_idx],
-                random_state=random_state,
-            ),
-            test_labels,
-        )
-        | {"call_count": 0},
     }
+    negative_probabilities = local_classifier_negative_probabilities(
+        vectors[train_idx],
+        labels[train_idx],
+        vectors[test_idx],
+        random_state=random_state,
+    )
+    for threshold in sorted(set(classifier_negative_thresholds), reverse=True):
+        methods[classifier_method_name(threshold)] = score_predictions(
+            predictions_at_threshold(negative_probabilities, threshold), test_labels
+        ) | {"call_count": 0}
     if sentiment_client is not None:
         test_texts = [texts[i] for i in test_idx]
         methods["llm"] = score_predictions(
