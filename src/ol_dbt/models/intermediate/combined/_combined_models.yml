@@ -73,7 +73,8 @@ models:
     description: str, postal code on user's profile
 
 - name: int__combined__courserun_enrollments
-  description: Intermediate model for user course enrollments from different platforms
+  description: Intermediate model for user course enrollments from different platforms.
+    One row per enrollment.
   config:
     meta:
       qa_branches:
@@ -91,6 +92,8 @@ models:
     - accepted_values:
         arguments:
           values: '{{ var("platforms") }}'
+  - name: enrollment_key
+    description: str, primary key for this table. The same value as tfact_enrollment.enrollment_key.
   - name: courserunenrollment_id
     description: int, enrollment ID on the corresponding platform. Null for enrollments
       from edX.org for now
@@ -611,3 +614,77 @@ unit_tests:
       courserun_id: 1477
       courserun_title: "MCPO"
       courserun_readable_id: "course-v1:xPRO+MCPO+26-12-1"
+- name: test_int__combined__courserun_enrollments_is_one_row_per_enrollment
+  description: >
+    A learner with two residential grade rows for a run keeps the latest updated.
+    A
+    learner with two unrevoked MITx Online certificates for a run keeps the latest
+    created. Native enrollment ids hash to the tfact_enrollment.enrollment_key value.
+  model: int__combined__courserun_enrollments
+  given:
+  - input: ref('int__mitx__courserun_enrollments')
+    rows:
+    - platform: "MITx Online"
+      courserunenrollment_id: 6
+      user_id: 600
+      user_username: "ana"
+      courserun_readable_id: "course-v1:MITxT+1.1x+1T2024"
+  - input: ref('int__mitxpro__courserunenrollments')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('int__bootcamps__courserunenrollments')
+    rows: []
+  - input: ref('int__mitxresidential__courserun_enrollments')
+    rows:
+    - courserunenrollment_id: 5
+      user_id: 500
+      courserun_readable_id: "MITx/2.2/2024"
+  - input: ref('int__mitxresidential__courserun_grades')
+    rows:
+    - courserungrade_id: 1
+      user_id: 500
+      courserun_readable_id: "MITx/2.2/2024"
+      courserungrade_grade: 0.9
+      courserungrade_letter_grade: "A"
+      courserungrade_updated_on: "2024-01-01T00:00:00"
+    - courserungrade_id: 2
+      user_id: 500
+      courserun_readable_id: "MITx/2.2/2024"
+      courserungrade_grade: 0.7
+      courserungrade_letter_grade: "B"
+      courserungrade_updated_on: "2024-02-01T00:00:00"
+  - input: ref('int__mitx__courserun_grades')
+    rows: []
+  - input: ref('int__mitxpro__courserun_grades')
+    rows: []
+  - input: ref('int__combined__courserun_certificates')
+    rows:
+    - platform: "MITx Online"
+      user_username: "ana"
+      courserun_readable_id: "course-v1:MITxT+1.1x+1T2024"
+      courseruncertificate_uuid: "older-uuid"
+      courseruncertificate_url: "https://example.com/older"
+      courseruncertificate_created_on: "2024-05-01T00:00:00"
+    - platform: "MITx Online"
+      user_username: "ana"
+      courserun_readable_id: "course-v1:MITxT+1.1x+1T2024"
+      courseruncertificate_uuid: "newer-uuid"
+      courseruncertificate_url: "https://example.com/newer"
+      courseruncertificate_created_on: "2024-06-01T00:00:00"
+  - input: ref('int__combined__course_runs')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  expect:
+    rows:
+    - platform: "MITx Online"
+      enrollment_key: "15e9bb69e428edeb6a76981e53b06c09"  # pragma: allowlist secret
+      courserungrade_grade:
+      courseruncertificate_uuid: "newer-uuid"
+    - platform: "Residential MITx"
+      enrollment_key: "2c493358fdfac4828eee26f0c812e997"  # pragma: allowlist secret
+      courserungrade_grade: 0.7
+      courseruncertificate_uuid:
