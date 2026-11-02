@@ -171,13 +171,81 @@ with users as (
     select * from email_links
 )
 
+, mitxonline_micromasters_holders as (
+    select
+        mitxonline_users_view.user_mitxonline_id
+        , coalesce(
+            mitxonline_users_view.user_micromasters_id, edxorg_users_view.user_micromasters_id
+        ) as user_micromasters_id
+    from mitxonline_users_view
+    left join account_links on mitxonline_users_view.user_mitxonline_id = account_links.user_mitxonline_id
+    left join edxorg_users_view on account_links.user_edxorg_id = edxorg_users_view.user_edxorg_id
+)
+
+---MicroMasters to MITx Online on email, for MicroMasters accounts whose mitxonline social auth
+-- doesn't resolve. The MITx Online account has to hold no MicroMasters id yet. Mutual first
+-- choices, as in email_links, because some MicroMasters accounts share an address.
+, unlinked_micromasters as (
+    select micromasters_users.*
+    from micromasters_users
+    left join mitxonline_users_view on micromasters_users.user_id = mitxonline_users_view.user_micromasters_id
+    where mitxonline_users_view.user_micromasters_id is null
+        and micromasters_users.user_email is not null
+)
+
+, mitxonline_without_micromasters as (
+    select mitxonline_users_view.*
+    from mitxonline_users_view
+    inner join mitxonline_micromasters_holders
+        on mitxonline_users_view.user_mitxonline_id = mitxonline_micromasters_holders.user_mitxonline_id
+    where mitxonline_micromasters_holders.user_micromasters_id is null
+        and mitxonline_users_view.user_mitxonline_email is not null
+)
+
+, micromasters_email_link_candidates as (
+    select
+        mitxonline_without_micromasters.user_mitxonline_id
+        , unlinked_micromasters.user_id as user_micromasters_id
+        , row_number() over (
+            partition by mitxonline_without_micromasters.user_mitxonline_id
+            order by
+                unlinked_micromasters.user_last_login desc nulls last
+                , unlinked_micromasters.user_joined_on desc nulls last
+                , unlinked_micromasters.user_id asc
+        ) as micromasters_rank
+        , row_number() over (
+            partition by unlinked_micromasters.user_id
+            order by
+                mitxonline_without_micromasters.user_last_login desc nulls last
+                , mitxonline_without_micromasters.user_joined_on desc nulls last
+                , mitxonline_without_micromasters.user_mitxonline_id asc
+        ) as mitxonline_rank
+    from mitxonline_without_micromasters
+    inner join unlinked_micromasters
+        on lower(mitxonline_without_micromasters.user_mitxonline_email) = lower(unlinked_micromasters.user_email)
+)
+
+, micromasters_email_links as (
+    select
+        user_mitxonline_id
+        , user_micromasters_id
+    from micromasters_email_link_candidates
+    where micromasters_rank = 1 and mitxonline_rank = 1
+)
+
 , mitxonline_edxorg_users as (
     select
         mitxonline_users_view.user_mitxonline_id
         , edxorg_users_view.user_edxorg_id
         , mitxonline_users_view.user_global_id
         , mitxonline_users_view.user_mitxonline_username
-        , edxorg_users_view.user_edxorg_username
+        -- Keeps the username the MicroMasters-only row held for edX.org accounts with no row of
+        -- their own. One that has a row keeps it there: dim_user readers join edX.org events on
+        -- this username, so repeating it would fan them out.
+        , coalesce(
+            edxorg_users_view.user_edxorg_username
+            , case when email_linked_edxorg.user_edxorg_id is null then email_linked_micromasters.user_edxorg_username end
+        ) as user_edxorg_username
         , mitxonline_users_view.user_mitxonline_email
         , edxorg_users_view.user_edxorg_email
         , mitxonline_users_view.user_joined_on as user_joined_on_mitxonline
@@ -186,46 +254,94 @@ with users as (
         , edxorg_users_view.user_last_login as user_last_login_on_edxorg
         , mitxonline_users_view.user_is_active as user_is_active_on_mitxonline
         , edxorg_users_view.user_is_active as user_is_active_on_edxorg
-        , edxorg_users_view.user_address_postal_code
-        , edxorg_users_view.user_street_address
-        , edxorg_users_view.user_address_city
+        , coalesce(
+            email_linked_micromasters.user_address_postal_code, edxorg_users_view.user_address_postal_code
+        ) as user_address_postal_code
+        , coalesce(email_linked_micromasters.user_street_address, edxorg_users_view.user_street_address)
+            as user_street_address
+        , coalesce(email_linked_micromasters.user_address_city, edxorg_users_view.user_address_city)
+            as user_address_city
         , coalesce(mitxonline_users_view.is_mitxonline_user is not null, false) as is_mitxonline_user
         , coalesce(edxorg_users_view.is_edxorg_user is not null, false) as is_edxorg_user
         -- nullif because the MITx Online legaladdress and name fields store blanks, not
         -- nulls, and a blank would win the coalesce and mask a populated edX.org value.
         , coalesce(
-            nullif(mitxonline_users_view.user_full_name, ''), nullif(edxorg_users_view.user_full_name, '')
+            nullif(mitxonline_users_view.user_full_name, '')
+            , nullif(email_linked_micromasters.user_full_name, '')
+            , nullif(edxorg_users_view.user_full_name, '')
         ) as user_full_name
         , coalesce(
-            nullif(mitxonline_users_view.user_first_name, ''), nullif(edxorg_users_view.user_first_name, '')
+            nullif(mitxonline_users_view.user_first_name, '')
+            , nullif(email_linked_micromasters.user_first_name, '')
+            , nullif(edxorg_users_view.user_first_name, '')
         ) as user_first_name
         , coalesce(
-            nullif(mitxonline_users_view.user_last_name, ''), nullif(edxorg_users_view.user_last_name, '')
+            nullif(mitxonline_users_view.user_last_name, '')
+            , nullif(email_linked_micromasters.user_last_name, '')
+            , nullif(edxorg_users_view.user_last_name, '')
         ) as user_last_name
         , coalesce(
             nullif(mitxonline_users_view.user_address_country, '')
+            , nullif(email_linked_micromasters.user_address_country, '')
             , nullif(edxorg_users_view.user_address_country, '')
         ) as user_address_country
         , coalesce(
             nullif(mitxonline_users_view.user_address_state, '')
+            , nullif(email_linked_micromasters.user_address_state_or_territory, '')
             , nullif(edxorg_users_view.user_address_state_or_territory, '')
         ) as user_address_state
-        , coalesce(mitxonline_users_view.user_highest_education, edxorg_users_view.user_highest_education)
-            as user_highest_education
-        , coalesce(mitxonline_users_view.user_gender, edxorg_users_view.user_gender) as user_gender
-        , coalesce(mitxonline_users_view.user_birth_year, edxorg_users_view.user_birth_year) as user_birth_year
-        , coalesce(mitxonline_users_view.user_company, edxorg_users_view.user_company_name) as user_company
-        , coalesce(mitxonline_users_view.user_job_title, edxorg_users_view.user_job_position) as user_job_title
-        , coalesce(mitxonline_users_view.user_industry, edxorg_users_view.user_company_industry) as user_industry
         , coalesce(
-            mitxonline_users_view.user_micromasters_id, edxorg_users_view.user_micromasters_id
+            mitxonline_users_view.user_highest_education
+            , email_linked_micromasters.user_highest_education
+            , edxorg_users_view.user_highest_education
+        ) as user_highest_education
+        , coalesce(
+            mitxonline_users_view.user_gender, email_linked_micromasters.user_gender, edxorg_users_view.user_gender
+        ) as user_gender
+        , coalesce(
+            mitxonline_users_view.user_birth_year
+            , cast(substring(email_linked_micromasters.user_birth_date, 1, 4) as int)
+            , edxorg_users_view.user_birth_year
+        ) as user_birth_year
+        , coalesce(
+            mitxonline_users_view.user_company
+            , email_linked_micromasters.user_company_name
+            , edxorg_users_view.user_company_name
+        ) as user_company
+        , coalesce(
+            mitxonline_users_view.user_job_title
+            , email_linked_micromasters.user_job_position
+            , edxorg_users_view.user_job_position
+        ) as user_job_title
+        , coalesce(
+            mitxonline_users_view.user_industry
+            , email_linked_micromasters.user_company_industry
+            , edxorg_users_view.user_company_industry
+        ) as user_industry
+        , coalesce(
+            mitxonline_users_view.user_micromasters_id
+            , email_linked_micromasters.user_id
+            , case when moved_micromasters.user_micromasters_id is null then edxorg_users_view.user_micromasters_id end
         ) as user_micromasters_id
         , coalesce(
-            mitxonline_users_view.user_micromasters_email, edxorg_users_view.user_micromasters_email
+            mitxonline_users_view.user_micromasters_email
+            , email_linked_micromasters.user_email
+            , case when moved_micromasters.user_micromasters_id is null then edxorg_users_view.user_micromasters_email end
         ) as user_micromasters_email
+        , email_linked_micromasters.user_id is not null as is_micromasters_linked_by_email
     from mitxonline_users_view
     left join account_links on mitxonline_users_view.user_mitxonline_id = account_links.user_mitxonline_id
     full outer join edxorg_users_view on account_links.user_edxorg_id = edxorg_users_view.user_edxorg_id
+    left join micromasters_email_links
+        on mitxonline_users_view.user_mitxonline_id = micromasters_email_links.user_mitxonline_id
+    left join micromasters_users as email_linked_micromasters
+        on micromasters_email_links.user_micromasters_id = email_linked_micromasters.user_id
+    left join edxorg_users_view as email_linked_edxorg
+        on micromasters_email_links.user_micromasters_id = email_linked_edxorg.user_micromasters_id
+    -- The id belongs on the account with the MicroMasters email (hq#14166), so the edX.org row
+    -- that reached it through social auth gives it up.
+    left join micromasters_email_links as moved_micromasters
+        on edxorg_users_view.user_micromasters_id = moved_micromasters.user_micromasters_id
 )
 
 select
@@ -260,6 +376,7 @@ select
     , user_company
     , user_industry
     , user_job_title
+    , is_micromasters_linked_by_email
     , case
         when is_mitxonline_user = true
             then {{ generate_hash_id(dbt.concat(["cast(user_mitxonline_id as varchar)", "'MITx Online'"])) }}
@@ -302,6 +419,7 @@ select
     , micromasters_users.user_company_name as user_company
     , micromasters_users.user_company_industry as user_industry
     , micromasters_users.user_job_position as user_job_title
+    , false as is_micromasters_linked_by_email
     , {{ generate_hash_id(dbt.concat(["cast(user_micromasters_id as varchar)", "'MicroMasters'"])) }} as user_hashed_id
 -- A person can hold two MicroMasters accounts, one reached from the edX.org side and one
 -- from MITx Online, but a collapsed row above keeps only one user_micromasters_id (MITx
