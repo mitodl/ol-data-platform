@@ -33,8 +33,9 @@ with program_certificates_dedp_from_micromasters as (
         , program_certificates_dedp_from_micromasters.micromasters_program_id
         , program_certificates_dedp_from_micromasters.mitxonline_program_id
         , program_certificates_dedp_from_micromasters.program_completion_timestamp
-        , mitx_users.user_edxorg_id
-        , mitx_users.user_edxorg_username
+        , coalesce(mitx_users.user_micromasters_edxorg_id, mitx_users.user_edxorg_id) as user_edxorg_id
+        , coalesce(mitx_users.user_micromasters_edxorg_username, mitx_users.user_edxorg_username)
+            as user_edxorg_username
         , mitx_users.user_mitxonline_username
         , mitx_users.user_micromasters_email as user_email
         , mitx_users.user_first_name

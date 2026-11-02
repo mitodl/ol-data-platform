@@ -191,6 +191,14 @@ models:
       with the same edX.org username. Uniqueness is asserted per MicroMasters account
       instead. On an email-linked row with no linked edX.org account, it is the MicroMasters
       account's edX.org username when that account has no row of its own.
+  - name: user_micromasters_edxorg_id
+    description: int, on an email-linked row, the edX.org user ID the MicroMasters
+      account reached through social auth. That account can sit on another row, so
+      models keyed on user_micromasters_id read this before user_edxorg_id. Null on
+      other rows.
+  - name: user_micromasters_edxorg_username
+    description: str, on an email-linked row, the MicroMasters account's edX.org username,
+      read before user_edxorg_username for the same reason. Null on other rows.
   - name: is_micromasters_linked_by_email
     description: boolean, true when user_micromasters_id reached this row through
       the lowercased email link rather than social auth. It says nothing about whether
@@ -665,28 +673,34 @@ unit_tests:
     rows:
     - {user_mitxonline_id: 1, user_edxorg_id: null, user_micromasters_id: 100, user_edxorg_username: edx_no_row,
       user_micromasters_email: One@Example.com, user_address_postal_code: "02139",
-      is_micromasters_linked_by_email: true}
+      is_micromasters_linked_by_email: true, user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: edx_no_row}
     - {user_mitxonline_id: 2, user_edxorg_id: 20, user_micromasters_id: null, user_edxorg_username: edx_two,
-      user_micromasters_email: null, user_address_postal_code: "02142", is_micromasters_linked_by_email: false}
+      user_micromasters_email: null, user_address_postal_code: "02142", is_micromasters_linked_by_email: false,
+      user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}
     - {user_mitxonline_id: 3, user_edxorg_id: null, user_micromasters_id: 101, user_edxorg_username: null,
       user_micromasters_email: two-mm@example.com, user_address_postal_code: "02142",
-      is_micromasters_linked_by_email: true}
+      is_micromasters_linked_by_email: true, user_micromasters_edxorg_id: 20, user_micromasters_edxorg_username: edx_two}
     - {user_mitxonline_id: 4, user_edxorg_id: null, user_micromasters_id: 102, user_edxorg_username: null,
-      user_micromasters_email: four@example.com, user_address_postal_code: null, is_micromasters_linked_by_email: true}
+      user_micromasters_email: four@example.com, user_address_postal_code: null, is_micromasters_linked_by_email: true,
+      user_micromasters_edxorg_id: 21, user_micromasters_edxorg_username: edx_four}
     - {user_mitxonline_id: null, user_edxorg_id: 21, user_micromasters_id: null, user_edxorg_username: edx_four,
-      user_micromasters_email: null, user_address_postal_code: null, is_micromasters_linked_by_email: false}
+      user_micromasters_email: null, user_address_postal_code: null, is_micromasters_linked_by_email: false,
+      user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}
     - {user_mitxonline_id: 5, user_edxorg_id: null, user_micromasters_id: 103, user_edxorg_username: null,
-      user_micromasters_email: five@example.com, user_address_postal_code: null, is_micromasters_linked_by_email: false}
+      user_micromasters_email: five@example.com, user_address_postal_code: null, is_micromasters_linked_by_email: false,
+      user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}
     - {user_mitxonline_id: null, user_edxorg_id: null, user_micromasters_id: 104,
       user_edxorg_username: null, user_micromasters_email: five@example.com, user_address_postal_code: null,
-      is_micromasters_linked_by_email: false}
+      is_micromasters_linked_by_email: false, user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}
     - {user_mitxonline_id: 6, user_edxorg_id: null, user_micromasters_id: 106, user_edxorg_username: null,
-      user_micromasters_email: six@example.com, user_address_postal_code: null, is_micromasters_linked_by_email: true}
+      user_micromasters_email: six@example.com, user_address_postal_code: null, is_micromasters_linked_by_email: true,
+      user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}
     - {user_mitxonline_id: null, user_edxorg_id: null, user_micromasters_id: 105,
       user_edxorg_username: null, user_micromasters_email: six@example.com, user_address_postal_code: null,
-      is_micromasters_linked_by_email: false}
+      is_micromasters_linked_by_email: false, user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}
     - {user_mitxonline_id: 7, user_edxorg_id: null, user_micromasters_id: 107, user_edxorg_username: null,
       user_micromasters_email: seven-mm@example.com, user_address_postal_code: null,
-      is_micromasters_linked_by_email: false}
+      is_micromasters_linked_by_email: false, user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}
     - {user_mitxonline_id: 8, user_edxorg_id: null, user_micromasters_id: null, user_edxorg_username: null,
-      user_micromasters_email: null, user_address_postal_code: null, is_micromasters_linked_by_email: false}
+      user_micromasters_email: null, user_address_postal_code: null, is_micromasters_linked_by_email: false,
+      user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}

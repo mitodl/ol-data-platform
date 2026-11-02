@@ -329,6 +329,8 @@ with users as (
             , case when moved_micromasters.user_micromasters_id is null then edxorg_users_view.user_micromasters_email end
         ) as user_micromasters_email
         , email_linked_micromasters.user_id is not null as is_micromasters_linked_by_email
+        , email_linked_edxorg.user_edxorg_id as user_micromasters_edxorg_id
+        , email_linked_micromasters.user_edxorg_username as user_micromasters_edxorg_username
     from mitxonline_users_view
     left join account_links on mitxonline_users_view.user_mitxonline_id = account_links.user_mitxonline_id
     full outer join edxorg_users_view on account_links.user_edxorg_id = edxorg_users_view.user_edxorg_id
@@ -377,6 +379,8 @@ select
     , user_industry
     , user_job_title
     , is_micromasters_linked_by_email
+    , user_micromasters_edxorg_id
+    , user_micromasters_edxorg_username
     , case
         when is_mitxonline_user = true
             then {{ generate_hash_id(dbt.concat(["cast(user_mitxonline_id as varchar)", "'MITx Online'"])) }}
@@ -420,6 +424,8 @@ select
     , micromasters_users.user_company_industry as user_industry
     , micromasters_users.user_job_position as user_job_title
     , false as is_micromasters_linked_by_email
+    , null as user_micromasters_edxorg_id
+    , null as user_micromasters_edxorg_username
     , {{ generate_hash_id(dbt.concat(["cast(user_micromasters_id as varchar)", "'MicroMasters'"])) }} as user_hashed_id
 -- A person can hold two MicroMasters accounts, one reached from the edX.org side and one
 -- from MITx Online, but a collapsed row above keeps only one user_micromasters_id (MITx
