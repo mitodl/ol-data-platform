@@ -315,12 +315,11 @@ def llm_classifier_predictions(
     for done, text in enumerate(test_texts, start=1):
         try:
             predictions.append(client.classify(text))
-        except Exception as error:
-            # Full traceback once; an outage would otherwise bury the progress lines.
+        except Exception:
+            # Only the first: the progress line counts the rest, and an outage
+            # would otherwise log one warning per call.
             if failed == 0:
                 log.warning("LLM sentiment call failed", exc_info=True)
-            else:
-                log.warning("LLM sentiment call failed: %s", error)
             predictions.append(None)
             failed += 1
         if done % LLM_PROGRESS_EVERY == 0 or done == len(test_texts):
