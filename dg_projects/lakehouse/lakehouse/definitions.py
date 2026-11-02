@@ -657,7 +657,12 @@ posthog_staging_schedule = ScheduleDefinition(
 # never been created, because edX.org lists no active non-MicroMasters MIT
 # program (checked 2026-09-22: 23 retired, 2 unpublished) and dlt creates no
 # table from an empty load. Building it would fail the whole job every day.
-AWAITING_RAW_TABLE = {"stg__edxorg__discovery__api__programs"}
+# raw__canvas__s3__course_content is the same until canvas_content_ingest's first
+# load, which is started by hand. Remove it here once that has landed.
+AWAITING_RAW_TABLE = {
+    "stg__canvas__s3__course_content",
+    "stg__edxorg__discovery__api__programs",
+}
 
 non_airbyte_staging_models = sorted(
     staging_models_reading(

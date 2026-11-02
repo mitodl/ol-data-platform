@@ -282,16 +282,23 @@ def test_url_config_keys_files_by_path_and_items_by_name() -> None:
 
 
 def test_the_checksum_ignores_export_noise_and_follows_the_published_set() -> None:
-    def checksum(manifest_note: str, published: dict[str, dict[str, Any]]) -> str:
+    def checksum(
+        manifest_note: str,
+        published: dict[str, dict[str, Any]],
+        fields: list[str | None] | None = None,
+    ) -> str:
         members = {
             cartridge.MANIFEST: _manifest([]) + manifest_note,
             "web_resources/a.pdf": "x",
         }
-        return cartridge.course_checksum(_open(_archive(members)), published, {})
+        return cartridge.course_checksum(
+            _open(_archive(members)), published, {}, fields or []
+        )
 
     item = {"web_resources/a.pdf": {"title": "A"}}
     assert checksum("", item) == checksum("<!-- exported later -->", item)
     assert checksum("", item) != checksum("", {})
+    assert checksum("", item) != checksum("", item, ["A new course code"])
 
 
 @pytest.mark.parametrize(
@@ -346,6 +353,7 @@ def test_text_from_srt(content: str, expected: str) -> None:
 def test_text_from_sjson() -> None:
     assert canvas_content.text_from_sjson('{"text": ["a", "b"]}') == "a b"
     assert canvas_content.text_from_sjson("not json") is None
+    assert canvas_content.text_from_sjson('["a list"]') is None
 
 
 def _pdf() -> bytes:
@@ -505,6 +513,39 @@ def test_the_newest_export_is_the_course(bucket: FakeS3) -> None:
 
 
 @pytest.mark.usefixtures("test_profile", "fake_tika")
+def test_a_new_course_code_alone_writes_the_new_run(bucket: FakeS3) -> None:
+    """The settings are left out of the digest's bytes, as Canvas rewrites them."""
+    _load()
+    root = f"{canvas_content.PREFIX}/42/v2"
+    bucket.objects[f"{root}.imscc"] = _archive(_MEMBERS, code="6.100L")
+    bucket.objects[f"{root}.metadata.json"] = bucket.objects[
+        f"{canvas_content.PREFIX}/42/v1.metadata.json"
+    ]
+    bucket.modified[f"{root}.imscc"] = _NOW + timedelta(hours=6)
+    rows = _load()
+    newest = max(row["course_retrieved_at"] for row in rows)
+    assert {
+        row["run_readable_id"] for row in rows if row["course_retrieved_at"] == newest
+    } == {"42-6.100L+canvas"}
+
+
+@pytest.mark.usefixtures("test_profile", "fake_tika")
+def test_a_broken_export_does_not_stop_the_courses_after_it(bucket: FakeS3) -> None:
+    bucket.objects.update(_export("43", "v1", _MEMBERS))
+    bucket.objects.update(_export("44", "v1", _MEMBERS))
+    bucket.objects[f"{canvas_content.PREFIX}/43/v1.imscc"] = b"not a zip"
+    rows = _load()
+    assert {row["course_id"] for row in rows} == {"42", "44"}
+
+
+@pytest.mark.usefixtures("test_profile", "fake_tika")
+def test_no_export_that_parses_fails_the_load(bucket: FakeS3) -> None:
+    bucket.objects[f"{canvas_content.PREFIX}/42/v1.imscc"] = b"not a zip"
+    with pytest.raises(Exception, match="could be parsed"):
+        _load()
+
+
+@pytest.mark.usefixtures("test_profile", "fake_tika")
 def test_a_course_gone_from_the_landing_zone_is_marked(bucket: FakeS3) -> None:
     other = _export("7", "v1", _MEMBERS)
     bucket.objects.update(other)
@@ -567,29 +608,54 @@ def test_a_tika_outage_fails_the_load(
         _load()
 
 
+def test_a_run_of_failures_is_probed_before_the_rest_of_the_course() -> None:
+    names = [f"web_resources/{number}.txt" for number in range(40)]
+    archive = _open(_archive(dict.fromkeys(names, "x")))
+    published: dict[str, dict[str, Any]] = {name: {} for name in names}
+    fake = FakeTika(fail=True)
+    pool = canvas_content.ThreadPoolExecutor(max_workers=1)
+    with pytest.raises(RuntimeError, match="Tika failed"):
+        canvas_content.read_course(
+            pool=pool,
+            client=fake,
+            archive=archive,
+            course_id="42",
+            archive_key="k",
+            published=published,
+            config_by_key={},
+            version="v",
+        )
+    pool.shutdown(wait=False, cancel_futures=True)
+    assert len(fake.calls) < len(names)
+
+
 def test_an_oversized_file_is_failed_without_being_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(canvas_content, "MAX_FILE_BYTES", 3)
     archive = _open(_archive({"web_resources/big.txt": "too big"}))
     tika_client = FakeTika()
-    extraction, md5 = canvas_content._read_member(  # noqa: SLF001
+    md5s: dict[str, str] = {}
+    extraction = canvas_content._read_member(  # noqa: SLF001
         tika_client,
         archive,
         archive.getinfo("web_resources/big.txt"),
+        md5s,
     )
     assert extraction == (None, "failed", False)
-    assert md5 is None
+    assert md5s == {}
     assert tika_client.calls == []
 
 
 def test_an_unreadable_pdf_is_failed_without_going_to_tika() -> None:
-    archive = _open(_archive({"web_resources/bad.pdf": "not a pdf"}))
     tika_client = FakeTika()
-    extraction, _md5 = canvas_content._read_member(  # noqa: SLF001
-        tika_client,
-        archive,
-        archive.getinfo("web_resources/bad.pdf"),
-    )
-    assert extraction == (None, "failed", False)
+    for content in ("not a pdf", ""):
+        archive = _open(_archive({"web_resources/bad.pdf": content}))
+        extraction = canvas_content._read_member(  # noqa: SLF001
+            tika_client,
+            archive,
+            archive.getinfo("web_resources/bad.pdf"),
+            {},
+        )
+        assert extraction == (None, "failed", False)
     assert tika_client.calls == []

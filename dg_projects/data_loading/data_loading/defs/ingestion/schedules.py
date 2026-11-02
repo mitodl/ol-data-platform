@@ -435,9 +435,10 @@ ocw_content_ingest_schedule = dg.ScheduleDefinition(
 
 # Canvas course files and text for MIT Learn's ContentFiles. The 00:00 export of
 # every course has landed by now, and the lakehouse's non_airbyte_staging_daily
-# follows at 06:00. A read of a course that did not change costs its zip
-# directory. Stopped everywhere: the first load sends every published file
-# through production Tika, so it is started by hand.
+# follows at 06:00. A course that did not change costs its zip directory and
+# its pages and assignment settings, read to find what is published. Stopped
+# everywhere: the first load sends every published file through production Tika,
+# so it is started by hand.
 canvas_content_ingest_schedule = dg.ScheduleDefinition(
     name="canvas_content_ingest_daily_schedule",
     target=dg.AssetSelection.keys(["ol_warehouse_raw_data", canvas_content.RAW_TABLE]),

@@ -54,10 +54,14 @@ TUTOR_FOLDER = "web_resources/ai/tutor/"
 FILES_TAB_ID = 11
 
 # Canvas rewrites these on every export without changing the course: the
-# manifest embeds the export time and reshuffles its resources. Nothing under
-# them is read for its bytes, and what they say about publishing is digested
-# through the published set.
+# manifest embeds the export time and reshuffles its resources. What a read takes
+# from them is digested instead: the published set, and the course's own fields.
 CHECKSUM_EXCLUDED = (MANIFEST, "course_settings/")
+
+# Part of every course version, so that changing it reads every course again.
+# Raise it when a rule here or in the source picks different files or text for
+# an archive that has not changed.
+PARSE_RULE = 1
 
 LOCK_TIMEZONE = ZoneInfo("US/Eastern")
 
@@ -461,14 +465,19 @@ def course_checksum(
     archive: zipfile.ZipFile,
     published: dict[str, dict[str, Any]],
     config: dict[str, dict[str, Any]],
+    course_fields: list[str | None],
 ) -> str:
     """Digest what a read of the course depends on, as ``canvas_course_checksum``.
 
-    It changes with a content member's bytes, the published set or a title, or
-    the url config, and not across Canvas's no-op exports. Unlike Learn's digest
-    it is not compared with one, so it can stay in this module's own form.
+    It changes with a content member's bytes, the published set or a title, the
+    url config, or the fields of the course's own row, and not across Canvas's
+    no-op exports. Learn's digest leaves the last out because Learn writes the
+    course before it checks the digest. Here the digest decides whether the course
+    row is written at all, so a new course code has to move it.
     """
     digest = hashlib.md5(usedforsecurity=False)
+    digest.update(f"parse_rule\t{PARSE_RULE}\n".encode())
+    digest.update(json.dumps(course_fields).encode())
     for info in sorted(archive.infolist(), key=lambda info: info.filename):
         if not info.filename.startswith(CHECKSUM_EXCLUDED):
             digest.update(f"{info.filename}\0{info.file_size}\0{info.CRC}\0".encode())

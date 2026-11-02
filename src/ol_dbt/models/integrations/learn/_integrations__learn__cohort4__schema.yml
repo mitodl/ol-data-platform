@@ -198,7 +198,9 @@ models:
     replaces ingest_canvas_course. A scoped pull filters and prunes on
     (etl_source, run_readable_id). Built from the newest export of each course in
     the landing zone by the same rules as learning_resources/etl/canvas.py, with
-    the text Tika extracts. Not at parity for PDFs: Learn converts a PDF of up to
+    the text Tika extracts. Tutor problem files are not here: ingest_canvas_course
+    also loads those, so flipping Canvas stops them unless Learn gets them another
+    way. Not at parity for PDFs: Learn converts a PDF of up to
     OCR_PDF_MAX_PAGE_THRESHOLD pages with opendataloader and an LLM (mit-learn
     #4126 changed that path), which keeps math and text in images and returns
     markdown, and this model has Tika's plain text for every PDF. A scanned PDF has
@@ -235,8 +237,9 @@ models:
     description: str, same value as key.
   - name: title
     description: str, the title of the module item, file or page that publishes the
-      file, or one derived from the file name when it has none. Learn sets this on
-      every read after a file's first; on a first read it has the derived title.
+      file, or one derived from the file name when it has none. Learn has this on
+      a read that reuses a file's text; on a file's first read, or the read after
+      its bytes change, Learn has the derived title.
     tests: [not_null]
   - name: description
     description: str, always null.

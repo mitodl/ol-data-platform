@@ -10,7 +10,8 @@ the course's URLs:
 MIT Learn builds its Canvas course and ContentFiles from the newest export of
 each course (``learning_resources/etl/canvas.py`` in mit-learn). This source
 reads the same objects and follows the same rules (``cartridge``), so the
-warehouse holds what Learn would have parsed:
+warehouse holds what Learn would have parsed, except tutor problem files
+(``load_problem_files``), which are not ContentFiles and have no table here:
 
     the course's settings                   -> content_kind = course
     each published file with a text type    -> content_kind = file
@@ -33,7 +34,8 @@ conversion. Here every PDF goes through Tika. See
 One load covers at most ``budget_bytes`` of archive members. The caller re-runs
 the source until a load reads nothing (``build_batched_assets`` in the
 data_loading code location), and the sweep resumes after the last course a
-load finished.
+load finished. A course that cannot be parsed is logged and skipped, so it does
+not hold back the courses after it, and is tried again by the next load.
 
 Tika credentials: see ``ol_dlt.tika``.
 
@@ -48,6 +50,7 @@ import logging
 import mimetypes
 import re
 import zipfile
+import zlib
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -212,7 +215,7 @@ def text_from_sjson(content: str) -> str | None:
     """Return the text of an SJSON transcript, or None when it is not JSON."""
     try:
         return " ".join(json.loads(content).get("text", []))
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, AttributeError, TypeError):
         logger.warning("A transcript was not valid SJSON")
         return None
 
@@ -278,17 +281,24 @@ def file_url(
 
 
 def _read_member(
-    client: tika.TikaClient, archive: zipfile.ZipFile, info: zipfile.ZipInfo
-) -> tuple[Extraction, str | None]:
-    """Return a member's extraction and the MD5 of its bytes."""
+    client: tika.TikaClient,
+    archive: zipfile.ZipFile,
+    info: zipfile.ZipInfo,
+    md5s: dict[str, str],
+) -> Extraction:
+    """Return a member's extraction, noting the MD5 of its bytes in ``md5s``."""
     if info.file_size > MAX_FILE_BYTES:
         logger.warning("%s is over the limit; not extracted", info.filename)
-        return (None, STATUS_FAILED, False), None
-    body = archive.read(info)
-    md5 = hashlib.md5(body, usedforsecurity=False).hexdigest()
+        return None, STATUS_FAILED, False
+    try:
+        body = archive.read(info)
+    except (zipfile.BadZipFile, zlib.error, EOFError):
+        logger.exception("Could not read %s from its archive", info.filename)
+        return None, STATUS_FAILED, False
+    md5s[info.filename] = hashlib.md5(body, usedforsecurity=False).hexdigest()
     extension = PurePosixPath(info.filename).suffix.lower()
-    if extension == ".pdf" and body and not pdf_is_valid(body):
-        return (None, STATUS_FAILED, False), md5
+    if extension == ".pdf" and not pdf_is_valid(body):
+        return None, STATUS_FAILED, False
     text, status, retry = extract(
         client,
         body,
@@ -296,14 +306,14 @@ def _read_member(
         _MIMETYPES.types_map[True].get(extension),
     )
     if text is None:
-        return (None, status, retry), md5
+        return None, status, retry
     # Learn strips what Tika returns before transforming it.
     text = text.strip()
     if extension == ".srt":
         text = text_from_srt(text)
     elif extension == ".sjson":
         text = text_from_sjson(text) or ""
-    return (text or None, status if text else STATUS_EMPTY, retry), md5
+    return text or None, status if text else STATUS_EMPTY, retry
 
 
 def course_row(  # noqa: PLR0913
@@ -351,25 +361,28 @@ def read_course(  # noqa: PLR0913
     :raises RuntimeError: Tika is down.
     """
     retrieved_at = datetime.now(tz=UTC)
-    settings = cartridge.parse_settings(archive)
     course = course_row(
         course_id,
         archive_key,
-        settings,
+        cartridge.parse_settings(archive),
         cartridge.parse_context(archive),
         version,
         retrieved_at,
     )
     run = course["run_readable_id"]
     members = documents(archive, published, run)
-    results = list(
-        pool.map(lambda info: _read_member(client, archive, info), members.values())
+    md5s: dict[str, str] = {}
+    extractions = collect(
+        client,
+        course_id,
+        pool.map(
+            lambda info: _read_member(client, archive, info, md5s), members.values()
+        ),
     )
-    extractions = collect(client, course_id, (result[0] for result in results))
 
     rows = [course]
-    for (key, info), (text, status, _retry), (_, md5) in zip(
-        members.items(), extractions, results, strict=True
+    for (key, info), (text, status, _retry) in zip(
+        members.items(), extractions, strict=True
     ):
         path = source_path(info.filename)
         item = published.get(path, {})
@@ -388,7 +401,7 @@ def read_course(  # noqa: PLR0913
                 "title": item.get("title") or derived_title(path),
                 "content_title": item.get("title"),
                 "url": file_url(path, item, config_by_key),
-                "file_md5": md5,
+                "file_md5": md5s.get(info.filename),
                 "file_size_bytes": info.file_size,
                 "content": text,
                 "extraction_status": status,
@@ -407,6 +420,20 @@ def _unpublished_row(course_id: str, retrieved_at: datetime) -> dict[str, Any]:
         "content_kind": KIND_UNPUBLISHED,
         "course_retrieved_at": retrieved_at,
     }
+
+
+def course_fields(
+    settings: dict[str, Any], context: dict[str, str | None]
+) -> list[str | None]:
+    """Return what the course's own row is built from, for its version."""
+    return [
+        settings.get("title"),
+        settings.get("course_code"),
+        settings.get("start_at"),
+        settings.get("conclude_at"),
+        context.get("canvas_domain"),
+        context.get("course_id"),
+    ]
 
 
 def _open_archive(fs: s3fs.S3FileSystem, bucket: str, key: str) -> Any:  # noqa: ANN401
@@ -431,7 +458,8 @@ def canvas_content_source(
         never split, so a load can exceed it by one course.
     :param table_format: ``native`` or ``iceberg``; defaults to the active
         profile's.
-    :raises RuntimeError: The landing zone has no Canvas exports.
+    :raises RuntimeError: The landing zone has no Canvas exports, none of them
+        could be parsed, or Tika is down.
     """
 
     @dlt.resource(
@@ -468,40 +496,58 @@ def canvas_content_source(
         # injectable context is not thread-safe (see .dlt/config.toml).
         client: tika.TikaClient | None = None
         spent = 0
+        unreadable = 0
         pool = ThreadPoolExecutor(max_workers=WORKERS)
         try:
             for course_id in pending:
                 key = archives[course_id]
                 try:
                     metadata = _load_metadata(fs, bucket, key)
+                    config_by_key = cartridge.url_config(metadata)
+                    with (
+                        _open_archive(fs, bucket, key) as handle,
+                        zipfile.ZipFile(handle) as archive,
+                    ):
+                        published = cartridge.published_items(
+                            archive, config_by_key, now
+                        )
+                        version = cartridge.course_checksum(
+                            archive,
+                            published,
+                            config_by_key,
+                            course_fields(
+                                cartridge.parse_settings(archive),
+                                cartridge.parse_context(archive),
+                            ),
+                        )
+                        recorded = versions.get(course_id)
+                        if not needs_read(recorded, version, now):
+                            continue
+                        client = client or tika.client_for_profile()
+                        rows, read_bytes, retry = read_course(
+                            pool=pool,
+                            client=client,
+                            archive=archive,
+                            course_id=course_id,
+                            archive_key=key,
+                            published=published,
+                            config_by_key=config_by_key,
+                            version=version,
+                        )
                 except FileNotFoundError:
                     # The metadata lands just after the archive. The next load
                     # finds it.
                     logger.warning("%s has no metadata yet; skipped", key)
                     continue
-                config_by_key = cartridge.url_config(metadata)
-                with (
-                    _open_archive(fs, bucket, key) as handle,
-                    zipfile.ZipFile(handle) as archive,
-                ):
-                    published = cartridge.published_items(archive, config_by_key, now)
-                    version = cartridge.course_checksum(
-                        archive, published, config_by_key
-                    )
-                    recorded = versions.get(course_id)
-                    if not needs_read(recorded, version, now):
-                        continue
-                    client = client or tika.client_for_profile()
-                    rows, read_bytes, retry = read_course(
-                        pool=pool,
-                        client=client,
-                        archive=archive,
-                        course_id=course_id,
-                        archive_key=key,
-                        published=published,
-                        config_by_key=config_by_key,
-                        version=version,
-                    )
+                except RuntimeError:
+                    # Tika is down, which no other course would get past.
+                    raise
+                except Exception:
+                    # A failed extract throws away every course this load read,
+                    # so one bad export would stop every load at the same place.
+                    logger.exception("Could not parse %s; skipped", key)
+                    unreadable += 1
+                    continue
                 yield pa.Table.from_pylist(rows, schema=SCHEMA)
                 versions[course_id] = record_read(recorded, version, now, retry=retry)
                 spent += read_bytes
@@ -512,6 +558,10 @@ def canvas_content_source(
             # Not waited for: when Tika is down, the calls in flight would each
             # hold the failure back by a timeout.
             pool.shutdown(wait=False, cancel_futures=True)
+        if unreadable == len(pending):
+            # Not one bad export: the landing zone or this code is the problem.
+            msg = f"None of the {unreadable} Canvas exports could be parsed."
+            raise RuntimeError(msg)
         state["resume_after"] = ""
 
     return course_content
