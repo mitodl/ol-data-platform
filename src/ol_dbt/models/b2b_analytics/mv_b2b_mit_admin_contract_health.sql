@@ -42,6 +42,20 @@ with contract_stats as (
         c.b2b_contract_max_learners, c.b2b_contract_membership_type
 )
 
+-- at_risk_since is a threshold date, like needs_attention_since: the reader compares it
+-- against the current UTC date, so at_risk does not freeze at this view's last refresh.
+-- health_status keeps its current_date() branch until ol-analytics-api reads this.
+, contract_thresholds as (
+    select
+        *,
+        case
+            when b2b_contract_is_active
+                 and round(100.0 * seats_consumed / nullif(seat_limit, 0), 1) < 25
+                then cast(date_sub(b2b_contract_end_date, interval 89 day) as date)
+        end                                                                     as at_risk_since
+    from contract_stats
+)
+
 select
     *,
     round(100.0 * seats_consumed / nullif(seat_limit, 0), 1)                   as seat_utilization_pct,
@@ -49,9 +63,8 @@ select
     case
         when not b2b_contract_is_active                                        then 'inactive'
         when round(100.0 * seats_consumed / nullif(seat_limit, 0), 1) >= 90   then 'high_utilization'
-        when round(100.0 * seats_consumed / nullif(seat_limit, 0), 1) < 25
-             and datediff(b2b_contract_end_date, current_date()) < 90          then 'at_risk'
+        when at_risk_since <= current_date()                                   then 'at_risk'
         when round(100.0 * seats_consumed / nullif(seat_limit, 0), 1) >= 50   then 'healthy'
         else 'early_stage'
     end                                                                         as health_status
-from contract_stats
+from contract_thresholds

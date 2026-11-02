@@ -878,9 +878,9 @@ models:
     the requesting org). MIT admin view only. Manual-refresh materialized view.
     Consumers: MIT contract admin dashboard.
   columns:
-  # The model selects * from its contract_stats CTE, so unlike the other five
-  # there is no literal column list in the SQL to read these off. The CTE's
-  # own SELECT is the source of truth.
+  # The model selects * from its contract_stats CTE (through contract_thresholds),
+  # so unlike the other five there is no literal column list in the SQL to read
+  # these off. The CTE's own SELECT is the source of truth.
   - name: organization_key
     description: Org identifier, joined via dim_organization (platform='mitxonline'
       only).
@@ -999,6 +999,20 @@ models:
         cohort:
           role: secondary
           contained_in: seats_consumed
+  - name: at_risk_since
+    description: >
+      The date from which the contract is at risk, to be compared against the
+      current UTC date by the reader (at_risk_since <= today). It is the end
+      date minus 89 days for an active contract under 25% utilization, so a
+      contract is at risk for its last 90 days and stays at risk past its end
+      date while it is still active. Null otherwise, including for a contract
+      with no end date or with unlimited seats.
+    config:
+      meta:
+        api_description: The date from which the contract counts as at risk. Empty
+          if it can't be at risk.
+        cohort:
+          role: measure
   - name: seat_utilization_pct
     description: seats_consumed / seat_limit * 100.
     config:
@@ -1022,6 +1036,8 @@ models:
       One of: inactive (contract not active), at_risk (utilization < 25% and
       expiring within 90 days), high_utilization (utilization >= 90%), healthy
       (utilization >= 50% and not at_risk), early_stage (everything else).
+      at_risk here is as of the view's last refresh. ol-analytics-api applies
+      at_risk_since per request.
     config:
       meta:
         api_description: 'Overall contract health: inactive (the contract isn''t active),
