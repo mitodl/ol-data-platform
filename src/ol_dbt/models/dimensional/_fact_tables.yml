@@ -438,7 +438,8 @@ models:
 - name: tfact_payment
   description: >
     Transaction fact table for payments/transactions.
-    Grain: One row per payment transaction.
+    Grain: One row per payment transaction, including every attempt the processor
+    did not accept. Filter on is_successful for money received.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
@@ -517,7 +518,18 @@ models:
   - name: transaction_type
     description: Type of transaction (payment, refund, etc.)
   - name: transaction_status
-    description: Transaction status (success, failed, pending)
+    description: >
+      The payment processor's decision, e.g. ACCEPT, CANCEL, DECLINE, ERROR, REVIEW.
+      Null on MITx Online's zero-dollar payments, which never reach the processor,
+      and
+      on most of its refunds.
+  - name: is_successful
+    description: >
+      True when the processor's decision is ACCEPT. REVIEW is not successful: no
+      REVIEW attempt on either platform has an accepted payment on its order, and
+      the
+      orders end failed or canceled, or are still in review. Refunds keep their own
+      transaction_type, so a sum of money received also filters on it.
   - name: transaction_created_on
     description: Transaction creation timestamp (for incremental processing)
 
@@ -890,6 +902,54 @@ unit_tests:
       transaction_type: "payment"
       transaction_status: "fulfilled"
       transaction_created_on: "2024-01-15T00:00:00"
+- name: test_tfact_payment_flags_accepted_attempts_as_successful
+  description: >
+    tfact_payment keeps every attempt, and is_successful marks the ones the processor
+    accepted. REVIEW is not successful, and a MITx Online zero-dollar payment with
+    no
+    decision is false, not null, so filtering on the flag needs no null handling.
+  model: tfact_payment
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__ecommerce_transaction')
+    rows:
+    - {transaction_id: 1, transaction_type: payment, transaction_status: ACCEPT, transaction_created_on: "2024-01-15T00:00:00"}
+    - {transaction_id: 2, transaction_type: payment, transaction_status: REVIEW, transaction_created_on: "2024-01-15T00:00:00"}
+    - {transaction_id: 3, transaction_type: payment, transaction_status: null, transaction_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__mitxpro__ecommerce_receipt')
+    rows:
+    - {receipt_id: 4, receipt_transaction_type: sale, receipt_transaction_status: ACCEPT,
+      receipt_created_on: "2024-01-15T00:00:00"}
+    - {receipt_id: 5, receipt_transaction_type: sale, receipt_transaction_status: CANCEL,
+      receipt_created_on: "2024-01-15T00:00:00"}
+    - {receipt_id: 6, receipt_transaction_type: sale, receipt_transaction_status: DECLINE,
+      receipt_created_on: "2024-01-15T00:00:00"}
+    - {receipt_id: 7, receipt_transaction_type: sale, receipt_transaction_status: ERROR,
+      receipt_created_on: "2024-01-15T00:00:00"}
+    - {receipt_id: 8, receipt_transaction_type: sale, receipt_transaction_status: REVIEW,
+      receipt_created_on: "2024-01-15T00:00:00"}
+  - input: ref('stg__mitxonline__app__postgres__ecommerce_order')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__ecommerce_order')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: ref('dim_payment_method')
+    rows: []
+  expect:
+    rows:
+    - {payment_id: 1, platform: mitxonline, is_successful: true}
+    - {payment_id: 2, platform: mitxonline, is_successful: false}
+    - {payment_id: 3, platform: mitxonline, is_successful: false}
+    - {payment_id: 4, platform: mitxpro, is_successful: true}
+    - {payment_id: 5, platform: mitxpro, is_successful: false}
+    - {payment_id: 6, platform: mitxpro, is_successful: false}
+    - {payment_id: 7, platform: mitxpro, is_successful: false}
+    - {payment_id: 8, platform: mitxpro, is_successful: false}
 - name: test_tfact_certificate_refreshes_stale_user_fk_after_dim_user_rekey
   description: >
     Regression test for the dim_user re-key incident: when dim_user.user_pk changes
