@@ -8,13 +8,14 @@ method by hand; the winner then gets its own production asset, same as
 clustering/categorization.
 """
 
-import logging
 import os
+import time
 from typing import Any, Protocol
 
 import numpy as np
 import polars as pl
 from anthropic import Anthropic, AnthropicBedrock
+from dagster import get_dagster_logger
 from ml.lib.courseware.extract import Effort
 from ml.lib.llm_client_adapters import (
     build_llm_client,
@@ -54,6 +55,8 @@ BEDROCK_SENTIMENT_MODEL_VERSION = os.environ.get(
 # for claude-haiku-4-5, and claude-haiku-5-5 thinks first by default.
 SENTIMENT_MAX_TOKENS = int(os.environ.get("SENTIMENT_MAX_TOKENS", "1024"))
 SENTIMENT_EFFORT: Effort = "low"
+# The calls run one at a time, so a run is silent for a long while without this.
+LLM_PROGRESS_EVERY = 100
 
 SENTIMENT_PROMPT_NAME = "feedback-sentiment-classify"
 CONVERSATION_PLACEHOLDER = "{{conversation_text}}"
@@ -62,8 +65,6 @@ SENTIMENT_PROMPT = (
     "point of view, as expressed at the end of the conversation. Respond with "
     "only one word: positive or negative.\n\n{{conversation_text}}"
 )
-
-logger = logging.getLogger(__name__)
 
 
 def fetch_sentiment_prompt() -> str:
@@ -307,16 +308,40 @@ def llm_classifier_predictions(
     against the other two methods' near-zero marginal cost, per §E's
     accuracy-vs-cost framing.
     """
+    log = get_dagster_logger()
     predictions: list[str | None] = []
-    for text in test_texts:
+    traceback_logged = False
+    start = time.monotonic()
+    for done, text in enumerate(test_texts, start=1):
         try:
             predictions.append(client.classify(text))
         except Exception:
-            logger.warning(
-                "LLM sentiment call failed for one conversation", exc_info=True
-            )
+            # Only the first: the progress line counts the rest, and an outage
+            # would otherwise log one warning per call.
+            if not traceback_logged:
+                log.warning("LLM sentiment call failed", exc_info=True)
+                traceback_logged = True
             predictions.append(None)
+        if done % LLM_PROGRESS_EVERY == 0 or done == len(test_texts):
+            log.info(
+                "LLM sentiment %d/%d (%.0fs, %d without an answer)",
+                done,
+                len(test_texts),
+                time.monotonic() - start,
+                predictions.count(None),
+            )
     return predictions
+
+
+def _log_scores(method: str, scores: dict[str, Any]) -> None:
+    get_dagster_logger().info(
+        "%s: accuracy %.4f, found %d of %d negatives (%d predicted negative)",
+        method,
+        scores["accuracy"],
+        scores["n_true_negative"],
+        scores["n_test_negative"],
+        scores["n_predicted_negative"],
+    )
 
 
 def run_sentiment_eval(  # noqa: PLR0913 -- one independently meaningful eval knob per arg
@@ -344,7 +369,14 @@ def run_sentiment_eval(  # noqa: PLR0913 -- one independently meaningful eval kn
         labels, test_fraction=test_fraction, random_state=random_state
     )
 
+    log = get_dagster_logger()
     test_labels = labels[test_idx]
+    log.info(
+        "Split %d train / %d test, %d negative in test",
+        len(train_idx),
+        len(test_idx),
+        int((test_labels == "negative").sum()),
+    )
     methods: dict[str, dict[str, Any]] = {
         "embedding_knn": score_predictions(
             embedding_knn_predictions(
@@ -367,10 +399,13 @@ def run_sentiment_eval(  # noqa: PLR0913 -- one independently meaningful eval kn
         )
         | {"call_count": 0},
     }
+    for method, scores in methods.items():
+        _log_scores(method, scores)
     if sentiment_client is not None:
         test_texts = [texts[i] for i in test_idx]
         methods["llm"] = score_predictions(
             llm_classifier_predictions(sentiment_client, test_texts), test_labels
         ) | {"call_count": len(test_texts)}
+        _log_scores("llm", methods["llm"])
 
     return {"methods": methods, "n_train": len(train_idx), "n_test": len(test_idx)}
