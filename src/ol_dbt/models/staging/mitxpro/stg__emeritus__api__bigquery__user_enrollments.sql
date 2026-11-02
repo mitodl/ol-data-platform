@@ -7,8 +7,9 @@ with source as (
 -- sync decides which copy wins. The other columns order the rows one sync sends twice.
 -- A replaced name arrives as a new row under the same batch and email, and the old row
 -- stops being sent. snapshot_by keeps only the newest sync holding that batch and email, so
--- the old name drops out and two names sent together both stay. A row with no email has
--- nothing to share, so it is compared on its own name.
+-- the old name drops out and two names sent together both stay. A row with no email is
+-- compared on its own first and last name. They stay separate columns, as in the fact's
+-- key, so two splits of one name remain two enrollments.
 {{ deduplicate_raw_table(
   raw_table='raw__emeritus__bigquery__api_enrollments'
   , partition_columns='batch_id, email, first_name, last_name'
@@ -18,7 +19,9 @@ with source as (
       , 'enrollment_type'
       , 'gdpr_consent_date'
   ]
-  , snapshot_by="batch_id, coalesce(lower(nullif(email, '(blank)')), concat(first_name, ' ', last_name))"
+  , snapshot_by="batch_id, lower(nullif(email, '(blank)'))"
+      ~ ", case when nullif(email, '(blank)') is null then first_name end"
+      ~ ", case when nullif(email, '(blank)') is null then last_name end"
 ) }}
 , cleaned as (
     select

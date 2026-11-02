@@ -2864,8 +2864,10 @@ unit_tests:
   description: >
     a@ changed run with no new last-modified date. b@ has a newer last-modified
     date in its older sync, which must not win. c@ replaced a name and the old
-    row stopped being sent. d@ has two names sent together, so both stay. The two
-    blank emails are unrelated people, so one leaving the export keeps its row.
+    row stopped being sent. d@ has two names sent together, so both stay. Rows
+    with a blank email are told apart by first and last name, so one leaving the
+    export keeps its row, including two splits of one name (Ann Marie / Lee and
+    Ann / Marie Lee) and two rows with no last name.
     e@ is sent twice by one sync, and the newer last-modified date wins.
   model: stg__emeritus__api__bigquery__user_enrollments
   given:
@@ -2893,6 +2895,15 @@ unit_tests:
       wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01 00:00:00'}
     - {_airbyte_extracted_at: 2, batch_id: B-1, email: (blank), first_name: Flo, last_name: Sent,
       wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01 00:00:00'}
+    - {_airbyte_extracted_at: 1, batch_id: B-1, email: (blank), first_name: Ann Marie,
+      last_name: Lee, wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01
+        00:00:00'}
+    - {_airbyte_extracted_at: 2, batch_id: B-1, email: (blank), first_name: Ann, last_name: Marie
+        Lee, wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01 00:00:00'}
+    - {_airbyte_extracted_at: 1, batch_id: B-1, email: (blank), first_name: Gus, last_name: null,
+      wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01 00:00:00'}
+    - {_airbyte_extracted_at: 2, batch_id: B-1, email: (blank), first_name: Hal, last_name: null,
+      wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01 00:00:00'}
     - {_airbyte_extracted_at: 2, batch_id: B-1, email: e@x.test, first_name: Eve,
       last_name: Lee, wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01
         00:00:00', enrollment_type: older}
@@ -2914,6 +2925,14 @@ unit_tests:
     - {user_email: null, user_first_name: Ed, user_last_name: Gone, courserun_external_readable_id: NEW,
       enrollment_type: null}
     - {user_email: null, user_first_name: Flo, user_last_name: Sent, courserun_external_readable_id: NEW,
+      enrollment_type: null}
+    - {user_email: null, user_first_name: Ann Marie, user_last_name: Lee, courserun_external_readable_id: NEW,
+      enrollment_type: null}
+    - {user_email: null, user_first_name: Ann, user_last_name: Marie Lee, courserun_external_readable_id: NEW,
+      enrollment_type: null}
+    - {user_email: null, user_first_name: Gus, user_last_name: null, courserun_external_readable_id: NEW,
+      enrollment_type: null}
+    - {user_email: null, user_first_name: Hal, user_last_name: null, courserun_external_readable_id: NEW,
       enrollment_type: null}
     - {user_email: e@x.test, user_first_name: Eve, user_last_name: Lee, courserun_external_readable_id: NEW,
       enrollment_type: newer}
