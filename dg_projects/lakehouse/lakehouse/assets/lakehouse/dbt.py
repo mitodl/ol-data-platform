@@ -117,6 +117,11 @@ def _stale_descendant_test_args(context: AssetExecutionContext) -> list[str]:
 
     Without the automation sensor nothing builds the models outside the
     selection, so there every test attached to one of them is excluded.
+
+    A check the run selected is never excluded, so this only works for a job
+    whose selection leaves out the checks on unselected assets (see
+    ``learn_integrations_qa_target``). A bare ``build_dbt_asset_selection``
+    selects them.
     """
     if not context.is_subset:
         return []
@@ -139,8 +144,7 @@ def _stale_descendant_test_args(context: AssetExecutionContext) -> list[str]:
     if not tests:
         return []
     context.log.info(
-        "Skipping %d test(s) attached to models this run does not rebuild; they "
-        "run when those models are built: %s",
+        "Skipping %d test(s) attached to models this run does not rebuild: %s",
         len(tests),
         ", ".join(tests),
     )

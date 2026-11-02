@@ -87,6 +87,7 @@ from lakehouse.assets.superset import (
 from lakehouse.lib.automation_targets import (
     OCW_LEARN_MODELS,
     dbt_automation_target,
+    learn_integrations_qa_target,
     ocw_learn_target,
 )
 from lakehouse.lib.contract_freshness import (
@@ -720,10 +721,7 @@ learn_integrations_qa_schedule = ScheduleDefinition(
     name="learn_integrations_qa_daily",
     job=define_asset_job(
         name="learn_integrations_qa_job",
-        selection=build_dbt_asset_selection(
-            [full_dbt_project],
-            dbt_select="+tag:qa_scheduled",
-        ),
+        selection=learn_integrations_qa_target(full_dbt_project),
     ),
     # The QA sync_and_stage schedules run at 00:00 (QA renders no inventory
     # intervals, so every group takes the 24-hour default). The dlt loads these
