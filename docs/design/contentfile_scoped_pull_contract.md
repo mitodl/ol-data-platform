@@ -332,8 +332,9 @@ How a scoped load behaves (`ocw_content_source(courses=[...])`):
   toward the 10% limit, and does not move the sweep's resume point. Only the sweep, which has seen
   the whole bucket, settles those.
 - It stops at the byte budget like the sweep, and the asset drains it, so a large named set is
-  safe to request. From the launchpad, a named set is run config on `ocw_content_ingest`:
-  `ops: {ocw_content_ingest: {config: {courses: [<slug>, ...]}}}`.
+  safe to request. A course's load is a partition of `ocw/course_content_load`, so one
+  course or a named set is a materialization or a backfill from the UI, and a backfill of
+  many is one run.
 
 How the sensor and the sweep share the state:
 

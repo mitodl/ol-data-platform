@@ -14,15 +14,18 @@ from typing import Any
 from dagster import (
     AssetExecutionContext,
     AssetKey,
+    AssetMaterialization,
     AssetsDefinition,
-    Config,
+    BackfillPolicy,
     DagsterEventType,
     DataVersion,
     Definitions,
+    DynamicPartitionsDefinition,
     MaterializeResult,
 )
 from dagster._core.definitions.data_version import DATA_VERSION_TAG
 from dagster_dlt import DagsterDltResource, dlt_assets
+from dagster_dlt.translator import DltResourceTranslatorData
 from ol_dlt.sources import (
     canvas_content,
     course_xml_blocks,
@@ -46,7 +49,6 @@ from ol_dlt.sources import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, EDXORG_DB_TABLES
 from ol_orchestrate.lib.failures import with_failure_hooks
-from pydantic import Field
 
 from data_loading.defs.ingestion.translators import (
     EdxorgDltTranslator,
@@ -497,28 +499,10 @@ posthog_events_assets = build_batched_assets(
 )
 
 
-class OcwContentLoadConfig(Config):
-    """Run config for the OCW content load."""
-
-    courses: list[str] | None = Field(
-        default=None,
-        description=(
-            "Course slugs to load on their own, each only if it changed. "
-            "Sweeps every course when unset."
-        ),
-    )
-
-
 # One load covers at most ocw_content.BUDGET_BYTES of course files, and each
 # load saves which courses it finished, so a run cut off mid-backlog resumes
 # there. The first run extracts every course (~70,000 files through Tika);
 # later runs read only the courses whose objects changed.
-#
-# Run config `courses` scopes the run to those courses, read only if changed and
-# drained a budget at a time the same way. That is how
-# ocw_content_publish_sensor loads a course soon after it is published, and how
-# a named set is loaded from the launchpad:
-#   ops: {ocw_content_ingest: {config: {courses: [<slug>, ...]}}}
 @dlt_assets(
     dlt_source=ocw_content.build_source(),
     dlt_pipeline=ocw_content.ocw_content_pipeline,
@@ -526,21 +510,71 @@ class OcwContentLoadConfig(Config):
     dagster_dlt_translator=RawDataDltTranslator(),
 )
 def ocw_content_assets(
-    context: AssetExecutionContext,
-    dlt: DagsterDltResource,
-    config: OcwContentLoadConfig,
+    context: AssetExecutionContext, dlt: DagsterDltResource
 ) -> Iterable[Any]:
-    """Sweep the OCW live bucket, or load the courses named in the run config."""
-    if config.courses is not None:
-        context.log.info(
-            "Loading %s named OCW courses: %s", len(config.courses), config.courses
-        )
+    """Sweep the OCW live bucket, the only load that unpublishes a course."""
     yield from drain(
         context=context,
         dlt=dlt,
-        build_source=partial(ocw_content.build_source, config.courses),
+        build_source=ocw_content.build_source,
         pipeline=ocw_content.ocw_content_pipeline,
     )
+
+
+OCW_COURSE_SLUGS_NAME = "ocw_course_slugs"
+ocw_course_slugs = DynamicPartitionsDefinition(name=OCW_COURSE_SLUGS_NAME)
+OCW_COURSE_LOAD_KEY = AssetKey(["ocw", "course_content_load"])
+
+
+class OcwCourseLoadTranslator(RawDataDltTranslator):
+    """Key the per-course load apart from the table it writes.
+
+    The table's asset stays unpartitioned. With 100 or more upstream partitions
+    Dagster drops a dependency from data versioning
+    (SKIP_PARTITION_DATA_VERSION_DEPENDENCY_THRESHOLD), and the five OCW models
+    below the table rebuild on its data version.
+    """
+
+    def get_asset_spec(self, data: DltResourceTranslatorData) -> Any:
+        """Return the raw-data spec under the per-course load's key."""
+        return super().get_asset_spec(data).replace_attributes(key=OCW_COURSE_LOAD_KEY)
+
+
+# One partition per course: its load history, and a retry or backfill of it from
+# the UI. A backfill of many is one run, so a re-read of hundreds of courses does
+# not start a pod for each. ocw_content_publish_sensor requests these.
+@dlt_assets(
+    dlt_source=ocw_content.build_source(),
+    dlt_pipeline=ocw_content.ocw_course_pipeline,
+    name="ocw_course_content_load",
+    dagster_dlt_translator=OcwCourseLoadTranslator(),
+    partitions_def=ocw_course_slugs,
+    backfill_policy=BackfillPolicy.single_run(),
+)
+def ocw_course_load_assets(
+    context: AssetExecutionContext, dlt: DagsterDltResource
+) -> Iterable[Any]:
+    """Load the courses of the run's partitions, each only if it changed."""
+    courses = list(context.partition_keys)
+    context.log.info("Loading %s OCW courses: %s", len(courses), courses)
+    for result in drain(
+        context=context,
+        dlt=dlt,
+        build_source=partial(ocw_content.build_source, courses),
+        pipeline=ocw_content.ocw_course_pipeline,
+    ):
+        yield result
+        # What the models below the table watch.
+        if result.metadata["rows_loaded"]:
+            context.log_event(
+                AssetMaterialization(
+                    asset_key=AssetKey(
+                        ["ol_warehouse_raw_data", ocw_content.RAW_TABLE]
+                    ),
+                    metadata={"courses": courses},
+                    tags={DATA_VERSION_TAG: context.run_id},
+                )
+            )
 
 
 defs = Definitions(
@@ -561,6 +595,7 @@ defs = Definitions(
             posthog_events_assets,
             ocw_content_assets,
             canvas_content_assets,
+            ocw_course_load_assets,
             *edxorg_s3_table_assets,
             *course_xml_blocks_assets,
             edxorg_program_reports_assets,

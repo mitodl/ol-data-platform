@@ -11,12 +11,7 @@ import requests
 from dlt.pipeline.exceptions import PipelineStepFailed
 
 from ol_dlt import config
-from ol_dlt.extraction import (
-    FAILURES_BEFORE_PROBE,
-    PROBE_DOCUMENT,
-    needs_read,
-    record_read,
-)
+from ol_dlt.extraction import FAILURES_BEFORE_PROBE, PROBE_DOCUMENT, needs_read
 from ol_dlt.sources import ocw_content
 
 _BUCKET = "ocw-test"
@@ -452,9 +447,6 @@ def test_known_course_seen_empty_is_unpublished_on_a_later_day() -> None:
     assert ocw_content.settle_empty_course(None, "v0", _at(1)) == (False, "v0")
     # The course coming back is a new version, so it is read.
     assert needs_read(seen[1], "v2", _at(1, 23, 59))
-    assert record_read(seen[1], "v2", _at(2), retry=True) == (
-        "v2|1|2026-10-02T04:35:00+00:00"
-    )
 
 
 @pytest.mark.integration
@@ -665,7 +657,6 @@ def test_scoped_load_never_unpublishes_a_course(
         if key.startswith("courses/a-course/"):
             del bucket.objects[key]
     named = ["a-course", "b-course"]
-    recorded = dict(_resource_state()["course_versions"])
 
     assert len(_load(courses=named)) == len(rows)
 
@@ -676,9 +667,7 @@ def test_scoped_load_never_unpublishes_a_course(
 
     monkeypatch.setattr(ocw_content, "datetime", Tomorrow)
     assert len(_load(courses=named)) == len(rows)
-    state = _resource_state()
-    assert state["course_versions"] == recorded
-    assert "unpublish_window" not in state
+    assert "unpublish_window" not in _resource_state()
     # Both gone at once trips the sweep's limit, which the scoped loads did
     # not spend or set off.
     with pytest.raises(PipelineStepFailed, match="Refusing to unpublish"):
@@ -775,8 +764,30 @@ def test_course_tika_cannot_read_is_recorded_when_tika_is_up(
     assert tika.calls == calls
 
 
+def _read(
+    version: str, at: datetime, *, failed: bool = False, slug: str = "a-course"
+) -> list[dict[str, Any]]:
+    """Build the rows one read of a course left in the raw table."""
+    return [
+        {
+            "course_slug": slug,
+            "content_kind": "course",
+            "file_key": None,
+            "file_etag": None,
+            "extraction_status": "failed" if failed else None,
+            "course_version": version,
+            "course_retrieved_at": at,
+        }
+    ]
+
+
+def _state(rows: list[dict[str, Any]]) -> str:
+    return ocw_content.course_records(rows)["a-course"].state
+
+
 def test_failing_course_is_read_again_on_a_bounded_number_of_days() -> None:
-    state = record_read(None, "v1", _at(1, 23, 59), retry=True)
+    rows = _read("v1", _at(1, 23, 59), failed=True)
+    state = _state(rows)
     assert not needs_read(state, "v1", _at(1, 23, 59))
     # Not again in a run that crosses midnight.
     assert not needs_read(state, "v1", _at(2, 0, 1))
@@ -784,16 +795,114 @@ def test_failing_course_is_read_again_on_a_bounded_number_of_days() -> None:
     assert needs_read(state, "v2", _at(1, 23, 59))
 
     for day in (3, 4):
-        state = record_read(state, "v1", _at(day), retry=True)
-    assert state == "v1|3|2026-10-04T04:35:00+00:00"
-    assert not needs_read(state, "v1", _at(5))
+        rows += _read("v1", _at(day), failed=True)
+    assert _state(rows) == "v1|3|2026-10-04T04:35:00+00:00"
+    assert not needs_read(_state(rows), "v1", _at(5))
 
-    assert record_read(state, "v1", _at(5), retry=False) == "v1"
+    assert _state([*rows, *_read("v1", _at(5))]) == "v1"
     assert not needs_read("v1", "v1", _at(6))
     # A new version starts its attempts over.
-    assert record_read(state, "v2", _at(5), retry=True) == (
+    assert _state([*rows, *_read("v2", _at(5), failed=True)]) == (
         "v2|1|2026-10-05T04:35:00+00:00"
     )
+
+
+def test_course_records_take_the_newest_read() -> None:
+    rows = [
+        *_read("v1", _at(1)),
+        *_read("v2", _at(2)),
+        *_read("v3", _at(1), slug="old-course"),
+        *_read("v1", _at(1), slug="gone-course"),
+        {
+            **_read("v2", _at(2), slug="gone-course")[0],
+            "content_kind": "unpublished",
+        },
+    ]
+    records = ocw_content.course_records(rows)
+    assert {slug: record.state for slug, record in records.items()} == {
+        "a-course": "v2",
+        "old-course": "v3",
+    }
+
+
+def test_course_records_hold_only_the_files_the_version_does_not_cover() -> None:
+    rows = _read("v1", _at(1))
+    file_rows = [
+        ("courses/a-course/abc_notes.pdf", "own"),
+        ("courses/a-course/resources/notes/abc.pdf", "under-resources"),
+        ("courses/b-course/abc_shared.pdf", "other-course"),
+    ]
+    rows += [
+        {**rows[0], "content_kind": "resource", "file_key": key, "file_etag": etag}
+        for key, etag in file_rows
+    ]
+    assert ocw_content.course_records(rows)["a-course"].external == {
+        "courses/a-course/resources/notes/abc.pdf": "under-resources",
+        "courses/b-course/abc_shared.pdf": "other-course",
+    }
+
+
+def test_old_state_keeps_only_the_empty_marks() -> None:
+    state = {
+        "course_versions": {"a-course": "v1", "b-course": "!empty|2026-10-01"},
+        "external_files": {"a-course": {"key": "etag"}},
+        "resume_after": "a-course",
+    }
+    empty: dict[str, str] = {}
+    ocw_content.migrate_course_versions(state, empty)
+    assert empty == {"b-course": "!empty|2026-10-01"}
+    assert state == {"resume_after": "a-course"}
+
+
+@pytest.mark.integration
+def test_loads_of_different_courses_lose_nothing_of_each_other(
+    test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
+) -> None:
+    """Two loads that share no dlt state, as loads running at once do not.
+
+    Each restores what it restores before the other commits, and neither sees
+    the other's state. What keeps a course from being read twice is its rows.
+    """
+
+    def load(pipeline_name: str, **kwargs: Any) -> None:
+        pipeline = config.pipeline_for("ocw", pipeline_name=pipeline_name)
+        pipeline.run(
+            config.with_nullable_load_id(
+                ocw_content.ocw_content_source(bucket=_BUCKET, **kwargs)
+            )
+        )
+
+    load("load_of_a", courses=["a-course"])
+    load("load_of_b", courses=["b-course"])
+    calls = fake_tika.calls
+    assert calls
+
+    # A first load with nothing to read stores a schema without the table,
+    # which must not make the next load read everything again.
+    load("load_of_a_again", courses=["a-course"])
+    load("the_sweep")
+    assert fake_tika.calls == calls
+
+
+@pytest.mark.integration
+def test_a_scoped_load_leaves_the_sweeps_state_alone(
+    test_profile: Path, bucket: FakeS3, fake_tika: FakeTika
+) -> None:
+    def load(pipeline: Any, **kwargs: Any) -> None:
+        pipeline.run(
+            config.with_nullable_load_id(
+                ocw_content.ocw_content_source(bucket=_BUCKET, **kwargs)
+            )
+        )
+
+    sweep = config.pipeline_for("ocw", pipeline_name="ocw_content")
+    load(sweep, budget_bytes=1)
+    assert _resource_state()["resume_after"] == "a-course"
+    load(
+        config.pipeline_for("ocw", pipeline_name="ocw_content_courses"),
+        courses=["b-course"],
+    )
+    assert _resource_state()["resume_after"] == "a-course"
 
 
 @pytest.mark.integration
