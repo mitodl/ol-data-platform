@@ -380,8 +380,9 @@ reconciliation sweep is not a substitute for that latency. Not designed here.
 |---|---|
 | `SyncOCWContentFilesTask` | `integrations.integrations__learn__ocw_content_files` |
 | `SyncOpenEdXContentFilesTask` | `integrations.integrations__learn__content_files` |
+| Canvas's content-file task | `integrations.integrations__learn__canvas_content_files`, and `integrations.integrations__learn__canvas_courses` for the course and its run: `ingest_canvas_course` writes both from one archive, so `canvas`/`course` and `canvas`/`content_file` flip together |
 
-Both must expose at minimum the scope key, `etl_source` (needed by the
+Each content-file view must expose at minimum the scope key, `etl_source` (needed by the
 §4 prune predicate to disambiguate scope keys across sources), plus the `ContentFile` fields MIT
 Learn persists — `key`, `title`, `description`, `url`, `file_type`, `content`, `content_title`,
 `content_author`, `content_language`, `content_type`, `image_src`, `uid`, `edx_module_id`,

@@ -15,6 +15,7 @@
 deployments:
   # Open Learning deployments
 - bootcamps
+- canvas
 - edxorg
 - learn_ai
 - micromasters

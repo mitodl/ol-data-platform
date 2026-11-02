@@ -87,21 +87,29 @@ class TikaClient:
             self._local.session = session
         return session
 
-    def extract_text(self, body: bytes, timeout: float = TIMEOUT_SECONDS) -> str | None:
+    def extract_text(
+        self,
+        body: bytes,
+        timeout: float = TIMEOUT_SECONDS,
+        content_type: str | None = None,
+    ) -> str | None:
         """Return the document's text, or None when Tika finds none.
-
-        No Content-Type is sent, so Tika detects the format from the bytes.
-        MIT Learn's OCW ETL does the same.
 
         :param body: The document.
         :param timeout: Seconds to wait for Tika.
+        :param content_type: The document's MIME type. Left unset Tika detects
+            the format from the bytes, as for MIT Learn's OCW ETL; Learn's
+            archive ETLs send one.
         :returns: The text as Tika gives it, unstripped, or None when empty.
         :raises requests.RequestException: Tika refused or failed the document.
         """
         for attempt in range(1, DROPPED_CONNECTION_ATTEMPTS + 1):
             try:
                 response = self._session.put(
-                    f"{self.base_url}/rmeta/text", data=body, timeout=timeout
+                    f"{self.base_url}/rmeta/text",
+                    data=body,
+                    timeout=timeout,
+                    headers={"Content-Type": content_type} if content_type else None,
                 )
             except requests.Timeout:
                 raise

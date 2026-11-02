@@ -1,0 +1,99 @@
+---
+version: 2
+
+models:
+- name: stg__canvas__s3__course_content
+  description: The current state of every Canvas course in the landing zone, as MIT
+    Learn parses it. One row per course and one per published file, from each course's
+    newest load.
+  columns:
+  - name: course_id
+    description: str, the Canvas course id
+    tests:
+    - not_null
+  - name: coursecontent_kind
+    description: str, course or file
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [course, file]
+  - name: coursecontent_archive_key
+    description: str, S3 key of the .imscc the row was read from
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the id of the course's run in Learn, <course_id>-<course_code>+canvas
+    tests:
+    - not_null
+  - name: course_code
+    description: str, course_code in the course's settings; null on a file row
+  - name: course_title
+    description: str, title in the course's settings; null on a file row
+  - name: course_url
+    description: str, the course's home in Canvas; null on a file row
+  - name: course_start_on
+    description: str, start_at in the course's settings as Canvas wrote it; null on
+      a file row
+  - name: course_end_on
+    description: str, conclude_at in the course's settings as Canvas wrote it; null
+      on a file row
+  - name: coursecontent_key
+    description: str, ContentFile.key; null on a course row
+  - name: coursecontent_source_path
+    description: str, the file's path in the archive; null on a course row
+  - name: coursecontent_file_extension
+    description: str, the file's extension with its dot, in lower case
+  - name: coursecontent_title
+    description: str, the title of what publishes the file, or one derived from its
+      name
+  - name: coursecontent_content_title
+    description: str, the title of what publishes the file; empty for a file only
+      a page links to
+  - name: coursecontent_url
+    description: str, the file's, assignment's or page's Canvas URL
+  - name: coursecontent_file_md5
+    description: str, MD5 of the file's bytes
+  - name: coursecontent_file_size_bytes
+    description: bigint, uncompressed size of the file in the archive
+  - name: coursecontent_text
+    description: str, the text Tika extracted from the file, or from an earlier read
+      of the same bytes when this read failed
+  - name: coursecontent_text_extraction_status
+    description: str, extracted, empty or failed
+  - name: coursecontent_retrieved_on
+    description: str, when this set of the course's rows was read, ISO 8601
+    tests:
+    - not_null
+
+unit_tests:
+- name: test_stg__canvas__s3__course_content_keeps_the_newest_set_and_earlier_text
+  description: >
+    Each course's newest read is the course, an unpublished marker empties it,
+    and a file that failed on a retry keeps the text of an earlier read of the
+    same bytes.
+  model: stg__canvas__s3__course_content
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__canvas__s3__course_content')
+    rows:
+    - {course_id: '1', content_kind: file, archive_key: a.imscc, run_readable_id: 1-A+canvas,
+      file_key: k1, source_path: web_resources/a.pdf, file_md5: m1, content: Text,
+      extraction_status: extracted, course_retrieved_at: "2026-10-01 00:00:00+00"}
+    - {course_id: '1', content_kind: file, archive_key: a.imscc, run_readable_id: 1-A+canvas,
+      file_key: k2, source_path: web_resources/locked-since.pdf, file_md5: m2, content: Old,
+      extraction_status: extracted, course_retrieved_at: "2026-10-01 00:00:00+00"}
+    - {course_id: '1', content_kind: course, archive_key: b.imscc, run_readable_id: 1-A+canvas,
+      course_code: A, course_retrieved_at: "2026-10-02 00:00:00+00"}
+    - {course_id: '1', content_kind: file, archive_key: b.imscc, run_readable_id: 1-A+canvas,
+      file_key: k1, source_path: web_resources/a.pdf, file_md5: m1, content: null,
+      extraction_status: failed, course_retrieved_at: "2026-10-02 00:00:00+00"}
+    - {course_id: '2', content_kind: course, archive_key: c.imscc, run_readable_id: 2-B+canvas,
+      course_code: B, course_retrieved_at: "2026-10-01 00:00:00+00"}
+    - {course_id: '2', content_kind: unpublished, course_retrieved_at: "2026-10-02\
+        \ 00:00:00+00"}
+  expect:
+    rows:
+    - {course_id: '1', coursecontent_kind: course, coursecontent_key: null, coursecontent_text: null,
+      coursecontent_text_extraction_status: null}
+    - {course_id: '1', coursecontent_kind: file, coursecontent_key: k1, coursecontent_text: Text,
+      coursecontent_text_extraction_status: extracted}

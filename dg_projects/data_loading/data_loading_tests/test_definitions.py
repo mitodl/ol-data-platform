@@ -155,6 +155,7 @@ def test_schedules_and_sensors_load() -> None:
         "edxorg_program_reports_ingest_daily_schedule",
         "xpro_tracking_logs_ingest_schedule",
         "ocw_content_ingest_daily_schedule",
+        "canvas_content_ingest_daily_schedule",
     }
     assert {s.name for s in _REPO.sensor_defs} >= {
         "edxorg_upstream_changes_sensor",

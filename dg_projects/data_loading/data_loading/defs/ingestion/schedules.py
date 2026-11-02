@@ -4,7 +4,12 @@ import json
 from collections.abc import Callable
 
 import dagster as dg
-from ol_dlt.sources import course_xml_blocks, edxorg_program_reports, ocw_content
+from ol_dlt.sources import (
+    canvas_content,
+    course_xml_blocks,
+    edxorg_program_reports,
+    ocw_content,
+)
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from data_loading.defs.ingestion.assets import (
@@ -428,6 +433,20 @@ ocw_content_ingest_schedule = dg.ScheduleDefinition(
     ),
 )
 
+# Canvas course files and text for MIT Learn's ContentFiles. The 00:00 export of
+# every course has landed by now, and the lakehouse's non_airbyte_staging_daily
+# follows at 06:00. A course that did not change costs its zip directory and
+# its pages and assignment settings, read to find what is published. Stopped
+# everywhere: the first load sends every published file through production Tika,
+# so it is started by hand.
+canvas_content_ingest_schedule = dg.ScheduleDefinition(
+    name="canvas_content_ingest_daily_schedule",
+    target=dg.AssetSelection.keys(["ol_warehouse_raw_data", canvas_content.RAW_TABLE]),
+    cron_schedule="5 5 * * *",
+    execution_timezone="Etc/UTC",
+    default_status=dg.DefaultScheduleStatus.STOPPED,
+)
+
 defs = dg.Definitions(
     schedules=[
         oll_ingest_schedule,
@@ -446,5 +465,6 @@ defs = dg.Definitions(
         edxorg_program_reports_ingest_schedule,
         xpro_tracking_logs_ingest_schedule,
         ocw_content_ingest_schedule,
+        canvas_content_ingest_schedule,
     ],
 )

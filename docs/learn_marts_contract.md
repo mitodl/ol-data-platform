@@ -23,6 +23,7 @@ Examples:
 - `integrations__learn__mitxonline_programs`
 - `integrations__learn__content_files`
 - `integrations__learn__ocw_content_files`
+- `integrations__learn__canvas_content_files`
 
 ## Required Columns
 
@@ -391,13 +392,13 @@ columns are described in
 ## Grain Expectations
 
 - **Catalog models** (`integrations__learn__<source>_courses`, `integrations__learn__<source>_programs`): One row per resource
-- **Content file models** (`integrations__learn__content_files`, `integrations__learn__ocw_content_files`): One row per content file
+- **Content file models** (`integrations__learn__content_files`, `integrations__learn__ocw_content_files`, `integrations__learn__canvas_content_files`): One row per content file
 - **Media models**: One row per channel, playlist, video, podcast or episode; `integrations__learn__youtube_playlist_videos` is one row per video in a playlist
 
 ## Nullability Rules
 
 1. All required columns must be `NOT NULL` in catalog models
-2. Content file models are exempt from the resource-level required columns; their non-null columns are `etl_source`, `run_readable_id` and `key`, plus `source_path` and `extraction_status` in `integrations__learn__content_files` and `url` and `content_type` in `integrations__learn__ocw_content_files`
+2. Content file models are exempt from the resource-level required columns; their non-null columns are `etl_source`, `run_readable_id` and `key`, plus `source_path` and `extraction_status` in `integrations__learn__content_files` and `integrations__learn__canvas_content_files`, and `url` and `content_type` in `integrations__learn__ocw_content_files`
 3. Media models are exempt from the resource-level required columns; their keys and non-null columns are in the table under Media Sources
 4. Aggregated columns (`topics`, `instructors`, and `courses` in `integrations__learn__xpro_programs`) may be `NULL` when no data exists; consumers should treat `NULL` as empty. `topics` is an array except in `integrations__learn__podcasts`, `integrations__learn__podcast_episodes` and `integrations__learn__mit_climate_articles`, where it is a comma-separated string, as is `courses`
 5. Text columns (`description`, `url`, `image_url`) may be `NULL` when no data exists
@@ -436,3 +437,4 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-22 | Tobias Macey | Added `child_program_order` to `integrations__learn__mitxonline_program_children`, so a Sync task can number child programs not shown as courses in requirement tree order, as MIT Learn's ETL does, and not by readable id. |
 | 2026-10-22 | Tobias Macey | Added `release_date` to `integrations__learn__content_files` for MIT Learn's `ContentFile.release_date` (mit-learn#4093). The file exclusions also follow mit-learn#4106: an asset name no longer matches a link that drops one of its separators. |
 | 2026-10-27 | Tobias Macey | Added `platform_code` to `integrations__learn__xpro_runs`, Learn's platform code for the run's course, so the content-file embedding chunks key an xPRO file's points under its course's platform and not always `xpro`. |
+| 2026-11-02 | Tobias Macey | Added `integrations__learn__canvas_content_files` and `integrations__learn__canvas_courses`. |
