@@ -444,7 +444,8 @@ models:
   description: >
     Transaction fact table for payments/transactions.
     Grain: One row per payment transaction, including every attempt the processor
-    did not accept. Filter on is_successful for money received.
+    did not accept. is_successful marks the attempts it accepted. Summing payments
+    takes is_successful and transaction_type together, as refunds are rows here too.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
@@ -528,8 +529,10 @@ models:
     description: >
       The payment processor's decision, e.g. ACCEPT, CANCEL, DECLINE, ERROR, REVIEW.
       Null on MITx Online's zero-dollar payments, which never reach the processor,
-      and
-      on most of its refunds.
+      and on
+      most of its refunds. 100 is CyberSource's reason code for success, which
+      mitol-payment-gateway writes as the decision on a payment recovered through
+      CyberSource's transaction details API rather than the checkout callback.
   - name: is_successful
     tests:
     # A null here is a row the incremental filter failed to repair, and readers filter
@@ -538,11 +541,17 @@ models:
         config:
           error_if: "!=0"
     description: >
-      True when the processor's decision is ACCEPT. REVIEW is not successful: no
-      REVIEW attempt on either platform has an accepted payment on its order, and
-      the
-      orders end failed or canceled, or are still in review. Refunds keep their own
-      transaction_type, so a sum of money received also filters on it.
+      True when the processor's decision is ACCEPT, and false for anything else,
+      including no decision. It describes the attempt, not money received, in two
+      ways.
+      A refund the processor accepted is true and stored with a positive amount, so
+      a
+      sum of payments also filters on transaction_type. And a MITx Online payment
+      recorded without an ACCEPT is false even on a fulfilled order, e.g. a decision
+      of
+      100. REVIEW is not successful: no REVIEW attempt on either platform has an accepted
+      payment on its order, and the orders end failed or canceled, or are still in
+      review.
   - name: transaction_created_on
     description: Transaction creation timestamp (for incremental processing)
 
