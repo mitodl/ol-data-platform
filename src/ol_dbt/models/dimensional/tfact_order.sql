@@ -2,9 +2,28 @@
     materialized='incremental',
     unique_key='order_key',
     incremental_strategy='delete+insert',
-    on_schema_change='append_new_columns'
+    on_schema_change='append_new_columns',
+    post_hook="delete from {{ this }}
+    where platform = 'micromasters'
+    and order_id in (
+        select order_id
+        from {{ ref('int__micromasters__orders') }}
+        where order_is_migrated_to_mitxonline
+    )"
 ) }}
 
+{#- The first incremental run after discount_amount is added reads a target without the column.
+    In a unit test `this` is the fixture's name, a string, which always has it. -#}
+{%- set target_has_discount_amount = false -%}
+{%- if is_incremental() and this is string -%}
+    {%- set target_has_discount_amount = true -%}
+{%- elif is_incremental() -%}
+    {%- set target_columns = adapter.get_columns_in_relation(this) | map(attribute='name') | map('lower') | list -%}
+    {%- set target_has_discount_amount = 'discount_amount' in target_columns -%}
+{%- endif %}
+
+-- The post_hook deletes MicroMasters orders counted under mitxonline, which delete+insert
+-- would otherwise keep: it only deletes keys the run selects.
 -- E-commerce order line fact table. Grain: one row per (order_id, line_id, platform).
 -- All source models are natively at line grain (one product per line).
 -- order_total_price_paid is a repeated order-header value — NOT additive across lines
@@ -237,10 +256,15 @@ with mitxonline_orders as (
 -- change, so the activity-timestamp watermark alone would never catch it). One row per
 -- key: a key a past run wrote twice would otherwise match each source row twice and be
 -- written twice again. It is re-selected instead, so delete+insert leaves one copy.
+-- The stored measures do the same job for a rule change, which the watermark can't see.
 , stale_user_fk_lookup as (
     select
         order_key
         , max(user_fk) as stored_user_fk
+        , max(line_price) as stored_line_price
+        , max(discount_type_fk) as stored_discount_type_fk
+        , {% if target_has_discount_amount %}max(discount_amount){% else %}cast(null as decimal(38, 2)){% endif %}
+            as stored_discount_amount
         , count(*) > 1 as stored_has_copies
     from {{ this }}
     group by order_key
@@ -293,6 +317,10 @@ with mitxonline_orders as (
         or owf.order_updated_on is null
         -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
         or sufk.stored_user_fk is distinct from owf.user_fk
+        -- a price or discount rule changed, including every row on the run that adds discount_amount
+        or sufk.stored_line_price is distinct from owf.line_price
+        or sufk.stored_discount_type_fk is distinct from owf.discount_type_fk
+        or sufk.stored_discount_amount is distinct from owf.discount_amount
         or sufk.stored_has_copies
     )
     {% endif %}
