@@ -64,8 +64,8 @@ with mitxonline_orders as (
         , orders.order_purchaser_user_id as user_id
         , lines.product_id
         , lines.product_price as line_price
-        -- Every multi-line xPRO order has a total of 0 today, so the header total is
-        -- each line's price paid
+        -- Every multi-line xPRO order has a total of 0, so the header total is each line's
+        -- price paid (assert_xpro_multi_line_orders_paid_nothing warns if that changes)
         , lines.product_price - orders.order_total_price_paid as discount_amount
         , orders.order_state
         , orders.order_total_price_paid
