@@ -315,8 +315,12 @@ def llm_classifier_predictions(
     for done, text in enumerate(test_texts, start=1):
         try:
             predictions.append(client.classify(text))
-        except Exception:
-            log.warning("LLM sentiment call failed for one conversation", exc_info=True)
+        except Exception as error:
+            # Full traceback once; an outage would otherwise bury the progress lines.
+            if failed == 0:
+                log.warning("LLM sentiment call failed", exc_info=True)
+            else:
+                log.warning("LLM sentiment call failed: %s", error)
             predictions.append(None)
             failed += 1
         if done % LLM_PROGRESS_EVERY == 0 or done == len(test_texts):
@@ -328,6 +332,17 @@ def llm_classifier_predictions(
                 failed,
             )
     return predictions
+
+
+def _log_scores(method: str, scores: dict[str, Any]) -> None:
+    get_dagster_logger().info(
+        "%s: accuracy %.4f, found %d of %d negatives (%d predicted negative)",
+        method,
+        scores["accuracy"],
+        scores["n_true_negative"],
+        scores["n_test_negative"],
+        scores["n_predicted_negative"],
+    )
 
 
 def run_sentiment_eval(  # noqa: PLR0913 -- one independently meaningful eval knob per arg
@@ -386,18 +401,12 @@ def run_sentiment_eval(  # noqa: PLR0913 -- one independently meaningful eval kn
         | {"call_count": 0},
     }
     for method, scores in methods.items():
-        log.info(
-            "%s: accuracy %.4f, found %d of %d negatives (%d labeled negative)",
-            method,
-            scores["accuracy"],
-            scores["n_true_negative"],
-            scores["n_test_negative"],
-            scores["n_predicted_negative"],
-        )
+        _log_scores(method, scores)
     if sentiment_client is not None:
         test_texts = [texts[i] for i in test_idx]
         methods["llm"] = score_predictions(
             llm_classifier_predictions(sentiment_client, test_texts), test_labels
         ) | {"call_count": len(test_texts)}
+        _log_scores("llm", methods["llm"])
 
     return {"methods": methods, "n_train": len(train_idx), "n_test": len(test_idx)}
