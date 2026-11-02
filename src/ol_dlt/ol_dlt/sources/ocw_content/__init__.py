@@ -81,6 +81,7 @@ from ol_dlt.extraction import (
     STATUS_FAILED,
     STATUS_MISSING,
     Extraction,
+    as_utc,
     collect,
     extract,
     needs_read,
@@ -631,7 +632,7 @@ def settle_empty_course(
         return (True, version) if waited(first_seen, now) else (False, recorded)
     if recorded_version == version:
         return False, recorded
-    return False, f"{EMPTY_MARK}|{now.isoformat(timespec='seconds')}"
+    return False, f"{EMPTY_MARK}|{now.isoformat()}"
 
 
 def migrate_course_versions(state: dict[str, Any], empty: dict[str, str]) -> None:
@@ -671,11 +672,15 @@ def read_since(mark: str, record: CourseRecord | None) -> bool:
 
     If so the prefix was a publish in progress, and the mark says nothing now.
     """
-    _, _, first_seen = mark.partition("|")
     if record is None:
         return False
-    # The mark holds whole seconds, and a read in the same second came before it.
-    return record.read_at.replace(microsecond=0) > datetime.fromisoformat(first_seen)
+    first_seen = as_utc(mark.partition("|")[2])
+    # A mark written before they held microseconds is good only to the second. A
+    # read in that second may be after it, and a second look costs less than
+    # unpublishing a live course.
+    if first_seen.microsecond == 0:
+        return record.read_at >= first_seen
+    return record.read_at > first_seen
 
 
 def count_unpublished(

@@ -852,6 +852,28 @@ def test_a_course_read_since_its_prefix_was_seen_empty_is_not_gone() -> None:
     assert not ocw_content.read_since(mark, None)
 
 
+def test_a_read_after_a_mark_in_the_same_second_counts() -> None:
+    seen = _at(2).replace(microsecond=500_000)
+    _, mark = ocw_content.settle_empty_course("v1", "v0", seen)
+
+    later = seen + timedelta(microseconds=1)
+    earlier = seen - timedelta(microseconds=1)
+    assert ocw_content.read_since(mark, ocw_content.CourseRecord("v1", later))
+    assert not ocw_content.read_since(mark, ocw_content.CourseRecord("v1", earlier))
+
+
+def test_a_mark_good_only_to_the_second_takes_a_read_in_that_second() -> None:
+    mark = f"{ocw_content.EMPTY_MARK}|{_at(2).isoformat(timespec='seconds')}"
+    read = _at(2).replace(microsecond=500_000)
+    assert ocw_content.read_since(mark, ocw_content.CourseRecord("v1", read))
+
+
+def test_a_date_only_mark_compares_as_utc() -> None:
+    mark = f"{ocw_content.EMPTY_MARK}|2026-10-02"
+    assert ocw_content.read_since(mark, ocw_content.CourseRecord("v1", _at(3)))
+    assert not ocw_content.read_since(mark, ocw_content.CourseRecord("v1", _at(1)))
+
+
 def test_a_sweep_refuses_a_table_that_lost_its_courses() -> None:
     state = {"known_courses": 2588}
     ocw_content.refuse_lost_records(state, 2500)

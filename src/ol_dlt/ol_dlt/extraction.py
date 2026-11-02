@@ -153,12 +153,15 @@ def collect(
     return collected
 
 
+def as_utc(value: str) -> datetime:
+    """Parse a recorded time, taking one with no time zone as UTC."""
+    then = datetime.fromisoformat(value)
+    return then.replace(tzinfo=UTC) if then.tzinfo is None else then
+
+
 def waited(since: str, now: datetime) -> bool:
     """Tell whether ``WAIT_BETWEEN_READS`` has passed since a recorded time."""
-    then = datetime.fromisoformat(since)
-    if then.tzinfo is None:
-        then = then.replace(tzinfo=UTC)
-    return now - then >= WAIT_BETWEEN_READS
+    return now - as_utc(since) >= WAIT_BETWEEN_READS
 
 
 def needs_read(recorded: str | None, version: str, now: datetime) -> bool:
