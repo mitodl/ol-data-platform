@@ -115,6 +115,8 @@ with mitxonline_orders as (
         , coupon_code as discount_code
         , order_total_price_paid as line_price_paid
     from {{ ref('int__micromasters__orders') }}
+    -- counted under mitxonline
+    where not order_is_migrated_to_mitxonline
 )
 
 , combined_orders as (

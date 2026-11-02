@@ -475,7 +475,9 @@ with bootcamps__ecommerce_order as (
         end as discount
         , null as discount_amount
     from micromasters_orders
-    where courserun_platform = '{{ var("edxorg") }}'
+    where
+        courserun_platform = '{{ var("edxorg") }}'
+        and not order_is_migrated_to_mitxonline
 
 )
 

@@ -597,6 +597,12 @@ models:
     description: string, readable id for the order
     tests:
     - unique
+  - name: order_is_migrated_to_mitxonline
+    description: boolean, true when MITx Online holds a copy of this order under the
+      same reference number. tfact_order and marts__combined__orders count that copy
+      and drop this one.
+    tests:
+    - not_null
   - name: line_id
     description: int, foreign key to ecommerce_line
     tests:
@@ -742,3 +748,39 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["user_edxorg_username", "program_title", "user_email"]
+
+unit_tests:
+- name: test_int__micromasters__orders_flags_orders_migrated_to_mitxonline
+  description: >
+    An order is migrated when a MITx Online order carries its reference number.
+  model: int__micromasters__orders
+  given:
+  - input: ref('stg__micromasters__app__postgres__ecommerce_order')
+    rows:
+    - {order_id: 1, user_id: 7, order_reference_number: MM-prod-1}
+    - {order_id: 2, user_id: 7, order_reference_number: MM-prod-2}
+  - input: ref('stg__micromasters__app__postgres__ecommerce_line')
+    rows:
+    - {line_id: 1, order_id: 1}
+    - {line_id: 2, order_id: 2}
+  - input: ref('stg__micromasters__app__postgres__ecommerce_coupon')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__ecommerce_redeemedcoupon')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__ecommerce_receipt')
+    rows: []
+  - input: ref('__micromasters__users')
+    rows:
+    - {user_id: 7}
+  - input: ref('stg__micromasters__app__postgres__courses_courserun')
+    rows: []
+  - input: ref('int__edxorg__mitx_users')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__ecommerce_order')
+    rows:
+    - {order_reference_number: MM-prod-1}
+    - {order_reference_number: mitxonline-production-9}
+  expect:
+    rows:
+    - {order_id: 1, order_is_migrated_to_mitxonline: true}
+    - {order_id: 2, order_is_migrated_to_mitxonline: false}

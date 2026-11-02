@@ -572,6 +572,7 @@ models:
     tests:
     - not_null
   - name: product_price
+    data_type: decimal(38,2)
     description: numeric, the product's price today, which moves when the price changes.
       Use line_price for the price at purchase.
     tests:
