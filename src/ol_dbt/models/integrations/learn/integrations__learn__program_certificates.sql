@@ -57,7 +57,9 @@ select
     certificates.program_certificate_hashed_id as record_hash
     , certificates.program_title
     , certificates.user_full_name
-    , coalesce(certificates.user_email, '')     as user_email
+    -- MIT Learn matches certificates to users with a case-sensitive user_email = request.user.email,
+    -- and its user emails are almost all lowercase
+    , lower(coalesce(certificates.user_email, '')) as user_email
     , certificates.user_edxorg_id
     , certificates.user_edxorg_username
     , certificates.user_mitxonline_username
@@ -75,6 +77,8 @@ select
     , certificates.user_address_postal_code
     , certificates.user_street_address
     , certificates.program_completion_timestamp
+    -- Null upstream for edX.org and MicroMasters certificates, which have no revocation
+    , coalesce(certificates.programcertificate_is_revoked, false) as is_revoked
     , coalesce(
         {{ from_iso8601_timestamp('certificates.program_completion_timestamp') }}
         , {{ current_timestamptz() }}

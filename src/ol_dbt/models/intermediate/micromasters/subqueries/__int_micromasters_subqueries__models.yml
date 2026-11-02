@@ -116,7 +116,9 @@ models:
       arguments:
         compare_model: ref('stg__micromasters__app__postgres__auth_user')
 - name: __micromasters_program_certificates_dedp_from_micromasters
-  description: DEDP program certificate earners according to the micromasters database
+  description: DEDP program certificate earners according to the micromasters database.
+    int__micromasters__program_certificates keeps only the certificates MITx Online
+    has no copy of.
   config:
     meta:
       qa_branches:
@@ -145,9 +147,12 @@ models:
     description: str, user id in the micromasters database
     tests:
     - not_null
+  - name: programcertificate_is_revoked
+    description: boolean, always null. MicroMasters has no certificate revocation.
 
 - name: __micromasters_program_certificates_dedp_from_mitxonline
-  description: DEDP program certificate earners according to the mitxonline database
+  description: DEDP program certificates in the mitxonline database, revoked ones
+    included
   config:
     meta:
       qa_branches:
@@ -176,9 +181,21 @@ models:
     tests:
     - unique
     - not_null
+  - name: micromasters_program_certificate_hashed_id
+    description: str, program_certificate_hashed_id of the MicroMasters certificate
+      this one copies, if any. MITx Online's migration gave each copy the MicroMasters
+      hash, with dashes added, as its uuid, so this is the hash of the uuid without
+      dashes. Matches no MicroMasters certificate for a certificate MITx Online issued.
+    tests:
+    - unique
+    - not_null
   - name: program_completion_timestamp
     description: timestamp, timestamp of the course certificate that completed the
       program
+    tests:
+    - not_null
+  - name: programcertificate_is_revoked
+    description: boolean, whether MITx Online revoked the certificate
     tests:
     - not_null
 
@@ -218,6 +235,9 @@ models:
   - name: program_completion_timestamp
     description: timestamp, timestamp of the course certificate that completed the
       program
+  - name: programcertificate_is_revoked
+    description: boolean, always null. 2U's program learner report and the override
+      list have no certificate revocation.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -631,3 +651,27 @@ unit_tests:
     - {program_certificate_hashed_id: u1-methods}
     - {program_certificate_hashed_id: u2-finance}
     - {program_certificate_hashed_id: u3-general-aaa}
+- name: test___micromasters_program_certificates_dedp_from_mitxonline_keeps_revoked_certificates
+  description: >
+    A revoked MITx Online DEDP certificate is kept with its flag, so MIT Learn
+    can learn of the revocation. Non-DEDP certificates are left out.
+  model: __micromasters_program_certificates_dedp_from_mitxonline
+  given:
+  - input: ref('int__mitxonline__program_certificates')
+    rows:
+    - {user_id: 1, user_username: revoked, program_id: 1, programcertificate_uuid: uuid-revoked,
+      programcertificate_created_on: "2023-01-01T00:00:00Z", programcertificate_is_revoked: true}
+    - {user_id: 2, user_username: valid, program_id: 1, programcertificate_uuid: uuid-valid,
+      programcertificate_created_on: "2023-01-01T00:00:00Z", programcertificate_is_revoked: false}
+    - {user_id: 3, user_username: other-program, program_id: 9, programcertificate_uuid: uuid-other,
+      programcertificate_created_on: "2023-01-01T00:00:00Z", programcertificate_is_revoked: false}
+  - input: ref('int__mitx__programs')
+    rows:
+    - {mitxonline_program_id: 1, micromasters_program_id: 2, program_title: DEDP ID,
+      is_dedp_program: true}
+    - {mitxonline_program_id: 9, micromasters_program_id: null, program_title: Other,
+      is_dedp_program: false}
+  expect:
+    rows:
+    - {user_mitxonline_id: 1, programcertificate_is_revoked: true}
+    - {user_mitxonline_id: 2, programcertificate_is_revoked: false}
