@@ -78,10 +78,8 @@ sources:
     - name: retrieved_at
       description: str, when the extraction that wrote this row ran
     config:
-      # The edX programs delivery rebuilds from the latest extraction; if the dlt
-      # load stops landing new ones it would keep re-sending a stale program set.
-      # Nothing runs `dbt source freshness` yet, so the delivery asset also refuses
-      # an extraction older than three days.
+      # The edX programs models read the latest extraction, so if the dlt load stops
+      # landing new ones they keep serving a stale program set.
       freshness:
         warn_after: {count: 2, period: day}
         error_after: {count: 3, period: day}

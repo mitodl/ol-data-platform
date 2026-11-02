@@ -685,7 +685,6 @@ dependencies = [
     { name = "jsonlines" },
     { name = "nh3" },
     { name = "ol-orchestrate-lib" },
-    { name = "pygithub" },
 ]
 
 [package.dev-dependencies]
@@ -705,7 +704,6 @@ requires-dist = [
     { name = "jsonlines", specifier = "~=4.0.0" },
     { name = "nh3", specifier = ">=0.2.0" },
     { name = "ol-orchestrate-lib", editable = "../../packages/ol-orchestrate-lib" },
-    { name = "pygithub", specifier = ">=2.8.1" },
 ]
 
 [package.metadata.requires-dev]
