@@ -63,6 +63,7 @@ with enrollment as (
     select
         deferred_order.order_id
         , course_run.courserun_pk as courserun_fk
+        , course_run.courserun_readable_id
     from {{ ref('int__mitxonline__deferred_course_run_orders') }} as deferred_order
     inner join course_run
         on
@@ -111,9 +112,7 @@ with enrollment as (
     select
         enrollment.enrollment_key
         {{ order_columns }}
-        , case
-            when product.courserun_fk != enrollment.courserun_fk then line_run.courserun_readable_id
-        end as deferred_from_courserun_readable_id
+        , mitxonline_deferred_orders.courserun_readable_id as deferred_from_courserun_readable_id
         -- Two moved lines on one order are told apart by course.
         , case
             when mitxonline_order_lines.courserun_fk = enrollment.courserun_fk then 1
@@ -140,8 +139,6 @@ with enrollment as (
             and mitxonline_order_lines.courserun_fk = mitxonline_deferred_orders.courserun_fk
     left join product
         on order_fact.product_fk = product.product_pk
-    left join course_run as line_run
-        on product.courserun_fk = line_run.courserun_pk
     where
         enrollment.platform = 'mitxonline'
         -- Another line on the order pays for its own run, so it isn't this enrollment's.
