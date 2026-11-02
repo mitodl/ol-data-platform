@@ -632,9 +632,9 @@ models:
 - name: int__mitxonline__deferred_course_run_orders
   description: The MITx Online course runs orders were bought for and no longer pay
     for. A deferral moves the paid course run record to the new run and leaves the
-    order's line on the old one, so these are the order lines with no paid record
-    on their run when the order has one on another run. One row per (order, course
-    run).
+    order's line on the old one, so these are the lines with no paid record on their
+    run on orders with a paid record on a run they have no line for. One row per (order,
+    course run).
   config:
     meta:
       qa_branches:
@@ -2722,6 +2722,8 @@ unit_tests:
     order with a record on its own run was not, and neither was one with no record
     at
     all. An order with lines on two runs reports only the line that lost its record.
+    A
+    line with no record on an order with no record off its lines was not moved either.
   model: int__mitxonline__deferred_course_run_orders
   given:
   - input: ref('int__mitxonline__ecommerce_order')
@@ -2731,12 +2733,15 @@ unit_tests:
     - {order_id: 3, courserun_id: 10}
     - {order_id: 4, courserun_id: 10}
     - {order_id: 4, courserun_id: 12}
+    - {order_id: 5, courserun_id: 10}
+    - {order_id: 5, courserun_id: 12}
   - input: ref('stg__mitxonline__app__postgres__courses_paidcourserun')
     rows:
     - {order_id: 1, courserun_id: 11}
     - {order_id: 2, courserun_id: 10}
     - {order_id: 4, courserun_id: 10}
     - {order_id: 4, courserun_id: 11}
+    - {order_id: 5, courserun_id: 10}
   expect:
     rows:
     - {order_id: 1, courserun_id: 10}

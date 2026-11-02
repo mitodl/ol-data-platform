@@ -70,6 +70,20 @@ with enrollment as (
             and course_run.platform = 'mitxonline'
 )
 
+-- The run on each order line. dim_product has no run for some products whose run exists.
+, mitxonline_order_lines as (
+    select
+        order_line.order_id
+        , cast(order_line.line_id as varchar) as line_id
+        , course_run.courserun_pk as courserun_fk
+        , course_run.course_fk
+    from {{ ref('int__mitxonline__ecommerce_order') }} as order_line
+    inner join course_run
+        on
+            order_line.courserun_id = course_run.source_id
+            and course_run.platform = 'mitxonline'
+)
+
 , order_via_direct_fk as (
     select
         enrollment.enrollment_key
@@ -100,20 +114,41 @@ with enrollment as (
         , case
             when product.courserun_fk != enrollment.courserun_fk then line_run.courserun_readable_id
         end as deferred_from_courserun_readable_id
-        , case when product.courserun_fk = enrollment.courserun_fk then 1 else 2 end as match_priority
+        -- Two moved lines on one order are told apart by course.
+        , case
+            when mitxonline_order_lines.courserun_fk = enrollment.courserun_fk then 1
+            when mitxonline_order_lines.course_fk = enrollment_run.course_fk then 2
+            else 3
+        end as match_priority
     from enrollment
     inner join mitxonline_paid_course_run
         on enrollment.courserun_fk = mitxonline_paid_course_run.courserun_fk
+    inner join course_run as enrollment_run
+        on enrollment.courserun_fk = enrollment_run.courserun_pk
     inner join order_fact
         on
             mitxonline_paid_course_run.order_id = order_fact.order_id
             and enrollment.user_fk = order_fact.user_fk
             and enrollment.platform_fk = order_fact.platform_fk
+    inner join mitxonline_order_lines
+        on
+            order_fact.order_id = mitxonline_order_lines.order_id
+            and order_fact.line_id = mitxonline_order_lines.line_id
+    left join mitxonline_deferred_orders
+        on
+            mitxonline_order_lines.order_id = mitxonline_deferred_orders.order_id
+            and mitxonline_order_lines.courserun_fk = mitxonline_deferred_orders.courserun_fk
     left join product
         on order_fact.product_fk = product.product_pk
     left join course_run as line_run
         on product.courserun_fk = line_run.courserun_pk
-    where enrollment.platform = 'mitxonline'
+    where
+        enrollment.platform = 'mitxonline'
+        -- Another line on the order pays for its own run, so it isn't this enrollment's.
+        and (
+            mitxonline_order_lines.courserun_fk = enrollment.courserun_fk
+            or mitxonline_deferred_orders.order_id is not null
+        )
 )
 
 -- An enrollment's courserun_fk/program_fk can each independently match a distinct
