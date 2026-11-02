@@ -526,8 +526,8 @@ models:
   - name: order_id
     description: int, foreign key to ecommerce order table for fulfilled or refunded
       orders on the corresponding platform. The latest created when the enrollment
-      has several. Note that this does not include orders from edX.org, for which
-      we do not have data.
+      has several, leaving out Bootcamps refund orders. Note that this does not include
+      orders from edX.org, for which we do not have data.
   - name: order_reference_number
     description: string, order reference number to identify a fulfilled or refunded
       order on the corresponding platform, e.g. mitxonline-production-20
@@ -543,7 +543,8 @@ models:
   - name: courserunenrollment_upgraded_on
     description: timestamp, date and time when the learner upgraded to the verified
       track course mode. May be the same as the date when the course enrollment was
-      created for xPro.
+      created for xPro. For Bootcamps, which has no upgrade, the latest payment date
+      of the order in order_id, so the last installment on an installment plan.
   - name: user_company
     description: str, user's company pulled on the platform user enrolled. May be
       blank.
@@ -1648,7 +1649,8 @@ unit_tests:
 - name: test_marts__combined_course_enrollment_detail_is_one_row_per_enrollment
   description: >
     A Bootcamps enrollment with installment orders keeps the latest created fulfilled
-    or refunded order. An xPro enrollment on a multi-line order takes the line for
+    or refunded order, leaving out a refund order. An xPro enrollment on a multi-line
+    order takes the line for
     its
     run, else the program line. An edX.org enrollment whose learner has a certificate
     on
@@ -1745,6 +1747,7 @@ unit_tests:
     - order_id: 501
       line_id: 601
       order_state: "fulfilled"
+      order_payment_type: "cybersource"
       user_username: "ana"
       courserun_id: 10
       order_created_on: "2024-01-01T00:00:00"
@@ -1752,6 +1755,7 @@ unit_tests:
     - order_id: 502
       line_id: 602
       order_state: "refunded"
+      order_payment_type: "cybersource"
       user_username: "ana"
       courserun_id: 10
       order_created_on: "2024-02-01T00:00:00"
@@ -1759,10 +1763,19 @@ unit_tests:
     - order_id: 503
       line_id: 603
       order_state: "created"
+      order_payment_type: "cybersource"
       user_username: "ana"
       courserun_id: 10
       order_created_on: "2024-03-01T00:00:00"
       order_reference_number: "bootcamps-503"
+    - order_id: 504
+      line_id: 604
+      order_state: "fulfilled"
+      order_payment_type: "refund"
+      user_username: "ana"
+      courserun_id: 10
+      order_created_on: "2024-04-01T00:00:00"
+      order_reference_number: "bootcamps-504"
   - input: ref('int__bootcamps__ecommerce_receipt')
     rows: []
   - input: ref('int__mitxpro__ecommerce_line')
