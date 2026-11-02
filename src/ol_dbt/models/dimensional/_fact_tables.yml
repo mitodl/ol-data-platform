@@ -286,7 +286,11 @@ models:
     Transaction fact table for e-commerce order lines across platforms.
     Grain: one row per (order_id, line_id, platform) — one line per product ordered.
     order_total_price_paid is a repeated order-header value and is NOT additive across
-    lines of the same order. Use line_price for revenue aggregations.
+    lines of the same order. line_price is the list price at purchase, so subtract
+    discount_amount for what a line was charged. A MicroMasters order migrated to
+    MITx
+    Online appears once, under mitxonline. The copy keeps the original order date
+    but not the order's coupon.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
@@ -2750,7 +2754,7 @@ unit_tests:
   - input: ref('int__micromasters__orders')
     rows:
     - {line_id: 4, order_id: 4, line_price: 500.00, order_total_price_paid: 500.00,
-      order_created_on: "2024-01-15T00:00:00"}
+      order_is_migrated_to_mitxonline: false, order_created_on: "2024-01-15T00:00:00"}
   - input: ref('dim_user')
     rows: []
   - input: ref('dim_discount_type')
@@ -2807,7 +2811,8 @@ unit_tests:
     rows: []
   - input: ref('int__micromasters__orders')
     rows:
-    - {line_id: 10, order_id: 10, coupon_id: 31, order_total_price_paid: 300.00, order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 10, order_id: 10, coupon_id: 31, order_total_price_paid: 300.00, order_is_migrated_to_mitxonline: false,
+      order_created_on: "2024-01-15T00:00:00"}
   - input: ref('dim_user')
     rows: []
   - input: ref('dim_discount_type')
@@ -2842,6 +2847,44 @@ unit_tests:
     - {line_id: "8", discount_type_fk: 3}
     - {line_id: "9", discount_type_fk: 1}
     - {line_id: "10", discount_type_fk: 2}
+- name: test_tfact_order_counts_a_migrated_micromasters_order_once
+  description: >
+    A MicroMasters order migrated to MITx Online is counted as its MITx Online copy.
+    A MicroMasters order with no copy stays.
+  model: tfact_order
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows:
+    - {line_id: 1, order_id: 1, order_reference_number: MM-prod-1, order_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__mitxpro__ecommerce_order')
+    rows: []
+  - input: ref('int__mitxpro__ecommerce_line')
+    rows: []
+  - input: ref('int__bootcamps__ecommerce_order')
+    rows: []
+  - input: ref('int__micromasters__orders')
+    rows:
+    - {line_id: 1, order_id: 1, order_is_migrated_to_mitxonline: true, order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 2, order_id: 2, order_is_migrated_to_mitxonline: false, order_created_on: "2024-01-15T00:00:00"}
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_discount_type')
+    rows: []
+  - input: ref('dim_product')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: ref('dim_discount')
+    rows: []
+  - input: ref('dim_tax_rate')
+    rows: []
+  expect:
+    rows:
+    - {platform: mitxonline, order_id: 1}
+    - {platform: micromasters, order_id: 2}
 - name: test_tfact_enrollment_order_resolves_program_order_id
   description: >
     An xPRO enrollment on a program order carries that order as its program order,
