@@ -274,15 +274,18 @@ left join discount_type
 left join discount_names
     on discount.discount_code = discount_names.discount_code
     and enrollment.platform_display = discount_names.platform
+-- Both sources keep a deferred order on the run it was bought for.
 left join enrollment_upgrades
     on f_order.order_id = enrollment_upgrades.order_id
     and enrollment.platform_display = enrollment_upgrades.platform
-    and course_run.courserun_readable_id = enrollment_upgrades.courserun_readable_id
+    and coalesce(f_order.deferred_from_courserun_readable_id, course_run.courserun_readable_id)
+        = enrollment_upgrades.courserun_readable_id
     and d_user.email = enrollment_upgrades.user_email
 left join order_emails
     on f_order.order_id = order_emails.order_id
     and enrollment.platform_display = order_emails.platform
-    and course_run.courserun_readable_id = order_emails.courserun_readable_id
+    and coalesce(f_order.deferred_from_courserun_readable_id, course_run.courserun_readable_id)
+        = order_emails.courserun_readable_id
     and d_user.email = order_emails.user_email
 left join course_passed_counts
     on d_user.email = course_passed_counts.user_email
