@@ -160,7 +160,7 @@ courseware_automation_sensor = AutomationConditionSensorDefinition(
 # tag_concurrency_limits caps at one run at a time: a chunker change requests every
 # course run at once, and concurrent overwrites of the vector tables conflict at
 # commit. Stopped by default: the first build of each table is a backfill launched by
-# hand.
+# hand, which the limit caps only if it is launched with the tag.
 LEARN_EMBEDDINGS_TAG = "learn_embeddings/model_calls"
 learn_embeddings_automation_sensor = AutomationConditionSensorDefinition(
     name="learn_embeddings_automation_sensor",
