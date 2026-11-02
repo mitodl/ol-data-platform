@@ -2378,6 +2378,43 @@ models:
     data_type: varchar
     description: the UUID for the organization in the SSO provider
 
+- name: stg__mitxonline__app__postgres__courses_paidcourserun
+  description: The MITx Online course run each order pays for, one row per (user,
+    run, order). A deferral repoints the row at the new run, so this holds the run
+    an order pays for now, while the order's line keeps the run it was bought for.
+    The app deletes the row when it deactivates the enrollment, but the raw table
+    still holds rows for deactivated enrollments.
+  columns:
+  - name: paidcourserun_id
+    data_type: bigint
+    description: primary key for this table
+    data_tests:
+    - not_null
+    - unique:
+        config:
+          error_if: "!=0"
+  - name: user_id
+    data_type: bigint
+    description: foreign key to users_user for the learner
+    data_tests:
+    - not_null
+  - name: courserun_id
+    data_type: bigint
+    description: foreign key to courses_courserun
+    data_tests:
+    - not_null
+  - name: order_id
+    data_type: bigint
+    description: foreign key to ecommerce_order
+    data_tests:
+    - not_null
+  - name: paidcourserun_created_on
+    data_type: varchar
+    description: timestamp, specifying when the record was created
+  - name: paidcourserun_updated_on
+    data_type: varchar
+    description: timestamp, specifying when the record was most recently updated
+
 - name: stg__mitxonline__app__postgres__courses_courserun_b2b_contracts
   description: The B2B contracts each MITx Online course run is offered under. A run
     can belong to several contracts, and a run in no contract has no row.
