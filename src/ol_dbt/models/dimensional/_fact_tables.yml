@@ -1418,6 +1418,7 @@ unit_tests:
       enrollment_created_on: "2024-01-15T00:00:00"
       enrollment_updated_on: "2024-01-15T00:00:00"
       enrollment_is_edx_enrolled: true
+      is_verified: true
     - enrollment_key: "unrelated-later-enrollment"
       enrollment_id: "9999"
       enrollment_type: "course"
@@ -1530,6 +1531,7 @@ unit_tests:
       enrollment_created_on: "2024-01-15T00:00:00"
       enrollment_updated_on: "2024-01-15T00:00:00"
       enrollment_is_edx_enrolled: true
+      is_verified: true
     - enrollment_key: "41162ba2680034f26c0e2beb0362f07a"  # pragma: allowlist secret
       enrollment_id: "6002"
       enrollment_type: "course"
@@ -1641,6 +1643,7 @@ unit_tests:
       enrollment_created_on: "2024-01-15T00:00:00"
       enrollment_updated_on: "2024-01-15T00:00:00"
       enrollment_is_edx_enrolled: true
+      is_verified: true
     - enrollment_key: "unrelated-later-enrollment"
       enrollment_id: "9999"
       enrollment_type: "course"
@@ -1750,6 +1753,7 @@ unit_tests:
       enrollment_mode: "audit"
       enrollment_created_on: "2019-04-01T00:00:00"
       enrollment_is_edx_enrolled: true
+      is_verified: false
     - enrollment_key: "97403d1256e08932b660fd47d724e4a4"  # pragma: allowlist secret
       enrollment_id: "f06edfd255c34d6aa0d5c991adc9b17d"  # pragma: allowlist secret
       enrollment_type: "course"
