@@ -368,8 +368,11 @@ models:
         column_list: ["order_id", "line_id", "platform"]
 
 - name: marts__combined_course_enrollment_detail
-  description: course enrollment detail with certificates, orders and coupons from
-    OL platforms. No order data for edX.org course purchase.
+  description: One row per course run enrollment on OL platforms, keyed by enrollment_key,
+    with its certificate, grade, order and coupon. An enrollment with several orders
+    (Bootcamps installments) shows its latest created order, so sum order amounts
+    from marts__combined__orders, not through this mart. No order data for edX.org
+    course purchase.
   config:
     meta:
       # Tier1 because it carries a data contract
@@ -393,12 +396,28 @@ models:
     - accepted_values:
         arguments:
           values: '{{ var("platforms") }}'
+  - name: enrollment_key
+    description: str, primary key for this table. The same value as tfact_enrollment.enrollment_key.
+    tests:
+    - unique:
+        config:
+          # Every fan-out is resolved in the model, so a duplicate is a new one upstream.
+          error_if: ">0"
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('tfact_enrollment')
+          field: enrollment_key
+        config:
+          # tfact_enrollment is incremental and can lag a new enrollment by a run.
+          severity: warn
   - name: courserunenrollment_id
     description: int, internal ID and foreign key to courserunenrollments on the corresponding
       platform. Null for enrollments on edX.org.
   - name: combined_orders_hash_id
-    description: int, primary key for this table. At the grain of order id, line id,
-      and platform.
+    description: str, hash of order id, line id and platform, as in marts__combined__orders.
+      Null for an enrollment with no order. Not unique, because one order can cover
+      several enrollments.
   - name: course_readable_id
     data_type: varchar
     description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
@@ -502,11 +521,13 @@ models:
   - name: line_id
     description: int, foreign key to ecommerce line table for fulfilled or refunded
       orders on the corresponding platform. For edX.org, it refers to line table in
-      MicroMasters application.
+      MicroMasters application. On a multi-line xPro order, the line for the enrollment's
+      run, else a program line.
   - name: order_id
     description: int, foreign key to ecommerce order table for fulfilled or refunded
-      orders on the corresponding platform. Note that this does not include orders
-      from edX.org, for which we do not have data.
+      orders on the corresponding platform. The latest created when the enrollment
+      has several. Note that this does not include orders from edX.org, for which
+      we do not have data.
   - name: order_reference_number
     description: string, order reference number to identify a fulfilled or refunded
       order on the corresponding platform, e.g. mitxonline-production-20
@@ -572,16 +593,8 @@ models:
         row_condition: "platform ='MITx Online'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["courserunenrollment_id", "combined_orders_hash_id"]
-        row_condition: "platform ='xPro'"
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      arguments:
         column_list: ["user_email", "courserun_readable_id"]
         row_condition: "platform ='xPRO Global Alumni'"
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      arguments:
-        column_list: ["courserunenrollment_id", "order_reference_number"]
-        row_condition: "platform='Bootcamps'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["courserunenrollment_id"]
@@ -1631,3 +1644,170 @@ unit_tests:
       discount_amount: 250.00}
     - {platform: xPro, order_id: 6, unit_price: 1000.00, discount: "20.00%", discount_amount: 200.00}
     - {platform: edX.org, order_id: 3, unit_price: 450.00, discount: "$50.00", discount_amount: null}
+
+- name: test_marts__combined_course_enrollment_detail_is_one_row_per_enrollment
+  description: >
+    A Bootcamps enrollment with installment orders keeps the latest created fulfilled
+    or refunded order. An xPro enrollment on a multi-line order takes the line for
+    its
+    run, else the program line. An edX.org enrollment whose learner has a certificate
+    on
+    each of two MITx Online accounts keeps the latest certificate.
+  model: marts__combined_course_enrollment_detail
+  given:
+  - input: ref('tfact_enrollment')
+    rows: []
+  - input: ref('tfact_enrollment_order')
+    rows: []
+  - input: ref('dim_discount')
+    rows: []
+  - input: ref('int__combined__courserun_enrollments')
+    rows:
+    - platform: "Bootcamps"
+      enrollment_key: "bootcamps-key"
+      courserunenrollment_id: 1
+      user_id: "100"
+      user_username: "ana"
+      courserun_id: 10
+      courserun_readable_id: "bootcamp-v1:run"
+    - platform: "xPro"
+      enrollment_key: "xpro-run-line-key"
+      courserunenrollment_id: 2
+      user_id: "200"
+      user_username: "bo"
+      courserun_id: 20
+      courserun_readable_id: "course-v1:xPRO+A+1"
+    - platform: "xPro"
+      enrollment_key: "xpro-program-line-key"
+      courserunenrollment_id: 3
+      user_id: "201"
+      user_username: "di"
+      courserun_id: 21
+      courserun_readable_id: "course-v1:xPRO+B+1"
+    - platform: "edX.org"
+      enrollment_key: "edxorg-key"
+      user_id: "300"
+      user_username: "cy"
+      courserun_readable_id: "MITxT/1.1x/1T2024"
+  - input: ref('int__mitxpro__courserunenrollments')
+    rows:
+    - courserunenrollment_id: 2
+      ecommerce_order_id: 7000
+      courserun_id: 20
+      courserun_readable_id: "course-v1:xPRO+A+1"
+      user_username: "bo"
+    - courserunenrollment_id: 3
+      ecommerce_order_id: 7100
+      courserun_id: 21
+      courserun_readable_id: "course-v1:xPRO+B+1"
+      user_username: "di"
+  - input: ref('int__combined__course_runs')
+    rows:
+    - platform: "edX.org"
+      courserun_readable_id: "MITxT/1.1x/1T2024"
+      courserun_is_current: false
+  - input: ref('int__combined__users')
+    rows: []
+  - input: ref('int__mitxonline__ecommerce_transaction')
+    rows: []
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows:
+    - order_id: 1
+      line_id: 1
+      user_id: 1
+      courserun_id: 1
+      order_state: "fulfilled"
+  - input: ref('int__micromasters__orders')
+    rows:
+    - order_id: 1
+      line_id: 1
+      user_id: 1
+      courserun_edxorg_readable_id: "unrelated"
+      order_state: "fulfilled"
+  - input: ref('int__micromasters__users')
+    rows:
+    - user_id: 30
+      user_edxorg_username: "cy"
+      user_mitxonline_username: "cy_mitxonline"
+      user_email: "cy@example.com"
+  - input: ref('int__mitxpro__ecommerce_order')
+    rows:
+    - order_id: 7000
+      order_state: "fulfilled"
+      order_created_on: "2024-01-01T00:00:00"
+    - order_id: 7100
+      order_state: "fulfilled"
+      order_created_on: "2024-01-01T00:00:00"
+  - input: ref('int__mitxpro__ecommerce_receipt')
+    rows: []
+  - input: ref('int__bootcamps__ecommerce_order')
+    rows:
+    - order_id: 501
+      line_id: 601
+      order_state: "fulfilled"
+      user_username: "ana"
+      courserun_id: 10
+      order_created_on: "2024-01-01T00:00:00"
+      order_reference_number: "bootcamps-501"
+    - order_id: 502
+      line_id: 602
+      order_state: "refunded"
+      user_username: "ana"
+      courserun_id: 10
+      order_created_on: "2024-02-01T00:00:00"
+      order_reference_number: "bootcamps-502"
+    - order_id: 503
+      line_id: 603
+      order_state: "created"
+      user_username: "ana"
+      courserun_id: 10
+      order_created_on: "2024-03-01T00:00:00"
+      order_reference_number: "bootcamps-503"
+  - input: ref('int__bootcamps__ecommerce_receipt')
+    rows: []
+  - input: ref('int__mitxpro__ecommerce_line')
+    rows:
+    - line_id: 7001
+      order_id: 7000
+      courserun_id: 20
+    - line_id: 7002
+      order_id: 7000
+      courserun_id: 99
+    - line_id: 7101
+      order_id: 7100
+      program_id: 5
+    - line_id: 7102
+      order_id: 7100
+      courserun_id: 98
+  - input: ref('int__mitxonline__courserun_certificates')
+    rows:
+    - user_username: "cy_mitxonline"
+      user_email: "cy_other@example.com"
+      courserun_readable_id: "course-v1:MITxT+1.1x+1T2024"
+      courseruncertificate_uuid: "older-uuid"
+      courseruncertificate_created_on: "2024-05-01T00:00:00"
+      courseruncertificate_is_revoked: false
+    - user_username: "cy_second_account"
+      user_email: "cy@example.com"
+      courserun_readable_id: "course-v1:MITxT+1.1x+1T2024"
+      courseruncertificate_uuid: "newer-uuid"
+      courseruncertificate_created_on: "2024-06-01T00:00:00"
+      courseruncertificate_is_revoked: false
+  expect:
+    rows:
+    - enrollment_key: "bootcamps-key"
+      order_id: 502
+      line_id: 602
+      courseruncertificate_uuid:
+    - enrollment_key: "xpro-run-line-key"
+      order_id: 7000
+      line_id: 7001
+      courseruncertificate_uuid:
+    - enrollment_key: "xpro-program-line-key"
+      order_id: 7100
+      line_id: 7101
+      courseruncertificate_uuid:
+    - enrollment_key: "edxorg-key"
+      order_id:
+      line_id:
+      courseruncertificate_uuid: "newer-uuid"
