@@ -32,7 +32,7 @@ params:
   - user_company
   - user_job_title
   - user_highest_education
-  - program_complete_days
+  - program_completion_days
   - courses_taken_in_program
   - capstone_ind
   - user_birth_year
@@ -49,7 +49,7 @@ params:
   column_config:
     courses_taken_in_program:
       showCellBars: false
-    program_complete_days:
+    program_completion_days:
       showCellBars: false
     user_id:
       showCellBars: false
