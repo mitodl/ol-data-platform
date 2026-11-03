@@ -418,27 +418,37 @@ def test_anthropic_sentiment_client_leaves_partial_text_unlabeled(
     assert client.classify("some conversation text") is None
 
 
-def test_feedback_sentiment_predicts_only_unrated_zendesk_conversations(
+def test_feedback_sentiment_predicts_only_unrated_learn_zendesk_conversations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     model = resolve_embedding_model(None, 4)
     vectors, labels = _separable_dataset(n_per_class=10)
-    rated = [("good" if label == "positive" else "bad") for label in labels]
-    # The last two are out of scope: a tutor conversation and a content idea.
-    unrated = [
-        ("zendesk", None, [5.0] * 4),
-        ("zendesk", "offered", [-5.0] * 4),
-        ("zendesk", "unoffered", [5.0] * 4),
-        ("learn_ai_tutor", None, [-5.0] * 4),
-        ("content_feedback", "idea", [-5.0] * 4),
+    # Rated on another platform: training uses every rated conversation.
+    rated = [
+        ("zendesk", "micromasters", "good" if label == "positive" else "bad", "")
+        for label in labels
     ]
-    pks = [f"pk{i}" for i in range(len(rated) + len(unrated))]
+    # Only the first three are in scope.
+    unrated = [
+        ("zendesk", "mitlearn", None, "I cannot log in"),
+        ("zendesk", "mitlearn", "offered", "Thanks"),
+        ("zendesk", "mitlearn", "unoffered", None),
+        ("zendesk", "mitlearn", None, "Idea: add a share button"),
+        ("zendesk", "mitxpro", None, "Exports Compliance"),
+        ("learn_ai_tutor", "mitlearn", None, "What is a gradient?"),
+        ("content_feedback", "mitlearn", "idea", "More videos"),
+    ]
+    unrated_vectors = [[5.0] * 4, [-5.0] * 4, [5.0] * 4] + [[-5.0] * 4] * 4
+    rows = rated + unrated
+    pks = [f"pk{i}" for i in range(len(rows))]
     tables = {
         "int__feedback__conversation": pl.DataFrame(
             {
                 "feedback_conversation_pk": pks,
-                "source_slug": ["zendesk"] * len(rated) + [u[0] for u in unrated],
-                "explicit_rating": rated + [u[1] for u in unrated],
+                "source_slug": [row[0] for row in rows],
+                "platform": [row[1] for row in rows],
+                "explicit_rating": [row[2] for row in rows],
+                "conversation_text": [row[3] for row in rows],
             }
         ),
         "feedback_embeddings": pl.DataFrame(
@@ -446,7 +456,7 @@ def test_feedback_sentiment_predicts_only_unrated_zendesk_conversations(
                 "feedback_conversation_pk": [*pks, "other_model"],
                 "embedding_vector": [
                     *vectors.tolist(),
-                    *[u[2] for u in unrated],
+                    *unrated_vectors,
                     [0.0] * 4,
                 ],
                 "embedding_model_version": [model.model_version] * len(pks)
@@ -466,7 +476,7 @@ def test_feedback_sentiment_predicts_only_unrated_zendesk_conversations(
         asset_module.FeedbackSentimentConfig(embedding_dim=4),
     )
 
-    assert result["feedback_conversation_pk"].to_list() == pks[len(rated) : -2]
+    assert result["feedback_conversation_pk"].to_list() == pks[len(rated) :][:3]
     assert result["sentiment_slug"].to_list() == ["positive", "negative", "positive"]
     assert result["sentiment_model_version"].unique().to_list() == [
         "local_classifier@0.35"

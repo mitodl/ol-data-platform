@@ -191,7 +191,7 @@ sources:
       meta:
         dagster:
           asset_key: [intermediate, feedback_sentiment_assignments]
-    description: One row per Zendesk conversation the model scored (upsert key feedback_conversation_pk),
+    description: One row per conversation the model scored (upsert key feedback_conversation_pk),
       materialized by the feedback_sentiment Dagster asset. Each run retrains the
       classifier on the rated conversations. No column tests here -- see feedback_cluster_run;
       not_null/unique coverage lives on int__feedback__sentiment instead.

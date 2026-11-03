@@ -10,6 +10,7 @@ from dagster import (
     MetadataValue,
     asset,
 )
+from ml.lib.cluster import DEFAULT_PLATFORMS
 from ml.lib.embed import resolve_embedding_model
 from ml.lib.sentiment_eval import (
     labeled_sentiment_sample,
@@ -36,6 +37,8 @@ PRODUCTION_NEGATIVE_THRESHOLD = 0.35
 PREDICTED_SOURCES = ("zendesk",)
 # A content-feedback idea is a suggestion, not a verdict, so it gets no sentiment.
 NO_SENTIMENT_RATINGS = ("idea",)
+# The Appzi widget's suggestion tickets, the Zendesk form of the same idea.
+NO_SENTIMENT_TEXT_PREFIX = "Idea:"
 
 SENTIMENT_ASSIGNMENT_SCHEMA = {
     "feedback_conversation_pk": pl.String,
@@ -68,6 +71,13 @@ class FeedbackSentimentConfig(Config):
         description=(
             "The source_slugs to predict for. Training still uses every rated "
             "conversation. Add a source only after scoring the model on it."
+        ),
+    )
+    platforms: list[str] | None = Field(
+        default=DEFAULT_PLATFORMS,
+        description=(
+            "The platforms to predict for, the same default as the summaries and "
+            "clusters (ml.lib.cluster). Null predicts every platform."
         ),
     )
     embedding_model: str | None = Field(
@@ -112,7 +122,7 @@ def feedback_sentiment(
     Each run retrains on every rated row and rewrites the prediction of each
     conversation it scores. afact_feedback_conversation uses the result only
     where it has no verdict, so a row left from before a rating is ignored.
-    Only config.sources are predicted, and never an idea.
+    Only config.sources on config.platforms are predicted, and never an idea.
     """
     embedding_model = resolve_embedding_model(
         config.embedding_model, config.embedding_dim
@@ -121,7 +131,16 @@ def feedback_sentiment(
         get_dbt_model_as_dataframe(
             database_name=database_name, table_name="int__feedback__conversation"
         )
-        .select(["feedback_conversation_pk", "source_slug", "explicit_rating"])
+        .select(
+            "feedback_conversation_pk",
+            "source_slug",
+            "platform",
+            "explicit_rating",
+            pl.col("conversation_text")
+            .str.starts_with(NO_SENTIMENT_TEXT_PREFIX)
+            .fill_null(value=False)
+            .alias("is_idea_text"),
+        )
         .collect()
     )
     embeddings_df = (
@@ -144,7 +163,10 @@ def feedback_sentiment(
             pl.col("explicit_rating").is_null()
             | ~pl.col("explicit_rating").is_in(NO_SENTIMENT_RATINGS)
         )
+        & ~pl.col("is_idea_text")
     )
+    if config.platforms is not None:
+        unrated_df = unrated_df.filter(pl.col("platform").is_in(config.platforms))
 
     class_counts = labeled_df["sentiment"].value_counts()
     if class_counts.height < 2:  # noqa: PLR2004
