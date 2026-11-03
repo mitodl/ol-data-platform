@@ -1285,9 +1285,6 @@ models:
     description: int, marts__combined_program_enrollment_detail.program_completion_days,
       the number of days from the start date of the first verified course run to the
       program certificate creation date
-  - name: program_complete_days
-    description: Deprecated, the old name for program_completion_days and always equal
-      to it. Removed once the Superset chart reads program_completion_days.
   tests:
   # NOTE: These conditional uniqueness tests match the upstream marts__combined_program_enrollment_detail
   # model's grain definition. This reporting model is a passthrough/enrichment layer that inherits
@@ -2007,9 +2004,8 @@ unit_tests:
       program_certificates: 1}
 
 - name: test_program_enrollment_with_user_report_keeps_the_mart_completion_days_name
-  description: >
-    The report serves the mart's program_completion_days under the same name, and
-    under the deprecated program_complete_days until the chart moves.
+  description: The report serves the mart's program_completion_days under the same
+    name.
   model: program_enrollment_with_user_report
   given:
   - input: ref('marts__combined_program_enrollment_detail')
@@ -2028,7 +2024,7 @@ unit_tests:
     rows: []
   expect:
     rows:
-    - {user_id: 8, program_completion_days: 30, program_complete_days: 30}
+    - {user_id: 8, program_completion_days: 30}
 
 - name: test_program_enrollment_with_user_report_matches_one_course_set_per_row
   description: >
