@@ -274,9 +274,6 @@ path = "dg_projects/edxorg"
 path = "dg_projects/legacy_openedx"
 
 [[tool.dg.workspace.projects]]
-path = "dg_projects/canvas"
-
-[[tool.dg.workspace.projects]]
 path = "dg_projects/delivery"
 
 [[tool.dg.workspace.projects]]

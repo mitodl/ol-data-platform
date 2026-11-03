@@ -43,6 +43,25 @@ def test_the_repo_rules_file_is_valid():
     assert rules.rule_for("dim_user") is not None
 
 
+@pytest.mark.parametrize(
+    ("name", "domain"),
+    [
+        ("dim_concept", "courses-content"),
+        ("snapshot_bridge_concept_relation", "courses-content"),
+        ("integrations__learn__concepts", "courses-content"),
+        ("courseware_claim", "courses-content"),
+        ("int__courseware__claims", "courses-content"),
+        # Open edX's courseware app holds learner state, not courseware knowledge.
+        ("raw__mitx__openedx__mysql__courseware_studentmodule", "engagement"),
+    ],
+)
+def test_the_repo_rules_place_courseware_names(name, domain):
+    rule = load_domain_rules(RULES_PATH).rule_for(name)
+
+    assert rule is not None
+    assert rule.domain == domain
+
+
 def test_first_matching_rule_wins_and_keeps_owner_and_tier():
     node = _node(
         "tfact_user_order", openmetadata={"owner": "data-platform", "tier": "T2"}

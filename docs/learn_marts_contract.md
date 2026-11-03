@@ -1,6 +1,6 @@
 # Learn Integration Schema Contract
 
-This document defines the stable interface that MIT Learn's Trino-pull ETL tasks depend on. All Learn-facing dbt integration models follow the naming convention and column requirements specified here.
+This document defines the stable interface that MIT Learn's warehouse-pull ETL tasks depend on. Learn reads these models from StarRocks over the MySQL protocol. All Learn-facing dbt integration models follow the naming convention and column requirements specified here.
 
 ## Model Location
 
@@ -23,6 +23,7 @@ Examples:
 - `integrations__learn__mitxonline_programs`
 - `integrations__learn__content_files`
 - `integrations__learn__ocw_content_files`
+- `integrations__learn__canvas_content_files`
 
 ## Required Columns
 
@@ -143,6 +144,7 @@ and MIT Learn unpublishes a run that is absent.
 | `price` | decimal | From the latest version of the run's product |
 | `instructors` | array(string) | Names on the course page's faculty page |
 | `published` | boolean | Whether `price` is above zero |
+| `platform_code` | string | MIT Learn's platform code for the course's `platform`, as `XPRO_PLATFORM_TRANSFORM` maps it (`emeritus`, `globalalumni`, `simplilearn`, `susskind`, `whu`, `xpro`). The run's resource's `platform.code`, which a content file's vector point key uses. Null for a platform Learn does not map: its loader skips such a course |
 
 `integrations__learn__xpro_programs` has one row per live program with a live CMS page and a
 product. It has the course columns above, plus `instructors` (array, the program
@@ -390,15 +392,15 @@ columns are described in
 ## Grain Expectations
 
 - **Catalog models** (`integrations__learn__<source>_courses`, `integrations__learn__<source>_programs`): One row per resource
-- **Content file models** (`integrations__learn__content_files`, `integrations__learn__ocw_content_files`): One row per content file
+- **Content file models** (`integrations__learn__content_files`, `integrations__learn__ocw_content_files`, `integrations__learn__canvas_content_files`): One row per content file
 - **Media models**: One row per channel, playlist, video, podcast or episode; `integrations__learn__youtube_playlist_videos` is one row per video in a playlist
 
 ## Nullability Rules
 
 1. All required columns must be `NOT NULL` in catalog models
-2. Content file models are exempt from the resource-level required columns; their non-null columns are `etl_source`, `run_readable_id` and `key`, plus `source_path` and `extraction_status` in `integrations__learn__content_files` and `url` and `content_type` in `integrations__learn__ocw_content_files`
+2. Content file models are exempt from the resource-level required columns; their non-null columns are `etl_source`, `run_readable_id` and `key`, plus `source_path` and `extraction_status` in `integrations__learn__content_files` and `integrations__learn__canvas_content_files`, and `url` and `content_type` in `integrations__learn__ocw_content_files`
 3. Media models are exempt from the resource-level required columns; their keys and non-null columns are in the table under Media Sources
-4. Aggregated columns (`topics`, `instructors`, and `courses` in `integrations__learn__xpro_programs`) may be `NULL` when no data exists; consumers should treat `NULL` as empty. `topics` is an array except in `integrations__learn__podcasts`, `integrations__learn__podcast_episodes` and `integrations__learn__mit_climate_articles`, where it is a comma-separated string, as is `courses`
+4. Aggregated columns (`topics`, `instructors`, and `courses` in `integrations__learn__xpro_programs`) may be `NULL` when no data exists; consumers should treat `NULL` as empty. `topics` is an array except in `integrations__learn__podcasts` and `integrations__learn__podcast_episodes`, where it is a comma-separated string, as is `courses`
 5. Text columns (`description`, `url`, `image_url`) may be `NULL` when no data exists
 
 ## ETL Source Values
@@ -434,3 +436,5 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-22 | Tobias Macey | Drop MIT edX courses. MIT Learn's `mit_edx` courses are retired rather than moved to a warehouse pull, so no Learn Sync task reads them and `integrations__learn__mit_edx_courses` is gone along with the Course Sources (MIT edX) columns. `mit_edx` stays as the source of `integrations__learn__mit_edx_programs`. The MIT edX programs columns now name what the model has (`course_readable_ids` and `topics` arrays) rather than `courses` and `departments` strings, which it never had. |
 | 2026-10-22 | Tobias Macey | Added `child_program_order` to `integrations__learn__mitxonline_program_children`, so a Sync task can number child programs not shown as courses in requirement tree order, as MIT Learn's ETL does, and not by readable id. |
 | 2026-10-22 | Tobias Macey | Added `release_date` to `integrations__learn__content_files` for MIT Learn's `ContentFile.release_date` (mit-learn#4093). The file exclusions also follow mit-learn#4106: an asset name no longer matches a link that drops one of its separators. |
+| 2026-10-27 | Tobias Macey | Added `platform_code` to `integrations__learn__xpro_runs`, Learn's platform code for the run's course, so the content-file embedding chunks key an xPRO file's points under its course's platform and not always `xpro`. |
+| 2026-11-02 | Tobias Macey | Added `integrations__learn__canvas_content_files` and `integrations__learn__canvas_courses`. |

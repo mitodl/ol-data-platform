@@ -44,7 +44,6 @@ import polars as pl
 from dagster import (
     AssetExecutionContext,
     AssetKey,
-    Config,
     MetadataValue,
     RetryPolicy,
     asset,
@@ -57,6 +56,7 @@ from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient, webhook_status
 from pydantic import Field
 
+from delivery.lib.learn_webhook import LearnDeliveryConfig, webhook_failure
 from delivery.lib.sanitize import clean_html
 
 log = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ _MAX_EXTRACTION_AGE = timedelta(days=3)
 _REVIEW_TITLE_PREFIX = "Review whether MIT Learn should unpublish edX program"
 
 
-class MitEdxProgramsWebhookConfig(Config):
+class MitEdxProgramsWebhookConfig(LearnDeliveryConfig):
     """Run config for mit_edx_programs_webhook."""
 
     review_repository: str = Field(
@@ -352,14 +352,13 @@ def mit_edx_programs_webhook(
         "Delivering %d MIT edX programs to MIT Learn webhook", len(resources)
     )
     try:
-        response = learn_client.notify_learning_resources(resources)
-    except httpx.HTTPStatusError as exc:
-        msg = (
-            f"MIT edX programs webhook failed with status "
-            f"{exc.response.status_code}: {exc}"
+        response = learn_client.notify_learning_resources(
+            resources, allow_mass_unpublish=config.allow_mass_unpublish
         )
-        context.log.exception(msg)
-        raise RuntimeError(msg) from exc
+    except httpx.HTTPStatusError as exc:
+        failure = webhook_failure("MIT edX programs", exc)
+        context.log.exception(failure.description)
+        raise failure from exc
 
     status = webhook_status(response)
     context.add_output_metadata(

@@ -9,8 +9,9 @@ metadata to MIT Learn over the webhook API. Sources currently delivered:
 - MIT edX programs
 
 It also pushes the instructor onboarding user list, read from the warehouse, to
-the access-forge GitHub repository, and each B2B organization's administration
-report to the B2B partners bucket.
+the access-forge GitHub repository, each B2B organization's administration
+report to the B2B partners bucket, and a notice of each Canvas course export
+(made in data_loading) to MIT Learn's content_files webhook.
 
 The extraction halves of these pipelines (sloan_course_metadata, video_api,
 video_metadata) still live here and move on to INGEST later.
@@ -22,12 +23,14 @@ watch every code location and must be registered from exactly one.
 from dagster import (
     AssetSelection,
     DefaultScheduleStatus,
+    DefaultSensorStatus,
     Definitions,
     ScheduleDefinition,
     define_asset_job,
 )
 from dagster_aws.s3 import S3Resource
 from ol_orchestrate.io_managers.filepath import S3FileObjectIOManager
+from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
@@ -46,6 +49,7 @@ from ol_orchestrate.resources.oauth import OAuthApiClientFactory
 from ol_orchestrate.sensors.failure_notification import FAILURE_NOTIFICATION_SENSORS
 
 from delivery.assets.b2b_organization import export_b2b_organization_data
+from delivery.assets.canvas import canvas_course_exports, course_content_metadata
 from delivery.assets.instructor_onboarding import (
     generate_instructor_onboarding_user_list,
     update_access_forge_repo,
@@ -63,6 +67,7 @@ from delivery.assets.ovs_videos import (
 from delivery.assets.sloan_api import sloan_course_metadata
 from delivery.lib.scheduled_automation import (
     NON_AIRBYTE_STAGING_CRON,
+    automate_where_registered,
     deliver_after_upstream,
     instigators_for_environment,
 )
@@ -125,6 +130,18 @@ mit_edx_programs_webhook, mit_edx_programs_delivery_sensor = deliver_after_upstr
     # Postgres inputs are staged by the midnight sync_and_stage job, so a
     # midnight tick would deliver after that rebuild, on yesterday's edX data.
     staging_cron=NON_AIRBYTE_STAGING_CRON,
+)
+
+# Tells Learn about each Canvas course export as data_loading lands it. In the
+# canvas location this ran under the location's default automation sensor,
+# which was RUNNING in production.
+course_content_metadata, canvas_course_export_webhook_sensor = (
+    automate_where_registered(
+        course_content_metadata,
+        "canvas_course_export_webhook_sensor",
+        condition=upstream_or_code_changes(),
+        default_status=DefaultSensorStatus.RUNNING,
+    )
 )
 
 # Daily schedule for learning resource API extraction
@@ -207,6 +224,16 @@ defs = Definitions(
         ),
         "vault": vault,
         "s3": S3Resource(),
+        # read by course_content_metadata, which re-fetches the course for its
+        # name, code and SIS id
+        "canvas_api": ApiClientFactory(
+            deployment="canvas",
+            client_class="CanvasApiClient",
+            mount_point="secret-data",
+            config_path="pipelines/canvas",
+            kv_version="1",
+            vault=vault,
+        ),
         "sloan_api": OAuthApiClientFactory(deployment="sloan", vault=vault),
         # opens the unpublish-review issues mit_edx_programs_webhook files when edX
         # lists no program, and commits the access-forge instructor user list
@@ -237,8 +264,11 @@ defs = Definitions(
             update_access_forge_repo,
             # Warehouse data pushed to the B2B partners bucket
             export_b2b_organization_data,
+            # Canvas course exports announced to MIT Learn
+            course_content_metadata,
         ]
-    ),
+    )
+    + canvas_course_exports,
     # Registration, not default_status, is what keeps these out of the
     # environments they were never meant to run in -- see
     # delivery.lib.scheduled_automation.
@@ -259,6 +289,7 @@ defs = Definitions(
             oll_delivery_sensor,
             mit_edx_programs_delivery_sensor,
             b2b_organization_list_sensor,
+            canvas_course_export_webhook_sensor,
             *FAILURE_NOTIFICATION_SENSORS,
         ]
     ),

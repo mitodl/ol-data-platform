@@ -49,8 +49,6 @@ with course_activities as (
     select
         user_username
         , courserun_readable_id
-        , count(distinct useractivity_video_id) as courseactivity_num_unique_play_video
-        , count(*) as courseactivity_num_play_video
         , max(useractivity_timestamp) as courseactivity_last_play_video_timestamp
     from course_activities_video
     where useractivity_event_type = 'play_video'
@@ -81,8 +79,6 @@ select
     , all_course_activities_stats.courserun_readable_id
     , all_course_activities_stats.courseactivity_num_days_activity
     , all_course_activities_stats.courseactivity_num_events
-    , play_video_stats.courseactivity_num_unique_play_video
-    , play_video_stats.courseactivity_num_play_video
     , play_video_stats.courseactivity_last_play_video_timestamp
     , problem_check_stats.courseactivity_last_problem_check_timestamp
     , course_chapters_stats.courseactivity_num_chapters_visited

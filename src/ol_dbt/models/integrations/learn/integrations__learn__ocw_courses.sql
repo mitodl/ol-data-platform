@@ -15,13 +15,9 @@ with courses as (
 )
 
 select
-    -- Django's slugify of the term: "January IAP" -> "january-iap".
-    {% set term_slug = regexp_replace_all(
-        regexp_replace_all("lower(trim(course_term))", "'[^a-z0-9_\\s-]'", "''"), "'[-\\s]+'", "'-'"
-    ) -%}
     {{ dbt.concat([
         "course_primary_course_number"
-        , "coalesce(" ~ dbt.concat(["'+'", term_slug]) ~ ", '')"
+        , "coalesce(" ~ dbt.concat(["'+'", django_slugify('course_term')]) ~ ", '')"
         , "coalesce(" ~ dbt.concat(["'_'", "course_year"]) ~ ", '')"
     ]) }} as readable_id
     , course_title as title

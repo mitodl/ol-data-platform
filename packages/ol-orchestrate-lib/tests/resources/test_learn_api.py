@@ -77,6 +77,15 @@ def test_notify_learning_resources_omits_sync_by_default() -> None:
     assert _sent_batch(resources=[resource]) == {"resources": [resource]}
 
 
+def test_notify_learning_resources_sends_allow_mass_unpublish_when_set() -> None:
+    """The override is in the signed body only when the caller asks for it."""
+    resource = {"readable_id": "a", "etl_source": "oll", "resource_type": "course"}
+    assert _sent_batch(resources=[resource], allow_mass_unpublish=True) == {
+        "resources": [resource],
+        "allow_mass_unpublish": True,
+    }
+
+
 LOCAL_LEARN = "https://api.learn.mit.dev"
 VAULT_SECRET = {"learn": {"url": "https://learn.example.com", "token": "from-vault"}}
 

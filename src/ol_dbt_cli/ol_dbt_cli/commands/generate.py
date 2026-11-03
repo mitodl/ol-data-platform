@@ -23,6 +23,7 @@ import yaml
 from cyclopts import App, Parameter
 
 from ol_dbt_cli.lib.dbt_executable import dbt_executable
+from ol_dbt_cli.lib.duckdb_aws import USE_AWS_CREDENTIAL_CHAIN_SQL
 from ol_dbt_cli.lib.inventory import DEFAULT_INVENTORY_DIR, load_units
 from ol_dbt_cli.lib.inventory_sources import plan_sources
 
@@ -236,7 +237,7 @@ def _describe_local_view(
     with duckdb.connect(str(duckdb_path)) as conn:
         for ext in ["httpfs", "aws", "iceberg"]:
             conn.execute(f"LOAD {ext}")
-        conn.execute("CALL load_aws_credentials()")
+        conn.execute(USE_AWS_CREDENTIAL_CHAIN_SQL)
         quoted_view_name = '"' + view_name.replace('"', '""') + '"'
         rows = conn.execute(f"DESCRIBE {quoted_view_name}").fetchall()  # noqa: S608
     # DESCRIBE returns: column_name, column_type, null, key, default, extra

@@ -116,17 +116,38 @@ def load_matching_rows(
     return pl.DataFrame(scan.to_arrow_batch_reader().read_all()).select(columns)
 
 
+def read_rows(
+    layer: str, table: str, columns: Sequence[str], **equals: str
+) -> pl.DataFrame | None:
+    """Read a table's rows whose columns equal the given values, if it exists.
+
+    Every equality goes into the Iceberg scan, which keeps only the matching
+    rows and prunes the files of other partitions. polars does not do that for a
+    filter on :func:`read_table`'s scan: of ``etl_source == "mitxonline" &
+    run_readable_id == <run>`` it handed pyiceberg only the ``etl_source`` term,
+    so the scan returned all 2.6M mitxonline rows of
+    integrations__learn__content_files with their text, and reading one course
+    run (2,279 rows) took 18.7 GB.
+
+    :param layer: the warehouse layer
+    :param table: the table name
+    :param columns: the columns to read
+    :param equals: column values every returned row has, at least one
+    :returns: the rows, or None when the table does not exist yet
+    :rtype: pl.DataFrame | None
+    :raises PermanentFailure: when a dev read redirect is set
+    """
+    _refuse_dev_redirects()
+    try:
+        return load_matching_rows(warehouse_database(layer), table, columns, equals)
+    except NoSuchTableError:
+        return None
+
+
 def require_rows(
     layer: str, table: str, columns: Sequence[str], **equals: str
 ) -> pl.DataFrame:
-    """Read the rows of an upstream table whose columns equal the given values.
-
-    Every equality goes into the Iceberg scan, which keeps only the matching
-    rows. polars does not do that for a filter on :func:`require_table`'s scan:
-    of ``etl_source == "mitxonline" & run_readable_id == <run>`` it handed
-    pyiceberg only the ``etl_source`` term, so the scan returned all 2.6M
-    mitxonline rows of integrations__learn__content_files with their text, and
-    reading one course run (2,279 rows) took 18.7 GB.
+    """Read the rows of an upstream table this asset cannot run without.
 
     :param layer: the warehouse layer
     :param table: the table name
@@ -135,10 +156,8 @@ def require_rows(
     :rtype: pl.DataFrame
     :raises Failure: when the table has not been built yet
     """
-    _refuse_dev_redirects()
-    database = warehouse_database(layer)
-    try:
-        return load_matching_rows(database, table, columns, equals)
-    except NoSuchTableError as error:
-        msg = f"{database}.{table} has not been built yet"
-        raise Failure(msg) from error
+    rows = read_rows(layer, table, columns, **equals)
+    if rows is None:
+        msg = f"{warehouse_database(layer)}.{table} has not been built yet"
+        raise Failure(msg)
+    return rows

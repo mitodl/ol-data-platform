@@ -32,7 +32,7 @@
         when {{ micromasters_program_id }} is not null then
               'program-v1:MITx+' || upper(
                   list_aggregate(
-                      list_transform(string_split({{ program_title }}, ' '), x -> left(x, 1)),
+                      list_transform(string_split({{ program_title }}, ' '), lambda x: left(x, 1)),
                       'string_agg', ''
                   )
               )

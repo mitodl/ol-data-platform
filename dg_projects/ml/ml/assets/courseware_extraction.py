@@ -36,11 +36,15 @@ from ml.lib.courseware.extract import (
     EXTRACTOR_ID,
     PROMPT_VERSION,
     SCHEMA_VERSION,
+    TEXT_STAGE,
     Effort,
     extract_scopes,
-    extraction_key,
+    plan_scopes,
+    scope_inputs,
+    stored_readings,
+    text_extraction_key,
 )
-from ml.lib.courseware.prompts import SYSTEM_PROMPT
+from ml.lib.courseware.prompts import CONTEXT_SYSTEM_PROMPT, TEXT_SYSTEM_PROMPT
 from ml.lib.courseware.scopes import build_scopes
 from ml.lib.courseware.warehouse import (
     EXTRACTION_PARTITION_EXPR,
@@ -64,10 +68,13 @@ SOURCES_KEY = AssetKey(["intermediate", "int__courseware__extraction_sources"])
 CHECKSUMS_KEY = AssetKey(
     ["intermediate", "int__courseware__extraction_source_checksums"]
 )
+TEXT_EXTRACTION_KEY = AssetKey(["intermediate", "courseware_text_extraction"])
 EXTRACTION_KEY = AssetKey(["intermediate", "courseware_claim_extraction"])
 CLAIM_KEY = AssetKey(["intermediate", "courseware_claim"])
 EVIDENCE_KEY = AssetKey(["intermediate", "courseware_claim_evidence"])
+SCOPE_INPUT_KEY = AssetKey(["intermediate", "courseware_scope_input"])
 EXTRACTION_PROMPT_NAME = "courseware-claim-extraction"
+CONTEXT_PROMPT_NAME = "courseware-claim-context"
 # The extractor version this code runs, as courseware_extraction_allowlist names it.
 EXTRACTOR_VERSION = {
     "extractor_id": EXTRACTOR_ID,
@@ -188,6 +195,15 @@ class CoursewareExtractionConfig(Config):
         default=DEFAULT_EFFORT, description="output_config.effort for every call"
     )
     max_workers: int = Field(default=6, ge=1, description="Concurrent model calls")
+    reuse_text_across_runs: bool = Field(
+        default=False,
+        description=(
+            "Let this run use another run's stored text reading of identical scope "
+            "text (e.g. a B2B copy of a course) instead of calling the text stage. "
+            "Off until identical passages in different courses have been compared "
+            "(docs/design/courseware_knowledge_extraction.md)."
+        ),
+    )
     min_exact_evidence_share: float = Field(
         default=DEFAULT_MIN_EXACT_EVIDENCE_SHARE,
         ge=0,
@@ -272,7 +288,13 @@ def evidence_check(evidence: pl.DataFrame, min_exact_share: float) -> AssetCheck
             # once (see the module docstring).
             automation_condition=upstream_or_code_changes(),
         )
-        for key in (CLAIM_KEY, EVIDENCE_KEY, EXTRACTION_KEY)
+        for key in (
+            TEXT_EXTRACTION_KEY,
+            CLAIM_KEY,
+            EVIDENCE_KEY,
+            EXTRACTION_KEY,
+            SCOPE_INPUT_KEY,
+        )
     },
     check_specs=[
         AssetCheckSpec(
@@ -294,11 +316,13 @@ def courseware_extraction(
     """Extract claims for every scope of one course run that is not stored yet.
 
     Calls ml.lib.courseware.extract.extract_scopes over the run's scopes, skipping
-    every extraction_key already in courseware_claim_extraction. All three tables
-    are append-only. Claims and evidence are written before the extraction rows,
-    which mark a key as done. A run courseware_extraction_allowlist does not approve
-    for this extractor version fails before anything is read or called, however it
-    was launched.
+    every extraction_key already in courseware_claim_extraction and reusing the
+    run's stored text readings (courseware_text_extraction), so a header edit
+    re-runs only the context stage. Every table is append-only. Text readings are
+    written first, then claims and evidence, then the extraction rows, which mark a
+    key as done. A run courseware_extraction_allowlist does not approve for this
+    extractor version fails before anything is read or called, however it was
+    launched.
     """
     platform, courserun = partition_courserun(context.partition_key)
     approved_run(platform, courserun)
@@ -312,43 +336,76 @@ def courseware_extraction(
     )
     scopes = build_scopes(rows) if rows.height else []
 
+    in_run = (pl.col("platform") == platform) & (
+        pl.col("courserun_readable_id") == courserun
+    )
     stored = read_table("intermediate", EXTRACTION_KEY.path[-1])
     existing_keys = (
-        set(
-            stored.filter(
-                (pl.col("platform") == platform)
-                & (pl.col("courserun_readable_id") == courserun)
-            )
-            .select("extraction_key")
-            .collect()["extraction_key"]
-        )
+        set(stored.filter(in_run).select("extraction_key").collect()["extraction_key"])
         if stored is not None
         else set()
     )
-
     client, model_id = anthropic_client(
         llm,
         config.model_id,
         default_model=DEFAULT_MODEL,
         default_bedrock_model=BEDROCK_DEFAULT_MODEL,
     )
+    across_runs = config.reuse_text_across_runs
+    stored_text = read_table("intermediate", TEXT_EXTRACTION_KEY.path[-1])
+    readings = (
+        stored_readings(
+            stored_text.filter(
+                # any run's reading of these scopes' text, or this run's own
+                pl.col("text_extraction_key").is_in(
+                    [
+                        text_extraction_key(scope, model_id, config.effort)
+                        for scope in scopes
+                    ]
+                )
+                if across_runs
+                else in_run
+            ).collect(),
+            across_runs=across_runs,
+        )
+        if stored_text is not None
+        else {}
+    )
     # Before any model call, so nothing Opik does can fail the run after outputs
     # start being written.
-    opik_prompt_version = publish_prompt_version(EXTRACTION_PROMPT_NAME, SYSTEM_PROMPT)
+    opik_prompt_version = publish_prompt_version(
+        EXTRACTION_PROMPT_NAME, TEXT_SYSTEM_PROMPT
+    )
+    opik_context_prompt_version = publish_prompt_version(
+        CONTEXT_PROMPT_NAME, CONTEXT_SYSTEM_PROMPT
+    )
+    pending = [
+        planned
+        for planned in plan_scopes(
+            scopes,
+            model_id=model_id,
+            effort=config.effort,
+            readings=readings,
+            across_runs=across_runs,
+        )
+        if planned.extraction_key not in existing_keys
+    ]
+    # A scope part with no stored text reading gets a new key, which no earlier
+    # attempt can have written claims under: its text reading is written first.
     pending_keys = [
-        key
-        for scope in scopes
-        if (key := extraction_key(scope, model_id, config.effort)) not in existing_keys
+        planned.extraction_key
+        for planned in pending
+        if planned.extraction_key is not None
     ]
     # Before any model call, so a catalog error fails the run before it spends.
-    if pending_keys:
+    if pending:
         catalog = get_glue_catalog()
         for key in (CLAIM_KEY, EVIDENCE_KEY):
             identifier = f"{_OUTPUT_METADATA['schema']}.{key.path[-1]}"
             if catalog.table_exists(identifier):
-                _clear_partial_write(
-                    catalog.load_table(identifier), platform, courserun, pending_keys
-                )
+                table = catalog.load_table(identifier)
+                if pending_keys:
+                    _clear_partial_write(table, platform, courserun, pending_keys)
 
     tables = extract_scopes(
         scopes,
@@ -356,15 +413,19 @@ def courseware_extraction(
         model_id=model_id,
         effort=config.effort,
         existing_keys=existing_keys,
+        readings=readings,
         max_workers=config.max_workers,
+        reuse_text_across_runs=across_runs,
     )
-    failed = len(pending_keys) - tables.extractions.height
+    failed = len(pending) - tables.extractions.height
     context.log.info(
-        "%s %s: %d scopes, %d already stored, %d extracted, %d failed",
+        "%s %s: %d scopes, %d already stored, %d new text readings, %d extracted, "
+        "%d failed",
         platform,
         courserun,
         len(scopes),
-        len(scopes) - len(pending_keys),
+        len(scopes) - len(pending),
+        tables.text_extractions.height,
         tables.extractions.height,
         failed,
     )
@@ -373,6 +434,21 @@ def courseware_extraction(
         pl.lit(platform).alias("platform"),
         pl.lit(courserun).alias("courserun_readable_id"),
     ]
+    yield Output(
+        tables.text_extractions,
+        output_name=TEXT_EXTRACTION_KEY.path[-1],
+        metadata={
+            "row_count": MetadataValue.int(tables.text_extractions.height),
+            "prompt_version": MetadataValue.text(TEXT_STAGE.prompt_version),
+            "opik_prompt_version": MetadataValue.text(opik_prompt_version),
+            "input_tokens": MetadataValue.int(
+                tables.text_extractions["input_tokens"].sum() or 0
+            ),
+            "output_tokens": MetadataValue.int(
+                tables.text_extractions["output_tokens"].sum() or 0
+            ),
+        },
+    )
     yield Output(
         tables.claims.with_columns(partition_columns),
         output_name=CLAIM_KEY.path[-1],
@@ -393,7 +469,7 @@ def courseware_extraction(
             "model_id": MetadataValue.text(model_id),
             "effort": MetadataValue.text(config.effort),
             "prompt_version": MetadataValue.text(PROMPT_VERSION),
-            "opik_prompt_version": MetadataValue.text(opik_prompt_version),
+            "opik_prompt_version": MetadataValue.text(opik_context_prompt_version),
             "input_tokens": MetadataValue.int(
                 tables.extractions["input_tokens"].sum() or 0
             ),
@@ -402,6 +478,14 @@ def courseware_extraction(
             ),
         },
     )
+    # Every scope part as read now, extracted or skipped, so dbt can tell which
+    # stored reading is the current text's.
+    observed = scope_inputs(scopes)
+    yield Output(
+        observed,
+        output_name=SCOPE_INPUT_KEY.path[-1],
+        metadata={"row_count": MetadataValue.int(observed.height)},
+    )
     yield evidence_check(tables.evidence, config.min_exact_evidence_share)
 
     # The successful scopes are stored. The failure is permanent for run_retries;
@@ -409,7 +493,7 @@ def courseware_extraction(
     if failed:
         raise ScopeExtractionFailure(
             description=(
-                f"{failed} of {len(pending_keys)} scopes failed to extract for "
+                f"{failed} of {len(pending)} scopes failed to extract for "
                 f"{platform} {courserun}"
             ),
             metadata={"retryable": False, "failed_scope_count": failed},

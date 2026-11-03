@@ -35,11 +35,13 @@ from dagster import (
     multi_observable_source_asset,
 )
 from ml.lib.learn_embeddings import (
+    CHUNK_SCHEMA,
     CONTENT_FILE_COLUMNS,
     CONTENT_FILE_SOURCES,
     EMBEDDED_SCHEMA,
     TOPIC_DOC_KIND,
     TOPICS_RELATION,
+    VECTOR_SCHEMA,
     active_chunkers,
     chunk_frame,
     chunkers_version,
@@ -54,6 +56,7 @@ from ml.lib.learn_embeddings import (
     topic_documents,
 )
 from ml.lib.warehouse import (
+    read_rows,
     read_table,
     require_rows,
     require_table,
@@ -121,10 +124,11 @@ def content_file_text_versions(
     """Return a digest of each run's files, for the runs with a known resource.
 
     The digest covers what a chunk or its point id depends on: the run's
-    resource, each file's key and checksum, and the two fields that pick the
-    markdown splitter. A registered run that is still in the runs model but has
-    no files left gets ``EMPTY_TEXT_VERSION``, so its partition is rebuilt with
-    no rows rather than keeping the chunks of files that are gone.
+    resource and platform code, each file's key and checksum, and the two fields
+    that pick the markdown splitter. A registered run that is still in the runs
+    model but has no files left, or no platform code, gets ``EMPTY_TEXT_VERSION``,
+    so its partition is rebuilt with no rows rather than keeping the chunks of
+    files that are gone or that Learn has no resource for.
 
     :param etl_source: the source
     :param run_readable_id: one run, or every run of the source when omitted
@@ -136,20 +140,29 @@ def content_file_text_versions(
     files = require_table(LAYER, source.files_relation).filter(
         pl.col("etl_source") == etl_source
     )
-    runs = require_table(LAYER, source.runs_relation).select(
-        pl.col("run_id").alias("run_readable_id"), "readable_id"
+    runs = source.run_resources(require_table(LAYER, source.runs_relation)).rename(
+        {"run_id": "run_readable_id"}
     )
     if run_readable_id is not None:
         files = files.filter(pl.col("run_readable_id") == run_readable_id)
         runs = runs.filter(pl.col("run_readable_id") == run_readable_id)
-    fields = ["readable_id", "key", "checksum", "file_type", "file_extension"]
+    resource_fields = ["readable_id", "platform_code"]
+    file_fields = ["key", "checksum", "file_type", "file_extension"]
     versions = (
-        files.select("run_readable_id", *fields[1:])
-        .join(runs, on="run_readable_id", how="inner")
+        files.select("run_readable_id", *file_fields)
+        .join(
+            runs.filter(pl.col("platform_code").is_not_null()),
+            on="run_readable_id",
+            how="inner",
+        )
         .group_by("run_readable_id")
         .agg(
             pl.concat_str(
-                [pl.col(name).fill_null("") for name in fields], separator="|"
+                [
+                    pl.col(name).fill_null("")
+                    for name in (*resource_fields, *file_fields)
+                ],
+                separator="|",
             )
             .sort()
             .str.join("\n")
@@ -189,7 +202,8 @@ def content_file_text_versions(
             group_name=GROUP_NAME,
             description=(
                 "The content files of one MIT Learn course run, versioned by a "
-                "digest of their keys and checksums and the run's resource."
+                "digest of their keys and checksums and the run's resource and "
+                "platform code."
             ),
         )
     ],
@@ -232,8 +246,8 @@ def content_file_embedding_chunks(
 ) -> Output[pl.DataFrame]:
     """Chunk one course run's content files.
 
-    The file's point key, and so its document key, needs the platform code and
-    the run's resource readable_id, which come from the runs model of the source.
+    The file's point key, and so its document key, needs the run's platform code
+    and resource readable_id, which come from the runs model of the source.
     """
     etl_source, run = partition_run(context.partition_key)
     source = CONTENT_FILE_SOURCES[etl_source]
@@ -245,15 +259,15 @@ def content_file_embedding_chunks(
         run_readable_id=run,
     )
     runs = (
-        require_table(LAYER, source.runs_relation)
+        source.run_resources(require_table(LAYER, source.runs_relation))
         .filter(pl.col("run_id") == run)
-        .select("run_id", "readable_id")
         .collect()
     )
-    documents, unmatched = content_file_documents(files, runs, source.platform_code)
+    documents, unmatched = content_file_documents(files, runs)
     if unmatched:
         context.log.warning(
-            "%d content files of %s %s have no resource in %s and are not chunked",
+            "%d content files of %s %s have no resource or platform code in %s "
+            "and are not chunked",
             unmatched,
             etl_source,
             run,
@@ -429,16 +443,20 @@ def content_file_embedding_vectors(
 ):
     """Embed one course run's chunks, reusing every stored vector of the space."""
     etl_source, run = partition_run(context.partition_key)
-    in_partition = (pl.col("etl_source") == etl_source) & (
-        pl.col("run_readable_id") == run
-    )
-    chunks = (
-        require_table(LAYER, CONTENT_FILE_CHUNKS_KEY.path[-1])
-        .filter(in_partition)
-        .collect()
+    in_partition = {"etl_source": etl_source, "run_readable_id": run}
+    chunks = require_rows(
+        LAYER,
+        CONTENT_FILE_CHUNKS_KEY.path[-1],
+        CHUNK_SCHEMA.names(),
+        **in_partition,
     )
     vectors = read_table(LAYER, CONTENT_FILE_VECTORS_KEY.path[-1])
-    stored = vectors.filter(in_partition).collect() if vectors is not None else None
+    stored = read_rows(
+        LAYER,
+        CONTENT_FILE_VECTORS_KEY.path[-1],
+        VECTOR_SCHEMA.names(),
+        **in_partition,
+    )
     rows, metadata, failures = embed_vectors(
         context,
         config,

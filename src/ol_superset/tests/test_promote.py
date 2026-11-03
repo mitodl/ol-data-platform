@@ -58,6 +58,20 @@ def test_promote_succeeds_when_all_pushes_succeed():
         promote(force=True, skip_validation=True)
 
 
+def test_promote_pushes_disable_jinja_templating():
+    """Dataset SQL holds Superset Jinja (filter_values) that sup must not render."""
+    with patch(
+        "ol_superset.commands.promote.run_sup_command",
+        side_effect=_run_sup_side_effect({"dataset", "chart", "dashboard"}),
+    ) as run_sup:
+        promote(force=True, skip_validation=True)
+
+    pushes = [c.args[0] for c in run_sup.call_args_list if c.args[0][1] == "push"]
+    assert [p[0] for p in pushes] == ["dataset", "chart", "dashboard"]
+    for push in pushes:
+        assert "--disable-jinja-templating" in push
+
+
 def test_promote_fails_build_when_dataset_push_fails():
     with (
         patch(

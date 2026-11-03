@@ -8,20 +8,24 @@ version: 2
 
 models:
 - name: integrations__learn__mit_climate_articles
+  config:
+    tags: [qa_scheduled]
   description: >
     MIT Climate Portal articles (Explainers + Ask MIT Climate) exposed for
-    MIT Learn's ETL. One row per article, identified by uuid.
+    MIT Learn's ETL. One row per article in the latest load of the feeds, identified
+    by uuid. An article the feeds have dropped stays in the merge-loaded raw table
+    and is left out here, which MIT Learn treats as unpublished.
     Sourced from stg__mit_climate__api__articles via the mit_climate dlt pipeline.
   columns:
   - name: readable_id
     description: Article UUID from the MIT Climate API. Used for upsert matching.
     tests: [not_null, unique]
   - name: title
-    description: Article title.
+    description: Article title with HTML entities decoded.
     tests: [not_null]
   - name: last_modified
     description: >
-      ISO-8601 timestamp derived from the article's created date.
+      ISO-8601 UTC instant of midnight US Eastern on the article's created date.
       Falls back to current_timestamp when the created field is absent.
     tests: [not_null]
   - name: etl_source
@@ -37,8 +41,10 @@ models:
   - name: image_alt
     description: Alt text for the article cover image, or NULL if absent.
   - name: topics
-    description: Comma-separated topic labels (normalized from pipe-separated raw
-      field).
+    description: >
+      Array of MIT Learn topic names, the feed's pipe-separated labels resolved
+      through the climate topic mappings, sorted. Null when none resolve, which MIT
+      Learn fills in by topic similarity.
   - name: footnotes
     description: Article footnotes/citations, as raw text from the CMS.
   - name: byline
@@ -53,6 +59,8 @@ models:
       Always 'climate' (differs from etl_source, which is 'mit_climate').
 
 - name: integrations__learn__mitpe_courses
+  config:
+    tags: [qa_scheduled]
   description: >
     MIT Professional Education courses for MIT Learn webhook delivery, one row per
     course with at least one published run (integrations__learn__mitpe_runs). A
@@ -106,6 +114,8 @@ models:
     tests: [not_null]
 
 - name: integrations__learn__mitpe_programs
+  config:
+    tags: [qa_scheduled]
   description: >
     MIT Professional Education programs for MIT Learn webhook delivery, one row per
     program with at least one published run, with the delivered courses it contains.
@@ -161,6 +171,8 @@ models:
     tests: [not_null]
 
 - name: integrations__learn__mitpe_runs
+  config:
+    tags: [qa_scheduled]
   description: >
     Published runs of MIT Professional Education courses and programs, for MIT Learn
     webhook delivery. Publication is evaluated when the model is built. Dates are
@@ -190,6 +202,8 @@ models:
     description: str, ISO 8601 enrollment end instant, null if none.
 
 - name: integrations__learn__oll_courses
+  config:
+    tags: [qa_scheduled]
   description: >
     Open Learning Library courses for MIT Learn webhook delivery, shaped as MIT
     Learn's legacy OLL ETL (learning_resources/etl/oll.py) writes them. One row per
@@ -385,6 +399,44 @@ models:
     tests: [not_null]
 
 unit_tests:
+- name: test_integrations__learn__mit_climate_articles_matches_legacy_transform
+  description: >
+    MIT Learn's climate ETL decodes the title and topic labels, splits topics on the
+    pipe (a label can hold a comma), maps them through the climate topic mappings
+    and drops the rest. An article missing from the latest load has left the feeds,
+    and an article with no resolved topic still counts.
+  model: integrations__learn__mit_climate_articles
+  given:
+  - input: ref('stg__mit_climate__api__articles')
+    rows:
+    - {article_uuid: a1, article_title: 'Earth&#039;s &quot;clean&quot; energy', article_url: /explainers/a1,
+      article_summary: Summary, article_image_src: /a1.png, article_image_alt: Alt,
+      article_topics_raw: 'Food, Water &amp; Agriculture|Unknown Label', article_created_on_raw: '2025-07-08',
+      article_footnotes: Notes, article_byline: By, article_feed_type: explainer,
+      article_dlt_load_id: '200.5'}
+    - {article_uuid: a2, article_title: No topics, article_url: /ask-mit/a2, article_summary: Summary,
+      article_image_src: '', article_image_alt: '', article_topics_raw: Unknown Label,
+      article_created_on_raw: '2025-01-15', article_feed_type: ask_mit_climate, article_dlt_load_id: '200.5'}
+    - {article_uuid: gone, article_title: Dropped from the feed, article_url: /ask-mit/gone,
+      article_summary: Summary, article_image_src: /gone.png, article_image_alt: Alt,
+      article_topics_raw: 'Food, Water &amp; Agriculture', article_created_on_raw: '2024-02-05',
+      article_feed_type: ask_mit_climate, article_dlt_load_id: '100.5'}
+  - input: ref('int__learn__offeror_topics')
+    rows:
+    - {offeror_code: climate, offeror_topic_name: 'Food, Water & Agriculture', topic_uuid: t1,
+      topic_name: Sustainable Business}
+    - {offeror_code: climate, offeror_topic_name: 'Food, Water & Agriculture', topic_uuid: t2,
+      topic_name: Adaptation and Resilience}
+    - {offeror_code: mitx, offeror_topic_name: Unknown Label, topic_uuid: t3, topic_name: Other
+        offeror}
+  expect:
+    rows:
+    - {readable_id: a1, title: 'Earth''s "clean" energy', last_modified: '2025-07-08T04:00:00.000Z',
+      url: 'https://climate.mit.edu/explainers/a1', image_url: 'https://climate.mit.edu/a1.png',
+      topics: [Adaptation and Resilience, Sustainable Business]}
+    - {readable_id: a2, title: No topics, last_modified: '2025-01-15T05:00:00.000Z',
+      url: 'https://climate.mit.edu/ask-mit/a2', image_url: null, topics: null}
+
 - name: test_integrations__learn__oll_courses_builds_legacy_ids_and_run_fields
   description: >
     MIT Learn's OLL ETL ids an OCW-offered row by course number, semester and year

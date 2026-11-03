@@ -32,7 +32,7 @@ from ml.lib.cluster_identity import (
     match_clusters,
 )
 from ml.lib.cluster_run_lookup import latest_identity_processed_run
-from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
+from ml.lib.embed import resolve_embedding_model
 from ml.lib.iceberg_helpers import table_exists
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
@@ -100,8 +100,7 @@ def _select_run_to_process(
         runs_lazy.filter(
             (pl.col("run_status") == "completed")
             & is_promoted_filter
-            & (pl.col("embedding_model_version") == default_embedding_model_version())
-            & (pl.col("embedding_dim") == EMBEDDING_DIM)
+            & resolve_embedding_model().matches()
             & (pl.col("embedding_input_filter") == PRODUCTION_EMBEDDING_INPUT)
         )
         .select(

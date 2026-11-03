@@ -17,8 +17,10 @@ QA or local instance too, where the old location had them STOPPED -- including
 ``ovs_videos_stale_cleanup_sensor``, which dispatches delete webhooks. The same
 holds for everything moved in since, each RUNNING in production when it moved:
 the two failure notification sensors from ``data_platform``,
-``instructor_onboarding_daily_schedule`` from ``lakehouse`` and
-``b2b_organization_list_sensor`` from ``b2b_organization``.
+``instructor_onboarding_daily_schedule`` from ``lakehouse``,
+``b2b_organization_list_sensor`` from ``b2b_organization`` and
+``canvas_course_export_webhook_sensor``, which stands in for ``canvas``'s
+``default_automation_condition_sensor``.
 
 Registration is the enforcing move. An instigator left out of ``Definitions`` is
 not stopped, it is absent, and nothing in the Dagster UI can start it. The two
@@ -105,6 +107,13 @@ INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     # production warehouse schemas outright, so a QA tick would put production
     # partner data in the QA bucket.
     "b2b_organization_list_sensor": frozenset({"production"}),
+    # Sends each Canvas course export to MIT Learn's content_files webhook.
+    # Moved from the canvas location (issue #2260), where the location's
+    # default_automation_condition_sensor did this. RUNNING in production; in
+    # QA it ticked too but never had a canvas_course_ids partition to act on,
+    # because the course ID sheet sensor and the export schedule never ran
+    # there.
+    "canvas_course_export_webhook_sensor": frozenset({"production"}),
     # Dispatches ovs_videos_webhook_job per discovered partition. RUNNING in
     # production.
     "ovs_videos_discovery_sensor": frozenset({"production"}),
@@ -216,16 +225,48 @@ def deliver_after_upstream(
     :returns: The asset, conditioned where it may run, and its sensor.
     :rtype: tuple[AssetsDefinition, AutomationConditionSensorDefinition]
     """
+    return automate_where_registered(
+        webhook,
+        sensor_name,
+        condition=AutomationCondition.on_cron(staging_cron),
+        default_status=DefaultSensorStatus.STOPPED,
+        environment=environment,
+    )
+
+
+def automate_where_registered(
+    asset: AssetsDefinition,
+    sensor_name: str,
+    *,
+    condition: AutomationCondition,
+    default_status: DefaultSensorStatus,
+    environment: str = DAGSTER_ENV,
+) -> tuple[AssetsDefinition, AutomationConditionSensorDefinition]:
+    """Give *asset* its own automation sensor, conditioned only where it registers.
+
+    A conditioned asset that no declared sensor targets is swept into Dagster's
+    synthesized ``default_automation_condition_sensor``, which exists in every
+    environment whatever this map says, so the condition has to be left off
+    wherever *sensor_name* is not declared.
+
+    :param asset: The asset to automate.
+    :param sensor_name: Its sensor's name, which must have an entry in
+        :data:`INSTIGATOR_ENVIRONMENTS`.
+    :param condition: The automation condition to attach.
+    :param default_status: How the sensor starts where it registers.
+    :param environment: The environment to build for.
+    :returns: The asset, conditioned where it may run, and its sensor.
+    :rtype: tuple[AssetsDefinition, AutomationConditionSensorDefinition]
+    """
     sensor = AutomationConditionSensorDefinition(
         sensor_name,
-        target=AssetSelection.assets(webhook),
+        target=AssetSelection.assets(asset),
         minimum_interval_seconds=LEARN_DELIVERY_SENSOR_INTERVAL_SECONDS,
-        default_status=DefaultSensorStatus.STOPPED,
+        default_status=default_status,
     )
     if environment not in INSTIGATOR_ENVIRONMENTS[sensor_name]:
-        return webhook, sensor
-    condition = AutomationCondition.on_cron(staging_cron)
-    conditioned = webhook.map_asset_specs(
+        return asset, sensor
+    conditioned = asset.map_asset_specs(
         lambda spec: spec.replace_attributes(automation_condition=condition)
     )
     return conditioned, sensor

@@ -6,6 +6,8 @@ from typing import Any
 import opik
 import pytest
 from ml.resources import opik_auth
+from ol_llm import KeycloakClient, TracingConfig
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.resources.secrets.vault import Vault
 
 
@@ -58,7 +60,7 @@ def _configure_opik_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def _reset_module_state(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every test starts from the same "never configured" process state.
 
-    configure_opik_keycloak_auth/get_opik_client cache themselves in module
+    configure_ol_llm/get_opik_client cache themselves in module
     globals (by design -- see their docstrings), which would otherwise leak
     True/a client across tests depending on run order.
     """
@@ -94,50 +96,84 @@ def test_is_opik_configured_false_without_the_client_location(
     assert opik_auth.is_opik_configured() is False
 
 
-def test_configure_skips_vault_when_not_configured() -> None:
+@pytest.fixture
+def ol_llm_calls(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[Any]]:
+    """Record what configure_ol_llm hands ol-llm instead of changing its state."""
+    calls: dict[str, list[Any]] = {"settings": [], "tracing": []}
+    monkeypatch.setattr(opik_auth, "configure", calls["settings"].append)
+    monkeypatch.setattr(opik_auth, "configure_tracing", calls["tracing"].append)
+    return calls
+
+
+def test_configure_skips_vault_when_not_configured(
+    ol_llm_calls: dict[str, list[Any]],
+) -> None:
     """No OPIK_URL_OVERRIDE means no Vault read -- a bad secret shouldn't matter."""
     kv_v1 = _FakeKvV1({})  # a read would KeyError
 
-    result = opik_auth.configure_opik_keycloak_auth(_build_vault(kv_v1))
+    result = opik_auth.configure_ol_llm(_build_vault(kv_v1))
 
     assert result is False
     assert kv_v1.reads == 0
+    assert ol_llm_calls["tracing"] == [TracingConfig(enabled=False)]
+    assert ol_llm_calls["settings"][0].environment == DAGSTER_ENV
 
 
-def test_configure_reads_vault_and_registers_hook_once(
-    monkeypatch: pytest.MonkeyPatch,
+def test_configure_reads_the_keycloak_client_from_vault(
+    monkeypatch: pytest.MonkeyPatch, ol_llm_calls: dict[str, list[Any]]
 ) -> None:
     _configure_opik_env(monkeypatch)
     kv_v1 = _FakeKvV1(_OPIK_SECRET)
-    vault = _build_vault(kv_v1)
-    registered: list[Any] = []
-    monkeypatch.setattr(opik_auth, "add_httpx_client_hook", registered.append)
 
-    first = opik_auth.configure_opik_keycloak_auth(vault)
-    second = opik_auth.configure_opik_keycloak_auth(vault)
+    result = opik_auth.configure_ol_llm(_build_vault(kv_v1))
 
-    assert first is True
-    assert second is True
-    assert len(registered) == 1  # second call short-circuits on _configured
-    assert kv_v1.reads == 1
-    auth = registered[0].update_init_arguments({})["auth"]
-    assert isinstance(auth, opik_auth.KeycloakClientCredentialsAuth)
-    expected_endpoint = (
-        "https://sso.ol.mit.edu/realms/ol-platform-engineering"
-        "/protocol/openid-connect/token"
-    )
-    assert auth._token_url == expected_endpoint
-    assert auth._client_id == "ol-opik-sdk"
+    assert result is True
+    assert opik_auth._configured is True
+    assert ol_llm_calls["tracing"] == [
+        TracingConfig(
+            keycloak=KeycloakClient(
+                token_url="https://sso.ol.mit.edu/realms/ol-platform-engineering"
+                "/protocol/openid-connect/token",
+                client_id="ol-opik-sdk",
+                client_secret="test-secret",  # pragma: allowlist secret
+            )
+        )
+    ]
 
 
-def test_configure_handles_vault_read_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_configure_handles_vault_read_failure(
+    monkeypatch: pytest.MonkeyPatch, ol_llm_calls: dict[str, list[Any]]
+) -> None:
     _configure_opik_env(monkeypatch)
     kv_v1 = _FakeKvV1({})  # secret-opik/sdk-client missing -> KeyError inside
 
-    result = opik_auth.configure_opik_keycloak_auth(_build_vault(kv_v1))
+    result = opik_auth.configure_ol_llm(_build_vault(kv_v1))
 
     assert result is False
     assert opik_auth._configured is False
+    assert ol_llm_calls["tracing"] == [TracingConfig(enabled=False)]
+
+
+def test_configure_gives_azure_an_entra_token_provider(
+    monkeypatch: pytest.MonkeyPatch, ol_llm_calls: dict[str, list[Any]]
+) -> None:
+    monkeypatch.setenv("LLM_AZURE_ENDPOINT", "https://example.openai.azure.com/")
+    monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
+    monkeypatch.setattr(opik_auth, "DefaultAzureCredential", lambda: "fake-cred")
+    monkeypatch.setattr(
+        opik_auth,
+        "get_bearer_token_provider",
+        lambda _credential, _scope: lambda: "entra-test-token",
+    )
+
+    opik_auth.configure_ol_llm(_build_vault(_FakeKvV1({})))
+
+    provider = ol_llm_calls["settings"][0].azure_ad_token_provider
+    assert provider is not None
+    assert provider() == "entra-test-token"
+    assert opik_auth.os.environ["AZURE_OPENAI_ENDPOINT"] == (
+        "https://example.openai.azure.com/"
+    )
 
 
 def test_get_opik_client_none_when_not_configured() -> None:
@@ -147,7 +183,7 @@ def test_get_opik_client_none_when_not_configured() -> None:
 def test_get_opik_client_none_when_auth_hook_never_registered(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """OPIK_URL_OVERRIDE set but configure_opik_keycloak_auth never ran (or failed)."""
+    """OPIK_URL_OVERRIDE set but configure_ol_llm never ran (or failed)."""
     _configure_opik_env(monkeypatch)
 
     assert opik_auth.get_opik_client() is None
@@ -359,40 +395,56 @@ def test_render_prompt_new_environment_uses_its_own_default_not_latest(
     assert fake_client.versions["feedback-summary"][2].metadata == _created_for("qa")
 
 
-def test_render_prompt_production_keeps_its_unscoped_version(
+def test_render_prompt_raises_when_production_has_no_label(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """
-    Production's first read takes the newest version from before environment
-    scoping, even after QA added its own versions
-    """
+    """Production never labels a version itself, however old or new it is"""
     fake_client = _FakeOpikClient(
-        existing={
-            "feedback-summary": ["Old: {{x}}", "Custom: {{x}}", ("QA: {{x}}", "qa")]
-        },
-        pointers={"qa": "v3"},
+        existing={"feedback-summary": ["Old: {{x}}", ("QA: {{x}}", "qa")]},
+        pointers={"qa": "v2"},
     )
     monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
     monkeypatch.setattr(opik_auth, "PROMPT_ENVIRONMENT", "production")
 
-    result = opik_auth.render_prompt("feedback-summary", "Default: {{x}}", x="hi")
+    with pytest.raises(opik_auth.PromptLabelMissingError, match="labeled production"):
+        opik_auth.render_prompt("feedback-summary", "Default: {{x}}", x="hi")
 
-    assert result == "Custom: hi"
-    assert fake_client.pointers("feedback-summary") == {"production": "v2", "qa": "v3"}
+    assert fake_client.writes == []
+    assert len(fake_client.versions["feedback-summary"]) == 2
 
 
-def test_render_prompt_production_ignores_a_version_qa_failed_to_claim(
+def test_seed_prompt_environment_points_qa_at_its_own_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A new prompt QA created but never pointed at doesn't reach Production"""
-    fake_client = _FakeOpikClient(existing={"new-prompt": [("QA: {{x}}", "qa")]})
+    fake_client = _FakeOpikClient(
+        existing={"feedback-summary": ["Prod: {{x}}"]}, pointers={"production": "v1"}
+    )
+    monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
+    monkeypatch.setattr(opik_auth, "PROMPT_ENVIRONMENT", "qa")
+
+    opik_auth.seed_prompt_environment("feedback-summary", "Default: {{x}}")
+
+    assert fake_client.pointers("feedback-summary") == {"production": "v1", "qa": "v2"}
+    assert fake_client.versions["feedback-summary"][1].metadata == _created_for("qa")
+
+
+def test_seed_prompt_environment_refuses_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_client = _FakeOpikClient(existing={"feedback-summary": ["Prod: {{x}}"]})
     monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
     monkeypatch.setattr(opik_auth, "PROMPT_ENVIRONMENT", "production")
 
-    result = opik_auth.render_prompt("new-prompt", "Default: {{x}}", x="hi")
+    with pytest.raises(opik_auth.PromptLabelMissingError):
+        opik_auth.seed_prompt_environment("feedback-summary", "Default: {{x}}")
 
-    assert result == "Default: hi"
-    assert fake_client.pointers("new-prompt") == {"production": "v2"}
+    assert fake_client.writes == []
+    assert len(fake_client.versions["feedback-summary"]) == 1
+
+
+def test_seed_prompt_environment_raises_without_an_opik_client() -> None:
+    with pytest.raises(opik_auth.PromptLabelMissingError, match="No Opik client"):
+        opik_auth.seed_prompt_environment("feedback-summary", "Default: {{x}}")
 
 
 def test_render_prompt_seeds_opik_when_prompt_missing(
@@ -412,17 +464,6 @@ def test_render_prompt_seeds_opik_when_prompt_missing(
     assert fake_client.pointers("feedback-summary") == {"qa": "v1"}
 
 
-def test_get_prompt_version_reads_its_environment(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    fake_client = _FakeOpikClient(
-        existing={"feedback-summary": [("a", "qa"), "b"]}, pointers={"qa": "v1"}
-    )
-    monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
-
-    assert opik_auth.get_prompt_version("feedback-summary") == "v1"
-
-
 def test_publish_prompt_version_adds_its_own_version_for_new_text(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -434,6 +475,23 @@ def test_publish_prompt_version_adds_its_own_version_for_new_text(
 
     assert opik_auth.publish_prompt_version("extract", "new") == "v3"
     assert fake_client.pointers("extract") == {"production": "v1", "qa": "v3"}
+
+
+def test_publish_prompt_version_leaves_the_production_label(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production records the version that ran without moving its label"""
+    fake_client = _FakeOpikClient(
+        existing={"extract": ["prod"]}, pointers={"production": "v1"}
+    )
+    monkeypatch.setattr(opik_auth, "get_opik_client", lambda: fake_client)
+    monkeypatch.setattr(opik_auth, "PROMPT_ENVIRONMENT", "production")
+
+    assert opik_auth.publish_prompt_version("extract", "new") == "v2"
+    assert fake_client.pointers("extract") == {"production": "v1"}
+    assert fake_client.writes == []
+    assert opik_auth.publish_prompt_version("extract", "new") == "v2"
+    assert len(fake_client.versions["extract"]) == 2
 
 
 def test_publish_prompt_version_reuses_its_own_earlier_version(
@@ -565,68 +623,6 @@ def test_traced_forwards_ignore_arguments(monkeypatch: pytest.MonkeyPatch) -> No
 
     assert add_one(1, trace_metadata={}) == 2
     assert track_calls[0]["ignore_arguments"] == ["trace_metadata"]
-
-
-class _FakeTokenResponse:
-    def __init__(self, payload: dict[str, Any], status_code: int = 200) -> None:
-        self._payload = payload
-        self.status_code = status_code
-
-    def raise_for_status(self) -> None:
-        pass
-
-    def json(self) -> dict[str, Any]:
-        return self._payload
-
-
-class _FakeTokenClient:
-    def __init__(self, responses: list[dict[str, Any]]) -> None:
-        self._responses = list(responses)
-        self.calls = 0
-
-    def post(self, url: str, data: dict[str, Any]) -> _FakeTokenResponse:  # noqa: ARG002
-        self.calls += 1
-        return _FakeTokenResponse(self._responses.pop(0))
-
-
-def test_keycloak_auth_fetches_token_once_and_reuses_it() -> None:
-    auth = opik_auth.KeycloakClientCredentialsAuth(
-        token_url="https://sso.example.com/protocol/openid-connect/token",
-        client_id="ol-opik-client",
-        client_secret="secret",  # pragma: allowlist secret
-    )
-    fake_token_client = _FakeTokenClient(
-        [{"access_token": "tok-1", "expires_in": 3600}]
-    )
-    auth._token_client = fake_token_client
-
-    first = auth._get_token()
-    second = auth._get_token()
-
-    assert first == "tok-1"
-    assert second == "tok-1"
-    assert fake_token_client.calls == 1
-
-
-def test_keycloak_auth_force_refresh_gets_a_new_token() -> None:
-    auth = opik_auth.KeycloakClientCredentialsAuth(
-        token_url="https://sso.example.com/protocol/openid-connect/token",
-        client_id="ol-opik-client",
-        client_secret="secret",  # pragma: allowlist secret
-    )
-    fake_token_client = _FakeTokenClient(
-        [
-            {"access_token": "tok-1", "expires_in": 3600},
-            {"access_token": "tok-2", "expires_in": 3600},
-        ]
-    )
-    auth._token_client = fake_token_client
-
-    auth._get_token()
-    refreshed = auth._get_token(force_refresh=True)
-
-    assert refreshed == "tok-2"
-    assert fake_token_client.calls == 2
 
 
 def _record_span_updates(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:

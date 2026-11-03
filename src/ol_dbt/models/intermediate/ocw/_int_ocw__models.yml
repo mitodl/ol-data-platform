@@ -366,6 +366,26 @@ models:
       arguments:
         column_list: ["course_uuid", "resource_uuid"]
 
+- name: int__ocw__learning_resource_types
+  description: One row per learning resource type assigned to an OCW resource.
+  columns:
+  - name: course_uuid
+    description: UUID of the course containing the resource
+    tests:
+    - not_null
+  - name: resource_uuid
+    description: UUID of the resource
+    tests:
+    - not_null
+  - name: learning_resource_type
+    description: One learning resource type assigned to the resource
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["course_uuid", "resource_uuid", "learning_resource_type"]
+
 - name: int__ocw__live_courses
   description: One row per OCW course published to the OCW live bucket, with the fields
     of its data.json that MIT Learn's OCW ETL reads. A directory left in the bucket
@@ -386,7 +406,11 @@ models:
       dashes. Equals LearningResourceRun.run_id in MIT Learn. Null for a course with
       neither.
     tests:
-    - unique
+    # A warning: as an error it would skip int__ocw__content_files too.
+    # integrations__learn__ocw_courses fails on a duplicate run_id.
+    - unique:
+        config:
+          severity: warn
   - name: course_site_uid
     description: str, site_uid, the course's uuid in ocw-studio
   - name: course_legacy_uid
@@ -690,3 +714,69 @@ unit_tests:
       course_department_numbers: [], course_topics: [], course_learn_topics: [], course_image_src: null,
       course_image_alt: null, course_instructors_json: '[]', course_image_description: null,
       course_hides_download: false}
+- name: test_int__ocw__learning_resource_types_splits_types
+  description: A resource with multiple types exposes one option row for each type.
+  model: int__ocw__learning_resource_types
+  given:
+  - input: ref('int__ocw__resources')
+    rows:
+    - {course_uuid: course-1, resource_uuid: resource-1, learning_resource_types: "Lecture\
+        \ Notes, Readings"}
+    - {course_uuid: course-1, resource_uuid: resource-2, learning_resource_types: Lecture
+        Notes}
+    - {course_uuid: course-1, resource_uuid: resource-3, learning_resource_types: null}
+  expect:
+    rows:
+    - {course_uuid: course-1, resource_uuid: resource-1, learning_resource_type: Lecture
+        Notes}
+    - {course_uuid: course-1, resource_uuid: resource-1, learning_resource_type: Readings}
+    - {course_uuid: course-1, resource_uuid: resource-2, learning_resource_type: Lecture
+        Notes}
+- name: test_int__ocw__live_courses_reads_other_shapes_as_learn_does
+  description: >
+    A level, department_numbers or learning_resource_types object gives its
+    keys, as Learn iterates it. A list field of another shape is empty rather
+    than failing the build.
+    hide_download is read for its Python truth, so the string "false" hides
+    the download. Any non-empty extra_course_numbers is split on commas and
+    each number stripped of Unicode whitespace, as str.strip() does.
+  model: int__ocw__live_courses
+  given:
+  - input: ref('stg__ocw__studio__postgres__websites_website')
+    rows:
+    - {website_url_path: courses/e-course, website_unpublish_status: null}
+    - {website_url_path: courses/f-course, website_unpublish_status: null}
+    - {website_url_path: courses/g-course, website_unpublish_status: null}
+  - input: ref('stg__ocw__s3__course_content')
+    rows:
+    - course_slug: e-course
+      coursecontent_kind: course
+      course_site_uid: 1d2b8c4e-0a6f-4e7d-9a51-3c8e2f7b6d40
+      course_data_json: >-
+        {"course_title": "E Course", "extra_course_numbers": " 2.002 ,2.003 , ",
+        "level": "Undergraduate", "department_numbers": {"2": "Mechanical"},
+        "learning_resource_types": "Lecture Notes", "topics": ["Engineering"],
+        "mit_learn_topics": "Engineering", "hide_download": "false"}
+    - course_slug: f-course
+      coursecontent_kind: course
+      course_site_uid: 5b7e9f21-6c3d-4a8b-b2e0-9d4f1a7c3e58
+      course_data_json: >-
+        {"course_title": "F Course", "extra_course_numbers": "  ",
+        "level": {"Undergraduate": true, "Graduate": 1},
+        "learning_resource_types": {"Lecture Notes": true}, "hide_download": 0}
+    - course_slug: g-course
+      coursecontent_kind: course
+      course_site_uid: 8e4a6d13-2f9b-4c7e-a5d0-6b1c3e9f2a74
+      course_data_json: '{"course_title": "G Course", "level": null, "hide_download":
+        1}'
+  expect:
+    rows:
+    - {course_slug: e-course, course_extra_course_numbers: ["2.002", "2.003", ""],
+      course_levels: [], course_department_numbers: ["2"], course_learning_resource_types: [],
+      course_topics: [], course_learn_topics: [], course_hides_download: true}
+    - {course_slug: f-course, course_extra_course_numbers: [""], course_levels: [
+        Graduate, Undergraduate], course_department_numbers: [], course_learning_resource_types: [
+        Lecture Notes], course_topics: [], course_learn_topics: [], course_hides_download: false}
+    - {course_slug: g-course, course_extra_course_numbers: [], course_levels: [],
+      course_department_numbers: [], course_learning_resource_types: [], course_topics: [],
+      course_learn_topics: [], course_hides_download: true}

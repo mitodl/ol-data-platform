@@ -1,3 +1,18 @@
+{%- set run_buckets = 48 -%}
+{{ config(
+    partition_by=(
+        ['etl_source, bucket(run_readable_id, ' ~ run_buckets ~ ')']
+        if target.type == 'starrocks' else none
+    ),
+    properties=(
+        {"format": "'PARQUET'"} if target.type == 'starrocks'
+        else {
+            "format": "'PARQUET'",
+            "partitioning": "ARRAY['etl_source', 'bucket(run_readable_id, " ~ run_buckets ~ ")']",
+        }
+    ),
+) }}
+
 {#
   integrations__learn__content_files
   One row per ContentFile of an MITx Online or xPRO course run, for MIT Learn's
@@ -15,6 +30,13 @@
   release_date is ContentFile.release_date (mit-learn#4093). Learn shows a file
   only while it is published and its release_date is null or past, so a
   future-dated row is here but hidden in Learn until that date.
+
+  Partitioned so a read of one run opens one bucket of files: the ml chunks asset
+  reads one (etl_source, run_readable_id) at a time, as the contract's scoped pull
+  will. sorted_by would not do it: it orders rows within each file, not across
+  files. Two sources by 48 buckets stays under Trino's default limit of 100
+  partitions per writer. A table model is replaced whole on every build, so
+  changing the spec needs no --full-refresh.
 #}
 
 with content_files as (

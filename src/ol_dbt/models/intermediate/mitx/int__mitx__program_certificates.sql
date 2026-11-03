@@ -1,5 +1,3 @@
-{{ config(materialized='view') }}
-
 with micromasters_program_certificates as (
     select * from {{ ref('int__micromasters__program_certificates') }}
 )

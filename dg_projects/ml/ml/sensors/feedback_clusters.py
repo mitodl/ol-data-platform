@@ -17,7 +17,7 @@ from ml.lib.cluster import (
     platforms_to_run_value,
     should_trigger_early_recluster,
 )
-from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
+from ml.lib.embed import resolve_embedding_model
 from ml.lib.iceberg_helpers import table_exists
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
@@ -55,17 +55,14 @@ def feedback_clusters_growth_sensor(context: SensorEvaluationContext):
     if not table_exists(catalog, f"{cluster_database_name}.feedback_embeddings"):
         return SkipReason("feedback_embeddings hasn't materialized yet")
     # Scoped to match feedback_clusters' own defaults (embedding_input="summary",
-    # default_embedding_model_version()/EMBEDDING_DIM) -- counting every
+    # resolve_embedding_model()'s model and dim) -- counting every
     # arm/model/dim would inflate this past what a completed run's
     # total_conversations actually measures, and could trigger on growth in rows
     # the next run won't even see.
+    embedding_model = resolve_embedding_model()
     embeddings_lf = get_dbt_model_as_dataframe(
         database_name=cluster_database_name, table_name="feedback_embeddings"
-    ).filter(
-        (pl.col("embedding_input") == "summary")
-        & (pl.col("embedding_model_version") == default_embedding_model_version())
-        & (pl.col("embedding_dim") == EMBEDDING_DIM)
-    )
+    ).filter((pl.col("embedding_input") == "summary") & embedding_model.matches())
     embedding_count = (
         filter_conversation_scope(
             embeddings_lf,
@@ -89,8 +86,7 @@ def feedback_clusters_growth_sensor(context: SensorEvaluationContext):
         )
         .filter(
             (pl.col("cluster_status") == "active")
-            & (pl.col("embedding_model_version") == default_embedding_model_version())
-            & (pl.col("embedding_dim") == EMBEDDING_DIM)
+            & embedding_model.matches()
             & (pl.col("embedding_input_filter") == "summary")
         )
         .select(pl.len())
@@ -131,8 +127,7 @@ def feedback_clusters_growth_sensor(context: SensorEvaluationContext):
                 run_column("is_promoted", pl.Boolean).fill_null(False)  # noqa: FBT003
                 | pl.col("cluster_run_id").is_in(processed_run_ids)
             )
-            & (pl.col("embedding_model_version") == default_embedding_model_version())
-            & (pl.col("embedding_dim") == EMBEDDING_DIM)
+            & embedding_model.matches()
             & (pl.col("embedding_input_filter") == "summary")
             & run_column("feedback_since", pl.String).eq_missing(
                 pl.lit(DEFAULT_FEEDBACK_SINCE, dtype=pl.String)

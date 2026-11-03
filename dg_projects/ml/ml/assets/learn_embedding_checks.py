@@ -36,7 +36,12 @@ from ml.assets.learn_embeddings import (
     TOPIC_VECTORS_KEY,
     partition_run,
 )
-from ml.lib.learn_embeddings import CONTENT_FILE_SOURCES, strategies
+from ml.lib.learn_embeddings import (
+    CHUNK_SCHEMA,
+    CONTENT_FILE_SOURCES,
+    VECTOR_SCHEMA,
+    strategies,
+)
 from ml.lib.learn_parity import (
     MIN_COSINE_SIMILARITY,
     ParityReport,
@@ -46,7 +51,7 @@ from ml.lib.learn_parity import (
     retrieve_points,
     scroll_point_ids,
 )
-from ml.lib.warehouse import require_table
+from ml.lib.warehouse import require_rows, require_table
 from ol_orchestrate.lib.embeddings.learn import (
     LEARN_CONTENT_FILES_COLLECTION,
     LEARN_TOPICS_COLLECTION,
@@ -174,17 +179,21 @@ def content_file_vectors_match_learn(
 ) -> AssetCheckResult:
     """Compare one course run's chunks with Learn's points for the run."""
     etl_source, run = partition_run(context.multi_partition_key)
-    in_partition = (pl.col("etl_source") == etl_source) & (
-        pl.col("run_readable_id") == run
-    )
+    in_partition = {"etl_source": etl_source, "run_readable_id": run}
     strategy = strategies()[LEARN_V1_CONTENT_FILES_ID]
     platform = platform_chunks(
-        require_table(LAYER, CONTENT_FILE_CHUNKS_KEY.path[-1])
-        .filter(in_partition)
-        .collect(),
-        require_table(LAYER, CONTENT_FILE_VECTORS_KEY.path[-1])
-        .filter(in_partition)
-        .collect(),
+        require_rows(
+            LAYER,
+            CONTENT_FILE_CHUNKS_KEY.path[-1],
+            CHUNK_SCHEMA.names(),
+            **in_partition,
+        ),
+        require_rows(
+            LAYER,
+            CONTENT_FILE_VECTORS_KEY.path[-1],
+            VECTOR_SCHEMA.names(),
+            **in_partition,
+        ),
         strategy,
     )
     client = learn_qdrant.get_client()
@@ -198,10 +207,20 @@ def content_file_vectors_match_learn(
         checksum_field="checksum",
         vector_name=vector_name,
     )
+    source = CONTENT_FILE_SOURCES[etl_source]
+    platform_code = source.platform_code
+    if platform_code is None:
+        # An xPRO run's code is its course's. A run with none, or no longer in
+        # the runs model, gets "", the code Learn gives a resource with no
+        # platform, so no xPRO point matches it.
+        platform_code = (
+            source.run_resources(require_table(LAYER, source.runs_relation))
+            .filter(pl.col("run_id") == run)
+            .collect()["platform_code"]
+            .first()
+        ) or ""
     learn_ids = scroll_point_ids(
-        client,
-        collection,
-        content_file_run_filter(CONTENT_FILE_SOURCES[etl_source].platform_code, run),
+        client, collection, content_file_run_filter(platform_code, run)
     )
     return check_result(
         compare_with_learn(

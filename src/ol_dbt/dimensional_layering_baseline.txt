@@ -12,9 +12,6 @@
 
 chatbot_usage_report -> int__learn_ai__chatbot
 chatbot_usage_report -> int__learn_ai__tutorbot
-data_detail_nav -> int__combined__course_runs
-data_detail_problems -> int__combined__course_runs
-data_detail_video -> int__combined__course_runs
 dedp_financial_assistance -> int__micromasters__course_enrollments
 dedp_financial_assistance -> int__mitxonline__course_runs
 dedp_financial_assistance -> int__mitxonline__flexiblepricing_flexiblepriceapplication
@@ -200,4 +197,3 @@ marts__mitxpro_ecommerce_productlist -> int__mitxpro__ecommerce_productversion
 marts__mitxpro_ecommerce_productlist -> int__mitxpro__program_runs
 marts__mitxpro_ecommerce_productlist -> int__mitxpro__programs
 organization_administration_report -> int__combined__user_course_roles
-page_engagement_views_report -> int__combined__course_runs

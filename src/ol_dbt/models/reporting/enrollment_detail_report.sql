@@ -182,7 +182,7 @@ select
     , case enrollment.platform
         when 'mitxonline' then
             case when f_certificate.certificate_uuid is not null
-            then concat('https://mitxonline.mit.edu/certificate/', f_certificate.certificate_uuid)
+            then concat('{{ var("mitlearn_url") }}', '/certificate/course/', f_certificate.certificate_uuid)
             else null end
         when 'mitxpro' then
             case when f_certificate.certificate_uuid is not null

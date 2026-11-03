@@ -113,8 +113,12 @@ models:
     description: int, seconds that a user played a video
   - name: video_duration
     description: int, duration of the video in seconds
+  - name: problems_with_attempt
+    description: int, count of distinct problems the user attempted at least once,
+      over all time (not the metric problems_attempted, which is per day)
   - name: problems_attempted
-    description: int, count of problems attempted
+    description: Deprecated, the old name for problems_with_attempt and always equal
+      to it. Removed once the Superset charts read problems_with_attempt.
   - name: number_of_problems
     description: int, total number of problems regardless of whether they were attempted
   - name: num_of_problems_correct
@@ -141,9 +145,11 @@ models:
     description: str, name of the problem within the course
   - name: discussion_topic_name
     description: str, name of the discussion topic within the course
+  - name: percent_problems_attempted
+    description: float, percentage of problems attempted
   - name: percetage_problems_attempted
-    description: float, percentage of problems attempted (note that column name is
-      misspelled as "percetage" upstream and retained here for compatibility)
+    description: Deprecated, the misspelled old name for percent_problems_attempted
+      and always equal to it. Removed once the Superset charts read percent_problems_attempted.
 
 - name: enrollment_detail_report
   description: Enrollment detail report for MITxOnline, xPro and edX.org courses.
@@ -676,8 +682,12 @@ models:
   - name: courserun_is_current
     description: boolean, true if the current date is between the course run start
       and end dates otherwise false
+  - name: distinct_video_titles_played
+    description: int, number of distinct video titles the user played in this section.
+      Two videos with one title count once
   - name: user_watched_video_count
-    description: int, count of videos a user watched
+    description: Deprecated, the old name for distinct_video_titles_played and always
+      equal to it. Removed once the Superset charts read distinct_video_titles_played.
   - name: max_coursestructure_block_index
     description: int, max position of the course content block within a course
   tests:
@@ -823,8 +833,8 @@ models:
   - name: dedp_public_policy_program_cert_ind
     description: str, indictor showing if the user has recieved any DEDP Public Policy
       program credentials
-  - name: any_dedp_program_enroll_ind
-    description: str, indicator showing if the user has enrolled in any DEDP program
+  - name: any_dedp_course_enroll_ind
+    description: str, indicator showing if the user has enrolled in any DEDP course
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -1009,8 +1019,12 @@ models:
       the course
   - name: problems_correct
     description: int, count of the number of correct problem attempts
+  - name: problems_with_attempt
+    description: int, count of distinct problems the user attempted at least once,
+      over all time (not the metric problems_attempted, which is per day)
   - name: problems_attempted
-    description: int, count of the number of problem attempted
+    description: Deprecated, the old name for problems_with_attempt and always equal
+      to it. Removed once the Superset charts read problems_with_attempt.
   - name: number_of_problems
     description: int, count of the total number of problems
   - name: number_of_total_attempts
@@ -1291,11 +1305,14 @@ models:
   - name: course_readable_id
     description: string, course ID without the run tag, formatted as course-v1:{org}+{course
       code}
-  - name: user_watched_video_count
-    description: int, number of distinct videos the user has watched (play_video events)
-      in this chapter
+  - name: distinct_video_titles_played
+    description: int, number of distinct video titles the user played (play_video
+      events) in this chapter. Two videos with one title count once
     tests:
     - not_null
+  - name: user_watched_video_count
+    description: Deprecated, the old name for distinct_video_titles_played and always
+      equal to it. Removed once the Superset charts read distinct_video_titles_played.
   - name: max_video_index
     description: int, maximum video sequence index number within the chapter that
       the user has watched
@@ -1504,13 +1521,17 @@ models:
     description: string, current playback position in the video
   - name: event_timestamp
     description: timestamp, date and time when the video event was recorded
+  - name: video_block_fk
+    description: string, identifier of the video block, distinguishes videos that
+      share a name
   - name: video_name
     description: string, display name of the video
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["platform", "courserun_readable_id", "user_username", "event_type",
-          "video_position", "event_timestamp", "video_name"]
+          "video_block_fk", "video_duration", "video_position", "event_timestamp",
+          "video_name"]
 
 - name: dedp_financial_assistance
   description: Report of users and their financial assistance status for DEDP programs
@@ -1867,8 +1888,9 @@ models:
     description: str, LLM summary of the conversation. Null if the conversation is
       not summarized.
   - name: conversation_text
-    description: str, the redacted conversation text with HTML entities unescaped,
-      including quoted email history. Turns are separated by a line of em dashes.
+    description: str, the redacted conversation text as HTML, including quoted email
+      history. &, < and > are escaped, line breaks are <br>, and turns are separated
+      by a blank line (<br><br>).
   - name: courserun_readable_id
     description: str, readable ID of the course run the conversation is about. Null
       if the conversation has no course run.
