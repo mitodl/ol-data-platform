@@ -7,11 +7,7 @@ with page_engagement as (
 )
 
 , course_runs as (
-    select
-        course_title
-        , courserun_readable_id
-    from {{ ref('int__combined__course_runs') }}
-    group by course_title, courserun_readable_id
+    {{ current_course_titles() }}
 )
 
 , unit_blocks as (
@@ -57,6 +53,7 @@ left join dim_user
     on page_engagement.user_fk= dim_user.user_pk
 left join course_runs
     on page_engagement.courserun_readable_id = course_runs.courserun_readable_id
+    and page_engagement.platform = course_runs.platform
 group by
     dim_user.email
     , dim_user.full_name

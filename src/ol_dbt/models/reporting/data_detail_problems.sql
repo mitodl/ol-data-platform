@@ -1,11 +1,14 @@
 with
     problem_events as (select * from {{ ref("tfact_problem_events") }}),
-    problems as (select * from {{ ref("dim_problem") }}),
-    combined__course_runs as (select * from {{ ref("int__combined__course_runs") }})
+    problems as (select * from {{ ref("dim_problem") }})
+
+, course_runs as (
+    {{ current_course_titles() }}
+)
 
 select
     problem_events.platform,
-    combined__course_runs.course_title,
+    course_runs.course_title,
     problem_events.courserun_readable_id,
     problem_events.user_username,
     problems.problem_name,
@@ -25,12 +28,12 @@ inner join
     on problem_events.problem_block_fk = problems.problem_block_pk
     and problem_events.courserun_readable_id = problems.courserun_readable_id
 inner join
-    combined__course_runs
-    on problem_events.courserun_readable_id = combined__course_runs.courserun_readable_id
-    and problem_events.platform = combined__course_runs.platform
+    course_runs
+    on problem_events.courserun_readable_id = course_runs.courserun_readable_id
+    and problem_events.platform = course_runs.platform
 group by
     problem_events.platform,
-    combined__course_runs.course_title,
+    course_runs.course_title,
     problem_events.courserun_readable_id,
     problem_events.user_username,
     problems.problem_name,
