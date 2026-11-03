@@ -37,8 +37,9 @@ PRODUCTION_NEGATIVE_THRESHOLD = 0.35
 PREDICTED_SOURCES = ("zendesk",)
 # A content-feedback idea is a suggestion, not a verdict, so it gets no sentiment.
 NO_SENTIMENT_RATINGS = ("idea",)
-# The Appzi widget's suggestion tickets, the Zendesk form of the same idea.
-NO_SENTIMENT_TEXT_PREFIX = "Idea:"
+# The Appzi widget's suggestion tickets, the Zendesk form of the same idea. An idea
+# sent with no answer is a bare "Idea" (appzi_feedback_text in macros/appzi.sql).
+NO_SENTIMENT_TEXT_PATTERN = r"^Idea(?::|\s*$)"
 
 SENTIMENT_ASSIGNMENT_SCHEMA = {
     "feedback_conversation_pk": pl.String,
@@ -104,10 +105,9 @@ class FeedbackSentimentConfig(Config):
     pool="feedback_sentiment",
     metadata={
         "schema": database_name,
-        # A run that sees only some conversations (an embedding model backfill)
-        # must not delete the other predictions.
-        "write_mode": "upsert",
-        "upsert_options": {"join_cols": ["feedback_conversation_pk"]},
+        # Overwrite so a conversation that leaves the scope (a platform change)
+        # loses its prediction; an upsert would keep it in afact forever.
+        "write_mode": "overwrite",
         "schema_update_mode": "update",
     },
 )
@@ -119,9 +119,9 @@ def feedback_sentiment(
 
     Tier 2 of the sentiment ladder (feedback_ml_approach.md §E): a logistic
     regression on the embeddings, trained on the explicitly rated conversations.
-    Each run retrains on every rated row and rewrites the prediction of each
-    conversation it scores. afact_feedback_conversation uses the result only
-    where it has no verdict, so a row left from before a rating is ignored.
+    Each run retrains on every rated row and overwrites the table, so it holds
+    exactly the conversations in scope now. afact_feedback_conversation uses the
+    result only where it has no verdict.
     Only config.sources on config.platforms are predicted, and never an idea.
     """
     embedding_model = resolve_embedding_model(
@@ -137,7 +137,7 @@ def feedback_sentiment(
             "platform",
             "explicit_rating",
             pl.col("conversation_text")
-            .str.starts_with(NO_SENTIMENT_TEXT_PREFIX)
+            .str.contains(NO_SENTIMENT_TEXT_PATTERN)
             .fill_null(value=False)
             .alias("is_idea_text"),
         )

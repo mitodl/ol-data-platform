@@ -30,7 +30,6 @@ with conversation as (
         , max(case when is_conversation_opening then user_fk end) as opened_by_user_fk
         -- a conversation is about one course run, so every turn carries the same key
         , max(courserun_fk) as courserun_fk
-        , max(nullif(explicit_rating, '')) as explicit_rating
     from feedback
     group by conversation_id, feedback_source_fk
 )
@@ -158,28 +157,31 @@ select
     , conversation.conversation_text
     , ticket.ticket_status as final_status
     , ticket.ticket_priority as final_priority
-    , turn_aggregates.explicit_rating
+    , conversation.explicit_rating
     -- Tier 1 of the sentiment ladder. Zendesk 'good'/'bad', tutor 'like'/'dislike'
     -- and content feedback 'positive'/'negative' are verdicts; Zendesk's 'unoffered'
     -- (no survey sent) and 'offered' (sent, unanswered) are kinds of absence, and
     -- content feedback's 'idea' is a suggestion, not a verdict. The first two fall
     -- through to the model tier (feedback_sentiment); 'idea' stays null.
-    , case turn_aggregates.explicit_rating
+    , case conversation.explicit_rating
         when 'good' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
         when 'like' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
         when 'positive' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
         when 'bad' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
         when 'dislike' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
         when 'negative' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
+        when 'idea' then null
         else model_sentiment.sentiment_fk
     end as sentiment_fk
     , case
-        when turn_aggregates.explicit_rating in {{ verdicts }} then 'explicit_rating'
+        when conversation.explicit_rating in {{ verdicts }} then 'explicit_rating'
+        when conversation.explicit_rating = 'idea' then null
         when model_sentiment.sentiment_fk is not null then 'model'
     end as sentiment_source
     -- A rating newer than the last prediction wins, so hide that stale model row's version.
     , case
-        when turn_aggregates.explicit_rating in {{ verdicts }} then null
+        when conversation.explicit_rating in {{ verdicts }} or conversation.explicit_rating = 'idea'
+            then null
         else model_sentiment.sentiment_model_version
     end as sentiment_model_version
     , summary.conversation_summary
