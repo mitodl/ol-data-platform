@@ -14,26 +14,6 @@ with combined__users as (
     select * from {{ ref('marts__combined_coursesinprogram') }}
 )
 
-, program as (
-    select * from {{ ref('dim_program') }}
-)
-
-, bridge_program_course as (
-    select * from {{ ref('bridge_program_course') }}
-)
-
-, course_run as (
-    select * from {{ ref('dim_course_run') }}
-)
-
-, tfact_enrollment as (
-    select * from {{ ref('tfact_enrollment') }}
-)
-
-, dim_user as (
-    select * from {{ ref('dim_user') }}
-)
-
 , dedp_indicators as (
     select
         user_email
@@ -58,25 +38,16 @@ with combined__users as (
 
 , dedp_enroll_indicators as (
     select
-        combined__users.user_email
+        combined_course_enrollment_detail.user_email
         , 1 as Any_DEDP_Course_Enrollment_Indicator
-    from program
-    join bridge_program_course
-        on program.program_pk = bridge_program_course.program_fk
-    join course_run
-        on
-            bridge_program_course.course_fk = course_run.course_fk
-            and course_run.is_current = true
-    join tfact_enrollment
-        on course_run.courserun_pk = tfact_enrollment.courserun_fk
-    join dim_user
-        on tfact_enrollment.user_fk = dim_user.user_pk
-    join combined__users
-        on
-            combined__users.user_mitxonline_id = dim_user.mitxonline_application_user_id
-            or combined__users.user_edxorg_id = dim_user.edxorg_openedx_user_id
-    where program.program_is_dedp = true
-    group by combined__users.user_email
+    from combined_course_enrollment_detail
+    inner join combined_coursesinprogram
+        on combined_course_enrollment_detail.course_readable_id = combined_coursesinprogram.course_readable_id
+    where combined_coursesinprogram.program_title in
+        ('Data, Economics, and Design of Policy'
+        , 'Data, Economics, and Design of Policy: International Development'
+        , 'Data, Economics, and Design of Policy: Public Policy')
+    group by combined_course_enrollment_detail.user_email
 )
 
 , dedp_certs as (
