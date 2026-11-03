@@ -734,11 +734,13 @@ models:
     description: str, street address. Person-level - street address, city and postal
       code are taken together from one of the user's accounts, so all three describe
       the same address. Accounts are ordered as for the demographic columns, by the
-      latest join date across the user's linked platforms, ties broken by platform
-      and then platform id, and the first one with a street address or postal code
-      is used. Emeritus and Global Alumni accounts have no join date, so they rank
-      last. Populated for edX.org, MITx Pro, Bootcamps, Emeritus, Global Alumni and
-      MicroMasters accounts.
+      latest join date across the user's linked platforms, not the join date of the
+      account the address comes from, so a newer signup on one platform can put an
+      older address ahead of a newer one from another. Ties are broken by platform
+      and then platform id, and the first account with a street address or postal
+      code is used. Emeritus and Global Alumni accounts have no join date, so they
+      rank last. Populated for edX.org, MITx Pro, Bootcamps, Emeritus, Global Alumni
+      and MicroMasters accounts.
     config:
       meta:
         openmetadata:
