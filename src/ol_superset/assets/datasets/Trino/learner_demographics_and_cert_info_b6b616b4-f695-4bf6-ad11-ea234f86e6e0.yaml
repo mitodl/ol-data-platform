@@ -297,7 +297,7 @@ columns:
   type: BIGINT
   verbose_name: null
 - advanced_data_type: null
-  column_name: any_dedp_program_enroll_ind
+  column_name: any_dedp_course_enroll_ind
   datetime_format: null
   description: null
   expression: null
