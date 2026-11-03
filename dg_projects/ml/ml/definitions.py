@@ -156,11 +156,11 @@ courseware_automation_sensor = AutomationConditionSensorDefinition(
 )
 
 # Chunking and embedding of Learn's content files and topics. Every run it launches
-# carries LEARN_EMBEDDINGS_TAG for ol-infrastructure's run_coordinator
-# tag_concurrency_limits to bound the model calls and the concurrent commits to the
-# vector tables, as for courseware. That limit does not exist yet, so add it before
-# turning this on: a chunker change requests every course run at once. Stopped by
-# default: the first build of each table is a backfill launched by hand.
+# carries LEARN_EMBEDDINGS_TAG, which ol-infrastructure's run_coordinator
+# tag_concurrency_limits caps at one run at a time: a chunker change requests every
+# course run at once, and concurrent overwrites of the vector tables conflict at
+# commit. Stopped by default: the first build of each table is a backfill launched by
+# hand, which the limit caps only if it is launched with the tag.
 LEARN_EMBEDDINGS_TAG = "learn_embeddings/model_calls"
 learn_embeddings_automation_sensor = AutomationConditionSensorDefinition(
     name="learn_embeddings_automation_sensor",
