@@ -176,7 +176,7 @@ with combined_course_activities_daily as (
         , user_username
         , courserun_readable_id
         , courseactivity_date
-        , count(*) as num_video_played
+        , count(*) as video_play_events
     from combined_play_video
     group by
         platform
@@ -191,7 +191,7 @@ with combined_course_activities_daily as (
         , user_username
         , courserun_readable_id
         , courseactivity_date
-        , count(*) as num_problem_submitted
+        , count(*) as problem_submitted_events
     from combined_problem_submitted
     group by
         platform
@@ -222,8 +222,11 @@ select
     , combined_course_activities_daily.courserun_readable_id
     , combined_course_activities_daily.courseactivity_date
     , combined_course_activities_daily.courseactivity_num_events as num_events
-    , combined_problem_submitted_daily.num_problem_submitted
-    , combined_play_video_daily.num_video_played
+    , combined_problem_submitted_daily.problem_submitted_events
+    , combined_play_video_daily.video_play_events
+    -- Old names, removed once the Superset charts read the two above.
+    , combined_problem_submitted_daily.problem_submitted_events as num_problem_submitted
+    , combined_play_video_daily.video_play_events as num_video_played
     , combined_discussion_daily.num_discussion_participated
     , combined_users.user_full_name
     , combined_users.user_email

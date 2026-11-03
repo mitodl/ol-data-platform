@@ -30,6 +30,8 @@ select
     , subq_video_engagements.total_video_count
     , 'MITx Online' as platform
     , mitxonline_video_engagements.courserun_is_current
+    , count(distinct mitxonline_video_engagements.video_title) as distinct_video_titles_played
+    -- Old name, removed once the Superset charts read distinct_video_titles_played.
     , count(distinct mitxonline_video_engagements.video_title) as user_watched_video_count
     , max(mitxonline_video_engagements.coursestructure_block_index) as max_coursestructure_block_index
 from mitxonline_video_engagements

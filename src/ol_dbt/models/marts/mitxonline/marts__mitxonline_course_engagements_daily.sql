@@ -28,7 +28,7 @@ with course_activities_daily as (
         user_username
         , courserun_readable_id
         , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
-        , count(*) as num_problem_submitted
+        , count(*) as problem_submitted_events
     from problem_submitted
     group by
         user_username
@@ -41,7 +41,7 @@ with course_activities_daily as (
         user_username
         , courserun_readable_id
         , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
-        , count(*) as num_video_played
+        , count(*) as video_play_events
     from video
     where useractivity_event_type = 'play_video'
     group by
@@ -76,8 +76,11 @@ select
     , course_runs.courserun_start_on
     , course_runs.courserun_end_on
     , course_activities_daily.courseactivity_num_events as num_events
-    , problem_submitted_users_daily.num_problem_submitted
-    , played_video_users_daily.num_video_played
+    , problem_submitted_users_daily.problem_submitted_events
+    , played_video_users_daily.video_play_events
+    -- Old names, removed once the Superset charts read the two above.
+    , problem_submitted_users_daily.problem_submitted_events as num_problem_submitted
+    , played_video_users_daily.video_play_events as num_video_played
     , participated_discussion_users_daily.num_discussion_participated
 from course_activities_daily
 inner join course_runs
