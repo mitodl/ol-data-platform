@@ -36,6 +36,10 @@ _CANVAS_EXPORT_ASSET_KEYS = frozenset(
     {"canvas/course_content", "canvas/course_metadata"}
 )
 
+# One partition per OCW course. It writes the raw table, whose own key stays
+# unpartitioned.
+_OCW_COURSE_LOAD_KEY = "ocw/course_content_load"
+
 # The Canvas instigators that were RUNNING in production in the canvas location.
 _CANVAS_INSTIGATOR_NAMES = frozenset(
     {"canvas_course_export_schedule", "canvas_google_sheet_course_id_sensor"}
@@ -101,7 +105,9 @@ def test_code_location_builds() -> None:
     # Every ingest asset lands under the raw-data key prefix, except the Canvas
     # course exports, which keep the keys they had in the canvas location...
     assert all(
-        k.startswith("ol_warehouse_raw_data/") or k in _CANVAS_EXPORT_ASSET_KEYS
+        k.startswith("ol_warehouse_raw_data/")
+        or k in _CANVAS_EXPORT_ASSET_KEYS
+        or k == _OCW_COURSE_LOAD_KEY
         for k in asset_keys
     )
     assert asset_keys >= _CANVAS_EXPORT_ASSET_KEYS

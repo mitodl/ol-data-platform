@@ -8,9 +8,13 @@ import pytest
 from dagster._core.test_utils import create_run_for_test
 from data_loading.definitions import defs
 from data_loading.defs.ingestion import ocw_content_sensor
-from data_loading.defs.ingestion.assets import ocw_content_assets
+from data_loading.defs.ingestion.assets import (
+    OCW_COURSE_LOAD_KEY,
+    OCW_COURSE_SLUGS_NAME,
+)
 from data_loading.defs.ingestion.ocw_content_sensor import (
     MAX_COURSES_PER_POLL,
+    MAX_COURSES_PER_TICK,
     POLL_INTERVAL_SECONDS,
     SETTLE_SECONDS,
     courses_published_between,
@@ -52,6 +56,11 @@ def published(monkeypatch: pytest.MonkeyPatch) -> dict[str, datetime]:
         "published_at",
         lambda _fs, bucket: times if bucket == ocw_content.BUCKET else {},
     )
+    monkeypatch.setattr(
+        ocw_content_sensor,
+        "course_digest",
+        lambda _fs, slug: f"digest-of-{slug}",
+    )
     return times
 
 
@@ -89,7 +98,7 @@ def test_first_tick_starts_watching_without_a_run(
     assert datetime.fromisoformat(result.cursor) <= now
 
 
-def test_requests_one_load_of_the_courses_published_since_the_last_tick(
+def test_requests_each_course_published_since_the_last_tick(
     instance: dg.DagsterInstance, published: dict[str, datetime]
 ) -> None:
     now = datetime.now(tz=UTC)
@@ -106,9 +115,11 @@ def test_requests_one_load_of_the_courses_published_since_the_last_tick(
 
     result = _tick(instance, since.isoformat())
 
-    (request,) = result.run_requests or []
-    config = request.run_config["ops"][ocw_content_assets.op.name]["config"]
-    assert config == {"courses": ["a-course", "b-course"]}
+    requests = result.run_requests or []
+    assert {request.partition_key: request.run_key for request in requests} == {
+        "a-course": "a-course:digest-of-a-course",
+        "b-course": "b-course:digest-of-b-course",
+    }
     assert result.cursor is not None
     cursor = datetime.fromisoformat(result.cursor)
     assert published["a-course"] < cursor < published["settling"]
@@ -117,18 +128,28 @@ def test_requests_one_load_of_the_courses_published_since_the_last_tick(
     assert not later.run_requests
 
 
-def test_requested_run_config_is_valid_for_the_asset() -> None:
-    run_config = dg.RunConfig(
-        ops={
-            ocw_content_assets.op.name: ocw_content_sensor.OcwContentLoadConfig(
-                courses=["a-course"]
-            )
-        }
-    )
+def test_every_course_gets_a_partition_once(
+    instance: dg.DagsterInstance, published: dict[str, datetime]
+) -> None:
+    since = datetime.now(tz=UTC) - _SINCE_AGO
+    published.update({"old-course": since - timedelta(days=30)})
 
-    assert dg.validate_run_config(
-        defs.resolve_implicit_global_asset_job_def(), run_config
-    )
+    requests = _tick(instance, since.isoformat()).dynamic_partitions_requests or []
+
+    (request,) = requests
+    assert isinstance(request, dg.AddDynamicPartitionsRequest)
+    assert request.partitions_def_name == OCW_COURSE_SLUGS_NAME
+    assert list(request.partition_keys) == ["old-course"]
+
+    instance.add_dynamic_partitions(OCW_COURSE_SLUGS_NAME, ["old-course"])
+    assert not _tick(instance, since.isoformat()).dynamic_partitions_requests
+
+
+def test_the_sensor_targets_the_course_load_and_not_the_table() -> None:
+    repository = defs.get_repository_def()
+    sensor = repository.get_sensor_def(OCW_CONTENT_SENSOR_NAME)
+    job = repository.get_job(sensor.job_name)
+    assert job.asset_layer.executable_asset_keys == {OCW_COURSE_LOAD_KEY}
 
 
 def test_mass_rebuild_is_left_to_the_sweep(
@@ -157,10 +178,19 @@ def test_window_held_open_by_a_long_load_is_not_taken_for_a_rebuild(
     for number in range(1, MAX_COURSES_PER_POLL + 2):
         published[f"course-{number}"] = since + timedelta(minutes=number)
 
-    (request,) = _tick(instance, since.isoformat()).run_requests or []
+    requests = _tick(instance, since.isoformat()).run_requests or []
 
-    config = request.run_config["ops"][ocw_content_assets.op.name]["config"]
-    assert len(config["courses"]) == MAX_COURSES_PER_POLL + 1
+    assert len(requests) == MAX_COURSES_PER_POLL + 1
+
+
+def test_a_long_window_still_has_a_ceiling(
+    instance: dg.DagsterInstance, published: dict[str, datetime]
+) -> None:
+    since = datetime.now(tz=UTC) - timedelta(hours=12)
+    for number in range(1, MAX_COURSES_PER_TICK + 2):
+        published[f"course-{number}"] = since + timedelta(minutes=number)
+
+    assert not _tick(instance, since.isoformat()).run_requests
 
 
 @pytest.mark.parametrize(
@@ -192,9 +222,7 @@ def test_waits_while_a_load_is_in_flight(
     assert result.cursor is None
     instance.report_run_failed(run)
     (request,) = _tick(instance, since.isoformat()).run_requests or []
-    assert request.run_config["ops"][ocw_content_assets.op.name]["config"] == {
-        "courses": ["a-course"]
-    }
+    assert request.partition_key == "a-course"
 
 
 def test_scoped_loads_and_the_sweep_carry_the_queue_tag(

@@ -316,8 +316,8 @@ the courses published since its last tick. It ships stopped. The reasons:
   `data.json`) took 16 s from a laptop with 32 in flight, against 206 s and 456 requests for a
   listing of all 455,605 objects. At five minutes that is ~750,000 HEAD requests a day.
 - `LastModified` only says _when_ to look. Whether a course changed is still decided by its ETag
-  digest in dlt state, so a publish or a mass rebuild that rewrites identical bytes costs one
-  listing of the course and no Tika calls.
+  digest against the newest version in `raw__ocw__s3__course_content`, so a publish or a mass
+  rebuild that rewrites identical bytes costs one listing of the course and no Tika calls.
 - The bucket is in our AWS account (`ocw_site` stack in ol-infrastructure), so S3 event
   notifications to SQS are possible. They would cut the five minutes to seconds but need a queue,
   an EventBridge rule and IAM for the Dagster role. The scoped load below is what either trigger
@@ -325,24 +325,31 @@ the courses published since its last tick. It ships stopped. The reasons:
 
 How a scoped load behaves (`ocw_content_source(courses=[...])`):
 
-- It reads a named course only when its digest changed (`force=True` reads it regardless), and
-  records the new digest in the same dlt state the daily sweep reads, so the sweep skips it.
+- It reads a named course only when its digest changed (`force=True` reads it regardless). The
+  rows it writes carry the new digest, so the sweep, which reads the same rows, skips it.
 - It never unpublishes. A named course gone from the bucket, or whose prefix has no `data.json`,
-  is skipped and its state left as it was: it does not mark the prefix empty, does not count
-  toward the 10% limit, and does not move the sweep's resume point. Only the sweep, which has seen
+  is skipped: it does not mark the prefix empty, does not count toward the 10% limit, and runs on
+  its own dlt pipeline, so it cannot move the sweep's resume point. Only the sweep, which has seen
   the whole bucket, settles those.
 - It stops at the byte budget like the sweep, and the asset drains it, so a large named set is
-  safe to request. From the launchpad, a named set is run config on `ocw_content_ingest`:
-  `ops: {ocw_content_ingest: {config: {courses: [<slug>, ...]}}}`.
+  safe to request. A course's load is a partition of `ocw/course_content_load`, so one
+  course or a named set is a materialization or a backfill from the UI, and a backfill of
+  many is one run.
 
-How the sensor and the sweep share the state:
+How the sensor and the sweep stay out of each other's way:
 
-- Each load saves the whole dlt state, and a load restores the one saved by the newest load id
-  (dlt's filesystem destination, `get_stored_state`). Two loads at once would drop what the earlier one recorded, e.g. the gone courses a
-  sweep unpublished, which the next sweep would unpublish and count against the limit again. So
-  the sensor waits while a sweep or scoped load is running, and the schedule ticks hourly from
-  04:35 to 09:35 and starts the day's one sweep at the first tick nothing is running. A load
-  started by hand from the UI is not seen by either.
+- A load learns what it knows about a course from that course's rows, which commit with the load
+  that wrote them, so loads of different courses cannot lose each other's change detection. dlt
+  state holds only what the sweep alone writes: its resume point, the unpublish count and the
+  prefixes it saw empty.
+- The raw table's asset stays unpartitioned, and a course's load is a partition of
+  `ocw/course_content_load`, which reports a materialization of the table. With 100 or more
+  upstream partitions Dagster drops a dependency from data versioning, and the models below the
+  table rebuild on its data version.
+- Runs still go one at a time, so they do not contend to commit to one Iceberg table. The sensor
+  waits while a sweep or course load is running, and the schedule ticks hourly from 04:35 to 09:35
+  and starts the day's one sweep at the first tick nothing is running. A load started by hand from
+  the UI is not seen by either.
 - More than 50 courses written per poll interval is a mass rebuild (138 courses per five minutes at
   the median on 2026-10-14; the busiest day of single publishes since had 30). The sensor skips
   those and the sweep reads them. The limit scales with the window, so the publishes that piled up

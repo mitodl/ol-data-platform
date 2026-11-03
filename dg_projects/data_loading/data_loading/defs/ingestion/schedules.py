@@ -356,23 +356,20 @@ xpro_tracking_logs_ingest_schedule = dg.ScheduleDefinition(
 OCW_CONTENT_SCHEDULE_NAME = "ocw_content_ingest_daily_schedule"
 # Defined in ocw_content_sensor, named here so the schedule can wait for its runs.
 OCW_CONTENT_SENSOR_NAME = "ocw_content_publish_sensor"
-# Carried by the sweep and by every scoped load. The run coordinator's
+# Carried by the sweep and by every course load. The run coordinator's
 # tag_concurrency_limits in ol-infrastructure (dagster_instance.yaml) caps runs
 # with this key at one, so a load requested while another is starting waits in
-# the queue. The in-flight checks below only keep the sensor and schedule from
-# requesting runs that would sit there.
+# the queue. Loads no longer lose each other's state, so the cap is now what
+# keeps them from contending to commit to one Iceberg table. The in-flight checks
+# below only keep the sensor and schedule from requesting runs that would sit
+# there.
 OCW_CONTENT_RUN_TAGS = {"ocw/content_load": "true"}
 
 
 def ocw_content_run_in_flight(instance: dg.DagsterInstance) -> bool:
-    """Tell whether a sweep or a scoped OCW content load has not finished.
+    """Tell whether a sweep or a course load has not finished.
 
-    Each load saves the source's whole dlt state, and a load restores the one
-    saved by the newest load id. So of two loads at once, one drops what the
-    other recorded: the sweep's resume point,
-    the prefixes it saw empty, the gone courses it unpublished (which the next
-    sweep would then unpublish and count against the limit again). A run
-    started by hand is seen, and queued behind the others, only if it is
+    A run started by hand is seen, and queued behind the others, only if it is
     launched with ``OCW_CONTENT_RUN_TAGS``. The schedule's own name is checked
     too because a sweep started before that tag existed carries only it, and
     the first sweep can outlast a day.
