@@ -143,6 +143,16 @@ models:
         cohort:
           role: primary
   - name: active_learners
+    description: Deprecated, the old name for actively_enrolled_learners and always
+      equal to it. Removed once ol-analytics-api and mit-learn read actively_enrolled_learners.
+    config:
+      meta:
+        api_description: 'Deprecated: use actively_enrolled_learners, which this always
+          equals.'
+        cohort:
+          role: secondary
+          contained_in: seats_consumed
+  - name: actively_enrolled_learners
     description: Distinct learners with an active enrollment under this contract.
     config:
       meta:
@@ -277,6 +287,16 @@ models:
         cohort:
           role: primary
   - name: active_learners
+    description: Deprecated, the old name for actively_enrolled_learners and always
+      equal to it. Removed once ol-analytics-api and mit-learn read actively_enrolled_learners.
+    config:
+      meta:
+        api_description: 'Deprecated: use actively_enrolled_learners, which this always
+          equals.'
+        cohort:
+          role: secondary
+          contained_in: enrolled_learners
+  - name: actively_enrolled_learners
     description: Distinct learners with an active enrollment.
     config:
       meta:
@@ -305,7 +325,18 @@ models:
           role: secondary
           contained_in: enrolled_learners
   - name: active_rate_pct
-    description: active_learners / enrolled_learners * 100.
+    description: Deprecated, the old name for actively_enrolled_rate_pct and always
+      equal to it. Removed once ol-analytics-api and mit-learn read actively_enrolled_rate_pct.
+    config:
+      meta:
+        api_description: 'Deprecated: use actively_enrolled_rate_pct, which this always
+          equals.'
+        cohort:
+          role: derived
+          derived_from:
+          - actively_enrolled_learners
+  - name: actively_enrolled_rate_pct
+    description: actively_enrolled_learners / enrolled_learners * 100.
     config:
       meta:
         api_description: Percentage of enrolled learners whose enrollment is still
@@ -313,7 +344,7 @@ models:
         cohort:
           role: derived
           derived_from:
-          - active_learners
+          - actively_enrolled_learners
   - name: completion_rate_pct
     description: certified_learners / enrolled_learners * 100.
     config:
@@ -701,6 +732,16 @@ models:
         cohort:
           role: dimension
   - name: total_enrolled_learners
+    description: Deprecated, the old name for actively_enrolled_learners and always
+      equal to it. Removed once ol-analytics-api and mit-learn read actively_enrolled_learners.
+    config:
+      meta:
+        api_description: 'Deprecated: use actively_enrolled_learners, which this always
+          equals.'
+        cohort:
+          role: secondary
+          contained_in: actively_enrolled_learners
+  - name: actively_enrolled_learners
     description: Distinct learners with an active enrollment in this course run.
     config:
       meta:
@@ -724,9 +765,9 @@ models:
           them.'
         cohort:
           role: secondary
-          contained_in: total_enrolled_learners
+          contained_in: actively_enrolled_learners
   - name: engagement_rate_pct
-    description: engaged_learners / total_enrolled_learners * 100.
+    description: engaged_learners / actively_enrolled_learners * 100.
     config:
       meta:
         api_description: Percentage of enrolled learners who did anything in the course.
@@ -840,7 +881,7 @@ models:
           role: secondary
           contained_in: engaged_learners
   - name: chatbot_adoption_pct
-    description: chatbot_users / total_enrolled_learners * 100.
+    description: chatbot_users / actively_enrolled_learners * 100.
     config:
       meta:
         api_description: Percentage of enrolled learners who used the chatbot. Withheld
@@ -853,11 +894,11 @@ models:
     description: >
       Learners holding an unrevoked certificate for this course run, whether
       or not their enrollment is still active. It is not a strict subset of
-      total_enrolled_learners: a learner who certified and then unenrolled is
+      actively_enrolled_learners: a learner who certified and then unenrolled is
       counted here and not there. ol-analytics-api declares it contained in
-      total_enrolled_learners anyway (ol-analytics-api #95, decided
+      actively_enrolled_learners anyway (ol-analytics-api #95, decided
       2026-10-15), so besides its own floor it is withheld when
-      total_enrolled_learners minus it is below the floor and not 0, which
+      actively_enrolled_learners minus it is below the floor and not 0, which
       includes below zero. That gap is the enrolled learners without a
       certificate minus the unenrolled certificate holders, never more than
       the true one, so the declaration over-suppresses on runs with unenrolled
@@ -870,7 +911,7 @@ models:
           few learners are in the group to report without identifying them.
         cohort:
           role: secondary
-          contained_in: total_enrolled_learners
+          contained_in: actively_enrolled_learners
 
 - name: mv_b2b_mit_admin_contract_health
   description: >
@@ -980,6 +1021,16 @@ models:
         cohort:
           role: primary
   - name: active_learners
+    description: Deprecated, the old name for actively_enrolled_learners and always
+      equal to it. Removed once ol-analytics-api and mit-learn read actively_enrolled_learners.
+    config:
+      meta:
+        api_description: 'Deprecated: use actively_enrolled_learners, which this always
+          equals.'
+        cohort:
+          role: secondary
+          contained_in: seats_consumed
+  - name: actively_enrolled_learners
     description: Distinct learners with an active enrollment under this contract.
     config:
       meta:
@@ -1365,6 +1416,16 @@ models:
         cohort:
           role: dimension
   - name: total_enrolled_learners
+    description: Deprecated, the old name for actively_enrolled_learners and always
+      equal to it. Removed once ol-analytics-api and mit-learn read actively_enrolled_learners.
+    config:
+      meta:
+        api_description: 'Deprecated: use actively_enrolled_learners, which this always
+          equals.'
+        cohort:
+          role: secondary
+          contained_in: actively_enrolled_learners
+  - name: actively_enrolled_learners
     description: Distinct learners with an active enrollment in this course run under
       this contract.
     config:
@@ -1388,9 +1449,9 @@ models:
           them.'
         cohort:
           role: secondary
-          contained_in: total_enrolled_learners
+          contained_in: actively_enrolled_learners
   - name: engagement_rate_pct
-    description: engaged_learners as a percentage of total_enrolled_learners.
+    description: engaged_learners as a percentage of actively_enrolled_learners.
     config:
       meta:
         api_description: Percentage of enrolled learners who did anything in the course.
@@ -1507,7 +1568,7 @@ models:
           role: secondary
           contained_in: engaged_learners
   - name: chatbot_adoption_pct
-    description: chatbot_users as a percentage of total_enrolled_learners.
+    description: chatbot_users as a percentage of actively_enrolled_learners.
     config:
       meta:
         api_description: Percentage of enrolled learners who used the chatbot. Withheld
@@ -1520,11 +1581,11 @@ models:
     description: >
       Learners holding an unrevoked certificate for this course run, whether
       or not their enrollment is still active. It is not a strict subset of
-      total_enrolled_learners: a learner who certified and then unenrolled is
+      actively_enrolled_learners: a learner who certified and then unenrolled is
       counted here and not there. ol-analytics-api declares it contained in
-      total_enrolled_learners anyway (ol-analytics-api #95, decided
+      actively_enrolled_learners anyway (ol-analytics-api #95, decided
       2026-10-15), so besides its own floor it is withheld when
-      total_enrolled_learners minus it is below the floor and not 0, which
+      actively_enrolled_learners minus it is below the floor and not 0, which
       includes below zero. That gap is the enrolled learners without a
       certificate minus the unenrolled certificate holders, never more than
       the true one, so the declaration over-suppresses on runs with unenrolled
@@ -1537,4 +1598,4 @@ models:
           few learners are in the group to report without identifying them.
         cohort:
           role: secondary
-          contained_in: total_enrolled_learners
+          contained_in: actively_enrolled_learners

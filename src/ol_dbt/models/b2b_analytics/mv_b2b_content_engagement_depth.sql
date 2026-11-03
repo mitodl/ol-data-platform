@@ -17,6 +17,9 @@
 -- emits, so each such sum publishes its own contributing cohort count
 -- (video_watchers, problem_attempters, chatbot_users) alongside it. Do not add
 -- an activity aggregate without also emitting the cohort it is attributable to.
+--
+-- total_enrolled_learners is the old name for actively_enrolled_learners, kept until
+-- ol-analytics-api and mit-learn read the new one.
 with contracts as (
 {{ b2b_contracts() }}
 )
@@ -32,6 +35,7 @@ select
     cr.courserun_readable_id,
     cr.courserun_title,
     count(distinct case when lc.enrollment_is_active then lc.user_fk end)     as total_enrolled_learners,
+    count(distinct case when lc.enrollment_is_active then lc.user_fk end)     as actively_enrolled_learners,
     count(distinct case when lc.days_active > 0 then lc.user_fk end)          as engaged_learners,
     round(100.0 * count(distinct case when lc.days_active > 0 then lc.user_fk end)
         / nullif(count(distinct case when lc.enrollment_is_active then lc.user_fk end), 0), 1
