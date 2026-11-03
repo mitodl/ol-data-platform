@@ -1281,10 +1281,13 @@ models:
       with the word capstone in the title, 'N' otherwise. It does not check completion.
       marts__combined_program_enrollment_detail.capstone_indicator counts enrollments
       in any mode.
+  - name: program_completion_days
+    description: int, marts__combined_program_enrollment_detail.program_completion_days,
+      the number of days from the start date of the first verified course run to the
+      program certificate creation date
   - name: program_complete_days
-    description: int, marts__combined_program_enrollment_detail.program_completion_days
-      under another name, the number of days from the start date of the first verified
-      course run to the program certificate creation date
+    description: Deprecated, the old name for program_completion_days and always equal
+      to it. Removed once the Superset chart reads program_completion_days.
   tests:
   # NOTE: These conditional uniqueness tests match the upstream marts__combined_program_enrollment_detail
   # model's grain definition. This reporting model is a passthrough/enrichment layer that inherits
@@ -2006,6 +2009,30 @@ unit_tests:
     - {program_readable_id: null, program_title: Computer Science, program_type: XSeries,
       total_enrollments: 1, unique_users: 1, verified_enrollments: 0, course_certificates: 0,
       program_certificates: 1}
+
+- name: test_program_enrollment_with_user_report_keeps_the_mart_completion_days_name
+  description: >
+    The report serves the mart's program_completion_days under the same name, and
+    under the deprecated program_complete_days until the chart moves.
+  model: program_enrollment_with_user_report
+  given:
+  - input: ref('marts__combined_program_enrollment_detail')
+    rows:
+    - {platform_name: MITx Online, program_title: Series, program_readable_id: "program-v1:MITxT+S",
+      user_id: 8, user_hashed_id: m8, user_email: learner@example.com, program_completion_days: 30}
+  - input: ref('marts__combined__users')
+    rows: []
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('bridge_program_course')
+    rows: []
+  - input: ref('dim_course')
+    rows: []
+  - input: ref('marts__combined_course_enrollment_detail')
+    rows: []
+  expect:
+    rows:
+    - {user_id: 8, program_completion_days: 30, program_complete_days: 30}
 
 - name: test_program_enrollment_with_user_report_matches_one_course_set_per_row
   description: >

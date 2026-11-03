@@ -155,6 +155,7 @@ select
         combined_users.user_address_postal_code, combined_users2.user_address_postal_code
     ) as user_address_postal_code
     , case when courses_detail.capstone_sum > 0 then 'Y' else 'N' end as capstone_ind
+    , enrollment_detail.program_completion_days
     , enrollment_detail.program_completion_days as program_complete_days
 from enrollment_detail
 left join combined_users
