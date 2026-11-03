@@ -64,7 +64,7 @@ with combined__users as (
     join bridge_program_course
         on program.program_pk = bridge_program_course.program_fk
     join course_run
-        on 
+        on
             bridge_program_course.course_fk = course_run.course_fk
             and course_run.is_current = true
     join tfact_enrollment
