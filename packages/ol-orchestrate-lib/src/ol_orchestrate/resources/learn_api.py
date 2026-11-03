@@ -118,6 +118,7 @@ class MITLearnApiClient(BaseApiClient):
         endpoint: str = "/api/v1/webhooks/learning_resources/",
         *,
         sync: list[tuple[str, str]] | None = None,
+        allow_mass_unpublish: bool = False,
     ) -> dict[str, Any]:
         """Send a batch of pre-computed LearningResource dicts to MIT Learn.
 
@@ -141,6 +142,9 @@ class MITLearnApiClient(BaseApiClient):
                 resources in the batch, so a pair that has gone empty stays
                 published unless it is declared here. Learn accepts course,
                 program and document.
+            allow_mass_unpublish: Skip MIT Learn's limit on how much of a pair a
+                batch may unpublish. Without it, a batch over the limit is refused
+                with a 422 and nothing in it is loaded.
         """
         data: dict[str, Any] = {"resources": resources}
         if sync:
@@ -148,4 +152,6 @@ class MITLearnApiClient(BaseApiClient):
                 {"etl_source": etl_source, "resource_type": resource_type}
                 for etl_source, resource_type in sync
             ]
+        if allow_mass_unpublish:
+            data["allow_mass_unpublish"] = True
         return self._post_signed_webhook(endpoint, data)
