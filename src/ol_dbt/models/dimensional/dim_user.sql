@@ -915,11 +915,11 @@ with mitx_users as (
 -- have only a city (Residential), so a city-only account never replaces a fuller address.
 -- Take one row rather than min_by per column, which skips NULLs on DuckDB and would fill
 -- each part from a different account.
--- Rows are ordered by row_num, as for the demographic columns: the latest signup date on the
--- row, across every platform the row combines. The MITx row combines a user's Learn, MITx Online
--- and edX.org accounts but takes its address only from edX.org, so a recent Learn or MITx Online
--- signup can rank that address ahead of a newer MITx Pro or Bootcamps one. The signup date of the
--- account the address came from is not used.
+-- Rows are ordered by row_num, using the same convention as the demographic columns: the
+-- latest signup date on the row, across every platform the row combines. The MITx row
+-- combines a user's Learn, MITx Online and edX.org accounts but takes its address only from
+-- MicroMasters, so a recent Learn or MITx Online signup can rank that address ahead of a newer
+-- MITx Pro or Bootcamps one.
 , ranked_addresses as (
     select
         user_pk

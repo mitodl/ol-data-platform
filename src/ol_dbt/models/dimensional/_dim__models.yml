@@ -733,14 +733,15 @@ models:
   - name: user_street_address
     description: str, street address. Person-level - street address, city and postal
       code are taken together from one of the user's accounts, so all three describe
-      the same address. Platform records are ordered as for the demographic columns,
-      by the latest signup date on each record. The MITx record combines a user's
-      Learn, MITx Online and edX.org accounts but takes its address only from edX.org,
-      so a recent Learn or MITx Online signup can put an older edX.org address ahead
-      of a newer MITx Pro or Bootcamps one. Ties are broken by platform and then platform
-      id, and the first record with a street address or postal code is used. Emeritus
-      and Global Alumni accounts have no join date, so they rank last. Populated for
-      edX.org, MITx Pro, Bootcamps, Emeritus, Global Alumni and MicroMasters accounts.
+      the same address. Rows are ordered using the same convention as the demographic
+      columns - the latest signup date on the row, across every platform the row combines.
+      The MITx row combines a user's Learn, MITx Online and edX.org accounts but takes
+      its address only from MicroMasters, so a recent Learn or MITx Online signup
+      can rank that address ahead of a newer MITx Pro or Bootcamps one. Ties are broken
+      by platform and then platform id, and the first row with a street address or
+      postal code is used. Emeritus and Global Alumni accounts have no join date,
+      so they rank last. Populated for edX.org, MITx Pro, Bootcamps, Emeritus, Global
+      Alumni and MicroMasters accounts.
     config:
       meta:
         openmetadata:
