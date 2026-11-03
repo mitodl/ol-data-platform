@@ -613,6 +613,10 @@ def report_raw_table(
 # One partition per course: its load history, and a retry or backfill of it from
 # the UI. A backfill of a contiguous range is one run, so a re-read of hundreds of
 # courses does not start a pod for each. ocw_content_publish_sensor requests these.
+# Launch one by hand with the OCW_CONTENT_RUN_TAGS run tag (ocw/content_load: true).
+# The run queue's one-at-a-time cap and ocw_content_run_in_flight match on that run
+# tag, and an asset's own tags do not become run tags, so an untagged run starts
+# beside a sensor's load and the two contend to commit to the raw table.
 @dlt_assets(
     dlt_source=ocw_content.build_source(),
     dlt_pipeline=ocw_content.ocw_course_pipeline,
