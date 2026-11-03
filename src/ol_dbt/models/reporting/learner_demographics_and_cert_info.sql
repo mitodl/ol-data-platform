@@ -14,6 +14,26 @@ with combined__users as (
     select * from {{ ref('marts__combined_coursesinprogram') }}
 )
 
+, program as (
+    select * from {{ ref('dim_program') }}
+)
+
+, bridge_program_course as (
+    select * from {{ ref('bridge_program_course') }}
+)
+
+, course_run as (
+    select * from {{ ref('dim_course_run') }}
+)
+
+, tfact_enrollment as (
+    select * from {{ ref('tfact_enrollment') }}
+)
+
+, dim_user as (
+    select * from {{ ref('dim_user') }}
+)
+
 , dedp_indicators as (
     select
         user_email
@@ -38,14 +58,21 @@ with combined__users as (
 
 , dedp_enroll_indicators as (
     select
-        user_email
-        , 1 as Any_DEDP_Program_Enrollment_Indicator
-    from program_enrollment_detail
-    where program_title in
-        ('Data, Economics, and Design of Policy'
-        , 'Data, Economics, and Design of Policy: International Development'
-        , 'Data, Economics, and Design of Policy: Public Policy')
-    group by user_email
+        dim_user.email as user_email
+        , 1 as Any_DEDP_Course_Enrollment_Indicator
+    from program
+    join bridge_program_course
+        on program.program_pk = bridge_program_course.program_fk
+    join course_run
+        on 
+            bridge_program_course.course_fk = course_run.course_fk
+            and course_run.is_current = true
+    join tfact_enrollment
+        on course_run.courserun_pk = tfact_enrollment.courserun_fk
+    join dim_user
+        on tfact_enrollment.user_fk = dim_user.user_pk
+    where program.program_is_dedp = true
+    group by dim_user.email
 )
 
 , dedp_certs as (
@@ -85,7 +112,7 @@ select
     , case when dedp_indicators.Any_DEDP_Program_Indicator= 1 then 'Y' else null end as any_dedp_program_cert_ind
     , case when dedp_indicators.DEDP_International_Program_Indicator= 1 then 'Y' else null end as dedp_international_program_cert_ind
     , case when dedp_indicators.DEDP_Public_Policy_Program_Indicator= 1 then 'Y' else null end as dedp_public_policy_program_cert_ind
-    , case when dedp_enroll_indicators.Any_DEDP_Program_Enrollment_Indicator= 1 then 'Y' else null end as any_dedp_program_enroll_ind
+    , case when dedp_enroll_indicators.Any_DEDP_Course_Enrollment_Indicator= 1 then 'Y' else null end as any_dedp_course_enroll_ind
 from combined__users
 left join dedp_indicators
     on combined__users.user_email = dedp_indicators.user_email
