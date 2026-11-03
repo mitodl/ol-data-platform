@@ -14,4 +14,8 @@ select
     , footnotes                                 as article_footnotes
     , byline                                    as article_byline
     , feed_type                                 as article_feed_type
+    -- The raw table is merge-loaded: an article the feeds drop stays, keeping the
+    -- _dlt_load_id of the last load that saw it. See
+    -- integrations__learn__mit_climate_articles.
+    , _dlt_load_id                              as article_dlt_load_id
 from source
