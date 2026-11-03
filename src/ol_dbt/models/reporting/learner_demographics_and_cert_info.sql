@@ -58,7 +58,7 @@ with combined__users as (
 
 , dedp_enroll_indicators as (
     select
-        dim_user.email as user_email
+        combined__users.user_email
         , 1 as Any_DEDP_Course_Enrollment_Indicator
     from program
     join bridge_program_course
@@ -71,8 +71,12 @@ with combined__users as (
         on course_run.courserun_pk = tfact_enrollment.courserun_fk
     join dim_user
         on tfact_enrollment.user_fk = dim_user.user_pk
+    join combined__users
+        on
+            combined__users.user_mitxonline_id = dim_user.mitxonline_application_user_id
+            or combined__users.user_edxorg_id = dim_user.edxorg_openedx_user_id
     where program.program_is_dedp = true
-    group by dim_user.email
+    group by combined__users.user_email
 )
 
 , dedp_certs as (
