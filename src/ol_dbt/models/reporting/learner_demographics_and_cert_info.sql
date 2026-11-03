@@ -38,14 +38,16 @@ with combined__users as (
 
 , dedp_enroll_indicators as (
     select
-        user_email
-        , 1 as Any_DEDP_Program_Enrollment_Indicator
-    from program_enrollment_detail
-    where program_title in
+        combined_course_enrollment_detail.user_email
+        , 1 as Any_DEDP_Course_Enrollment_Indicator
+    from combined_course_enrollment_detail
+    inner join combined_coursesinprogram
+        on combined_course_enrollment_detail.course_readable_id = combined_coursesinprogram.course_readable_id
+    where combined_coursesinprogram.program_title in
         ('Data, Economics, and Design of Policy'
         , 'Data, Economics, and Design of Policy: International Development'
         , 'Data, Economics, and Design of Policy: Public Policy')
-    group by user_email
+    group by combined_course_enrollment_detail.user_email
 )
 
 , dedp_certs as (
@@ -85,7 +87,7 @@ select
     , case when dedp_indicators.Any_DEDP_Program_Indicator= 1 then 'Y' else null end as any_dedp_program_cert_ind
     , case when dedp_indicators.DEDP_International_Program_Indicator= 1 then 'Y' else null end as dedp_international_program_cert_ind
     , case when dedp_indicators.DEDP_Public_Policy_Program_Indicator= 1 then 'Y' else null end as dedp_public_policy_program_cert_ind
-    , case when dedp_enroll_indicators.Any_DEDP_Program_Enrollment_Indicator= 1 then 'Y' else null end as any_dedp_program_enroll_ind
+    , case when dedp_enroll_indicators.Any_DEDP_Course_Enrollment_Indicator= 1 then 'Y' else null end as any_dedp_course_enroll_ind
 from combined__users
 left join dedp_indicators
     on combined__users.user_email = dedp_indicators.user_email
