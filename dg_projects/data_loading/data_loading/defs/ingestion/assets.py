@@ -55,6 +55,7 @@ from data_loading.defs.ingestion.translators import (
     EdxorgDltTranslator,
     RawDataDltTranslator,
 )
+from ol_dlt import keyset
 
 
 def build_ingest_assets(
@@ -159,6 +160,27 @@ xpro_app_assets = (
         pipeline=xpro_app.xpro_app_pipeline,
     )
     if DAGSTER_ENV in XPRO_APP_DLT_ENVIRONMENTS
+    else None
+)
+# Keys-only reads of the MITx Online app database (ol_dlt.keyset), for the
+# history snapshots and staging to tell deleted keys from live ones. Run by hand
+# for now: the run after every load comes with the keyset automation (witan task
+# tk-run-each-unit-s-keysets-after-every-load-and-sta-4caeb1).
+#
+# Production is absent because its keysets read the RDS read replica, and the
+# MITx Online stack does not export the replica's address yet
+# (tk-export-production-read-replica-addresses-for-the-d2d989).
+# MITXONLINE_APP_DB_HOST in production is the primary.
+MITXONLINE_APP_KEYSET_ENVIRONMENTS = frozenset({"dev", "ci", "qa"})
+MITXONLINE_APP_KEYSET_UNIT = "mitxonline/app_postgres"
+
+mitxonline_app_keyset_assets = (
+    build_ingest_assets(
+        name="mitxonline_app_keyset",
+        source=keyset.build_unit_keyset_source(MITXONLINE_APP_KEYSET_UNIT),
+        pipeline=keyset.unit_keyset_pipeline(MITXONLINE_APP_KEYSET_UNIT),
+    )
+    if DAGSTER_ENV in MITXONLINE_APP_KEYSET_ENVIRONMENTS
     else None
 )
 see_assets = build_ingest_assets(
@@ -653,6 +675,7 @@ defs = Definitions(
             podcast_rss_assets,
             keycloak_assets,
             *([mitxonline_app_assets] if mitxonline_app_assets else []),
+            *([mitxonline_app_keyset_assets] if mitxonline_app_keyset_assets else []),
             *([xpro_app_assets] if xpro_app_assets else []),
             youtube_assets,
             see_assets,
