@@ -91,7 +91,8 @@ models:
       and MicroMasters programs have; every course in an xPRO program is required.
       This flags courses, it does not count them; the number of courses a program
       requires is program_num_required_courses in int__mitxonline__program_requirements
-      and int__micromasters__program_requirements.
+      and int__micromasters__program_requirements, null for a MITx Online program
+      with tracks.
     tests:
     - not_null
   - name: course_order
