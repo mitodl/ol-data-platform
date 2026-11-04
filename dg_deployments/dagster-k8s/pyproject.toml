@@ -13,12 +13,12 @@ dependencies = [
     "ol-orchestrate-lib",
     # The Dagster plugins pin dagster exactly, so this line decides which
     # plugin versions the ranges below resolve to.
-    "dagster==1.13.26",
+    "dagster==1.13.28",
     "dagster-aws~=0.29.0",
-    "dagster-graphql==1.13.26",
+    "dagster-graphql==1.13.28",
     "dagster-k8s~=0.29.0",
     "dagster-postgres~=0.29.0",
-    "dagster-webserver==1.13.26",
+    "dagster-webserver==1.13.28",
     # OpenTelemetry auto-instrumentation for the webserver and the daemon.
     #
     # These are agent packages, not runtime dependencies: nothing in
