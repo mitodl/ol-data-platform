@@ -2,9 +2,10 @@
 unit_tests:
 - name: test_bridge_user_contract_keeps_one_row_per_re_added_membership
   description: >
-    Regression test for 2026-11-04. The raw userb2bcontract table syncs
-    incrementally on id, so a learner removed from a contract and re-added
-    leaves one row per stint. Each became its own bridge row and fanned out
+    Regression test for 2026-11-04. In production the raw userb2bcontract
+    table is loaded by Airbyte's xmin sync, which never carries a hard delete,
+    so a learner removed from a contract and re-added leaves one row per stint. Each
+    became its own bridge row and fanned out
     mv_b2b_learner_enrollment (3 rows for one enrollment). The bridge must hold
     one row for the (user, contract), from the most recently created membership,
     and still carry the decision recorded on an earlier stint.

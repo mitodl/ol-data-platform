@@ -266,9 +266,10 @@ models:
       Null when the contract's organization is not in dim_organization.
   - name: membership_is_current
     description: True when the raw userb2bcontract table holds a row for the membership.
-      False for a removed membership kept only because of a recorded decision. The
-      raw table syncs incrementally and never drops a hard-deleted row, so a membership
-      removed in MITx Online still reads true.
+      False for a removed membership kept only because of a recorded decision. In
+      production, Airbyte's xmin sync never drops a hard-deleted row, so a membership
+      removed in MITx Online still reads true. QA's dlt load replaces the table, so
+      it reads false there.
   - name: consented_to_data_sharing
     description: >
       The learner's decision to share their course data with the contract's

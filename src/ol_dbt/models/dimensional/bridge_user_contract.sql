@@ -8,12 +8,12 @@
 -- the snapshot: when the current membership has no decision, or is gone, the row
 -- carries the latest decision ever recorded for the (user, contract), consent or
 -- decline.
--- The raw table syncs incrementally on id, so a hard-deleted membership is never
--- removed from it. A learner removed and re-added leaves one row per stint under the
--- same (user, contract), which MITx Online itself never holds (unique_together on
--- user and contract_page). The most recently created row stands for the membership.
--- A membership deleted and not re-added still reads as current until the sync carries
--- deletes.
+-- In production the raw table is loaded by Airbyte's xmin cursor, deduplicated on
+-- id, which never carries a hard delete. A learner removed and re-added there leaves
+-- one row per stint under the same (user, contract), which MITx Online itself never
+-- holds (unique_together on user and contract_page). The most recently created row
+-- stands for the membership. A production membership deleted and not re-added still
+-- reads as current. QA's dlt load replaces the table, so deleted rows drop out there.
 with membership_rows as (
     select
         user_id
