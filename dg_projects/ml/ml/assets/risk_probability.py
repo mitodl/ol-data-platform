@@ -1,4 +1,3 @@
-import os
 from datetime import UTC, datetime
 
 import polars as pl
@@ -11,17 +10,13 @@ from ml.lib.helper import (
     risk_probability,
     scaled_features,
 )
+from ml.lib.warehouse import warehouse_database
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
-from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import (
     get_dbt_model_as_dataframe,
 )
 
-if DAGSTER_ENV == "dev":
-    _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
-    write_database_name = f"ol_warehouse_production_{_schema_suffix}_reporting"
-else:
-    write_database_name = "ol_warehouse_production_reporting"
+write_database_name = warehouse_database("reporting")
 
 
 @asset(

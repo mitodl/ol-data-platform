@@ -1,4 +1,3 @@
-import os
 from datetime import UTC, datetime
 
 import polars as pl
@@ -18,20 +17,13 @@ from ml.lib.sentiment_eval import (
     run_sentiment_eval,
     validate_negative_thresholds,
 )
+from ml.lib.warehouse import warehouse_database
 from ml.resources.llm import LLMClientFactory
-from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from pydantic import Field, field_validator
 
-if DAGSTER_ENV == "dev":
-    _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
-    intermediate_database_name = (
-        f"ol_warehouse_production_{_schema_suffix}_intermediate"
-    )
-    dimensional_database_name = f"ol_warehouse_production_{_schema_suffix}_dimensional"
-else:
-    intermediate_database_name = "ol_warehouse_production_intermediate"
-    dimensional_database_name = "ol_warehouse_production_dimensional"
+intermediate_database_name = warehouse_database("intermediate")
+dimensional_database_name = warehouse_database("dimensional")
 
 SENTIMENT_EVAL_RESULT_SCHEMA = {
     "eval_run_id": pl.String,

@@ -1,5 +1,4 @@
 import contextlib
-import os
 
 import polars as pl
 from dagster import (
@@ -27,9 +26,9 @@ from ml.lib.summarize import (
     summarize_and_checkpoint,
     summary_use_case,
 )
+from ml.lib.warehouse import warehouse_database
 from ol_llm import BatchFailed
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
-from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import (
     get_dbt_model_as_dataframe,
 )
@@ -37,11 +36,7 @@ from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
 from pydantic import Field
 from pyiceberg.exceptions import NoSuchTableError
 
-if DAGSTER_ENV == "dev":
-    _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
-    database_name = f"ol_warehouse_production_{_schema_suffix}_intermediate"
-else:
-    database_name = "ol_warehouse_production_intermediate"
+database_name = warehouse_database("intermediate")
 
 
 # Summaries only: clusters see just what was summarized, so they keep the shared default

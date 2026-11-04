@@ -21,8 +21,8 @@ from pyiceberg.expressions import And, EqualTo
 def warehouse_database(layer: str) -> str:
     """Return the Glue database the ml assets read and write for a layer.
 
-    Mirrors feedback_redacted.py and the courseware_intermediate dbt source: dev
-    writes to the production catalog under a personal schema suffix.
+    Matches the dbt sources that read these tables: dev writes to the production
+    catalog under a personal schema suffix.
 
     :param layer: e.g. intermediate or dimensional
     :returns: the Glue database name
