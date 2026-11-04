@@ -38,11 +38,11 @@ COPY ingestion/inventory ingestion/inventory
 WORKDIR /app/dg_projects/lakehouse
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv venv --relocatable && \
-    uv sync --frozen --no-install-project --no-dev --no-editable
+    uv sync --locked --no-install-project --no-dev --no-editable
 
 # Sync the project itself
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable
+    uv sync --locked --no-dev --no-editable
 
 # OpenTelemetry auto-instrumentation agent, activated by PYTHONPATH (see the
 # /opt/otel symlink in the final stage).

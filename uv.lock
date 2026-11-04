@@ -3002,6 +3002,9 @@ sqlfluff = [
     { name = "sqlfluff", extra = ["rs"] },
     { name = "sqlfluff-templater-dbt" },
 ]
+uv-operations = [
+    { name = "cyclopts" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -3045,6 +3048,7 @@ sqlfluff = [
     { name = "sqlfluff", extras = ["rs"], specifier = ">=4.4.0,<5" },
     { name = "sqlfluff-templater-dbt", specifier = ">=4.4.0,<5" },
 ]
+uv-operations = [{ name = "cyclopts", specifier = "~=5.3.2" }]
 
 [[package]]
 name = "ol-dbt-cli"

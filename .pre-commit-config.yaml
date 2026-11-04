@@ -93,6 +93,18 @@ repos:
     files: ^src/ol_dbt/(models|tests)/
     exclude: *sqlfluff_baseline
     require_serial: true
+  # Every project outside the root workspace has its own uv.lock, which embeds
+  # the metadata of its path dependencies (e.g. packages/ol-orchestrate-lib).
+  # Renovate relocks only the lockfile next to the pyproject.toml it edits, so
+  # the others go stale and the image builds' `uv sync --locked` fails.
+  - id: uv-lock
+    name: uv lock (every project)
+    entry: uv run --frozen --only-group uv-operations python bin/uv-operations.py
+      lock
+    language: system
+    files: (^|/)(pyproject\.toml|uv\.lock)$
+    pass_filenames: false
+    require_serial: true
 - repo: https://github.com/zizmorcore/zizmor-pre-commit
   rev: v1.31.1
   hooks:
