@@ -8,7 +8,8 @@ the raw table prefix and the Vault mount.
 Names, databases and mounts follow ol-infrastructure (each application's
 ``OLVaultPostgresDatabaseConfig`` / ``OLVaultMysqlDatabaseConfig``). The host
 comes from ``<NAME>_DB_HOST`` in the data_loading deployment, which
-ol-infrastructure sets only for MITx Online and xPRO today.
+ol-infrastructure sets for MITx Online and xPRO and for none of the other units
+here yet.
 """
 
 from ol_dlt.database import MYSQL_DRIVER, DatabaseSourceSpec
