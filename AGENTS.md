@@ -11,7 +11,7 @@ This guide provides essential information for coding agents working with the MIT
 **Repository Type**: Python uv workspace with 7+ Dagster code locations and a dbt project
 **Size**: ~209 Python dependencies, ~30 workspace projects
 **Python Version**: 3.13 (strictly ~=3.13,<3.14)
-**Package Manager**: uv 0.9+ (replaces pip/poetry)
+**Package Manager**: uv 0.9.11+ (replaces pip/poetry; `bin/uv-operations.py` needs `uv workspace list --paths`)
 
 **Key Technologies**:
 
