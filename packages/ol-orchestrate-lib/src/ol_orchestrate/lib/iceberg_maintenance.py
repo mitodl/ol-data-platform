@@ -97,8 +97,10 @@ class IcebergMaintenanceEngine(Protocol):
     def analyze(self, schema: str, table: str) -> None:
         """Refresh the engine's query optimizer statistics for the table."""
 
-    def base_tables_in_schemas(self, schemas: set[str]) -> set[tuple[str, str]]:
-        """Return the ``(schema, table)`` pairs that exist as tables, not views."""
+    def base_tables_among(
+        self, candidates: set[tuple[str, str]]
+    ) -> set[tuple[str, str]]:
+        """Return the ``(schema, table)`` *candidates* that exist as tables."""
 
 
 @dataclass(frozen=True)

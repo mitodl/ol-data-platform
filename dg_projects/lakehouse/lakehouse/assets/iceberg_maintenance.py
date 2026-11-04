@@ -260,15 +260,16 @@ def _maintainable_dbt_layer_configs(
         WAREHOUSE_ENV,
     )
 
-    base_tables = engine.base_tables_in_schemas(
-        {cfg.schema_name for cfg in manifest_configs}
+    base_tables = engine.base_tables_among(
+        {(cfg.schema_name, cfg.model_name) for cfg in manifest_configs}
     )
     maintainable, unbacked = partition_by_catalog_presence(
         manifest_configs, base_tables
     )
     if unbacked:
         context.log.warning(
-            "Skipping %d of %d configs with no table in %s (view or absent): %s",
+            "Skipping %d of %d configs with no table in %s (view, absent or "
+            "unloadable): %s",
             len(unbacked),
             len(manifest_configs),
             WAREHOUSE_ENV,
