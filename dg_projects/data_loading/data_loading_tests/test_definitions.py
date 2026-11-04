@@ -19,9 +19,13 @@ import pytest
 from data_loading.definitions import defs
 from data_loading.defs.ingestion.assets import (
     MITXONLINE_APP_DLT_ENVIRONMENTS,
+    MITXONLINE_APP_KEYSET_ENVIRONMENTS,
+    MITXONLINE_APP_KEYSET_UNIT,
     XPRO_APP_DLT_ENVIRONMENTS,
 )
 from ol_dlt.sources import mitxonline_app, xpro_app
+
+from ol_dlt import keyset
 
 _REPO = defs.get_repository_def()
 
@@ -52,6 +56,13 @@ _B2B_PILOT_ASSET_KEYS = (
     "ol_warehouse_raw_data/raw__mitxonline__app__postgres__courses_courserun",
     "ol_warehouse_raw_data/raw__mitxonline__app__postgres__courses_courserun_b2b_contracts",
 )
+
+
+def _is_mitxonline_app_table(key: str) -> bool:
+    """Return True for a MITx Online app raw table, and not its keyset."""
+    return "raw__mitxonline__app__postgres__" in key and not key.endswith(
+        keyset.KEYSET_SUFFIX
+    )
 
 
 @contextmanager
@@ -219,9 +230,9 @@ def test_mitxonline_app_assets_load_where_dlt_owns_the_unit(environment: str) ->
     with _repository_for(environment) as repo:
         asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
         assert set(_B2B_PILOT_ASSET_KEYS) <= asset_keys
-        assert len(
-            [key for key in asset_keys if "raw__mitxonline__app__postgres__" in key]
-        ) == len(mitxonline_app.MITXONLINE_APP_SPEC.tables)
+        assert len([key for key in asset_keys if _is_mitxonline_app_table(key)]) == len(
+            mitxonline_app.MITXONLINE_APP_SPEC.tables
+        )
         schedule = repo.get_schedule_def("mitxonline_app_ingest_schedule")
         # The MITx Online structure blocks share the "mitxonline" group and
         # read the production landing zone, so the app schedule must not
@@ -230,9 +241,7 @@ def test_mitxonline_app_assets_load_where_dlt_owns_the_unit(environment: str) ->
             key.to_user_string()
             for key in repo.get_job(schedule.job_name).asset_layer.selected_asset_keys
         }
-        assert scheduled == {
-            key for key in asset_keys if "raw__mitxonline__app__postgres__" in key
-        }
+        assert scheduled == {key for key in asset_keys if _is_mitxonline_app_table(key)}
 
 
 def test_mitxonline_app_dlt_does_not_run_in_production() -> None:
@@ -257,6 +266,37 @@ def test_mitxonline_app_dlt_does_not_run_in_production() -> None:
         assert "mitxonline_app_ingest_schedule" not in {
             s.name for s in repo.schedule_defs
         }
+
+
+@pytest.mark.parametrize("environment", sorted(MITXONLINE_APP_KEYSET_ENVIRONMENTS))
+def test_mitxonline_app_keysets_load_unscheduled(environment: str) -> None:
+    """One keyset asset per rendered table, and no schedule runs them.
+
+    The run after every load belongs to the keyset automation, which has to
+    order it after the load and before the snapshots.
+    """
+    with _repository_for(environment) as repo:
+        keyset_keys = {
+            key.to_user_string()
+            for key in repo.assets_defs_by_key
+            if key.to_user_string().endswith(keyset.KEYSET_SUFFIX)
+        }
+        assert keyset_keys == {
+            "ol_warehouse_raw_data/raw__mitxonline__app__postgres__"
+            f"{table.name}{keyset.KEYSET_SUFFIX}"
+            for table in keyset.inventory_keyset_tables()[MITXONLINE_APP_KEYSET_UNIT]
+        }
+        for schedule in repo.schedule_defs:
+            selected = repo.get_job(schedule.job_name).asset_layer.selected_asset_keys
+            assert not {key.to_user_string() for key in selected} & keyset_keys
+
+
+def test_mitxonline_app_keysets_do_not_run_in_production() -> None:
+    """Production keysets read the replica, whose address is not exported yet."""
+    with _repository_for("production") as repo:
+        asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
+        assert asset_keys, "code location exposed no assets under production"
+        assert not [key for key in asset_keys if key.endswith(keyset.KEYSET_SUFFIX)]
 
 
 @pytest.mark.parametrize("environment", sorted(XPRO_APP_DLT_ENVIRONMENTS))

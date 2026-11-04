@@ -987,6 +987,85 @@ def render_dagster_intervals(units: list[Unit]) -> dict[str, int]:
     return dict(sorted(intervals.items()))
 
 
+# Layers that are a relational database a keys-only read can reach.
+DATABASE_LAYERS = frozenset({"app_postgres", "mysql", "openedx_notes"})
+INCREMENTAL_DEDUPED_HISTORY = "incremental_deduped_history"
+
+# The learner-activity tables, left out of raw history (8430c2, 2026-10-09) and
+# so out of the keyset sweep (826b18 decision 7): 164M keys a sweep, and staging
+# already dedups studentmodule on its natural key.
+LEARNER_ACTIVITY_TABLES = frozenset(
+    {
+        "raw__mitx__openedx__mysql__courseware_studentmodule",
+        "raw__mitxonline__openedx__mysql__courseware_studentmodule",
+        "raw__xpro__openedx__mysql__courseware_studentmodule",
+        "raw__mitx__openedx__mysql__completion_blockcompletion",
+        "raw__mitxonline__openedx__mysql__completion_blockcompletion",
+        "raw__xpro__openedx__mysql__completion_blockcompletion",
+        "raw__mitxonline__openedx__mysql__grades_persistentsubsectiongrade",
+    }
+)
+
+KEYSET_TABLES_PATH = Path("src/ol_dlt/ol_dlt/keyset/tables.json")
+
+
+def _cut_over_to_dlt_replace(unit: Unit) -> bool:
+    """Return True when production loads the unit by dlt replace, which carries deletes."""
+    dlt = unit.data.get("dlt")
+    return unit.data.get("loader") == DLT_LOADER and isinstance(dlt, dict) and dlt.get("write_disposition") == "replace"
+
+
+def keyset_tables(units: list[Unit]) -> dict[str, list[dict[str, str]]]:
+    """Map each unit key to the `{table, key}` rows whose deletes only a keyset shows.
+
+    A modeled table synced `incremental_deduped_history` from a database never
+    loses a row in raw when the source deletes it (826b18, bucket 1). A unit
+    production loads by dlt replace already carries deletes and drops out; its
+    keysets retire in the cutover change.
+
+    A composite key stops the render: the keyset module reads one key column,
+    and leaving such a table out would be a table with no delete capture that
+    nothing reports.
+    """
+    selected: dict[str, list[dict[str, str]]] = {}
+    for unit in sorted(units, key=lambda u: u.key):
+        if unit.data.get("layer") not in DATABASE_LAYERS or _cut_over_to_dlt_replace(unit):
+            continue
+        rows = []
+        for table in unit.tables:
+            if (
+                table.get("sync_mode") != INCREMENTAL_DEDUPED_HISTORY
+                or not table.get("modeled")
+                or table.get("raw_table") in LEARNER_ACTIVITY_TABLES
+            ):
+                continue
+            primary_key = table.get("primary_key") or []
+            if len(primary_key) != 1 or len(primary_key[0]) != 1:
+                msg = (
+                    f"{unit.key} table {table.get('name')!r} needs a keyset but its primary key "
+                    f"{primary_key!r} is not one column, which the keyset module cannot read"
+                )
+                raise RenderError(msg)
+            rows.append({"table": str(table["name"]), "key": str(primary_key[0][0])})
+        if rows:
+            selected[unit.key] = sorted(rows, key=lambda row: row["table"])
+    return selected
+
+
+def render_keyset_tables(units: list[Unit]) -> str:
+    """Render `keyset_tables` as the JSON ol_dlt.keyset reads at run time.
+
+    The data_loading image carries ol_dlt but not the inventory, so the
+    selection is projected into a file inside the package, the same way the
+    metadata-column map is projected into a dbt macro.
+    """
+    document = {
+        "generated_by": "ol-dbt inventory keysets --write",
+        "units": keyset_tables(units),
+    }
+    return json.dumps(document, indent=2) + "\n"
+
+
 # ---------------------------------------------------------------------------
 # Reconciliation (§5): the inventory against independent observations
 # ---------------------------------------------------------------------------

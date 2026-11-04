@@ -63,6 +63,18 @@ LOCAL_DEV_PASSWORD = "localdev"  # noqa: S105  # pragma: allowlist secret
 # address, whichever provider it came from (environment or .dlt/secrets.toml).
 LOCAL_SOURCES_ONLY_VARIABLE = "OL_DLT_LOCAL_SOURCES_ONLY"
 
+POSTGRES_DRIVER = "postgresql+psycopg2"
+MYSQL_DRIVER = "mysql+pymysql"
+
+# TLS on deployed profiles, in each driver's own query spelling. The Postgres
+# parameter groups enforce it anyway (`rds.force_ssl`). PyMySQL given an ssl
+# option without a CA encrypts without verifying the server certificate, which
+# is what legacy_openedx's MySQLClient does against the same edxapp databases.
+_DEPLOYED_TLS_QUERY: dict[str, dict[str, str]] = {
+    POSTGRES_DRIVER: {"sslmode": "require"},
+    MYSQL_DRIVER: {"ssl_check_hostname": "false"},
+}
+
 
 def _is_loopback(host: str) -> bool:
     if host == "localhost":
@@ -123,7 +135,9 @@ class DatabaseSourceSpec:
             warehouse table (and Dagster asset) name.
         database: Database name to connect to.
         vault_mount: Vault database secrets-engine mount serving this database,
-            e.g. ``postgres-keycloak``. Used by deployed profiles only.
+            e.g. ``postgres-keycloak``. Used by deployed profiles only. A mount
+            whose name differs per environment spells it with ``{profile}``,
+            e.g. ``postgres-ocw-studio-applications-{profile}``.
         tables: The tables to ingest.
         db_schema: Schema the tables live in, or ``None`` for engines that have
             no named schema.
@@ -140,7 +154,7 @@ class DatabaseSourceSpec:
     db_schema: str | None = "public"
     vault_role: str = "readonly"
     port: int = 5432
-    drivername: str = "postgresql+psycopg2"
+    drivername: str = POSTGRES_DRIVER
 
     @property
     def env_prefix(self) -> str:
@@ -150,6 +164,10 @@ class DatabaseSourceSpec:
     def raw_table_name(self, table: DatabaseTable) -> str:
         """Return the raw warehouse table name for ``table``."""
         return f"{self.raw_table_prefix}{table.name}"
+
+    def vault_mount_for(self, profile: str) -> str:
+        """Return the Vault mount serving this database under ``profile``."""
+        return self.vault_mount.format(profile=profile)
 
 
 def _uses_vault(profile: str) -> bool:
@@ -161,8 +179,7 @@ def _connection_url(spec: DatabaseSourceSpec, profile: str) -> URL:
     """Build the connection URL for ``spec`` under ``profile``.
 
     Deployed profiles omit the username/password — those are injected per
-    connection from Vault — and require TLS, which the RDS parameter group
-    enforces anyway (``rds.force_ssl``).
+    connection from Vault — and require TLS (see ``_DEPLOYED_TLS_QUERY``).
     """
     host = config.resolve_secret(None, f"{spec.env_prefix}_HOST")
     port = config.resolve_secret(None, f"{spec.env_prefix}_PORT")
@@ -179,7 +196,7 @@ def _connection_url(spec: DatabaseSourceSpec, profile: str) -> URL:
             host=host,
             port=int(port) if port else spec.port,
             database=spec.database,
-            query={"sslmode": "require"},
+            query=_DEPLOYED_TLS_QUERY[spec.drivername],
         )
     if host and os.getenv(LOCAL_SOURCES_ONLY_VARIABLE) and not _is_loopback(host):
         msg = (
@@ -201,7 +218,9 @@ def _connection_url(spec: DatabaseSourceSpec, profile: str) -> URL:
         # side of the stream, and kubectl answers a reset by dropping the whole
         # forward ("lost connection to pod"), which fails every other table
         # mid-extract. A host override is some other database, left to libpq.
-        query={} if host else {"sslmode": "disable"},
+        query={"sslmode": "disable"}
+        if spec.drivername == POSTGRES_DRIVER and not host
+        else {},
     )
 
 
@@ -226,7 +245,7 @@ def _credentials_for(
     )
 
 
-def _vault_credential_injector(spec: DatabaseSourceSpec) -> Any:  # noqa: ANN401
+def _vault_credential_injector(spec: DatabaseSourceSpec, profile: str) -> Any:  # noqa: ANN401
     """Return an engine adapter that supplies Vault credentials per connection.
 
     SQLAlchemy's ``do_connect`` event fires when a pooled connection is
@@ -243,7 +262,7 @@ def _vault_credential_injector(spec: DatabaseSourceSpec) -> Any:  # noqa: ANN401
             cparams: dict[str, Any],
         ) -> None:
             username, password = vault.read_database_credentials(
-                spec.vault_mount, spec.vault_role
+                spec.vault_mount_for(profile), spec.vault_role
             )
             cparams["user"] = username
             cparams["password"] = password
@@ -323,7 +342,9 @@ def build_table_resource(
         write_disposition="merge" if table.cursor_column else "replace",
         primary_key=table.primary_key,
         engine_adapter_callback=(
-            _vault_credential_injector(spec) if _uses_vault(resolved_profile) else None
+            _vault_credential_injector(spec, resolved_profile)
+            if _uses_vault(resolved_profile)
+            else None
         ),
     )
     return resource.with_name(raw_name).apply_hints(
