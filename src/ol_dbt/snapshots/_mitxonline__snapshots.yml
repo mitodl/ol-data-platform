@@ -58,8 +58,11 @@ snapshots:
     row with no decision, so the raw table alone loses a recorded decision.
     bridge_user_contract reads this to keep it. Resolution is one run: a
     decision made and its membership deleted between two runs is never
-    recorded, and history starts at the first run. A deleted membership has its
-    current version closed (dbt_valid_to set), not a tombstone row.
+    recorded, and history starts at the first run. In production, deletes are
+    not seen: Airbyte's xmin sync keeps hard-deleted rows in raw, so a deleted
+    membership's current version stays open. QA's dlt load replaces the table,
+    so there a deleted membership has its current version closed (dbt_valid_to
+    set).
   config:
     schema: dimensional
     unique_key: userb2bcontract_id
