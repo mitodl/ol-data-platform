@@ -8,7 +8,13 @@
 -- the snapshot: when the current membership has no decision, or is gone, the row
 -- carries the latest decision ever recorded for the (user, contract), consent or
 -- decline.
-with current_memberships as (
+-- The raw table syncs incrementally on id, so a hard-deleted membership is never
+-- removed from it. A learner removed and re-added leaves one row per stint under the
+-- same (user, contract), which MITx Online itself never holds (unique_together on
+-- user and contract_page). The most recently created row stands for the membership.
+-- A membership deleted and not re-added still reads as current until the sync carries
+-- deletes.
+with membership_rows as (
     select
         user_id
         , contract_id
@@ -16,7 +22,23 @@ with current_memberships as (
         , userb2bcontract_consent_modified_at
         , userb2bcontract_created_on
         , userb2bcontract_updated_on
+        , row_number() over (
+            partition by user_id, contract_id
+            order by userb2bcontract_created_on desc, userb2bcontract_id desc
+        ) as membership_rank
     from {{ ref('stg__mitxonline__app__postgres__b2b_userb2bcontract') }}
+)
+
+, current_memberships as (
+    select
+        user_id
+        , contract_id
+        , userb2bcontract_consented_to_data_sharing
+        , userb2bcontract_consent_modified_at
+        , userb2bcontract_created_on
+        , userb2bcontract_updated_on
+    from membership_rows
+    where membership_rank = 1
 )
 
 , decision_history as (
