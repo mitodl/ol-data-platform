@@ -245,9 +245,9 @@ with mitxonline_orders as (
 , final as (
     select
         {{ dbt_utils.generate_surrogate_key([
-            'cast(order_id as varchar)',
-            'line_id',
-            'platform'
+            'cast(owf.order_id as varchar)',
+            'owf.line_id',
+            'owf.platform'
         ]) }} as order_key
         , owf.order_id
         , owf.line_id

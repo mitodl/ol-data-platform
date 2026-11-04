@@ -780,8 +780,8 @@ with mitx_users as (
 , combined_users as (
     select
         {{ dbt_utils.generate_surrogate_key([
-            'user_identity_source',
-            'user_identity_id'
+            'account_identity.user_identity_source',
+            'account_identity.user_identity_id'
         ]) }} as user_pk
         , account_identity.*
     from account_identity
