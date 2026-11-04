@@ -162,7 +162,7 @@ def load_rows_by_key(
         for task in scan.plan_files()
     ]
     if not frames:
-        return pl.DataFrame(scan.to_arrow()).select(columns)
+        return pl.DataFrame(reader.to_table([])).select(columns)
     return pl.concat(frames)
 
 

@@ -13,6 +13,7 @@ from ml.lib.embed import resolve_embedding_model
 from ml.lib.sentiment_eval import (
     CLASSIFIER_NEGATIVE_THRESHOLDS,
     EMBEDDING_COLUMNS,
+    EXPLICIT_RATING_TO_SENTIMENT,
     build_sentiment_client,
     labeled_sentiment_sample,
     run_sentiment_eval,
@@ -133,9 +134,8 @@ def feedback_sentiment_eval(
             table_name="afact_feedback_conversation",
         )
         .select(["feedback_conversation_pk", "explicit_rating"])
+        .filter(pl.col("explicit_rating").is_in(list(EXPLICIT_RATING_TO_SENTIMENT)))
         .collect()
-        .pipe(labeled_sentiment_sample)
-        .drop("sentiment")
     )
     rated_pks = afact_df["feedback_conversation_pk"].to_list()
     embeddings_df = (
