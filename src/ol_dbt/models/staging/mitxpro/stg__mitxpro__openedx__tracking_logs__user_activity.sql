@@ -9,7 +9,7 @@
 ) }}
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__xpro__openedx__tracking_logs') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__xpro__openedx__tracking_log_events') }}
     where
         username != ''
         and {{ json_query_string('context', "'$.user_id'") }} is not null
@@ -21,7 +21,7 @@ with source as (
 )
 
 {{ deduplicate_raw_table(
-    raw_table='raw__xpro__openedx__tracking_logs'
+    raw_table='raw__xpro__openedx__tracking_log_events'
     , partition_columns = 'username, context, event_source, event_type, event, "time"'
 ) }}
 , cleaned as (

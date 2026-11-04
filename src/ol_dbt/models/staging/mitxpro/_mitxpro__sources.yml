@@ -937,10 +937,13 @@ sources:
         secondary/junior high/middle school", "Elementary/primary school", "No formal
         education", "Other education"
 
-  - name: raw__xpro__openedx__tracking_logs
+  - name: raw__xpro__openedx__tracking_log_events
     description: MIT xPro Open edX event data that are emitted by server, the browser,
       or the mobile device to capture information about user's interactions with a
-      course
+      course. Loaded by ol_dlt.sources.tracking_logs from the gzipped JSON Lines files
+      in xpro-production-edxapp-tracking/valid/, one append per file. It replaced
+      the Airbyte-loaded raw__xpro__openedx__tracking_logs, which is kept as the archive
+      (ingestion/inventory/retired.yml).
     columns:
     - name: username
       description: str, username of the open edX user who caused the event to be emitted.
@@ -985,13 +988,16 @@ sources:
       description: str, URI from the HTTP Referer request-header field
     - name: log_file
       description: str, internal used field for log file location
-    - name: _ab_source_file_url
-      description: str, url path for the raw log file
-    - name: vector_timestamp
-      description: str, time when Vector processed this record. Blank for old records.
     - name: environment
       description: str, internal used field to indicate environment for the event.
         e.g. xpro-production
+    - name: _source_file
+      description: str, S3 URL of the log file the event was read from
+    - name: _file_modified_at
+      description: timestamp, last-modified time of the log file the event was read
+        from
+    - name: _dlt_load_id
+      description: str, identifier of the dlt load that appended the row
   - name: raw__xpro__app__postgres__cms_certificatepage
     columns:
     - name: page_ptr_id
