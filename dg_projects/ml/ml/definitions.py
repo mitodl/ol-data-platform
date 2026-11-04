@@ -114,8 +114,6 @@ feedback_sentiment_eval_job = define_asset_job(
     selection=[feedback_sentiment_eval],
 )
 
-# Retrains on every rated conversation and overwrites its table, so a run after each
-# upstream update gains nothing: once a day, in a run of its own.
 feedback_sentiment_job = define_asset_job(
     name="feedback_sentiment_job",
     selection=[feedback_sentiment],
@@ -129,8 +127,7 @@ feedback_sentiment_schedule = ScheduleDefinition(
 )
 
 # Covers the feedback pipeline's auto-cascading assets (feedback_clusters itself
-# runs from feedback_clusters_growth_sensor, feedback_sentiment from
-# feedback_sentiment_daily). Re-enable in the UI after deploy if it was
+# runs from feedback_clusters_growth_sensor). Re-enable in the UI after deploy if it was
 # previously on. Stopped by default.
 feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
     name="feedback_pipeline_automation_sensor",
