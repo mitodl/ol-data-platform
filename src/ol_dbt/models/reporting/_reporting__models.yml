@@ -1176,6 +1176,9 @@ models:
     - accepted_values:
         arguments:
           values: ["MITx Online", "edX.org", "xPRO", "Simplilearn"]
+        config:
+          # Each failing row is one new platform, so the project's >10 does not apply.
+          error_if: ">0"
   - name: program_id
     description: int, id representing a single program on a particular platform
   - name: program_title
