@@ -34,11 +34,35 @@ with mitxonline_courses as (
     from {{ ref('int__mitxpro__courses') }}
 )
 
+, mitx_course_titles as (
+    -- int__mitx__courses can hold several rows for one course_number (e.g. the UAI.* numbers)
+    select
+        course_number
+        , course_title
+    from (
+        select
+            trim(course_number) as course_number
+            , course_title
+            , row_number() over (
+                partition by trim(course_number)
+                order by
+                    is_on_mitxonline desc
+                    , mitxonline_course_id asc nulls last
+                    , course_readable_id asc
+            ) as _row_num
+        from {{ ref('int__mitx__courses') }}
+        where course_number is not null and course_title is not null
+    )
+    where _row_num = 1
+)
+
 , edxorg_courses as (
     -- edxorg has no native course table — courses are represented only at the courserun level.
     -- One row per course_readable_id is synthesized by collapsing all course runs for a given
     -- course_readable_id down to the single most-recent run (by courserun_start_date desc nulls
     -- last), which supplies the course-level attributes (title, course_number, is_live).
+    -- course_title is the int__mitx__courses title for the course_number (MITx Online's when the
+    -- course is on MITx Online), falling back to the latest run's title.
     -- source_id is always null for edxorg courses because edxorg exposes no integer course ID.
     --
     -- Implementation note — QUALIFY collapse via ROW_NUMBER subquery:
@@ -49,13 +73,13 @@ with mitxonline_courses as (
     -- ROW_NUMBER() is computed in an inner subquery and the outer query filters WHERE _row_num = 1.
     -- The semantics are identical — exactly one row is kept per course_readable_id.
     select
-        course_readable_id
-        , source_id
-        , course_title
-        , course_number
-        , course_description
-        , course_is_live
-        , platform
+        latest_runs.course_readable_id
+        , latest_runs.source_id
+        , coalesce(mitx_course_titles.course_title, latest_runs.course_title) as course_title
+        , latest_runs.course_number
+        , latest_runs.course_description
+        , latest_runs.course_is_live
+        , latest_runs.platform
     from (
         select
             course_readable_id
@@ -70,8 +94,10 @@ with mitxonline_courses as (
                 order by courserun_start_date desc nulls last
             ) as _row_num
         from {{ ref('int__edxorg__mitx_courseruns') }}
-    )
-    where _row_num = 1
+    ) as latest_runs
+    left join mitx_course_titles
+        on trim(latest_runs.course_number) = mitx_course_titles.course_number
+    where latest_runs._row_num = 1
 )
 
 , ocw_courses as (
