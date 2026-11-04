@@ -773,26 +773,35 @@ with mitx_users as (
     from combined_accounts
 )
 
+-- The two windows below must stay identical. They're written out rather than shared through a
+-- named WINDOW clause, which StarRocks doesn't support.
 , account_identity as (
     select
         first_value(case
             when ranked_accounts.user_global_id is not null then 'global'
             when ranked_accounts.id_source_user_id is not null then ranked_accounts.id_source
             else 'email'
-        end) over w as user_identity_source
+        end) over (
+            partition by ranked_accounts.email
+            order by
+                ranked_accounts.has_no_source_id asc
+                , ranked_accounts.id_source_rank asc
+                , ranked_accounts.user_global_id desc
+                , ranked_accounts.sort_id desc nulls last
+                , ranked_accounts.id_source_user_id desc
+        ) as user_identity_source
         , first_value(coalesce(ranked_accounts.user_global_id, ranked_accounts.id_source_user_id, ranked_accounts.email))
-            over w as user_identity_id
+            over (
+                partition by ranked_accounts.email
+                order by
+                    ranked_accounts.has_no_source_id asc
+                    , ranked_accounts.id_source_rank asc
+                    , ranked_accounts.user_global_id desc
+                    , ranked_accounts.sort_id desc nulls last
+                    , ranked_accounts.id_source_user_id desc
+            ) as user_identity_id
         , ranked_accounts.*
     from ranked_accounts
-    window w as (
-        partition by email
-        order by
-            has_no_source_id asc
-            , id_source_rank asc
-            , user_global_id desc
-            , sort_id desc nulls last
-            , id_source_user_id desc
-    )
 )
 
 , combined_users as (
@@ -920,10 +929,12 @@ with mitx_users as (
         -- Fallback full_name in case the base row (most recent platform) has a null name.
         -- Cross-platform users may have their base row on a platform with null full_name.
         -- Takes the next account in base-row order that has a non-blank one, so the pick is stable.
-        , min_by(trim(full_name), row_num) filter (where trim(full_name) <> '') as agg_full_name
+        -- The key is nulled on rows without one rather than using FILTER (WHERE ...), which
+        -- StarRocks can't parse on min_by. min_by skips null keys on Trino, StarRocks and DuckDB.
+        , min_by(trim(full_name), case when trim(full_name) <> '' then row_num end) as agg_full_name
         -- Fallback address_state for cross-platform users whose base row is from a platform
         -- that null-codes address_state (e.g. Emeritus, Global Alumni, Residential).
-        , min_by(address_state, row_num) filter (where address_state is not null) as agg_address_state
+        , min_by(address_state, case when address_state is not null then row_num end) as agg_address_state
     from ranked_users
     group by user_pk
 )
