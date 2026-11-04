@@ -16,7 +16,7 @@ from ol_orchestrate.lib.glue_helper import (
     get_dbt_model_as_dataframe,
 )
 
-write_database_name = warehouse_database("reporting")
+database_name = warehouse_database("reporting")
 
 
 @asset(
@@ -27,7 +27,7 @@ write_database_name = warehouse_database("reporting")
     io_manager_key="io_manager",
     key=AssetKey(["reporting", "student_risk_probability"]),
     pool="student_risk_probability",
-    metadata={"schema": write_database_name},
+    metadata={"schema": database_name},
 )
 def student_risk_probability(context: AssetExecutionContext) -> pl.DataFrame:
     """
@@ -37,7 +37,7 @@ def student_risk_probability(context: AssetExecutionContext) -> pl.DataFrame:
     """
 
     df = get_dbt_model_as_dataframe(
-        database_name="ol_warehouse_production_reporting",
+        database_name=database_name,
         table_name="cheating_detection_report",
     )
 

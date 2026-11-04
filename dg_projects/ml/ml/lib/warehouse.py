@@ -21,8 +21,7 @@ from pyiceberg.expressions import And, EqualTo
 def warehouse_database(layer: str) -> str:
     """Return the Glue database the ml assets read and write for a layer.
 
-    Matches the dbt sources that read these tables: dev writes to the production
-    catalog under a personal schema suffix.
+    In dev, this is the production catalog under a personal schema suffix.
 
     :param layer: e.g. intermediate or dimensional
     :returns: the Glue database name
@@ -31,9 +30,9 @@ def warehouse_database(layer: str) -> str:
     if DAGSTER_ENV == "dev":
         # docker-compose passes the variable through empty when it is unset,
         # which would name the shared ol_warehouse_production__<layer> database.
-        suffix = os.environ["DBT_SCHEMA_SUFFIX"]
+        suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
         if not suffix:
-            msg = "DBT_SCHEMA_SUFFIX is empty; set it to your dev schema suffix"
+            msg = "DBT_SCHEMA_SUFFIX is not set; set it to your dev schema suffix"
             raise ValueError(msg)
         return f"ol_warehouse_production_{suffix}_{layer}"
     return f"ol_warehouse_{DAGSTER_ENV}_{layer}"
