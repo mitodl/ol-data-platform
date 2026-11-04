@@ -5,7 +5,7 @@
     on_schema_change='append_new_columns',
     partition_by=(['platform'] if target.type == 'starrocks' else none),
     properties=(
-        {"format": "'PARQUET'"} if target.type == 'starrocks'
+        none if target.type == 'starrocks'
         else {"partitioning": "ARRAY['platform']"}
     ),
 ) }}
