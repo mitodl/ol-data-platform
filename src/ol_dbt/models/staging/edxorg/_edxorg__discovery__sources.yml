@@ -77,8 +77,8 @@ sources:
     - name: retrieved_at
       description: str, when the extraction that wrote this row ran
     config:
-      # Models read the latest extraction, so if the dlt load stops landing new
-      # ones they keep serving a stale program set.
+      # Staging keeps each program's most recent row, so if the dlt load stops
+      # landing new extractions the program data goes stale without an error.
       freshness:
         warn_after: {count: 2, period: day}
         error_after: {count: 3, period: day}
