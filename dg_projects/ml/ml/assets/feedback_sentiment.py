@@ -139,19 +139,8 @@ def feedback_sentiment(
         )
         .collect()
     )
-    embeddings_df = (
-        get_dbt_model_as_dataframe(
-            database_name=database_name, table_name="feedback_embeddings"
-        )
-        .filter(embedding_model.matches())
-        .select(["feedback_conversation_pk", "embedding_vector"])
-        .collect()
-    )
-    joined = conversation_df.join(
-        embeddings_df, on="feedback_conversation_pk", how="inner"
-    )
-    labeled_df = labeled_sentiment_sample(joined)
-    unrated_df = joined.join(
+    labeled_df = labeled_sentiment_sample(conversation_df)
+    unrated_df = conversation_df.join(
         labeled_df, on="feedback_conversation_pk", how="anti"
     ).filter(
         pl.col("source_slug").is_in(config.sources)
@@ -163,6 +152,27 @@ def feedback_sentiment(
     )
     if config.platforms is not None:
         unrated_df = unrated_df.filter(pl.col("platform").is_in(config.platforms))
+    # Read only the vectors these rows need: every vector at once is several GB.
+    needed_pks = pl.concat(
+        [labeled_df["feedback_conversation_pk"], unrated_df["feedback_conversation_pk"]]
+    )
+    embeddings_df = (
+        get_dbt_model_as_dataframe(
+            database_name=database_name, table_name="feedback_embeddings"
+        )
+        .filter(
+            embedding_model.matches()
+            & pl.col("feedback_conversation_pk").is_in(needed_pks.to_list())
+        )
+        .select(["feedback_conversation_pk", "embedding_vector"])
+        .collect()
+    )
+    labeled_df = labeled_df.join(
+        embeddings_df, on="feedback_conversation_pk", how="inner"
+    )
+    unrated_df = unrated_df.join(
+        embeddings_df, on="feedback_conversation_pk", how="inner"
+    )
 
     class_counts = labeled_df["sentiment"].value_counts()
     if class_counts.height < 2:  # noqa: PLR2004

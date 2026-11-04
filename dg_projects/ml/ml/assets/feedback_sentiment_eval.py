@@ -133,13 +133,20 @@ def feedback_sentiment_eval(
         )
         .select(["feedback_conversation_pk", "explicit_rating"])
         .collect()
+        .pipe(labeled_sentiment_sample)
+        .drop("sentiment")
     )
+    # Read only the rated rows' vectors and text: every vector at once is several GB.
+    rated_pks = afact_df["feedback_conversation_pk"].to_list()
     embeddings_df = (
         get_dbt_model_as_dataframe(
             database_name=intermediate_database_name,
             table_name="feedback_embeddings",
         )
-        .filter(embedding_model.matches())
+        .filter(
+            embedding_model.matches()
+            & pl.col("feedback_conversation_pk").is_in(rated_pks)
+        )
         .select(["feedback_conversation_pk", "embedding_vector"])
         .collect()
     )
@@ -148,6 +155,7 @@ def feedback_sentiment_eval(
             database_name=intermediate_database_name,
             table_name="int__feedback__conversation",
         )
+        .filter(pl.col("feedback_conversation_pk").is_in(rated_pks))
         .select(["feedback_conversation_pk", "conversation_text"])
         .collect()
     )
