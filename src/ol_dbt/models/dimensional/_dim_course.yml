@@ -234,9 +234,10 @@ unit_tests:
         \ Learning", is_current: true}
 - name: test_dim_course_titles_edxorg_course_from_mitx_courses_before_latest_run
   description: >
-    An edX.org course takes the int__mitx__courses title of its course_number, trimmed,
-    and one row of a duplicated number is used. With no match it keeps the latest
-    run's title.
+    An edX.org course takes the int__mitx__courses title of its course_number, trimmed
+    on both sides, and both id forms of a course share it. For a duplicated number
+    the MITx Online row wins, else the lowest readable id. With no match, or no
+    course_number, it keeps the latest run's title.
   model: dim_course
   overrides:
     macros:
@@ -258,18 +259,34 @@ unit_tests:
         \ Run Title", courserun_start_date: "2020-01-01", courserun_is_published: true}
     - {course_readable_id: "course-v1:MITx+6.00.1x", course_number: " 6.00.1x", courserun_title: "Latest\
         \ Run Title", courserun_start_date: "2021-01-01", courserun_is_published: true}
+    - {course_readable_id: "MITx/6.00.1x/2013", course_number: "6.00.1x", courserun_title: "Other\
+        \ Form Run Title", courserun_start_date: "2013-01-01", courserun_is_published: true}
     - {course_readable_id: "course-v1:MITx+UAI.1", course_number: "UAI.1", courserun_title: "UAI\
+        \ 1 Run Title", courserun_start_date: "2021-01-01", courserun_is_published: true}
+    - {course_readable_id: "course-v1:MITx+UAI.2", course_number: "UAI.2", courserun_title: "UAI\
+        \ 2 Run Title", courserun_start_date: "2021-01-01", courserun_is_published: true}
+    - {course_readable_id: "course-v1:MITx+7.00x", course_number: "7.00x", courserun_title: "Seven\
         \ Run Title", courserun_start_date: "2021-01-01", courserun_is_published: true}
     - {course_readable_id: "course-v1:MITx+NOMATCH", course_number: "NOMATCH", courserun_title: "No\
-        \ Match Run Title", courserun_start_date: "2021-01-01", courserun_is_published: true}
+        \ Match Latest Run Title", courserun_start_date: "2021-06-01", courserun_is_published: true}
+    - {course_readable_id: "course-v1:MITx+NOMATCH", course_number: "NOMATCH", courserun_title: "No\
+        \ Match Older Run Title", courserun_start_date: "2020-06-01", courserun_is_published: true}
+    - {course_readable_id: "course-v1:MITx+NONUM", course_number: null, courserun_title: "No\
+        \ Number Run Title", courserun_start_date: "2021-01-01", courserun_is_published: true}
   - input: ref('int__mitx__courses')
     rows:
     - {course_number: "6.00.1x", course_title: "MITx Online Title", is_on_mitxonline: true,
       mitxonline_course_id: 7, course_readable_id: "course-v1:MITxT+6.00.1x"}
-    - {course_number: "UAI.1", course_title: "UAI Second", is_on_mitxonline: false,
-      mitxonline_course_id: null, course_readable_id: "course-v1:MITx+UAI.1b"}
-    - {course_number: "UAI.1", course_title: "UAI First", is_on_mitxonline: false,
+    - {course_number: "UAI.1", course_title: "UAI 1 Offline", is_on_mitxonline: false,
       mitxonline_course_id: null, course_readable_id: "course-v1:MITx+UAI.1a"}
+    - {course_number: "UAI.1", course_title: "UAI 1 Online", is_on_mitxonline: true,
+      mitxonline_course_id: 9, course_readable_id: "course-v1:MITxT+UAI.1"}
+    - {course_number: "UAI.2", course_title: "UAI 2 Second", is_on_mitxonline: false,
+      mitxonline_course_id: null, course_readable_id: "course-v1:MITx+UAI.2b"}
+    - {course_number: "UAI.2", course_title: "UAI 2 First", is_on_mitxonline: false,
+      mitxonline_course_id: null, course_readable_id: "course-v1:MITx+UAI.2a"}
+    - {course_number: " 7.00x ", course_title: "Seven Lookup Title", is_on_mitxonline: false,
+      mitxonline_course_id: null, course_readable_id: "course-v1:MITx+7.00x"}
   - input: ref('int__ocw__courses')
     format: sql
     rows: select cast(null as varchar) as course_readable_id, cast(null as varchar)
@@ -287,5 +304,10 @@ unit_tests:
   expect:
     rows:
     - {course_readable_id: "course-v1:MITx+6.00.1x", course_title: "MITx Online Title"}
-    - {course_readable_id: "course-v1:MITx+UAI.1", course_title: "UAI First"}
-    - {course_readable_id: "course-v1:MITx+NOMATCH", course_title: "No Match Run Title"}
+    - {course_readable_id: "MITx/6.00.1x/2013", course_title: "MITx Online Title"}
+    - {course_readable_id: "course-v1:MITx+UAI.1", course_title: "UAI 1 Online"}
+    - {course_readable_id: "course-v1:MITx+UAI.2", course_title: "UAI 2 First"}
+    - {course_readable_id: "course-v1:MITx+7.00x", course_title: "Seven Lookup Title"}
+    - {course_readable_id: "course-v1:MITx+NOMATCH", course_title: "No Match Latest\
+        \ Run Title"}
+    - {course_readable_id: "course-v1:MITx+NONUM", course_title: "No Number Run Title"}
