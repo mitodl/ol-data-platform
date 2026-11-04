@@ -62,6 +62,8 @@ sqlfluff = [
     "sqlfluff[rs]>=4.4.0,<5",
     "sqlfluff-templater-dbt>=4.4.0,<5",
 ]
+# The uv-lock hook runs bin/uv-operations.py in this group.
+uv-operations = ["cyclopts~=5.3.2"]
 dev = [
     {include-group = "prek"},
     "dagster-dg-cli>=1.12.10",
