@@ -720,8 +720,7 @@ non_airbyte_staging_schedules = (
 # QA's data_loading schedules load daily, so QA holds close to production's
 # rows. Those schedules set no default status, so they run in QA because they
 # were started in its UI. ocw_courses waits on the OCW live bucket (the ocw__s3 unit is
-# omitted in QA), and mit_edx_programs also reads mitlearn topic tables QA does
-# not hold.
+# omitted in QA).
 learn_integrations_qa_schedule = ScheduleDefinition(
     name="learn_integrations_qa_daily",
     job=define_asset_job(

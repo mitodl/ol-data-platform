@@ -15,7 +15,7 @@ integrations__learn__<source>_<entity>
 ```
 
 Where:
-- `<source>` is the ETL source name (e.g., `ocw`, `mitxonline`, `xpro`, `mit_edx`, `oll`)
+- `<source>` is the ETL source name (e.g., `ocw`, `mitxonline`, `xpro`, `oll`)
 - `<entity>` is the entity type (e.g., `courses`, `programs`, `content_files`)
 
 Examples:
@@ -51,18 +51,6 @@ These columns are optional but recommended for most marts:
 ## Source-Specific Columns
 
 Each source may add additional columns following its needs.
-
-### MIT edX programs
-
-`integrations__learn__mit_edx_programs` carries list-valued fields as arrays, not
-delimited strings. Beyond the required columns, the ones MIT Learn links on are:
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `course_readable_ids` | array(string) | The program's course keys in the programs API's order. MIT Learn links the ones it publishes |
-| `topics` | array(string) | MIT Learn topics the program's published courses' edX subjects resolve to through the topic crosswalk |
-
-The model's full column list is in `_integrations__learn__cohort2__schema.yml`.
 
 ### OCW
 
@@ -410,7 +398,6 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 - `ocw` - OCW courses
 - `mitxonline` - MITx Online courses
 - `xpro` - xPRO courses
-- `mit_edx` - MIT edX programs
 - `oll` - Open Learning Library
 - `canvas` - Canvas courses
 - `youtube` - YouTube videos
@@ -438,3 +425,4 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-22 | Tobias Macey | Added `release_date` to `integrations__learn__content_files` for MIT Learn's `ContentFile.release_date` (mit-learn#4093). The file exclusions also follow mit-learn#4106: an asset name no longer matches a link that drops one of its separators. |
 | 2026-10-27 | Tobias Macey | Added `platform_code` to `integrations__learn__xpro_runs`, Learn's platform code for the run's course, so the content-file embedding chunks key an xPRO file's points under its course's platform and not always `xpro`. |
 | 2026-11-02 | Tobias Macey | Added `integrations__learn__canvas_content_files` and `integrations__learn__canvas_courses`. |
+| 2026-11-04 | Matt Bertrand | Drop MIT edX programs. MIT Learn removed its `mit_edx` program ETL (mit-learn#4193), so `integrations__learn__mit_edx_programs` and `integrations__learn__mit_edx_program_instructors` are gone, along with the MIT edX programs columns and `mit_edx` from the source values. |
