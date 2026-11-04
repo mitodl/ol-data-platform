@@ -12,11 +12,12 @@ from dagster import (
 from ml.lib.cluster import DEFAULT_PLATFORMS
 from ml.lib.embed import resolve_embedding_model
 from ml.lib.sentiment_eval import (
+    EMBEDDING_COLUMNS,
     labeled_sentiment_sample,
     predict_unrated_sentiment,
     validate_negative_thresholds,
 )
-from ml.lib.warehouse import warehouse_database
+from ml.lib.warehouse import load_rows_in, warehouse_database
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from pydantic import Field, field_validator
@@ -152,20 +153,19 @@ def feedback_sentiment(
     )
     if config.platforms is not None:
         unrated_df = unrated_df.filter(pl.col("platform").is_in(config.platforms))
-    # Read only the vectors these rows need: every vector at once is several GB.
     needed_pks = pl.concat(
         [labeled_df["feedback_conversation_pk"], unrated_df["feedback_conversation_pk"]]
     )
     embeddings_df = (
-        get_dbt_model_as_dataframe(
-            database_name=database_name, table_name="feedback_embeddings"
+        load_rows_in(
+            database_name,
+            "feedback_embeddings",
+            EMBEDDING_COLUMNS,
+            "feedback_conversation_pk",
+            needed_pks.to_list(),
         )
-        .filter(
-            embedding_model.matches()
-            & pl.col("feedback_conversation_pk").is_in(needed_pks.to_list())
-        )
+        .filter(embedding_model.matches())
         .select(["feedback_conversation_pk", "embedding_vector"])
-        .collect()
     )
     labeled_df = labeled_df.join(
         embeddings_df, on="feedback_conversation_pk", how="inner"

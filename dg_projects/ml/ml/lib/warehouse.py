@@ -15,7 +15,8 @@ from ol_orchestrate.lib.glue_helper import (
     load_dbt_model_table,
 )
 from pyiceberg.exceptions import NoSuchTableError
-from pyiceberg.expressions import And, EqualTo
+from pyiceberg.expressions import And, EqualTo, In
+from pyiceberg.io.pyarrow import ArrowScan
 
 
 def warehouse_database(layer: str) -> str:
@@ -113,6 +114,56 @@ def load_matching_rows(
     )
     # The scan returns the selected columns in the table's order.
     return pl.DataFrame(scan.to_arrow_batch_reader().read_all()).select(columns)
+
+
+def load_rows_in(
+    database_name: str,
+    table_name: str,
+    columns: Sequence[str],
+    column: str,
+    values: Sequence[str],
+) -> pl.DataFrame:
+    """Read the rows of an Iceberg table whose column is one of the values.
+
+    pyiceberg reads every data file of a scan at the same time and filters each
+    file only after reading it. When the values are spread across every file, as
+    feedback_conversation_pk is, that holds most of the table in memory: reading
+    the rated conversations' vectors of feedback_embeddings that way ran the
+    sentiment assets out of memory. This reads the files one at a time, so memory
+    holds one file and the rows kept so far.
+
+    In dev with a fixture or local lake redirect set, it filters that table instead.
+
+    :param database_name: the Glue database
+    :param table_name: the table
+    :param columns: the columns to read
+    :param column: the column to match
+    :param values: the values to keep
+    :returns: the matching rows, with ``columns`` in the order given
+    :rtype: pl.DataFrame
+    """
+    if DAGSTER_ENV == "dev" and (
+        os.environ.get(FIXTURE_DIR_VARIABLE) or os.environ.get(LOCAL_LAKE_VARIABLE)
+    ):
+        return (
+            get_dbt_model_as_dataframe(
+                database_name=database_name, table_name=table_name
+            )
+            .filter(pl.col(column).is_in(list(values)))
+            .select(columns)
+            .collect()
+        )
+    table = load_dbt_model_table(database_name, table_name)
+    row_filter = In(column, set(values))
+    scan = table.scan(row_filter=row_filter, selected_fields=tuple(columns))
+    reader = ArrowScan(table.metadata, table.io, scan.projection(), row_filter)
+    frames = [
+        pl.DataFrame(reader.to_table([task])).select(columns)
+        for task in scan.plan_files()
+    ]
+    if not frames:
+        return pl.DataFrame(scan.to_arrow()).select(columns)
+    return pl.concat(frames)
 
 
 def read_rows(

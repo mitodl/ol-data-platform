@@ -472,6 +472,13 @@ def test_feedback_sentiment_predicts_only_unrated_learn_zendesk_conversations(
         "get_dbt_model_as_dataframe",
         lambda **kwargs: tables[kwargs["table_name"]].lazy(),
     )
+    monkeypatch.setattr(
+        asset_module,
+        "load_rows_in",
+        lambda _database, table, columns, column, values: (
+            tables[table].filter(pl.col(column).is_in(values)).select(columns)
+        ),
+    )
 
     result = asset_module.feedback_sentiment(
         build_asset_context(),

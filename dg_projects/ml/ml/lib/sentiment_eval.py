@@ -73,6 +73,16 @@ SENTIMENT_PROMPT = (
 )
 
 
+# The feedback_embeddings columns the sentiment assets read: the key, the vector,
+# and the two that embedding_model.matches() filters on.
+EMBEDDING_COLUMNS = (
+    "feedback_conversation_pk",
+    "embedding_vector",
+    "embedding_model_version",
+    "embedding_dim",
+)
+
+
 def fetch_sentiment_prompt() -> str:
     """Return the sentiment prompt template, preferring Opik's Prompt Library entry.
 
