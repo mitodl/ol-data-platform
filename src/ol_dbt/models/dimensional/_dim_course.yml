@@ -58,7 +58,9 @@ models:
   - name: course_number
     description: Course number (e.g., 6.00.1x)
   - name: course_title
-    description: Course title
+    description: >
+      Course title. For edxorg courses, the int__mitx__courses title of the course_number
+      (MITx Online's when the course is on MITx Online), else the latest run's title.
     tests:
     - not_null
   - name: course_description
@@ -134,6 +136,11 @@ unit_tests:
       as courserun_title, cast(null as varchar) as course_number, cast(null as varchar)
       as courserun_start_date, cast(null as boolean) as courserun_is_published where
       false
+  - input: ref('int__mitx__courses')
+    format: sql
+    rows: select cast(null as varchar) as course_number, cast(null as varchar) as
+      course_title, cast(null as boolean) as is_on_mitxonline, cast(null as integer)
+      as mitxonline_course_id, cast(null as varchar) as course_readable_id where false
   - input: ref('int__ocw__courses')
     format: sql
     rows: select cast(null as varchar) as course_readable_id, cast(null as varchar)
@@ -194,6 +201,11 @@ unit_tests:
       as courserun_title, cast(null as varchar) as course_number, cast(null as varchar)
       as courserun_start_date, cast(null as boolean) as courserun_is_published where
       false
+  - input: ref('int__mitx__courses')
+    format: sql
+    rows: select cast(null as varchar) as course_number, cast(null as varchar) as
+      course_title, cast(null as boolean) as is_on_mitxonline, cast(null as integer)
+      as mitxonline_course_id, cast(null as varchar) as course_readable_id where false
   - input: ref('int__ocw__courses')
     format: sql
     rows: select cast(null as varchar) as course_readable_id, cast(null as varchar)
@@ -220,3 +232,82 @@ unit_tests:
         \ New Title", is_current: true}
     - {course_readable_id: "course-v1:xPRO+DL", primary_platform: "mitxpro", course_title: "Deep\
         \ Learning", is_current: true}
+- name: test_dim_course_titles_edxorg_course_from_mitx_courses_before_latest_run
+  description: >
+    An edX.org course takes the int__mitx__courses title of its course_number, trimmed
+    on both sides, and both id forms of a course share it. For a duplicated number
+    the MITx Online row wins, else the lowest readable id. With no match, or no
+    course_number, it keeps the latest run's title.
+  model: dim_course
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__courses')
+    format: sql
+    rows: select cast(null as varchar) as course_readable_id, cast(null as integer)
+      as course_id, cast(null as varchar) as course_title, cast(null as varchar) as
+      course_number, cast(null as varchar) as course_description, cast(null as boolean)
+      as course_is_live where false
+  - input: ref('int__mitxpro__courses')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('int__edxorg__mitx_courseruns')
+    rows:
+    - {course_readable_id: "course-v1:MITx+6.00.1x", course_number: " 6.00.1x", courserun_title: "Old\
+        \ Run Title", courserun_start_date: "2020-01-01", courserun_is_published: true}
+    - {course_readable_id: "course-v1:MITx+6.00.1x", course_number: " 6.00.1x", courserun_title: "Latest\
+        \ Run Title", courserun_start_date: "2021-01-01", courserun_is_published: true}
+    - {course_readable_id: "MITx/6.00.1x/2013", course_number: "6.00.1x", courserun_title: "Other\
+        \ Form Run Title", courserun_start_date: "2013-01-01", courserun_is_published: true}
+    - {course_readable_id: "course-v1:MITx+UAI.1", course_number: "UAI.1", courserun_title: "UAI\
+        \ 1 Run Title", courserun_start_date: "2021-01-01", courserun_is_published: true}
+    - {course_readable_id: "course-v1:MITx+UAI.2", course_number: "UAI.2", courserun_title: "UAI\
+        \ 2 Run Title", courserun_start_date: "2021-01-01", courserun_is_published: true}
+    - {course_readable_id: "course-v1:MITx+7.00x", course_number: "7.00x", courserun_title: "Seven\
+        \ Run Title", courserun_start_date: "2021-01-01", courserun_is_published: true}
+    - {course_readable_id: "course-v1:MITx+NOMATCH", course_number: "NOMATCH", courserun_title: "No\
+        \ Match Latest Run Title", courserun_start_date: "2021-06-01", courserun_is_published: true}
+    - {course_readable_id: "course-v1:MITx+NOMATCH", course_number: "NOMATCH", courserun_title: "No\
+        \ Match Older Run Title", courserun_start_date: "2020-06-01", courserun_is_published: true}
+    - {course_readable_id: "course-v1:MITx+NONUM", course_number: null, courserun_title: "No\
+        \ Number Run Title", courserun_start_date: "2021-01-01", courserun_is_published: true}
+  - input: ref('int__mitx__courses')
+    rows:
+    - {course_number: "6.00.1x", course_title: "MITx Online Title", is_on_mitxonline: true,
+      mitxonline_course_id: 7, course_readable_id: "course-v1:MITxT+6.00.1x"}
+    - {course_number: "UAI.1", course_title: "UAI 1 Offline", is_on_mitxonline: false,
+      mitxonline_course_id: null, course_readable_id: "course-v1:MITx+UAI.1a"}
+    - {course_number: "UAI.1", course_title: "UAI 1 Online", is_on_mitxonline: true,
+      mitxonline_course_id: 9, course_readable_id: "course-v1:MITxT+UAI.1"}
+    - {course_number: "UAI.2", course_title: "UAI 2 Second", is_on_mitxonline: false,
+      mitxonline_course_id: null, course_readable_id: "course-v1:MITx+UAI.2b"}
+    - {course_number: "UAI.2", course_title: "UAI 2 First", is_on_mitxonline: false,
+      mitxonline_course_id: null, course_readable_id: "course-v1:MITx+UAI.2a"}
+    - {course_number: " 7.00x ", course_title: "Seven Lookup Title", is_on_mitxonline: false,
+      mitxonline_course_id: null, course_readable_id: "course-v1:MITx+7.00x"}
+  - input: ref('int__ocw__courses')
+    format: sql
+    rows: select cast(null as varchar) as course_readable_id, cast(null as varchar)
+      as course_title, cast(null as varchar) as course_primary_course_number, cast(null
+      as varchar) as course_description, cast(null as boolean) as course_is_live where
+      false
+  - input: ref('int__bootcamps__course_runs')
+    rows: []
+  - input: ref('int__bootcamps__courses')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  expect:
+    rows:
+    - {course_readable_id: "course-v1:MITx+6.00.1x", course_title: "MITx Online Title"}
+    - {course_readable_id: "MITx/6.00.1x/2013", course_title: "MITx Online Title"}
+    - {course_readable_id: "course-v1:MITx+UAI.1", course_title: "UAI 1 Online"}
+    - {course_readable_id: "course-v1:MITx+UAI.2", course_title: "UAI 2 First"}
+    - {course_readable_id: "course-v1:MITx+7.00x", course_title: "Seven Lookup Title"}
+    - {course_readable_id: "course-v1:MITx+NOMATCH", course_title: "No Match Latest\
+        \ Run Title"}
+    - {course_readable_id: "course-v1:MITx+NONUM", course_title: "No Number Run Title"}
