@@ -17,9 +17,11 @@ from lakehouse.lib.dbt_environment import (
     DATA_LAKE_ENV_MAP,
     DBT_AUTOMATION_ENVIRONMENTS,
     DBT_TARGET_MAP,
+    ICEBERG_MAINTENANCE_ENGINE_MAP,
     STARROCKS_DBT_TARGET_MAP,
     STARROCKS_LOCAL_TARGET,
     STARROCKS_LOCAL_TARGETS,
+    iceberg_maintenance_engine,
     resolve_for_environment,
     starrocks_is_local,
 )
@@ -37,6 +39,7 @@ ALL_MAPS = pytest.mark.parametrize(
         ("DBT_TARGET_MAP", DBT_TARGET_MAP),
         ("STARROCKS_DBT_TARGET_MAP", STARROCKS_DBT_TARGET_MAP),
         ("DATA_LAKE_ENV_MAP", DATA_LAKE_ENV_MAP),
+        ("ICEBERG_MAINTENANCE_ENGINE_MAP", ICEBERG_MAINTENANCE_ENGINE_MAP),
     ],
 )
 
@@ -250,3 +253,22 @@ def test_a_new_environment_does_not_automate_by_default(monkeypatch):
     """
     monkeypatch.setattr(dbt_environment, "DAGSTER_ENV", "staging")
     assert "staging" not in dbt_environment.DBT_AUTOMATION_ENVIRONMENTS
+
+
+def test_production_maintains_iceberg_on_trino_until_the_cutover():
+    """Production builds the warehouse on Trino until the cutover (ADR 0012).
+
+    The maintenance engine flips with that cutover, not ahead of it.
+    """
+    assert ICEBERG_MAINTENANCE_ENGINE_MAP["production"] == "trino"
+
+
+@pytest.mark.parametrize("name", ["trino", "starrocks"])
+def test_each_engine_name_resolves(name):
+    assert iceberg_maintenance_engine(name) == name
+
+
+def test_an_override_naming_no_engine_raises():
+    """A typo in DAGSTER_ICEBERG_MAINTENANCE_ENGINE fails at load, not at 02:00."""
+    with pytest.raises(ValueError, match="starocks"):
+        iceberg_maintenance_engine("starocks")
