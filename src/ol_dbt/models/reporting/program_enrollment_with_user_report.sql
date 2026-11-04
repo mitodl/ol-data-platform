@@ -192,6 +192,6 @@ left join courses_detail
             and enrollment_detail.program_title = courses_detail.program_title))
     and enrollment_detail.user_email = courses_detail.user_email
 left join pre_org_details
-    on enrollment_detail.platform_name = pre_org_details.platform
+    on enrollment_detail.platform_name = pre_org_details.platform_name
     and enrollment_detail.user_email = pre_org_details.email
     and enrollment_detail.program_title = pre_org_details.program_title
