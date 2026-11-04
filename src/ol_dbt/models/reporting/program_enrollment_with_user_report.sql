@@ -45,6 +45,7 @@ with enrollment_detail as (
 , pre_org_details as (
     select
         dim_user.email
+        , dim_user.mitxonline_application_user_id
         , program.program_title
         , dim_organization.organization_name
         , dim_platform.platform_name
@@ -62,6 +63,7 @@ with enrollment_detail as (
     where tfact_enrollment.enrollment_type = 'program'
     group by
         dim_user.email
+        , dim_user.mitxonline_application_user_id
         , program.program_title
         , dim_organization.organization_name
         , dim_platform.platform_name
@@ -193,5 +195,5 @@ left join courses_detail
     and enrollment_detail.user_email = courses_detail.user_email
 left join pre_org_details
     on enrollment_detail.platform_name = pre_org_details.platform_name
-    and enrollment_detail.user_email = pre_org_details.email
+    and enrollment_detail.user_id = pre_org_details.mitxonline_application_user_id
     and enrollment_detail.program_title = pre_org_details.program_title
