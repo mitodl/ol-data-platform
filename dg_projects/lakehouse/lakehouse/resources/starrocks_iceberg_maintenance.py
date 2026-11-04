@@ -231,9 +231,10 @@ class StarRocksIcebergMaintenanceResource(
 
         Only candidates get a ``SHOW CREATE TABLE``, so ``__dbt_tmp`` and other
         relations no config names are never loaded. A candidate whose
-        ``SHOW CREATE TABLE`` fails (dropped since the listing, or a catalog
-        entry StarRocks cannot load) is left out with a warning, and the asset
-        reports it with the other configs that have no table.
+        ``SHOW CREATE TABLE`` fails with a server error (dropped since the
+        listing, or a catalog entry StarRocks cannot load) is left out with a
+        warning, and the asset reports it with the other configs that have no
+        table. A connection failure raises.
         """
         if not candidates:
             return set()
@@ -253,6 +254,11 @@ class StarRocksIcebergMaintenanceResource(
                 if not self._is_view(schema, table):
                     tables.add((schema, table))
             except MySQLError as exc:
+                # A lost connection that outlasted _fetch's retries says nothing
+                # about this table. Skipping it would let the run succeed, and
+                # advance the materialization count, without maintaining it.
+                if not _connection_survives(exc):
+                    raise
                 log.warning(
                     "Cannot load %s.%s, not maintaining it: %s", schema, table, exc
                 )

@@ -247,6 +247,25 @@ def test_a_table_that_cannot_be_loaded_is_skipped_not_fatal(
     assert len(fake.connections) == 1
 
 
+@pytest.mark.parametrize(
+    "error",
+    [OperationalError(SERVER_LOST, "Lost connection"), InterfaceError(0, "")],
+)
+def test_a_connection_failure_while_loading_is_fatal(
+    monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    """Skipping on a dead connection would let the run pass without those tables."""
+
+    def respond(sql: str, _params: Any) -> list[dict[str, Any]]:
+        if "information_schema" in sql:
+            return [{"table_schema": SCHEMA, "table_name": "int__a_table"}]
+        raise error
+
+    engine, _ = _engine(monkeypatch, respond)
+    with pytest.raises(type(error)):
+        engine.base_tables_among({(SCHEMA, "int__a_table")})
+
+
 def test_no_candidates_sends_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     engine, fake = _engine(monkeypatch, _with_delete_files(0))
     assert engine.base_tables_among(set()) == set()
