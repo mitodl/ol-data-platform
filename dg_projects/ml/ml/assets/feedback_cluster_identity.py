@@ -1,4 +1,3 @@
-import os
 from datetime import UTC, datetime
 from typing import Any
 
@@ -34,18 +33,14 @@ from ml.lib.cluster_identity import (
 from ml.lib.cluster_run_lookup import latest_identity_processed_run
 from ml.lib.embed import resolve_embedding_model
 from ml.lib.iceberg_helpers import table_exists
+from ml.lib.warehouse import warehouse_database
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
-from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.failures import permanent_failure
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
 from pydantic import Field
 
-if DAGSTER_ENV == "dev":
-    _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
-    database_name = f"ol_warehouse_production_{_schema_suffix}_intermediate"
-else:
-    database_name = "ol_warehouse_production_intermediate"
+database_name = warehouse_database("intermediate")
 
 
 class FeedbackClusterIdentityConfig(Config):
