@@ -5,7 +5,7 @@ sources:
 - name: reporting
   loader: airbyte
   database: '{{ target.database | default(none) }}'
-  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_reporting'
+  schema: '{{ target.schema }}_reporting'
   tables:
   - name: student_risk_probability
     description: Student risk probability scores produced by a logistic regression

@@ -3,7 +3,7 @@ version: 2
 
 sources:
 # database/schema are target-derived, not literals, so they must keep resolving to
-# the same relation feedback_redacted.py's DAGSTER_ENV branch actually writes to
+# the same relation warehouse_database in dg_projects/ml/ml/lib/warehouse.py names
 # (dev -> production catalog + personal suffix, qa -> qa catalog, else -> production).
 # Verify both sides agree before changing either.
 - name: feedback_intermediate
