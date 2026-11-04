@@ -42,6 +42,7 @@ from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 
 from lakehouse.assets.airbyte_drift import airbyte_inventory_drift
 from lakehouse.assets.iceberg_maintenance import (
+    WAREHOUSE_ENV,
     iceberg_dbt_layer_maintenance,
     iceberg_raw_layer_maintenance,
 )
@@ -99,6 +100,7 @@ from lakehouse.lib.contract_freshness import (
 )
 from lakehouse.lib.dbt_environment import (
     DBT_AUTOMATION_ENABLED,
+    ICEBERG_MAINTENANCE_ENGINE,
     STARROCKS_IS_LOCAL,
 )
 from lakehouse.lib.executor import executor_for_environment
@@ -115,6 +117,9 @@ from lakehouse.lib.scheduled_automation import schedules_for_environment
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 from lakehouse.resources.starrocks import StarRocksResource
+from lakehouse.resources.starrocks_iceberg_maintenance import (
+    StarRocksIcebergMaintenanceResource,
+)
 from lakehouse.resources.superset_api import SupersetApiClientFactory
 from lakehouse.sensors import (
     build_asset_check_openmetadata_sensor,
@@ -743,10 +748,20 @@ DBT_ARTIFACTS_S3_PREFIX = os.environ.get(
     "DBT_ARTIFACTS_S3_PREFIX", "openmetadata/dbt-artifacts"
 ).rstrip("/")
 
-# Build resources dict, conditionally including airbyte
-resources_dict = {
-    "dbt": dbt_cli,
-    "trino_maintenance": TrinoMaintenanceResource(
+starrocks = StarRocksResource(
+    vault=vault,
+    vault_mount_point=STARROCKS_VAULT_MOUNT,
+    host=starrocks_host_map[DAGSTER_ENV],
+    database="b2b_analytics",
+    static_username="root" if STARROCKS_IS_LOCAL else None,
+)
+
+# Compaction and ANALYZE for iceberg_dbt_layer_maintenance, on the engine
+# ICEBERG_MAINTENANCE_ENGINE names. The StarRocks catalog is derived from
+# WAREHOUSE_ENV, the value that scopes the maintained schemas, so the two
+# cannot name different warehouses.
+iceberg_maintenance_engines = {
+    "trino": TrinoMaintenanceResource(
         host=os.environ.get("DAGSTER_TRINO_HOST", trino_host_map[DAGSTER_ENV]),
         catalog=os.environ.get("DAGSTER_TRINO_CATALOG", trino_catalog_map[DAGSTER_ENV]),
         vault=vault,
@@ -755,6 +770,18 @@ resources_dict = {
         # DBT_TRINO_PASSWORD env vars when vault_path is empty (local dev).
         vault_path=os.environ.get("DAGSTER_TRINO_VAULT_PATH", ""),
     ),
+    "starrocks": StarRocksIcebergMaintenanceResource(
+        starrocks=starrocks,
+        catalog=f"ol_data_lake_{WAREHOUSE_ENV}",
+    ),
+}
+
+# Build resources dict, conditionally including airbyte
+resources_dict = {
+    "dbt": dbt_cli,
+    "iceberg_maintenance_engine": iceberg_maintenance_engines[
+        ICEBERG_MAINTENANCE_ENGINE
+    ],
     "dbt_s3_artifacts": DbtS3ArtifactsResource(
         s3_bucket=os.environ.get("DBT_ARTIFACTS_S3_BUCKET", ""),
         s3_prefix=DBT_ARTIFACTS_S3_PREFIX,
@@ -777,13 +804,7 @@ resources_dict = {
         config_path="pipelines/openmetadata-dagster-bot",
         vault=vault,
     ),
-    "starrocks": StarRocksResource(
-        vault=vault,
-        vault_mount_point=STARROCKS_VAULT_MOUNT,
-        host=starrocks_host_map[DAGSTER_ENV],
-        database="b2b_analytics",
-        static_username="root" if STARROCKS_IS_LOCAL else None,
-    ),
+    "starrocks": starrocks,
     # Separate from "dbt" (pinned to a Trino target) -- see dbt_starrocks.py.
     "starrocks_dbt": starrocks_dbt_cli,
 }
