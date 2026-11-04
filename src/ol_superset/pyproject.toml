@@ -29,7 +29,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-superset-sup = { git = "https://github.com/mitodl/superset-sup", rev = "self_hosted_superset_oidc" }
+superset-sup = { git = "https://github.com/mitodl/superset-sup", rev = "d686d53b127c660922783dd919096ecf98a6698d" }
 
 [tool.ruff]
 target-version = "py313"
