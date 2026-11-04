@@ -857,6 +857,33 @@
 
 
 {#
+    month_series: a SELECT returning one DATE column, col_name, for start_date and every
+    month after it up to end_date inclusive. start_date must be the first of a month and
+    no later than end_date, both DATE expressions. StarRocks has no sequence() over dates,
+    so it adds 0..months_diff months to start_date. months_diff counts whole months, which
+    matches Trino's sequence only from a first-of-month start: from the 31st, Trino clamps
+    to the end of a shorter month and months_diff drops it.
+#}
+{% macro month_series(start_date, end_date, col_name) -%}
+    {{ adapter.dispatch('month_series', 'open_learning')(start_date, end_date, col_name) }}
+{%- endmacro %}
+
+{% macro default__month_series(start_date, end_date, col_name) -%}
+    select {{ col_name }}
+    from unnest(sequence({{ start_date }}, {{ end_date }}, interval '1' month)) as t ({{ col_name }})
+{%- endmacro %}
+
+{% macro duckdb__month_series(start_date, end_date, col_name) -%}
+    select cast(unnest(generate_series({{ start_date }}, {{ end_date }}, interval 1 month)) as date) as {{ col_name }}
+{%- endmacro %}
+
+{% macro starrocks__month_series(start_date, end_date, col_name) -%}
+    select cast(months_add({{ start_date }}, month_offset) as date) as {{ col_name }}
+    from table(generate_series(0, months_diff({{ end_date }}, {{ start_date }}))) as t (month_offset)
+{%- endmacro %}
+
+
+{#
     try_cast: `expr` as `type`, or NULL where the value does not convert. StarRocks
     has no try_cast; its cast already returns NULL for a string that does not convert.
 #}
