@@ -17,8 +17,7 @@ from ml.lib.sentiment_eval import (
     predict_unrated_sentiment,
     validate_negative_thresholds,
 )
-from ml.lib.warehouse import load_rows_in, warehouse_database
-from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ml.lib.warehouse import load_rows_by_key, warehouse_database
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from pydantic import Field, field_validator
 
@@ -97,7 +96,6 @@ class FeedbackSentimentConfig(Config):
         AssetKey(["intermediate", "feedback_embeddings"]),
         AssetKey(["intermediate", "int__feedback__conversation"]),
     ],
-    automation_condition=upstream_or_code_changes(),
     io_manager_key="io_manager",
     pool="feedback_sentiment",
     metadata={
@@ -157,7 +155,7 @@ def feedback_sentiment(
         [labeled_df["feedback_conversation_pk"], unrated_df["feedback_conversation_pk"]]
     )
     embeddings_df = (
-        load_rows_in(
+        load_rows_by_key(
             database_name,
             "feedback_embeddings",
             EMBEDDING_COLUMNS,

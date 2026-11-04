@@ -18,7 +18,7 @@ from ml.lib.sentiment_eval import (
     run_sentiment_eval,
     validate_negative_thresholds,
 )
-from ml.lib.warehouse import load_rows_in, warehouse_database
+from ml.lib.warehouse import load_rows_by_key, warehouse_database
 from ml.resources.llm import LLMClientFactory
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from pydantic import Field, field_validator
@@ -139,7 +139,7 @@ def feedback_sentiment_eval(
     )
     rated_pks = afact_df["feedback_conversation_pk"].to_list()
     embeddings_df = (
-        load_rows_in(
+        load_rows_by_key(
             intermediate_database_name,
             "feedback_embeddings",
             EMBEDDING_COLUMNS,
@@ -149,7 +149,7 @@ def feedback_sentiment_eval(
         .filter(embedding_model.matches())
         .select(["feedback_conversation_pk", "embedding_vector"])
     )
-    conversation_df = load_rows_in(
+    conversation_df = load_rows_by_key(
         intermediate_database_name,
         "int__feedback__conversation",
         ["feedback_conversation_pk", "conversation_text"],
