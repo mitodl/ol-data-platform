@@ -475,8 +475,13 @@ def test_feedback_sentiment_predicts_only_unrated_learn_zendesk_conversations(
     monkeypatch.setattr(
         asset_module,
         "load_rows_by_key",
-        lambda _database, table, columns, key_column, keys: (
-            tables[table].filter(pl.col(key_column).is_in(keys)).select(columns)
+        lambda _database, table, columns, key_column, keys, equals: (
+            tables[table]
+            .filter(
+                pl.col(key_column).is_in(keys),
+                *(pl.col(column) == value for column, value in equals.items()),
+            )
+            .select(columns)
         ),
     )
 

@@ -12,7 +12,6 @@ from dagster import (
 from ml.lib.cluster import DEFAULT_PLATFORMS
 from ml.lib.embed import resolve_embedding_model
 from ml.lib.sentiment_eval import (
-    EMBEDDING_COLUMNS,
     labeled_sentiment_sample,
     predict_unrated_sentiment,
     validate_negative_thresholds,
@@ -154,16 +153,16 @@ def feedback_sentiment(
     needed_pks = pl.concat(
         [labeled_df["feedback_conversation_pk"], unrated_df["feedback_conversation_pk"]]
     )
-    embeddings_df = (
-        load_rows_by_key(
-            database_name,
-            "feedback_embeddings",
-            EMBEDDING_COLUMNS,
-            "feedback_conversation_pk",
-            needed_pks.to_list(),
-        )
-        .filter(embedding_model.matches())
-        .select(["feedback_conversation_pk", "embedding_vector"])
+    embeddings_df = load_rows_by_key(
+        database_name,
+        "feedback_embeddings",
+        ["feedback_conversation_pk", "embedding_vector"],
+        "feedback_conversation_pk",
+        needed_pks.to_list(),
+        equals={
+            "embedding_model_version": embedding_model.model_version,
+            "embedding_dim": embedding_model.dim,
+        },
     )
     labeled_df = labeled_df.join(
         embeddings_df, on="feedback_conversation_pk", how="inner"

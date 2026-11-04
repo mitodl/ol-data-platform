@@ -116,12 +116,14 @@ def load_matching_rows(
     return pl.DataFrame(scan.to_arrow_batch_reader().read_all()).select(columns)
 
 
-def load_rows_by_key(
+def load_rows_by_key(  # noqa: PLR0913
     database_name: str,
     table_name: str,
     columns: Sequence[str],
     key_column: str,
     keys: Sequence[str],
+    *,
+    equals: Mapping[str, str | int] | None = None,
 ) -> pl.DataFrame:
     """Read the rows of an Iceberg table whose key is one of the given keys.
 
@@ -139,6 +141,7 @@ def load_rows_by_key(
     :param columns: the columns to read
     :param key_column: the column to match
     :param keys: the keys to keep
+    :param equals: column values every returned row also has
     :returns: the matching rows, with ``columns`` in the order given
     :rtype: pl.DataFrame
     """
@@ -149,12 +152,19 @@ def load_rows_by_key(
             get_dbt_model_as_dataframe(
                 database_name=database_name, table_name=table_name
             )
-            .filter(pl.col(key_column).is_in(list(keys)))
+            .filter(
+                pl.col(key_column).is_in(list(keys)),
+                *(pl.col(column) == value for column, value in (equals or {}).items()),
+            )
             .select(columns)
             .collect()
         )
     table = load_dbt_model_table(database_name, table_name)
-    row_filter = In(key_column, set(keys))
+    row_filter = reduce(
+        And,
+        (EqualTo(column, value) for column, value in (equals or {}).items()),
+        In(key_column, set(keys)),
+    )
     scan = table.scan(row_filter=row_filter, selected_fields=tuple(columns))
     reader = ArrowScan(table.metadata, table.io, scan.projection(), row_filter)
     frames = [

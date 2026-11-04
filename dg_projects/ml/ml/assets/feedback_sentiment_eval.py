@@ -12,7 +12,6 @@ from dagster import (
 from ml.lib.embed import resolve_embedding_model
 from ml.lib.sentiment_eval import (
     CLASSIFIER_NEGATIVE_THRESHOLDS,
-    EMBEDDING_COLUMNS,
     EXPLICIT_RATING_TO_SENTIMENT,
     build_sentiment_client,
     labeled_sentiment_sample,
@@ -138,16 +137,16 @@ def feedback_sentiment_eval(
         .collect()
     )
     rated_pks = afact_df["feedback_conversation_pk"].to_list()
-    embeddings_df = (
-        load_rows_by_key(
-            intermediate_database_name,
-            "feedback_embeddings",
-            EMBEDDING_COLUMNS,
-            "feedback_conversation_pk",
-            rated_pks,
-        )
-        .filter(embedding_model.matches())
-        .select(["feedback_conversation_pk", "embedding_vector"])
+    embeddings_df = load_rows_by_key(
+        intermediate_database_name,
+        "feedback_embeddings",
+        ["feedback_conversation_pk", "embedding_vector"],
+        "feedback_conversation_pk",
+        rated_pks,
+        equals={
+            "embedding_model_version": embedding_model.model_version,
+            "embedding_dim": embedding_model.dim,
+        },
     )
     conversation_df = load_rows_by_key(
         intermediate_database_name,
