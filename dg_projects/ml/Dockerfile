@@ -25,11 +25,11 @@ COPY dg_projects/ml dg_projects/ml
 WORKDIR /app/dg_projects/ml
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv venv --relocatable && \
-    uv sync --frozen --no-install-project --no-dev --no-editable
+    uv sync --locked --no-install-project --no-dev --no-editable
 
 # Sync the project itself
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable
+    uv sync --locked --no-dev --no-editable
 
 # tiktoken downloads an encoding on first use. The embedding assets count chunk and
 # request sizes in cl100k_base, so it is fetched here into a cache the final image
