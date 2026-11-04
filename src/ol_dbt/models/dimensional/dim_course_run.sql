@@ -101,7 +101,7 @@ with micromasters_courseruns as (
         , cr.courserun_enrollment_end_date as enrollment_end
         , cr.courserun_is_published as courserun_is_live
         , cast(null as varchar) as courserun_created_on
-        , cast(null as varchar) as course_readable_id
+        , cr.course_readable_id
         , cast(null as varchar) as semester
         , cast(null as double) as passing_grade
         , 'edxorg' as platform
