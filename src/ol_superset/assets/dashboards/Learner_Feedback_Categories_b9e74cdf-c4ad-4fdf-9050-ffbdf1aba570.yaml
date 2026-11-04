@@ -257,8 +257,9 @@ position:
         - **Feedback Categories** counts conversations in each category. The axis
         uses a log scale.
 
-        - **Feedback Category Trend** shows the 10 largest categories by month, for
-        the last 12 full months.
+        - **Feedback Category Trend** shows the 10 largest categories by month. The
+        **Year** and **Month** filters set which months it shows. Pick more than one
+        to compare them. The current month is partial, so its count is lower.
 
         - Click a bar to filter **Feedback Cluster Conversations** to that category.
 

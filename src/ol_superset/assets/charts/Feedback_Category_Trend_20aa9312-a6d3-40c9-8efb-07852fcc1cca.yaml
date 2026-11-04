@@ -6,8 +6,7 @@ description: null
 params:
   adhoc_filters:
   - clause: WHERE
-    comparator: 'DATETRUNC(DATEADD(DATETIME("today"), -12, month), month) : DATETRUNC(DATETIME("today"),
-      month)'
+    comparator: No filter
     expressionType: SIMPLE
     operator: TEMPORAL_RANGE
     subject: conversation_date
