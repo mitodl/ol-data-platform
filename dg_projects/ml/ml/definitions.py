@@ -3,8 +3,10 @@ import os
 from dagster import (
     AssetSelection,
     AutomationConditionSensorDefinition,
+    DefaultScheduleStatus,
     DefaultSensorStatus,
     Definitions,
+    ScheduleDefinition,
     define_asset_job,
 )
 from dagster_aws.s3 import S3Resource
@@ -112,6 +114,18 @@ feedback_sentiment_eval_job = define_asset_job(
     selection=[feedback_sentiment_eval],
 )
 
+feedback_sentiment_job = define_asset_job(
+    name="feedback_sentiment_job",
+    selection=[feedback_sentiment],
+)
+feedback_sentiment_schedule = ScheduleDefinition(
+    name="feedback_sentiment_daily",
+    job=feedback_sentiment_job,
+    cron_schedule="0 12 * * *",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.STOPPED,
+)
+
 # Covers the feedback pipeline's auto-cascading assets (feedback_clusters itself
 # runs from feedback_clusters_growth_sensor). Re-enable in the UI after deploy if it was
 # previously on. Stopped by default.
@@ -123,7 +137,6 @@ feedback_pipeline_automation_sensor = AutomationConditionSensorDefinition(
         feedback_cluster_identity,
         feedback_cluster_assignment,
         feedback_category_proposals,
-        feedback_sentiment,
     ),
     default_status=DefaultSensorStatus.STOPPED,
 )
@@ -299,7 +312,9 @@ defs = Definitions(
         feedback_embeddings_job,
         feedback_clusters_job,
         feedback_sentiment_eval_job,
+        feedback_sentiment_job,
     ],
+    schedules=[feedback_sentiment_schedule],
     sensors=[
         feedback_pipeline_automation_sensor,
         feedback_clusters_growth_sensor,
