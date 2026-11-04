@@ -937,7 +937,7 @@
         'raw__xpro__openedx__mysql__user_api_userorgtag': '_airbyte_extracted_at',
         'raw__xpro__openedx__mysql__workflow_assessmentworkflow': '_airbyte_extracted_at',
         'raw__xpro__openedx__mysql__workflow_assessmentworkflowstep': '_airbyte_extracted_at',
-        'raw__xpro__openedx__tracking_logs': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],
+        'raw__xpro__openedx__tracking_log_events': '_file_modified_at',
         'raw__youtube__api__channels': '_dlt_load_id',
         'raw__youtube__api__playlist_items': '_dlt_load_id',
         'raw__youtube__api__playlists': '_dlt_load_id',

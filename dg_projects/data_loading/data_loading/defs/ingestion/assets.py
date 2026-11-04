@@ -491,8 +491,8 @@ edxorg_program_reports_assets = build_batched_assets(
 )
 
 
-# The xPro tracking log, loaded in full beside the Airbyte-loaded
-# raw__xpro__openedx__tracking_logs until staging is repointed at it. One
+# The xPro tracking log. It replaced the Airbyte-loaded
+# raw__xpro__openedx__tracking_logs, which is kept as the archive. One
 # listing per run: a full listing of the production bucket (264,950 files on
 # 2026-10-27) takes about 50 s, and the first runs walk ~331 batches.
 XPRO_TRACKING_LOGS_TABLE = "raw__xpro__openedx__tracking_log_events"

@@ -1130,3 +1130,22 @@ retired:
     not deleted. The landing files under
     xpro/openedx/processed_data/course_structure/ stay in S3, and the table
     stays in place, read-only.
+- deployment: xpro
+  layer: tracking_logs
+  raw_tables:
+  - raw__xpro__openedx__tracking_logs
+  retired_on: '2026-11-04'
+  reason: >-
+    Replaced by raw__xpro__openedx__tracking_log_events, which
+    ol_dlt.sources.tracking_logs loads from the same files in
+    xpro-production-edxapp-tracking/valid/ (#3172). On 2026-11-04 both tables
+    held the same 265,854 files. Per file, 265,759 row counts matched this
+    table's one-copy count (fewest rows of any sync). For the other 95, the
+    distinct events matched exactly: 92 files here hold duplicate rows written
+    within one sync, and for 3 the first sync read a partly written file. The
+    "xPro Tracking Logs → S3 Data Lake" connection was disabled the same day
+    and is kept disabled, not deleted. dbt no longer reads the table. It stays
+    in place, read-only, as the archive of what Airbyte loaded, with its
+    _airbyte_* and _ab_source_file_* columns.
+  frozen: true
+  modeled: false
