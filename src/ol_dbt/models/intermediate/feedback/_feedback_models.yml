@@ -489,6 +489,10 @@ models:
           min_value: 1
   - name: conversation_text_chars
     description: int, summed pre-redaction length of the kept turns.
+  - name: explicit_rating
+    description: str, the conversation's explicit rating from tfact_feedback, the
+      same value afact_feedback_conversation carries. The feedback_sentiment asset
+      trains on it.
   - name: conversation_text
     description: str, the conversation's redacted turns concatenated in order with
       a turn delimiter. When no turn has text of its own (only "[No content]", "SCRUBBED"
@@ -543,6 +547,41 @@ models:
       embedded.
   - name: embedded_at
     description: ISO8601 varchar, when embedding_vector was generated.
+
+- name: int__feedback__sentiment
+  description: feedback_sentiment_assignments' output, one row per conversation the
+    model scored -- the model tier of the sentiment. Empty until the feedback_sentiment
+    asset has materialized in this schema.
+  columns:
+  - name: feedback_conversation_pk
+    description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+    tests:
+    - not_null
+    - unique
+  - name: sentiment_fk
+    description: str, foreign key to dim_sentiment, hashed from sentiment_slug.
+    tests:
+    - relationships:
+        arguments:
+          to: ref('dim_sentiment')
+          field: sentiment_pk
+  - name: sentiment_slug
+    description: str, the predicted sentiment, 'positive' or 'negative'.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: ['positive', 'negative']
+  - name: negative_probability
+    description: double, the classifier's P(negative). sentiment_slug is 'negative'
+      when this is at least the threshold in sentiment_model_version.
+  - name: sentiment_model_version
+    description: str, the method and threshold that produced sentiment_slug, e.g.
+      'local_classifier@0.35'.
+  - name: embedding_model_version
+    description: str, which embedding model the classifier used.
+  - name: predicted_at
+    description: ISO8601 varchar, when sentiment_slug was predicted.
 
 - name: int__feedback__cluster_membership
   description: feedback_cluster_membership's output, one row per conversation -- the

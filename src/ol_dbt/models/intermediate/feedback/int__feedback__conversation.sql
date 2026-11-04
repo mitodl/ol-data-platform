@@ -43,6 +43,7 @@ select
     , min(feedback.feedback_occurred_at) as conversation_opened_at
     , count(*) as turn_count
     , sum(feedback.feedback_text_chars) as conversation_text_chars
+    , max(nullif(feedback.explicit_rating, '')) as explicit_rating
     -- nullif because array_join drops null elements: with the redaction stub in place
     -- every turn's text is null, and the join yields '' rather than null. An empty
     -- string reads as real content to the summarizer's skip rule.
