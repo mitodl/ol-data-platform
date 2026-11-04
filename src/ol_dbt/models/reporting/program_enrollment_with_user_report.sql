@@ -43,7 +43,7 @@ with enrollment_detail as (
 )
 
 , pre_org_details as (
-    select 
+    select
         dim_user.email
         , program.program_title
         , dim_organization.organization_name
@@ -60,7 +60,7 @@ with enrollment_detail as (
     inner join dim_platform
         on tfact_enrollment.platform_fk = dim_platform.platform_pk
     where tfact_enrollment.enrollment_type = 'program'
-    group by  
+    group by
         dim_user.email
         , program.program_title
         , dim_organization.organization_name

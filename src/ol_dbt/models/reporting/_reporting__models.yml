@@ -1252,8 +1252,8 @@ models:
   # it should be simplified/fixed upstream (see issue #TBD)
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on"
-          , "organization_name"]
+        column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on",
+          "organization_name"]
         row_condition: "program_id !=2 and platform_name !='edX.org'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
