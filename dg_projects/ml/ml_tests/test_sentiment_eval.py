@@ -435,11 +435,12 @@ def test_feedback_sentiment_predicts_only_unrated_learn_zendesk_conversations(
         ("zendesk", "mitlearn", "unoffered", None),
         ("zendesk", "mitlearn", None, "Idea: add a share button"),
         ("zendesk", "mitlearn", None, "Idea"),
+        ("zendesk", "mitlearn", None, "Idea\n---\nAny update?"),
         ("zendesk", "mitxpro", None, "Exports Compliance"),
         ("learn_ai_tutor", "mitlearn", None, "What is a gradient?"),
         ("content_feedback", "mitlearn", "idea", "More videos"),
     ]
-    unrated_vectors = [[5.0] * 4, [-5.0] * 4, [5.0] * 4] + [[-5.0] * 4] * 5
+    unrated_vectors = [[5.0] * 4, [-5.0] * 4, [5.0] * 4] + [[-5.0] * 4] * 6
     rows = rated + unrated
     pks = [f"pk{i}" for i in range(len(rows))]
     tables = {

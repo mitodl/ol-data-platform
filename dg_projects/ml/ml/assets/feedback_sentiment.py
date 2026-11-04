@@ -1,4 +1,3 @@
-import os
 from datetime import UTC, datetime
 
 import polars as pl
@@ -17,16 +16,12 @@ from ml.lib.sentiment_eval import (
     predict_unrated_sentiment,
     validate_negative_thresholds,
 )
+from ml.lib.warehouse import warehouse_database
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
-from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from pydantic import Field, field_validator
 
-if DAGSTER_ENV == "dev":
-    _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
-    database_name = f"ol_warehouse_production_{_schema_suffix}_intermediate"
-else:
-    database_name = "ol_warehouse_production_intermediate"
+database_name = warehouse_database("intermediate")
 
 # Repeated 5-fold CV on the rated conversations: precision 0.83 (0.77-0.89 across
 # folds), recall 0.33. Lower thresholds lose much more precision than they gain recall.
@@ -38,8 +33,9 @@ PREDICTED_SOURCES = ("zendesk",)
 # A content-feedback idea is a suggestion, not a verdict, so it gets no sentiment.
 NO_SENTIMENT_RATINGS = ("idea",)
 # The Appzi widget's suggestion tickets, the Zendesk form of the same idea. An idea
-# sent with no answer is a bare "Idea" (appzi_feedback_text in macros/appzi.sql).
-NO_SENTIMENT_TEXT_PATTERN = r"^Idea(?::|\s*$)"
+# sent with no answer is a bare "Idea" (appzi_feedback_text in macros/appzi.sql),
+# followed by the turn separator from int__feedback__conversation if a reply came.
+NO_SENTIMENT_TEXT_PATTERN = r"^Idea(?::|\s*(?:$|\n---\n))"
 
 SENTIMENT_ASSIGNMENT_SCHEMA = {
     "feedback_conversation_pk": pl.String,
