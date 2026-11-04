@@ -1,10 +1,6 @@
--- Grain: one public comment on a solved or closed MIT Learn ticket. Input to the
--- redaction asset that feeds the support chatbot's knowledge base.
+-- Grain: one ticket, its public comments joined in order into one conversation text.
 with ticket as (
     select * from {{ ref('int__zendesk__ticket') }}
-    where
-        ticket_platform = 'mitlearn'
-        and ticket_status in ('solved', 'closed')
 )
 
 , ticket_comment as (
@@ -22,7 +18,6 @@ with ticket as (
     select
         ticket_comment.comment_id
         , ticket_comment.ticket_id
-        , ticket_comment.comment_source_channel
         , ticket_comment.comment_created_at
         , case
             when ticket_comment.comment_author_user_id = ticket.ticket_requester_user_id
@@ -46,25 +41,38 @@ with ticket as (
     left join users on ticket_comment.comment_author_user_id = users.user_id
 )
 
+, conversation as (
+    select
+        ticket_id
+        , count(*) as comment_count
+        , count_if(comment_author_role = 'staff') as staff_comment_count
+        , min(comment_created_at) as first_comment_at
+        , max(comment_created_at) as last_comment_at
+        , {{ array_join(
+            "array_agg('[' || comment_author_role || '] ' || comment_body"
+            ~ " order by comment_created_at, comment_id)"
+            , '\n---\n'
+        ) }} as conversation_text
+    from comments
+    where comment_body != ''
+    group by ticket_id
+)
+
 select
-    comments.comment_id
-    , comments.ticket_id
-    -- comment_id breaks ties between comments that share a created_at
-    , row_number() over (
-        partition by comments.ticket_id
-        order by comments.comment_created_at, comments.comment_id
-    ) as turn_index
-    , comments.comment_author_role
-    , comments.comment_body
-    , comments.comment_source_channel
-    , comments.comment_created_at
-    , ticket.ticket_subject
+    ticket.ticket_id
+    , ticket.ticket_platform
     , ticket.ticket_status
+    , ticket.ticket_subject
+    , ticket.group_name
+    , ticket.brand_subdomain
     , ticket.ticket_tags
     , ticket.ticket_satisfaction_rating_score
-    , ticket.group_name
+    , conversation.comment_count
+    , conversation.staff_comment_count
+    , conversation.conversation_text
+    , conversation.first_comment_at
+    , conversation.last_comment_at
     , ticket.ticket_created_at
     , ticket.ticket_updated_at
-from comments
-inner join ticket on comments.ticket_id = ticket.ticket_id
-where comments.comment_body != ''
+from conversation
+inner join ticket on conversation.ticket_id = ticket.ticket_id

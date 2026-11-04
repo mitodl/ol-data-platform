@@ -164,68 +164,58 @@ models:
     tests:
     - not_null
 
-- name: int__zendesk__mitlearn_ticket_comment
-  description: One public comment on a solved or closed MIT Learn ticket, with quoted
-    email history removed. Internal notes are left out. This is the raw input to the
-    redaction asset that feeds the support chatbot's knowledge base; the body still
-    holds PII.
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      arguments:
-        column_list: [ticket_id, turn_index]
+- name: int__zendesk__ticket_conversation
+  description: One Zendesk ticket with its public comments joined in time order into
+    one conversation text, across all platforms and ticket statuses. Internal notes
+    are left out, and quoted email history is cut from each comment. The text still
+    holds PII; redact it before any LLM use.
   columns:
-  - name: comment_id
-    description: int, primary key for the ticket comment
+  - name: ticket_id
+    description: int, primary key, foreign key to int__zendesk__ticket
     tests:
     - not_null
     - unique
-  - name: ticket_id
-    description: int, foreign key to int__zendesk__ticket
-    tests:
-    - not_null
-  - name: turn_index
-    description: int, 1-based position of the comment in the ticket's public thread,
-      ordered by comment_created_at then comment_id
-    tests:
-    - not_null
-  - name: comment_author_role
-    description: str, who wrote the comment. 'requester' is the ticket requester;
-      'staff' is a Zendesk agent or admin, or any @mit.edu account (some support staff
-      reply from end-user accounts); 'other_end_user' is anyone else, such as a CC'd
-      learner or a partner contact.
-    tests:
-    - not_null
-    - accepted_values:
-        arguments:
-          values: [requester, staff, other_end_user]
-  - name: comment_body
-    description: str, the comment's plain-text body, cut at the first quoted reply
-      (an Outlook "From/Sent" header, a Gmail "On ... wrote:" line, or Zendesk's reply
-      delimiter) and trimmed. Never empty.
-    tests:
-    - not_null
-  - name: comment_source_channel
-    description: str, the channel through which the comment was created. e.g. "web",
-      "email"
-  - name: comment_created_at
-    description: timestamp, the time the comment was created
-    tests:
-    - not_null
-  - name: ticket_subject
-    description: str, the subject of the ticket. Holds PII like the body.
+  - name: ticket_platform
+    description: str, the platform the ticket is about, from int__zendesk__ticket
   - name: ticket_status
-    description: str, 'solved' or 'closed'
-    tests:
-    - accepted_values:
-        arguments:
-          values: [solved, closed]
+    description: str, the ticket's state, e.g. "open", "solved", "closed"
+  - name: ticket_subject
+    description: str, the subject of the ticket. Holds PII like the conversation text.
+  - name: group_name
+    description: str, the Zendesk group the ticket is routed to
+  - name: brand_subdomain
+    description: str, the help centre subdomain of the ticket's brand
   - name: ticket_tags
     description: array, the tags applied to the ticket
   - name: ticket_satisfaction_rating_score
     description: str, the ticket's CSAT score, e.g. "good", "bad", "offered". Most
       tickets have none.
-  - name: group_name
-    description: str, the Zendesk group the ticket is routed to
+  - name: comment_count
+    description: int, the number of public comments in conversation_text. Changes
+      when a comment is added, so a consumer that stores derived rows can detect a
+      changed conversation.
+    tests:
+    - not_null
+  - name: staff_comment_count
+    description: int, the number of those comments written by staff
+    tests:
+    - not_null
+  - name: conversation_text
+    description: str, the public comments in order of comment_created_at then comment_id,
+      separated by a "---" line. Each comment starts with its author's role in brackets.
+      [requester] is the ticket requester; [staff] is a Zendesk agent or admin, or
+      any @mit.edu account (some support staff reply from end-user accounts); [other_end_user]
+      is anyone else, such as a CC'd learner or a partner contact. Each comment is
+      cut at its first quoted reply (an Outlook "From/Sent" header, a Gmail "On ...
+      wrote:" line, or Zendesk's reply delimiter), and empty comments are left out.
+    tests:
+    - not_null
+  - name: first_comment_at
+    description: timestamp, the time of the first public comment
+  - name: last_comment_at
+    description: timestamp, the time of the last public comment
+    tests:
+    - not_null
   - name: ticket_created_at
     description: timestamp, the time the ticket was created
   - name: ticket_updated_at
