@@ -20,8 +20,7 @@ Airbyte connection that loaded their files into ``raw__edxorg__s3__*``. That
 connection inferred its schema from a sample of old files, so it dropped the
 fields #2721 added, and it re-appended every file the assets overwrote. Each
 row carries the ``retrieved_at`` of the extraction that wrote it, and staging
-treats the rows sharing the latest ``retrieved_at`` as what the API currently
-lists, so these tables only ever append.
+keeps each key's most recent row, so these tables only ever append.
 
 Nested values (images, subjects, seats, staff, a course's runs) are stored as
 JSON strings, which is what the Airbyte tables held and what staging parses.
