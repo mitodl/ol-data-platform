@@ -537,6 +537,10 @@ def run(  # noqa: PLR0913
             )
             sys.exit(1)
         defer = False
+        # With no deferral, a relationships test whose other model is outside
+        # the selection reads a table this build never made (the same reason
+        # `dev` defaults to buildable).
+        indirect_selection = indirect_selection or "buildable"
     elif defer is None:
         defer = True
     if lake is not None and lake.env != env:
