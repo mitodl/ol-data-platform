@@ -31,8 +31,8 @@ Workflow::
     # Your own copy of the QA warehouse in ol_data_lake_qa
     ol-dbt starrocks run --target starrocks_dev_qa --vars '{schema_suffix: alice}' --select +my_model
 
-    # A PR build in the CI lake
-    ol-dbt starrocks run --env ci --target ci --vars '{schema_suffix: pr_123}' --select my_model+
+    # A PR build in the CI lake: no deferral, so select the parents too
+    ol-dbt starrocks run --env ci --target ci --vars '{schema_suffix: pr_123}' --select +my_model
 
 dbt ``profiles.yml`` must reference the env vars this command injects::
 

@@ -253,7 +253,7 @@ def load(
     port: Annotated[int, Parameter(help="StarRocks query port (--env dev only).")] = LOCAL_PORT,
     schema: Annotated[
         str | None,
-        Parameter(help="Raw schema to create the tables in. Default: the env's raw schema.", show_default=False),
+        Parameter(help=f"Raw schema to create the tables in (--env dev only). Default: {LOCAL_RAW_SCHEMA}."),
     ] = None,
     vault_oidc_role: Annotated[
         str, Parameter(help="Vault OIDC auth role for --env ci, as for ol-dbt starrocks.")
@@ -272,6 +272,11 @@ def load(
     `ol-dbt starrocks build --env dev`. With --env ci it fills CI's raw schema,
     which CI builds read in place of deferring to QA.
     """
+    # CI builds read raw from CI_RAW_SCHEMA only, and load drops every raw__*
+    # table in the schema it is given, so any other CI schema is the wrong one.
+    if env == "ci" and schema is not None:
+        err_console.print(f"[bold red]--schema cannot be used with --env ci: CI's raw schema is {CI_RAW_SCHEMA}.")
+        sys.exit(1)
     # Every row is made into parameters first, so a value that cannot be
     # written as JSON fails before a table is dropped.
     prepared = [

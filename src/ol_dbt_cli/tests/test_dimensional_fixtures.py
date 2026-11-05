@@ -293,3 +293,15 @@ def test_load_writes_each_env_s_raw_schema(
         f"DROP TABLE IF EXISTS {qualified} FORCE",
         f"CREATE TABLE {qualified} (`id` INT)",
     ]
+
+
+def test_load_refuses_another_schema_in_the_ci_lake(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Load drops every raw__* table in its schema, and CI builds read only CI's raw schema."""
+
+    def refuse(*_: Any) -> None:
+        pytest.fail("load connected before refusing --schema")
+
+    monkeypatch.setattr(fixtures_command, "connect_ci_lake", refuse)
+
+    with pytest.raises(SystemExit):
+        fixtures_command.load(env="ci", schema="ol_warehouse_ci_staging")
