@@ -244,6 +244,19 @@ rules:
   - "*catalog*"
   - "*blockedcountry*"
 
+  # Raw app tables no model reads yet whose business area is clear.
+- domain: engagement
+  match:
+  - "*openedx_notes__*"
+- domain: enrollments-progress
+  match:
+  - "*digitalcredentials_*"
+  - "*sheets_deferralrequest"
+- domain: commerce
+  match:
+  - "*voucher_voucher"
+  - "*sheets_refundrequest"
+
   # Lake tables the rules above leave unmatched and that belong in no domain.
   # They come last so that they only take names nothing above places.
   #
@@ -288,7 +301,9 @@ rules:
   - "*django_migrations"
   - "*django_session"
   - "*django_site"
-  - "*_cache"
+  - "*__durable_cache"
+  - "*__external_asset_cache"
+  - "*__imagekit_cache"
   - "*guardian_*"
   - "*oauth2_provider_*"
   - "*silk_*"
@@ -297,7 +312,9 @@ rules:
   - "*taggit_*"
   - "*wagtail*"
   - "*maxmind_*"
-  - "*sheets_*"
+  - "*sheets_filewatchrenewalattempt"
+  - "*sheets_googleapiauth"
+  - "*sheets_googlefilewatch"
   - "*mailgun__*domains"
   # App tables no model reads and no domain has claimed. Give one a domain
   # above when a model starts reading it.
@@ -305,11 +322,8 @@ rules:
   match:
   - "*affiliate_*"
   - "*compliance_exportsinquirylog"
-  - "*digitalcredentials_*"
-  - "*voucher_voucher"
   - "*testimonials_*"
   - "*widgets_*"
-  - "*openedx_notes__*"
   # Connection checks and test objects from Airbyte syncs.
 - domain:
   match:
