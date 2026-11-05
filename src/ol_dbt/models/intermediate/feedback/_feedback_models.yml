@@ -514,7 +514,9 @@ models:
     - unique
   - name: conversation_summary
     description: str, the LLM-generated summary. Null for a single-turn/short conversation
-      (skipped by design, §A.1) or if the table doesn't exist yet.
+      (skipped by design, §A.1), for one the model's content filter stopped before
+      it was ever summarized, or if the table doesn't exist yet. A summary whose conversation
+      later had a filtered turn is kept and misses that turn.
   - name: summary_model_version
     description: str, which model produced conversation_summary, in ol-llm's provider:model
       form. Null under the same conditions as conversation_summary.
