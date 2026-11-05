@@ -268,6 +268,8 @@ DATA_LAKE_ENV = resolve_for_environment(
 # iceberg_dbt_layer_maintenance. qa runs it on StarRocks ahead of the cutover
 # (ol-infrastructure ADR 0012), against the same Glue tables Trino still
 # builds there, so the StarRocks path is proven before production needs it.
+# The nightly schedule is production-only (lib/scheduled_automation.py), so in
+# qa the asset runs when materialized by hand.
 # Production flips at the cutover; DAGSTER_ICEBERG_MAINTENANCE_ENGINE
 # overrides the entry in one deployment without a release.
 #
