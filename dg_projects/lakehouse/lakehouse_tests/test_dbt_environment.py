@@ -255,12 +255,19 @@ def test_a_new_environment_does_not_automate_by_default(monkeypatch):
     assert "staging" not in dbt_environment.DBT_AUTOMATION_ENVIRONMENTS
 
 
-def test_production_maintains_iceberg_on_trino_until_the_cutover():
-    """Production builds the warehouse on Trino until the cutover (ADR 0012).
+def test_iceberg_maintenance_engine_per_environment():
+    """QA proves the StarRocks path ahead of the cutover (ADR 0012).
 
-    The maintenance engine flips with that cutover, not ahead of it.
+    Production flips with that cutover, not ahead of it. dev stays on Trino
+    because its local StarRocks has no catalog for the production schemas it
+    maintains.
     """
-    assert ICEBERG_MAINTENANCE_ENGINE_MAP["production"] == "trino"
+    assert ICEBERG_MAINTENANCE_ENGINE_MAP == {
+        "dev": "trino",
+        "ci": "trino",
+        "qa": "starrocks",
+        "production": "trino",
+    }
 
 
 @pytest.mark.parametrize("name", ["trino", "starrocks"])
