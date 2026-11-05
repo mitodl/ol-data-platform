@@ -9,4 +9,4 @@ inner join {{ ref('int__mitxpro__ecommerce_line') }} as lines
     on orders.order_id = lines.order_id
 where orders.order_total_price_paid != 0
 group by orders.order_id
-having count(*) > 1
+having count(distinct lines.line_id) > 1
