@@ -1,7 +1,10 @@
 certification_details: null
 certified_by: null
-css: ".search-select,\n.search-select .ant-select-selector {\n  min-width: 220px !important;\n\
-  }\n"
+css: |
+  .search-select,
+  .search-select .ant-select-selector {
+    min-width: 220px !important;
+  }
 dashboard_title: Learner Feedback Categories
 description: null
 metadata:
@@ -249,25 +252,14 @@ position:
     children: []
     id: MARKDOWN-feedbackintro
     meta:
-      code: 'Learner feedback from Zendesk support tickets, the Learn AI tutor, discussion
-        forums and in-course content feedback, grouped into categories by clustering
-        similar conversations.
+      code: |-
+        Learner feedback from Zendesk support tickets, the Learn AI tutor, discussion forums and in-course content feedback, grouped into categories by clustering similar conversations.
 
-
-        - **Feedback Categories** counts conversations in each category. The axis
-        uses a log scale.
-
-        - **Feedback Category Trend** shows the 10 largest categories by month. The
-        **Year** and **Month** filters set which months it shows. Pick more than one
-        to compare them. The current month is partial, so its count is lower.
-
+        - **Feedback Categories** counts conversations in each category. The axis uses a log scale.
+        - **Feedback Category Trend** shows the 10 largest categories by month. The **Year** and **Month** filters set which months it shows. Pick more than one to compare them. The current month is partial, so its count is lower.
         - Click a bar to filter **Feedback Cluster Conversations** to that category.
-
-        - Category labels, descriptions and summaries are AI-generated. The **Conversation**
-        column has the full text, with personal information removed.
-
-        - For Zendesk, **Conversation ID** is the ticket ID. Open the ticket at https://odl.zendesk.com/agent/tickets/
-        followed by the ID.'
+        - Category labels, descriptions and summaries are AI-generated. The **Conversation** column has the full text, with personal information removed.
+        - For Zendesk, **Conversation ID** is the ticket ID. Open the ticket at https://odl.zendesk.com/agent/tickets/ followed by the ID.
       height: 30
       width: 12
     parents:

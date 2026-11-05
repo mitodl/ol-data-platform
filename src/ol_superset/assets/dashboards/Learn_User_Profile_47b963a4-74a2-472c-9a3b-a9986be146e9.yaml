@@ -193,8 +193,10 @@ position:
     children: []
     id: MARKDOWN-82d59f9235
     meta:
-      code: "### Change Log\n\n        **2/2/26**: Standardized filter name: 'Full\
-        \ Name' → 'User Full Name'"
+      code: |-
+        ### Change Log
+
+                **2/2/26**: Standardized filter name: 'Full Name' → 'User Full Name'
       height: 50
       width: 8
     parents:

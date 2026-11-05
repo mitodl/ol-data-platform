@@ -473,13 +473,10 @@ position:
     children: []
     id: MARKDOWN-_cL9OAn4ltqfv_Lbg_wwO
     meta:
-      code: '### Change Log
+      code: |
+        ### Change Log
 
-
-        **2/2/26**: Standardized filter name: ''Enrolled "Current" Course Run'' →
-        ''Current Course Run''; Enabled search on User Email filter
-
-        '
+        **2/2/26**: Standardized filter name: 'Enrolled "Current" Course Run' → 'Current Course Run'; Enabled search on User Email filter
       height: 33
       width: 12
     parents:

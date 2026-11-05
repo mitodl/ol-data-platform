@@ -35,10 +35,9 @@ params:
     hasCustomLabel: true
     label: '%_of_Learners_That_Played_A_Video'
     optionName: metric_l5c334byisa_p7rmx2wh92
-    sqlExpression: 'CAST(COUNT(DISTINCT (CASE WHEN num_video_played> 0 THEN user_username
-      ELSE null END)) AS decimal(10,2))/
-
-      CAST(COUNT(DISTINCT user_username) as decimal(10,2))'
+    sqlExpression: |-
+      CAST(COUNT(DISTINCT (CASE WHEN num_video_played> 0 THEN user_username ELSE null END)) AS decimal(10,2))/
+      CAST(COUNT(DISTINCT user_username) as decimal(10,2))
   - aggregate: null
     column: null
     datasourceWarning: false
@@ -46,10 +45,9 @@ params:
     hasCustomLabel: true
     label: '%_of_Learners_That_Submitted_Problem'
     optionName: metric_ylcblnqaund_cnq3layng0u
-    sqlExpression: 'CAST(COUNT(DISTINCT (CASE WHEN num_problem_submitted> 0 THEN user_username
-      ELSE null END)) AS decimal(10,2))/
-
-      CAST(COUNT(DISTINCT user_username) as decimal(10,2))'
+    sqlExpression: |-
+      CAST(COUNT(DISTINCT (CASE WHEN num_problem_submitted> 0 THEN user_username ELSE null END)) AS decimal(10,2))/
+      CAST(COUNT(DISTINCT user_username) as decimal(10,2))
   - aggregate: null
     column: null
     datasourceWarning: false
@@ -57,10 +55,9 @@ params:
     hasCustomLabel: true
     label: '%_of_Learners_Participated_In_Discussion'
     optionName: metric_bv6eq24ga6m_3ew9eu11jld
-    sqlExpression: 'CAST(COUNT(DISTINCT (CASE WHEN num_discussion_participated> 0
-      THEN user_username ELSE null END)) AS decimal(10,2))/
-
-      CAST(COUNT(DISTINCT user_username) as decimal(10,2))'
+    sqlExpression: |-
+      CAST(COUNT(DISTINCT (CASE WHEN num_discussion_participated> 0 THEN user_username ELSE null END)) AS decimal(10,2))/
+      CAST(COUNT(DISTINCT user_username) as decimal(10,2))
   order_by_cols: []
   order_desc: true
   percent_metrics: []
