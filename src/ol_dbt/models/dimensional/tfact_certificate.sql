@@ -382,9 +382,9 @@ with mitxonline_certificates as (
 , final as (
     select
         {{ dbt_utils.generate_surrogate_key([
-            'cast(certificate_id as varchar)',
-            'platform',
-            'certificate_scope'
+            'cast(cwf.certificate_id as varchar)',
+            'cwf.platform',
+            'cwf.certificate_scope'
         ]) }} as certificate_key
         , cwf.certificate_id
         , cwf.certificate_issued_date_key

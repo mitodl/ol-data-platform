@@ -130,8 +130,8 @@ with mitxonline_payments as (
 , final as (
     select
         {{ dbt_utils.generate_surrogate_key([
-            'cast(payment_id as varchar)',
-            'platform'
+            'cast(pwf.payment_id as varchar)',
+            'pwf.platform'
         ]) }} as payment_key
         , pwf.payment_id
         , pwf.order_id
