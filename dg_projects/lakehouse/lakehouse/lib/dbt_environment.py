@@ -265,11 +265,11 @@ DATA_LAKE_ENV = resolve_for_environment(
 )
 
 # Which engine compacts and analyzes the dbt-built Iceberg tables in
-# iceberg_dbt_layer_maintenance. It follows whichever engine builds the
-# warehouse, and qa and production still build on Trino. The StarRocks
-# cutover (ol-infrastructure ADR 0012) flips these entries to "starrocks";
-# until then DAGSTER_ICEBERG_MAINTENANCE_ENGINE=starrocks runs it on StarRocks
-# in one deployment without a release.
+# iceberg_dbt_layer_maintenance. qa runs it on StarRocks ahead of the cutover
+# (ol-infrastructure ADR 0012), against the same Glue tables Trino still
+# builds there, so the StarRocks path is proven before production needs it.
+# Production flips at the cutover; DAGSTER_ICEBERG_MAINTENANCE_ENGINE
+# overrides the entry in one deployment without a release.
 #
 # "starrocks" in dev reaches the local cluster, whose only lake catalog is
 # ol_data_lake_local, while WAREHOUSE_ENV keeps dev on production schemas. The
@@ -279,7 +279,7 @@ IcebergMaintenanceEngineName = Literal["trino", "starrocks"]
 ICEBERG_MAINTENANCE_ENGINE_MAP: Mapping[str, IcebergMaintenanceEngineName] = {
     "dev": "trino",
     "ci": "trino",
-    "qa": "trino",
+    "qa": "starrocks",
     "production": "trino",
 }
 
