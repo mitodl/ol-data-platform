@@ -147,8 +147,9 @@ sources:
     description: One row per conversation (upsert key feedback_conversation_pk), materialized
       by the feedback_summaries Dagster asset. Null conversation_summary/summary_model_version
       for a single-turn/short conversation, which the asset's skip rule never summarizes
-      (§A.1). No column tests here -- see feedback_cluster_run; not_null/unique coverage
-      lives on int__feedback__summary instead.
+      (§A.1), and for one the model's content filter stopped. No column tests here
+      -- see feedback_cluster_run; not_null/unique coverage lives on int__feedback__summary
+      instead.
     columns:
     - name: feedback_conversation_pk
       description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
@@ -165,7 +166,9 @@ sources:
     - name: idempotency_key
       description: str, ol-llm's batch key over the conversation text, prompt template,
         and model. The asset re-summarizes a conversation when its current key differs.
-        Null for a row with no summary.
+        Set with no summary for a conversation the content filter stopped, so it is
+        not submitted again until its text, the prompt, or the model changes. Null
+        for any other row with no summary.
   - name: feedback_embeddings
     config:
       meta:

@@ -14,6 +14,7 @@ from ol_llm import (
     BatchKeys,
     BatchReport,
     Chunk,
+    LLMContentFiltered,
     LLMResult,
     ManagedPrompt,
     TextTemplate,
@@ -338,6 +339,32 @@ class Summarizer:
             )
         return pl.DataFrame(records, schema=SUMMARIZE_CHECKPOINT_SCHEMA)
 
+    def filtered_frame(self, rows: Sequence[dict[str, Any]]) -> pl.DataFrame:
+        """Return the feedback_summaries rows for content-filtered conversations.
+
+        ol-llm treats a content filter as coming from the input under this prompt
+        and model, not to be retried under the same key (RowFailure.retry_next_run),
+        so each row keeps its idempotency key and filter_unsummarized drops it
+        until the text, the prompt, or the model changes. Without the key, a
+        single filtered conversation is submitted, and fails the run, every time
+        the asset runs. Every other provenance column stays null, as for a
+        skipped row, so the conversation is embedded from its concatenated turns.
+
+        :param rows: conversations whose call raised LLMContentFiltered.
+        :rtype: pl.DataFrame
+        """
+        return pl.DataFrame(
+            [
+                {
+                    **_identity(row),
+                    "idempotency_key": self.keys.key(row["conversation_text"]),
+                    "embedding_input": "concatenated_turns",
+                }
+                for row in rows
+            ],
+            schema=SUMMARIZE_CHECKPOINT_SCHEMA,
+        )
+
 
 def skipped_frame(rows: Sequence[dict[str, Any]]) -> pl.DataFrame:
     """Return the feedback_summaries rows for conversations with no text.
@@ -374,11 +401,13 @@ def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning 
 ) -> tuple[pl.DataFrame, BatchReport[dict[str, Any]]]:
     """Summarize unsummarized_df in chunks, upserting each as it completes.
 
-    Conversations without text are upserted first as skipped rows. A failed
-    conversation is left out of the table, so the next run submits it again.
-    process_batch stops the run when its circuit breaker opens (an outage, a
-    rate limit that outlasts the retries, or a rejected credential); everything
-    upserted before that stays.
+    Conversations without text are upserted first as skipped rows. A
+    conversation the content filter stopped is upserted with its key and no
+    summary (see Summarizer.filtered_frame). Any other failed conversation is
+    left out of the table, so the next run submits it again. process_batch
+    stops the run when its circuit breaker opens (an outage, a rate limit that
+    outlasts the retries, or a rejected credential); everything upserted before
+    that stays.
 
     :param unsummarized_df: the rows filter_unsummarized kept.
     :param summarizer: the run's summarizer.
@@ -407,7 +436,19 @@ def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning 
     checkpoint(skipped_frame([row for row in rows if not needs_summary(row)]))
 
     def persist(chunk: Chunk[dict[str, Any], LLMResult[str]]) -> None:
-        checkpoint(summarizer.summarized_frame(chunk.succeeded))
+        filtered = [
+            failure.row
+            for failure in chunk.failed
+            if isinstance(failure.error, LLMContentFiltered)
+        ]
+        checkpoint(
+            pl.concat(
+                [
+                    summarizer.summarized_frame(chunk.succeeded),
+                    summarizer.filtered_frame(filtered),
+                ]
+            )
+        )
 
     report = process_batch(
         [row for row in rows if needs_summary(row)],
