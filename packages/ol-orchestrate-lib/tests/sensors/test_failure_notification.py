@@ -837,6 +837,33 @@ def test_the_slack_message_says_the_run_ran_out_of_resumes() -> None:
     assert "SIGTERM" not in text
 
 
+def test_the_ran_out_of_resumes_section_fits_slacks_text_limit() -> None:
+    """A fan-out run can interrupt hundreds of steps; Slack rejects a section
+    over 3,000 characters, which would fail the sensor tick.
+    """
+    context = _context(
+        [
+            _step_failure(
+                f"fan_out_step_{n:04d}",
+                "SIGTERM",
+                cls_name="DagsterExecutionInterruptedError",
+            )
+            for n in range(400)
+        ]
+    )
+
+    blocks = error_message(
+        context, context.get_step_failure_events(), resume_attempts=MAX_RESUMES
+    )
+
+    assert all(
+        len(block["text"]["text"]) <= MAX_SLACK_TEXT_LENGTH
+        for block in blocks
+        if isinstance(block.get("text"), dict)
+    )
+    assert "Ran out of resumes" in _block_text(blocks)
+
+
 def test_the_slack_message_is_unchanged_without_resumes() -> None:
     context = _context([_step_failure("some_model", "boom", cls_name="ValueError")])
 

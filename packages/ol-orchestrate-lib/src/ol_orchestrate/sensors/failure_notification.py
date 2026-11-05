@@ -522,7 +522,9 @@ def error_message(
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": (
+                    # A fan-out run can interrupt hundreds of steps, and Slack
+                    # rejects a section over its text limit.
+                    "text": truncate_text(
                         f"*Ran out of resumes* -- run monitoring resumed this run "
                         f"{resume_attempts} time(s) after its worker was terminated "
                         "(node drain, eviction or deploy), then stopped. No step "
