@@ -119,6 +119,29 @@ def build_database_uuid_map(assets_dir: Path) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
+class _BlockStringDumper(yaml.SafeDumper):
+    pass
+
+
+def _represent_str(dumper: yaml.SafeDumper, value: str) -> yaml.ScalarNode:
+    # PyYAML falls back to a quoted style when a string cannot be a literal block
+    style = "|" if "\n" in value else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", value, style=style)
+
+
+_BlockStringDumper.add_representer(str, _represent_str)
+
+
+def _dump_yaml(data: dict[str, object]) -> str:
+    return yaml.dump(
+        data,
+        Dumper=_BlockStringDumper,
+        allow_unicode=True,
+        default_flow_style=False,
+        sort_keys=True,
+    )
+
+
 def _sorted_dict(d: dict[str, object]) -> dict[str, object]:
     """Recursively sort all dict keys alphabetically."""
 
@@ -221,12 +244,7 @@ def normalize_chart(
     # 4. Sort all dict keys alphabetically for deterministic output
     data = _sorted_dict(data)
 
-    new_text = yaml.dump(
-        data,
-        allow_unicode=True,
-        default_flow_style=False,
-        sort_keys=True,
-    )
+    new_text = _dump_yaml(data)
 
     # 5. Annotate dataset_uuid with the human-readable dataset name
     dataset_uuid = data.get("dataset_uuid")
@@ -265,12 +283,7 @@ def normalize_dataset(
     # Sort all dict keys alphabetically
     data = _sorted_dict(data)
 
-    new_text = yaml.dump(
-        data,
-        allow_unicode=True,
-        default_flow_style=False,
-        sort_keys=True,
-    )
+    new_text = _dump_yaml(data)
 
     changed = new_text.strip() != original_text.strip()
 
@@ -309,12 +322,7 @@ def normalize_dashboard(
 
     data = _sorted_dict(data)
 
-    new_text = yaml.dump(
-        data,
-        allow_unicode=True,
-        default_flow_style=False,
-        sort_keys=True,
-    )
+    new_text = _dump_yaml(data)
 
     changed = new_text.strip() != original_text.strip()
 
