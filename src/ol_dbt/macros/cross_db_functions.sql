@@ -293,7 +293,8 @@
     rounded half away from zero, no grouping separators (Trino's format('%.2f', x)).
     StarRocks has no format() for numbers, and DuckDB's printf rounds some half-way
     values down (0.015 to 0.01). Casting to decimal(38, 2) rounds as Trino does on
-    both, for decimal and double input.
+    StarRocks for decimal and double input, and on DuckDB for decimal input. DuckDB
+    rounds a double by its binary value (0.145 to 0.14, where Trino gives 0.15).
 #}
 {% macro format_fixed_decimal(number_expr) -%}
     {{ adapter.dispatch('format_fixed_decimal', 'open_learning')(number_expr) }}
