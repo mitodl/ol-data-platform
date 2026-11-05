@@ -6,6 +6,13 @@ with ticket_comment as (  -- noqa: PRS
     select * from {{ ref('stg__zendesk__user') }}
 )
 
+-- Zendesk marks a delete only on the ticket, and a deleted ticket's comments stay in
+-- staging unchanged, so they are dropped through the ticket's status.
+, deleted_ticket as (
+    select ticket_id from {{ ref('stg__zendesk__ticket') }}
+    where ticket_status = 'deleted'
+)
+
 select
     ticket_comment.comment_id
     , ticket_comment.ticket_id
@@ -30,3 +37,5 @@ select
     , ticket_comment.comment_created_at
 from ticket_comment
 left join users on ticket_comment.comment_author_user_id = users.user_id
+left join deleted_ticket on ticket_comment.ticket_id = deleted_ticket.ticket_id
+where deleted_ticket.ticket_id is null
