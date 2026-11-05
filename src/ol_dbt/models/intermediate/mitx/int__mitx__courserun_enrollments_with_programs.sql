@@ -20,6 +20,7 @@ with edx_enrollments as (
 , edx_query as (
     select
         edx_enrollments.platform
+        , edx_enrollments.courserunenrollment_id
         , edx_enrollments.courserunenrollment_is_active
         , edx_enrollments.courserunenrollment_created_on
         , edx_enrollments.courserunenrollment_enrollment_mode
@@ -47,6 +48,7 @@ with edx_enrollments as (
 , mitxonline_query as (
     select
         mitxonline_enrollments_with_program.courserunenrollment_platform as platform
+        , mitxonline_enrollments_with_program.courserunenrollment_id
         , mitxonline_enrollments_with_program.courserunenrollment_is_active
         , mitxonline_enrollments_with_program.courserunenrollment_created_on
         , mitxonline_enrollments_with_program.courserunenrollment_enrollment_mode

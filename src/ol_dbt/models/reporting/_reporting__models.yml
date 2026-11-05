@@ -41,13 +41,13 @@ models:
     tests:
     - not_null
   - name: verified_enrollments
-    description: int, count of verified (paid) enrollments in the program's courses,
-      aggregated by user_email and courserun_readable_id
+    description: int, count of enrollments in the program's courses that tfact_enrollment.is_verified
+      marks verified, aggregated by user_email and courserun_readable_id
     tests:
     - not_null
   - name: unique_verified_users
-    description: int, count of unique verified users enrolled in the program's courses,
-      aggregated by user_email
+    description: int, count of unique users with an enrollment in the program's courses
+      that tfact_enrollment.is_verified marks verified, aggregated by user_email
     tests:
     - not_null
   - name: course_certificates
@@ -765,8 +765,8 @@ models:
       on that particular activity date for a user and courserun
   - name: verified_count
     data_type: bigint
-    description: int, count of enrollments that have a enrollment mode status of verified
-      on that particular activity date for a user and courserun
+    description: int, count of active enrollments that tfact_enrollment.is_verified
+      marks verified on that particular activity date for a user and courserun
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -1209,16 +1209,16 @@ models:
     description: string, country of the user. Coalesced from edX.org and hashed ID
       user matches.
   - name: verified_courses_taken_in_program
-    description: int, count of distinct verified courses the user has taken within
-      the program
+    description: int, count of distinct courses the user has taken within the program
+      on an enrollment tfact_enrollment.is_verified marks verified
   - name: course_certificate_sum
     description: int, count of distinct courses for which the user has earned a certificate
       within the program
   - name: courses_taken_in_program
     description: int, compatibility alias for verified_courses_taken_in_program
   - name: verified_courses_passed_in_program
-    description: int, count of distinct verified courses the user has passed within
-      the program
+    description: int, count of distinct courses the user has passed within the program
+      on an enrollment tfact_enrollment.is_verified marks verified
   - name: all_courses_passed_in_program
     description: int, count of distinct courses the user has passed within the program
   - name: user_street_address
@@ -1904,3 +1904,41 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["source", "conversation_id"]
+
+unit_tests:
+- name: test_program_summary_report_counts_verified_from_the_fact
+  description: >
+    verified_enrollments and unique_verified_users read tfact_enrollment.is_verified,
+    not the mode, across the mart's display platform names.
+  model: program_summary_report
+  given:
+  - input: ref('marts__combined_course_enrollment_detail')
+    rows:
+    - {platform: "MITx Online", courserunenrollment_id: 6001, user_id: "1", user_email: "a@example.com",
+      course_readable_id: "course-v1:MITxT+1", courserun_readable_id: "course-v1:MITxT+1+1T2024",
+      courserunenrollment_enrollment_mode: "verified"}
+    - {platform: "MITx Online", courserunenrollment_id: 6002, user_id: "2", user_email: "b@example.com",
+      course_readable_id: "course-v1:MITxT+1", courserun_readable_id: "course-v1:MITxT+1+1T2024",
+      courserunenrollment_enrollment_mode: "verified"}
+    - {platform: "edX.org", courserunenrollment_id: null, user_id: "777", user_email: "c@example.com",
+      course_readable_id: "course-v1:MITxT+1", courserun_readable_id: "MITx/6.00x/2T2019",
+      courserunenrollment_enrollment_mode: "verified"}
+  - input: ref('marts__combined_coursesinprogram')
+    rows:
+    - {program_name: "Statistics", course_readable_id: "course-v1:MITxT+1"}
+  - input: ref('marts__combined_program_enrollment_detail')
+    rows:
+    - {program_name: "Statistics", program_type: "MicroMasters", user_email: "a@example.com",
+      user_has_completed_program: false}
+  - input: ref('tfact_enrollment')
+    rows:
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_id: "6001", is_verified: true}
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_id: "6002", is_verified: false}
+    - enrollment_id: "d2c262edd935f1303dc150a525096fe5"  # pragma: allowlist secret
+      platform: "edxorg"
+      enrollment_type: "course"
+      is_verified: true
+  expect:
+    rows:
+    - {program_name: "Statistics", total_enrollments: 3, verified_enrollments: 2,
+      unique_verified_users: 2}

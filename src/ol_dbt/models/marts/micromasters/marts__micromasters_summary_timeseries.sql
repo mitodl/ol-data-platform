@@ -1,6 +1,14 @@
-with enrollments as (
+with micromasters_enrollments as (
     select *
     from {{ ref('int__micromasters__course_enrollments') }}
+)
+
+, enrollments as (
+    select
+        micromasters_enrollments.*
+        , verified_course_enrollments.is_verified
+    from micromasters_enrollments
+    {{ join_verified_course_enrollments('micromasters_enrollments') }}
 )
 
 , course_certificates as (
@@ -28,10 +36,10 @@ with enrollments as (
         , count(*) as total_enrollments
         , count(distinct enrollments.user_email) as unique_users
         , count(distinct enrollments.user_address_country) as unique_countries
-        , count_if(enrollments.courserunenrollment_enrollment_mode = 'verified') as verified_enrollments
+        , count_if(enrollments.is_verified) as verified_enrollments
         , count(
             distinct case
-                when enrollments.courserunenrollment_enrollment_mode = 'verified' then enrollments.user_email
+                when enrollments.is_verified then enrollments.user_email
             end
         )
             as unique_verified_users
@@ -58,7 +66,7 @@ with enrollments as (
         -- on the same key as total_enrollments.
         , count(
             distinct case
-                when enrollments.courserunenrollment_enrollment_mode = 'verified'
+                when enrollments.is_verified
                     then concat_ws(
                         ',', cast(enrollments.user_id as varchar), enrollments.platform, enrollments.courserun_readable_id
                     )
@@ -67,7 +75,7 @@ with enrollments as (
             as verified_enrollments
         , count(
             distinct case
-                when enrollments.courserunenrollment_enrollment_mode = 'verified' then enrollments.user_email
+                when enrollments.is_verified then enrollments.user_email
             end
         )
             as unique_verified_users
