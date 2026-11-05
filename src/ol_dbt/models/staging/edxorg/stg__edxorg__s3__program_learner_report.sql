@@ -29,7 +29,15 @@ with source as (
         cast(user_id as integer) as user_id
         , program_uuid
         , course_run_key as courserun_readable_id
-        , min(program_certificate_awarded_at) as earliest_program_cert_award_on
+        -- The six reports dated 2024-12-10 through 2024-12-16 each fill the award date
+        -- on about 460k rows, most for learners who have not completed the program and
+        -- some later than the report itself, so their award dates are ignored.
+        , min(
+            case
+                when report_date not between '2024-12-10' and '2024-12-16'
+                    then program_certificate_awarded_at
+            end
+        ) as earliest_program_cert_award_on
         , max(completed_program) as ever_completed_program
     from source
     group by 1, 2, 3
