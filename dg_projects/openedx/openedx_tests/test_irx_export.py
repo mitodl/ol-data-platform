@@ -4,6 +4,7 @@ import csv
 import hashlib
 import io
 import json
+import os
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -17,14 +18,18 @@ from openedx.assets import irx_export
 from openedx.assets.irx_export import (
     IRX_EXPORT_FILES,
     MANIFEST_NAME,
+    CourseExport,
     SourceTableReplacedError,
     _DigestingWriter,
     build_irx_export_asset,
+    copy_course_exports,
+    latest_course_exports,
     legacy_csv_columns,
     read_data_files,
     write_legacy_csv,
     write_parquet,
 )
+from openedx.assets.openedx import course_xml
 from pyiceberg.catalog.sql import SqlCatalog
 from pyiceberg.expressions import AlwaysTrue
 from pyiceberg.table import Table
@@ -205,18 +210,137 @@ def _irx_frame(table: _Table) -> pl.DataFrame:
     return pl.DataFrame([row, {**row, "course_id": "course-v1:not+listed+run"}])
 
 
+def _course_export(root: UPath, course_id: str, content: bytes, modified: int) -> UPath:
+    sha256 = hashlib.sha256(content).hexdigest()
+    path = root / course_id / f"{sha256}.xml.tar.gz"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    os.utime(path.path, (modified, modified))
+    return path
+
+
+def test_latest_course_exports_points_at_each_listed_runs_newest_export(
+    tmp_path,
+) -> None:
+    root = UPath(tmp_path)
+    _course_export(root, COURSE_ID, b"old", 1_000)
+    newest = _course_export(root, COURSE_ID, b"newest", 3_000)
+    _course_export(root, COURSE_ID, b"middle", 2_000)
+    _course_export(root, "course-v1:not+listed+run", b"unlisted", 1_000)
+    # Not an export: the course_xml asset only ever writes .xml.tar.gz.
+    (root / COURSE_ID / "notes.txt").write_bytes(b"x")
+    missing = "course-v1:MITx+never+exported"
+
+    # The course API can list a run twice; legacy exported it once.
+    exports, absent = latest_course_exports(root, [COURSE_ID, missing, COURSE_ID])
+
+    assert absent == [missing]
+    assert exports == [
+        CourseExport(
+            course_id=COURSE_ID,
+            source=newest.path,
+            size_bytes=len(b"newest"),
+            sha256=hashlib.sha256(b"newest").hexdigest(),
+            exported_at=datetime.fromtimestamp(3_000, tz=UTC),
+        )
+    ]
+
+
+def test_copy_course_exports_copies_only_versions_not_yet_delivered(
+    tmp_path,
+) -> None:
+    landing, destination = UPath(tmp_path) / "landing", UPath(tmp_path) / "courses"
+    first = _course_export(landing, COURSE_ID, b"v1", 1_000)
+    # S3 has no directories to create; a local path does.
+    (destination / COURSE_ID).mkdir(parents=True)
+
+    exports, _ = latest_course_exports(landing, [COURSE_ID])
+    delivery = copy_course_exports(exports, destination)
+    copy = destination / COURSE_ID / first.name
+    assert delivery.copied == 1
+    assert delivery.failed == []
+    assert copy.read_bytes() == b"v1"
+    assert delivery.delivered == [
+        {
+            "course_id": COURSE_ID,
+            "path": copy.fs.unstrip_protocol(copy.path),
+            "size_bytes": len(b"v1"),
+            "sha256": hashlib.sha256(b"v1").hexdigest(),
+            "exported_at": datetime.fromtimestamp(1_000, tz=UTC).isoformat(),
+        }
+    ]
+
+    # The next night, with nothing re-exported, copies nothing.
+    again = copy_course_exports(exports, destination)
+    assert (again.delivered, again.copied) == (delivery.delivered, 0)
+
+    # A new version is copied beside the old one, which stays where it was.
+    second = _course_export(landing, COURSE_ID, b"v2", 2_000)
+    exports, _ = latest_course_exports(landing, [COURSE_ID])
+    delivery = copy_course_exports(exports, destination)
+    assert delivery.copied == 1
+    assert [entry["sha256"] for entry in delivery.delivered] == [
+        hashlib.sha256(b"v2").hexdigest()
+    ]
+    assert sorted(path.name for path in (destination / COURSE_ID).iterdir()) == (
+        sorted([first.name, second.name])
+    )
+
+
+def test_a_failed_copy_is_named_and_the_others_still_delivered(tmp_path) -> None:
+    landing, destination = UPath(tmp_path) / "landing", UPath(tmp_path) / "courses"
+    broken = "course-v1:MITx+broken+run"
+    _course_export(landing, COURSE_ID, b"ok", 1_000)
+    gone = _course_export(landing, broken, b"gone", 1_000)
+    for course_id in (COURSE_ID, broken):
+        (destination / course_id).mkdir(parents=True)
+    exports, _ = latest_course_exports(landing, [broken, COURSE_ID])
+    # Listed, then unreadable by the time it's copied.
+    gone.unlink()
+
+    delivery = copy_course_exports(exports, destination)
+
+    assert delivery.copied == 1
+    assert [entry["course_id"] for entry in delivery.delivered] == [COURSE_ID]
+    assert [entry["course_id"] for entry in delivery.failed] == [broken]
+    assert delivery.failed == [{"course_id": broken, "error": "FileNotFoundError"}]
+
+
+def test_the_drop_fails_when_every_course_copy_fails(
+    drop_root, landing_root, monkeypatch
+) -> None:
+    _course_export(
+        landing_root.joinpath("mitx", *course_xml.key.path), COURSE_ID, b"x", 1_000
+    )
+    monkeypatch.setattr(irx_export, "_copy_error", lambda *_: "PermissionError")
+
+    assert not _run_export(monkeypatch).success
+    assert not (drop_root / MANIFEST_NAME).exists()
+
+
 @pytest.fixture
-def drop_root(tmp_path, monkeypatch) -> UPath:
-    # Both roots, so a DAGSTER_ENVIRONMENT exported in the shell can't send the
-    # test's files to a real bucket.
+def landing_root(tmp_path) -> UPath:
+    return UPath(tmp_path) / "landing"
+
+
+@pytest.fixture
+def drop_root(tmp_path, landing_root, monkeypatch) -> UPath:
+    # Every root, so a DAGSTER_ENVIRONMENT exported in the shell can't send the
+    # test's files to, or its listing at, a real bucket.
     monkeypatch.setattr(irx_export, "IRX_EXPORT_ROOTS", {})
     monkeypatch.setattr(irx_export, "IRX_EXPORT_SANDBOX_ROOT", str(tmp_path))
+    monkeypatch.setattr(
+        irx_export,
+        "course_xml_root",
+        lambda deployment: landing_root.joinpath(deployment, *course_xml.key.path),
+    )
     monkeypatch.setattr(
         irx_export, "load_dbt_model_table", lambda _db, name: _Table(name)
     )
     drop = UPath(tmp_path) / "mitx" / DROP_DATE.replace("-", "")
     # S3 has no directories to create; a local path does.
     drop.mkdir(parents=True)
+    (UPath(tmp_path) / "courses" / "mitx" / COURSE_ID).mkdir(parents=True)
     return drop
 
 
@@ -281,6 +405,39 @@ def test_manifest_lists_every_delivered_file(drop_root, monkeypatch) -> None:
     assert row_counts["course_ids.csv"] == 1
     # Forum isn't cut to the course list, so both fixture rows are delivered.
     assert row_counts["forum_contents.parquet"] == len(FORUM_ROWS)
+
+
+def test_manifest_points_at_course_copies_outside_the_nightly_drop(
+    tmp_path, drop_root, landing_root, monkeypatch
+) -> None:
+    export = _course_export(
+        landing_root.joinpath("mitx", *course_xml.key.path),
+        COURSE_ID,
+        b"tarball",
+        1_000,
+    )
+
+    assert _run_export(monkeypatch).success
+
+    copy = UPath(tmp_path) / "courses" / "mitx" / COURSE_ID / export.name
+    assert copy.read_bytes() == b"tarball"
+    manifest = json.loads((drop_root / MANIFEST_NAME).read_bytes())
+    assert [entry["path"] for entry in manifest["course_exports"]] == [
+        copy.fs.unstrip_protocol(copy.path)
+    ]
+    assert manifest["course_exports_missing"] == []
+    assert manifest["course_exports_failed"] == []
+    assert not (drop_root / "courses").exists()
+
+
+def test_a_listed_run_with_no_course_export_is_named_not_fatal(
+    drop_root, monkeypatch
+) -> None:
+    assert _run_export(monkeypatch).success
+
+    manifest = json.loads((drop_root / MANIFEST_NAME).read_bytes())
+    assert manifest["course_exports"] == []
+    assert manifest["course_exports_missing"] == [COURSE_ID]
 
 
 def test_failed_rerun_takes_the_old_manifest_down(drop_root, monkeypatch) -> None:
