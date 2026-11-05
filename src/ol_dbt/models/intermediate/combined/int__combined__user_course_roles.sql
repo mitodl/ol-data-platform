@@ -138,7 +138,7 @@ with mitxonline_courseroles as (
         from combined_courseroles
         inner join user_course_role_seed_file
             on combined_courseroles.hashed_user_email = user_course_role_seed_file.hashed_user_email
-    )
+    ) as subquery
     where row_num = 1
 )
 

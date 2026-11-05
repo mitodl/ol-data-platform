@@ -620,7 +620,7 @@ with mitxonline_problem_events as (
                 order by event_timestamp
             ) as rn
         from combined
-    )
+    ) as subquery
     where rn = 1 or event_type != 'problem_check'
 )
 

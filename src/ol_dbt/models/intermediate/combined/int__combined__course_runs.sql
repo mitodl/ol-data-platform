@@ -43,7 +43,7 @@ with mitx_courses as (
                 order by courserun_start_on desc, courserun_end_on desc, enrollment_created_on desc
             ) as row_num
         from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
-    )
+    ) as subquery
     where row_num = 1
 )
 
@@ -60,7 +60,7 @@ with mitx_courses as (
                 order by courserun_start_on desc, courserun_end_on desc, user_gdpr_consent_date desc
             ) as row_num
         from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
-    )
+    ) as subquery
     where row_num = 1
 )
 

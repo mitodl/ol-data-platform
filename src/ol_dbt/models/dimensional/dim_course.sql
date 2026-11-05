@@ -70,7 +70,7 @@ with mitxonline_courses as (
                 order by courserun_start_date desc nulls last
             ) as _row_num
         from {{ ref('int__edxorg__mitx_courseruns') }}
-    )
+    ) as subquery
     where _row_num = 1
 )
 
