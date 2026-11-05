@@ -441,7 +441,8 @@ models:
     description: int, the position of the macro in the agent's macro list
   - name: macro_actions
     description: array, JSON strings each with a field and a value. They set ticket
-      fields or add a comment when an agent applies the macro.
+      fields or add a reply when an agent applies the macro. The reply is the comment_value_html
+      action, or comment_value in older macros.
   - name: macro_restriction_type
     description: str, who can use the macro. Group or User. Null means all agents.
     tests:
@@ -451,15 +452,6 @@ models:
   - name: macro_restriction_group_ids
     description: str, JSON array of the ids of the groups that can use the macro.
       Null for macros restricted to one user.
-  - name: macro_comment_html
-    description: str, the HTML reply the macro adds to the ticket. It can have Zendesk
-      placeholders, for example the requester's first name.
-  - name: macro_comment_text
-    description: str, the plain text reply the macro adds to the ticket. Older macros
-      use this instead of macro_comment_html.
-  - name: macro_comment_is_public
-    description: bool, if the reply is a public reply. False means an internal note.
-      Null means the macro keeps the agent's current setting.
   - name: macro_created_at
     description: timestamp, the time the macro was created
     tests:
