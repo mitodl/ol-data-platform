@@ -216,6 +216,22 @@ position:
     - TAB-4v3GFdnYKe_sFoeSmMadM
     - ROW-hxzGJDX0qpJEA9F6yFEe8
     type: CHART
+  CHART-feedbacktrend:
+    children: []
+    id: CHART-feedbacktrend
+    meta:
+      chartId: 900001
+      height: 60
+      sliceName: Feedback Category Trend
+      uuid: 20aa9312-a6d3-40c9-8efb-07852fcc1cca
+      width: 12
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-955ay3MgnusOgklz_0ZtT
+    - TAB-feedbacktrend
+    - ROW-feedbacktrend
+    type: CHART
   DASHBOARD_VERSION_KEY: v2
   GRID_ID:
     children:
@@ -240,6 +256,10 @@ position:
 
         - **Feedback Categories** counts conversations in each category. The axis
         uses a log scale.
+
+        - **Feedback Category Trend** shows the 10 largest categories by month. The
+        **Year** and **Month** filters set which months it shows. Pick more than one
+        to compare them. The current month is partial, so its count is lower.
 
         - Click a bar to filter **Feedback Cluster Conversations** to that category.
 
@@ -273,6 +293,18 @@ position:
     - GRID_ID
     - TABS-955ay3MgnusOgklz_0ZtT
     - TAB-feedbackabout
+    type: ROW
+  ROW-feedbacktrend:
+    children:
+    - CHART-feedbacktrend
+    id: ROW-feedbacktrend
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-955ay3MgnusOgklz_0ZtT
+    - TAB-feedbacktrend
     type: ROW
   ROW-hxzGJDX0qpJEA9F6yFEe8:
     children:
@@ -325,9 +357,23 @@ position:
     - GRID_ID
     - TABS-955ay3MgnusOgklz_0ZtT
     type: TAB
+  TAB-feedbacktrend:
+    children:
+    - ROW-feedbacktrend
+    id: TAB-feedbacktrend
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Trends
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-955ay3MgnusOgklz_0ZtT
+    type: TAB
   TABS-955ay3MgnusOgklz_0ZtT:
     children:
     - TAB-4v3GFdnYKe_sFoeSmMadM
+    - TAB-feedbacktrend
     - TAB-feedbackabout
     id: TABS-955ay3MgnusOgklz_0ZtT
     meta: {}
