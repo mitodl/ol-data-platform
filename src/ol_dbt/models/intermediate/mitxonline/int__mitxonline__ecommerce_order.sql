@@ -7,7 +7,11 @@ with lines as (
 )
 
 , versions as (
-    select *
+    select
+        *
+        , cast(
+            {{ json_query_string('version_object_serialized_data', "'$[0].fields.price'") }} as decimal(38, 2)
+        ) as product_version_price
     from {{ ref('stg__mitxonline__app__postgres__reversion_version') }}
     where
         contenttype_id in (
@@ -76,6 +80,15 @@ select
     , lines.line_id
     , lines.product_version_id
     , intermediate_products_view.product_price
+    -- A migrated MicroMasters order points at a $1,000 product version created at the
+    -- October 2022 migration, not a price it was sold at, and MicroMasters records no list
+    -- price. So the order carries what its MicroMasters copy carried: the price paid, and
+    -- no amount off.
+    , case
+        when orders.order_reference_number like 'MM-%' then lines.line_discounted_unit_price
+        else versions.product_version_price
+    end as line_price
+    , lines.line_discounted_unit_price
     , intermediate_products_view.product_type
     , intermediate_products_view.product_id
     , intermediate_products_view.courserun_id
@@ -98,20 +111,9 @@ select
         when orders.order_state in ('fulfilled', 'refunded')
             then discountredemptions.discountredemption_timestamp
     end as discountredemption_timestamp
-    -- A fixed-price discount's amount is the price the learner pays, not an amount off,
-    -- and MITx Online charges the lower of it and the product price.
-    -- paid-amount-off stores 0 and is resolved at checkout, so it has no amount here.
-    -- Multiply before dividing: Trino keeps a decimal quotient at the dividend's scale,
-    -- so amount / 100 would round 12.5% to 0.13.
     , case
-        when discounts.discount_type = 'percent-off'
-            then cast(intermediate_products_view.product_price * discounts.discount_amount / 100 as decimal(38, 2))
-        when discounts.discount_type = 'dollars-off'
-            then cast(least(discounts.discount_amount, intermediate_products_view.product_price) as decimal(38, 2))
-        when discounts.discount_type = 'fixed-price'
-            then cast(
-                greatest(intermediate_products_view.product_price - discounts.discount_amount, 0) as decimal(38, 2)
-            )
+        when orders.order_reference_number like 'MM-%' then null
+        else versions.product_version_price - lines.line_discounted_unit_price
     end as discount_amount
 from lines
 inner join orders on lines.order_id = orders.order_id

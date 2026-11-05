@@ -37,6 +37,13 @@ with orders as (
     select * from {{ ref('int__edxorg__mitx_users') }}
 )
 
+-- A MicroMasters order migrated to MITx Online keeps its reference number there
+, mitxonline_copies as (
+    select order_reference_number
+    from {{ ref('stg__mitxonline__app__postgres__ecommerce_order') }}
+    where order_reference_number like 'MM-%'
+)
+
 select
     orders.order_id
     , orders.user_id
@@ -49,6 +56,7 @@ select
     , users.user_email
     , orders.order_state
     , orders.order_reference_number
+    , mitxonline_copies.order_reference_number is not null as order_is_migrated_to_mitxonline
     , orders.order_total_price_paid
     , orders.order_created_on
     , lines.line_id
@@ -80,11 +88,6 @@ select
         when orders.order_state in ('fulfilled', 'refunded')
             then redeemedcoupons.redeemedcoupon_created_on
     end as redeemedcoupon_created_on
-    , case
-        when coupons.coupon_amount_type = 'percent-discount'
-            then cast(lines.line_price * coupons.coupon_amount as decimal(38, 2))
-        else cast(coupons.coupon_amount as decimal(38, 2))
-    end as coupon_amount
 from orders
 inner join users on orders.user_id = users.user_id
 inner join lines on orders.order_id = lines.order_id
@@ -93,3 +96,4 @@ left join redeemedcoupons on orders.order_id = redeemedcoupons.order_id
 left join coupons on redeemedcoupons.coupon_id = coupons.coupon_id
 left join receipts on orders.order_id = receipts.order_id and receipts.row_num = 1
 left join edxorg_users on users.user_edxorg_username = edxorg_users.user_username
+left join mitxonline_copies on orders.order_reference_number = mitxonline_copies.order_reference_number

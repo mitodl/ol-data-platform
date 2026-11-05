@@ -5,13 +5,26 @@
     on_schema_change='append_new_columns'
 ) }}
 
+{#- The first incremental run after is_successful is added reads a target without the column.
+    In a unit test `this` is the fixture's name, a string, which always has it. -#}
+{%- set target_has_is_successful = false -%}
+{%- if is_incremental() and this is string -%}
+    {%- set target_has_is_successful = true -%}
+{%- elif is_incremental() -%}
+    {%- set target_columns = adapter.get_columns_in_relation(this) | map(attribute='name') | map('lower') | list -%}
+    {%- set target_has_is_successful = 'is_successful' in target_columns -%}
+{%- endif %}
+
 -- Consolidate payments from all platforms
 with mitxonline_payments as (
     select
         transaction_id as payment_id
         , order_id
         , null as user_id
-        , transaction_amount
+        -- The app wrote 0 on some accepted payments, so those take the processor's
+        -- req_amount. Zero-dollar orders have no req_amount and stay at 0.
+        , coalesce(nullif(transaction_amount, 0), transaction_payment_amount, transaction_amount)
+            as transaction_amount
         , transaction_type
         , transaction_status
         , transaction_payment_method as payment_method
@@ -91,6 +104,7 @@ with mitxonline_payments as (
         , dim_platform_lookup.platform_pk as platform_fk
         , dim_payment_method.payment_method_pk as payment_method_fk
         , {{ iso8601_to_date_key('transaction_created_on') }} as payment_date_key
+        , coalesce(combined_payments.transaction_status = 'ACCEPT', false) as is_successful
     from combined_payments
     left join order_user_lookup as oul
         on combined_payments.order_id = oul.order_id
@@ -116,13 +130,17 @@ with mitxonline_payments as (
     group by platform
 )
 
--- Snapshot of the target's current (payment_key, user_fk) pairs, used to re-select rows
--- whose user_fk has gone stale after a dim_user re-key (the source row itself did not
--- change, so the activity-timestamp watermark alone would never catch it).
+-- Snapshot of the target's current rows, used to re-select any whose user_fk has gone
+-- stale after a dim_user re-key, or whose amount or is_successful no longer match the
+-- rule. The source row itself did not change, so the created_on watermark alone would
+-- never catch them.
 , stale_user_fk_lookup as (
     select
         payment_key
         , user_fk as stored_user_fk
+        , transaction_amount as stored_transaction_amount
+        , {% if target_has_is_successful %}is_successful{% else %}cast(null as boolean){% endif %}
+            as stored_is_successful
     from {{ this }}
 )
 {% endif %}
@@ -143,6 +161,7 @@ with mitxonline_payments as (
         , pwf.transaction_amount
         , pwf.transaction_type
         , pwf.transaction_status
+        , pwf.is_successful
         , pwf.transaction_created_on
     from payments_with_fks as pwf
 
@@ -160,6 +179,9 @@ with mitxonline_payments as (
         or pwf.transaction_created_on is null
         -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
         or sufk.stored_user_fk is distinct from pwf.user_fk
+        -- the amount or the flag's rule changed, including every row on the run that adds the flag
+        or sufk.stored_transaction_amount is distinct from pwf.transaction_amount
+        or sufk.stored_is_successful is distinct from pwf.is_successful
     )
     {% endif %}
 )

@@ -618,6 +618,9 @@ models:
   - name: contenttype_id
     description: int, foreign key in the django_contenttype table, content type of
       the product
+  - name: line_discounted_unit_price
+    description: numeric, the price of the line after any discount, as recorded at
+      purchase
 
 - name: stg__mitxonline__app__postgres__reversion_revision
   description: This table is used to track changes to products and transactions
