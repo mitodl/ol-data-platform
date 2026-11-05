@@ -243,3 +243,76 @@ rules:
   - "*offeror*"
   - "*catalog*"
   - "*blockedcountry*"
+
+  # Lake tables the rules above leave unmatched and that belong in no domain.
+  # They come last so that they only take names nothing above places.
+  #
+  # HubSpot marketing CRM data, which no domain covers. The unprefixed and
+  # raw_hubspot_ tables are an older HubSpot load.
+- domain:
+  match:
+  - "*hubspot*"
+  - contacts
+  - deals
+  # Unprefixed Zendesk Support streams no model reads. The tickets dbt does read
+  # come from raw__thirdparty__zendesk_support__*, which "*zendesk*" places.
+- domain:
+  match:
+  - account_attributes
+  - brands
+  - categories
+  - group_memberships
+  - groups
+  - satisfaction_ratings
+  - sla_policies
+  - tags
+  - tickets
+  - ticket_*
+  # TechTV and OVS site administration, job queues and the TechTV to OVS
+  # migration map, left over once their videos and users are placed above.
+- domain:
+  match:
+  - raw__techtv__*
+  - raw__ovs__*
+  # Keycloak realm, client and identity provider configuration.
+- domain:
+  match:
+  - raw__keycloak__*
+  # Django and Wagtail framework housekeeping: sessions, migrations, caches,
+  # OAuth tokens, permissions, profiling, tagging, robots.txt and CMS admin.
+  # "*wagtail*" also takes the orphaned stg__mitxpro__app__postgres__wagtail_pagerevision
+  # table, whose model was removed in #1495.
+- domain:
+  match:
+  - "*django_admin_log"
+  - "*django_migrations"
+  - "*django_session"
+  - "*django_site"
+  - "*_cache"
+  - "*guardian_*"
+  - "*oauth2_provider_*"
+  - "*silk_*"
+  - "*consumerthrottlelimit"
+  - "*robots_*"
+  - "*taggit_*"
+  - "*wagtail*"
+  - "*maxmind_*"
+  - "*sheets_*"
+  - "*mailgun__*domains"
+  # App tables no model reads and no domain has claimed. Give one a domain
+  # above when a model starts reading it.
+- domain:
+  match:
+  - "*affiliate_*"
+  - "*compliance_exportsinquirylog"
+  - "*digitalcredentials_*"
+  - "*voucher_voucher"
+  - "*testimonials_*"
+  - "*widgets_*"
+  - "*openedx_notes__*"
+  # Connection checks and test objects from Airbyte syncs.
+- domain:
+  match:
+  - airbyte_test_table_*
+  - testaccount
+  - testopportunity*
