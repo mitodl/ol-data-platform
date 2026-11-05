@@ -9,6 +9,8 @@ models:
   - dbt_utils.expression_is_true:
       arguments:
         expression: ticket_status <> 'deleted'
+      config:
+        error_if: ">0"
   columns:
   - name: ticket_id
     description: int, primary key for the ticket
