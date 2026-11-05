@@ -20,12 +20,14 @@ with program_certificates_dedp_from_micromasters as (
 , mitxonline_programs as (
     select * from {{ ref('int__mitxonline__programs') }}
 )
--- Some micromasters learners from previous semesters don't have mitxonline logins. The mitxonline
--- database does not include the certificates for those users. However, for future semesters,
--- the mitxonline  database will be the source for dedp program certificates and the table in
--- the micromasters database will no longer be updated. Hence we query the micromasters database for
--- dedp certificates earned before 2022-10-01 and the mitxonline database for those earned after
 
+-- MITx Online is the source of DEDP certificates. It holds copies of most certificates MicroMasters
+-- issued, so a MicroMasters certificate is kept only when MITx Online has no copy of it. A copy takes the
+-- MicroMasters certificate's hash: before this model read MITx Online for every date, it published the
+-- MicroMasters certificate, and MIT Learn upserts on the hash, never deletes, and references the row from
+-- its program letters. A copy is found by its uuid (see __micromasters_program_certificates_dedp_from_mitxonline),
+-- not by user or email, because int__mitx__users links some MicroMasters accounts to a different MITx Online
+-- account or to none, and an email can change.
 , report as (
     select
         program_certificates_dedp_from_micromasters.program_certificate_hashed_id
@@ -48,15 +50,24 @@ with program_certificates_dedp_from_micromasters as (
         , mitx_users.user_address_postal_code
         , mitx_users.user_street_address
         , true as program_is_dedp
+        , program_certificates_dedp_from_micromasters.programcertificate_is_revoked
     from program_certificates_dedp_from_micromasters
     left join mitx_users
         on program_certificates_dedp_from_micromasters.user_micromasters_id = mitx_users.user_micromasters_id
-    where program_certificates_dedp_from_micromasters.program_completion_timestamp < '2022-10-01'
+    left join program_certificates_dedp_from_mitxonline
+        on
+            program_certificates_dedp_from_micromasters.program_certificate_hashed_id
+            = program_certificates_dedp_from_mitxonline.micromasters_program_certificate_hashed_id
+    where program_certificates_dedp_from_mitxonline.micromasters_program_certificate_hashed_id is null
 
     union all
 
+    -- A copy keeps the MicroMasters certificate's hash
     select
-        program_certificates_dedp_from_mitxonline.program_certificate_hashed_id
+        coalesce(
+            program_certificates_dedp_from_micromasters.program_certificate_hashed_id
+            , program_certificates_dedp_from_mitxonline.program_certificate_hashed_id
+        ) as program_certificate_hashed_id
         , program_certificates_dedp_from_mitxonline.program_title
         , program_certificates_dedp_from_mitxonline.micromasters_program_id
         , program_certificates_dedp_from_mitxonline.mitxonline_program_id
@@ -76,10 +87,14 @@ with program_certificates_dedp_from_micromasters as (
         , mitx_users.user_address_postal_code
         , mitx_users.user_street_address
         , true as program_is_dedp
+        , program_certificates_dedp_from_mitxonline.programcertificate_is_revoked
     from program_certificates_dedp_from_mitxonline
     left join mitx_users
         on program_certificates_dedp_from_mitxonline.user_mitxonline_id = mitx_users.user_mitxonline_id
-    where program_certificates_dedp_from_mitxonline.program_completion_timestamp >= '2022-10-01'
+    left join program_certificates_dedp_from_micromasters
+        on
+            program_certificates_dedp_from_mitxonline.micromasters_program_certificate_hashed_id
+            = program_certificates_dedp_from_micromasters.program_certificate_hashed_id
 
     union all
 
@@ -104,6 +119,7 @@ with program_certificates_dedp_from_micromasters as (
         , mitx_users.user_address_postal_code
         , mitx_users.user_street_address
         , false as program_is_dedp
+        , program_certificates_non_dedp.programcertificate_is_revoked
     from program_certificates_non_dedp
     left join mitx_users
         on program_certificates_non_dedp.user_edxorg_id = mitx_users.user_edxorg_id
@@ -130,6 +146,7 @@ select
     , report.user_street_address
     , report.user_address_state_or_territory
     , report.program_is_dedp
+    , report.programcertificate_is_revoked
     , if(
         mitxonline_programs.program_id is not null
         , mitxonline_programs.program_readable_id
