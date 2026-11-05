@@ -629,6 +629,28 @@ models:
   - name: payment_bill_to_address_country
     description: str, address country from most recent cybersource payment
 
+- name: int__mitxonline__deferred_course_run_orders
+  description: The MITx Online course runs orders were bought for and no longer pay
+    for. A deferral moves the paid course run record to the new run and leaves the
+    order's line on the old one, so these are the lines with no paid record on their
+    run on orders with a paid record on a run they have no line for. One row per (order,
+    course run).
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+  columns:
+  - name: order_id
+    description: int, foreign key to ecommerce_order
+    tests:
+    - not_null
+  - name: courserun_id
+    description: int, foreign key to courses_courserun. The run on the order's line.
+    tests:
+    - not_null
+
 - name: int__mitxonline__program_course_run_orders
   description: MITx Online course run orders that a program purchase covered, at the
     grain of an order line. After a learner buys a program, MITx Online creates a
@@ -752,7 +774,8 @@ models:
       DEDP enrollments for MITx Online courses are verified in either MITx Online
       or MicroMasters orders. For DEDP runs on MITx Online in '3T2021', '1T2022',
       '2T2022', these are paid and verified in MicroMasters. For other DEDP courses
-      that run on MITx Online, they are paid and verified in MITx Online
+      that run on MITx Online, they are paid and verified in MITx Online. An order
+      a deferral moved to another run does not verify the run it was bought for.
     tests:
     - not_null
     - accepted_values:
@@ -863,7 +886,8 @@ models:
       DEDP enrollments for MITx Online courses are verified in either MITx Online
       or MicroMasters orders. For DEDP runs on MITx Online in '3T2021', '1T2022',
       '2T2022', these are paid and verified in MicroMasters. For other DEDP courses
-      that run on MITx Online, they are paid and verified in MITx Online
+      that run on MITx Online, they are paid and verified in MITx Online. An order
+      a deferral moved to another run does not verify the run it was bought for.
     tests:
     - not_null
     - accepted_values:
@@ -2688,6 +2712,89 @@ unit_tests:
   expect:
     rows:
     - {user_id: 1, openedx_user_id: 11, user_username: "ann-lee"}
+- name: test_int__mitxonline__deferred_course_run_orders_finds_moved_orders
+  description: >
+    An order whose paid record sits on another run was moved off the run on its line.
+    An
+    order with a record on its own run was not, and neither was one with no record
+    at
+    all. An order with lines on two runs reports only the line that lost its record.
+    A
+    line with no record on an order with no record off its lines was not moved either.
+  model: int__mitxonline__deferred_course_run_orders
+  given:
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows:
+    - {order_id: 1, courserun_id: 10}
+    - {order_id: 2, courserun_id: 10}
+    - {order_id: 3, courserun_id: 10}
+    - {order_id: 4, courserun_id: 10}
+    - {order_id: 4, courserun_id: 12}
+    - {order_id: 5, courserun_id: 10}
+    - {order_id: 5, courserun_id: 12}
+  - input: ref('stg__mitxonline__app__postgres__courses_paidcourserun')
+    rows:
+    - {order_id: 1, courserun_id: 11}
+    - {order_id: 2, courserun_id: 10}
+    - {order_id: 4, courserun_id: 10}
+    - {order_id: 4, courserun_id: 11}
+    - {order_id: 5, courserun_id: 10}
+  expect:
+    rows:
+    - {order_id: 1, courserun_id: 10}
+    - {order_id: 4, courserun_id: 12}
+- name: test_int__mitxonline__courserunenrollments_moved_dedp_order_does_not_verify
+  description: >
+    A deferral leaves the app's mode audit on the run the order was bought for. That
+    run's DEDP order no longer verifies it, so the app's mode stands. An undeferred
+    DEDP
+    order still verifies an audit enrollment, and a run the app itself keeps verified
+    stays verified.
+  model: int__mitxonline__courserunenrollments
+  given:
+  - input: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
+    rows:
+    - {courserunenrollment_id: 1, user_id: 1, courserun_id: 10, courserunenrollment_enrollment_mode: audit,
+      courserunenrollment_enrollment_status: null}
+    - {courserunenrollment_id: 2, user_id: 1, courserun_id: 11, courserunenrollment_enrollment_mode: verified,
+      courserunenrollment_enrollment_status: null}
+    - {courserunenrollment_id: 3, user_id: 2, courserun_id: 10, courserunenrollment_enrollment_mode: audit,
+      courserunenrollment_enrollment_status: null}
+    - {courserunenrollment_id: 4, user_id: 3, courserun_id: 10, courserunenrollment_enrollment_mode: verified,
+      courserunenrollment_enrollment_status: null}
+  - input: ref('int__mitxonline__users')
+    rows:
+    - {user_id: 1}
+    - {user_id: 2}
+    - {user_id: 3}
+  - input: ref('int__mitxonline__course_runs')
+    rows:
+    - {courserun_id: 10, course_id: 50, courserun_tag: 1T2024}
+    - {courserun_id: 11, course_id: 50, courserun_tag: 2T2024}
+  - input: ref('int__mitxonline__program_requirements')
+    rows:
+    - {course_id: 50, program_id: 1}
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows:
+    - {order_id: 101, user_id: 1, courserun_id: 10, order_state: fulfilled}
+    - {order_id: 102, user_id: 2, courserun_id: 10, order_state: fulfilled}
+    - {order_id: 103, user_id: 3, courserun_id: 10, order_state: fulfilled}
+  - input: ref('int__mitxonline__deferred_course_run_orders')
+    rows:
+    - {order_id: 101, courserun_id: 10}
+    - {order_id: 103, courserun_id: 10}
+  - input: ref('stg__micromasters__app__postgres__ecommerce_order')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__ecommerce_line')
+    rows: []
+  - input: ref('__micromasters__users')
+    rows: []
+  expect:
+    rows:
+    - {courserunenrollment_id: 1, courserunenrollment_enrollment_mode: audit}
+    - {courserunenrollment_id: 2, courserunenrollment_enrollment_mode: verified}
+    - {courserunenrollment_id: 3, courserunenrollment_enrollment_mode: verified}
+    - {courserunenrollment_id: 4, courserunenrollment_enrollment_mode: verified}
 - name: test_int__mitxonline__program_course_run_orders_matches_program_purchase
   description: >
     A course run order with a program's internal discount links to the learner's

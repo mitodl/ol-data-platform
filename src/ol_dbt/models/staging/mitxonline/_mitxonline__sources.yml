@@ -333,6 +333,22 @@ sources:
     - name: reference_number
       description: string, readable id for the order. Shared with micromasters
 
+  - name: raw__mitxonline__app__postgres__courses_paidcourserun
+    columns:
+    - name: id
+      description: int, primary key in courses_paidcourserun
+    - name: user_id
+      description: int, foreign key to users_user for the learner
+    - name: course_run_id
+      description: int, foreign key to courses_courserun. A deferral repoints an existing
+        row at the run the learner deferred to.
+    - name: order_id
+      description: int, foreign key to ecommerce_order
+    - name: created_on
+      description: timestamp, specifying when the record was created
+    - name: updated_on
+      description: timestamp, specifying when the record was most recently updated
+
   - name: raw__mitxonline__app__postgres__courses_programrun
     columns:
     - name: id

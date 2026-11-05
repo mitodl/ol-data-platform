@@ -1,0 +1,71 @@
+---
+unit_tests:
+- name: test_enrollment_detail_report_reads_a_deferred_order_on_its_bought_run
+  description: >
+    tfact_enrollment_order moves a deferred order to the new run, while the combined
+    orders and enrollment marts keep it on the run it was bought for. The upgrade
+    time
+    and redeemed email are read from the bought run, so the deferred enrollment keeps
+    them. An order that was not deferred still matches on the enrollment's own run.
+  model: enrollment_detail_report
+  given:
+  - input: ref('tfact_enrollment')
+    rows:
+    - {enrollment_key: "DEFERRED", enrollment_id: "1", user_fk: "U1", courserun_fk: "CR2",
+      platform: "mitxonline", platform_fk: "P_MXO"}
+    - {enrollment_key: "NOT_DEFERRED", enrollment_id: "2", user_fk: "U2", courserun_fk: "CR1",
+      platform: "mitxonline", platform_fk: "P_MXO"}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: "CR1", courserun_readable_id: "course-v1:MITxT+14.100x+1T2024",
+      is_current: true}
+    - {courserun_pk: "CR2", courserun_readable_id: "course-v1:MITxT+14.100x+2T2024",
+      is_current: true}
+  - input: ref('dim_course')
+    rows: []
+  - input: ref('tfact_certificate')
+    rows: []
+  - input: ref('tfact_grade')
+    rows: []
+  - input: ref('dim_contract')
+    rows: []
+  - input: ref('dim_organization')
+    rows: []
+  - input: ref('dim_user')
+    rows:
+    - {user_pk: "U1", email: "one@example.com"}
+    - {user_pk: "U2", email: "two@example.com"}
+  - input: ref('tfact_enrollment_order')
+    rows:
+    - {enrollment_key: "DEFERRED", order_id: 9001, deferred_from_courserun_readable_id: "course-v1:MITxT+14.100x+1T2024"}
+    - {enrollment_key: "NOT_DEFERRED", order_id: 9002, deferred_from_courserun_readable_id: null}
+  - input: ref('dim_discount')
+    rows: []
+  - input: ref('tfact_payment')
+    rows: []
+  - input: ref('dim_payment_method')
+    rows: []
+  - input: ref('dim_program')
+    rows: []
+  - input: ref('dim_discount_type')
+    rows: []
+  - input: ref('marts__combined_discounts')
+    rows: []
+  - input: ref('marts__combined__orders')
+    rows:
+    - {order_id: 9001, platform: "MITx Online", courserun_readable_id: "course-v1:MITxT+14.100x+1T2024",
+      user_email: "one@example.com", redeemed_email: "redeemed-one@example.com"}
+    - {order_id: 9002, platform: "MITx Online", courserun_readable_id: "course-v1:MITxT+14.100x+1T2024",
+      user_email: "two@example.com", redeemed_email: "redeemed-two@example.com"}
+  - input: ref('marts__combined_course_enrollment_detail')
+    rows:
+    - {order_id: 9001, platform: "MITx Online", courserun_readable_id: "course-v1:MITxT+14.100x+1T2024",
+      user_email: "one@example.com", courserunenrollment_upgraded_on: "2024-01-05"}
+    - {order_id: 9002, platform: "MITx Online", courserun_readable_id: "course-v1:MITxT+14.100x+1T2024",
+      user_email: "two@example.com", courserunenrollment_upgraded_on: "2024-01-06"}
+  expect:
+    rows:
+    - {enrollment_key: "DEFERRED", order_id: 9001, courserunenrollment_upgraded_on: "2024-01-05",
+      redeemed_email: "redeemed-one@example.com"}
+    - {enrollment_key: "NOT_DEFERRED", order_id: 9002, courserunenrollment_upgraded_on: "2024-01-06",
+      redeemed_email: "redeemed-two@example.com"}
