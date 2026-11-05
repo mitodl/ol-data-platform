@@ -33,8 +33,11 @@ with mitx_courses as (
 , edx_signatories as (
     select
         courserun_readable_id
-        , array_agg(signatory_normalized_name order by signatory_normalized_name)
-            filter (where signatory_normalized_name <> '') as signatory_names
+        , {{ array_agg_filter(
+            'signatory_normalized_name'
+            , "signatory_normalized_name <> ''"
+            , order_by='signatory_normalized_name'
+        ) }} as signatory_names
     from {{ ref('stg__edxorg__s3__course_certificate_signatory') }}
     group by courserun_readable_id
 )
@@ -72,7 +75,7 @@ select distinct
     , least(
         {{ from_iso8601_timestamp('coalesce(edx_courseruns.courserun_enrollment_end_date, edx_courseruns.courserun_end_date)') }}
          ---default to current timestamp - 1 day to avoid having courses open for enrollment on mitxonline
-        , date_add('day', -1, current_timestamp)
+        , {{ dbt.dateadd('day', -1, 'current_timestamp') }}
       ) as enrollment_end
     , {{ from_iso8601_timestamp('edx_courseruns.courserun_start_date') }} as start_date
     , {{ from_iso8601_timestamp('edx_courseruns.courserun_end_date') }} as end_date

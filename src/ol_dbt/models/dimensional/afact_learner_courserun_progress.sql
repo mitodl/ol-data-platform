@@ -25,7 +25,7 @@ with enrollments_ranked as (
                 case when enrollment_is_active then 0 else 1 end
                 , enrollment_created_on desc nulls last
                 -- enrollment_id is a string; compare the integer ids as numbers.
-                , try_cast(enrollment_id as bigint) desc nulls last
+                , {{ try_cast('enrollment_id', 'bigint') }} desc nulls last
                 , enrollment_id desc
         ) as enrollment_rank
     from {{ ref('tfact_enrollment') }}

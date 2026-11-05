@@ -110,7 +110,7 @@ with problems as (
     select
         problem_events.courserun_readable_id
         , problem_events.problem_block_id
-        , arbitrary(problem_events.problem_name) as problem_name
+        , {{ arbitrary('problem_events.problem_name') }} as problem_name
         , array_agg(
             distinct
             {{ json_query_string('cast(t.value as varchar)', "'$.response_type'") }}

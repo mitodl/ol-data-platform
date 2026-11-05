@@ -310,7 +310,7 @@ with mitxonline_certificates as (
                 , case when certificate_is_revoked then 1 else 0 end
                 , certificate_issued_on desc nulls last
                 -- certificate_id is a string; compare the integer ids as numbers.
-                , try_cast(certificate_id as bigint) desc nulls last
+                , {{ try_cast('certificate_id', 'bigint') }} desc nulls last
                 , certificate_id desc
         ) as _cross_source_row_num
     from certificates_grouped
