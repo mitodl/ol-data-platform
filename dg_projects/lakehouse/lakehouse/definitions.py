@@ -143,13 +143,15 @@ trino_catalog_map = {
     "production": "ol_data_lake_production",
 }
 
-# Hosts match the starrocks_qa / starrocks_production target defaults in
-# src/ol_dbt/profiles.yml. ci falls back to the QA FE for schema parity. dev is
-# the local-dev cluster, which Tilt forwards to this port on the host.
+# qa and production run Dagster in the same EKS cluster as their StarRocks, so
+# they reach the FE through its in-cluster service. From a QA pod the external
+# name lakehouse.qa.starrocks.ol.mit.edu times out. ci falls back to the QA FE
+# for schema parity. dev is the local-dev cluster, which Tilt forwards to this
+# port on the host.
 starrocks_host_map = {
     "dev": "127.0.0.1",
     "ci": "lakehouse.qa.starrocks.ol.mit.edu",
-    "qa": "lakehouse.qa.starrocks.ol.mit.edu",
+    "qa": "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local",
     "production": "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local",
 }
 
