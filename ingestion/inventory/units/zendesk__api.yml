@@ -26,6 +26,7 @@ airbyte:
     - categories
     - group_memberships
     - groups
+    - macros
     - organizations
     - satisfaction_ratings
     - sections
@@ -123,6 +124,29 @@ tables:
       created_at: copy
       updated_at: copy
       description: copy
+- name: macros
+  raw_table: raw__thirdparty__zendesk_support__macros
+  sync_mode: incremental_append
+  cursor_field:
+  - updated_at
+  primary_key:
+  - - id
+  modeled: true
+  mirror:
+    columns:
+      _airbyte_extracted_at: copy
+      id: copy
+      url: copy
+      title: copy
+      active: copy
+      actions: copy
+      default: copy
+      position: copy
+      raw_title: copy
+      created_at: copy
+      updated_at: copy
+      description: copy
+      restriction: copy
 - name: organizations
   raw_table: raw__thirdparty__zendesk_support__organizations
   sync_mode: full_refresh_overwrite

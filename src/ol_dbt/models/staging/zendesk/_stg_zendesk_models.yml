@@ -411,3 +411,60 @@ models:
     description: timestamp, the time of the last update of the field
     tests:
     - not_null
+
+- name: stg__zendesk__macro
+  description: Macros in Zendesk. A macro is a saved reply and set of ticket changes
+    that agents apply to tickets.
+  columns:
+  - name: macro_id
+    description: int, primary key for the macro
+    tests:
+    - not_null
+    - unique
+  - name: macro_api_url
+    description: str, the API url of the macro
+  - name: macro_title
+    description: str, the title of the macro. Double colons put it in a category.
+    tests:
+    - not_null
+  - name: macro_raw_title
+    description: str, the title of the macro before dynamic content is applied
+  - name: macro_description
+    description: str, the description of the macro
+  - name: macro_is_active
+    description: bool, if the macro is active
+    tests:
+    - not_null
+  - name: macro_is_default
+    description: bool, if the macro is a default macro created by Zendesk
+  - name: macro_position
+    description: int, the position of the macro in the agent's macro list
+  - name: macro_actions
+    description: array, JSON strings each with a field and a value. They set ticket
+      fields or add a comment when an agent applies the macro.
+  - name: macro_restriction_type
+    description: str, who can use the macro. Group or User. Null means all agents.
+    tests:
+    - accepted_values:
+        arguments:
+          values: [Group, User]
+  - name: macro_restriction_group_ids
+    description: str, JSON array of the ids of the groups that can use the macro.
+      Null for macros restricted to one user.
+  - name: macro_comment_html
+    description: str, the HTML reply the macro adds to the ticket. It can have Zendesk
+      placeholders, for example the requester's first name.
+  - name: macro_comment_text
+    description: str, the plain text reply the macro adds to the ticket. Older macros
+      use this instead of macro_comment_html.
+  - name: macro_comment_is_public
+    description: bool, if the reply is a public reply. False means an internal note.
+      Null means the macro keeps the agent's current setting.
+  - name: macro_created_at
+    description: timestamp, the time the macro was created
+    tests:
+    - not_null
+  - name: macro_updated_at
+    description: timestamp, the time of the last update of the macro
+    tests:
+    - not_null
