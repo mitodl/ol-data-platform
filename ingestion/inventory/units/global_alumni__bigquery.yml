@@ -17,7 +17,9 @@ airbyte:
   connections:
   - environment: production
     name: Global Alumni BigQuery → S3 Data Lake
-    status: active
+    # The Global Alumni feed ended: the source table has read 0 rows since
+    # 2026-05-04 and no further data is expected (confirmed 2026-11-05).
+    status: inactive
     sync_interval_hours: 24
     streams:
     - api_enrollments
