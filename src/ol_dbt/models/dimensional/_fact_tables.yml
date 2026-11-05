@@ -181,12 +181,17 @@ models:
     has no such FK at the source, so their order is reconstructed by matching the
     enrollment's course/program against dim_product, then to tfact_order — fragile
     in
-    those same scenarios, but the only signal available for them. Materialized as
-    a
+    those same scenarios, but the only signal available for them. MITx Online's paid
+    course run record corrects the deferral case. The order columns hold orders from
+    the enrollment's own platform, so an enrollment paid through MicroMasters has
+    none.
+    Materialized as a
     full-table rebuild (not incremental), since tfact_enrollment's own incremental
     watermark has no visibility into order-side changes (refunds, price updates,
     fulfillment).
-    Grain: one row per enrollment_key.
+    Grain: one row per enrollment_key, for every enrollment, including those with
+    no
+    order.
   config:
     meta:
       qa_branches:
@@ -226,7 +231,8 @@ models:
   - name: order_reference_number
     description: Order reference/confirmation number for the resolved order
   - name: order_state
-    description: Order state (fulfilled or refunded) of the resolved order
+    description: Order state (fulfilled or refunded) of the resolved order. A fulfilled
+      order is resolved ahead of a refunded one.
   - name: order_updated_on
     description: Last-updated timestamp of the resolved order
   - name: discount_fk
@@ -270,6 +276,25 @@ models:
         where: "program_discount_fk is not null"
         config:
           severity: warn
+  - name: is_paid
+    description: >
+      Whether an order pays for this enrollment. This is a commerce fact,
+      separate from the enrollment mode, which each platform sets by its own
+      rules (hq#14161). On MITx Online and xPRO it is true when the enrollment
+      has a fulfilled order, or for MITx Online a MicroMasters order for the
+      same run that was not fully refunded. A $0 fulfilled order counts, e.g.
+      a B2B or 100% coupon order, and a refund does not. On edX.org we hold
+      only MicroMasters orders, so it is true for such an order, false if the
+      only MicroMasters order was fully refunded, and otherwise follows the
+      verified mode. MITx Online's copies of enrollments in runs hosted on
+      edX.org follow the edX.org rule. Null on Residential, Bootcamps, Emeritus
+      and Global Alumni, which the decision does not cover. Retakes on an
+      earlier run's order, course runs covered only by a program order, and
+      enrollments migrated from edX.org with no order are false on MITx Online
+      even when verified. Do not sum this across MITx Online and edX.org:
+      about 276,000 MITx Online copies repeat an edX.org enrollment and would
+      count twice. Applying the edX.org rule to the copies is a reading of
+      hq#14161, which does not mention them.
 
 - name: tfact_order
   description: >
@@ -2440,6 +2465,10 @@ unit_tests:
     rows: []
   - input: ref('int__mitxonline__deferred_course_run_orders')
     rows: []
+  - input: ref('int__micromasters__orders')
+    rows: []
+  - input: ref('int__mitxonline__course_runs')
+    rows: []
   - input: ref('int__mitxonline__ecommerce_order')
     rows: []
   - input: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
@@ -2522,6 +2551,10 @@ unit_tests:
     - {order_id: 9001, courserun_id: 101}
     - {order_id: 9003, courserun_id: 101}
     - {order_id: 9004, courserun_id: 101}
+  - input: ref('int__micromasters__orders')
+    rows: []
+  - input: ref('int__mitxonline__course_runs')
+    rows: []
   - input: ref('int__mitxonline__ecommerce_order')
     rows:
     - {order_id: 9001, line_id: 1, courserun_id: 101}
@@ -2547,6 +2580,7 @@ unit_tests:
     - {order_id: 9005, courserun_id: 101}
   expect:
     rows:
+    - {enrollment_key: "DEFERRED_FROM", order_id: null, order_state: null, deferred_from_courserun_readable_id: null}
     - {enrollment_key: "DEFERRED_TO", order_id: 9001, order_state: "fulfilled", deferred_from_courserun_readable_id: "course-v1:MITxT+14.100x+1T2024"}
     - {enrollment_key: "NOT_DEFERRED", order_id: 9002, order_state: "fulfilled", deferred_from_courserun_readable_id: null}
     - {enrollment_key: "LEFT_VERIFIED", order_id: 9003, order_state: "fulfilled",
@@ -2556,6 +2590,131 @@ unit_tests:
     - {enrollment_key: "SECOND_ORDER", order_id: 9005, order_state: "fulfilled", deferred_from_courserun_readable_id: null}
     - {enrollment_key: "SECOND_ORDER_TO", order_id: 9004, order_state: "fulfilled",
       deferred_from_courserun_readable_id: "course-v1:MITxT+14.100x+1T2024"}
+- name: test_tfact_enrollment_order_resolves_is_paid
+  description: >
+    MITx Online and xPRO are paid on a fulfilled order, with a MicroMasters order
+    counting
+    for MITx Online. A refund is not paid, and a fulfilled order wins over a more
+    recently
+    updated refund. edX.org, and MITx Online's copies of edX.org-hosted runs, fall
+    back to
+    the verified mode, minus enrollments whose only order was refunded. A fulfilled
+    MicroMasters order is paid there whatever the mode. MicroMasters orders stay out
+    of the
+    order columns. Platforms the decision does not cover are null.
+  model: tfact_enrollment_order
+  given:
+  - input: ref('tfact_enrollment')
+    rows:
+    - {enrollment_key: "MXO_FULFILLED", order_id: null, user_fk: "U1", courserun_fk: "CR1",
+      program_fk: null, platform_fk: "P_MXO", platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "MXO_REFUNDED", order_id: null, user_fk: "U2", courserun_fk: "CR1",
+      program_fk: null, platform_fk: "P_MXO", platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "MXO_NO_ORDER", order_id: null, user_fk: "U3", courserun_fk: "CR1",
+      program_fk: null, platform_fk: "P_MXO", platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "MXO_REBOUGHT", order_id: null, user_fk: "U4", courserun_fk: "CR1",
+      program_fk: null, platform_fk: "P_MXO", platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "MXO_VIA_MICROMASTERS", order_id: null, user_fk: "U5", courserun_fk: "CR1",
+      program_fk: null, platform_fk: "P_MXO", platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "XPRO_FULFILLED", order_id: 7001, user_fk: "U6", courserun_fk: "CR4",
+      program_fk: null, platform_fk: "P_XPRO", platform: "mitxpro", enrollment_mode: "no-id-professional"}
+    - {enrollment_key: "XPRO_REFUNDED", order_id: 7002, user_fk: "U7", courserun_fk: "CR4",
+      program_fk: null, platform_fk: "P_XPRO", platform: "mitxpro", enrollment_mode: "no-id-professional"}
+    - {enrollment_key: "EDX_VERIFIED", order_id: null, user_fk: "U8", courserun_fk: "CR2",
+      program_fk: null, platform_fk: "P_EDX", platform: "edxorg", enrollment_mode: "verified"}
+    - {enrollment_key: "EDX_AUDIT", order_id: null, user_fk: "U9", courserun_fk: "CR2",
+      program_fk: null, platform_fk: "P_EDX", platform: "edxorg", enrollment_mode: "audit"}
+    - {enrollment_key: "EDX_REFUNDED", order_id: null, user_fk: "U10", courserun_fk: "CR2",
+      program_fk: null, platform_fk: "P_EDX", platform: "edxorg", enrollment_mode: "verified"}
+    - {enrollment_key: "EDX_AUDIT_VIA_MICROMASTERS", order_id: null, user_fk: "U11",
+      courserun_fk: "CR2", program_fk: null, platform_fk: "P_EDX", platform: "edxorg",
+      enrollment_mode: "audit"}
+    - {enrollment_key: "MXO_COPY_VERIFIED", order_id: null, user_fk: "U12", courserun_fk: "CR3",
+      program_fk: null, platform_fk: "P_MXO", platform: "mitxonline", enrollment_mode: "verified"}
+    - {enrollment_key: "MXO_COPY_AUDIT", order_id: null, user_fk: "U13", courserun_fk: "CR3",
+      program_fk: null, platform_fk: "P_MXO", platform: "mitxonline", enrollment_mode: "audit"}
+    - {enrollment_key: "BOOTCAMPS", order_id: null, user_fk: "U14", courserun_fk: "CR5",
+      program_fk: null, platform_fk: "P_BOOTCAMPS", platform: "bootcamps", enrollment_mode: null}
+    - {enrollment_key: "EDX_PARTIAL_REFUND", order_id: null, user_fk: "U15", courserun_fk: "CR2",
+      program_fk: null, platform_fk: "P_EDX", platform: "edxorg", enrollment_mode: "audit"}
+  - input: ref('dim_product')
+    rows:
+    - {product_pk: "PROD_CR1", product_type: "course run", courserun_fk: "CR1", program_fk: null,
+      platform_fk: "P_MXO", is_current: true}
+    - {product_pk: "PROD_CR4", product_type: "course run", courserun_fk: "CR4", program_fk: null,
+      platform_fk: "P_XPRO", is_current: true}
+  - input: ref('tfact_order')
+    rows:
+    - {order_key: "OK1", order_id: 9001, line_id: "1", user_fk: "U1", product_fk: "PROD_CR1",
+      platform_fk: "P_MXO", platform: "mitxonline", order_state: "fulfilled", order_updated_on: "2024-01-01"}
+    - {order_key: "OK2", order_id: 9002, line_id: "2", user_fk: "U2", product_fk: "PROD_CR1",
+      platform_fk: "P_MXO", platform: "mitxonline", order_state: "refunded", order_updated_on: "2024-01-01"}
+    - {order_key: "OK3", order_id: 9003, line_id: "3", user_fk: "U4", product_fk: "PROD_CR1",
+      platform_fk: "P_MXO", platform: "mitxonline", order_state: "fulfilled", order_updated_on: "2024-01-01"}
+    - {order_key: "OK4", order_id: 9004, line_id: "4", user_fk: "U4", product_fk: "PROD_CR1",
+      platform_fk: "P_MXO", platform: "mitxonline", order_state: "refunded", order_updated_on: "2024-02-01"}
+    - {order_key: "OK5", order_id: 7001, line_id: "5", user_fk: "U6", product_fk: "PROD_CR4",
+      platform_fk: "P_XPRO", platform: "mitxpro", order_state: "fulfilled", order_updated_on: "2024-01-01"}
+    - {order_key: "OK6", order_id: 7002, line_id: "6", user_fk: "U7", product_fk: "PROD_CR4",
+      platform_fk: "P_XPRO", platform: "mitxpro", order_state: "refunded", order_updated_on: "2024-01-01"}
+    - {order_key: "OK7", order_id: 501, line_id: "51", user_fk: "U5", product_fk: null,
+      platform_fk: "P_MM", platform: "micromasters", order_state: "fulfilled", order_updated_on: "2024-01-01"}
+    - {order_key: "OK8", order_id: 502, line_id: "52", user_fk: "U10", product_fk: null,
+      platform_fk: "P_MM", platform: "micromasters", order_state: "refunded", order_updated_on: "2024-01-01"}
+    - {order_key: "OK9", order_id: 503, line_id: "53", user_fk: "U11", product_fk: null,
+      platform_fk: "P_MM", platform: "micromasters", order_state: "fulfilled", order_updated_on: "2024-01-01"}
+    - {order_key: "OK10", order_id: 504, line_id: "54", user_fk: "U15", product_fk: null,
+      platform_fk: "P_MM", platform: "micromasters", order_state: "partially_refunded",
+      order_updated_on: "2024-01-01"}
+  - input: ref('int__micromasters__orders')
+    rows:
+    - {order_id: 501, line_id: 51, courserun_readable_id: "course-v1:MITxT+14.100x+1T2022",
+      courserun_edxorg_readable_id: "MITxT/14.100x/1T2022"}
+    - {order_id: 502, line_id: 52, courserun_readable_id: "course-v1:MITx+14.100x+1T2020",
+      courserun_edxorg_readable_id: "MITx/14.100x/1T2020"}
+    - {order_id: 503, line_id: 53, courserun_readable_id: "course-v1:MITx+14.100x+1T2020",
+      courserun_edxorg_readable_id: "MITx/14.100x/1T2020"}
+    - {order_id: 504, line_id: 54, courserun_readable_id: "course-v1:MITx+14.100x+1T2020",
+      courserun_edxorg_readable_id: "MITx/14.100x/1T2020"}
+  - input: ref('int__mitxonline__program_course_run_orders')
+    rows: []
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: "CR1", source_id: 101, courserun_readable_id: "course-v1:MITxT+14.100x+1T2022",
+      platform: "mitxonline", is_current: true}
+    - {courserun_pk: "CR2", source_id: null, courserun_readable_id: "MITx/14.100x/1T2020",
+      platform: "edxorg", is_current: true}
+    - {courserun_pk: "CR3", source_id: 103, courserun_readable_id: "course-v1:MITx+6.00x+1T2015",
+      platform: "mitxonline", is_current: true}
+  - input: ref('int__mitxonline__course_runs')
+    rows:
+    - {courserun_id: 101, courserun_platform: "MITx Online"}
+    - {courserun_id: 103, courserun_platform: "edX.org"}
+  - input: ref('int__mitxonline__deferred_course_run_orders')
+    rows: []
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__courses_paidcourserun')
+    rows: []
+  expect:
+    rows:
+    - {enrollment_key: "MXO_FULFILLED", order_id: 9001, is_paid: true}
+    - {enrollment_key: "MXO_REFUNDED", order_id: 9002, is_paid: false}
+    - {enrollment_key: "MXO_NO_ORDER", order_id: null, is_paid: false}
+    - {enrollment_key: "MXO_REBOUGHT", order_id: 9003, is_paid: true}
+    - {enrollment_key: "MXO_VIA_MICROMASTERS", order_id: null, is_paid: true}
+    - {enrollment_key: "XPRO_FULFILLED", order_id: 7001, is_paid: true}
+    - {enrollment_key: "XPRO_REFUNDED", order_id: 7002, is_paid: false}
+    - {enrollment_key: "EDX_VERIFIED", order_id: null, is_paid: true}
+    - {enrollment_key: "EDX_AUDIT", order_id: null, is_paid: false}
+    - {enrollment_key: "EDX_REFUNDED", order_id: null, is_paid: false}
+    - {enrollment_key: "EDX_AUDIT_VIA_MICROMASTERS", order_id: null, is_paid: true}
+    - {enrollment_key: "MXO_COPY_VERIFIED", order_id: null, is_paid: true}
+    - {enrollment_key: "MXO_COPY_AUDIT", order_id: null, is_paid: false}
+    - {enrollment_key: "BOOTCAMPS", order_id: null, is_paid: null}
+    - {enrollment_key: "EDX_PARTIAL_REFUND", order_id: null, is_paid: true}
 - name: test_tfact_enrollment_order_takes_a_deferred_order_from_the_moved_line
   description: >
     On a two-course order, deferring one course leaves the other line paying for its
@@ -2648,6 +2807,10 @@ unit_tests:
     - {order_id: 9300, line_id: 60, courserun_id: 10}
   - input: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
     rows: []
+  - input: ref('int__micromasters__orders')
+    rows: []
+  - input: ref('int__mitxonline__course_runs')
+    rows: []
   - input: ref('stg__mitxonline__app__postgres__courses_paidcourserun')
     rows:
     - {order_id: 9100, courserun_id: 2}
@@ -2705,6 +2868,10 @@ unit_tests:
     - {order_id: 9001, line_id: 1, courserun_id: 101}
     - {order_id: 9002, line_id: 2, courserun_id: 101}
   - input: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
+    rows: []
+  - input: ref('int__micromasters__orders')
+    rows: []
+  - input: ref('int__mitxonline__course_runs')
     rows: []
   - input: ref('stg__mitxonline__app__postgres__courses_paidcourserun')
     rows:

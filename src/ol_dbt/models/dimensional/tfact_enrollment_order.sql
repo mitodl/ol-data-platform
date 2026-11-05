@@ -13,7 +13,8 @@
 -- incremental watermark tracks enrollment activity, not order-side changes (refunds,
 -- price updates, fulfillment), so a table refresh keeps this current with tfact_order
 -- without needing its own watermark logic.
--- Grain: one row per enrollment_key.
+-- Grain: one row per enrollment_key, for every enrollment, so is_paid covers the ones with
+-- no order.
 {%- set order_columns %}
         , order_fact.order_key as order_fk
         , order_fact.order_id
@@ -38,7 +39,9 @@ with enrollment as (
 
 , order_fact as (
     select * from {{ ref('tfact_order') }}
-    where order_state in ('fulfilled', 'refunded')
+    where
+        order_state in ('fulfilled', 'refunded')
+        or (platform = 'micromasters' and order_state = 'partially_refunded')
 )
 
 , course_run as (
@@ -214,7 +217,10 @@ with enrollment as (
         , row_number() over (
             partition by enrollment_key
             order by
-                match_priority asc
+                -- A learner can hold a refunded order and a later fulfilled one for the
+                -- same enrollment, and the refund can be the most recently updated.
+                case when order_state = 'fulfilled' then 0 else 1 end asc
+                , match_priority asc
                 , order_updated_on desc nulls last
                 -- order_updated_on is order-level and shared by every line on a
                 -- multi-line order, so it alone can leave ties unresolved.
@@ -273,8 +279,64 @@ with enrollment as (
     where resolved_orders.row_num = 1
 )
 
+-- MicroMasters sold only DEDP courses. Its orders feed is_paid and stay out of the order
+-- columns: tfact_order files them under their own platform, their ids overlap MITx
+-- Online's, and enrollment_detail_report joins payments on order_id and the enrollment's
+-- platform, so a MicroMasters id there would pick up another learner's receipt.
+, micromasters_orders as (
+    select
+        enrollment.enrollment_key
+        -- A partial refund leaves a payment standing.
+        , max(case when order_fact.order_state != 'refunded' then 1 else 0 end) = 1 as has_fulfilled_order
+    from enrollment
+    inner join course_run
+        on enrollment.courserun_fk = course_run.courserun_pk
+    inner join order_fact
+        on enrollment.user_fk = order_fact.user_fk
+    inner join {{ ref('int__micromasters__orders') }} as micromasters_line
+        on
+            order_fact.order_id = micromasters_line.order_id
+            and order_fact.line_id = cast(micromasters_line.line_id as varchar)
+    where
+        order_fact.platform = 'micromasters'
+        and enrollment.platform in ('edxorg', 'mitxonline')
+        and course_run.courserun_readable_id in (
+            micromasters_line.courserun_readable_id
+            , micromasters_line.courserun_edxorg_readable_id
+        )
+    group by enrollment.enrollment_key
+)
+
+-- MITx Online holds copies of edX.org enrollments for runs hosted there. Like the
+-- originals, they have no order to read.
+, mitxonline_runs_on_edxorg as (
+    select course_run.courserun_pk
+    from course_run
+    inner join {{ ref('int__mitxonline__course_runs') }} as mitxonline_run
+        on course_run.source_id = mitxonline_run.courserun_id
+    where
+        course_run.platform = 'mitxonline'
+        and mitxonline_run.courserun_platform = '{{ var("edxorg") }}'
+)
+
+, enrollment_order_state as (
+    select
+        enrollment.enrollment_key
+        , coalesce(
+            enrollment_orders.order_state = 'fulfilled' or micromasters_orders.has_fulfilled_order
+            , false
+        ) as has_fulfilled_order
+        , enrollment_orders.enrollment_key is not null
+        or micromasters_orders.enrollment_key is not null as has_order
+    from enrollment
+    left join enrollment_orders
+        on enrollment.enrollment_key = enrollment_orders.enrollment_key
+    left join micromasters_orders
+        on enrollment.enrollment_key = micromasters_orders.enrollment_key
+)
+
 select
-    enrollment_orders.enrollment_key
+    enrollment.enrollment_key
     , enrollment_orders.order_fk
     , enrollment_orders.order_id
     , enrollment_orders.order_reference_number
@@ -286,8 +348,28 @@ select
     , enrollment_orders.deferred_from_courserun_readable_id
     , enrollment_orders.program_order_id
     , program_order_discounts.program_discount_fk
-from enrollment_orders
+    -- hq#14161. We hold no edX.org orders, so that platform falls back to the mode, minus
+    -- enrollments whose only MicroMasters order was refunded. Platforms the decision does
+    -- not cover stay null.
+    , case
+        when enrollment.platform = 'edxorg' or mitxonline_runs_on_edxorg.courserun_pk is not null
+            then
+                case
+                    when enrollment_order_state.has_fulfilled_order then true
+                    when enrollment_order_state.has_order then false
+                    else coalesce(enrollment.enrollment_mode = 'verified', false)
+                end
+        when enrollment.platform in ('mitxonline', 'mitxpro')
+            then enrollment_order_state.has_fulfilled_order
+    end as is_paid
+from enrollment
+inner join enrollment_order_state
+    on enrollment.enrollment_key = enrollment_order_state.enrollment_key
+left join enrollment_orders
+    on enrollment.enrollment_key = enrollment_orders.enrollment_key
 left join program_order_discounts
     on
         enrollment_orders.program_order_id = program_order_discounts.order_id
         and enrollment_orders.platform = program_order_discounts.platform
+left join mitxonline_runs_on_edxorg
+    on enrollment.courserun_fk = mitxonline_runs_on_edxorg.courserun_pk
