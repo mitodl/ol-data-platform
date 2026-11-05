@@ -76,11 +76,11 @@ select
     , combined_products.product_name
     , case
         when discount_type = 'percent-off'
-            then concat(format('%.2f', mitxonline_discount.discount_amount), '%')
+            then concat({{ format_fixed_decimal('mitxonline_discount.discount_amount') }}, '%')
         when discount_type = 'dollars-off'
-            then concat('$', format('%.2f', mitxonline_discount.discount_amount))
+            then concat('$', {{ format_fixed_decimal('mitxonline_discount.discount_amount') }})
         when discount_type = 'fixed-price'
-            then concat('Fixed Price: ', format('%.2f', mitxonline_discount.discount_amount))
+            then concat('Fixed Price: ', {{ format_fixed_decimal('mitxonline_discount.discount_amount') }})
     end as discount_amount_text
     , null as company_name
     , null as discount_type
