@@ -81,6 +81,9 @@ select
             then concat('$', format('%.2f', mitxonline_discount.discount_amount))
         when discount_type = 'fixed-price'
             then concat('Fixed Price: ', format('%.2f', mitxonline_discount.discount_amount))
+        -- The amount is resolved per learner at checkout; the discount stores 0
+        when discount_type = 'paid-amount-off'
+            then 'Paid Amount Off'
     end as discount_amount_text
     , null as company_name
     , null as discount_type

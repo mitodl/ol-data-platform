@@ -74,7 +74,11 @@ with enrollment as (
                 order by transaction_created_on desc, payment_id desc
             ) as row_num
         from {{ ref('tfact_payment') }}
-        where transaction_type = 'payment'
+        -- xPRO records a payment as a CyberSource 'sale' receipt, and keeps the
+        -- cancelled, declined and errored attempts beside the accepted one
+        where
+            transaction_type = 'payment'
+            or (transaction_type = 'sale' and transaction_status = 'ACCEPT')
     )
     where row_num = 1
 )
