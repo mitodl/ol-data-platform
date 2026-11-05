@@ -213,7 +213,7 @@ with mitxonline_courses as (
         , course_is_live
         , platform as primary_platform
         , current_timestamp as effective_date
-        , cast(null as timestamp) as end_date
+        , {{ null_timestamp() }} as end_date
         , true as is_current
     from current_courses
 )

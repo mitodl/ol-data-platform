@@ -1179,6 +1179,20 @@
 
 {% macro starrocks__null_timestamptz() -%}cast(null as datetime){%- endmacro %}
 
+{#
+    null_timestamp: a NULL of the engine's zone-less timestamp type. StarRocks has
+    no `timestamp` type. A macro for the whole expression rather than
+    `cast(null as {{ dbt.type_timestamp() }})`, which ol-dbt validate's raw-SQL
+    parse cannot read.
+#}
+{% macro null_timestamp() -%}
+    {{ adapter.dispatch('null_timestamp', 'open_learning')() }}
+{%- endmacro %}
+
+{% macro default__null_timestamp() -%}cast(null as timestamp){%- endmacro %}
+
+{% macro starrocks__null_timestamp() -%}cast(null as datetime){%- endmacro %}
+
 {% macro current_timestamptz() -%}
     {{ adapter.dispatch('current_timestamptz', 'open_learning')() }}
 {%- endmacro %}
