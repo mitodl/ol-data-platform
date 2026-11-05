@@ -2,7 +2,8 @@
     materialized='incremental',
     unique_key='enrollment_key',
     incremental_strategy='delete+insert',
-    on_schema_change='append_new_columns'
+    on_schema_change='append_new_columns',
+    post_hook="{{ delete_tfact_enrollment_gone_from_source() }}"
 ) }}
 
 {#- The first incremental run after contract_fk is added reads a target without the column.
@@ -199,12 +200,7 @@ with mitxonline_enrollments as (
         -- the student id: any change to this id moving forward would change the key and
         -- result in a duplicate record. The name is keyed as first and last, not the
         -- concatenated user_full_name, which can join two different splits of one name.
-        {{ dbt_utils.generate_surrogate_key([
-            'emeritus_enrollments.courserun_external_readable_id',
-            'emeritus_enrollments.user_email',
-            'emeritus_enrollments.user_first_name',
-            'emeritus_enrollments.user_last_name'
-        ]) }} as enrollment_id
+        {{ emeritus_enrollment_id('emeritus_enrollments') }} as enrollment_id
         , cast(null as bigint) as user_id
         , emeritus_enrollments.user_id as external_user_id
         , emeritus_enrollments.user_email
@@ -236,10 +232,7 @@ with mitxonline_enrollments as (
         -- Source has no native enrollment_id. Keyed on the learner the same way as
         -- dim_user.global_alumni_identity_key (email first; a Global Alumni student id
         -- is not unique per person).
-        {{ dbt_utils.generate_surrogate_key([
-            'coalesce(global_alumni_enrollments.user_email, cast(global_alumni_enrollments.user_id as varchar))',
-            'global_alumni_enrollments.courserun_external_readable_id'
-        ]) }} as enrollment_id
+        {{ global_alumni_enrollment_id('global_alumni_enrollments') }} as enrollment_id
         , cast(null as bigint) as user_id
         , global_alumni_enrollments.user_id as external_user_id
         , global_alumni_enrollments.user_email

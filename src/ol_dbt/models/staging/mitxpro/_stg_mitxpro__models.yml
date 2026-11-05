@@ -2860,3 +2860,79 @@ unit_tests:
       coursestructure_content_hash: B, coursestructure_retrieved_at: '2026-10-03T00:00:00.000000Z'}
     - {courserun_readable_id: course-v1:xPRO+DSx+R1, coursestructure_block_id: b2,
       coursestructure_content_hash: B, coursestructure_retrieved_at: '2026-10-03T00:00:00.000000Z'}
+- name: test_stg__emeritus__api__bigquery__user_enrollments_keeps_the_latest_sync
+  description: >
+    a@ changed run with no new last-modified date. b@ has a newer last-modified
+    date in its older sync, which must not win. c@ replaced a name and the old
+    row stopped being sent. d@ has two names sent together, so both stay. Rows
+    with a blank email are told apart by first and last name, so one leaving the
+    export keeps its row, including two splits of one name (Ann Marie / Lee and
+    Ann / Marie Lee) and two rows with no last name.
+    e@ is sent twice by one sync, and the newer last-modified date wins.
+  model: stg__emeritus__api__bigquery__user_enrollments
+  given:
+  - input: source('ol_warehouse_raw_data', 'raw__emeritus__bigquery__api_enrollments')
+    rows:
+    - {_airbyte_extracted_at: 1, batch_id: B-1, email: a@x.test, first_name: Ann,
+      last_name: Lee, wrike_run_code: OLD, opportunity_last_modified_date: '2026-01-01
+        00:00:00'}
+    - {_airbyte_extracted_at: 2, batch_id: B-1, email: a@x.test, first_name: Ann,
+      last_name: Lee, wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01
+        00:00:00'}
+    - {_airbyte_extracted_at: 1, batch_id: B-1, email: b@x.test, first_name: Bo, last_name: Lee,
+      wrike_run_code: OLD, opportunity_last_modified_date: '2026-02-01 00:00:00'}
+    - {_airbyte_extracted_at: 2, batch_id: B-1, email: b@x.test, first_name: Bo, last_name: Lee,
+      wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01 00:00:00'}
+    - {_airbyte_extracted_at: 1, batch_id: B-1, email: c@x.test, first_name: Cy, last_name: Old,
+      wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01 00:00:00'}
+    - {_airbyte_extracted_at: 2, batch_id: B-1, email: C@x.test, first_name: Cy, last_name: New,
+      wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01 00:00:00'}
+    - {_airbyte_extracted_at: 2, batch_id: B-1, email: d@x.test, first_name: Di, last_name: One,
+      wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01 00:00:00'}
+    - {_airbyte_extracted_at: 2, batch_id: B-1, email: d@x.test, first_name: Di, last_name: Two,
+      wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01 00:00:00'}
+    - {_airbyte_extracted_at: 1, batch_id: B-1, email: (blank), first_name: Ed, last_name: Gone,
+      wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01 00:00:00'}
+    - {_airbyte_extracted_at: 2, batch_id: B-1, email: (blank), first_name: Flo, last_name: Sent,
+      wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01 00:00:00'}
+    - {_airbyte_extracted_at: 1, batch_id: B-1, email: (blank), first_name: Ann Marie,
+      last_name: Lee, wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01
+        00:00:00'}
+    - {_airbyte_extracted_at: 2, batch_id: B-1, email: (blank), first_name: Ann, last_name: Marie
+        Lee, wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01 00:00:00'}
+    - {_airbyte_extracted_at: 1, batch_id: B-1, email: (blank), first_name: Gus, last_name: null,
+      wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01 00:00:00'}
+    - {_airbyte_extracted_at: 2, batch_id: B-1, email: (blank), first_name: Hal, last_name: null,
+      wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01 00:00:00'}
+    - {_airbyte_extracted_at: 2, batch_id: B-1, email: e@x.test, first_name: Eve,
+      last_name: Lee, wrike_run_code: NEW, opportunity_last_modified_date: '2026-01-01
+        00:00:00', enrollment_type: older}
+    - {_airbyte_extracted_at: 2, batch_id: B-1, email: e@x.test, first_name: Eve,
+      last_name: Lee, wrike_run_code: NEW, opportunity_last_modified_date: '2026-02-01
+        00:00:00', enrollment_type: newer}
+  expect:
+    rows:
+    - {user_email: a@x.test, user_first_name: Ann, user_last_name: Lee, courserun_external_readable_id: NEW,
+      enrollment_type: null}
+    - {user_email: b@x.test, user_first_name: Bo, user_last_name: Lee, courserun_external_readable_id: NEW,
+      enrollment_type: null}
+    - {user_email: C@x.test, user_first_name: Cy, user_last_name: New, courserun_external_readable_id: NEW,
+      enrollment_type: null}
+    - {user_email: d@x.test, user_first_name: Di, user_last_name: One, courserun_external_readable_id: NEW,
+      enrollment_type: null}
+    - {user_email: d@x.test, user_first_name: Di, user_last_name: Two, courserun_external_readable_id: NEW,
+      enrollment_type: null}
+    - {user_email: null, user_first_name: Ed, user_last_name: Gone, courserun_external_readable_id: NEW,
+      enrollment_type: null}
+    - {user_email: null, user_first_name: Flo, user_last_name: Sent, courserun_external_readable_id: NEW,
+      enrollment_type: null}
+    - {user_email: null, user_first_name: Ann Marie, user_last_name: Lee, courserun_external_readable_id: NEW,
+      enrollment_type: null}
+    - {user_email: null, user_first_name: Ann, user_last_name: Marie Lee, courserun_external_readable_id: NEW,
+      enrollment_type: null}
+    - {user_email: null, user_first_name: Gus, user_last_name: null, courserun_external_readable_id: NEW,
+      enrollment_type: null}
+    - {user_email: null, user_first_name: Hal, user_last_name: null, courserun_external_readable_id: NEW,
+      enrollment_type: null}
+    - {user_email: e@x.test, user_first_name: Eve, user_last_name: Lee, courserun_external_readable_id: NEW,
+      enrollment_type: newer}
