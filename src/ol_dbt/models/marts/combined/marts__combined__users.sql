@@ -46,25 +46,28 @@ with mitx__users as (
     select * from {{ ref('int__combined__course_runs') }}
 )
 
+-- Program, order and course rows are matched to users by lowercased email
+-- because the platforms store some addresses in different letter case. Each
+-- aggregate is keyed on the lowercased email so a user row matches one row.
 , program_stats as (
     select
-        user_email
+        lower(user_email) as user_email
         , sum(case when user_has_completed_program = true then 1 else 0 end) as completed_program_count
     from combined_programs
-    group by user_email
+    group by lower(user_email)
 )
 
 , orders_stats as (
     select
-        user_email
+        lower(user_email) as user_email
         , sum(order_total_price_paid) as total_amount_paid_orders
     from orders
-    group by user_email
+    group by lower(user_email)
 )
 
 , course_stats as (
     select
-        combined_enrollments.user_email
+        lower(combined_enrollments.user_email) as user_email
         , count(distinct combined_enrollments.course_title) as num_of_course_enrolled
         , count(
             distinct
@@ -79,7 +82,7 @@ with mitx__users as (
     from combined_enrollments
     left join combined_courseruns
         on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
-    group by combined_enrollments.user_email
+    group by lower(combined_enrollments.user_email)
 )
 
 , combined_users as (
@@ -313,7 +316,7 @@ select
     , income.latest_income_usd
     , case when program_stats.completed_program_count > 0 then true end as has_program_certificate
 from combined_users
-left join course_stats on combined_users.user_email = course_stats.user_email
-left join program_stats on combined_users.user_email = program_stats.user_email
-left join orders_stats on combined_users.user_email = orders_stats.user_email
+left join course_stats on lower(combined_users.user_email) = course_stats.user_email
+left join program_stats on lower(combined_users.user_email) = program_stats.user_email
+left join orders_stats on lower(combined_users.user_email) = orders_stats.user_email
 left join income on combined_users.user_mitxonline_username = income.user_username
