@@ -136,7 +136,13 @@ models:
 - name: int__mitx__users
   description: MITx users combined from MITx Online, MicroMasters, and edX.org. For
     users who exist on both platforms, their profile fields are selected in the order
-    of MITx Online, MicroMasters, and edX.org, whichever is not null.
+    of MITx Online, MicroMasters, and edX.org, whichever is not null. A MicroMasters
+    account links to MITx Online through its mitxonline social auth, otherwise on
+    lowercased email to an account holding no other MicroMasters id, otherwise through
+    its edX.org account. An email link wins over the edX.org path, so the MicroMasters
+    id sits on the account with the MicroMasters email even when the learner's edX.org
+    account is on another row. A MicroMasters account no link reaches gets its own
+    row.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -161,7 +167,9 @@ models:
   - name: is_mitxonline_user
     description: boolean, indicating if this user has an account on MITx Online
   - name: is_edxorg_user
-    description: boolean, indicating if this user has an account on edX.org
+    description: boolean, indicating if this user has an account on edX.org. True
+      on an email-linked row that keeps the MicroMasters account's edX.org username
+      because that account has no row of its own.
   - name: user_mitxonline_id
     description: int, user ID on MITx Online
     tests:
@@ -183,7 +191,23 @@ models:
       two MicroMasters accounts (one linked from edX.org, one from MITx Online) has
       only one of those ids kept on the collapsed row, and the other account is appended
       with the same edX.org username. Uniqueness is asserted per MicroMasters account
-      instead.
+      instead. On an email-linked row with no linked edX.org account, it is the MicroMasters
+      account's edX.org username when that account has no row of its own.
+  - name: user_micromasters_edxorg_id
+    description: int, on an email-linked row, the edX.org user ID the MicroMasters
+      account reached through social auth, or null when that login has no edX.org
+      row. That account can sit on another row, so models keyed on user_micromasters_id
+      read this in place of user_edxorg_id whenever user_micromasters_edxorg_username
+      is set, so the id and username name one account.
+  - name: user_micromasters_edxorg_username
+    description: str, on an email-linked row, the MicroMasters account's edX.org username,
+      read before user_edxorg_username for the same reason. Null on other rows.
+  - name: is_micromasters_linked_by_email
+    description: boolean, true when user_micromasters_id reached this row through
+      the lowercased email link rather than social auth. It says nothing about whether
+      the MicroMasters data moved to MITx Online.
+    tests:
+    - not_null
   - name: user_mitxonline_email
     description: str, user email on MITx Online
     tests:
@@ -594,3 +618,124 @@ models:
       arguments:
         column_list: ["user_email", "mitxonline_program_id", "micromasters_program_id",
           "program_title"]
+
+unit_tests:
+- name: test_int__mitx__users_links_micromasters_to_mitxonline_on_email
+  description: >
+    A MicroMasters account whose mitxonline social auth doesn't resolve moves to the
+    MITx
+    Online account with its email, and leaves the edX.org row that reached it. Social
+    auth
+    wins, an account already holding a MicroMasters id takes no other, and when two
+    MicroMasters accounts share an address the one logged in last is linked.
+  model: int__mitx__users
+  given:
+  - input: ref('int__mitxonline__users')
+    rows:
+    # 1 has only a MicroMasters-only twin. 2 and 3 are one person with two accounts: 2 is
+    # linked to edX.org account 20, 3 has the MicroMasters email. 4 shares an email with a
+    # MicroMasters account whose edX.org account 21 has no MITx Online link.
+    - {user_id: 1, user_username: m1, user_email: one@example.com, user_birth_year: 1990}
+    - {user_id: 2, user_username: m2, user_email: two-edx@example.com}
+    - {user_id: 3, user_username: m3, user_email: two-mm@example.com}
+    - {user_id: 4, user_username: m4, user_email: four@example.com}
+    # 5 holds MicroMasters id 103 through social auth, so 104 with its email stays apart.
+    - {user_id: 5, user_username: m5, user_email: five@example.com}
+    # 6 has two MicroMasters accounts on one address.
+    - {user_id: 6, user_username: m6, user_email: six@example.com}
+    # 107 has social auth to 7, so 8 with the MicroMasters email is not linked.
+    - {user_id: 7, user_username: m7, user_email: seven@example.com}
+    - {user_id: 8, user_username: m8, user_email: seven-mm@example.com}
+  - input: ref('int__edxorg__mitx_users')
+    rows:
+    - {user_id: 20, user_username: edx_two, user_email: two-edx@example.com, user_birth_year: 1990}
+    - {user_id: 21, user_username: edx_four, user_email: four-edx@example.com}
+  - input: ref('int__micromasters__users')
+    rows:
+    - {user_id: 100, user_email: One@Example.com, user_edxorg_username: edx_no_row,
+      user_mitxonline_username: null, user_address_postal_code: "02139", user_last_login: null,
+      user_joined_on: null}
+    - {user_id: 101, user_email: two-mm@example.com, user_edxorg_username: edx_two,
+      user_mitxonline_username: null, user_address_postal_code: "02142", user_last_login: null,
+      user_joined_on: null}
+    - {user_id: 102, user_email: four@example.com, user_edxorg_username: edx_four,
+      user_mitxonline_username: null, user_address_postal_code: null, user_last_login: null,
+      user_joined_on: null}
+    - {user_id: 103, user_email: five@example.com, user_edxorg_username: null, user_mitxonline_username: m5,
+      user_address_postal_code: null, user_last_login: null, user_joined_on: null}
+    - {user_id: 104, user_email: five@example.com, user_edxorg_username: null, user_mitxonline_username: null,
+      user_address_postal_code: null, user_last_login: null, user_joined_on: null}
+    - {user_id: 105, user_email: six@example.com, user_edxorg_username: null, user_mitxonline_username: null,
+      user_address_postal_code: null, user_last_login: '2020-01-01', user_joined_on: null}
+    - {user_id: 106, user_email: six@example.com, user_edxorg_username: null, user_mitxonline_username: null,
+      user_address_postal_code: null, user_last_login: '2021-01-01', user_joined_on: null}
+    - {user_id: 107, user_email: seven-mm@example.com, user_edxorg_username: null,
+      user_mitxonline_username: m7, user_address_postal_code: null, user_last_login: null,
+      user_joined_on: null}
+  expect:
+    rows:
+    - {user_mitxonline_id: 1, user_edxorg_id: null, user_micromasters_id: 100, user_edxorg_username: edx_no_row,
+      user_micromasters_email: One@Example.com, user_address_postal_code: "02139",
+      is_micromasters_linked_by_email: true, user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: edx_no_row}
+    - {user_mitxonline_id: 2, user_edxorg_id: 20, user_micromasters_id: null, user_edxorg_username: edx_two,
+      user_micromasters_email: null, user_address_postal_code: "02142", is_micromasters_linked_by_email: false,
+      user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}
+    - {user_mitxonline_id: 3, user_edxorg_id: null, user_micromasters_id: 101, user_edxorg_username: null,
+      user_micromasters_email: two-mm@example.com, user_address_postal_code: "02142",
+      is_micromasters_linked_by_email: true, user_micromasters_edxorg_id: 20, user_micromasters_edxorg_username: edx_two}
+    - {user_mitxonline_id: 4, user_edxorg_id: null, user_micromasters_id: 102, user_edxorg_username: null,
+      user_micromasters_email: four@example.com, user_address_postal_code: null, is_micromasters_linked_by_email: true,
+      user_micromasters_edxorg_id: 21, user_micromasters_edxorg_username: edx_four}
+    - {user_mitxonline_id: null, user_edxorg_id: 21, user_micromasters_id: null, user_edxorg_username: edx_four,
+      user_micromasters_email: null, user_address_postal_code: null, is_micromasters_linked_by_email: false,
+      user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}
+    - {user_mitxonline_id: 5, user_edxorg_id: null, user_micromasters_id: 103, user_edxorg_username: null,
+      user_micromasters_email: five@example.com, user_address_postal_code: null, is_micromasters_linked_by_email: false,
+      user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}
+    - {user_mitxonline_id: null, user_edxorg_id: null, user_micromasters_id: 104,
+      user_edxorg_username: null, user_micromasters_email: five@example.com, user_address_postal_code: null,
+      is_micromasters_linked_by_email: false, user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}
+    - {user_mitxonline_id: 6, user_edxorg_id: null, user_micromasters_id: 106, user_edxorg_username: null,
+      user_micromasters_email: six@example.com, user_address_postal_code: null, is_micromasters_linked_by_email: true,
+      user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}
+    - {user_mitxonline_id: null, user_edxorg_id: null, user_micromasters_id: 105,
+      user_edxorg_username: null, user_micromasters_email: six@example.com, user_address_postal_code: null,
+      is_micromasters_linked_by_email: false, user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}
+    - {user_mitxonline_id: 7, user_edxorg_id: null, user_micromasters_id: 107, user_edxorg_username: null,
+      user_micromasters_email: seven-mm@example.com, user_address_postal_code: null,
+      is_micromasters_linked_by_email: false, user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}
+    - {user_mitxonline_id: 8, user_edxorg_id: null, user_micromasters_id: null, user_edxorg_username: null,
+      user_micromasters_email: null, user_address_postal_code: null, is_micromasters_linked_by_email: false,
+      user_micromasters_edxorg_id: null, user_micromasters_edxorg_username: null}
+
+- name: test_int__mitx__users_email_link_keeps_is_edxorg_user
+  description: >
+    An email-linked row that took over a MicroMasters-only row's edX.org username
+    still reports an
+    edX.org account (1). One whose edX.org account has its own row does not repeat
+    it (2), and
+    neither does a row whose MicroMasters account has no edX.org login (3).
+  model: int__mitx__users
+  given:
+  - input: ref('int__mitxonline__users')
+    rows:
+    - {user_id: 1, user_username: m1, user_email: one@example.com, user_birth_year: 1990}
+    - {user_id: 2, user_username: m2, user_email: two@example.com}
+    - {user_id: 3, user_username: m3, user_email: three@example.com}
+  - input: ref('int__edxorg__mitx_users')
+    rows:
+    - {user_id: 20, user_username: edx_two, user_email: two-edx@example.com, user_birth_year: 1990}
+  - input: ref('int__micromasters__users')
+    rows:
+    - {user_id: 100, user_email: one@example.com, user_edxorg_username: edx_no_row,
+      user_mitxonline_username: null, user_last_login: null, user_joined_on: null}
+    - {user_id: 101, user_email: two@example.com, user_edxorg_username: edx_two, user_mitxonline_username: null,
+      user_last_login: null, user_joined_on: null}
+    - {user_id: 102, user_email: three@example.com, user_edxorg_username: null, user_mitxonline_username: null,
+      user_last_login: null, user_joined_on: null}
+  expect:
+    rows:
+    - {user_mitxonline_id: 1, user_edxorg_id: null, is_edxorg_user: true}
+    - {user_mitxonline_id: 2, user_edxorg_id: null, is_edxorg_user: false}
+    - {user_mitxonline_id: 3, user_edxorg_id: null, is_edxorg_user: false}
+    - {user_mitxonline_id: null, user_edxorg_id: 20, is_edxorg_user: true}
