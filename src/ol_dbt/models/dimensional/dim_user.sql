@@ -150,7 +150,7 @@ with mitx_users as (
                     , user_address_postal_code asc
             ) as row_num
         from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
-    )
+    ) as subquery
     where row_num = 1
 )
 
@@ -188,7 +188,7 @@ with mitx_users as (
                     , user_address_postal_code asc
             ) as row_num
         from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
-    )
+    ) as subquery
     where row_num = 1
 )
 
@@ -284,7 +284,7 @@ with mitx_users as (
                 order by user_created_on desc
             ) as row_num
         from {{ ref('stg__mitlearn__app__postgres__users_user') }}
-    )
+    ) as subquery
     where row_num = 1
 )
 
@@ -299,7 +299,7 @@ with mitx_users as (
                 order by user_last_login desc nulls last, user_created_on desc nulls last, user_id desc
             ) as global_id_row_num
         from learn_user_deduped_by_email
-    )
+    ) as subquery
     where global_id_row_num = 1
 )
 

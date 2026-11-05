@@ -289,6 +289,31 @@
 
 
 {#
+    format_fixed_decimal: A number as a string with exactly two decimal places,
+    rounded half away from zero, no grouping separators (Trino's format('%.2f', x)).
+    StarRocks has no format() for numbers, and DuckDB's printf rounds some half-way
+    values down (0.015 to 0.01). Casting to decimal(38, 2) rounds as Trino does on
+    StarRocks for decimal and double input, and on DuckDB for decimal input. DuckDB
+    rounds a double by its binary value (0.145 to 0.14, where Trino gives 0.15).
+#}
+{% macro format_fixed_decimal(number_expr) -%}
+    {{ adapter.dispatch('format_fixed_decimal', 'open_learning')(number_expr) }}
+{%- endmacro %}
+
+{% macro default__format_fixed_decimal(number_expr) -%}
+    format('%.2f', {{ number_expr }})
+{%- endmacro %}
+
+{% macro duckdb__format_fixed_decimal(number_expr) -%}
+    cast(cast({{ number_expr }} as decimal(38, 2)) as varchar)
+{%- endmacro %}
+
+{% macro starrocks__format_fixed_decimal(number_expr) -%}
+    cast(cast({{ number_expr }} as decimal(38, 2)) as varchar)
+{%- endmacro %}
+
+
+{#
     date_format: Format a date/timestamp using a MySQL-style format string (Trino date_format).
     DuckDB uses strftime with the same %-style format strings.
 #}
@@ -1154,6 +1179,20 @@
 {% macro default__null_timestamptz() -%}cast(null as timestamp with time zone){%- endmacro %}
 
 {% macro starrocks__null_timestamptz() -%}cast(null as datetime){%- endmacro %}
+
+{#
+    null_timestamp: a NULL of the engine's zone-less timestamp type. StarRocks has
+    no `timestamp` type. A macro for the whole expression rather than
+    `cast(null as {{ dbt.type_timestamp() }})`, which ol-dbt validate's raw-SQL
+    parse cannot read.
+#}
+{% macro null_timestamp() -%}
+    {{ adapter.dispatch('null_timestamp', 'open_learning')() }}
+{%- endmacro %}
+
+{% macro default__null_timestamp() -%}cast(null as timestamp){%- endmacro %}
+
+{% macro starrocks__null_timestamp() -%}cast(null as datetime){%- endmacro %}
 
 {% macro current_timestamptz() -%}
     {{ adapter.dispatch('current_timestamptz', 'open_learning')() }}
