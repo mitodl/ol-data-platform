@@ -29,6 +29,7 @@ This module cleans up fields that cause erroneous diffs between exports:
 """
 
 import re
+import sys
 from pathlib import Path
 
 import cyclopts
@@ -387,6 +388,7 @@ def normalize(
     datasets: bool = False,
     dashboards: bool = False,
     dry_run: bool = False,
+    check: bool = False,
 ) -> None:
     """Normalize exported YAML assets to reduce erroneous diffs.
 
@@ -396,7 +398,9 @@ def normalize(
         datasets: Only normalize datasets
         dashboards: Only normalize dashboards
         dry_run: Show what would change without writing any files
+        check: Like dry_run, but exit with status 1 if any file would change
     """
+    dry_run = dry_run or check
     process_all = not (charts or datasets or dashboards)
 
     if dry_run:
@@ -496,8 +500,10 @@ def normalize(
     if dry_run:
         console.print(
             f"[yellow]Would update {total_changed}/{total_files} file(s). "
-            "Run without --dry-run to apply.[/yellow]"
+            "Run `ol-superset normalize` to apply.[/yellow]"
         )
+        if check and total_changed > 0:
+            sys.exit(1)
     else:
         console.print(
             f"[bold green]✅ Done — updated {total_changed}/{total_files} "
