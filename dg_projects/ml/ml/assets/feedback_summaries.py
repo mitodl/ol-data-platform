@@ -124,7 +124,7 @@ class FeedbackSummariesConfig(Config):
 
 
 @asset(
-    code_version="feedback_summaries_v7",
+    code_version="feedback_summaries_v8",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_summaries"]),
     deps=[AssetKey(["intermediate", "int__feedback__conversation"])],
