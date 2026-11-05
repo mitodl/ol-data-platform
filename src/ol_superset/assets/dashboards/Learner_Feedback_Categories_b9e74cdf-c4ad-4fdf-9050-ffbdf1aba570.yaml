@@ -344,19 +344,6 @@ position:
     - GRID_ID
     - TABS-955ay3MgnusOgklz_0ZtT
     type: TAB
-  TAB-feedbacktrend:
-    children:
-    - ROW-feedbacktrend
-    id: TAB-feedbacktrend
-    meta:
-      defaultText: Tab title
-      placeholder: Tab title
-      text: Trends
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - TABS-955ay3MgnusOgklz_0ZtT
-    type: TAB
   TAB-feedbackabout:
     children:
     - ROW-feedbackintro
@@ -365,6 +352,19 @@ position:
       defaultText: Tab title
       placeholder: Tab title
       text: About
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-955ay3MgnusOgklz_0ZtT
+    type: TAB
+  TAB-feedbacktrend:
+    children:
+    - ROW-feedbacktrend
+    id: TAB-feedbacktrend
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Trends
     parents:
     - ROOT_ID
     - GRID_ID
