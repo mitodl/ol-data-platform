@@ -398,7 +398,7 @@ def normalize(
         datasets: Only normalize datasets
         dashboards: Only normalize dashboards
         dry_run: Show what would change without writing any files
-        check: Like dry_run, but exit with status 1 if any file would change
+        check: Like dry_run, but exit with status 1 if any file would change or fails
     """
     dry_run = dry_run or check
     process_all = not (charts or datasets or dashboards)
@@ -415,6 +415,7 @@ def normalize(
     charts_changed = charts_total = 0
     datasets_changed = datasets_total = 0
     dashboards_changed = dashboards_total = 0
+    files_failed = 0
 
     # --- Charts ---
     if process_all or charts:
@@ -436,6 +437,7 @@ def normalize(
                         action = "Would update" if dry_run else "Updated"
                         console.print(f"  [green]{action}:[/green] {yaml_file.name}")
                 except Exception as exc:  # noqa: BLE001
+                    files_failed += 1
                     console.print(
                         f"  [red]⚠ Error processing {yaml_file.name}: {exc}[/red]"
                     )
@@ -463,6 +465,7 @@ def normalize(
                         action = "Would update" if dry_run else "Updated"
                         console.print(f"  [green]{action}:[/green] {yaml_file.name}")
                 except Exception as exc:  # noqa: BLE001
+                    files_failed += 1
                     console.print(
                         f"  [red]⚠ Error processing {yaml_file.name}: {exc}[/red]"
                     )
@@ -486,6 +489,7 @@ def normalize(
                         action = "Would update" if dry_run else "Updated"
                         console.print(f"  [green]{action}:[/green] {yaml_file.name}")
                 except Exception as exc:  # noqa: BLE001
+                    files_failed += 1
                     console.print(
                         f"  [red]⚠ Error processing {yaml_file.name}: {exc}[/red]"
                     )
@@ -502,7 +506,7 @@ def normalize(
             f"[yellow]Would update {total_changed}/{total_files} file(s). "
             "Run `ol-superset normalize` to apply.[/yellow]"
         )
-        if check and total_changed > 0:
+        if check and (total_changed > 0 or files_failed > 0):
             sys.exit(1)
     else:
         console.print(
