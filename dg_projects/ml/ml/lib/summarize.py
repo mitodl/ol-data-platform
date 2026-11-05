@@ -2,12 +2,12 @@
 
 import logging
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import polars as pl
-from ml.lib.iceberg_helpers import upsert_chunk
+from ml.lib.iceberg_helpers import table_exists, upsert_chunk
 from ml.resources.opik_auth import OPIK_PROJECT_NAME, seed_prompt_environment
 from ol_llm import (
     Attribution,
@@ -28,6 +28,7 @@ from pydantic_ai import ModelRetry, RunContext, TextOutput
 from pydantic_ai.messages import ModelResponse
 from pydantic_ai.settings import ThinkingEffort
 from pyiceberg.catalog import Catalog
+from pyiceberg.expressions import In
 
 JOIN_COLS = ["feedback_conversation_pk"]
 
@@ -339,31 +340,49 @@ class Summarizer:
             )
         return pl.DataFrame(records, schema=SUMMARIZE_CHECKPOINT_SCHEMA)
 
-    def filtered_frame(self, rows: Sequence[dict[str, Any]]) -> pl.DataFrame:
+    def filtered_frame(
+        self,
+        rows: Sequence[dict[str, Any]],
+        summarized: Mapping[str, dict[str, Any]],
+    ) -> pl.DataFrame:
         """Return the feedback_summaries rows for content-filtered conversations.
 
         ol-llm treats a content filter as coming from the input under this prompt
         and model, not to be retried under the same key (RowFailure.retry_next_run),
-        so each row keeps its idempotency key and filter_unsummarized drops it
-        until the text, the prompt, or the model changes. Without the key, a
-        single filtered conversation is submitted, and fails the run, every time
-        the asset runs. Every other provenance column stays null, as for a
-        skipped row, so the conversation is embedded from its concatenated turns.
+        so each row gets the filtered text's idempotency key and
+        filter_unsummarized drops it until the text, the prompt, or the model
+        changes. Without the key, a single filtered conversation is submitted,
+        and fails the run, every time the asset runs.
+
+        A conversation summarized before keeps its stored row, with only the key
+        replaced, the same as filter_unsummarized leaving a summary in place when
+        the text goes missing. Its summary misses the filtered turn, but its
+        summary embedding and its cluster stay consistent: incremental assignment
+        and reclustering skip the concatenated_turns arm, so moving it there
+        would leave its old cluster assignment behind. Any other conversation
+        gets no summary and every other provenance column null, as for a skipped
+        row, so it is embedded from its concatenated turns.
 
         :param rows: conversations whose call raised LLMContentFiltered.
+        :param summarized: the stored row of each of them that has a summary, by
+            feedback_conversation_pk.
         :rtype: pl.DataFrame
         """
-        return pl.DataFrame(
-            [
-                {
-                    **_identity(row),
-                    "idempotency_key": self.keys.key(row["conversation_text"]),
-                    "embedding_input": "concatenated_turns",
-                }
-                for row in rows
-            ],
-            schema=SUMMARIZE_CHECKPOINT_SCHEMA,
-        )
+        records = []
+        for row in rows:
+            key = self.keys.key(row["conversation_text"])
+            stored = summarized.get(row["feedback_conversation_pk"])
+            if stored is None:
+                records.append(
+                    {
+                        **_identity(row),
+                        "idempotency_key": key,
+                        "embedding_input": "concatenated_turns",
+                    }
+                )
+            else:
+                records.append({**stored, "idempotency_key": key})
+        return pl.DataFrame(records, schema=SUMMARIZE_CHECKPOINT_SCHEMA)
 
 
 def skipped_frame(rows: Sequence[dict[str, Any]]) -> pl.DataFrame:
@@ -379,6 +398,29 @@ def skipped_frame(rows: Sequence[dict[str, Any]]) -> pl.DataFrame:
         [{**_identity(row), "embedding_input": "concatenated_turns"} for row in rows],
         schema=SUMMARIZE_CHECKPOINT_SCHEMA,
     )
+
+
+def _stored_summaries(
+    catalog: Catalog, table_identifier: str, pks: Sequence[str]
+) -> dict[str, dict[str, Any]]:
+    """Return the stored row of each of pks that has a summary, by pk.
+
+    A table from before a column was added lacks it, and the row's value for it
+    stays null when filtered_frame builds the frame.
+    """
+    if not pks or not table_exists(catalog, table_identifier):
+        return {}
+    stored = (
+        catalog.load_table(table_identifier)
+        .scan(row_filter=In("feedback_conversation_pk", pks))
+        .to_polars()
+        .filter(pl.col("conversation_summary").is_not_null())
+    )
+    columns = [col for col in SUMMARIZE_CHECKPOINT_SCHEMA if col in stored.columns]
+    return {
+        row["feedback_conversation_pk"]: row
+        for row in stored.select(columns).to_dicts()
+    }
 
 
 def _identity(row: dict[str, Any]) -> dict[str, Any]:
@@ -402,8 +444,9 @@ def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning 
     """Summarize unsummarized_df in chunks, upserting each as it completes.
 
     Conversations without text are upserted first as skipped rows. A
-    conversation the content filter stopped is upserted with its key and no
-    summary (see Summarizer.filtered_frame). Any other failed conversation is
+    conversation the content filter stopped is upserted with its key, keeping
+    any summary it already had (see Summarizer.filtered_frame). Any other
+    failed conversation is
     left out of the table, so the next run submits it again. process_batch
     stops the run when its circuit breaker opens (an outage, a rate limit that
     outlasts the retries, or a rejected credential); everything upserted before
@@ -441,11 +484,16 @@ def summarize_and_checkpoint(  # noqa: PLR0913 -- each is an independent tuning 
             for failure in chunk.failed
             if isinstance(failure.error, LLMContentFiltered)
         ]
+        summarized = _stored_summaries(
+            catalog,
+            table_identifier,
+            [row["feedback_conversation_pk"] for row in filtered],
+        )
         checkpoint(
             pl.concat(
                 [
                     summarizer.summarized_frame(chunk.succeeded),
-                    summarizer.filtered_frame(filtered),
+                    summarizer.filtered_frame(filtered, summarized),
                 ]
             )
         )

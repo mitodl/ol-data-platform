@@ -532,7 +532,7 @@ def test_summarize_and_checkpoint_leaves_a_failed_conversation_out(
 
 
 def test_filtered_frame_keeps_the_key_and_no_summary() -> None:
-    frame = SUMMARIZER.filtered_frame([_conversation_row(conversation_ref="1")])
+    frame = SUMMARIZER.filtered_frame([_conversation_row(conversation_ref="1")], {})
 
     record = frame.row(0, named=True)
     assert frame.schema == pl.Schema(summarize.SUMMARIZE_CHECKPOINT_SCHEMA)
@@ -563,6 +563,37 @@ def test_summarize_and_checkpoint_records_a_filtered_conversation(
     stored = _stored_rows(iceberg_catalog)
     assert stored["idempotency_key"].to_list() == [_key("blocked"), _key(TEXT)]
     assert stored["conversation_summary"].is_null().to_list() == [True, False]
+
+
+def test_a_filtered_new_turn_keeps_the_stored_summary(
+    iceberg_catalog: SqlCatalog,
+) -> None:
+    """A summarized conversation stays in the summary arm, so its embedding and
+    cluster assignment stay consistent; only its key moves to the new text.
+    """
+    first = pl.DataFrame([_conversation_row(conversation_ref="1")])
+    with override_models(FunctionModel(_summarize)):
+        summarize.summarize_and_checkpoint(
+            first, SUMMARIZER, (iceberg_catalog, TABLE), max_concurrency=1
+        )
+    before = _stored_rows(iceberg_catalog).row(0, named=True)
+    new_turn = first.with_columns(
+        pl.lit(f"{TEXT}\n---\nblocked").alias("conversation_text"),
+        pl.lit(3).alias("turn_count"),
+    )
+
+    with (
+        override_models(FunctionModel(_summarize)),
+        pytest.raises(BatchFailed, match="1 of 1 rows failed"),
+    ):
+        summarize.summarize_and_checkpoint(
+            new_turn, SUMMARIZER, (iceberg_catalog, TABLE), max_concurrency=1
+        )
+
+    after = _stored_rows(iceberg_catalog).row(0, named=True)
+    assert after["idempotency_key"] == _key(f"{TEXT}\n---\nblocked")
+    assert {**after, "idempotency_key": None} == {**before, "idempotency_key": None}
+    assert after["embedding_input"] == "summary"
 
 
 def test_a_conversation_filtered_alone_fails_one_run_not_every_run(
