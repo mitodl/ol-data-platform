@@ -397,10 +397,9 @@ position:
     children: []
     id: MARKDOWN-1o1uJTcBdCkHg338Pa4rK
     meta:
-      code: '### Change Log
-
-        **2/2/26**: Enabled search functionality on Course Run Readable ID filter
-        **3/16/26**: added a new table with detailed organization data in table form'
+      code: |-
+        ### Change Log
+        **2/2/26**: Enabled search functionality on Course Run Readable ID filter **3/16/26**: added a new table with detailed organization data in table form
       height: 50
       width: 4
     parents:

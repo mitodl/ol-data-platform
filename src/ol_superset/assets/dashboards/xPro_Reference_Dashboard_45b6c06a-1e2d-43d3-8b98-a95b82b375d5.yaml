@@ -51,11 +51,11 @@ position:
     children: []
     id: MARKDOWN-l3qFrlZ8qrOSGujbfiDLK
     meta:
-      code: '[Field Defintions](https://mitodl.github.io/ol-data-platform/#!/overview)
+      code: |-
+        [Field Defintions](https://mitodl.github.io/ol-data-platform/#!/overview)
 
 
-
-        Help Email: odl-data@mit.edu'
+        Help Email: odl-data@mit.edu
       height: 71
       width: 5
     parents:
@@ -68,29 +68,20 @@ position:
     children: []
     id: MARKDOWN-ws68KzAt82td4AOKDh7wU
     meta:
-      code: '
+      code: |2+
 
         # Dashboards
 
-
         ### [Enrollment](https://bi.ol.mit.edu/superset/dashboard/p/MwAEyOz50Vk/)
-
         ### [Products](https://bi.ol.mit.edu/superset/dashboard/p/OYg5Vd7E8VQ/)
-
         ### [Course Engagement](https://bi.ol.mit.edu/superset/dashboard/p/pQVZbW9E3rn/)
-
         ### [Orders](https://bi.ol.mit.edu/superset/dashboard/p/pNBExgRZWmX/)
-
 
         # Charts
 
-
         ### [Percent Content Engagement](https://bi.ol.mit.edu/superset/explore/p/b0yGKlk7pXQ/)
-
         ### [Percent Engagement Out of Total Engagement Opportunities](https://bi.ol.mit.edu/superset/explore/p/q6PMXdlMOdl/)
 
-
-        '
       height: 80
       width: 12
     parents:
