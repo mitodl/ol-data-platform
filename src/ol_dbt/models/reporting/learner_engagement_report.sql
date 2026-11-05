@@ -397,12 +397,8 @@ select
     , page_video_problems.estimated_time_played
     , page_video_problems.video_duration
     , page_video_problems.problems_with_attempt
-    -- Old name, removed once the Superset charts read problems_with_attempt.
-    , page_video_problems.problems_with_attempt as problems_attempted
     , page_video_problems.number_of_problems
     , page_video_problems.percent_problems_attempted
-    -- Old name, removed once the Superset charts read percent_problems_attempted.
-    , page_video_problems.percent_problems_attempted as percetage_problems_attempted
     , page_video_problems.num_of_problems_correct
     , page_video_problems.avg_percent_grade
     , page_video_problems.max_possible_grade

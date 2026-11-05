@@ -81,7 +81,7 @@ columns:
   type: BOOLEAN
   verbose_name: null
 - advanced_data_type: null
-  column_name: user_watched_video_count
+  column_name: distinct_video_titles_played
   datetime_format: null
   description: null
   expression: ''

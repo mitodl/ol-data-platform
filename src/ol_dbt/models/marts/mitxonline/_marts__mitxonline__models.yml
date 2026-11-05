@@ -216,14 +216,8 @@ models:
     description: int, number of course activity events for the user
   - name: problem_submitted_events
     description: int, number of problem submitted events in a course for the user
-  - name: num_problem_submitted
-    description: Deprecated, the old name for problem_submitted_events and always
-      equal to it. Removed once the Superset charts read problem_submitted_events.
   - name: video_play_events
     description: int, number of play video events in a course for the user
-  - name: num_video_played
-    description: Deprecated, the old name for video_play_events and always equal to
-      it. Removed once the Superset charts read video_play_events.
   - name: num_discussion_participated
     description: int, number of adding a post, response, or comment events in a course
       for the user

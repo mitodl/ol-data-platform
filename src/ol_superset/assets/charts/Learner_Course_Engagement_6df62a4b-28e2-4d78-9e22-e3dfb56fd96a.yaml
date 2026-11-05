@@ -21,8 +21,8 @@ params:
   - courserun_readable_id
   - courseactivity_date
   - num_events
-  - num_problem_submitted
-  - num_video_played
+  - problem_submitted_events
+  - video_play_events
   - num_discussion_participated
   allow_render_html: false
   annotation_layers: []
@@ -35,8 +35,8 @@ params:
   - user_username
   - courserun_readable_id
   - num_events
-  - num_problem_submitted
-  - num_video_played
+  - problem_submitted_events
+  - video_play_events
   - num_discussion_participated
   - courseactivity_date
   order_by_cols:

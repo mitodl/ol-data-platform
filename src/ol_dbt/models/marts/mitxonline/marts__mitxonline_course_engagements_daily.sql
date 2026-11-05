@@ -78,9 +78,6 @@ select
     , course_activities_daily.courseactivity_num_events as num_events
     , problem_submitted_users_daily.problem_submitted_events
     , played_video_users_daily.video_play_events
-    -- Old names, removed once the Superset charts read the two above.
-    , problem_submitted_users_daily.problem_submitted_events as num_problem_submitted
-    , played_video_users_daily.video_play_events as num_video_played
     , participated_discussion_users_daily.num_discussion_participated
 from course_activities_daily
 inner join course_runs

@@ -68,7 +68,7 @@ params:
     column:
       advanced_data_type: null
       changed_on: '2025-05-29T21:49:25.066486'
-      column_name: percetage_problems_attempted
+      column_name: percent_problems_attempted
       created_on: '2025-05-29T21:49:25.066485'
       description: null
       expression: null

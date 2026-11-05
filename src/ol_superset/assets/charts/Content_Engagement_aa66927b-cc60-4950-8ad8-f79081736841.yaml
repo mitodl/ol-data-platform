@@ -29,7 +29,7 @@ params:
     hasCustomLabel: true
     label: Watched_a_video
     optionName: metric_dbwq09vzfs8_i6m93r7z48
-    sqlExpression: COUNT(DISTINCT(CASE WHEN num_video_played> 0 THEN user_email ELSE
+    sqlExpression: COUNT(DISTINCT(CASE WHEN video_play_events> 0 THEN user_email ELSE
       null END))
   - aggregate: null
     column: null
@@ -38,7 +38,7 @@ params:
     hasCustomLabel: true
     label: Tried_a_problem
     optionName: metric_fc9iy7qj0ih_7iecfw62ccm
-    sqlExpression: COUNT(DISTINCT (case when num_problem_submitted> 0 then user_email
+    sqlExpression: COUNT(DISTINCT (case when problem_submitted_events> 0 then user_email
       else null end))
   - aggregate: null
     column: null
