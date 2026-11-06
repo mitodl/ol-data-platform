@@ -513,20 +513,35 @@ edxorg_program_reports_assets = build_batched_assets(
 )
 
 
-# The xPro tracking log. It replaced the Airbyte-loaded
-# raw__xpro__openedx__tracking_logs, which is kept as the archive. One
-# listing per run: a full listing of the production bucket (264,950 files on
-# 2026-10-27) takes about 50 s, and the first runs walk ~331 batches.
-XPRO_TRACKING_LOGS_TABLE = "raw__xpro__openedx__tracking_log_events"
-xpro_tracking_logs_assets = build_batched_assets(
-    name="xpro_tracking_logs",
-    build_source=partial(
-        tracking_logs.tracking_logs_source, raw_table=XPRO_TRACKING_LOGS_TABLE
-    ),
-    pipeline=tracking_logs.tracking_logs_pipeline_for(XPRO_TRACKING_LOGS_TABLE),
-    translator=RawDataDltTranslator(),
-    list_once=True,
-)
+# The Open edX tracking logs, one asset per deployment. xPro's replaced the
+# Airbyte-loaded raw__xpro__openedx__tracking_logs, which is kept as the
+# archive. MITx Online's and MITx's load beside their Airbyte tables until
+# staging is repointed. One listing per run: a full listing of a production
+# bucket (264,950 to 473,863 files on 2026-10-27) takes 50 to 89 s, and the
+# first runs walk ~331 (xpro), ~884 (mitxonline) and ~932 (mitx) batches.
+TRACKING_LOGS_DEPLOYMENTS = ("xpro", "mitxonline", "mitx")
+
+
+def tracking_logs_table(deployment: str) -> str:
+    """Return the raw table ol_dlt.sources.tracking_logs loads for a deployment."""
+    return f"raw__{deployment}__openedx__tracking_log_events"
+
+
+tracking_logs_assets = {
+    deployment: build_batched_assets(
+        name=f"{deployment}_tracking_logs",
+        build_source=partial(
+            tracking_logs.tracking_logs_source,
+            raw_table=tracking_logs_table(deployment),
+        ),
+        pipeline=tracking_logs.tracking_logs_pipeline_for(
+            tracking_logs_table(deployment)
+        ),
+        translator=RawDataDltTranslator(),
+        list_once=True,
+    )
+    for deployment in TRACKING_LOGS_DEPLOYMENTS
+}
 
 
 # Canvas course files and text for MIT Learn's ContentFiles. One load covers at
@@ -688,7 +703,7 @@ defs = Definitions(
             *edxorg_s3_table_assets,
             *course_xml_blocks_assets,
             edxorg_program_reports_assets,
-            xpro_tracking_logs_assets,
+            *tracking_logs_assets.values(),
         ]
     ),
 )
