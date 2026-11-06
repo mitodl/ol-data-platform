@@ -31,10 +31,10 @@ with mitxonline_orders as (
         , discount_id
         , discount_code
         , case
-            when discount_amount_text like 'Fixed Price: 0%' then 'free'
-            when substr(discount_amount_text, length(discount_amount_text), 1) = '%' then 'percentage'
-            when substr(discount_amount_text, 1, 1) = '$' then 'fixed_amount'
-            else null
+            when discount_type = 'fixed-price' and discount_amount_text like 'Fixed Price: 0%' then 'free'
+            when discount_type = 'fixed-price' then 'fixed_price'
+            when discount_type = 'percent-off' then 'percentage'
+            when discount_type = 'dollars-off' then 'fixed_amount'
           end as discount_type_code
     from {{ ref('int__mitxonline__ecommerce_order') }}
 )

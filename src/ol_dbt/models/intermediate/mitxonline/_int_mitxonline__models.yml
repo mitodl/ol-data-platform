@@ -594,6 +594,9 @@ models:
   - name: discount_source
     description: str, type of discount coupon. Possible options are "marketing", "sales",
       "financial-assistance", "customer-support", "staff", "legacy"
+  - name: discount_type
+    description: str, how the discount amount is applied. One of "percent-off", "dollars-off"
+      or "fixed-price"
   - name: discount_amount_text
     description: str, discount amount in readable format from the most recent coupon
       redemption for the order. It can be percent-off which is <dollar amount>% off,

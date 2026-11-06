@@ -287,11 +287,12 @@ with bootcamps__ecommerce_order as (
         , order_total_price_paid as order_total_price_paid_plus_tax
         , order_total_price_paid
         , case
+            -- MITx Online charges the lower of the fixed price and the product price
             when discount_amount_text like '%Fixed%'
                 then cast(
-                    product_price - cast(
-                        substring(discount_amount_text, 14)
-                        as decimal(38, 2)
+                    greatest(
+                        product_price - cast(substring(discount_amount_text, 14) as decimal(38, 2))
+                        , 0
                     ) as varchar
                 )
             else discount_amount_text
@@ -460,9 +461,9 @@ with bootcamps__ecommerce_order as (
         , case
             when coupon_discount_amount_text like '%Fixed%'
                 then cast(
-                    line_price - cast(
-                        substring(coupon_discount_amount_text, 14)
-                        as decimal(38, 2)
+                    greatest(
+                        line_price - cast(substring(coupon_discount_amount_text, 14) as decimal(38, 2))
+                        , 0
                     ) as varchar
                 )
             else coupon_discount_amount_text
