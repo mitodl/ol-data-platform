@@ -2087,6 +2087,16 @@ unit_tests:
     rows: []
   - input: ref('marts__combined_course_enrollment_detail')
     rows: []
+  - input: ref('tfact_enrollment')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_contract')
+    rows: []
+  - input: ref('dim_organization')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
   expect:
     rows:
     - {user_id: 8, program_completion_days: 30, program_complete_days: 30}
@@ -2133,6 +2143,16 @@ unit_tests:
       courserunenrollment_enrollment_mode: verified}
     - {platform: MITx Online, user_email: learner@example.com, course_readable_id: "course-v1:MITxT+C",
       courserunenrollment_enrollment_mode: verified}
+  - input: ref('tfact_enrollment')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_contract')
+    rows: []
+  - input: ref('dim_organization')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
   expect:
     rows:
     - {platform_name: edX.org, verified_courses_taken_in_program: 3, capstone_ind: Y}
@@ -2171,6 +2191,16 @@ unit_tests:
     - {platform: xPro, user_email: learner@example.com, course_readable_id: "course-v1:xPRO+MLx1",
       courserunenrollment_enrollment_mode: no-id-professional, courserungrade_is_passing: true,
       courseruncertificate_is_earned: true}
+  - input: ref('tfact_enrollment')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_contract')
+    rows: []
+  - input: ref('dim_organization')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
   expect:
     rows:
     - {platform_name: xPRO, verified_courses_taken_in_program: 0, all_courses_passed_in_program: 1,
