@@ -71,6 +71,8 @@ COURSE_EXPORTS_PREFIX = "courses"
 COURSE_XML_SUFFIX = ".xml.tar.gz"
 # botocore's default connection pool size, which s3fs does not raise.
 COPY_WORKERS = 10
+# Failed copies, with none succeeding, before the run fails: one is a bad object.
+MIN_COPIES_TO_FAIL = 2
 
 LEGACY_DATETIME = "%Y-%m-%d %H:%M:%S"
 
@@ -458,19 +460,21 @@ class CourseExportDelivery:
 
 def _copy_error(fs: Any, source: str, target: str) -> str | None:
     # s3fs raises an S3 error response as an OSError subclass, chained to the
-    # botocore error that carries S3's code.
+    # botocore error that carries S3's code. Timeouts and dropped connections
+    # are OSErrors too, but carry no response; those are an outage, not a
+    # refusal of this object, and fail the run.
     try:
         fs.cp_file(source, target)
     except OSError as error:
+        response = getattr(error.__cause__, "response", None)
+        if not response:
+            raise
         get_dagster_logger().warning(
             "Could not copy %s to %s: %s", source, target, error
         )
         # The class and S3's code only: S3's message can name the role that was
         # denied, and the manifest is read outside MIT OL.
-        response = getattr(error.__cause__, "response", None)
-        if response:
-            return f"{type(error).__name__} ({response['Error']['Code']})"
-        return type(error).__name__
+        return f"{type(error).__name__} ({response['Error']['Code']})"
     return None
 
 
@@ -488,8 +492,8 @@ def copy_course_exports(
     A copy S3 refuses leaves that run out of the delivered list and names it
     with its error, so one bad object doesn't cost IRx the night's drop. Legacy
     did the same with a course whose export failed. The next night retries it.
-    A transport error that outlasts s3fs's retries is not an S3 refusal; it
-    fails the run, as an outage should.
+    Anything that is not an S3 error response (a timeout, a dropped connection
+    that outlasts s3fs's retries) fails the run, as an outage should.
     """
     fs = destination.fs
     base = destination.path.rstrip("/")
@@ -689,9 +693,10 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
                 len(courses.failed),
                 courses.failed,
             )
-            # One bad object is left out; every copy failing is a broken grant
-            # or bucket, and a manifest with no courses would hide it.
-            if not courses.copied:
+            # One bad object is left out. Every copy failing, once there were
+            # at least two to try, is a broken grant or bucket, and a green run
+            # would hide it night after night.
+            if not courses.copied and len(courses.failed) >= MIN_COPIES_TO_FAIL:
                 raise Failure(
                     description=(
                         f"All {len(courses.failed)} course export copies to "

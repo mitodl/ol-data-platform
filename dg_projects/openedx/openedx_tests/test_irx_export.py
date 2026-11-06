@@ -5,7 +5,7 @@ import hashlib
 import io
 import json
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
@@ -287,26 +287,86 @@ def test_copy_course_exports_copies_only_versions_not_yet_delivered(
     )
 
 
-def test_a_failed_copy_is_named_and_the_others_still_delivered(tmp_path) -> None:
+class _ClientError(Exception):
+    """The shape s3fs chains under an OSError it translated from S3's response."""
+
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.response = {"Error": {"Code": code}}
+
+
+def _s3_refusal() -> OSError:
+    error = PermissionError("Access Denied for arn:aws:iam::000000000000:role/x")
+    error.__cause__ = _ClientError("AccessDenied")
+    return error
+
+
+def _fail_copies(
+    monkeypatch, fs: Any, course_ids: set[str], error: Callable[[], Exception]
+) -> None:
+    copy = fs.cp_file
+
+    def cp_file(source: str, target: str, **kwargs: Any) -> None:
+        if any(f"/{course_id}/" in target for course_id in course_ids):
+            raise error()
+        copy(source, target, **kwargs)
+
+    monkeypatch.setattr(fs, "cp_file", cp_file)
+
+
+def test_a_refused_copy_is_named_and_the_others_still_delivered(
+    tmp_path, monkeypatch
+) -> None:
     landing, destination = UPath(tmp_path) / "landing", UPath(tmp_path) / "courses"
     broken = "course-v1:MITx+broken+run"
-    _course_export(landing, COURSE_ID, b"ok", 1_000)
-    gone = _course_export(landing, broken, b"gone", 1_000)
     for course_id in (COURSE_ID, broken):
+        _course_export(landing, course_id, course_id.encode(), 1_000)
         (destination / course_id).mkdir(parents=True)
     exports, _ = latest_course_exports(landing, [broken, COURSE_ID])
-    # Listed, then unreadable by the time it's copied.
-    gone.unlink()
+    _fail_copies(monkeypatch, destination.fs, {broken}, _s3_refusal)
 
     delivery = copy_course_exports(exports, destination)
 
     assert delivery.copied == 1
     assert [entry["course_id"] for entry in delivery.delivered] == [COURSE_ID]
-    assert [entry["course_id"] for entry in delivery.failed] == [broken]
-    assert delivery.failed == [{"course_id": broken, "error": "FileNotFoundError"}]
+    # The class and S3's code, not S3's message, which can name the role.
+    assert delivery.failed == [
+        {"course_id": broken, "error": "PermissionError (AccessDenied)"}
+    ]
+
+
+def test_a_copy_timeout_fails_instead_of_naming_the_course(
+    tmp_path, monkeypatch
+) -> None:
+    landing, destination = UPath(tmp_path) / "landing", UPath(tmp_path) / "courses"
+    _course_export(landing, COURSE_ID, b"x", 1_000)
+    (destination / COURSE_ID).mkdir(parents=True)
+    exports, _ = latest_course_exports(landing, [COURSE_ID])
+    # An OSError subclass with no S3 response behind it.
+    _fail_copies(monkeypatch, destination.fs, {COURSE_ID}, TimeoutError)
+
+    with pytest.raises(TimeoutError):
+        copy_course_exports(exports, destination)
 
 
 def test_the_drop_fails_when_every_course_copy_fails(
+    drop_root, landing_root, monkeypatch
+) -> None:
+    other = "course-v1:MITx+2.00x+3T2026"
+    for course_id in (COURSE_ID, other):
+        _course_export(
+            landing_root.joinpath("mitx", *course_xml.key.path),
+            course_id,
+            course_id.encode(),
+            1_000,
+        )
+    monkeypatch.setattr(irx_export, "_copy_error", lambda *_: "PermissionError")
+
+    assert not _run_export(monkeypatch, course_ids=(COURSE_ID, other)).success
+    assert not (drop_root / MANIFEST_NAME).exists()
+
+
+def test_one_failed_copy_alone_does_not_fail_the_drop(
     drop_root, landing_root, monkeypatch
 ) -> None:
     _course_export(
@@ -314,8 +374,11 @@ def test_the_drop_fails_when_every_course_copy_fails(
     )
     monkeypatch.setattr(irx_export, "_copy_error", lambda *_: "PermissionError")
 
-    assert not _run_export(monkeypatch).success
-    assert not (drop_root / MANIFEST_NAME).exists()
+    assert _run_export(monkeypatch).success
+    manifest = json.loads((drop_root / MANIFEST_NAME).read_bytes())
+    assert manifest["course_exports_failed"] == [
+        {"course_id": COURSE_ID, "error": "PermissionError"}
+    ]
 
 
 @pytest.fixture
@@ -345,7 +408,10 @@ def drop_root(tmp_path, landing_root, monkeypatch) -> UPath:
 
 
 def _run_export(
-    monkeypatch, fail_on: str | None = None, replaced: dict[str, int] | None = None
+    monkeypatch,
+    fail_on: str | None = None,
+    replaced: dict[str, int] | None = None,
+    course_ids: Sequence[str] = (COURSE_ID,),
 ):
     """Run the mitx export; ``replaced`` maps a model to reads that lose a file."""
     replaced = dict(replaced or {})
@@ -372,7 +438,9 @@ def _run_export(
 
     monkeypatch.setattr(irx_export, "read_data_files", read)
     openedx = SimpleNamespace(
-        client=SimpleNamespace(get_edx_course_ids=lambda: [[{"id": COURSE_ID}]])
+        client=SimpleNamespace(
+            get_edx_course_ids=lambda: [[{"id": course_id} for course_id in course_ids]]
+        )
     )
     return materialize(
         [build_irx_export_asset("mitx")],
