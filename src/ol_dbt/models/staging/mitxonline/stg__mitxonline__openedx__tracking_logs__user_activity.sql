@@ -35,7 +35,7 @@ with source as (
     left join {{ source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__auth_user') }} as auth_user
         on
             most_recent_source.username = ''
-            and auth_user.id = try_cast({{ json_query_string('most_recent_source.event', "'$.user_id'") }} as integer)
+            and auth_user.id = {{ try_cast(json_query_string('most_recent_source.event', "'$.user_id'"), 'integer') }}
 )
 
 , cleaned as (
@@ -56,8 +56,8 @@ with source as (
         , {{ extract_course_id_from_tracking_log() }} as courserun_readable_id
         --- extract common fields from context object
         , coalesce(
-            try_cast({{ json_query_string('context', "'$.user_id'") }} as integer)
-            , try_cast({{ json_query_string('event', "'$.user_id'") }} as integer)
+            {{ try_cast(json_query_string('context', "'$.user_id'"), 'integer') }}
+            , {{ try_cast(json_query_string('event', "'$.user_id'"), 'integer') }}
         ) as openedx_user_id
         , {{ json_query_string('context', "'$.org_id'") }} as org_id
         , {{ json_query_string('context', "'$.path'") }} as useractivity_path
