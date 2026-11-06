@@ -81,10 +81,11 @@
 
 
 
-{% macro zendesk_comment_text(body, raw_body) %}
-  {#- An Appzi survey email becomes "<type>: <answer>"; any other comment is kept as written. -#}
+{% macro zendesk_comment_text(body, raw_body, is_appzi=none) %}
+  {#- Pass is_appzi when the caller already computed it, so its regexes run once. -#}
   case
-      when {{ is_appzi_email(body) }} then {{ appzi_feedback_text(body, raw_body) }}
+      when {{ is_appzi if is_appzi else is_appzi_email(body) }}
+          then {{ appzi_feedback_text(body, raw_body) }}
       else {{ raw_body }}
   end
 {% endmacro %}

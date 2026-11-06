@@ -21,6 +21,14 @@ with ticket as (
     select
         ticket_comment.comment_id
         , ticket_comment.ticket_id
+        , ticket.ticket_platform
+        , ticket.ticket_status
+        , ticket.ticket_subject
+        , ticket.group_name
+        , ticket.ticket_tags
+        , ticket.ticket_satisfaction_rating_score
+        , ticket.ticket_created_at
+        , ticket.ticket_updated_at
         , ticket_comment.comment_source_channel
         , ticket_comment.comment_created_at
         , case
@@ -42,14 +50,14 @@ with ticket as (
 
 select
     comments.ticket_id
-    , ticket.ticket_platform
-    , ticket.ticket_status
-    , ticket.ticket_subject
-    , ticket.group_name
-    , ticket.ticket_tags
-    , ticket.ticket_satisfaction_rating_score
-    , ticket.ticket_created_at
-    , ticket.ticket_updated_at
+    , comments.ticket_platform
+    , comments.ticket_status
+    , comments.ticket_subject
+    , comments.group_name
+    , comments.ticket_tags
+    , comments.ticket_satisfaction_rating_score
+    , comments.ticket_created_at
+    , comments.ticket_updated_at
     , comments.comment_id
     -- comment_id breaks ties between comments that share a created_at
     , row_number() over (
@@ -61,5 +69,4 @@ select
     , comments.comment_source_channel
     , comments.comment_created_at
 from comments
-inner join ticket on comments.ticket_id = ticket.ticket_id
 where comments.comment_body != ''

@@ -217,7 +217,9 @@ models:
     description: str, who wrote the comment. 'requester' is the ticket requester;
       'staff' is a Zendesk agent or admin, or any @mit.edu account (some support staff
       reply from end-user accounts); 'other_end_user' is anyone else, such as a CC'd
-      learner or a partner contact.
+      learner or a partner contact. A CC'd learner with an @mit.edu email is counted
+      as staff, which is under 1% of staff comments. An author missing from stg__zendesk__user
+      is other_end_user.
     tests:
     - not_null
     - accepted_values:

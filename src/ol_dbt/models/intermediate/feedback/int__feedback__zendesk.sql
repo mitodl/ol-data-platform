@@ -40,7 +40,7 @@ with ticket_comment as (
     select
         requester_turns.*
         , {{ zendesk_comment_text(
-            'requester_turns.appzi_body', 'requester_turns.comment_plain_body'
+            'requester_turns.appzi_body', 'requester_turns.comment_plain_body', 'requester_turns.is_appzi'
         ) }} as text
         , case
             when requester_turns.is_appzi
