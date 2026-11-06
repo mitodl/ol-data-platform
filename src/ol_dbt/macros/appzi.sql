@@ -80,6 +80,15 @@
 {% endmacro %}
 
 
+
+{% macro zendesk_comment_text(body, raw_body) %}
+  {#- An Appzi survey email becomes "<type>: <answer>"; any other comment is kept as written. -#}
+  case
+      when {{ is_appzi_email(body) }} then {{ appzi_feedback_text(body, raw_body) }}
+      else {{ raw_body }}
+  end
+{% endmacro %}
+
 {% macro appzi_page_url(body) %}
   {#- The Feedback Origin link ends in the page URL as base64url. The EMAIL parameter
       goes because PII masking does not cover this column. -#}

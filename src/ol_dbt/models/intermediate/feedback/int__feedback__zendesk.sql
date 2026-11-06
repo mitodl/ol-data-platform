@@ -39,13 +39,9 @@ with ticket_comment as (
 , parsed_turns as (
     select
         requester_turns.*
-        , case
-            when requester_turns.is_appzi
-                then {{ appzi_feedback_text(
-                    'requester_turns.appzi_body', 'requester_turns.comment_plain_body'
-                ) }}
-            else requester_turns.comment_plain_body
-        end as text
+        , {{ zendesk_comment_text(
+            'requester_turns.appzi_body', 'requester_turns.comment_plain_body'
+        ) }} as text
         , case
             when requester_turns.is_appzi
                 then {{ appzi_page_url('requester_turns.appzi_body') }}

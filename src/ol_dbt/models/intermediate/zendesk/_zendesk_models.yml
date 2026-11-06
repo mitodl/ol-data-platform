@@ -225,9 +225,8 @@ models:
           values: [requester, staff, other_end_user]
   - name: comment_body
     description: str, the comment's plain-text body. An Appzi survey email is reduced
-      to its feedback type and answer, as in int__feedback__zendesk. Any other comment
-      is cut at its first quoted reply (an Outlook "From/Sent" header, a Gmail "On
-      ... wrote" line, or Zendesk's reply delimiter) and trimmed. Never empty.
+      to its feedback type and answer, the same text as int__feedback__zendesk. Any
+      other comment is kept as written, with any quoted email history. Never empty.
     tests:
     - not_null
   - name: comment_source_channel

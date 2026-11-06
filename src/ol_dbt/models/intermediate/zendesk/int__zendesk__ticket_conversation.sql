@@ -31,22 +31,9 @@ with ticket as (
                 then 'staff'
             else 'other_end_user'
         end as comment_author_role
-        -- An Appzi survey email becomes "<type>: <answer>". Otherwise cut the quoted
-        -- history mail clients append (Outlook, Gmail, Zendesk's reply delimiter): it
-        -- repeats earlier turns and the email addresses in them.
-        , case
-            when {{ is_appzi_email('ticket_comment.appzi_body') }}
-                then {{ appzi_feedback_text(
-                    'ticket_comment.appzi_body', 'ticket_comment.comment_plain_body'
-                ) }}
-            else {{ strip_whitespace(regexp_replace_all(
-                'ticket_comment.comment_plain_body'
-                , "'(?s)(\\n[ \\t]*(_{10,}[ \\t]*\\n\\s*)?From: [^\\n]*\\n\\s*(Sent|Date): "
-                  ~ "|\\n[ \\t]*On [^\\n]{5,200} wrote:[ \\t]*\\n"
-                  ~ "|##- Please type your reply above this line -##).*'"
-                , "''"
-            )) }}
-        end as comment_body
+        , {{ zendesk_comment_text(
+            'ticket_comment.appzi_body', 'ticket_comment.comment_plain_body'
+        ) }} as comment_body
     from ticket_comment
     inner join ticket on ticket_comment.ticket_id = ticket.ticket_id
     left join users on ticket_comment.comment_author_user_id = users.user_id
