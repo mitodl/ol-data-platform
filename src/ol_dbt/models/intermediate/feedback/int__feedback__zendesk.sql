@@ -39,13 +39,9 @@ with ticket_comment as (
 , parsed_turns as (
     select
         requester_turns.*
-        , case
-            when requester_turns.is_appzi
-                then {{ appzi_feedback_text(
-                    'requester_turns.appzi_body', 'requester_turns.comment_plain_body'
-                ) }}
-            else requester_turns.comment_plain_body
-        end as text
+        , {{ zendesk_comment_text(
+            'requester_turns.appzi_body', 'requester_turns.comment_plain_body', 'requester_turns.is_appzi'
+        ) }} as text
         , case
             when requester_turns.is_appzi
                 then {{ appzi_page_url('requester_turns.appzi_body') }}
@@ -77,16 +73,7 @@ select
     end as channel_slug
     , cast(null as varchar) as courserun_readable_id
     , cast(null as varchar) as block_id
-    -- MIT Learn by group: support routes it to three groups, two with their own
-    -- brand. Others by brand: their groups are support teams that span platforms.
-    , case
-        when ticket.group_name in ('MIT Learn', 'Universal AI', 'upGrad UAI')
-            then 'mitlearn'
-        when ticket.brand_subdomain = 'mitxonline' then 'mitxonline'
-        when ticket.brand_subdomain = 'xpro' then 'mitxpro'
-        when ticket.brand_subdomain = 'mitocw' then 'ocw'
-        when ticket.brand_subdomain = 'mitx-micromasters' then 'micromasters'
-    end as platform
+    , ticket.ticket_platform as platform
     , case when parsed_turns.appzi_page_url is not null then 'page_url' else 'unspecified' end as subject_type
     , cast(null as varchar) as subject_ref
     , parsed_turns.appzi_page_url as subject_url

@@ -52,6 +52,14 @@ models:
       Stable across brand renames.
   - name: group_name
     description: str, the name of the group associated with the ticket
+  - name: ticket_platform
+    description: str, the platform the ticket is about. MIT Learn is assigned by group
+      ('MIT Learn', 'Universal AI', 'upGrad UAI'); the others by brand subdomain ('mitxonline',
+      'mitxpro', 'ocw', 'micromasters'). Null for tickets that match neither.
+    tests:
+    - accepted_values:
+        arguments:
+          values: [mitlearn, mitxonline, mitxpro, ocw, micromasters]
   - name: ticket_is_public
     description: bool, whether this ticket is publicly visible
   - name: ticket_recipient_email
@@ -164,6 +172,73 @@ models:
     tests:
     - not_null
 
+- name: int__zendesk__ticket_conversation
+  description: One public comment on a Zendesk ticket, as one turn of the ticket's
+    conversation, across all platforms and ticket statuses. Internal notes and Appzi
+    notices are left out. The comment body still holds PII; redact it before any LLM
+    use.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [ticket_id, turn_index]
+  columns:
+  - name: ticket_id
+    description: int, foreign key to int__zendesk__ticket
+    tests:
+    - not_null
+  - name: ticket_platform
+    description: str, the platform the ticket is about, from int__zendesk__ticket
+  - name: ticket_status
+    description: str, the ticket's state, e.g. "open", "solved", "closed"
+  - name: ticket_subject
+    description: str, the subject of the ticket. Holds PII like the comment body.
+  - name: group_name
+    description: str, the Zendesk group the ticket is routed to
+  - name: ticket_tags
+    description: array, the tags applied to the ticket
+  - name: ticket_satisfaction_rating_score
+    description: str, the ticket's CSAT score, e.g. "good", "bad", "offered". Most
+      tickets have none.
+  - name: ticket_created_at
+    description: timestamp, the time the ticket was created
+  - name: ticket_updated_at
+    description: timestamp, the time the ticket was last updated
+  - name: comment_id
+    description: int, primary key for the comment
+    tests:
+    - not_null
+    - unique
+  - name: turn_index
+    description: int, 1-based position of the comment in the ticket's conversation,
+      ordered by comment_created_at then comment_id
+    tests:
+    - not_null
+  - name: comment_author_role
+    description: str, who wrote the comment. 'requester' is the ticket requester;
+      'staff' is a Zendesk agent or admin, or any @mit.edu account (some support staff
+      reply from end-user accounts); 'other_end_user' is anyone else, such as a CC'd
+      learner or a partner contact. A CC'd learner with an @mit.edu email is counted
+      as staff, which is under 1% of staff comments. An author missing from stg__zendesk__user
+      is other_end_user.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [requester, staff, other_end_user]
+  - name: comment_body
+    description: str, the comment's plain-text body. An Appzi survey email is reduced
+      to its feedback type and answer, the same text as int__feedback__zendesk. Any
+      other comment is kept as written, with any quoted email history. Never empty.
+    tests:
+    - not_null
+  - name: comment_source_channel
+    description: str, the channel through which the comment was created. e.g. "web",
+      "email"
+  - name: comment_created_at
+    description: timestamp, the time the comment was created
+    tests:
+    - not_null
+
 unit_tests:
 - name: test_int__zendesk__ticket_comment_drops_the_comments_of_deleted_tickets
   description: >
@@ -188,3 +263,42 @@ unit_tests:
     rows:
     - {comment_id: 1, ticket_id: 10}
     - {comment_id: 3, ticket_id: 30}
+- name: test_int__zendesk__ticket_conversation_labels_comment_author_roles
+  description: >
+    The requester wins over any other label, even with an @mit.edu email. Agents,
+    admins and @mit.edu end-user accounts are staff. Other end users, and an author
+    missing from stg__zendesk__user, are other_end_user.
+  model: int__zendesk__ticket_conversation
+  given:
+  - input: ref('int__zendesk__ticket')
+    rows:
+    - {ticket_id: 10, ticket_requester_user_id: 100}
+  - input: ref('int__zendesk__ticket_comment')
+    rows:
+    - {comment_id: 1, ticket_id: 10, comment_author_user_id: 100, comment_is_public: true,
+      comment_plain_body: question, comment_created_at: '2026-11-01 00:00:01'}
+    - {comment_id: 2, ticket_id: 10, comment_author_user_id: 200, comment_is_public: true,
+      comment_plain_body: agent reply, comment_created_at: '2026-11-01 00:00:02'}
+    - {comment_id: 3, ticket_id: 10, comment_author_user_id: 300, comment_is_public: true,
+      comment_plain_body: admin reply, comment_created_at: '2026-11-01 00:00:03'}
+    - {comment_id: 4, ticket_id: 10, comment_author_user_id: 400, comment_is_public: true,
+      comment_plain_body: support reply, comment_created_at: '2026-11-01 00:00:04'}
+    - {comment_id: 5, ticket_id: 10, comment_author_user_id: 500, comment_is_public: true,
+      comment_plain_body: cc reply, comment_created_at: '2026-11-01 00:00:05'}
+    - {comment_id: 6, ticket_id: 10, comment_author_user_id: 600, comment_is_public: true,
+      comment_plain_body: unknown reply, comment_created_at: '2026-11-01 00:00:06'}
+  - input: ref('stg__zendesk__user')
+    rows:
+    - {user_id: 100, user_role: end-user, user_email: learner@mit.edu}
+    - {user_id: 200, user_role: agent, user_email: agent@example.com}
+    - {user_id: 300, user_role: admin, user_email: admin@example.com}
+    - {user_id: 400, user_role: end-user, user_email: support@mit.edu}
+    - {user_id: 500, user_role: end-user, user_email: cc@example.com}
+  expect:
+    rows:
+    - {comment_id: 1, turn_index: 1, comment_author_role: requester}
+    - {comment_id: 2, turn_index: 2, comment_author_role: staff}
+    - {comment_id: 3, turn_index: 3, comment_author_role: staff}
+    - {comment_id: 4, turn_index: 4, comment_author_role: staff}
+    - {comment_id: 5, turn_index: 5, comment_author_role: other_end_user}
+    - {comment_id: 6, turn_index: 6, comment_author_role: other_end_user}

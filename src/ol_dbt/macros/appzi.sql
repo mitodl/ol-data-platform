@@ -80,6 +80,16 @@
 {% endmacro %}
 
 
+
+{% macro zendesk_comment_text(body, raw_body, is_appzi=none) %}
+  {#- Pass is_appzi when the caller already computed it, so its regexes run once. -#}
+  case
+      when {{ is_appzi if is_appzi else is_appzi_email(body) }}
+          then {{ appzi_feedback_text(body, raw_body) }}
+      else {{ raw_body }}
+  end
+{% endmacro %}
+
 {% macro appzi_page_url(body) %}
   {#- The Feedback Origin link ends in the page URL as base64url. The EMAIL parameter
       goes because PII masking does not cover this column. -#}
