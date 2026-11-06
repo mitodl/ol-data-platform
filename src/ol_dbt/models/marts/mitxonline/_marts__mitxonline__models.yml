@@ -69,9 +69,11 @@ models:
     - unique
     - not_null
   - name: user_full_name
-    description: str, full name on MITx Online
+    description: str, full name on MITx Online. Null when the learner has no name
+      on any platform.
     tests:
-    - not_null
+    - dbt_utils.expression_is_true:
+        expression: is null or trim(user_full_name) <> ''
   - name: user_email
     description: str, email on MITx Online
     tests:
