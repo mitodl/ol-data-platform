@@ -3,7 +3,14 @@ version: 2
 
 models:
 - name: int__zendesk__ticket
-  description: Intermediate model for Zendesk tickets
+  description: Intermediate model for Zendesk tickets that still exist in Zendesk.
+    Deleted tickets stay in stg__zendesk__ticket and are left out here.
+  tests:
+  - dbt_utils.expression_is_true:
+      arguments:
+        expression: ticket_status <> 'deleted'
+      config:
+        error_if: ">0"
   columns:
   - name: ticket_id
     description: int, primary key for the ticket
@@ -102,7 +109,8 @@ models:
     description: string, via object JSON describing how the ticket was created
 
 - name: int__zendesk__ticket_comment
-  description: Comments associated with Zendesk tickets
+  description: Comments associated with Zendesk tickets, without the comments of deleted
+    tickets
   columns:
   - name: comment_id
     description: int, primary key for the ticket comment
@@ -155,3 +163,28 @@ models:
     description: timestamp, the time comment was created
     tests:
     - not_null
+
+unit_tests:
+- name: test_int__zendesk__ticket_comment_drops_the_comments_of_deleted_tickets
+  description: >
+    A deleted ticket's comments carry no delete marker of their own, so they are
+    dropped through the ticket's status. Comments on other tickets, and on a ticket
+    missing from staging, are kept.
+  model: int__zendesk__ticket_comment
+  given:
+  - input: ref('stg__zendesk__ticket_comment')
+    rows:
+    - {comment_id: 1, ticket_id: 10, comment_author_user_id: 100}
+    - {comment_id: 2, ticket_id: 20, comment_author_user_id: 100}
+    - {comment_id: 3, ticket_id: 30, comment_author_user_id: 100}
+  - input: ref('stg__zendesk__user')
+    rows:
+    - {user_id: 100, user_name: Learner, user_email: learner@example.com}
+  - input: ref('stg__zendesk__ticket')
+    rows:
+    - {ticket_id: 10, ticket_status: solved}
+    - {ticket_id: 20, ticket_status: deleted}
+  expect:
+    rows:
+    - {comment_id: 1, ticket_id: 10}
+    - {comment_id: 3, ticket_id: 30}
