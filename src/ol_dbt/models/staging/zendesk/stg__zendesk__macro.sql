@@ -11,7 +11,7 @@ with source as (
         , raw_title as macro_raw_title
         , description as macro_description
         , active as macro_is_active
-        , "default" as macro_is_default
+        , {{ adapter.quote("default") }} as macro_is_default
         , position as macro_position
         , actions as macro_actions
         , nullif({{ json_query_string('restriction', "'$.type'") }}, 'null') as macro_restriction_type

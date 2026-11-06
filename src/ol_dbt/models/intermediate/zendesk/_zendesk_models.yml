@@ -263,3 +263,42 @@ unit_tests:
     rows:
     - {comment_id: 1, ticket_id: 10}
     - {comment_id: 3, ticket_id: 30}
+- name: test_int__zendesk__ticket_conversation_labels_comment_author_roles
+  description: >
+    The requester wins over any other label, even with an @mit.edu email. Agents,
+    admins and @mit.edu end-user accounts are staff. Other end users, and an author
+    missing from stg__zendesk__user, are other_end_user.
+  model: int__zendesk__ticket_conversation
+  given:
+  - input: ref('int__zendesk__ticket')
+    rows:
+    - {ticket_id: 10, ticket_requester_user_id: 100}
+  - input: ref('int__zendesk__ticket_comment')
+    rows:
+    - {comment_id: 1, ticket_id: 10, comment_author_user_id: 100, comment_is_public: true,
+      comment_plain_body: question, comment_created_at: '2026-11-01 00:00:01'}
+    - {comment_id: 2, ticket_id: 10, comment_author_user_id: 200, comment_is_public: true,
+      comment_plain_body: agent reply, comment_created_at: '2026-11-01 00:00:02'}
+    - {comment_id: 3, ticket_id: 10, comment_author_user_id: 300, comment_is_public: true,
+      comment_plain_body: admin reply, comment_created_at: '2026-11-01 00:00:03'}
+    - {comment_id: 4, ticket_id: 10, comment_author_user_id: 400, comment_is_public: true,
+      comment_plain_body: support reply, comment_created_at: '2026-11-01 00:00:04'}
+    - {comment_id: 5, ticket_id: 10, comment_author_user_id: 500, comment_is_public: true,
+      comment_plain_body: cc reply, comment_created_at: '2026-11-01 00:00:05'}
+    - {comment_id: 6, ticket_id: 10, comment_author_user_id: 600, comment_is_public: true,
+      comment_plain_body: unknown reply, comment_created_at: '2026-11-01 00:00:06'}
+  - input: ref('stg__zendesk__user')
+    rows:
+    - {user_id: 100, user_role: end-user, user_email: learner@mit.edu}
+    - {user_id: 200, user_role: agent, user_email: agent@example.com}
+    - {user_id: 300, user_role: admin, user_email: admin@example.com}
+    - {user_id: 400, user_role: end-user, user_email: support@mit.edu}
+    - {user_id: 500, user_role: end-user, user_email: cc@example.com}
+  expect:
+    rows:
+    - {comment_id: 1, turn_index: 1, comment_author_role: requester}
+    - {comment_id: 2, turn_index: 2, comment_author_role: staff}
+    - {comment_id: 3, turn_index: 3, comment_author_role: staff}
+    - {comment_id: 4, turn_index: 4, comment_author_role: staff}
+    - {comment_id: 5, turn_index: 5, comment_author_role: other_end_user}
+    - {comment_id: 6, turn_index: 6, comment_author_role: other_end_user}
