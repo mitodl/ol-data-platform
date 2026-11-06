@@ -1283,7 +1283,7 @@ models:
     description: str, URL to the program certificate for users who earned the certificate
       on either mitxonline.mit.edu or xpro.mit.edu. Null for edX.org or revoked certificates.
   - name: organization_name
-    description: string, name of the organization associated with the user's enrollment.
+    description: string, MITx Online B2B contract organization; null otherwise.
   - name: user_highest_education
     description: string, highest level of education attained by the user. Coalesced
       from edX.org and hashed ID user matches.
