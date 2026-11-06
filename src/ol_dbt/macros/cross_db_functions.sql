@@ -1052,6 +1052,17 @@
     {{ literal | replace('\\', '\\\\') }}
 {%- endmacro %}
 
+{#
+    dbt's escape_single_quotes on StarRocks. dbt builds unit-test fixture and expected
+    values with string_literal(escape_single_quotes(value)), and the default only doubles
+    quotes, so a fixture value with a backslash lost it on StarRocks (an expected
+    '<p>One \"quoted\"</p>' came back as '<p>One "quoted"</p>'). Root-project macros take
+    precedence over dbt's own in the dbt dispatch namespace.
+#}
+{% macro starrocks__escape_single_quotes(expression) -%}
+    {{ expression | replace('\\', '\\\\') | replace("'", "''") }}
+{%- endmacro %}
+
 
 {#
     regexp_extract_all: every match of `pattern` in `subject` (or of its capture group
@@ -1570,7 +1581,13 @@
 {%- endmacro %}
 
 
-{# json_object_from_pairs: a JSON object as varchar from [key, expression] pairs, in order. #}
+{# json_object_from_pairs: a JSON object as varchar from [key, expression] pairs.
+   StarRocks and DuckDB keep the pairs' order. Trino's json_object does not (the zendesk
+   pairs come out as ticket_status, group_name, ticket_priority, ...), so compare parsed
+   JSON, not strings, across engines. Values must be varchar, numeric or boolean: StarRocks'
+   json_object rejects DATETIME and DATE, so cast those to varchar at the call site (Trino
+   renders a timestamp in json_object as its varchar cast, so the cast changes nothing there).
+   StarRocks also drops trailing zeros from a decimal (1.50 becomes 1.5); Trino keeps them. #}
 {% macro json_object_from_pairs(pairs) -%}
     {{ adapter.dispatch('json_object_from_pairs', 'open_learning')(pairs) }}
 {%- endmacro %}
@@ -1591,11 +1608,14 @@
     ) as varchar)
 {%- endmacro %}
 
-{# StarRocks takes DuckDB's json_object(key, value, ...) form, not Trino's key: value. #}
+{# StarRocks' JSON type sorts object keys and casts to varchar with ": " separators, so
+   the object is assembled as a string in the pairs' order. Each value is still encoded
+   by json_object (quotes, backslashes, control characters, null), from a one-key object
+   whose wrapper is stripped. #}
 {% macro starrocks__json_object_from_pairs(pairs) -%}
-    cast(json_object(
+    concat('{', concat_ws(','
         {%- for key, expr in pairs %}
-        {% if not loop.first %}, {% endif %}'{{ key }}', {{ expr }}
+        , concat('"{{ key }}":', regexp_extract(cast(json_object('v', {{ expr }}) as varchar), {{ starrocks_string_literal("'^\\{\"v\": (.*)\\}$'") }}, 1))
         {%- endfor %}
-    ) as varchar)
+    ), '}')
 {%- endmacro %}
