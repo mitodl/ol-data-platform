@@ -295,6 +295,42 @@ def test_load_writes_each_env_s_raw_schema(
     ]
 
 
+def test_connect_ci_lake_uses_vault_ci_admin_over_a_port_forward(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CI's FE has no TLS and no route from a laptop, and creating tables takes the admin role."""
+    import mysql.connector  # noqa: PLC0415
+
+    from ol_dbt_cli.commands import _vault_auth, starrocks  # noqa: PLC0415
+
+    calls: dict[str, Any] = {}
+
+    def fetch(*args: Any) -> tuple[str, str]:
+        calls["vault"] = args
+        return "v-ci-admin", "secret"
+
+    monkeypatch.setattr(_vault_auth, "fetch_vault_db_credentials", fetch)
+    monkeypatch.setattr(starrocks, "_start_port_forward", lambda cfg: calls.setdefault("port_forward", cfg))
+    monkeypatch.setattr(mysql.connector, "connect", lambda **kwargs: calls.setdefault("connect", kwargs))
+
+    fixtures_command.connect_ci_lake("my-oidc-role")
+
+    assert calls["vault"] == (
+        "https://vault-ci.odl.mit.edu",
+        "database-starrocks",
+        "ci",
+        "admin",
+        "my-oidc-role",
+    )
+    assert calls["port_forward"]["eks_context"] == "data-ci"
+    assert calls["connect"] == {
+        "host": "127.0.0.1",
+        "port": 9030,
+        "user": "v-ci-admin",
+        "password": "secret",  # pragma: allowlist secret
+        "ssl_disabled": True,
+        "autocommit": True,
+    }
+
+
 def test_load_refuses_another_schema_in_the_ci_lake(monkeypatch: pytest.MonkeyPatch) -> None:
     """Load drops every raw__* table in its schema, and CI builds read only CI's raw schema."""
 
