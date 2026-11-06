@@ -288,7 +288,6 @@ WEBHOOK_DELIVERY_SENSOR_NAMES = frozenset(
         "mit_climate_delivery_sensor",
         "mitpe_delivery_sensor",
         "oll_delivery_sensor",
-        "mit_edx_programs_delivery_sensor",
     }
 )
 

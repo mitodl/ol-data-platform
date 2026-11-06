@@ -13,7 +13,6 @@ dependencies = [
     # third-party HTML exactly the way the Celery ETL does.
     "nh3 >= 0.2.0",
     "ol-orchestrate-lib",
-    "pygithub>=2.8.1",
 ]
 
 [project.entry-points]

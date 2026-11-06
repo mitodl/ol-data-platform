@@ -422,10 +422,9 @@ position:
     children: []
     id: MARKDOWN-49jpOJGrDnO_Ql5sw7tKg
     meta:
-      code: '### Change Log
-
-        **2/2/26**: Standardized filter names: ''Learner Email'' → ''User Email'',
-        ''Learner name'' → ''User Full Name'''
+      code: |-
+        ### Change Log
+        **2/2/26**: Standardized filter names: 'Learner Email' → 'User Email', 'Learner name' → 'User Full Name'
       height: 50
       width: 12
     parents:
@@ -438,11 +437,19 @@ position:
     children: []
     id: MARKDOWN-UwcBhYwtzJ
     meta:
-      code: "\n<a href='https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__combined_course_enrollment_detail#description'\
-        \ target='_blank'>Enrollment column definition</a>\n\n\n<a href=\"https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__combined__orders\"\
-        \ target=\"_blank\">Order column definition</a>\n\n<br>\n\nThis dashboard\
-        \ contains data from:\n  - marts__combined_course_enrollment_detail\n  - marts__combined__orders\n\
-        \  - marts__combined_coursesinprogram"
+      code: |2-
+
+        <a href='https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__combined_course_enrollment_detail#description' target='_blank'>Enrollment column definition</a>
+
+
+        <a href="https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__combined__orders" target="_blank">Order column definition</a>
+
+        <br>
+
+        This dashboard contains data from:
+          - marts__combined_course_enrollment_detail
+          - marts__combined__orders
+          - marts__combined_coursesinprogram
       height: 50
       width: 6
     parents:

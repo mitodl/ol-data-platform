@@ -11,7 +11,7 @@ This guide provides essential information for coding agents working with the MIT
 **Repository Type**: Python uv workspace with 7+ Dagster code locations and a dbt project
 **Size**: ~209 Python dependencies, ~30 workspace projects
 **Python Version**: 3.13 (strictly ~=3.13,<3.14)
-**Package Manager**: uv 0.9+ (replaces pip/poetry)
+**Package Manager**: uv 0.9.11+ (replaces pip/poetry; `bin/uv-operations.py` needs `uv workspace list --paths`)
 
 **Key Technologies**:
 
@@ -111,8 +111,11 @@ SKIP=sqlfluff-lint uv run prek run --all-files
 
 ### Common Errors & Solutions
 
+**Error: "The lockfile at `uv.lock` needs to be updated, but `--locked` was provided"** (image build)
+→ Solution: `uv run bin/uv-operations.py lock`. Every project outside the root workspace has its own lockfile, and a change to a shared `pyproject.toml` (e.g. `packages/ol-orchestrate-lib`) makes all of them stale. The `uv-lock` prek hook does this for you.
+
 **Error: "uv sync package conflicts"**
-→ Solution: `uv lock --upgrade && uv sync`
+→ Solution: `uv run bin/uv-operations.py lock --upgrade-package <package>`, never `uv lock` in the root alone
 
 **Error: "dbt deps fails" / "dbt not found"**
 → Solution: Ensure in `src/ol_dbt/` directory; run `uv sync` first
@@ -154,10 +157,12 @@ ol-dbt run --select my_model+
 ol-dbt run --target dev_qa
 ```
 
-**Run uv commands across all projects**:
+**Run uv commands in every project that has its own lockfile** (see `README.md`, "uv lockfiles"):
 ```bash
-python bin/uv-operations.py sync --continue-on-error
-python bin/uv-operations.py lock --upgrade
+uv run bin/uv-operations.py lock                  # relock whatever is stale
+uv run bin/uv-operations.py lock --check
+uv run bin/uv-operations.py lock --upgrade-package dagster
+uv run bin/uv-operations.py exec pip list
 ```
 
 ## Directory Structure & Key Files

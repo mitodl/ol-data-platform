@@ -9,20 +9,20 @@
 ) }}
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__xpro__openedx__tracking_logs') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__xpro__openedx__tracking_log_events') }}
     where
         username != ''
         and {{ json_query_string('context', "'$.user_id'") }} is not null
         and {{ json_query_string('event', "'$.exception'") }} is null
 
     {% if is_incremental() %}
-        and "time" > (select max(this.useractivity_timestamp) from {{ this }} as this) --noqa
+        and {{ adapter.quote('time') }} > (select max(this.useractivity_timestamp) from {{ this }} as this) --noqa
     {% endif %}
 )
 
 {{ deduplicate_raw_table(
-    raw_table='raw__xpro__openedx__tracking_logs'
-    , partition_columns = 'username, context, event_source, event_type, event, "time"'
+    raw_table='raw__xpro__openedx__tracking_log_events'
+    , partition_columns = 'username, context, event_source, event_type, event, ' ~ adapter.quote('time')
 ) }}
 , cleaned as (
     select

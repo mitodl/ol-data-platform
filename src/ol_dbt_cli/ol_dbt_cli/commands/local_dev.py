@@ -213,6 +213,7 @@ def _ensure_registry_tables(conn: duckdb.DuckDBPyConnection) -> None:
 
 def _record_registry_scan(duckdb_path: Path, database_name: str) -> None:
     """Record that a Glue database was successfully scanned in this run."""
+    duckdb_path.parent.mkdir(parents=True, exist_ok=True)
     with duckdb.connect(str(duckdb_path)) as conn:
         _ensure_registry_tables(conn)
         conn.execute(

@@ -43,7 +43,7 @@
     ---Input: courserun_readable_id in course-v1:{org}+{course number}+{run tag} for courses created since Fall 2014,
     --- {org}/{course number}/{run tag} for courses created before Fall 2014
      case
-          when position('course-v' in {{ courserun_readable_id }} ) > 0
+          when {{ courserun_readable_id }} like '%course-v%'
              then regexp_extract({{ courserun_readable_id }}, 'course-v(\d{1}):([\w\.\-]+)\+([a-zA-Z0-9.-]+)')
           else
              concat(

@@ -13,13 +13,13 @@ with source as (
         and {{ json_query_string('context', "'$.user_id'") }} is not null
 
         {% if is_incremental() %}
-            and "time" > (select max(this.useractivity_timestamp) from {{ this }} as this)
+            and {{ adapter.quote('time') }} > (select max(this.useractivity_timestamp) from {{ this }} as this)
         {% endif %}
 )
 
 {{ deduplicate_raw_table(
     raw_table='raw__mitx__openedx__tracking_logs'
-    , partition_columns = 'username, context, event_source, event_type, event, "time"'
+    , partition_columns = 'username, context, event_source, event_type, event, ' ~ adapter.quote('time')
 ) }}
 , cleaned as (
     select
@@ -40,7 +40,7 @@ with source as (
         , {{ json_query_string('context', "'$.org_id'") }} as org_id
         , {{ json_query_string('context', "'$.path'") }} as useractivity_path
         , {{ format_timestamp_as_iso8601(from_iso8601_timestamp_nanos(
-            regexp_replace_with_backreferences('"time"', "'(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)'", "'$1T$2$3'")
+            regexp_replace_with_backreferences(adapter.quote('time'), "'(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)'", "'$1T$2$3'")
         )) }} as useractivity_timestamp
     from most_recent_source
 )

@@ -150,7 +150,7 @@ with mitx_users as (
                     , user_address_postal_code asc
             ) as row_num
         from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
-    )
+    ) as subquery
     where row_num = 1
 )
 
@@ -188,7 +188,7 @@ with mitx_users as (
                     , user_address_postal_code asc
             ) as row_num
         from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
-    )
+    ) as subquery
     where row_num = 1
 )
 
@@ -284,7 +284,7 @@ with mitx_users as (
                 order by user_created_on desc
             ) as row_num
         from {{ ref('stg__mitlearn__app__postgres__users_user') }}
-    )
+    ) as subquery
     where row_num = 1
 )
 
@@ -299,7 +299,7 @@ with mitx_users as (
                 order by user_last_login desc nulls last, user_created_on desc nulls last, user_id desc
             ) as global_id_row_num
         from learn_user_deduped_by_email
-    )
+    ) as subquery
     where global_id_row_num = 1
 )
 
@@ -319,15 +319,33 @@ with mitx_users as (
 
 )
 
+-- Some Learn profile names are a Python dict repr, {'givenName': 'A', 'familyName': 'B'},
+-- where a missing part is None. Only a name that starts like that dict is parsed, so a display
+-- name like {Gaurav} Gaming is kept. A part that is None or not quoted extracts as null.
+{% set learn_dict_name = "'^[ ]*[{][''\"]givenName[''\"]: '" %}
+{% set learn_dict_given_name = "'[''\"]givenName[''\"]: [''\"](.*?)[''\"], [''\"]familyName[''\"]'" %}
+{% set learn_dict_family_name = "'[''\"]familyName[''\"]: [''\"](.*)[''\"][}]$'" %}
+
 , learn_user_view as(
     select
         learn_user.user_global_id
         , learn_user.user_id as mitlearn_user_id
         , learn_user.user_email as email
-        , case when learn_profile.user_name is not null and trim(learn_profile.user_name) <> ''
-            then learn_profile.user_name
-            else concat(learn_user.user_first_name, ' ', learn_user.user_last_name)
-        end as full_name
+        -- A blank name is null, not ' ', so the coalesce with the MITx name below can fall through.
+        , coalesce(
+            nullif(trim(
+                case
+                    when {{ regexp_like('learn_profile.user_name', learn_dict_name) }}
+                    then concat(
+                        coalesce({{ regexp_extract_or_null('learn_profile.user_name', learn_dict_given_name, 1) }}, '')
+                        , ' '
+                        , coalesce({{ regexp_extract_or_null('learn_profile.user_name', learn_dict_family_name, 1) }}, '')
+                    )
+                    else learn_profile.user_name
+                end
+            ), '')
+            , nullif(trim(concat(coalesce(learn_user.user_first_name, ''), ' ', coalesce(learn_user.user_last_name, ''))), '')
+        ) as full_name
         , learn_profile.user_current_education as highest_education
         , learn_user.user_is_active as user_is_active_on_mitlearn
         , learn_user.user_joined_on as user_joined_on_mitlearn
@@ -755,33 +773,42 @@ with mitx_users as (
     from combined_accounts
 )
 
+-- The two windows below must stay identical. They're written out rather than shared through a
+-- named WINDOW clause, which StarRocks doesn't support.
 , account_identity as (
     select
         first_value(case
             when ranked_accounts.user_global_id is not null then 'global'
             when ranked_accounts.id_source_user_id is not null then ranked_accounts.id_source
             else 'email'
-        end) over w as user_identity_source
+        end) over (
+            partition by ranked_accounts.email
+            order by
+                ranked_accounts.has_no_source_id asc
+                , ranked_accounts.id_source_rank asc
+                , ranked_accounts.user_global_id desc
+                , ranked_accounts.sort_id desc nulls last
+                , ranked_accounts.id_source_user_id desc
+        ) as user_identity_source
         , first_value(coalesce(ranked_accounts.user_global_id, ranked_accounts.id_source_user_id, ranked_accounts.email))
-            over w as user_identity_id
+            over (
+                partition by ranked_accounts.email
+                order by
+                    ranked_accounts.has_no_source_id asc
+                    , ranked_accounts.id_source_rank asc
+                    , ranked_accounts.user_global_id desc
+                    , ranked_accounts.sort_id desc nulls last
+                    , ranked_accounts.id_source_user_id desc
+            ) as user_identity_id
         , ranked_accounts.*
     from ranked_accounts
-    window w as (
-        partition by email
-        order by
-            has_no_source_id asc
-            , id_source_rank asc
-            , user_global_id desc
-            , sort_id desc nulls last
-            , id_source_user_id desc
-    )
 )
 
 , combined_users as (
     select
         {{ dbt_utils.generate_surrogate_key([
-            'user_identity_source',
-            'user_identity_id'
+            'account_identity.user_identity_source',
+            'account_identity.user_identity_id'
         ]) }} as user_pk
         , account_identity.*
     from account_identity
@@ -901,11 +928,13 @@ with mitx_users as (
         , max(user_joined_on_bootcamps) as user_joined_on_bootcamps
         -- Fallback full_name in case the base row (most recent platform) has a null name.
         -- Cross-platform users may have their base row on a platform with null full_name.
-        -- Takes the next account in base-row order that has one, so the pick is stable.
-        , min_by(full_name, row_num) filter (where full_name is not null) as agg_full_name
+        -- Takes the next account in base-row order that has a non-blank one, so the pick is stable.
+        -- The key is nulled on rows without one rather than using FILTER (WHERE ...), which
+        -- StarRocks can't parse on min_by. min_by skips null keys on Trino, StarRocks and DuckDB.
+        , min_by(trim(full_name), case when trim(full_name) <> '' then row_num end) as agg_full_name
         -- Fallback address_state for cross-platform users whose base row is from a platform
         -- that null-codes address_state (e.g. Emeritus, Global Alumni, Residential).
-        , min_by(address_state, row_num) filter (where address_state is not null) as agg_address_state
+        , min_by(address_state, case when address_state is not null then row_num end) as agg_address_state
     from ranked_users
     group by user_pk
 )
@@ -977,7 +1006,7 @@ select
     , agg.global_alumni_identity_key
     , agg.micromasters_user_id
     , base.email
-    , coalesce(base.full_name, agg.agg_full_name) as full_name
+    , coalesce(nullif(trim(base.full_name), ''), agg.agg_full_name) as full_name
     , base.address_country
     , base.highest_education
     , base.gender

@@ -16,7 +16,7 @@ from typing import Any
 from dagster import ConfigurableResource, ResourceDependency
 from ol_orchestrate.resources.secrets.vault import Vault
 from pydantic import Field as PydanticField
-from pymysql import connect
+from pymysql import Connection, connect
 from pymysql.cursors import DictCursor
 from pymysql.err import OperationalError
 
@@ -98,6 +98,25 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
         )["data"]
         return creds["username"], creds["password"]
 
+    def connect(self) -> Connection[DictCursor]:
+        """Open a connection with fresh credentials and no retry.
+
+        For a caller that runs many statements and would otherwise have Vault
+        create a database user for each one, as `execute` and `fetch` do.
+        """
+        username, password = self.generate_credentials()
+        return connect(
+            host=self.host,
+            port=self.port,
+            database=self.database,
+            user=username,
+            password=password,
+            cursorclass=DictCursor,
+            # An explicit context makes pymysql refuse a server without TLS,
+            # which the static login must not require.
+            ssl=None if self.static_username is not None else _make_ssl_context(),
+        )
+
     def execute(self, sql: str, *, idempotent: bool = True) -> None:
         """Run *sql*, retrying with fresh credentials on a transient error.
 
@@ -156,21 +175,8 @@ class StarRocksResource(ConfigurableResource["StarRocksResource"]):
                 )
                 time.sleep(delay)
 
-            username, password = self.generate_credentials()
             try:
-                conn = connect(
-                    host=self.host,
-                    port=self.port,
-                    database=self.database,
-                    user=username,
-                    password=password,
-                    cursorclass=DictCursor,
-                    # An explicit context makes pymysql refuse a server
-                    # without TLS, which the static login must not require.
-                    ssl=None
-                    if self.static_username is not None
-                    else _make_ssl_context(),
-                )
+                conn = self.connect()
             except OperationalError as exc:
                 if exc.args[0] not in _RETRIABLE_ERRORS:
                     raise

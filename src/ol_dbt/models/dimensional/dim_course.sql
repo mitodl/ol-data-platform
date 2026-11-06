@@ -70,7 +70,7 @@ with mitxonline_courses as (
                 order by courserun_start_date desc nulls last
             ) as _row_num
         from {{ ref('int__edxorg__mitx_courseruns') }}
-    )
+    ) as subquery
     where _row_num = 1
 )
 
@@ -213,7 +213,7 @@ with mitxonline_courses as (
         , course_is_live
         , platform as primary_platform
         , current_timestamp as effective_date
-        , cast(null as timestamp) as end_date
+        , {{ null_timestamp() }} as end_date
         , true as is_current
     from current_courses
 )

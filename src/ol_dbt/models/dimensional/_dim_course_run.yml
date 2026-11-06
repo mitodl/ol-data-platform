@@ -47,23 +47,23 @@ models:
           - open-learning.course-run
   - name: course_fk
     description: >
-      Foreign key to dim_course. Null when no matching course exists in dim_course
-      —
-      edxorg runs attempt a join (extracting course_readable_id from courserun_readable_id)
-      but will be null until edxorg courses are loaded. emeritus and global_alumni
+      Foreign key to dim_course. Null when no matching course exists in dim_course.
+      edxorg runs join on the course_readable_id of int__edxorg__mitx_courseruns,
+      which
+      is not derivable from the run id (MITx+14.73x or MITx/14.73x). emeritus and
+      global_alumni
       runs link to the xPro course that holds their Wrike course code (partner prefix
       included), or else to the emeritus or global_alumni course for that code. Other
       nulls
       indicate courses not yet in dim_course.
     tests:
     - not_null:
-        where: "platform != 'edxorg'"
         config:
           severity: warn
     - relationships:
         to: ref('dim_course')
         field: course_pk
-        where: "platform != 'edxorg' and course_fk is not null"
+        where: "course_fk is not null"
   - name: platform_fk
     description: Foreign key to dim_platform, resolved from the platform string
     tests:
@@ -621,3 +621,53 @@ unit_tests:
       is_current: true}
     - {courserun_readable_id: "course-v1:xPRO+DL+R2", platform: "mitxpro", course_fk: "xpro_dl",
       is_current: true}
+- name: test_dim_course_run_links_edxorg_runs_by_source_course_readable_id
+  description: >
+    An edxorg run takes the dim_course row keyed on the source course_readable_id,
+    whatever its form. A plus-form course, a slash-form course and a run whose id
+    derives a different course (MITx/6.00.1x_9/2T2016 of MITx+6.00.1x) all resolve.
+  model: dim_course_run
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('stg__micromasters__app__postgres__courses_courserun')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__exams_examrun')
+    rows: []
+  - input: ref('int__mitxonline__course_runs')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__courses_course')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('int__mitxpro__courses')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('int__edxorg__mitx_courseruns')
+    rows:
+    - {courserun_readable_id: "MITx/14.73x/1T2015", course_readable_id: "MITx+14.73x"}
+    - {courserun_readable_id: "MITx/7.00x/2013_Spring", course_readable_id: "MITx/7.00x"}
+    - {courserun_readable_id: "MITx/6.00.1x_9/2T2016", course_readable_id: "MITx+6.00.1x"}
+  - input: ref('int__mitxresidential__courseruns')
+    rows: []
+  - input: ref('int__bootcamps__course_runs')
+    rows: []
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: "edx_1473", course_readable_id: "MITx+14.73x", primary_platform: "edxorg",
+      is_current: true}
+    - {course_pk: "edx_700", course_readable_id: "MITx/7.00x", primary_platform: "edxorg",
+      is_current: true}
+    - {course_pk: "edx_6001", course_readable_id: "MITx+6.00.1x", primary_platform: "edxorg",
+      is_current: true}
+  - input: ref('dim_platform')
+    rows: []
+  expect:
+    rows:
+    - {courserun_readable_id: "MITx/14.73x/1T2015", platform: "edxorg", course_fk: "edx_1473"}
+    - {courserun_readable_id: "MITx/7.00x/2013_Spring", platform: "edxorg", course_fk: "edx_700"}
+    - {courserun_readable_id: "MITx/6.00.1x_9/2T2016", platform: "edxorg", course_fk: "edx_6001"}

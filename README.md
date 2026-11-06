@@ -195,80 +195,32 @@ This merges auth-related tables into the existing `_mitlearn__sources.yml` file.
 - Generated staging models reference the correct source and include all discovered columns
 - The script handles YAML merging to avoid duplicating source definitions
 
-# UV Operations Utility
+# uv lockfiles
 
-This repository includes a utility script for running `uv` commands across all code locations in the `dg_deployment/code_locations` directory. The script is located at `bin/uv-operations.py`.
+The root workspace (`packages/*`, `src/ol_dbt_cli`) shares `uv.lock`, but every
+other uv project has its own: each code location under `dg_projects/`, the two
+deployments under `dg_deployments/`, `src/ol_dlt` and `src/ol_superset`. Each of
+those lockfiles also records the dependencies of its path dependencies, so a
+change to `packages/ol-orchestrate-lib/pyproject.toml` makes all of them stale,
+and the image builds (`uv sync --locked`) fail until they are relocked.
 
-## Overview
-
-The `uv-operations.py` script automatically discovers all directories containing a `pyproject.toml` file in the code locations directory and executes the specified `uv` command on each one. This is useful for operations like:
-
-- Synchronizing dependencies across all code locations (`uv sync`)
-- Upgrading lock files (`uv lock --upgrade`)
-- Building packages (`uv build`)
-- Listing installed packages (`uv pip list`)
-
-## Usage
-
-### Basic Command
+`bin/uv-operations.py` runs a uv command in each of these projects. It finds them
+as every `pyproject.toml` tracked in git that is not a member of the root
+workspace, so a new project is covered once it is committed.
 
 ```bash
-python bin/uv-operations.py <uv-command> [args...]
+uv run bin/uv-operations.py list                           # the projects it covers
+uv run bin/uv-operations.py lock                           # relock whatever is stale
+uv run bin/uv-operations.py lock --check                   # fail if anything is stale
+uv run bin/uv-operations.py lock --upgrade-package dagster # upgrade one package everywhere
+uv run bin/uv-operations.py lock --upgrade                 # upgrade everything everywhere
+uv run bin/uv-operations.py sync
+uv run bin/uv-operations.py exec pip list                  # any other uv command
 ```
 
-Or run it directly as an executable:
+It runs every project and reports the failures at the end; `--fail-fast` stops at
+the first one.
 
-```bash
-./bin/uv-operations.py <uv-command> [args...]
-```
-
-### Examples
-
-#### Sync all code locations
-
-```bash
-python bin/uv-operations.py sync
-```
-
-#### Upgrade lock files
-
-```bash
-python bin/uv-operations.py lock --upgrade
-```
-
-#### List packages in all locations
-
-```bash
-python bin/uv-operations.py pip list
-```
-
-#### Continue on errors
-
-By default, the script stops at the first failure. To continue processing all locations even if some fail:
-
-```bash
-python bin/uv-operations.py sync --continue-on-error
-```
-
-#### Verbose output
-
-For detailed output showing the exact commands being run:
-
-```bash
-python bin/uv-operations.py sync --verbose
-```
-
-## Parameters
-
-- `--code-locations-dir`: Base directory containing code locations (default: `dg_deployment/code_locations`)
-- `--continue-on-error`: Continue running even if some locations fail
-- `--verbose`: Print verbose output including the full command being executed
-
-## Output
-
-The script provides:
-
-- A list of discovered code locations
-- Progress indicators for each location being processed
-- Success (✓) or failure (✗) markers for each location
-- A summary at the end showing successful and failed operations
+The `uv-lock` prek hook runs `lock` whenever a `pyproject.toml` or `uv.lock`
+changes, and autofix.ci runs it on every pull request, so a dependency bump that
+edits one `pyproject.toml` gets the other lockfiles relocked in the same PR.

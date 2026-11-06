@@ -2,8 +2,9 @@
 
 This module provides the building blocks for the two nightly maintenance assets:
 
-- ``iceberg_dbt_layer_maintenance``: OPTIMIZE + ANALYZE (Trino) + EXPIRE
-  (pyiceberg) for all dbt-managed tables and non-dbt singletons.
+- ``iceberg_dbt_layer_maintenance``: OPTIMIZE + ANALYZE (Trino or StarRocks,
+  see ``IcebergMaintenanceEngine``) + EXPIRE (pyiceberg) for all dbt-managed
+  tables and non-dbt singletons.
 - ``iceberg_raw_layer_maintenance``: EXPIRE (pyiceberg) for the 1,300+
   Airbyte-ingested tables in ``ol_warehouse_production_raw``.
 
@@ -44,7 +45,7 @@ import re
 from collections.abc import Collection
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import boto3
 from pyiceberg.catalog import Catalog
@@ -79,6 +80,27 @@ class TableMaintenanceConfig:
     optimize_after_every_n_runs: int = 1
     # Run ANALYZE after this many materializations since last maintenance
     analyze_after_every_n_runs: int = 7
+
+
+class IcebergMaintenanceEngine(Protocol):
+    """The query engine that compacts and analyzes dbt-layer tables.
+
+    ``TrinoMaintenanceResource`` (Galaxy) and the lakehouse location's
+    ``StarRocksIcebergMaintenanceResource`` both satisfy it, so the dbt-layer
+    asset runs against whichever engine builds the warehouse until the
+    StarRocks cutover retires Trino.
+    """
+
+    def optimize(self, schema: str, table: str, file_size_mb: int = 512) -> None:
+        """Rewrite the table's data files smaller than ``file_size_mb``."""
+
+    def analyze(self, schema: str, table: str) -> None:
+        """Refresh the engine's query optimizer statistics for the table."""
+
+    def base_tables_among(
+        self, candidates: set[tuple[str, str]]
+    ) -> set[tuple[str, str]]:
+        """Return the ``(schema, table)`` *candidates* that exist as tables."""
 
 
 @dataclass(frozen=True)
