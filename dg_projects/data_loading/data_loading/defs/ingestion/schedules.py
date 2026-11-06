@@ -334,14 +334,9 @@ edxorg_program_reports_ingest_schedule = dg.ScheduleDefinition(
 TRACKING_LOGS_START_HOUR = {"xpro": 0, "mitxonline": 1, "mitx": 2}
 
 
-def tracking_logs_schedule_name(deployment: str) -> str:
-    """Return the name of a deployment's tracking log schedule."""
-    return f"{deployment}_tracking_logs_ingest_schedule"
-
-
 def tracking_logs_ingest_schedule(deployment: str) -> dg.ScheduleDefinition:
     """Build the 12-hourly schedule that loads one deployment's tracking log."""
-    name = tracking_logs_schedule_name(deployment)
+    name = f"{deployment}_tracking_logs_ingest_schedule"
     return dg.ScheduleDefinition(
         name=name,
         target=dg.AssetSelection.keys(
