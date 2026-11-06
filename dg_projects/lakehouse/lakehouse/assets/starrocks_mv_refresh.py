@@ -108,7 +108,9 @@ def refresh_starrocks_analytics_mvs(
         severity=AssetCheckSeverity.ERROR,
         metadata={
             "checked": MetadataValue.json(sorted({g.relation for g in grains})),
-            "not_refreshed": MetadataValue.json(sorted(failed)),
+            # A failed change-log stamp lands in the same failures as a failed
+            # REFRESH, so an MV listed here may have refreshed.
+            "skipped_refresh_or_stamp_failed": MetadataValue.json(sorted(failed)),
             "duplicates": MetadataValue.json(duplicates),
         },
     )
