@@ -13,8 +13,9 @@ from ol_dlt.sources import (
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from data_loading.defs.ingestion.assets import (
-    XPRO_TRACKING_LOGS_TABLE,
+    TRACKING_LOGS_DEPLOYMENTS,
     mitxonline_app_assets,
+    tracking_logs_table,
     xpro_app_assets,
 )
 from data_loading.defs.ingestion.sensor import IN_FLIGHT_RUN_STATUSES
@@ -307,51 +308,73 @@ edxorg_program_reports_ingest_schedule = dg.ScheduleDefinition(
     ),
 )
 
-# Every 12 hours, the cadence of the Airbyte connection it replaces (inventory
-# unit xpro/tracking_logs). The first production runs walk the 44.3 GB backlog
-# at most 200 batches of 128 MiB gzip a run, so it takes about two runs, and
-# the guard keeps a run that outlasts the interval from overlapping the next.
-# The guard sees only this schedule's runs and their retries, not a run launched
-# by hand. max_runtime fails a hung run after 11 hours, and run_retries
-# relaunches it with the same tags, so a hang that repeats on every attempt
-# holds the schedule off until the retries run out.
+# Every 12 hours, the cadence of the Airbyte connections they replace (inventory
+# units <deployment>/tracking_logs). A first production run walks at most 200
+# batches of 128 MiB gzip, so the backlog takes about two runs for xpro (44.3
+# GB) and five each for mitxonline (118.3 GB) and mitx (124.5 GB), and the guard
+# keeps a run that outlasts the interval from overlapping the next. The guard
+# sees only its own schedule's runs and their retries, not a run launched by
+# hand. max_runtime fails a hung run after 11 hours, and run_retries relaunches
+# it with the same tags, so a hang that repeats on every attempt holds the
+# schedule off until the retries run out.
+#
+# The deployments start an hour apart so their backlog runs do not all start at
+# once. Once drained, each run takes minutes and is done well before the
+# lakehouse's non_airbyte_staging_daily at 06:00 UTC.
 #
 # A batch should peak near 4.3 GB at the worst gzip ratio measured (see
 # tracking_logs.BUDGET_BYTES), and the run also holds its listing (474 MB for
-# the whole bucket). Nothing has been measured in a deployed pod, and the other
-# two batched loads each passed 7 GB against the 8Gi default, so this takes
-# their 16Gi limit. The request stays low, as for those schedules.
+# the whole mitx bucket). The other two batched loads each passed 7 GB against
+# the 8Gi default, so these take their 16Gi limit. The request stays low, as
+# for those schedules.
 #
-# RUNNING in production and QA, which reads the QA deployment's bucket (51,857
-# files, 0.9 GB on 2026-10-28). Stopped elsewhere, where the source would read
-# production.
-XPRO_TRACKING_LOGS_SCHEDULE_NAME = "xpro_tracking_logs_ingest_schedule"
-no_xpro_tracking_logs_run_in_flight = no_run_in_flight(XPRO_TRACKING_LOGS_SCHEDULE_NAME)
-xpro_tracking_logs_ingest_schedule = dg.ScheduleDefinition(
-    name=XPRO_TRACKING_LOGS_SCHEDULE_NAME,
-    target=dg.AssetSelection.keys(["ol_warehouse_raw_data", XPRO_TRACKING_LOGS_TABLE]),
-    cron_schedule="50 */12 * * *",
-    execution_timezone="Etc/UTC",
-    should_execute=no_xpro_tracking_logs_run_in_flight,
-    tags={
-        "dagster/max_runtime": str(11 * 60 * 60),
-        "dagster-k8s/config": json.dumps(
-            {
-                "container_config": {
-                    "resources": {
-                        "requests": {"memory": "2Gi"},
-                        "limits": {"memory": "16Gi"},
+# RUNNING in production and QA, which reads each deployment's QA bucket (xpro's
+# held 51,857 files, 0.9 GB on 2026-10-28). Stopped elsewhere, where the source
+# would read production.
+TRACKING_LOGS_START_HOUR = {"xpro": 0, "mitxonline": 1, "mitx": 2}
+
+
+def tracking_logs_schedule_name(deployment: str) -> str:
+    """Return the name of a deployment's tracking log schedule."""
+    return f"{deployment}_tracking_logs_ingest_schedule"
+
+
+def tracking_logs_ingest_schedule(deployment: str) -> dg.ScheduleDefinition:
+    """Build the 12-hourly schedule that loads one deployment's tracking log."""
+    name = tracking_logs_schedule_name(deployment)
+    return dg.ScheduleDefinition(
+        name=name,
+        target=dg.AssetSelection.keys(
+            ["ol_warehouse_raw_data", tracking_logs_table(deployment)]
+        ),
+        cron_schedule=f"50 {TRACKING_LOGS_START_HOUR[deployment]}-23/12 * * *",
+        execution_timezone="Etc/UTC",
+        should_execute=no_run_in_flight(name),
+        tags={
+            "dagster/max_runtime": str(11 * 60 * 60),
+            "dagster-k8s/config": json.dumps(
+                {
+                    "container_config": {
+                        "resources": {
+                            "requests": {"memory": "2Gi"},
+                            "limits": {"memory": "16Gi"},
+                        }
                     }
                 }
-            }
+            ),
+        },
+        default_status=(
+            dg.DefaultScheduleStatus.RUNNING
+            if DAGSTER_ENV in {"qa", "production"}
+            else dg.DefaultScheduleStatus.STOPPED
         ),
-    },
-    default_status=(
-        dg.DefaultScheduleStatus.RUNNING
-        if DAGSTER_ENV in {"qa", "production"}
-        else dg.DefaultScheduleStatus.STOPPED
-    ),
-)
+    )
+
+
+tracking_logs_ingest_schedules = {
+    deployment: tracking_logs_ingest_schedule(deployment)
+    for deployment in TRACKING_LOGS_DEPLOYMENTS
+}
 
 OCW_CONTENT_SCHEDULE_NAME = "ocw_content_ingest_daily_schedule"
 # Defined in ocw_content_sensor, named here so the schedule can wait for its runs.
@@ -460,7 +483,7 @@ defs = dg.Definitions(
         posthog_events_ingest_schedule,
         course_xml_blocks_ingest_schedule,
         edxorg_program_reports_ingest_schedule,
-        xpro_tracking_logs_ingest_schedule,
+        *tracking_logs_ingest_schedules.values(),
         ocw_content_ingest_schedule,
         canvas_content_ingest_schedule,
     ],
