@@ -1134,7 +1134,7 @@ retired:
   layer: tracking_logs
   raw_tables:
   - raw__edxorg__s3__tracking_logs
-  retired_on: '2026-10-28'
+  retired_on: '2026-11-05'
   reason: >-
     MIT has moved its courses off edX.org, so the daily export of MITx course
     events is winding down: 9 files landed in October 2026, the last for
@@ -1143,11 +1143,12 @@ retired:
     (tk-load-edxorg-tracking-logs-with-dlt-from-a-cutoff-609400). That day it
     held all 1,608 files in the landing zone, through the one modified
     2026-10-25T22:19:40Z, as 2,233,522,873 rows. The "edx.org Tracking Logs →
-    S3 Data Lake" connection was disabled the same day and is kept disabled,
-    not deleted. A file landing after that stays under
-    edxorg-raw-data/edxorg/raw_data/tracking_logs/ in the landing zone and is
-    not loaded. stg__edxorg__s3__tracking_logs__user_activity still models the
-    table, which stays in place, read-only.
+    S3 Data Lake" connection was disabled on 2026-11-05 and is kept disabled,
+    not deleted. No file landed between the two dates. A file landing after
+    that stays under edxorg-raw-data/edxorg/raw_data/tracking_logs/ in the
+    landing zone and is not loaded.
+    stg__edxorg__s3__tracking_logs__user_activity still models the table,
+    which stays in place, read-only.
   frozen: true
 - deployment: xpro
   layer: tracking_logs
