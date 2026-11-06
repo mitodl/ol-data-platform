@@ -236,16 +236,88 @@ def refresh_materialized_views(
         raise MaterializedViewRefreshError(failures)
 
 
-def _materialized_view_nodes(
-    manifest: Mapping[str, Any],
-) -> Iterator[Mapping[str, Any]]:
+def _is_materialized_view(node: Mapping[str, Any]) -> bool:
     return (
-        node
-        for node in manifest["nodes"].values()
-        if node["resource_type"] == "model"
+        node["resource_type"] == "model"
         and node["config"]["materialized"] == "materialized_view"
         and STARROCKS_TAG in node["tags"]
     )
+
+
+def _materialized_view_nodes(
+    manifest: Mapping[str, Any],
+) -> Iterator[Mapping[str, Any]]:
+    return (node for node in manifest["nodes"].values() if _is_materialized_view(node))
+
+
+@dataclass(frozen=True)
+class ViewGrain:
+    """The columns a StarRocks MV's grain test says identify one of its rows.
+
+    :param relation: Schema-qualified MV name.
+    :param columns: The test's `combination_of_columns`.
+    :param where: The test's `where` config, if it has one.
+    """
+
+    relation: str
+    columns: tuple[str, ...]
+    where: str | None = None
+
+
+def view_grains(manifest: Mapping[str, Any]) -> list[ViewGrain]:
+    """Each StarRocks MV's `dbt_utils.unique_combination_of_columns` test.
+
+    The dbt tests on these models are severity: warn and run before the
+    refresh, so a duplicate they would find never fails anything. These are the
+    same grains, checked after the refresh by `duplicate_keys_sql`.
+    """
+    views = {
+        unique_id: f"{node['schema']}.{node['alias']}"
+        for unique_id, node in manifest["nodes"].items()
+        if _is_materialized_view(node)
+    }
+    grains = [
+        ViewGrain(
+            relation=views[node["attached_node"]],
+            columns=tuple(node["test_metadata"]["kwargs"]["combination_of_columns"]),
+            where=node["config"].get("where"),
+        )
+        for node in manifest["nodes"].values()
+        if node["resource_type"] == "test"
+        and node.get("attached_node") in views
+        and node.get("test_metadata", {}).get("namespace") == "dbt_utils"
+        and node["test_metadata"]["name"] == "unique_combination_of_columns"
+    ]
+    return sorted(grains, key=lambda grain: (grain.relation, grain.columns))
+
+
+def duplicate_keys_sql(grain: ViewGrain) -> str:
+    """Count the keys of *grain* held by more than one row, and those rows.
+
+    Grouped the way dbt_utils groups, so a null key column matches the test.
+    """
+    where = f" where {grain.where}" if grain.where else ""
+    return (
+        "select count(*) as duplicate_keys, coalesce(sum(n), 0) as duplicate_rows"  # noqa: S608
+        f" from (select count(*) as n from {grain.relation}{where}"
+        f" group by {', '.join(grain.columns)} having count(*) > 1) d"
+    )
+
+
+def duplicated_grains(
+    grains: Iterable[ViewGrain], fetch: Callable[[str], list[dict[str, Any]]]
+) -> dict[str, dict[str, str | int]]:
+    """Map each relation with duplicate keys to its counts; empty when none."""
+    duplicates: dict[str, dict[str, str | int]] = {}
+    for grain in grains:
+        (row,) = fetch(duplicate_keys_sql(grain))
+        if row["duplicate_keys"]:
+            duplicates[grain.relation] = {
+                "columns": ", ".join(grain.columns),
+                "duplicate_keys": int(row["duplicate_keys"]),
+                "duplicate_rows": int(row["duplicate_rows"]),
+            }
+    return duplicates
 
 
 def documented_columns(manifest: Mapping[str, Any]) -> dict[str, set[str]]:

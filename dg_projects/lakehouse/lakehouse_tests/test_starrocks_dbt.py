@@ -22,10 +22,13 @@ from lakehouse.lib.starrocks_dbt import (
     ChangeTrackedView,
     MaterializedViewRefreshError,
     MissingBaseTablesError,
+    ViewGrain,
     base_table_relations,
     change_tracked_views,
     documented_columns,
     drifted_relations,
+    duplicate_keys_sql,
+    duplicated_grains,
     live_column_query,
     live_columns,
     looks_retriable,
@@ -36,6 +39,7 @@ from lakehouse.lib.starrocks_dbt import (
     stamp_change_log,
     stamp_change_log_sql,
     unreadable_base_tables,
+    view_grains,
 )
 from lakehouse.resources.starrocks import _RETRIABLE_ERRORS
 
@@ -1161,3 +1165,91 @@ def test_the_build_uploads_its_artifacts_for_openmetadata():
 def test_openmetadata_gets_the_manifest_with_the_results():
     """Nothing else produces a manifest for the StarRocks target."""
     assert set(OM_ARTIFACTS) == {"run_results.json", "manifest.json"}
+
+
+def _grain_test(model, columns, *, namespace="dbt_utils", where=None):
+    return {
+        "resource_type": "test",
+        "attached_node": f"model.open_learning.{model}",
+        "config": {"severity": "warn", "where": where},
+        "test_metadata": {
+            "name": "unique_combination_of_columns",
+            "namespace": namespace,
+            "kwargs": {"combination_of_columns": columns},
+        },
+    }
+
+
+def _manifest_with_tests(models, tests):
+    nodes = _manifest(models)["nodes"]
+    nodes.update({f"test.open_learning.t{i}": test for i, test in enumerate(tests)})
+    return {"nodes": nodes}
+
+
+class TestViewGrains:
+    def test_reads_the_grain_test_of_each_view(self):
+        manifest = _manifest_with_tests(
+            [
+                _mv_node("mv_b", ["k1", "k2"], schema="b2b_learner_records"),
+                _mv_node("mv_a", ["k"]),
+            ],
+            [_grain_test("mv_b", ["k1", "k2"]), _grain_test("mv_a", ["k"])],
+        )
+        assert view_grains(manifest) == [
+            ViewGrain("b2b_analytics.mv_a", ("k",)),
+            ViewGrain("b2b_learner_records.mv_b", ("k1", "k2")),
+        ]
+
+    def test_ignores_tests_on_models_the_refresh_does_not_own(self):
+        trino_table = _model_node("dim_x", materialized="table", tags=[])
+        manifest = _manifest_with_tests(
+            [trino_table, _mv_node("mv_a", ["k"])],
+            [_grain_test("dim_x", ["k"]), _grain_test("mv_a", ["k"])],
+        )
+        assert [g.relation for g in view_grains(manifest)] == ["b2b_analytics.mv_a"]
+
+    def test_ignores_other_tests(self):
+        not_utils = _grain_test("mv_a", ["k"], namespace="dbt_expectations")
+        no_metadata = {
+            "resource_type": "test",
+            "attached_node": "model.open_learning.mv_a",
+            "config": {},
+        }
+        manifest = _manifest_with_tests(
+            [_mv_node("mv_a", ["k"])], [not_utils, no_metadata]
+        )
+        assert view_grains(manifest) == []
+
+    def test_keeps_the_where_config(self):
+        manifest = _manifest_with_tests(
+            [_mv_node("mv_a", ["k"])], [_grain_test("mv_a", ["k"], where="k > 0")]
+        )
+        assert view_grains(manifest) == [
+            ViewGrain("b2b_analytics.mv_a", ("k",), "k > 0")
+        ]
+
+
+class TestDuplicateKeysSql:
+    def test_groups_by_the_grain(self):
+        sql = duplicate_keys_sql(ViewGrain("s.mv", ("a", "b")))
+        assert "from s.mv group by a, b having count(*) > 1" in sql
+
+    def test_applies_the_where_config(self):
+        sql = duplicate_keys_sql(ViewGrain("s.mv", ("a",), "a > 0"))
+        assert "from s.mv where a > 0 group by a" in sql
+
+
+class TestDuplicatedGrains:
+    def test_reports_only_views_with_duplicates(self):
+        counts = {
+            "s.clean": {"duplicate_keys": 0, "duplicate_rows": 0},
+            "s.dup": {"duplicate_keys": 4, "duplicate_rows": 11},
+        }
+
+        def fetch(sql):
+            return [next(c for name, c in counts.items() if f" {name} " in sql)]
+
+        grains = [ViewGrain("s.clean", ("a",)), ViewGrain("s.dup", ("a", "b"))]
+        assert duplicated_grains(grains, fetch) == {
+            "s.dup": {"columns": "a, b", "duplicate_keys": 4, "duplicate_rows": 11}
+        }

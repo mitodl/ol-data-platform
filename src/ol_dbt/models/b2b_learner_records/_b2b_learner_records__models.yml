@@ -10,7 +10,10 @@
 # gates nothing. At error severity it would fail starrocks_dbt_assets and skip
 # the MV refresh for every StarRocks model, and the tests run before that
 # refresh, against a view the build has just recreated. Anything the API
-# contract depends on is enforced in the SQL instead.
+# contract depends on is enforced in the SQL instead. The grain tests
+# (dbt_utils.unique_combination_of_columns) run again after the refresh as the
+# Dagster asset check grains_are_unique on b2b_analytics/starrocks_mv_refresh,
+# which alerts at ERROR severity without gating the refresh.
 #
 # Change logs. A model that sets config.meta.change_tracking gets a companion
 # table, <model>_changes, in this database. dbt does not build it: the Dagster
