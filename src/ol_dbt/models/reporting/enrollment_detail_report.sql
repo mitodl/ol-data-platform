@@ -75,7 +75,7 @@ with enrollment as (
             ) as row_num
         from {{ ref('tfact_payment') }}
         where transaction_type = 'payment'
-    )
+    ) as subquery
     where row_num = 1
 )
 

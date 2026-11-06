@@ -11,7 +11,7 @@ with cheating_detection as (
         cast(null as varchar) as courserun_readable_id
         , cast(null as bigint) as openedx_user_id
         , cast(null as double) as risk_probability
-        , cast(null as timestamp) as created_timestamp
+        , {{ null_timestamp() }} as created_timestamp
     where false
 {% else %}
     select * from {{ risk.relation_ref }}

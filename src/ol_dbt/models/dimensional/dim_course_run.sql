@@ -384,7 +384,7 @@ with micromasters_courseruns as (
         , semester
         , passing_grade
         , current_timestamp as effective_date
-        , cast(null as timestamp) as end_date
+        , {{ null_timestamp() }} as end_date
         , true as is_current
         , courserun_upgrade_deadline
     from courseruns_with_all_fks

@@ -14,7 +14,7 @@ select
     , cast(null as varchar) as category_slug
     , cast(null as varchar) as category_label
     , cast(null as varchar) as category_description
-    , cast(null as timestamp) as proposed_at
+    , {{ null_timestamp() }} as proposed_at
     , cast(null as varchar) as cluster_status
 where false
 {% else %}

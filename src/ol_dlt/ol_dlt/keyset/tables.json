@@ -1,0 +1,521 @@
+{
+  "generated_by": "ol-dbt inventory keysets --write",
+  "units": {
+    "learn_ai/app_postgres": [
+      {
+        "table": "ai_chatbots_chatresponserating",
+        "key": "checkpoint_id"
+      }
+    ],
+    "micromasters/app_postgres": [
+      {
+        "table": "cms_programpage",
+        "key": "page_ptr_id"
+      },
+      {
+        "table": "courses_courserun",
+        "key": "id"
+      },
+      {
+        "table": "courses_electivecourse",
+        "key": "id"
+      },
+      {
+        "table": "courses_electivesset",
+        "key": "id"
+      },
+      {
+        "table": "courses_program",
+        "key": "id"
+      },
+      {
+        "table": "django_content_type",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_coupon",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_couponinvoice",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_line",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_order",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_receipt",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_redeemedcoupon",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_usercoupon",
+        "key": "id"
+      },
+      {
+        "table": "exams_examrun",
+        "key": "id"
+      },
+      {
+        "table": "grades_combinedfinalgrade",
+        "key": "id"
+      },
+      {
+        "table": "grades_finalgrade",
+        "key": "id"
+      },
+      {
+        "table": "grades_micromasterscoursecertificate",
+        "key": "id"
+      },
+      {
+        "table": "grades_proctoredexamgrade",
+        "key": "id"
+      },
+      {
+        "table": "profiles_education",
+        "key": "id"
+      },
+      {
+        "table": "profiles_employment",
+        "key": "id"
+      },
+      {
+        "table": "social_auth_usersocialauth",
+        "key": "id"
+      },
+      {
+        "table": "wagtailcore_page",
+        "key": "id"
+      },
+      {
+        "table": "wagtailimages_image",
+        "key": "id"
+      }
+    ],
+    "mitlearn/app_postgres": [
+      {
+        "table": "content_feedback_contentfeedback",
+        "key": "id"
+      },
+      {
+        "table": "learning_resources_learningresourcetopic",
+        "key": "id"
+      },
+      {
+        "table": "learning_resources_learningresourcetopicmapping",
+        "key": "id"
+      },
+      {
+        "table": "learning_resources_search_percolatequery",
+        "key": "id"
+      },
+      {
+        "table": "learning_resources_search_percolatequery_users",
+        "key": "id"
+      },
+      {
+        "table": "learning_resources_userlist",
+        "key": "id"
+      },
+      {
+        "table": "learning_resources_userlist_topics",
+        "key": "id"
+      },
+      {
+        "table": "learning_resources_userlistrelationship",
+        "key": "id"
+      },
+      {
+        "table": "profiles_profile_topic_interests",
+        "key": "id"
+      }
+    ],
+    "mitx/mysql": [
+      {
+        "table": "certificates_generatedcertificate",
+        "key": "id"
+      },
+      {
+        "table": "course_overviews_courseoverview",
+        "key": "id"
+      },
+      {
+        "table": "credit_crediteligibility",
+        "key": "id"
+      },
+      {
+        "table": "grades_persistentcoursegrade",
+        "key": "id"
+      },
+      {
+        "table": "grades_persistentsubsectiongrade",
+        "key": "id"
+      },
+      {
+        "table": "grades_persistentsubsectiongradeoverride",
+        "key": "id"
+      },
+      {
+        "table": "workflow_assessmentworkflow",
+        "key": "id"
+      }
+    ],
+    "mitxonline/app_postgres": [
+      {
+        "table": "b2b_userb2bcontract",
+        "key": "id"
+      },
+      {
+        "table": "courses_blockedcountry",
+        "key": "id"
+      },
+      {
+        "table": "courses_courserun_b2b_contracts",
+        "key": "id"
+      },
+      {
+        "table": "courses_courseruncertificate",
+        "key": "id"
+      },
+      {
+        "table": "courses_courserunenrollment",
+        "key": "id"
+      },
+      {
+        "table": "courses_courserunenrollmentaudit",
+        "key": "id"
+      },
+      {
+        "table": "courses_courserungrade",
+        "key": "id"
+      },
+      {
+        "table": "courses_coursestopic",
+        "key": "id"
+      },
+      {
+        "table": "courses_department",
+        "key": "id"
+      },
+      {
+        "table": "courses_programcertificate",
+        "key": "id"
+      },
+      {
+        "table": "courses_programenrollment",
+        "key": "id"
+      },
+      {
+        "table": "courses_programenrollmentaudit",
+        "key": "id"
+      },
+      {
+        "table": "django_content_type",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_basket",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_basketdiscount",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_basketitem",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_discount",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_discountproduct",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_discountredemption",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_product",
+        "key": "id"
+      },
+      {
+        "table": "flexiblepricing_countryincomethreshold",
+        "key": "id"
+      },
+      {
+        "table": "flexiblepricing_currencyexchangerate",
+        "key": "id"
+      },
+      {
+        "table": "flexiblepricing_flexiblepricetier",
+        "key": "id"
+      },
+      {
+        "table": "openedx_openedxuser",
+        "key": "id"
+      },
+      {
+        "table": "reversion_revision",
+        "key": "id"
+      },
+      {
+        "table": "reversion_version",
+        "key": "id"
+      },
+      {
+        "table": "wagtailcore_page",
+        "key": "id"
+      },
+      {
+        "table": "wagtailimages_image",
+        "key": "id"
+      }
+    ],
+    "mitxonline/mysql": [
+      {
+        "table": "grades_persistentcoursegrade",
+        "key": "id"
+      },
+      {
+        "table": "grades_persistentsubsectiongradeoverride",
+        "key": "id"
+      },
+      {
+        "table": "student_anonymoususerid",
+        "key": "id"
+      },
+      {
+        "table": "submissions_submission",
+        "key": "id"
+      }
+    ],
+    "ocw/app_postgres": [
+      {
+        "table": "gdrive_sync_drivefile",
+        "key": "file_id"
+      }
+    ],
+    "ovs/app_postgres": [
+      {
+        "table": "dj_elastictranscoder_encodejob",
+        "key": "id"
+      },
+      {
+        "table": "ui_collection",
+        "key": "id"
+      },
+      {
+        "table": "ui_collectionedxendpoint",
+        "key": "id"
+      },
+      {
+        "table": "ui_edxendpoint",
+        "key": "id"
+      },
+      {
+        "table": "ui_encodejob",
+        "key": "id"
+      },
+      {
+        "table": "ui_video",
+        "key": "id"
+      }
+    ],
+    "xpro/app_postgres": [
+      {
+        "table": "b2b_ecommerce_b2bcoupon",
+        "key": "id"
+      },
+      {
+        "table": "b2b_ecommerce_b2bcouponaudit",
+        "key": "id"
+      },
+      {
+        "table": "b2b_ecommerce_b2bcouponredemption",
+        "key": "id"
+      },
+      {
+        "table": "b2b_ecommerce_b2border",
+        "key": "id"
+      },
+      {
+        "table": "b2b_ecommerce_b2borderaudit",
+        "key": "id"
+      },
+      {
+        "table": "b2b_ecommerce_b2breceipt",
+        "key": "id"
+      },
+      {
+        "table": "cms_externalprogrampage",
+        "key": "page_ptr_id"
+      },
+      {
+        "table": "cms_programpage",
+        "key": "page_ptr_id"
+      },
+      {
+        "table": "cms_signatorypage",
+        "key": "page_ptr_id"
+      },
+      {
+        "table": "courses_course",
+        "key": "id"
+      },
+      {
+        "table": "courses_courseruncertificate",
+        "key": "id"
+      },
+      {
+        "table": "courses_courserunenrollment",
+        "key": "id"
+      },
+      {
+        "table": "courses_courserungrade",
+        "key": "id"
+      },
+      {
+        "table": "courses_platform",
+        "key": "id"
+      },
+      {
+        "table": "courses_program",
+        "key": "id"
+      },
+      {
+        "table": "courses_programcertificate",
+        "key": "id"
+      },
+      {
+        "table": "courses_programenrollment",
+        "key": "id"
+      },
+      {
+        "table": "courses_programrun",
+        "key": "id"
+      },
+      {
+        "table": "django_content_type",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_basket",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_basketitem",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_bulkcouponassignment",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_company",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_coupon",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_couponeligibility",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_couponpayment",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_couponpaymentversion",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_couponredemption",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_couponselection",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_couponversion",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_line",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_linerunselection",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_order",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_orderaudit",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_productcouponassignment",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_programrunline",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_receipt",
+        "key": "id"
+      },
+      {
+        "table": "ecommerce_taxrate",
+        "key": "id"
+      },
+      {
+        "table": "wagtailimages_image",
+        "key": "id"
+      }
+    ],
+    "xpro/mysql": [
+      {
+        "table": "certificates_generatedcertificate",
+        "key": "id"
+      },
+      {
+        "table": "credit_crediteligibility",
+        "key": "id"
+      },
+      {
+        "table": "grades_persistentcoursegrade",
+        "key": "id"
+      },
+      {
+        "table": "grades_persistentsubsectiongrade",
+        "key": "id"
+      },
+      {
+        "table": "grades_persistentsubsectiongradeoverride",
+        "key": "id"
+      },
+      {
+        "table": "workflow_assessmentworkflow",
+        "key": "id"
+      }
+    ]
+  }
+}

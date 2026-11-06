@@ -1,5 +1,8 @@
 with ticket as (  -- noqa: PRS
+   -- Staging keeps deleted tickets so a history can be built from it; downstream
+   -- models see only tickets that still exist in Zendesk.
    select * from {{ ref('stg__zendesk__ticket') }}
+   where ticket_status <> 'deleted'
 )
 
 , users as (

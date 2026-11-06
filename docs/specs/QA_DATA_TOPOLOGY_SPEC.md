@@ -638,7 +638,7 @@ masked:
   containing `@`, and the only ones with a run of seven or more digits are 24
   `content_cue_<uuid>` labels.
 
-Three tables are filtered:
+Three tables were filtered. The tracking-logs filter went with its unit, so two still are:
 
 - `raw__edxorg__program_learner_report`: 14.4B rows, 760 GB. Airbyte re-reads the same report
   files every day (their mtimes stop at 2025-03-13) and appends about 15M rows per sync. The
@@ -646,7 +646,8 @@ Three tables are filtered:
   one full report while syncs run a day apart, and two if a gap is shorter. The staging model
   dedupes on user, course run and program either way.
 - `raw__edxorg__s3__tracking_logs`: 2.2B rows, 245 GB. The mirror keeps 30 days of syncs and
-  drops `edx.user.settings.changed` events.
+  drops `edx.user.settings.changed` events. It stopped on 2026-10-28, when the unit was
+  retired as frozen history (`retired.yml`). QA keeps the copy it made on 2026-10-07.
 - `raw__edxorg__s3__tables__courseware_studentmodule`: 13.8B rows, 1,124 GB, in 30,373
   unpartitioned, unsorted data files (2026-10-15). The mirror keeps the `MITx/14.73x` runs, by
   a range on `course_id`. Iceberg truncates the file-level `course_id` bounds to 16

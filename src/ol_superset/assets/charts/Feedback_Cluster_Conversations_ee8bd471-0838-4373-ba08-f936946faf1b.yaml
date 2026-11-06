@@ -29,8 +29,13 @@ params:
   - course_title
   - courserun_readable_id
   allow_rearrange_columns: false
-  allow_render_html: false
+  allow_render_html: true
   color_pn: true
+  column_config:
+    conversation_summary:
+      columnWidth: 300
+    conversation_text:
+      columnWidth: 300
   comparison_color_enabled: false
   comparison_color_scheme: Green
   comparison_type: values

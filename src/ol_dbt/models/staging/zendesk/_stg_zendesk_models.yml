@@ -24,7 +24,8 @@ models:
       "question", or "task".
   - name: ticket_status
     description: str, the state of the ticket. Possible values are "new", "open",
-      "pending", "hold", "solved", or "closed".
+      "pending", "hold", "solved", "closed", or "deleted". Staging keeps deleted tickets;
+      int__zendesk__ticket drops them.
     tests:
     - not_null
   - name: ticket_description

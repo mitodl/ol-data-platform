@@ -27,6 +27,7 @@ from ol_dbt_cli.lib.git_utils import get_repo_root, resolve_merge_base
 from ol_dbt_cli.lib.glue_schema import DEFAULT_GLUE_DATABASE, columns_by_table
 from ol_dbt_cli.lib.inventory import (
     DEFAULT_INVENTORY_DIR,
+    KEYSET_TABLES_PATH,
     RETIRED_FILENAME,
     RenderError,
     Unit,
@@ -42,6 +43,7 @@ from ol_dbt_cli.lib.inventory import (
     render_airbyte,
     render_dagster_intervals,
     render_dbt_metadata_columns,
+    render_keyset_tables,
     retired_pairs,
     validate_inventory,
 )
@@ -270,6 +272,48 @@ def metadata_columns(
     err_console.print(
         f"[bold red]{escape(str(output))} is stale. Regenerate with `ol-dbt inventory metadata-columns --write`."
     )
+    sys.exit(1)
+
+
+@inventory_app.command
+def keysets(
+    *,
+    inventory_dir: Annotated[
+        Path,
+        Parameter(name=["--inventory-dir", "-i"], help="Directory holding units/."),
+    ] = DEFAULT_INVENTORY_DIR,
+    output: Annotated[
+        Path,
+        Parameter(name=["--output", "-o"], help="JSON file to render."),
+    ] = KEYSET_TABLES_PATH,
+    write: Annotated[
+        bool,
+        Parameter(help="Write the file. Without it, check it is current and exit 1 if not."),
+    ] = False,
+) -> None:
+    """Render the tables ol_dlt.keyset pulls keys-only reads of, by unit.
+
+    The tables Airbyte syncs incrementally from a database never lose a row in
+    raw when the source deletes it, so each gets a `<raw_table>__keyset` table
+    of its current keys. Run without `--write` to check the committed file.
+    """
+    try:
+        rendered = render_keyset_tables(load_units(inventory_dir))
+    except RenderError as error:
+        err_console.print(f"[bold red]{escape(str(error))}")
+        sys.exit(1)
+
+    if write:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered)
+        console.print(f"Wrote {escape(str(output))}")
+        return
+
+    current = output.read_text() if output.exists() else None
+    if current == rendered:
+        console.print(f"{escape(str(output))} is current.")
+        return
+    err_console.print(f"[bold red]{escape(str(output))} is stale. Regenerate with `ol-dbt inventory keysets --write`.")
     sys.exit(1)
 
 

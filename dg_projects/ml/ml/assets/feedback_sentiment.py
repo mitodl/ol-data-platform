@@ -16,8 +16,7 @@ from ml.lib.sentiment_eval import (
     predict_unrated_sentiment,
     validate_negative_thresholds,
 )
-from ml.lib.warehouse import warehouse_database
-from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ml.lib.warehouse import load_rows_by_key, warehouse_database
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from pydantic import Field, field_validator
 
@@ -96,7 +95,6 @@ class FeedbackSentimentConfig(Config):
         AssetKey(["intermediate", "feedback_embeddings"]),
         AssetKey(["intermediate", "int__feedback__conversation"]),
     ],
-    automation_condition=upstream_or_code_changes(),
     io_manager_key="io_manager",
     pool="feedback_sentiment",
     metadata={
@@ -139,19 +137,8 @@ def feedback_sentiment(
         )
         .collect()
     )
-    embeddings_df = (
-        get_dbt_model_as_dataframe(
-            database_name=database_name, table_name="feedback_embeddings"
-        )
-        .filter(embedding_model.matches())
-        .select(["feedback_conversation_pk", "embedding_vector"])
-        .collect()
-    )
-    joined = conversation_df.join(
-        embeddings_df, on="feedback_conversation_pk", how="inner"
-    )
-    labeled_df = labeled_sentiment_sample(joined)
-    unrated_df = joined.join(
+    labeled_df = labeled_sentiment_sample(conversation_df)
+    unrated_df = conversation_df.join(
         labeled_df, on="feedback_conversation_pk", how="anti"
     ).filter(
         pl.col("source_slug").is_in(config.sources)
@@ -163,6 +150,26 @@ def feedback_sentiment(
     )
     if config.platforms is not None:
         unrated_df = unrated_df.filter(pl.col("platform").is_in(config.platforms))
+    needed_pks = pl.concat(
+        [labeled_df["feedback_conversation_pk"], unrated_df["feedback_conversation_pk"]]
+    )
+    embeddings_df = load_rows_by_key(
+        database_name,
+        "feedback_embeddings",
+        ["feedback_conversation_pk", "embedding_vector"],
+        "feedback_conversation_pk",
+        needed_pks.to_list(),
+        equals={
+            "embedding_model_version": embedding_model.model_version,
+            "embedding_dim": embedding_model.dim,
+        },
+    )
+    labeled_df = labeled_df.join(
+        embeddings_df, on="feedback_conversation_pk", how="inner"
+    )
+    unrated_df = unrated_df.join(
+        embeddings_df, on="feedback_conversation_pk", how="inner"
+    )
 
     class_counts = labeled_df["sentiment"].value_counts()
     if class_counts.height < 2:  # noqa: PLR2004

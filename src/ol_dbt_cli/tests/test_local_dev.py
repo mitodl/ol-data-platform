@@ -14,6 +14,7 @@ from ol_dbt_cli.commands.local_dev import (
     _describe_registry_age,
     _get_glue_tables,
     _is_dbt_shadow_table,
+    _record_registry_scan,
     _register_single_table,
     _registry_last_refreshed,
     _show_registry,
@@ -360,6 +361,12 @@ class TestRegistryAge:
 
     def test_returns_none_when_no_database_file(self, tmp_path: Path) -> None:
         assert _registry_last_refreshed(tmp_path / "missing.duckdb", ["my_db"]) is None
+
+    def test_record_scan_creates_missing_directory(self, tmp_path: Path) -> None:
+        """Register records the scan before anything else creates --duckdb-path's directory."""
+        db = tmp_path / "not" / "yet" / "local.duckdb"
+        _record_registry_scan(db, "my_db")
+        assert _registry_last_refreshed(db, ["my_db"]) is not None
 
     def test_returns_none_when_no_registry_table(self, tmp_path: Path) -> None:
         """An existing DuckDB file with no registry table must not raise."""

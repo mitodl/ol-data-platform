@@ -49,3 +49,7 @@ jobs:
     - name: Validate Superset assets
       working-directory: src/ol_superset
       run: uv run ol-superset validate --dbt-dir ../ol_dbt
+
+    - name: Check Superset asset YAML is normalized
+      working-directory: src/ol_superset
+      run: uv run ol-superset normalize --check
