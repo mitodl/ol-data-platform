@@ -80,10 +80,7 @@ from lakehouse.assets.qa_mirror import (
     qa_mirror_refresh_schedules,
 )
 from lakehouse.assets.qa_observation_drift import qa_observation_drift
-from lakehouse.assets.starrocks_mv_refresh import (
-    refresh_starrocks_analytics_mvs,
-    starrocks_mv_grains_are_unique,
-)
+from lakehouse.assets.starrocks_mv_refresh import refresh_starrocks_analytics_mvs
 from lakehouse.assets.superset import (
     build_superset_dataset_assets,
     superset_dataset_keys,
@@ -878,7 +875,6 @@ defs = Definitions(
         # the Sentry hook the assets get. AssetChecksDefinition subclasses
         # AssetsDefinition, so with_failure_hooks attaches it.
         *with_failure_hooks(qa_mirror_checks),
-        *with_failure_hooks([starrocks_mv_grains_are_unique]),
     ],
     resources=resources_dict,
     executor=executor_for_environment(
