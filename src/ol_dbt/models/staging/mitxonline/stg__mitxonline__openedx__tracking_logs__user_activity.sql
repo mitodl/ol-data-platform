@@ -11,8 +11,11 @@
 with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__tracking_logs') }}
     where
-        username != ''
-        and {{ json_query_string('context', "'$.user_id'") }} != 'null'
+        (
+            (username != '' and {{ json_query_string('context', "'$.user_id'") }} != 'null')
+            -- MITx Online enrolls learners through the edX API, so these events carry the learner only in event.user_id
+            or (username = '' and event_type like 'edx.course.enrollment.%')
+        )
         and {{ json_query_string('event', "'$.exception'") }} is null
 
     {% if is_incremental() %}
@@ -24,9 +27,20 @@ with source as (
     raw_table='raw__mitxonline__openedx__tracking_logs'
     , partition_columns = 'username, context, event_source, event_type, event, ' ~ adapter.quote('time')
 ) }}
+, tracking_logs as (
+    select
+        most_recent_source.*
+        , auth_user.username as auth_user_username
+    from most_recent_source
+    left join {{ source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__auth_user') }} as auth_user
+        on
+            most_recent_source.username = ''
+            and auth_user.id = {{ try_cast(json_query_string('most_recent_source.event', "'$.user_id'"), 'integer') }}
+)
+
 , cleaned as (
     select
-        username as user_username
+        coalesce(nullif(username, ''), auth_user_username) as user_username
         , context as useractivity_context_object
         , event as useractivity_event_object
         , event_source as useractivity_event_source
@@ -41,14 +55,18 @@ with source as (
         , event_type as useractivity_event_type
         , {{ extract_course_id_from_tracking_log() }} as courserun_readable_id
         --- extract common fields from context object
-        , cast({{ json_query_string('context', "'$.user_id'") }} as integer) as openedx_user_id
+        , coalesce(
+            {{ try_cast(json_query_string('context', "'$.user_id'"), 'integer') }}
+            , {{ try_cast(json_query_string('event', "'$.user_id'"), 'integer') }}
+        ) as openedx_user_id
         , {{ json_query_string('context', "'$.org_id'") }} as org_id
         , {{ json_query_string('context', "'$.path'") }} as useractivity_path
         --- due to log collector changes, values of time field come with different formats
         , {{ format_timestamp_as_iso8601(from_iso8601_timestamp_nanos(
             regexp_replace_with_backreferences('time', "'(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)'", "'$1T$2$3'")
         )) }} as useractivity_timestamp -- noqa
-    from most_recent_source
+    from tracking_logs
 )
 
 select * from cleaned
+where user_username is not null
