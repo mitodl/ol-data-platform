@@ -1282,6 +1282,8 @@ models:
   - name: programcertificate_url
     description: str, URL to the program certificate for users who earned the certificate
       on either mitxonline.mit.edu or xpro.mit.edu. Null for edX.org or revoked certificates.
+  - name: organization_name
+    description: string, MITx Online B2B contract organization; null otherwise.
   - name: user_highest_education
     description: string, highest level of education attained by the user. Coalesced
       from edX.org and hashed ID user matches.
@@ -1353,11 +1355,12 @@ models:
   # it should be simplified/fixed upstream (see issue #TBD)
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on"]
+        column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on",
+          "organization_name"]
         row_condition: "program_id !=2 and platform_name !='edX.org'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["user_username", "user_email"]
+        column_list: ["user_username", "user_email", "organization_name"]
         row_condition: "program_id =2 and platform_name ='edX.org'"
 - name: combined_video_engagements_counts_report
   description: Combined video engagement report across all platforms with video counts
@@ -2084,6 +2087,16 @@ unit_tests:
     rows: []
   - input: ref('marts__combined_course_enrollment_detail')
     rows: []
+  - input: ref('tfact_enrollment')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_contract')
+    rows: []
+  - input: ref('dim_organization')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
   expect:
     rows:
     - {user_id: 8, program_completion_days: 30, program_complete_days: 30}
@@ -2130,6 +2143,16 @@ unit_tests:
       courserunenrollment_enrollment_mode: verified}
     - {platform: MITx Online, user_email: learner@example.com, course_readable_id: "course-v1:MITxT+C",
       courserunenrollment_enrollment_mode: verified}
+  - input: ref('tfact_enrollment')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_contract')
+    rows: []
+  - input: ref('dim_organization')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
   expect:
     rows:
     - {platform_name: edX.org, verified_courses_taken_in_program: 3, capstone_ind: Y}
@@ -2168,6 +2191,16 @@ unit_tests:
     - {platform: xPro, user_email: learner@example.com, course_readable_id: "course-v1:xPRO+MLx1",
       courserunenrollment_enrollment_mode: no-id-professional, courserungrade_is_passing: true,
       courseruncertificate_is_earned: true}
+  - input: ref('tfact_enrollment')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_contract')
+    rows: []
+  - input: ref('dim_organization')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
   expect:
     rows:
     - {platform_name: xPRO, verified_courses_taken_in_program: 0, all_courses_passed_in_program: 1,

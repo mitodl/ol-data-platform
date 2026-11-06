@@ -22,6 +22,51 @@ with enrollment_detail as (
     select * from {{ ref('dim_program') }}
 )
 
+, tfact_enrollment as (
+    select * from {{ ref('tfact_enrollment') }}
+)
+
+, dim_user as (
+    select * from {{ ref('dim_user') }}
+)
+
+, dim_contract as (
+    select * from {{ ref('dim_contract') }}
+)
+
+, dim_organization as (
+    select * from {{ ref('dim_organization') }}
+)
+
+, dim_platform as (
+    select * from {{ ref('dim_platform') }}
+)
+
+, pre_org_details as (
+    select
+        dim_user.mitxonline_application_user_id
+        , program.program_title
+        , dim_organization.organization_name
+        , dim_platform.platform_name
+    from tfact_enrollment
+    inner join dim_user
+        on tfact_enrollment.user_fk = dim_user.user_pk
+    inner join dim_contract
+        on tfact_enrollment.contract_fk = dim_contract.contract_pk
+    inner join dim_organization
+        on dim_contract.organization_fk = dim_organization.organization_pk
+    inner join program
+        on tfact_enrollment.program_fk = program.program_pk
+    inner join dim_platform
+        on tfact_enrollment.platform_fk = dim_platform.platform_pk
+    where tfact_enrollment.enrollment_type = 'program'
+    group by
+        dim_user.mitxonline_application_user_id
+        , program.program_title
+        , dim_organization.organization_name
+        , dim_platform.platform_name
+)
+
 -- An enrollment row with a readable id matches the programs that carry it, and one
 -- without (an edX.org XSeries row) matches every program with its title, e.g. both the
 -- edX.org program and the MITx Online program it moved to. Each key's courses are
@@ -125,6 +170,7 @@ select
     , enrollment_detail.programcertificate_is_revoked
     , enrollment_detail.programcertificate_uuid
     , enrollment_detail.programcertificate_url
+    , pre_org_details.organization_name
     , coalesce(
         combined_users.user_highest_education, combined_users2.user_highest_education
     ) as user_highest_education
@@ -174,3 +220,7 @@ left join courses_detail
     and courses_detail.match_type = if(enrollment_detail.program_readable_id is not null, 'readable_id', 'title')
     and coalesce(enrollment_detail.program_readable_id, enrollment_detail.program_title) = courses_detail.match_value
     and enrollment_detail.user_email = courses_detail.user_email
+left join pre_org_details
+    on enrollment_detail.platform_name = pre_org_details.platform_name
+    and enrollment_detail.user_id = pre_org_details.mitxonline_application_user_id
+    and enrollment_detail.program_title = pre_org_details.program_title
