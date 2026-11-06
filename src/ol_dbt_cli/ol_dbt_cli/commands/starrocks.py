@@ -488,7 +488,10 @@ def run(  # noqa: PLR0913
         IndirectSelection | None,
         Parameter(
             name="--indirect-selection",
-            help="dbt's --indirect-selection. Default: buildable for dev, dbt's own (eager) elsewhere.",
+            help=(
+                "dbt's --indirect-selection. Default: buildable for --env dev and for targets that "
+                "cannot defer (--target ci), dbt's own (eager) elsewhere."
+            ),
             show_default=False,
         ),
     ] = None,
