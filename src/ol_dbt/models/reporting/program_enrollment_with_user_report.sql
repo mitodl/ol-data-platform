@@ -44,8 +44,7 @@ with enrollment_detail as (
 
 , pre_org_details as (
     select
-        dim_user.email
-        , dim_user.mitxonline_application_user_id
+        dim_user.mitxonline_application_user_id
         , program.program_title
         , dim_organization.organization_name
         , dim_platform.platform_name
@@ -62,8 +61,7 @@ with enrollment_detail as (
         on tfact_enrollment.platform_fk = dim_platform.platform_pk
     where tfact_enrollment.enrollment_type = 'program'
     group by
-        dim_user.email
-        , dim_user.mitxonline_application_user_id
+        dim_user.mitxonline_application_user_id
         , program.program_title
         , dim_organization.organization_name
         , dim_platform.platform_name
