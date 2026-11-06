@@ -1052,6 +1052,17 @@
     {{ literal | replace('\\', '\\\\') }}
 {%- endmacro %}
 
+{#
+    dbt's escape_single_quotes on StarRocks. dbt builds unit-test fixture and expected
+    values with string_literal(escape_single_quotes(value)), and the default only doubles
+    quotes, so a fixture value with a backslash lost it on StarRocks (an expected
+    '<p>One \"quoted\"</p>' came back as '<p>One "quoted"</p>'). Root-project macros take
+    precedence over dbt's own in the dbt dispatch namespace.
+#}
+{% macro starrocks__escape_single_quotes(expression) -%}
+    {{ expression | replace('\\', '\\\\') | replace("'", "''") }}
+{%- endmacro %}
+
 
 {#
     regexp_extract_all: every match of `pattern` in `subject` (or of its capture group
