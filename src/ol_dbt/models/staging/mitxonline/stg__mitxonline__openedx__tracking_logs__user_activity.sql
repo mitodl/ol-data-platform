@@ -12,17 +12,9 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__tracking_logs') }}
     where
         (
-            (
-                username != ''
-                and {{ json_query_string('context', "'$.user_id'") }} != 'null'
-            )
-            -- MITx Online enrolls learners through the edX API with a service token, so these
-            -- events have no user context and carry the learner only in event.user_id
-            or (
-                username = ''
-                and event_type like 'edx.course.enrollment.%'
-                and try_cast({{ json_query_string('event', "'$.user_id'") }} as integer) is not null
-            )
+            (username != '' and {{ json_query_string('context', "'$.user_id'") }} != 'null')
+            -- MITx Online enrolls learners through the edX API, so these events carry the learner only in event.user_id
+            or (username = '' and event_type like 'edx.course.enrollment.%')
         )
         and {{ json_query_string('event', "'$.exception'") }} is null
 
@@ -35,23 +27,15 @@ with source as (
     raw_table='raw__mitxonline__openedx__tracking_logs'
     , partition_columns = 'username, context, event_source, event_type, event, ' ~ adapter.quote('time')
 ) }}
-, auth_users as (
-    select
-        id as auth_user_id
-        , username as auth_user_username
-    from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__auth_user') }}
-)
-
 , tracking_logs as (
     select
         most_recent_source.*
-        , auth_users.auth_user_username
+        , auth_user.username as auth_user_username
     from most_recent_source
-    left join auth_users
+    left join {{ source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__auth_user') }} as auth_user
         on
             most_recent_source.username = ''
-            and auth_users.auth_user_id
-            = try_cast({{ json_query_string('most_recent_source.event', "'$.user_id'") }} as integer)
+            and auth_user.id = try_cast({{ json_query_string('most_recent_source.event', "'$.user_id'") }} as integer)
 )
 
 , cleaned as (
