@@ -3,7 +3,7 @@ name = "ol-dlt"
 version = "0.1.0"
 description = "Standalone dlt pipelines (sources, config) for the MIT Open Learning data platform, wrapped by the data_loading Dagster code location"
 authors = [{ name = "MIT Open Learning Engineering", email = "ol-data@mit.edu" }]
-requires-python = "~=3.13,<3.15"
+requires-python = "~=3.15,<3.16"
 license = "BSD-3-Clause"
 dependencies = [
     "dlt[filesystem,parquet,pyiceberg,sql_database]>=1.28,<2",
