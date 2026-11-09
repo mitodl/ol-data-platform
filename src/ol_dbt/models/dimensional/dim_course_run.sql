@@ -270,6 +270,8 @@ with micromasters_courseruns as (
     from {{ ref('int__ocw__live_courses') }} as live_courses
     inner join {{ ref('int__ocw__courses') }} as ocw_courses
         on concat('courses/', live_courses.course_slug) = ocw_courses.course_url_path
+    -- a course with neither uid has no Learn run id to key the run by
+    where live_courses.courserun_readable_id is not null
 )
 
 , combined_courseruns as (

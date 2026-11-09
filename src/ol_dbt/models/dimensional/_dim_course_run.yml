@@ -711,7 +711,8 @@ unit_tests:
   description: >
     An OCW run is a published course site, keyed by MIT Learn's run id, and links
     to the ocw-studio website dim_course holds for the path the site is published
-    at. A live course with no ocw-studio website at its path has no run.
+    at. A live course with no ocw-studio website at its path has no run, and
+    neither does one with no uid to key it by.
   model: dim_course_run
   overrides:
     macros:
@@ -745,10 +746,13 @@ unit_tests:
       course_title: "Linear Algebra"}
     - {course_slug: "orphan-site", courserun_readable_id: "00000000000000000000000000000000",
       course_title: "Orphan"}
+    - {course_slug: "no-uid-site", courserun_readable_id: null, course_title: "No\
+        \ uid"}
   - input: ref('int__ocw__courses')
     rows:
     - {course_readable_id: "18.06-spring-2010", course_url_path: "courses/18-06-linear-algebra-spring-2010"}
     - {course_readable_id: "18.s097-iap-2021", course_url_path: null}
+    - {course_readable_id: "no-uid-course", course_url_path: "courses/no-uid-site"}
   - input: ref('dim_course')
     rows:
     - {course_pk: "ocw_1806", course_readable_id: "18.06-spring-2010", primary_platform: "ocw",
