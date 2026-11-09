@@ -451,6 +451,11 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["user_id", "courserun_readable_id", "program_uuid"]
+  - dbt_utils.expression_is_true:
+      arguments:
+        expression: program_certificate_awarded_on is null or user_has_completed_program
+      config:
+        error_if: ">0"
 
 - name: stg__edxorg__program_entitlement
   description: staging model for edX.org program entitlement records
