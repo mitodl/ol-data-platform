@@ -3,9 +3,8 @@
 An asset belongs to one automation sensor, so the two targets must not overlap.
 They live here rather than in definitions.py so a test can resolve both against
 a synthetic manifest: definitions.py builds them over ``full_dbt_project``, and
-importing that needs a parsed manifest, which only the image has. The job that
-builds the Learn views where those sensors do not run lives here for the same
-reason.
+importing that needs a parsed manifest, which only the image has. The
+selections of the scheduled dbt jobs live here for the same reason.
 """
 
 from dagster import AssetsDefinition, AssetSelection
@@ -72,27 +71,41 @@ def dbt_automation_target(dbt_assets: AssetsDefinition) -> AssetSelection:
     )
 
 
-def learn_integrations_qa_target(dbt_assets: AssetsDefinition) -> AssetSelection:
-    """learn_integrations_qa_job's selection.
+def dbt_job_target(dbt_assets: AssetsDefinition, dbt_select: str) -> AssetSelection:
+    """Select a scheduled dbt job's models and only the dbt tests attached to them.
 
     ``build_dbt_asset_selection`` resolves checks from dbt's eager selection, so
     a test attached to an unselected model comes along when any of its parents
     is selected. dagster-dbt then names that test in ``--select``, and
     ``_stale_descendant_test_args`` keeps every selected check, so the job runs
-    it against a table it does not build. QA's copies of those tables are
-    missing or years old, and five such tests failed every attempt on
-    2026-11-02 with every model built.
+    it against a table it does not build.
 
     ``materializable()`` keeps the assets and takes AssetSelection's default
     check rule, the checks targeting those assets. Intersecting it with the dbt
     selection adds no non-dbt check to the job. The tests dropped here reach
-    dbt's indirect selection instead, where ``unselected_model_test_names``
-    excludes them.
+    dbt's indirect selection instead, where ``_stale_descendant_test_args`` can
+    exclude them (in production, only those attached to a descendant of a
+    selected model).
+
+    :param dbt_assets: the Trino dbt project's assets.
+    :param dbt_select: the dbt selection string for the job's models.
+    :returns: the selected dbt models, with the dbt tests attached to them.
+    :rtype: AssetSelection
+    """
+    models = build_dbt_asset_selection([dbt_assets], dbt_select=dbt_select)
+    return models & models.materializable()
+
+
+def learn_integrations_qa_target(dbt_assets: AssetsDefinition) -> AssetSelection:
+    """learn_integrations_qa_job's selection.
+
+    QA's copies of the tables this job does not build are missing or years old,
+    and five tests attached to them failed every attempt on 2026-11-02 with
+    every model built, until ``dbt_job_target`` left them out (#3237).
 
     :param dbt_assets: the Trino dbt project's assets.
     :returns: the qa_scheduled models and their upstream dbt models, with the
         dbt tests attached to those models.
     :rtype: AssetSelection
     """
-    models = build_dbt_asset_selection([dbt_assets], dbt_select="+tag:qa_scheduled")
-    return models & models.materializable()
+    return dbt_job_target(dbt_assets, "+tag:qa_scheduled")
