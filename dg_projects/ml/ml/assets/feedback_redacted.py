@@ -1,6 +1,5 @@
 from dagster import AssetKey
-from ml.lib.redact import JOIN_COLS, TEXT_COLS
-from ml.lib.redacted_asset import build_redacted_asset
+from ml.lib.redact import JOIN_COLS, TEXT_COLS, build_redacted_asset
 
 feedback_redacted = build_redacted_asset(
     name="feedback_redacted",
