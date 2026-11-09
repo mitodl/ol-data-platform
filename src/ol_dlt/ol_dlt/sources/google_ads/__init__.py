@@ -20,8 +20,9 @@ Data flow, per client account:
 
 Credentials: the qa and production profiles read Vault
 ``secret-data/pipelines/google_ads``, which ol-infrastructure's dagster stack
-populates with three keys copied from the Concourse secret
-``secret-concourse/main/google_ads_optimization``:
+populates in production only (the credential can change bids on the live
+accounts, so it stays out of QA) with three keys copied from the Concourse
+secret ``secret-concourse/main/google_ads_optimization``:
 
     google_ads_json         service-account key JSON
     google_developer_token  Google Ads API developer token
