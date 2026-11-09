@@ -247,6 +247,33 @@ with micromasters_courseruns as (
     where row_num = 1
 )
 
+-- OCW publishes one site per course offering and has no run table. The run is the published
+-- site, keyed by MIT Learn's OCW run id, which is the id courseware extractions carry. Its course
+-- is the ocw-studio website dim_course holds, found by the path the site is published at.
+, ocw_courseruns as (
+    select
+        live_courses.courserun_readable_id
+        , cast(null as integer) as source_id
+        , cast(null as integer) as course_id
+        , live_courses.course_title as courserun_title
+        , cast(null as varchar) as courserun_start_on
+        , cast(null as varchar) as courserun_end_on
+        , cast(null as varchar) as enrollment_start
+        , cast(null as varchar) as enrollment_end
+        , true as courserun_is_live
+        , cast(null as varchar) as courserun_created_on
+        , ocw_courses.course_readable_id
+        , cast(null as varchar) as semester
+        , cast(null as double) as passing_grade
+        , 'ocw' as platform
+        , cast(null as varchar) as courserun_upgrade_deadline
+    from {{ ref('int__ocw__live_courses') }} as live_courses
+    inner join {{ ref('int__ocw__courses') }} as ocw_courses
+        on concat('courses/', live_courses.course_slug) = ocw_courses.course_url_path
+    -- a course with neither uid has no Learn run id to key the run by
+    where live_courses.courserun_readable_id is not null
+)
+
 , combined_courseruns as (
     select * from mitxonline_courseruns
     union all
@@ -261,6 +288,8 @@ with micromasters_courseruns as (
     select * from emeritus_courseruns
     union all
     select * from global_alumni_courseruns
+    union all
+    select * from ocw_courseruns
 )
 
 -- Pre-compute course_readable_id for all platforms so the dim_course join is a simple equality
@@ -461,9 +490,10 @@ with micromasters_courseruns as (
                     and existing.platform = new_records.platform
             )
             -- An Emeritus or Global Alumni run is dropped from the source once xPro holds a run
-            -- with its code, so it has no replacement row to trigger the expiry above
+            -- with its code, and an OCW run once its site is unpublished, so neither has a
+            -- replacement row to trigger the expiry above
             or (
-                existing.platform in ('emeritus', 'global_alumni')
+                existing.platform in ('emeritus', 'global_alumni', 'ocw')
                 and not exists (
                     select 1
                     from courseruns_with_all_fks
