@@ -19,15 +19,15 @@ Data flow, per client account:
     shared_criterion    -> raw__google_ads__api__shared_criterion_snapshots
 
 Credentials: the qa and production profiles read Vault
-``secret-data/pipelines/google_ads``, which must hold three keys copied from the
-Concourse secret ``secret-concourse/main/google_ads_optimization``:
+``secret-data/pipelines/google_ads``, which ol-infrastructure's dagster stack
+populates with three keys copied from the Concourse secret
+``secret-concourse/main/google_ads_optimization``:
 
     google_ads_json         service-account key JSON
     google_developer_token  Google Ads API developer token
     google_manager_account  manager account id, sent as login_customer_id
 
-The copy doesn't exist yet: ol-infrastructure has to add it for QA and
-production. Any other profile reads a ``google-ads.yaml`` from the path in
+Any other profile reads a ``google-ads.yaml`` from the path in
 GOOGLE_ADS_CONFIG_PATH, the same file ad_opt_v2 uses.
 
 Run standalone:

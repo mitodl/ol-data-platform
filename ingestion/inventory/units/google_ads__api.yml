@@ -1,14 +1,13 @@
 ---
 # Hand-written: this unit has no Airbyte connection, so bin/airbyte-inventory.py
 # cannot produce it. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
-# Every table is merge except customer_clients (replace). qa stays omit until
-# ol-infrastructure writes the credentials to QA's secret-data/pipelines/google_ads.
+# Every table is merge except customer_clients (replace).
 schema_version: 1
 deployment: google_ads
 layer: api
 scope: scoped
 strategies:
-  qa: omit
+  qa: ingest
   local: fixture
 loader: dlt
 table_prefix: raw__google_ads__api__

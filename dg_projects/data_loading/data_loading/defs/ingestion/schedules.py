@@ -81,8 +81,7 @@ youtube_ingest_schedule = dg.ScheduleDefinition(
 
 # One @dlt_assets run loads every raw__google_ads__api__* table, so target the
 # group. Daily reports stop at yesterday (UTC); 10:00 UTC is after midnight in
-# the accounts' US time zones. Stopped until ol-infrastructure copies the
-# credentials to secret-data/pipelines/google_ads; start google_ads_freshness_sensor
+# the accounts' US time zones. Stopped by default; start google_ads_freshness_sensor
 # with it.
 google_ads_ingest_schedule = dg.ScheduleDefinition(
     name="google_ads_ingest_daily_schedule",
