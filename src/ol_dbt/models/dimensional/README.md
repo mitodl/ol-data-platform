@@ -140,8 +140,8 @@ evaluates to NULL (falsy) and silently drops all rows.
 
 The business terms these models decide (user, learner, course run, enrollment, the three
 meanings of "active", and the FERPA and NIST privacy categories) are defined in the
-OpenMetadata glossary `open-learning`. The glossary and its terms are created by
-ol-infrastructure's `om_server_config.py` and edited in OpenMetadata after that.
+OpenMetadata glossary `open-learning`, declared in `glossary/open-learning.yaml` at the
+repository root and published by `ol-dbt glossary sync` (see `glossary/README.md`).
 
 A column that implements a term names it in its YAML, and the nightly om-ingest-dbt job
 attaches the term to the column:
@@ -156,4 +156,4 @@ attaches the term to the column:
 ```
 
 Use the term's fully qualified name. OpenMetadata skips a name it does not know, with a
-warning in the ingestion log, so add the term to `om_server_config.py` first.
+warning in the ingestion log, so add the term to `glossary/open-learning.yaml` first.
