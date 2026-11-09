@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import dataclasses
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 import sentry_sdk
 from dagster import AssetCheckSeverity, DagsterInstance, MetadataValue, RetryPolicy
+from dagster._core.events import JobFailureData, RunFailureReason
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.failed_partitions import (
     FAILED_PARTITION_CHECK_NAME,
@@ -23,6 +25,7 @@ from ol_orchestrate.sensors.failure_notification import (
     MAX_SLACK_TEXT_LENGTH,
     RESUMES_EXHAUSTED,
     RETRY_NUMBER_TAG,
+    RUN_NOT_RESUMED,
     as_resumes_exhausted,
     asset_check_failure_message,
     asset_check_failure_sensor,
@@ -30,6 +33,7 @@ from ol_orchestrate.sensors.failure_notification import (
     collect_new_check_failures,
     dagster_url,
     error_message,
+    failed_on_its_steps,
     failure_to_report,
     format_check_metadata,
     get_exception,
@@ -37,12 +41,13 @@ from ol_orchestrate.sensors.failure_notification import (
     is_reported_by_the_run_failure_sensor,
     is_retry_of_a_reported_failure,
     latest_check_evaluation_cursor,
-    ran_out_of_resumes,
     record_announcement,
     repeats_to_announce,
+    sentry_failure_detail,
     sentry_fingerprint,
     sentry_message,
     step_failure_of,
+    summarize_resumes,
     truncate_text,
 )
 from sentry_sdk.transport import Transport
@@ -748,10 +753,10 @@ def test_a_run_whose_every_step_was_interrupted_is_not_reported() -> None:
     assert is_an_interrupted_worker(_failure_of(context)) is True
 
 
-# ── Runs that ran out of resumes ──────────────────────────────────────────────
+# ── Interrupted runs and resumes ──────────────────────────────────────────────
 
 
-def _interrupted_context() -> Any:
+def _interrupted_context(failure_message: str = "") -> Any:
     return _context(
         [
             _step_failure(
@@ -760,86 +765,329 @@ def _interrupted_context() -> Any:
             _step_failure(
                 "airbyte_sync", "SIGTERM", cls_name="DagsterExecutionInterruptedError"
             ),
-        ]
+        ],
+        failure_message=failure_message,
     )
 
 
 MAX_RESUMES = 3
 
-
-@pytest.mark.parametrize(
-    ("resume_attempts", "max_resume_attempts"),
-    [(0, MAX_RESUMES), (2, MAX_RESUMES), (0, 0)],
-    ids=["never resumed", "attempts left", "run monitoring off"],
+# What run monitoring logs when it fails a run whose workers kept dying
+# (dagster/_daemon/monitoring/run_monitoring.py).
+DAEMON_EXHAUSTED_MESSAGE = (
+    "Detected run worker status FAILED: 'Run has not completed but K8s job has "
+    "no active pods'. Marking run 0123abcd as failed, because it has surpassed "
+    "the configured maximum attempts to resume the run: 3."
 )
-def test_an_interrupted_run_with_resumes_left_is_skipped(
-    resume_attempts: int, max_resume_attempts: int
-) -> None:
-    """Only Dagster's own rule (count >= max, as in run_will_resume) is exhaustion.
-
-    A run that failed with attempts left failed for some other reason (a
-    resume that raised, the max-runtime timeout), not by running out.
-    """
-    failure = _failure_of(_interrupted_context())
-
-    assert ran_out_of_resumes(failure, resume_attempts, max_resume_attempts) is False
 
 
-def test_an_interrupted_run_that_ran_out_of_resumes_is_reported() -> None:
-    """Regression: run 82b3d642 lost workers to node drains and was skipped.
+class ResumeCountingInstance:
+    """Stands in for the DagsterInstance resume settings and counts reads."""
 
-    Dagster fails an interrupted run only once run monitoring will not resume
-    it again, which is the resume count reaching the configured maximum.
-    """
-    failure = _failure_of(_interrupted_context())
+    def __init__(
+        self,
+        resume_attempts: int,
+        max_resume_attempts: int = MAX_RESUMES,
+        *,
+        run_monitoring_enabled: bool = True,
+    ) -> None:
+        self.resume_attempts = resume_attempts
+        self.run_monitoring_max_resume_run_attempts = max_resume_attempts
+        self.run_monitoring_enabled = run_monitoring_enabled
+        self.calls: list[str] = []
 
-    assert ran_out_of_resumes(failure, MAX_RESUMES, MAX_RESUMES) is True
+    def count_resume_run_attempts(self, run_id: str) -> int:
+        self.calls.append(run_id)
+        return self.resume_attempts
 
 
-@pytest.mark.parametrize("resume_attempts", [0, MAX_RESUMES])
-def test_a_real_failure_is_not_relabelled_as_resumes_exhausted(
-    resume_attempts: int,
-) -> None:
-    """A resumed run that then failed in user code keeps its own exception type."""
-    context = _context([_step_failure("some_model", "boom", cls_name="ValueError")])
-
-    assert (
-        ran_out_of_resumes(_failure_of(context), resume_attempts, MAX_RESUMES) is False
+def _report(
+    instance: ResumeCountingInstance, failure: Any, *, failed_on_steps: bool = False
+) -> Any:
+    return failure_to_report(
+        instance, "run-1", failure, failed_on_steps=failed_on_steps
     )
 
 
-def test_a_run_with_no_step_failure_is_not_relabelled() -> None:
-    assert ran_out_of_resumes(step_failure_of([]), MAX_RESUMES, MAX_RESUMES) is False
+@pytest.mark.parametrize(
+    "instance",
+    [
+        ResumeCountingInstance(0, max_resume_attempts=0),
+        ResumeCountingInstance(0, run_monitoring_enabled=False),
+    ],
+    ids=["no resume attempts configured", "run monitoring off"],
+)
+def test_an_interrupted_run_is_skipped_where_nothing_resumes_runs(
+    instance: ResumeCountingInstance,
+) -> None:
+    """With nothing to resume it, an interrupted worker is the deploy or drain.
+
+    Matches DagsterInstance.run_will_resume, which checks run_monitoring_enabled
+    before the count, so a maximum set with monitoring off resumes nothing.
+    """
+    assert _report(instance, _failure_of(_interrupted_context())) is None
+    assert instance.calls == []
 
 
-def test_a_run_that_ran_out_of_resumes_is_titled_and_grouped_as_such() -> None:
+@pytest.mark.parametrize("resume_attempts", [0, 1, MAX_RESUMES])
+def test_interrupted_step_pods_under_a_live_worker_are_skipped(
+    resume_attempts: int,
+) -> None:
+    """A preempted or evicted step pod fails the run on its steps.
+
+    The run worker survived, so neither a resume nor running out of them has
+    anything to do with it, and the count is not read.
+    """
+    instance = ResumeCountingInstance(resume_attempts=resume_attempts)
+
+    assert (
+        _report(instance, _failure_of(_interrupted_context()), failed_on_steps=True)
+        is None
+    )
+    assert instance.calls == []
+
+
+def test_a_real_failure_on_its_steps_is_still_reported() -> None:
+    instance = ResumeCountingInstance(resume_attempts=0)
+    failure = _failure_of(
+        _context([_step_failure("some_model", "boom", cls_name="ValueError")])
+    )
+
+    assert _report(instance, failure, failed_on_steps=True) == (failure, 0)
+
+
+def _run_failure_event(failure_reason: RunFailureReason | None) -> Any:
+    data = None if failure_reason is None else JobFailureData(None, failure_reason)
+    return SimpleNamespace(event_specific_data=data)
+
+
+@pytest.mark.parametrize(
+    ("failure_reason", "expected"),
+    [
+        (RunFailureReason.STEP_FAILURE, True),
+        (RunFailureReason.UNEXPECTED_TERMINATION, False),
+        (RunFailureReason.RUN_WORKER_RESTART, False),
+        (None, False),
+    ],
+    ids=["steps failed", "worker interrupted", "worker restarted", "no failure data"],
+)
+def test_failed_on_its_steps_reads_dagsters_failure_reason(
+    failure_reason: RunFailureReason | None, *, expected: bool
+) -> None:
+    """Built from Dagster's own types so a renamed reason fails here.
+
+    No failure data is what report_run_failed records when called without it,
+    as the gRPC server did for run 254815a2.
+    """
+    assert failed_on_its_steps(_run_failure_event(failure_reason)) is expected
+
+
+def test_an_interrupted_run_that_ran_out_of_resumes_is_reported() -> None:
+    """Regression: run 82b3d642 lost workers to node drains and was skipped."""
+    instance = ResumeCountingInstance(resume_attempts=MAX_RESUMES)
+
+    reportable = _report(instance, _failure_of(_interrupted_context()))
+
+    assert reportable is not None
+    failure, resume_attempts = reportable
+    assert failure is not None
+    assert failure.error_type == RESUMES_EXHAUSTED
+    assert failure.step_key == "airbyte_sync"
+    assert resume_attempts == MAX_RESUMES
+    assert instance.calls == ["run-1"]
+
+
+@pytest.mark.parametrize("resume_attempts", [0, 1, MAX_RESUMES - 1])
+def test_an_interrupted_run_that_failed_with_resumes_left_is_reported(
+    resume_attempts: int,
+) -> None:
+    """Regression: run 254815a2 on 2026-11-09 was skipped as an interruption.
+
+    Its resumed worker was interrupted 0.4 s after starting, before Dagster's
+    "will be resumed" check was in place, and Dagster failed the run with one of
+    three resumes used. Dagster does not fail an interrupted run it will resume,
+    so a failed one with attempts left was ended by something else.
+    """
+    instance = ResumeCountingInstance(resume_attempts=resume_attempts)
+
+    reportable = _report(instance, _failure_of(_interrupted_context()))
+
+    assert reportable is not None
+    failure, reported_attempts = reportable
+    assert failure is not None
+    assert failure.error_type == RUN_NOT_RESUMED
+    assert failure.step_key == "airbyte_sync"
+    assert reported_attempts == resume_attempts
+
+
+def test_sentry_gets_the_run_failure_message_for_a_run_not_resumed() -> None:
+    """The interruption traceback says nothing about what ended the run."""
+    message = "This run has been marked as failed from outside the execution context."
+    context = _interrupted_context(failure_message=message)
+    reportable = _report(
+        ResumeCountingInstance(resume_attempts=1), _failure_of(context)
+    )
+    assert reportable is not None
+
+    assert sentry_failure_detail(context, reportable[0]) == message
+
+
+def test_a_run_with_no_step_failure_that_ran_out_of_resumes_is_relabelled() -> None:
+    """Every worker died without a step failure (SIGKILL or OOM each time).
+
+    Run monitoring fails the run with "surpassed the configured maximum
+    attempts to resume", which was titled as a run with no step failure.
+    """
+    instance = ResumeCountingInstance(resume_attempts=MAX_RESUMES)
+
+    reportable = _report(instance, step_failure_of([]))
+
+    assert reportable is not None
+    failure, resume_attempts = reportable
+    assert failure is not None
+    assert failure.error_type == RESUMES_EXHAUSTED
+    assert failure.step_key == "run"
+    assert failure.error is None
+    assert resume_attempts == MAX_RESUMES
+
+
+@pytest.mark.parametrize(
+    "instance",
+    [
+        ResumeCountingInstance(resume_attempts=1),
+        ResumeCountingInstance(0, max_resume_attempts=0),
+    ],
+    ids=["resumes left", "run monitoring off"],
+)
+def test_a_run_with_no_step_failure_is_otherwise_reported_as_it_is(
+    instance: ResumeCountingInstance,
+) -> None:
+    assert _report(instance, step_failure_of([])) == (None, 0)
+
+
+@pytest.mark.parametrize("resume_attempts", [0, MAX_RESUMES])
+def test_a_real_failure_is_reported_as_it_is_without_counting_resumes(
+    resume_attempts: int,
+) -> None:
+    """A resumed run that then failed in user code keeps its own exception type.
+
+    The resume count is an extra event-log read only an interrupted run, or
+    one with no step failure, needs.
+    """
+    instance = ResumeCountingInstance(resume_attempts=resume_attempts)
+    failure = _failure_of(
+        _context([_step_failure("some_model", "boom", cls_name="ValueError")])
+    )
+
+    assert _report(instance, failure) == (failure, 0)
+    assert instance.calls == []
+
+
+def test_dagster_exposes_the_resume_settings_on_the_instance() -> None:
+    """The sensor reads these on context.instance; guard them against API drift."""
+    with DagsterInstance.ephemeral() as instance:
+        assert instance.count_resume_run_attempts("no-such-run") == 0
+        assert instance.run_monitoring_max_resume_run_attempts == 0
+        assert instance.run_monitoring_enabled is False
+
+
+@pytest.mark.parametrize("error_type", [RESUMES_EXHAUSTED, RUN_NOT_RESUMED])
+def test_a_relabelled_run_is_titled_and_grouped_as_such(error_type: str) -> None:
     """Titled as the interruption, the issue would read as the step's fault."""
     context = _interrupted_context()
     interrupted = _failure_of(context)
-    exhausted = as_resumes_exhausted(interrupted)
+    relabelled = dataclasses.replace(interrupted, error_type=error_type)
 
-    assert sentry_message(context, exhausted) == f"{RESUMES_EXHAUSTED}: airbyte_sync"
-    assert sentry_fingerprint(context, exhausted) != sentry_fingerprint(
+    assert sentry_message(context, relabelled) == f"{error_type}: airbyte_sync"
+    assert sentry_fingerprint(context, relabelled) != sentry_fingerprint(
         context, interrupted
     )
 
 
+def test_a_run_with_no_step_failure_that_ran_out_of_resumes_is_titled_as_such() -> None:
+    context = _context([], failure_message=DAEMON_EXHAUSTED_MESSAGE)
+    exhausted = as_resumes_exhausted(None)
+
+    # There is no step to name, so the title names the job.
+    assert sentry_message(context, exhausted) == f"{RESUMES_EXHAUSTED}: a_job"
+    assert sentry_fingerprint(context, exhausted) != sentry_fingerprint(context, None)
+
+
+def _summary(context: Any, failure: Any, resume_attempts: int) -> str | None:
+    return summarize_resumes(
+        failure,
+        resume_attempts,
+        context.get_step_failure_events(),
+        context.failure_event.message,
+    )
+
+
 def test_the_slack_message_says_the_run_ran_out_of_resumes() -> None:
-    context = _interrupted_context()
+    """The failure message is kept: a launch error or the max-runtime timeout
+    reached on the last attempt is named only there.
+    """
+    context = _interrupted_context(failure_message="Exceeded maximum runtime")
+    summary = _summary(context, as_resumes_exhausted(_failure_of(context)), 3)
 
     text = _block_text(
-        error_message(context, context.get_step_failure_events(), resume_attempts=3)
+        error_message(
+            context, context.get_step_failure_events(), resume_summary=summary
+        )
     )
 
     assert "Ran out of resumes" in text
     assert "3 time(s)" in text
     assert "airbyte_sync" in text
     assert "SIGTERM" not in text
+    assert "Exceeded maximum runtime" in text
 
 
-def test_the_ran_out_of_resumes_section_fits_slacks_text_limit() -> None:
+def test_the_slack_message_says_the_run_was_not_resumed() -> None:
+    """The run failure message is the only clue to what failed such a run."""
+    context = _interrupted_context(
+        failure_message=(
+            "This run has been marked as failed from outside the execution context."
+        )
+    )
+    failure = dataclasses.replace(_failure_of(context), error_type=RUN_NOT_RESUMED)
+
+    text = _block_text(
+        error_message(
+            context,
+            context.get_step_failure_events(),
+            resume_summary=_summary(context, failure, 1),
+        )
+    )
+
+    assert "Interrupted and not resumed" in text
+    assert "1 time(s)" in text
+    assert "marked as failed from outside the execution context" in text
+    assert "airbyte_sync" in text
+    assert "SIGTERM" not in text
+
+
+def test_the_slack_message_for_workers_that_died_without_a_step_failure() -> None:
+    """With no interrupted step to name, the daemon's message says what died."""
+    context = _context([], failure_message=DAEMON_EXHAUSTED_MESSAGE)
+
+    text = _block_text(
+        error_message(
+            context,
+            context.get_step_failure_events(),
+            resume_summary=_summary(context, as_resumes_exhausted(None), MAX_RESUMES),
+        )
+    )
+
+    assert "Ran out of resumes" in text
+    assert "has no active pods" in text
+    assert "Interrupted step(s)" not in text
+    assert "No step failure recorded" not in text
+
+
+def test_the_resume_summary_fits_slacks_text_limit() -> None:
     """A fan-out run can interrupt hundreds of steps; Slack rejects a section
-    over 3,000 characters, which would fail the sensor tick.
+    over 3,000 characters, which would fail the sensor tick. The run failure
+    message comes before the step list, so truncation never cuts its fence.
     """
     context = _context(
         [
@@ -849,11 +1097,15 @@ def test_the_ran_out_of_resumes_section_fits_slacks_text_limit() -> None:
                 cls_name="DagsterExecutionInterruptedError",
             )
             for n in range(400)
-        ]
+        ],
+        failure_message="x" * 5000,
     )
+    failure = dataclasses.replace(_failure_of(context), error_type=RUN_NOT_RESUMED)
 
     blocks = error_message(
-        context, context.get_step_failure_events(), resume_attempts=MAX_RESUMES
+        context,
+        context.get_step_failure_events(),
+        resume_summary=_summary(context, failure, 1),
     )
 
     assert all(
@@ -861,7 +1113,22 @@ def test_the_ran_out_of_resumes_section_fits_slacks_text_limit() -> None:
         for block in blocks
         if isinstance(block.get("text"), dict)
     )
-    assert "Ran out of resumes" in _block_text(blocks)
+    text = _block_text(blocks)
+    assert "Interrupted and not resumed" in text
+    assert text.count("```") == 2
+
+
+@pytest.mark.parametrize(
+    "step_failure_events",
+    [[_step_failure("some_model", "boom", cls_name="ValueError")], []],
+    ids=["user-code failure", "no step failure"],
+)
+def test_other_failures_have_no_resume_summary(
+    step_failure_events: list[Any],
+) -> None:
+    context = _context(step_failure_events)
+
+    assert _summary(context, step_failure_of(step_failure_events), 0) is None
 
 
 def test_the_slack_message_is_unchanged_without_resumes() -> None:
@@ -871,68 +1138,6 @@ def test_the_slack_message_is_unchanged_without_resumes() -> None:
 
     assert "Ran out of resumes" not in text
     assert "boom" in text
-
-
-class ResumeCountingInstance:
-    """Stands in for DagsterInstance.count_resume_run_attempts and counts calls."""
-
-    run_monitoring_max_resume_run_attempts = MAX_RESUMES
-
-    def __init__(self, resume_attempts: int) -> None:
-        self.resume_attempts = resume_attempts
-        self.calls: list[str] = []
-
-    def count_resume_run_attempts(self, run_id: str) -> int:
-        self.calls.append(run_id)
-        return self.resume_attempts
-
-
-def test_the_sensor_skips_an_interrupted_run_that_was_never_resumed() -> None:
-    instance = ResumeCountingInstance(resume_attempts=0)
-
-    reportable = failure_to_report(
-        instance, "run-1", _failure_of(_interrupted_context())
-    )
-
-    assert reportable is None
-    assert instance.calls == ["run-1"]
-
-
-def test_the_sensor_reports_an_interrupted_run_that_ran_out_of_resumes() -> None:
-    instance = ResumeCountingInstance(resume_attempts=3)
-
-    reportable = failure_to_report(
-        instance, "run-1", _failure_of(_interrupted_context())
-    )
-
-    assert reportable is not None
-    failure, resume_attempts = reportable
-    assert failure is not None
-    assert failure.error_type == RESUMES_EXHAUSTED
-    assert resume_attempts == 3
-
-
-@pytest.mark.parametrize(
-    "step_failure_events",
-    [[_step_failure("some_model", "boom", cls_name="ValueError")], []],
-    ids=["user-code failure", "no step failure"],
-)
-def test_the_sensor_does_not_count_resumes_for_other_failures(
-    step_failure_events: list[Any],
-) -> None:
-    """The resume count is an extra event-log read only an interruption needs."""
-    instance = ResumeCountingInstance(resume_attempts=3)
-    failure = step_failure_of(step_failure_events)
-
-    assert failure_to_report(instance, "run-1", failure) == (failure, 0)
-    assert instance.calls == []
-
-
-def test_dagster_counts_resume_attempts_on_the_instance() -> None:
-    """The sensor calls this on context.instance; guard it against API drift."""
-    with DagsterInstance.ephemeral() as instance:
-        assert instance.count_resume_run_attempts("no-such-run") == 0
-        assert instance.run_monitoring_max_resume_run_attempts == 0
 
 
 # ── Slack rate limiting ───────────────────────────────────────────────────────
