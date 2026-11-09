@@ -1,13 +1,21 @@
 """Schedules for data_loading ingest pipelines."""
 
 import json
+from collections.abc import Callable
 
 import dagster as dg
-from ol_dlt.sources import course_xml_blocks, edxorg_program_reports, ocw_content
+from ol_dlt.sources import (
+    canvas_content,
+    course_xml_blocks,
+    edxorg_program_reports,
+    ocw_content,
+)
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from data_loading.defs.ingestion.assets import (
+    TRACKING_LOGS_DEPLOYMENTS,
     mitxonline_app_assets,
+    tracking_logs_table,
     xpro_app_assets,
 )
 from data_loading.defs.ingestion.sensor import IN_FLIGHT_RUN_STATUSES
@@ -167,20 +175,31 @@ xpro_app_ingest_schedule = (
 POSTHOG_SCHEDULE_NAME = "posthog_events_ingest_hourly_schedule"
 
 
-def no_posthog_run_in_flight(context: dg.ScheduleEvaluationContext) -> bool:
-    """Skip a tick while the previous run is still loading.
+def no_run_in_flight(
+    schedule_name: str,
+) -> Callable[[dg.ScheduleEvaluationContext], bool]:
+    """Return a ``should_execute`` that skips a tick while the last run loads.
 
-    A backlog (the first run, or catching up after the schedule was off) can
-    outlast an hour. Two runs starting from the same saved cursor would both
-    load the same hours and append them twice.
+    For appending loads whose backlog can outlast the schedule's interval. Two
+    runs starting from the same saved cursor would both load the same files
+    and append them twice.
     """
-    return not context.instance.get_run_records(
-        dg.RunsFilter(
-            tags={"dagster/schedule_name": POSTHOG_SCHEDULE_NAME},
-            statuses=list(IN_FLIGHT_RUN_STATUSES),
-        ),
-        limit=1,
-    )
+
+    def should_execute(context: dg.ScheduleEvaluationContext) -> bool:
+        return not context.instance.get_run_records(
+            dg.RunsFilter(
+                tags={"dagster/schedule_name": schedule_name},
+                statuses=list(IN_FLIGHT_RUN_STATUSES),
+            ),
+            limit=1,
+        )
+
+    return should_execute
+
+
+# A backlog (the first run, or catching up after the schedule was off) can
+# outlast an hour.
+no_posthog_run_in_flight = no_run_in_flight(POSTHOG_SCHEDULE_NAME)
 
 
 posthog_events_ingest_schedule = dg.ScheduleDefinition(
@@ -289,26 +308,86 @@ edxorg_program_reports_ingest_schedule = dg.ScheduleDefinition(
     ),
 )
 
+# Every 12 hours, the cadence of the Airbyte connections they replace (inventory
+# units <deployment>/tracking_logs). A first production run walks at most 200
+# batches of 128 MiB gzip, so the backlog takes about two runs for xpro (44.3
+# GB) and five each for mitxonline (118.3 GB) and mitx (124.5 GB), and the guard
+# keeps a run that outlasts the interval from overlapping the next. The guard
+# sees only its own schedule's runs and their retries, not a run launched by
+# hand. max_runtime fails a hung run after 11 hours, and run_retries relaunches
+# it with the same tags, so a hang that repeats on every attempt holds the
+# schedule off until the retries run out.
+#
+# The deployments start an hour apart so their backlog runs do not all start at
+# once. Once drained, each run takes minutes and is done well before the
+# lakehouse's non_airbyte_staging_daily at 06:00 UTC.
+#
+# A batch should peak near 4.3 GB at the worst gzip ratio measured (see
+# tracking_logs.BUDGET_BYTES), and the run also holds its listing (474 MB for
+# the whole mitx bucket). The other two batched loads each passed 7 GB against
+# the 8Gi default, so these take their 16Gi limit. The request stays low, as
+# for those schedules.
+#
+# RUNNING in production and QA, which reads each deployment's QA bucket (xpro's
+# held 51,857 files, 0.9 GB on 2026-10-28). Stopped elsewhere, where the source
+# would read production.
+TRACKING_LOGS_START_HOUR = {"xpro": 0, "mitxonline": 1, "mitx": 2}
+
+
+def tracking_logs_ingest_schedule(deployment: str) -> dg.ScheduleDefinition:
+    """Build the 12-hourly schedule that loads one deployment's tracking log."""
+    name = f"{deployment}_tracking_logs_ingest_schedule"
+    return dg.ScheduleDefinition(
+        name=name,
+        target=dg.AssetSelection.keys(
+            ["ol_warehouse_raw_data", tracking_logs_table(deployment)]
+        ),
+        cron_schedule=f"50 {TRACKING_LOGS_START_HOUR[deployment]}-23/12 * * *",
+        execution_timezone="Etc/UTC",
+        should_execute=no_run_in_flight(name),
+        tags={
+            "dagster/max_runtime": str(11 * 60 * 60),
+            "dagster-k8s/config": json.dumps(
+                {
+                    "container_config": {
+                        "resources": {
+                            "requests": {"memory": "2Gi"},
+                            "limits": {"memory": "16Gi"},
+                        }
+                    }
+                }
+            ),
+        },
+        default_status=(
+            dg.DefaultScheduleStatus.RUNNING
+            if DAGSTER_ENV in {"qa", "production"}
+            else dg.DefaultScheduleStatus.STOPPED
+        ),
+    )
+
+
+tracking_logs_ingest_schedules = {
+    deployment: tracking_logs_ingest_schedule(deployment)
+    for deployment in TRACKING_LOGS_DEPLOYMENTS
+}
+
 OCW_CONTENT_SCHEDULE_NAME = "ocw_content_ingest_daily_schedule"
 # Defined in ocw_content_sensor, named here so the schedule can wait for its runs.
 OCW_CONTENT_SENSOR_NAME = "ocw_content_publish_sensor"
-# Carried by the sweep and by every scoped load. The run coordinator's
+# Carried by the sweep and by every course load. The run coordinator's
 # tag_concurrency_limits in ol-infrastructure (dagster_instance.yaml) caps runs
 # with this key at one, so a load requested while another is starting waits in
-# the queue. The in-flight checks below only keep the sensor and schedule from
-# requesting runs that would sit there.
+# the queue. Loads no longer lose each other's state, so the cap is now what
+# keeps them from contending to commit to one Iceberg table. The in-flight checks
+# below only keep the sensor and schedule from requesting runs that would sit
+# there.
 OCW_CONTENT_RUN_TAGS = {"ocw/content_load": "true"}
 
 
 def ocw_content_run_in_flight(instance: dg.DagsterInstance) -> bool:
-    """Tell whether a sweep or a scoped OCW content load has not finished.
+    """Tell whether a sweep or a course load has not finished.
 
-    Each load saves the source's whole dlt state, and a load restores the one
-    saved by the newest load id. So of two loads at once, one drops what the
-    other recorded: the sweep's resume point,
-    the prefixes it saw empty, the gone courses it unpublished (which the next
-    sweep would then unpublish and count against the limit again). A run
-    started by hand is seen, and queued behind the others, only if it is
+    A run started by hand is seen, and queued behind the others, only if it is
     launched with ``OCW_CONTENT_RUN_TAGS``. The schedule's own name is checked
     too because a sweep started before that tag existed carries only it, and
     the first sweep can outlast a day.
@@ -369,6 +448,20 @@ ocw_content_ingest_schedule = dg.ScheduleDefinition(
     ),
 )
 
+# Canvas course files and text for MIT Learn's ContentFiles. The 00:00 export of
+# every course has landed by now, and the lakehouse's non_airbyte_staging_daily
+# follows at 06:00. A course that did not change costs its zip directory and
+# its pages and assignment settings, read to find what is published. Stopped
+# everywhere: the first load sends every published file through production Tika,
+# so it is started by hand.
+canvas_content_ingest_schedule = dg.ScheduleDefinition(
+    name="canvas_content_ingest_daily_schedule",
+    target=dg.AssetSelection.keys(["ol_warehouse_raw_data", canvas_content.RAW_TABLE]),
+    cron_schedule="5 5 * * *",
+    execution_timezone="Etc/UTC",
+    default_status=dg.DefaultScheduleStatus.STOPPED,
+)
+
 defs = dg.Definitions(
     schedules=[
         oll_ingest_schedule,
@@ -385,6 +478,8 @@ defs = dg.Definitions(
         posthog_events_ingest_schedule,
         course_xml_blocks_ingest_schedule,
         edxorg_program_reports_ingest_schedule,
+        *tracking_logs_ingest_schedules.values(),
         ocw_content_ingest_schedule,
+        canvas_content_ingest_schedule,
     ],
 )

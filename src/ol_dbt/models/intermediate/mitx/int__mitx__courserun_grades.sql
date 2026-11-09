@@ -1,7 +1,5 @@
 --- MITx course grades combined from MITx Online and edX.org
 
-{{ config(materialized='view') }}
-
 with mitxonline_grades as (
     select *
     from {{ ref('int__mitxonline__courserun_grades') }}

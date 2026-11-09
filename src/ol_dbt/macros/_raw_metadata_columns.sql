@@ -11,6 +11,7 @@
 -#}
 {% macro raw_metadata_column_map() %}
     {% do return({
+        'raw__canvas__s3__course_content': 'course_retrieved_at',
         'raw__edxorg__discovery__api__mitx_course': '_dlt_load_id',
         'raw__edxorg__discovery__api__mitx_course_run': '_dlt_load_id',
         'raw__edxorg__discovery__api__program': '_dlt_load_id',
@@ -32,7 +33,6 @@
         'raw__edxorg__s3__tables__grades_persistentcoursegrade': '_file_modified_at',
         'raw__edxorg__s3__tables__student_courseaccessrole': '_file_modified_at',
         'raw__edxorg__s3__tables__student_courseenrollment': '_file_modified_at',
-        'raw__edxorg__s3__tracking_logs': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],
         'raw__emeritus__bigquery__api_enrollments': '_airbyte_extracted_at',
         'raw__global_alumni__bigquery__api_enrollments': '_airbyte_extracted_at',
         'raw__irx__edxorg__bigquery__email_opt_in': '_airbyte_extracted_at',
@@ -645,6 +645,7 @@
         'raw__thirdparty__zendesk_support__categories': '_airbyte_extracted_at',
         'raw__thirdparty__zendesk_support__group_memberships': '_airbyte_extracted_at',
         'raw__thirdparty__zendesk_support__groups': '_airbyte_extracted_at',
+        'raw__thirdparty__zendesk_support__macros': '_airbyte_extracted_at',
         'raw__thirdparty__zendesk_support__organizations': '_airbyte_extracted_at',
         'raw__thirdparty__zendesk_support__satisfaction_ratings': '_airbyte_extracted_at',
         'raw__thirdparty__zendesk_support__sections': '_airbyte_extracted_at',
@@ -936,7 +937,7 @@
         'raw__xpro__openedx__mysql__user_api_userorgtag': '_airbyte_extracted_at',
         'raw__xpro__openedx__mysql__workflow_assessmentworkflow': '_airbyte_extracted_at',
         'raw__xpro__openedx__mysql__workflow_assessmentworkflowstep': '_airbyte_extracted_at',
-        'raw__xpro__openedx__tracking_logs': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],
+        'raw__xpro__openedx__tracking_log_events': '_file_modified_at',
         'raw__youtube__api__channels': '_dlt_load_id',
         'raw__youtube__api__playlist_items': '_dlt_load_id',
         'raw__youtube__api__playlists': '_dlt_load_id',

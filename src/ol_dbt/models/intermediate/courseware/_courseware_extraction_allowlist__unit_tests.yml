@@ -150,3 +150,30 @@ unit_tests:
   expect:
     rows:
     - {courserun_readable_id: r2, scope_id: materials, source_ref: static/reading2.pdf}
+
+- name: test_int__courseware__extraction_allowlist_platform_row_without_a_course
+  description: >
+    A current run whose course_fk has no dim_course row cannot match a course row,
+    so it takes its platform's row. A run dim_course_run has no current row for is
+    approved only by a row naming it, never by a course or platform row.
+  model: int__courseware__extraction_allowlist
+  given:
+  - input: ref('dim_course_run')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", course_fk: missing,
+      is_current: true}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+2T", course_fk: a,
+      is_current: false}
+  - input: ref('dim_course')
+    rows:
+    - {course_pk: a, course_readable_id: "course-v1:X+A"}
+  - input: ref('courseware_extraction_allowlist')
+    rows:
+    - {platform: mitxonline, course_readable_id: null, courserun_readable_id: null,
+      extractor_id: v1, prompt_version: by_platform, schema_version: s}
+    - {platform: mitxonline, course_readable_id: "course-v1:X+A", courserun_readable_id: null,
+      extractor_id: v1, prompt_version: by_course, schema_version: s}
+  expect:
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+A+1T", allowlist_level: platform,
+      prompt_version: by_platform}

@@ -14,10 +14,20 @@ dependencies = [
     "pyiceberg[glue]>=0.9",
     "requests>=2.32",
     # >=1.2 for the CSV reader's `strict_mode` argument (edxorg_s3 source).
-    "duckdb>=1.2,!=1.5.0,!=1.5.1",
+    # <2 since 2026-10-29: dlt through 1.31.0 calls
+    # DuckDBPyConnection.fetch_arrow_table(), which DuckDB 2.0 removed. Drop the
+    # cap once a dlt release fixes https://github.com/dlt-hub/dlt/issues/4595.
+    "duckdb>=1.2,!=1.5.0,!=1.5.1,<2",
     "defusedxml>=0.7",
+    # Parsing a Canvas Common Cartridge (ol_dlt.sources.canvas_content).
+    "beautifulsoup4>=4.12",
+    "pypdf[crypto]>=6.9.1,<7",
+    "python-dateutil>=2.9",
     # Relational sources (ol_dlt.database) and their Vault-issued credentials.
     "psycopg2-binary>=2.9",
+    # The Open edX edxapp MariaDB databases (ol_dlt.keyset.specs), the driver
+    # legacy_openedx already reads them with.
+    "pymysql~=1.1",
     "hvac>=2.3",
     "youtube-transcript-api>=1.0,<2",
     # Backfill entrypoints (ol_dlt.sources.posthog_events.__main__) take real

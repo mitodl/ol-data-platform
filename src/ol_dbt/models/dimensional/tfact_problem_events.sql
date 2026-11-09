@@ -3,9 +3,11 @@
     unique_key='event_id',
     incremental_strategy='delete+insert',
     on_schema_change='append_new_columns',
-    properties={
-        "partitioning": "ARRAY['platform']",
-    }
+    partition_by=(['platform'] if target.type == 'starrocks' else none),
+    properties=(
+        none if target.type == 'starrocks'
+        else {"partitioning": "ARRAY['platform']"}
+    ),
 ) }}
 
 {% set problem_events =
@@ -618,7 +620,7 @@ with mitxonline_problem_events as (
                 order by event_timestamp
             ) as rn
         from combined
-    )
+    ) as subquery
     where rn = 1 or event_type != 'problem_check'
 )
 

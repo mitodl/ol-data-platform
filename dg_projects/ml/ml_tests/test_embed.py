@@ -1,98 +1,147 @@
 """Tests for ml.lib.embed."""
 
+import io
 import json
-import logging
+import threading
 import time
-from typing import Any, Self
+from collections.abc import Sequence
+from typing import Any
 
 import boto3
-import httpx2
-import openai
 import polars as pl
 import pytest
-from botocore.exceptions import ClientError
-from google import genai
-from google.auth.credentials import AnonymousCredentials
-from google.genai import types as genai_types
+from botocore.response import StreamingBody
+from botocore.stub import Stubber
 from ml.lib import embed
+from ml.lib.iceberg_helpers import upsert_chunk
+from ol_llm import BatchFailed, LLMError, LLMRejected
+from ol_llm.testing import override_embedding_models
+from ol_orchestrate.lib.embeddings.models import EmbeddingBatch, EmbeddingModelSpec
+from pydantic_ai.embeddings import TestEmbeddingModel
+from pydantic_ai.embeddings.bedrock import BedrockEmbeddingModel
+from pydantic_ai.embeddings.result import EmbedInputType
+from pydantic_ai.models import override_allow_model_requests
+from pydantic_ai.providers.bedrock import BedrockProvider
+from pyiceberg.catalog.sql import SqlCatalog
+
+OPENAI = embed.resolve_embedding_model("openai:text-embedding-3-large", 3)
+TITAN = embed.resolve_embedding_model("bedrock:amazon.titan-embed-text-v2:0", 3)
+VERTEX_TEXT = embed.resolve_embedding_model("google-cloud:text-embedding-005", 3)
+COHERE = embed.resolve_embedding_model("bedrock:cohere.embed-english-v3", 3)
+
+TITAN_TOO_LONG = (
+    "400 Bad Request: Too many input tokens. Max input tokens: {max_tokens}, "
+    "request input token count: {tokens} "
+)
 
 
-def _fake_response(status_code: int) -> httpx2.Response:
-    return httpx2.Response(
-        status_code, request=httpx2.Request("POST", "https://example.com")
+def _rejected(message: str, status_code: int = 400) -> LLMRejected:
+    return LLMRejected(
+        message, use_case="feedback-embedding", model="test", status_code=status_code
     )
 
 
-class _FakeEmbeddingClient:
-    """Returns a deterministic vector derived from each input text's length.
+class _FakeEmbedder:
+    """An Embedder that returns a vector derived from each text's length.
 
-    Simulates a per-batch openai.BadRequestError (a genuine bad row) when any
-    text in the batch is "boom", so embed_and_checkpoint's chunk-level retry
-    fallback can be exercised. Simulates a systemic openai.RateLimitError when
-    any text is "ratelimit", so the no-retry path can be exercised too.
+    Raises a 400 row rejection for any request containing "boom", and a 401 for
+    any request containing "denied".
     """
 
     def __init__(
-        self,
-        model_version: str = "text-embedding-3-large",
-        dim: int = 3,
-        max_request_batch_size: int = 2048,
+        self, model: embed.FeedbackEmbeddingModel, *, delay: float = 0
     ) -> None:
-        self.model_version = model_version
-        self.dim = dim
-        self.max_request_batch_size = max_request_batch_size
-        self.max_input_chars: int | None = None
-        self.batch_calls: list[list[str]] = []
-        self.trace_metadata_calls: list[dict[str, object] | None] = []
+        self._spec = model.spec
+        self._delay = delay
+        self.calls: list[list[str]] = []
+        self._lock = threading.Lock()
 
-    def embed_batch(
-        self, texts: list[str], *, trace_metadata: dict[str, object] | None = None
-    ) -> list[list[float]]:
-        self.batch_calls.append(texts)
-        self.trace_metadata_calls.append(trace_metadata)
+    @property
+    def spec(self) -> EmbeddingModelSpec:
+        return self._spec
+
+    def embed(
+        self, texts: Sequence[str], *, input_type: EmbedInputType
+    ) -> EmbeddingBatch:
+        assert input_type == "document"
+        with self._lock:
+            self.calls.append(list(texts))
+        time.sleep(self._delay)
         if "boom" in texts:
-            msg = "simulated bad row"
-            raise openai.BadRequestError(msg, response=_fake_response(400), body=None)
-        if "ratelimit" in texts:
-            msg = "simulated rate limit"
-            raise openai.RateLimitError(msg, response=_fake_response(429), body=None)
-        if "toolong" in texts:
-            # Bedrock's isolatable-per-row equivalent of openai.BadRequestError
-            # -- e.g. Cohere embed-english-v3's 2048-char-per-text cap. The
-            # "#/texts/<index>" pointer is what distinguishes this from a
-            # request-level ValidationException below.
-            raise ClientError(
-                {
-                    "Error": {
-                        "Code": "ValidationException",
-                        "Message": (
-                            "Malformed input request: #/texts/1: expected "
-                            "maxLength: 2048, actual: 2103, please reformat "
-                            "your input and try again."
-                        ),
-                    }
-                },
-                "InvokeModel",
+            msg = "status_code: 400, body: text 1 is malformed"
+            raise _rejected(msg)
+        if "denied" in texts:
+            msg = "status_code: 401, body: bad credential"
+            raise _rejected(msg, status_code=401)
+        return EmbeddingBatch(
+            vectors=[[float(len(text))] * self._spec.vector_length for text in texts],
+            input_tokens=len(texts),
+        )
+
+
+class _CohereEmbedder(_FakeEmbedder):
+    """Rejects any request containing "boom" with Bedrock's ValidationException."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(COHERE)
+        self._message = message
+
+    def embed(
+        self, texts: Sequence[str], *, input_type: EmbedInputType
+    ) -> EmbeddingBatch:
+        if "boom" in texts:
+            self.calls.append(list(texts))
+            raise _rejected(self._message.format(index=list(texts).index("boom")))
+        return super().embed(texts, input_type=input_type)
+
+
+class _TitanLimitEmbedder(_FakeEmbedder):
+    """Rejects texts over max_chars the way Titan does, counting 2 chars per token."""
+
+    def __init__(self, max_chars: int, message: str | None = None) -> None:
+        super().__init__(TITAN)
+        self._max_chars = max_chars
+        self._message = message
+
+    def embed(
+        self, texts: Sequence[str], *, input_type: EmbedInputType
+    ) -> EmbeddingBatch:
+        assert input_type == "document"
+        [text] = texts
+        self.calls.append([text])
+        if len(text) > self._max_chars:
+            message = self._message or TITAN_TOO_LONG.format(
+                max_tokens=self._max_chars // 2, tokens=len(text) // 2
             )
-        if "throttled" in texts:
-            # A ClientError that is NOT content-related -- must stay systemic.
-            raise ClientError(
-                {"Error": {"Code": "ThrottlingException", "Message": "slow down"}},
-                "InvokeModel",
-            )
-        if "badmodel" in texts:
-            # Same ValidationException code as "toolong", but request-level (no
-            # per-item pointer) -- must also stay systemic, not retried per row.
-            raise ClientError(
-                {
-                    "Error": {
-                        "Code": "ValidationException",
-                        "Message": "The provided model identifier is invalid.",
-                    }
-                },
-                "InvokeModel",
-            )
-        return [[float(len(text))] * self.dim for text in texts]
+            raise _rejected(message)
+        return EmbeddingBatch(vectors=[[0.1, 0.2, 0.3]], input_tokens=1)
+
+
+TABLE = "some_db.feedback_embeddings"
+Target = tuple[SqlCatalog, str]
+
+
+@pytest.fixture
+def target(iceberg_catalog: SqlCatalog) -> Target:
+    return iceberg_catalog, TABLE
+
+
+def _stored_rows(catalog: SqlCatalog) -> pl.DataFrame:
+    return catalog.load_table(TABLE).scan().to_polars().sort("conversation_ref")
+
+
+def _rows(*texts: str | None) -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "feedback_conversation_pk": [f"pk-{i}" for i in range(len(texts))],
+            "source_slug": ["zendesk"] * len(texts),
+            "conversation_ref": [str(i) for i in range(len(texts))],
+            "turn_count": [2] * len(texts),
+            "embedding_input": ["summary"] * len(texts),
+            "resolved_text": list(texts),
+        },
+        schema_overrides={"resolved_text": pl.String},
+    )
 
 
 def test_resolve_embedding_text_picks_summary_or_concatenated_turns() -> None:
@@ -122,1217 +171,607 @@ def test_resolve_embedding_text_picks_summary_or_concatenated_turns() -> None:
     assert resolved_by_ref["2"]["resolved_text"] == "one turn"
 
 
-def test_filter_unembedded_drops_already_embedded_rows() -> None:
-    source_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1", "pk-2"],
-            "source_slug": ["zendesk", "zendesk"],
-            "conversation_ref": ["1", "2"],
-            "turn_count": [3, 1],
-            "embedding_input": ["summary", "concatenated_turns"],
-            "resolved_text": ["a", "b"],
-        }
-    )
-    already_embedded_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [3],
-            "embedding_input": ["summary"],
-            "embedding_model_version": ["text-embedding-3-large"],
-            "embedding_dim": [1024],
-        }
-    )
+@pytest.mark.parametrize(
+    ("model", "stored"),
+    [
+        ("openai:text-embedding-3-large", "text-embedding-3-large"),
+        ("bedrock:amazon.titan-embed-text-v2:0", "amazon.titan-embed-text-v2:0"),
+        ("google-cloud:gemini-embedding-001", "gemini-embedding-001"),
+    ],
+)
+def test_resolve_embedding_model_stores_the_id_the_vendor_clients_wrote(
+    model: str, stored: str
+) -> None:
+    resolved = embed.resolve_embedding_model(model, 512)
 
-    result = embed.filter_unembedded(
-        source_df,
-        already_embedded_df,
-        current_model_version="text-embedding-3-large",
-        current_dim=1024,
-    )
-
-    assert result["conversation_ref"].to_list() == ["2"]
+    assert resolved.model == model
+    assert resolved.model_version == stored
+    assert resolved.dim == 512
 
 
-def test_filter_unembedded_reembeds_on_turn_count_change() -> None:
-    """A conversation that gained a turn is reprocessed even if the arm is unchanged.
-
-    embedding_input alone can't detect this: the arm (summary/concatenated_turns)
-    usually stays the same across a turn_count change.
-    """
-    source_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [4],
-            "embedding_input": ["summary"],
-            "resolved_text": ["an updated summary"],
-        }
-    )
-    already_embedded_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [3],
-            "embedding_input": ["summary"],
-            "embedding_model_version": ["text-embedding-3-large"],
-            "embedding_dim": [1024],
-        }
-    )
-
-    result = embed.filter_unembedded(
-        source_df,
-        already_embedded_df,
-        current_model_version="text-embedding-3-large",
-        current_dim=1024,
-    )
-
-    assert result["conversation_ref"].to_list() == ["1"]
-
-
-def test_filter_unembedded_reembeds_on_input_arm_change() -> None:
-    """A conversation embedded off concatenated_turns is reprocessed once summarized."""
-    source_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [3],
-            "embedding_input": ["summary"],
-            "resolved_text": ["a short summary"],
-        }
-    )
-    already_embedded_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [3],
-            "embedding_input": ["concatenated_turns"],
-            "embedding_model_version": ["text-embedding-3-large"],
-            "embedding_dim": [1024],
-        }
-    )
-
-    result = embed.filter_unembedded(
-        source_df,
-        already_embedded_df,
-        current_model_version="text-embedding-3-large",
-        current_dim=1024,
-    )
-
-    assert result["conversation_ref"].to_list() == ["1"]
-
-
-def test_filter_unembedded_reembeds_on_stale_model_version() -> None:
-    source_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [3],
-            "embedding_input": ["summary"],
-            "resolved_text": ["a short summary"],
-        }
-    )
-    already_embedded_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [3],
-            "embedding_input": ["summary"],
-            "embedding_model_version": ["old-model"],
-            "embedding_dim": [1024],
-        }
-    )
-
-    result = embed.filter_unembedded(
-        source_df,
-        already_embedded_df,
-        current_model_version="text-embedding-3-large",
-        current_dim=1024,
-    )
-
-    assert result["conversation_ref"].to_list() == ["1"]
-
-
-def test_filter_unembedded_reembeds_on_stale_dim() -> None:
-    """A dimension sweep on the same model (e.g. 512 -> 1024) triggers re-embedding."""
-    source_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [3],
-            "embedding_input": ["summary"],
-            "resolved_text": ["a short summary"],
-        }
-    )
-    already_embedded_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [3],
-            "embedding_input": ["summary"],
-            "embedding_model_version": ["text-embedding-3-large"],
-            "embedding_dim": [512],
-        }
-    )
-
-    result = embed.filter_unembedded(
-        source_df,
-        already_embedded_df,
-        current_model_version="text-embedding-3-large",
-        current_dim=1024,
-    )
-
-    assert result["conversation_ref"].to_list() == ["1"]
-
-
-def test_build_embedding_client_rejects_non_openai_clients() -> None:
-    class _FakeLLM:
-        def get_client(self) -> object:
-            return object()
-
-    with pytest.raises(TypeError, match="embeddings adapter"):
-        embed.build_embedding_client(_FakeLLM())
-
-
-class _FakeLLM:
-    """Stands in for LLMClientFactory: a real one needs a Vault resource to build."""
-
-    def __init__(self, client: object) -> None:
-        self._client = client
-
-    def get_client(self) -> object:
-        return self._client
-
-
-def test_build_embedding_client_uses_default_model_and_dim() -> None:
-    client = embed.build_embedding_client(
-        _FakeLLM(openai.OpenAI(api_key="sk-test"))  # pragma: allowlist secret
-    )
-
-    assert client.model_version == embed.EMBEDDING_MODEL_VERSION
-    assert client.dim == embed.EMBEDDING_DIM
-
-
-def test_build_embedding_client_honors_model_version_and_dim_override() -> None:
-    """FeedbackEmbeddingsConfig.embedding_model_version/embedding_dim (passed
-    through as model_version/dim here) override the module defaults -- how a run
-    tries a different model or dimension without a code change (§B bake-off).
-    """
-    client = embed.build_embedding_client(
-        _FakeLLM(openai.OpenAI(api_key="sk-test")),  # pragma: allowlist secret
-        model_version="text-embedding-3-small",
-        dim=256,
-    )
-
-    assert client.model_version == "text-embedding-3-small"
-    assert client.dim == 256
-
-
-def test_build_embedding_client_dispatches_to_gemini() -> None:
-    client = embed.build_embedding_client(
-        _FakeLLM(genai.Client(api_key="test")),  # pragma: allowlist secret
-        model_version="gemini-embedding-001",
-    )
-
-    assert isinstance(client, embed.GeminiEmbeddingClient)
-    assert client.model_version == "gemini-embedding-001"
-
-
-def test_build_embedding_client_dispatches_to_bedrock() -> None:
-    bedrock_client = boto3.client("bedrock-runtime", region_name="us-east-1")
-
-    client = embed.build_embedding_client(_FakeLLM(bedrock_client))
-
-    assert isinstance(client, embed.BedrockEmbeddingClient)
-    assert client.model_version == embed.BEDROCK_EMBEDDING_MODEL_VERSION
-
-
-def test_build_embedding_client_honors_bedrock_model_version_override() -> None:
-    """model_version is ignored for a Bedrock client -- only bedrock_model_version
-    applies, mirroring build_summary_client's model_version/bedrock_model_version
-    split.
-    """
-    bedrock_client = boto3.client("bedrock-runtime", region_name="us-east-1")
-
-    client = embed.build_embedding_client(
-        _FakeLLM(bedrock_client),
-        model_version="text-embedding-3-small",
-        bedrock_model_version="cohere.embed-english-v3",
-    )
-
-    assert client.model_version == "cohere.embed-english-v3"
-
-
-def test_bedrock_client_sub_batches_titan_by_single_text() -> None:
-    """Titan has no batch endpoint (_embed_titan loops one invoke_model call per
-    text), so its sub-batch size must be 1 -- otherwise _embed_chunk's one
-    future per sub-batch never actually parallelizes Titan's real API calls,
-    regardless of max_concurrency.
-    """
-    client = embed.BedrockEmbeddingClient(
-        boto3.client("bedrock-runtime", region_name="us-east-1"),
-        "amazon.titan-embed-text-v2:0",
-        1024,
-    )
-
-    assert client.max_request_batch_size == 1
-
-
-def test_bedrock_client_sub_batches_cohere_by_96() -> None:
-    client = embed.BedrockEmbeddingClient(
-        boto3.client("bedrock-runtime", region_name="us-east-1"),
-        "cohere.embed-english-v3",
-        1024,
-    )
-
-    assert client.max_request_batch_size == 96
-
-
-def test_default_embedding_model_version_matches_bedrock_outside_dev(
+def test_resolve_embedding_model_defaults_to_the_module_settings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """#2689: outside dev, embedding_llm defaults to bedrock_embeddings."""
-    monkeypatch.setattr(embed, "DAGSTER_ENV", "production")
-    monkeypatch.delenv("EMBEDDING_PROVIDER", raising=False)
-
-    assert (
-        embed.default_embedding_model_version() == embed.BEDROCK_EMBEDDING_MODEL_VERSION
+    monkeypatch.setattr(
+        embed, "EMBEDDING_MODEL", "bedrock:amazon.titan-embed-text-v2:0"
     )
+    monkeypatch.setattr(embed, "EMBEDDING_DIM", 256)
 
+    resolved = embed.resolve_embedding_model()
 
-def test_default_embedding_model_version_matches_openai_in_dev(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(embed, "DAGSTER_ENV", "dev")
-    monkeypatch.delenv("EMBEDDING_PROVIDER", raising=False)
-
-    assert embed.default_embedding_model_version() == embed.EMBEDDING_MODEL_VERSION
-
-
-def test_default_embedding_model_version_honors_explicit_provider_override(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(embed, "DAGSTER_ENV", "production")
-    monkeypatch.setenv("EMBEDDING_PROVIDER", "openai")
-
-    assert embed.default_embedding_model_version() == embed.EMBEDDING_MODEL_VERSION
-
-
-def _gemini_client(
-    monkeypatch: pytest.MonkeyPatch,
-    response_body: dict[str, Any],
-    *,
-    vertexai: bool,
-) -> tuple[genai.Client, list[dict[str, Any]]]:
-    """Build a real genai.Client with its transport replaced, so the SDK's own
-    per-backend and per-model routing runs but nothing leaves the process. Returns
-    the client and the list each request's path and body are appended to.
-    """
-    if vertexai:
-        client = genai.Client(
-            vertexai=True,
-            project="test-project",
-            location="global",
-            credentials=AnonymousCredentials(),
-        )
-    else:
-        client = genai.Client(api_key="test")  # pragma: allowlist secret
-    requests: list[dict[str, Any]] = []
-
-    def fake_request(
-        _method: str,
-        path: str,
-        body: dict[str, Any],
-        _http_options: object = None,
-    ) -> genai_types.HttpResponse:
-        requests.append({"path": path, "body": body})
-        return genai_types.HttpResponse(headers={}, body=json.dumps(response_body))
-
-    monkeypatch.setattr(client._api_client, "request", fake_request)
-    return client, requests
+    assert resolved.model_version == "amazon.titan-embed-text-v2:0"
+    assert resolved.dim == 256
+    assert resolved.spec.dimensions == 256
 
 
 @pytest.mark.parametrize(
-    ("vertexai", "model_version", "expected"),
+    ("model", "batch_size", "max_request_tokens"),
     [
-        (False, "gemini-embedding-001", 250),
-        (False, "gemini-embedding-2-preview", 250),
-        (True, "gemini-embedding-001", 1),
-        (True, "gemini-embedding-2-preview", 1),
-        (True, "text-embedding-005", 5),
+        ("google:gemini-embedding-001", 250, 250_000),
+        ("google-cloud:gemini-embedding-001", 1, 20_000),
+        ("google-cloud:text-embedding-005", 5, 20_000),
+        ("google-cloud:text-multilingual-embedding-002", 5, 20_000),
+        ("bedrock:amazon.titan-embed-text-v2:0", 1, 250_000),
+        ("bedrock:cohere.embed-english-v3", 96, 250_000),
     ],
 )
-def test_gemini_embedding_client_sizes_request_batches_by_backend_and_model(
-    monkeypatch: pytest.MonkeyPatch,
-    vertexai: bool,  # noqa: FBT001
-    model_version: str,
-    expected: int,
+def test_resolve_embedding_model_sizes_requests_per_backend_and_model(
+    model: str, batch_size: int, max_request_tokens: int
 ) -> None:
-    client, _ = _gemini_client(monkeypatch, {}, vertexai=vertexai)
+    spec = embed.resolve_embedding_model(model).spec
 
-    embedding_client = embed.GeminiEmbeddingClient(client, model_version, 2)
+    assert spec.batch_size == batch_size
+    assert spec.max_request_tokens == max_request_tokens
 
-    assert embedding_client.max_request_batch_size == expected
 
-
-def test_gemini_api_embeds_each_text_separately(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    ("model", "max_input_tokens"),
+    [
+        ("google:gemini-embedding-001", 2048),
+        ("google:gemini-embedding-2", 8192),
+        ("google:gemini-embedding-2-preview", 8192),
+        ("google-cloud:gemini-embedding-001", 2048),
+        ("google-cloud:gemini-embedding-2", 8192),
+        ("google-cloud:text-embedding-005", 2048),
+    ],
+)
+def test_resolve_embedding_model_caps_google_texts_per_model(
+    model: str, max_input_tokens: int
 ) -> None:
-    """A bare list of strings would reach gemini-embedding-2 as one Content and come
-    back as one aggregated vector.
-    """
-    client, requests = _gemini_client(
-        monkeypatch,
-        {"embeddings": [{"values": [0.1, 0.2]}, {"values": [0.3, 0.4]}]},
-        vertexai=False,
-    )
-
-    result = embed.GeminiEmbeddingClient(
-        client, "gemini-embedding-2-preview", 2
-    ).embed_batch(["a", "b"])
-
-    assert result == [[0.1, 0.2], [0.3, 0.4]]
-    assert requests[0]["path"].endswith(":batchEmbedContents")
-    assert [len(r["content"]["parts"]) for r in requests[0]["body"]["requests"]] == [
-        1,
-        1,
-    ]
+    assert embed.resolve_embedding_model(model).max_input_tokens == max_input_tokens
 
 
-def test_vertex_gemini_embedding_001_calls_predict(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    client, requests = _gemini_client(
-        monkeypatch,
-        {
-            "predictions": [
-                {"embeddings": {"values": [0.1, 0.2], "statistics": {"token_count": 3}}}
-            ]
-        },
-        vertexai=True,
-    )
-
-    result = embed.GeminiEmbeddingClient(client, "gemini-embedding-001", 2).embed_batch(
-        ["a"]
-    )
-
-    assert result == [[0.1, 0.2]]
-    assert requests[0]["path"].endswith("gemini-embedding-001:predict")
-    assert len(requests[0]["body"]["instances"]) == 1
-
-
-def test_vertex_predict_model_sends_one_instance_per_text(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    client, requests = _gemini_client(
-        monkeypatch,
-        {
-            "predictions": [
-                {"embeddings": {"values": [0.1, 0.2]}},
-                {"embeddings": {"values": [0.3, 0.4]}},
-            ]
-        },
-        vertexai=True,
-    )
-
-    result = embed.GeminiEmbeddingClient(client, "text-embedding-005", 2).embed_batch(
-        ["a", "b"]
-    )
-
-    assert result == [[0.1, 0.2], [0.3, 0.4]]
-    assert requests[0]["path"].endswith("text-embedding-005:predict")
-    assert [i["content"] for i in requests[0]["body"]["instances"]] == ["a", "b"]
-
-
-def test_vertex_embed_content_model_calls_embed_content(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    client, requests = _gemini_client(
-        monkeypatch, {"embedding": {"values": [0.1, 0.2]}}, vertexai=True
-    )
-
-    result = embed.GeminiEmbeddingClient(
-        client, "gemini-embedding-2-preview", 2
-    ).embed_batch(["a"])
-
-    assert result == [[0.1, 0.2]]
-    assert requests[0]["path"].endswith("gemini-embedding-2-preview:embedContent")
-
-
-def test_vertex_embed_content_model_rejects_more_than_one_text(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The SDK raises rather than sending one aggregated request, so an oversized
-    batch fails the chunk instead of pairing one vector with several rows.
-    """
-    client, requests = _gemini_client(
-        monkeypatch, {"embedding": {"values": [0.1, 0.2]}}, vertexai=True
-    )
-
-    with pytest.raises(ValueError, match="one content at a time"):
-        embed.GeminiEmbeddingClient(
-            client, "gemini-embedding-2-preview", 2
-        ).embed_batch(["a", "b"])
-    assert requests == []
-
-
-def test_gemini_embedding_client_rejects_an_embedding_count_mismatch(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    client, _ = _gemini_client(
-        monkeypatch, {"embeddings": [{"values": [0.1, 0.2]}]}, vertexai=False
-    )
-
-    with pytest.raises(ValueError, match="returned 1 embeddings for 2 texts"):
-        embed.GeminiEmbeddingClient(client, "gemini-embedding-001", 2).embed_batch(
-            ["a", "b"]
+def test_resolve_embedding_model_rejects_a_model_it_cannot_size() -> None:
+    with pytest.raises(ValueError, match="No request sizing"):
+        embed.resolve_embedding_model(
+            "bedrock:amazon.nova-2-multimodal-embeddings-v1:0"
         )
 
 
-class _FakeBedrockBody:
-    def __init__(self, payload: dict[str, Any]) -> None:
-        self._raw = json.dumps(payload).encode()
-
-    def read(self) -> bytes:
-        return self._raw
-
-
-class _FakeBedrockClient:
-    def __init__(self, responses: list[dict[str, Any]]) -> None:
-        self._responses = iter(responses)
-        self.calls: list[dict[str, Any]] = []
-
-    def invoke_model(self, *, modelId: str, body: str) -> dict[str, Any]:
-        self.calls.append({"modelId": modelId, **json.loads(body)})
-        return {"body": _FakeBedrockBody(next(self._responses))}
-
-
-def test_bedrock_embedding_client_titan_calls_once_per_text() -> None:
-    fake_client = _FakeBedrockClient(
-        [{"embedding": [0.1, 0.2]}, {"embedding": [0.3, 0.4]}]
-    )
-    client = embed.BedrockEmbeddingClient(
-        fake_client, "amazon.titan-embed-text-v2:0", 2
-    )
-
-    result = client.embed_batch(["a", "b"])
-
-    assert result == [[0.1, 0.2], [0.3, 0.4]]
-    assert len(fake_client.calls) == 2
-    assert fake_client.calls[0]["inputText"] == "a"
-    assert fake_client.calls[0]["dimensions"] == 2
-
-
-class _TokenLimitedTitanClient(_FakeBedrockClient):
-    """Rejects texts over max_chars the way Titan does, counting 2 chars per token."""
-
-    def __init__(self, max_chars: int, message: str | None = None) -> None:
-        super().__init__([])
-        self._max_chars = max_chars
-        self._message = message
-
-    def invoke_model(self, *, modelId: str, body: str) -> dict[str, Any]:
-        text = json.loads(body)["inputText"]
-        self.calls.append({"modelId": modelId, "inputText": text})
-        if len(text) > self._max_chars:
-            message = self._message or (
-                "400 Bad Request: Too many input tokens. Max input tokens: "
-                f"{self._max_chars // 2}, request input token count: {len(text) // 2} "
-            )
-            raise ClientError(
-                {"Error": {"Code": "ValidationException", "Message": message}},
-                "InvokeModel",
-            )
-        return {"body": _FakeBedrockBody({"embedding": [0.1, 0.2]})}
-
-
-def test_bedrock_titan_shortens_a_text_over_the_token_limit_and_retries() -> None:
-    fake_client = _TokenLimitedTitanClient(max_chars=10_000)
-    client = embed.BedrockEmbeddingClient(
-        fake_client, "amazon.titan-embed-text-v2:0", 2
-    )
-
-    result = client.embed_batch(["x" * 40_000])
-
-    assert result == [[0.1, 0.2]]
-    assert client.max_input_chars == 50_000
-    assert [len(call["inputText"]) for call in fake_client.calls] == [40_000, 9_000]
-
-
-def test_bedrock_titan_raises_a_validation_error_that_is_not_about_length() -> None:
-    fake_client = _TokenLimitedTitanClient(
-        max_chars=0, message="The provided model identifier is invalid."
-    )
-    client = embed.BedrockEmbeddingClient(
-        fake_client, "amazon.titan-embed-text-v2:0", 2
-    )
-
-    with pytest.raises(ClientError, match="model identifier is invalid"):
-        client.embed_batch(["a"])
-    assert len(fake_client.calls) == 1
-
-
-def test_bedrock_embedding_client_cohere_batches_in_one_call() -> None:
-    fake_client = _FakeBedrockClient([{"embeddings": [[0.1, 0.2], [0.3, 0.4]]}])
-    client = embed.BedrockEmbeddingClient(fake_client, "cohere.embed-english-v3", 2)
-
-    result = client.embed_batch(["a", "b"])
-
-    assert result == [[0.1, 0.2], [0.3, 0.4]]
-    assert len(fake_client.calls) == 1
-    assert fake_client.calls[0]["texts"] == ["a", "b"]
-    assert "embedding_types" not in fake_client.calls[0]
-
-
-def test_bedrock_embedding_client_cohere_v4_unnests_float_embeddings() -> None:
-    # v4 speaks Cohere's v2-style contract: embedding_types in the request,
-    # embeddings.float (not a flat embeddings list) in the response.
-    fake_client = _FakeBedrockClient(
-        [{"embeddings": {"float": [[0.1, 0.2], [0.3, 0.4]]}}]
-    )
-    client = embed.BedrockEmbeddingClient(fake_client, "cohere.embed-v4:0", 2)
-
-    result = client.embed_batch(["a", "b"])
-
-    assert result == [[0.1, 0.2], [0.3, 0.4]]
-    assert fake_client.calls[0]["embedding_types"] == ["float"]
-    assert fake_client.calls[0]["output_dimension"] == 2
-
-
-def test_bedrock_embedding_client_rejects_unknown_model_family() -> None:
-    client = embed.BedrockEmbeddingClient(_FakeBedrockClient([]), "unknown.model", 2)
-
-    with pytest.raises(ValueError, match="No Bedrock embedding adapter"):
-        client.embed_batch(["a"])
-
-
-class _FakeField:
-    def __init__(self, name: str) -> None:
-        self.name = name
-
-
-class _FakeSchema:
-    def __init__(self, top_level_names: list[str], nested_extra: list[str]) -> None:
-        # Mirrors real pyiceberg: column_names flattens in nested field names
-        # (e.g. a List column's "element" child) that fields/columns does not.
-        self.column_names = top_level_names + nested_extra
-        self.fields = [_FakeField(name) for name in top_level_names]
-
-
-class _FakeSchemaUpdate:
-    def __init__(self, table: "_FakeTable") -> None:
-        self._table = table
-
-    def union_by_name(self, schema: Any) -> None:
-        # Mirrors real union_by_name: appends any not-yet-seen field at the end
-        # of the table's column order, never inserting it where the incoming
-        # schema happens to place it.
-        for name in schema.names:
-            if name not in self._table._column_names:
-                self._table._column_names.append(name)
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(self, *args: object) -> None:
-        pass
-
-
-class _FakeTable:
-    def __init__(self) -> None:
-        self.upserts: list[dict[str, object]] = []
-        self._column_names: list[str] = []
-        self._nested_extra_column_names: list[str] = []
-
-    def update_schema(self) -> _FakeSchemaUpdate:
-        return _FakeSchemaUpdate(self)
-
-    def schema(self) -> _FakeSchema:
-        return _FakeSchema(self._column_names, self._nested_extra_column_names)
-
-    def upsert(self, **kwargs: object) -> None:
-        self.upserts.append(kwargs)
-
-
-class _FakeCatalog:
-    def __init__(self, table: _FakeTable) -> None:
-        self._table = table
-        self.create_calls: list[str] = []
-
-    def create_table_if_not_exists(
-        self,
-        identifier: str,
-        **kwargs: Any,
-    ) -> _FakeTable:
-        self.create_calls.append(identifier)
-        if not self._table._column_names:
-            schema = kwargs.get("schema")
-            if schema is not None:
-                self._table._column_names = list(schema.names)
-        return self._table
-
-
-def _embedding_df(**overrides: object) -> pl.DataFrame:
-    conversation_ref = overrides.get("conversation_ref", "1")
-    row = {
-        "feedback_conversation_pk": f"pk-{conversation_ref}",
-        "source_slug": "zendesk",
-        "conversation_ref": conversation_ref,
-        "turn_count": 1,
-        "embedding_input": "summary",
-        "resolved_text": "hello",
-    }
-    row.update(overrides)
-    return pl.DataFrame([row])
-
-
-def test_embed_and_checkpoint_skips_null_text() -> None:
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    client = _FakeEmbeddingClient()
-    df = pl.DataFrame(
+def test_matches_selects_the_model_version_and_dim() -> None:
+    rows = pl.DataFrame(
         {
-            "feedback_conversation_pk": ["pk-1", "pk-2"],
-            "source_slug": ["zendesk", "zendesk"],
-            "conversation_ref": ["1", "2"],
-            "turn_count": [3, 1],
-            "embedding_input": ["summary", "concatenated_turns"],
-            "resolved_text": ["hello", None],
+            "embedding_model_version": [
+                "text-embedding-3-large",
+                "text-embedding-3-large",
+                "openai:text-embedding-3-large",
+            ],
+            "embedding_dim": [3, 1024, 3],
         }
     )
 
-    result = embed.embed_and_checkpoint(
-        df, client, (catalog, "some_db.feedback_embeddings")
+    assert rows.filter(OPENAI.matches()).height == 1
+
+
+def test_key_changes_with_the_text_the_arm_the_model_and_the_dim() -> None:
+    keys = {
+        OPENAI.key("a", "summary"),
+        OPENAI.key("b", "summary"),
+        OPENAI.key("a", "concatenated_turns"),
+        embed.resolve_embedding_model("azure:text-embedding-3-large", 3).key(
+            "a", "summary"
+        ),
+        embed.resolve_embedding_model("openai:text-embedding-3-large", 4).key(
+            "a", "summary"
+        ),
+    }
+
+    assert len(keys) == 5
+    assert OPENAI.key("a", "summary") == OPENAI.key("a", "summary")
+
+
+def test_input_text_cuts_titan_by_characters() -> None:
+    assert TITAN.input_text("x" * 60_000) == "x" * 50_000
+
+
+def test_input_text_cuts_openai_to_its_token_limit() -> None:
+    text = "word " * 10_000
+
+    cut = OPENAI.input_text(text)
+
+    assert text.startswith(cut)
+    assert len(cut) < len(text)
+    assert OPENAI.input_text("short") == "short"
+
+
+def _stored(
+    keys: dict[str, str | None],
+    *,
+    turn_count: int = 2,
+    embedding_input: str = "summary",
+) -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "feedback_conversation_pk": list(keys),
+            "turn_count": [turn_count] * len(keys),
+            "embedding_input": [embedding_input] * len(keys),
+            "idempotency_key": list(keys.values()),
+        },
+        schema={
+            "feedback_conversation_pk": pl.String,
+            "turn_count": pl.Int64,
+            "embedding_input": pl.String,
+            "idempotency_key": pl.String,
+        },
+    )
+
+
+def _key(text: str) -> str:
+    return OPENAI.key(text, "summary")
+
+
+def test_filter_unembedded_drops_a_conversation_embedded_from_the_same_text() -> None:
+    source = _rows("same", "new")
+
+    result = embed.filter_unembedded(source, _stored({"pk-0": _key("same")}), OPENAI)
+
+    assert result["conversation_ref"].to_list() == ["1"]
+    assert result.columns == source.columns
+
+
+def test_filter_unembedded_reembeds_a_changed_text() -> None:
+    """A re-summarized conversation keeps its turn_count and arm, so only the text
+    shows that its stored vector is stale.
+    """
+    result = embed.filter_unembedded(
+        _rows("a new summary"), _stored({"pk-0": _key("the old summary")}), OPENAI
+    )
+
+    assert result["conversation_ref"].to_list() == ["0"]
+
+
+def test_filter_unembedded_reembeds_an_arm_switch_with_the_same_text() -> None:
+    """A summary equal to the concatenated turns must still update the stored arm,
+    which decides the summary-scoped clusters.
+    """
+    stored = _stored({"pk-0": OPENAI.key("text", "concatenated_turns")})
+
+    result = embed.filter_unembedded(_rows("text"), stored, OPENAI)
+
+    assert result["conversation_ref"].to_list() == ["0"]
+
+
+def test_filter_unembedded_keeps_a_keyless_row_with_the_same_turns_and_arm() -> None:
+    """Rows embedded before the key existed are not all redone on deploy."""
+    result = embed.filter_unembedded(_rows("text"), _stored({"pk-0": None}), OPENAI)
+
+    assert result.height == 0
+
+
+@pytest.mark.parametrize(
+    ("turn_count", "embedding_input"), [(1, "summary"), (2, "concatenated_turns")]
+)
+def test_filter_unembedded_reembeds_a_keyless_row_whose_turns_or_arm_changed(
+    turn_count: int, embedding_input: str
+) -> None:
+    stored = _stored(
+        {"pk-0": None}, turn_count=turn_count, embedding_input=embedding_input
+    )
+
+    result = embed.filter_unembedded(_rows("text"), stored, OPENAI)
+
+    assert result["conversation_ref"].to_list() == ["0"]
+
+
+def test_filter_unembedded_keeps_new_rows_without_text_and_drops_stored_ones() -> None:
+    result = embed.filter_unembedded(
+        _rows(None, " "), _stored({"pk-0": _key("old")}), OPENAI
     )
 
     assert result["conversation_ref"].to_list() == ["1"]
-    assert result["turn_count"].to_list() == [3]
-    assert result["embedding_dim"].to_list() == [3]
-    assert result["embedding_model_version"].to_list() == ["text-embedding-3-large"]
-    assert result["embedding_vector"].to_list() == [[5.0, 5.0, 5.0]]
-    assert result["embedding_vector"].dtype == pl.List(pl.Float32)
-    # the null-text row is filtered out before any batch is ever sent
-    assert client.batch_calls == [["hello"]]
 
 
-def test_embed_and_checkpoint_skips_blank_text() -> None:
+def test_embed_and_checkpoint_skips_null_and_blank_text(target: Target) -> None:
     """Vertex's :predict sends no instance for an empty text, which would fail
     every other row in the same request.
     """
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    client = _FakeEmbeddingClient()
-    df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1", "pk-2", "pk-3"],
-            "source_slug": ["zendesk", "zendesk", "zendesk"],
-            "conversation_ref": ["1", "2", "3"],
-            "turn_count": [3, 1, 1],
-            "embedding_input": ["summary", "concatenated_turns", "summary"],
-            "resolved_text": ["hello", "", " \n "],
-        }
+    embedder = _FakeEmbedder(OPENAI)
+
+    result, report = embed.embed_and_checkpoint(
+        _rows("hello", None, "", " \n "), OPENAI, embedder, target
     )
 
-    result = embed.embed_and_checkpoint(
-        df, client, (catalog, "some_db.feedback_embeddings")
+    assert result["conversation_ref"].to_list() == ["0"]
+    assert embedder.calls == [["hello"]]
+    assert report.failures == []
+
+
+def test_embed_and_checkpoint_writes_the_stored_model_key_and_float32_vectors(
+    target: Target,
+) -> None:
+    result, report = embed.embed_and_checkpoint(
+        _rows("hello"), OPENAI, _FakeEmbedder(OPENAI), target
     )
 
-    assert result["conversation_ref"].to_list() == ["1"]
-    assert client.batch_calls == [["hello"]]
+    [row] = result.to_dicts()
+    assert row["embedding_model_version"] == "text-embedding-3-large"
+    assert row["embedding_dim"] == 3
+    assert row["embedding_vector"] == [5.0, 5.0, 5.0]
+    assert row["idempotency_key"] == _key("hello")
+    assert row["turn_count"] == 2
+    assert result["embedding_vector"].dtype == pl.List(pl.Float32)
+    assert result.columns == list(embed.EMBEDDING_CHECKPOINT_SCHEMA)
+    assert report.input_tokens == 1
 
 
-def test_embed_and_checkpoint_batches_calls() -> None:
-    """Multiple rows within EMBEDDING_BATCH_SIZE go out in a single API call."""
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    client = _FakeEmbeddingClient()
-    df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1", "pk-2", "pk-3"],
-            "source_slug": ["zendesk", "zendesk", "zendesk"],
-            "conversation_ref": ["1", "2", "3"],
-            "turn_count": [1, 1, 1],
-            "embedding_input": ["summary", "summary", "summary"],
-            "resolved_text": ["hi", "hello", "hey"],
-        }
-    )
-
-    result = embed.embed_and_checkpoint(
-        df, client, (catalog, "some_db.feedback_embeddings")
-    )
-
-    assert sorted(result["conversation_ref"].to_list()) == ["1", "2", "3"]
-    # one batch call carrying all three texts, not three separate calls
-    assert client.batch_calls == [["hi", "hello", "hey"]]
-    # metadata lists stay aligned with the batch's text order, not resorted
-    assert client.trace_metadata_calls == [
-        {
-            "feedback_conversation_pks": ["pk-1", "pk-2", "pk-3"],
-            "conversation_refs": ["1", "2", "3"],
-            "embedding_inputs": ["summary", "summary", "summary"],
-        }
-    ]
-
-
-def test_embed_and_checkpoint_runs_request_batches_concurrently() -> None:
-    """max_concurrency > 1 should let several embed_batch calls overlap, not
-    run strictly one after another -- the actual parallelism lever for a client
-    like Titan with no real batch endpoint.
+def test_embed_and_checkpoint_updates_a_table_from_before_idempotency_key(
+    target: Target,
+) -> None:
+    """A table created before idempotency_key existed gets it appended and its
+    stored vectors replaced, and the returned frame is in the table's column
+    order, which the io_manager's upsert casts by.
     """
-    call_delay = 0.2
-
-    class _SlowEmbeddingClient:
-        model_version = "test-model"
-        dim = 3
-        max_request_batch_size = 1
-        max_input_chars = None
-
-        def embed_batch(
-            self,
-            texts: list[str],
-            *,
-            trace_metadata: dict[str, object] | None = None,  # noqa: ARG002
-        ) -> list[list[float]]:
-            time.sleep(call_delay)
-            return [[float(len(text))] * self.dim for text in texts]
-
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    row_count = 8
-    df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": [f"pk-{i}" for i in range(row_count)],
-            "source_slug": ["zendesk"] * row_count,
-            "conversation_ref": [str(i) for i in range(row_count)],
-            "turn_count": [1] * row_count,
-            "embedding_input": ["summary"] * row_count,
-            "resolved_text": [f"text {i}" for i in range(row_count)],
-        }
+    catalog, identifier = target
+    old_columns = [
+        "feedback_conversation_pk",
+        "source_slug",
+        "conversation_ref",
+        "turn_count",
+        "embedding_vector",
+        "embedding_input",
+        "embedding_dim",
+        "embedding_model_version",
+        "embedded_at",
+    ]
+    existing = embed._embedded_frame(
+        OPENAI,
+        [
+            ({**row, "idempotency_key": None}, [0.0] * 3)
+            for row in _rows("old", "old").to_dicts()
+        ],
+    ).select(old_columns)
+    catalog.create_table(identifier, schema=existing.to_arrow().schema).append(
+        existing.to_arrow()
     )
+
+    result, _ = embed.embed_and_checkpoint(
+        _rows("hello", "new", "added").filter(pl.col("conversation_ref") != "1"),
+        OPENAI,
+        _FakeEmbedder(OPENAI),
+        target,
+    )
+
+    table_columns = [
+        field.name for field in catalog.load_table(identifier).schema().fields
+    ]
+    assert table_columns == [*old_columns, "idempotency_key"]
+    assert result.columns == table_columns
+    stored = _stored_rows(catalog)
+    assert stored["conversation_ref"].to_list() == ["0", "1", "2"]
+    assert stored["embedding_vector"].to_list() == [[5.0] * 3, [0.0] * 3, [5.0] * 3]
+    assert stored["idempotency_key"].is_null().to_list() == [False, True, False]
+
+
+def test_embed_and_checkpoint_sends_requests_within_the_models_limits(
+    target: Target,
+) -> None:
+    """Vertex's text-embedding models take five texts per request."""
+    embedder = _FakeEmbedder(VERTEX_TEXT)
+    texts = [f"text {i}" for i in range(7)]
+
+    result, _ = embed.embed_and_checkpoint(
+        _rows(*texts), VERTEX_TEXT, embedder, target, max_concurrency=1
+    )
+
+    assert result.height == 7
+    assert embedder.calls == [texts[:5], texts[5:]]
+
+
+def test_embed_and_checkpoint_upserts_about_batch_size_conversations_at_once(
+    target: Target, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    written: list[tuple[int, list[str]]] = []
+
+    def recording_upsert_chunk(*args: Any) -> pl.DataFrame:
+        written.append((args[2].height, args[3]))
+        return upsert_chunk(*args)
+
+    monkeypatch.setattr(embed, "upsert_chunk", recording_upsert_chunk)
+
+    embed.embed_and_checkpoint(
+        _rows(*(f"text {i}" for i in range(23))),
+        VERTEX_TEXT,
+        _FakeEmbedder(VERTEX_TEXT),
+        target,
+        batch_size=8,
+    )
+
+    # Two requests of five per chunk: 23 texts are five requests in three chunks.
+    assert written == [(10, embed.UPSERT_JOIN_COLS)] * 2 + [(3, embed.UPSERT_JOIN_COLS)]
+    assert _stored_rows(target[0]).height == 23
+
+
+def test_embed_and_checkpoint_runs_requests_concurrently(target: Target) -> None:
+    """Titan takes one text per request, so concurrency is its wall-clock lever."""
+    call_delay = 0.2
+    row_count = 8
 
     start = time.monotonic()
-    result = embed.embed_and_checkpoint(
-        df,
-        _SlowEmbeddingClient(),
-        (catalog, "some_db.feedback_embeddings"),
-        batch_size=row_count,
+    result, _ = embed.embed_and_checkpoint(
+        _rows(*(f"text {i}" for i in range(row_count))),
+        TITAN,
+        _FakeEmbedder(TITAN, delay=call_delay),
+        target,
         max_concurrency=row_count,
     )
     elapsed = time.monotonic() - start
 
     assert result.height == row_count
-    # Serial would take row_count * call_delay (1.6s); running them all at once
-    # should land close to one call_delay, with generous headroom for CI jitter.
+    # Serial would take row_count * call_delay (1.6s).
     assert elapsed < row_count * call_delay / 2
 
 
-def test_embed_and_checkpoint_splits_request_batches_by_provider_limit() -> None:
-    """A checkpoint chunk larger than the client's per-request limit is split
-    into multiple embed_batch calls, e.g. Bedrock Cohere's 96-text cap -- the
-    checkpoint batch_size can be much larger than any provider's real limit.
-    """
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    client = _FakeEmbeddingClient(max_request_batch_size=2)
-    df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1", "pk-2", "pk-3"],
-            "source_slug": ["zendesk", "zendesk", "zendesk"],
-            "conversation_ref": ["1", "2", "3"],
-            "turn_count": [1, 1, 1],
-            "embedding_input": ["summary", "summary", "summary"],
-            "resolved_text": ["hi", "hello", "hey"],
-        }
-    )
-
-    result = embed.embed_and_checkpoint(
-        df, client, (catalog, "some_db.feedback_embeddings"), batch_size=3
-    )
-
-    assert sorted(result["conversation_ref"].to_list()) == ["1", "2", "3"]
-    # one checkpoint chunk of 3 rows, split into two request-sized calls -- run
-    # concurrently, so compare unordered
-    assert sorted(client.batch_calls, key=len) == [["hey"], ["hi", "hello"]]
-    # one Iceberg commit for the whole checkpoint chunk, not one per request
-    assert len(table.upserts) == 1
-
-
-def test_embed_and_checkpoint_retries_individually_on_batch_failure() -> None:
-    """A bad row fails the batch call; the rest are recovered by retrying solo."""
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    client = _FakeEmbeddingClient()
-    df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1", "pk-2", "pk-3"],
-            "source_slug": ["zendesk", "zendesk", "zendesk"],
-            "conversation_ref": ["1", "2", "3"],
-            "turn_count": [1, 1, 1],
-            "embedding_input": ["summary", "summary", "summary"],
-            "resolved_text": ["hello", "boom", "world"],
-        }
-    )
-
-    result = embed.embed_and_checkpoint(
-        df, client, (catalog, "some_db.feedback_embeddings")
-    )
-
-    # "2" (the "boom" row) is dropped; "1" and "3" are recovered via solo retries
-    assert sorted(result["conversation_ref"].to_list()) == ["1", "3"]
-    assert client.batch_calls[0] == ["hello", "boom", "world"]
-    # after the batch fails, each row is retried one at a time
-    assert ["hello"] in client.batch_calls
-    assert ["boom"] in client.batch_calls
-    # the failed batch's metadata still lists all three rows together
-    assert client.trace_metadata_calls[0] == {
-        "feedback_conversation_pks": ["pk-1", "pk-2", "pk-3"],
-        "conversation_refs": ["1", "2", "3"],
-        "embedding_inputs": ["summary", "summary", "summary"],
-    }
-    # each solo retry's metadata is a single-row list matching that one row
-    assert {
-        "feedback_conversation_pks": ["pk-1"],
-        "conversation_refs": ["1"],
-        "embedding_inputs": ["summary"],
-    } in client.trace_metadata_calls
-    assert {
-        "feedback_conversation_pks": ["pk-2"],
-        "conversation_refs": ["2"],
-        "embedding_inputs": ["summary"],
-    } in client.trace_metadata_calls
-    assert {
-        "feedback_conversation_pks": ["pk-3"],
-        "conversation_refs": ["3"],
-        "embedding_inputs": ["summary"],
-    } in client.trace_metadata_calls
-    assert ["world"] in client.batch_calls
-
-
-def test_embed_and_checkpoint_drops_chunk_on_systemic_failure() -> None:
-    """A rate limit (or other systemic error) must not trigger 1 retry call per row
-    in the chunk -- that just multiplies the same failure len(chunk) times against
-    an endpoint that already asked us to back off.
-    """
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    client = _FakeEmbeddingClient()
-    df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1", "pk-2", "pk-3"],
-            "source_slug": ["zendesk", "zendesk", "zendesk"],
-            "conversation_ref": ["1", "2", "3"],
-            "turn_count": [1, 1, 1],
-            "embedding_input": ["summary", "summary", "summary"],
-            "resolved_text": ["hello", "ratelimit", "world"],
-        }
-    )
-    errors: list[str] = []
-
-    result = embed.embed_and_checkpoint(
-        df, client, (catalog, "some_db.feedback_embeddings"), errors=errors
-    )
-
-    # the whole chunk is dropped, not just the "ratelimit" row
-    assert result.height == 0
-    # exactly the one batch call -- no per-row retry calls follow it
-    assert client.batch_calls == [["hello", "ratelimit", "world"]]
-    assert len(errors) == 1
-
-
-def test_embed_and_checkpoint_retries_individually_on_bedrock_validation_error() -> (
-    None
-):
-    """Bedrock's ValidationException (e.g. Cohere embed-english-v3's 2048-char
-    per-text cap, #2543) is isolatable like openai.BadRequestError -- one bad
-    row must not sink the rest of the chunk.
-    """
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    client = _FakeEmbeddingClient()
-    df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1", "pk-2", "pk-3"],
-            "source_slug": ["zendesk", "zendesk", "zendesk"],
-            "conversation_ref": ["1", "2", "3"],
-            "turn_count": [1, 1, 1],
-            "embedding_input": ["summary", "summary", "summary"],
-            "resolved_text": ["hello", "toolong", "world"],
-        }
-    )
-
-    result = embed.embed_and_checkpoint(
-        df, client, (catalog, "some_db.feedback_embeddings")
-    )
-
-    # "2" (the "toolong" row) is dropped; "1" and "3" are recovered via solo retries
-    assert sorted(result["conversation_ref"].to_list()) == ["1", "3"]
-    assert ["hello"] in client.batch_calls
-    assert ["world"] in client.batch_calls
-
-
-def test_embed_and_checkpoint_drops_chunk_on_non_validation_client_error() -> None:
-    """A ClientError whose code isn't ValidationException (e.g. throttling) is
-    systemic, same as openai.RateLimitError -- no per-row retries.
-    """
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    client = _FakeEmbeddingClient()
-    df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1", "pk-2", "pk-3"],
-            "source_slug": ["zendesk", "zendesk", "zendesk"],
-            "conversation_ref": ["1", "2", "3"],
-            "turn_count": [1, 1, 1],
-            "embedding_input": ["summary", "summary", "summary"],
-            "resolved_text": ["hello", "throttled", "world"],
-        }
-    )
-    errors: list[str] = []
-
-    result = embed.embed_and_checkpoint(
-        df, client, (catalog, "some_db.feedback_embeddings"), errors=errors
-    )
-
-    assert result.height == 0
-    assert client.batch_calls == [["hello", "throttled", "world"]]
-    assert len(errors) == 1
-
-
-def test_embed_and_checkpoint_drops_chunk_on_request_level_validation_error() -> None:
-    """A ValidationException with no "#/texts/<index>" pointer (e.g. an invalid
-    model id) is request-level, not row-content -- must stay systemic rather
-    than retry once per row in the chunk.
-    """
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    client = _FakeEmbeddingClient()
-    df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1", "pk-2", "pk-3"],
-            "source_slug": ["zendesk", "zendesk", "zendesk"],
-            "conversation_ref": ["1", "2", "3"],
-            "turn_count": [1, 1, 1],
-            "embedding_input": ["summary", "summary", "summary"],
-            "resolved_text": ["hello", "badmodel", "world"],
-        }
-    )
-    errors: list[str] = []
-
-    result = embed.embed_and_checkpoint(
-        df, client, (catalog, "some_db.feedback_embeddings"), errors=errors
-    )
-
-    assert result.height == 0
-    assert client.batch_calls == [["hello", "badmodel", "world"]]
-    assert len(errors) == 1
-
-
-def test_checkpoint_embedding_chunk_upserts_a_non_empty_chunk() -> None:
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    chunk_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [1],
-            "embedding_input": ["summary"],
-            "embedding_vector": [[0.1, 0.2, 0.3]],
-            "embedding_dim": [3],
-            "embedding_model_version": ["text-embedding-3-large"],
-        }
-    )
-
-    embed.checkpoint_embedding_chunk(catalog, "some_db.feedback_embeddings", chunk_df)
-
-    assert catalog.create_calls == ["some_db.feedback_embeddings"]
-    assert len(table.upserts) == 1
-    assert table.upserts[0]["join_cols"] == [
-        "feedback_conversation_pk",
-        "embedding_model_version",
-        "embedding_dim",
-    ]
-
-
-def test_checkpoint_embedding_chunk_reorders_using_top_level_fields_only() -> None:
-    """Pyiceberg's Schema.column_names includes nested fields (e.g. a List
-    column's "element" child, surfaced as "embedding_vector.element") -- using
-    it to reorder columns would try to select a name Polars doesn't have.
-    """
-    table = _FakeTable()
-    table._column_names = [
-        "feedback_conversation_pk",
-        "source_slug",
-        "conversation_ref",
-        "turn_count",
-        "embedding_input",
-        "embedding_vector",
-        "embedding_dim",
-        "embedding_model_version",
-    ]
-    # column_names would also surface this, but it isn't a real top-level field.
-    table._nested_extra_column_names = ["embedding_vector.element"]
-    catalog = _FakeCatalog(table)
-    chunk_df = pl.DataFrame(
-        {
-            "feedback_conversation_pk": ["pk-1"],
-            "source_slug": ["zendesk"],
-            "conversation_ref": ["1"],
-            "turn_count": [1],
-            "embedding_input": ["summary"],
-            "embedding_vector": [[0.1, 0.2, 0.3]],
-            "embedding_dim": [3],
-            "embedding_model_version": ["text-embedding-3-large"],
-        }
-    )
-
-    embed.checkpoint_embedding_chunk(catalog, "some_db.feedback_embeddings", chunk_df)
-
-    assert len(table.upserts) == 1
-
-
-def test_checkpoint_embedding_chunk_skips_empty_chunks_without_touching_catalog() -> (
-    None
-):
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    empty_df = pl.DataFrame(schema=embed.EMBEDDING_CHECKPOINT_SCHEMA)
-
-    embed.checkpoint_embedding_chunk(catalog, "some_db.feedback_embeddings", empty_df)
-
-    assert catalog.create_calls == []
-    assert table.upserts == []
-
-
-def test_embed_and_checkpoint_upserts_each_chunk() -> None:
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    client = _FakeEmbeddingClient()
-    df = pl.concat(
-        [_embedding_df(conversation_ref=str(i)) for i in range(5)],
-        how="vertical_relaxed",
-    )
-
-    result = embed.embed_and_checkpoint(
-        df,
-        client,
-        (catalog, "some_db.feedback_embeddings"),
-        batch_size=2,
-    )
-
-    assert result.height == 5
-    # 3 chunks of size 2, 2, 1 -- one upsert call per chunk
-    assert len(table.upserts) == 3
-
-
-class _FakeLog:
-    def __init__(self) -> None:
-        self.info_calls: list[tuple[object, ...]] = []
-
-    def info(self, *args: object) -> None:
-        self.info_calls.append(args)
-
-
-class _FakeContext:
-    def __init__(self) -> None:
-        self.log = _FakeLog()
-
-
-def test_embed_and_checkpoint_logs_via_context_when_given() -> None:
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    client = _FakeEmbeddingClient()
-    df = pl.concat(
-        [_embedding_df(conversation_ref=str(i)) for i in range(5)],
-        how="vertical_relaxed",
-    )
-    context = _FakeContext()
-
-    embed.embed_and_checkpoint(
-        df,
-        client,
-        (catalog, "some_db.feedback_embeddings"),
-        batch_size=2,
-        context=context,
-    )
-
-    # 3 chunks of size 2, 2, 1 -- one context.log.info call per chunk
-    assert len(context.log.info_calls) == 3
-
-
-def test_embed_and_checkpoint_falls_back_to_module_logger_without_context(
-    caplog: pytest.LogCaptureFixture,
+def test_embed_and_checkpoint_isolates_a_rejected_text_in_a_request(
+    target: Target,
 ) -> None:
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    client = _FakeEmbeddingClient()
-    df = pl.concat(
-        [_embedding_df(conversation_ref=str(i)) for i in range(5)],
-        how="vertical_relaxed",
+    embedder = _FakeEmbedder(OPENAI)
+
+    result, report = embed.embed_and_checkpoint(
+        _rows("hello", "boom", "world"), OPENAI, embedder, target
     )
 
-    with caplog.at_level(logging.INFO, logger="ml.lib.embed"):
+    assert result["conversation_ref"].to_list() == ["0", "2"]
+    assert embedder.calls == [
+        ["hello", "boom", "world"],
+        ["hello"],
+        ["boom"],
+        ["world"],
+    ]
+    [failure] = report.failures
+    assert failure.row["conversation_ref"] == "1"
+    assert failure.retry_next_run is False
+
+
+def test_cohere_isolates_a_text_bedrock_names_in_its_rejection(
+    target: Target,
+) -> None:
+    embedder = _CohereEmbedder(
+        "ValidationException: #/texts/{index}: expected maxLength"
+    )
+
+    result, report = embed.embed_and_checkpoint(
+        _rows("hello", "boom", "world"), COHERE, embedder, target
+    )
+
+    assert result["conversation_ref"].to_list() == ["0", "2"]
+    assert len(embedder.calls) == 4
+    [failure] = report.failures
+    assert failure.row["conversation_ref"] == "1"
+
+
+def test_cohere_fails_a_request_level_rejection_without_splitting_it(
+    target: Target,
+) -> None:
+    """A 400 that names no text (e.g. a dimension the model does not take) fails
+    the same way for every text alone, so it is not retried 96 times.
+    """
+    embedder = _CohereEmbedder("ValidationException: Malformed input request")
+
+    with pytest.raises(BatchFailed, match="Malformed input request"):
         embed.embed_and_checkpoint(
-            df,
-            client,
-            (catalog, "some_db.feedback_embeddings"),
-            batch_size=2,
+            _rows("hello", "boom", "world"), COHERE, embedder, target
         )
 
-    upserted_logs = [r for r in caplog.records if "Upserted chunk" in r.message]
-    assert len(upserted_logs) == 3
+    assert embedder.calls == [["hello", "boom", "world"]]
 
 
-def test_embed_and_checkpoint_aborts_early_on_a_systemic_failure() -> None:
-    """A credential-type failure shouldn't burn through every remaining chunk with
-    the same error -- a whole chunk with zero successes should abort the run
-    (default EMBEDDING_MAX_CONSECUTIVE_FAILED_CHUNKS=1) instead of trying every
-    chunk. Chunks already upserted before the abort stay in the real table -- no
-    separate recovery step needed on the next run.
+def test_embed_and_checkpoint_stops_on_a_rejected_credential(target: Target) -> None:
+    """A 401 opens the circuit at once rather than failing every later request."""
+    catalog, identifier = target
+    embedder = _FakeEmbedder(TITAN)
+
+    with pytest.raises(BatchFailed) as excinfo:
+        embed.embed_and_checkpoint(
+            _rows("denied", "hello", "world"),
+            TITAN,
+            embedder,
+            target,
+            batch_size=1,
+            max_concurrency=1,
+        )
+
+    assert embedder.calls == [["denied"]]
+    assert excinfo.value.report.circuit_opened_by is not None
+    # The failed chunk writes nothing.
+    assert not catalog.table_exists(identifier)
+
+
+def test_embed_and_checkpoint_keeps_earlier_chunks_when_a_later_one_stops(
+    target: Target,
+) -> None:
+    with pytest.raises(BatchFailed):
+        embed.embed_and_checkpoint(
+            _rows("hello", "denied"),
+            TITAN,
+            _FakeEmbedder(TITAN),
+            target,
+            batch_size=1,
+            max_concurrency=1,
+        )
+
+    assert _stored_rows(target[0])["conversation_ref"].to_list() == ["0"]
+
+
+def test_titan_shortens_a_text_over_the_token_limit_and_retries(target: Target) -> None:
+    embedder = _TitanLimitEmbedder(max_chars=10_000)
+
+    result, _ = embed.embed_and_checkpoint(_rows("x" * 40_000), TITAN, embedder, target)
+
+    assert result.height == 1
+    assert [len(text) for [text] in embedder.calls] == [40_000, 9_000]
+
+
+def test_titan_fails_a_rejection_that_is_not_about_length(target: Target) -> None:
+    embedder = _TitanLimitEmbedder(
+        max_chars=0, message="The provided model identifier is invalid."
+    )
+
+    with pytest.raises(BatchFailed, match="model identifier is invalid"):
+        embed.embed_and_checkpoint(_rows("a"), TITAN, embedder, target)
+
+    assert len(embedder.calls) == 1
+
+
+def _bedrock_response(payload: dict[str, Any]) -> dict[str, Any]:
+    body = json.dumps(payload).encode()
+    return {
+        "body": StreamingBody(io.BytesIO(body), len(body)),
+        "contentType": "application/json",
+    }
+
+
+def _bedrock_client() -> Any:
+    return boto3.client(
+        "bedrock-runtime",
+        region_name="us-east-1",
+        aws_access_key_id="test",  # pragma: allowlist secret
+        aws_secret_access_key="test",  # pragma: allowlist secret
+    )
+
+
+def test_titan_shortens_through_ol_llm_and_pydantic_ai_bedrock(target: Target) -> None:
+    """Titan's real over-limit error, through PydanticAI's Bedrock model and
+    ol-llm's policy wrapper, arrives as LLMRejected with the token counts in its
+    message, which is what the shorten-and-retry reads.
     """
-
-    class _AlwaysFailingClient:
-        model_version = "test-model"
-        dim = 3
-        max_request_batch_size = 2048
-
-        def embed_batch(
-            self,
-            texts: list[str],  # noqa: ARG002
-            *,
-            trace_metadata: dict[str, object] | None = None,  # noqa: ARG002
-        ) -> list[list[float]]:
-            msg = "simulated auth failure"
-            raise RuntimeError(msg)
-
-    table = _FakeTable()
-    catalog = _FakeCatalog(table)
-    batch_size = 2
-    df = pl.concat(
-        [_embedding_df(conversation_ref=str(i)) for i in range(10)],
-        how="vertical_relaxed",
+    client = _bedrock_client()
+    stubber = Stubber(client)
+    stubber.add_client_error(
+        "invoke_model",
+        service_error_code="ValidationException",
+        service_message=TITAN_TOO_LONG.format(max_tokens=8192, tokens=16384),
+        http_status_code=400,
     )
-    errors: list[str] = []
-
-    result = embed.embed_and_checkpoint(
-        df,
-        _AlwaysFailingClient(),
-        (catalog, "some_db.feedback_embeddings"),
-        batch_size=batch_size,
-        errors=errors,
+    stubber.add_response(
+        "invoke_model", _bedrock_response({"embedding": [0.1, 0.2, 0.3]})
+    )
+    model = BedrockEmbeddingModel(
+        "amazon.titan-embed-text-v2:0", provider=BedrockProvider(bedrock_client=client)
     )
 
-    assert result.height == 0
-    # Aborted after the first fully-failed chunk, not all 10 rows. One error for
-    # the whole chunk, not one per row -- a systemic failure isn't retried per-row.
-    assert len(errors) == 1
-    assert len(errors) < df.height
+    # One worker: override_embedding_models is a context variable, which
+    # process_batch's threads would not see.
+    with (
+        stubber,
+        override_embedding_models(model),
+        override_allow_model_requests(allow_model_requests=True),
+    ):
+        result, _ = embed.embed_and_checkpoint(
+            _rows("x" * 20_000),
+            TITAN,
+            TITAN.embedder(run_id="run"),
+            target,
+            max_concurrency=1,
+        )
+        stubber.assert_no_pending_responses()
+
+    assert result["embedding_vector"].to_list() == [
+        pytest.approx([0.1, 0.2, 0.3], rel=1e-6)
+    ]
+
+
+def test_cohere_isolates_through_ol_llm_and_pydantic_ai_bedrock(
+    target: Target,
+) -> None:
+    """Bedrock's per-text error, through PydanticAI's Bedrock model and ol-llm's
+    policy wrapper, keeps the "#/texts/<index>" pointer in LLMRejected's message,
+    which is what rejects_one_text reads.
+    """
+    client = _bedrock_client()
+    stubber = Stubber(client)
+
+    def reject_text(index: int) -> None:
+        stubber.add_client_error(
+            "invoke_model",
+            service_error_code="ValidationException",
+            service_message=(
+                f"Malformed input request: #/texts/{index}: expected maxLength: "
+                "2048, actual: 3000, please reformat your input and try again."
+            ),
+            http_status_code=400,
+        )
+
+    # The request, then "hello", "boom", and "world" one at a time.
+    reject_text(1)
+    stubber.add_response("invoke_model", _bedrock_response({"embeddings": [[0.1] * 3]}))
+    reject_text(0)
+    stubber.add_response("invoke_model", _bedrock_response({"embeddings": [[0.2] * 3]}))
+    model = BedrockEmbeddingModel(
+        "cohere.embed-english-v3", provider=BedrockProvider(bedrock_client=client)
+    )
+
+    with (
+        stubber,
+        override_embedding_models(model),
+        override_allow_model_requests(allow_model_requests=True),
+    ):
+        result, report = embed.embed_and_checkpoint(
+            _rows("hello", "boom", "world"),
+            COHERE,
+            COHERE.embedder(run_id="run"),
+            target,
+            max_concurrency=1,
+        )
+        stubber.assert_no_pending_responses()
+
+    assert result["conversation_ref"].to_list() == ["0", "2"]
+    [failure] = report.failures
+    assert failure.row["conversation_ref"] == "1"
+
+
+def test_embedder_calls_ol_llm_with_the_feedback_embedding_use_case(
+    target: Target,
+) -> None:
+    embedder = OPENAI.embedder(run_id="run")
+
+    with override_embedding_models(TestEmbeddingModel()):
+        result, report = embed.embed_and_checkpoint(
+            _rows("hello", "world"), OPENAI, embedder, target, max_concurrency=1
+        )
+
+    assert result["embedding_vector"].to_list() == [[1.0] * 3, [1.0] * 3]
+    assert report.batch.succeeded == 1
+    assert OPENAI.use_case().name == "feedback-embedding"
+    assert OPENAI.use_case().profile == "batch"
+
+
+def test_embedder_raises_ol_llm_errors_for_a_failed_request() -> None:
+    class _Unreadable(TestEmbeddingModel):
+        async def embed(self, inputs, *, input_type, settings=None):
+            result = await super().embed(
+                inputs, input_type=input_type, settings=settings
+            )
+            return type(result)(
+                embeddings=result.embeddings[:-1],
+                inputs=result.inputs,
+                input_type=result.input_type,
+                usage=result.usage,
+                model_name=result.model_name,
+                provider_name=result.provider_name,
+            )
+
+    with (
+        override_embedding_models(_Unreadable()),
+        pytest.raises(LLMError, match="returned 1 vectors for 2 texts"),
+    ):
+        OPENAI.embedder().embed(["a", "b"], input_type="document")

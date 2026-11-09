@@ -4,7 +4,14 @@ import numpy as np
 import polars as pl
 import pytest
 from anthropic import Anthropic, AnthropicBedrock
+from anthropic.types import TextBlock, ThinkingBlock
+from dagster import build_asset_context
+from ml.assets import feedback_sentiment as asset_module
+from ml.assets.feedback_sentiment_eval import FeedbackSentimentEvalConfig
 from ml.lib import sentiment_eval
+from ml.lib.embed import resolve_embedding_model
+from ml.resources.opik_auth import PromptLabelMissingError
+from ml_tests.fake_anthropic import FakeAnthropicClient, FakeMessage
 from openai import OpenAI
 
 
@@ -19,18 +26,36 @@ class _FakeLLM:
         return self._client
 
 
-def test_labeled_sentiment_sample_maps_good_bad_and_drops_the_rest() -> None:
+def test_labeled_sentiment_sample_maps_every_verdict_and_drops_the_rest() -> None:
+    ratings = [
+        "good",
+        "like",
+        "positive",
+        "bad",
+        "dislike",
+        "negative",
+        "offered",
+        "unoffered",
+        "idea",
+    ]
     df = pl.DataFrame(
         {
-            "feedback_conversation_pk": ["1", "2", "3"],
-            "explicit_rating": ["good", "bad", "offered"],
+            "feedback_conversation_pk": [str(i) for i in range(len(ratings))],
+            "explicit_rating": ratings,
         }
     )
 
     result = sentiment_eval.labeled_sentiment_sample(df)
 
-    assert result["feedback_conversation_pk"].to_list() == ["1", "2"]
-    assert result["sentiment"].to_list() == ["positive", "negative"]
+    assert result["feedback_conversation_pk"].to_list() == [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+    ]
+    assert result["sentiment"].to_list() == ["positive"] * 3 + ["negative"] * 3
 
 
 def test_train_test_split_indices_covers_every_row_exactly_once() -> None:
@@ -76,26 +101,109 @@ def _separable_dataset(n_per_class: int = 20, seed: int = 0):
     return vectors, labels
 
 
-def test_embedding_knn_accuracy_is_high_on_separable_classes() -> None:
+def test_embedding_knn_predictions_are_right_on_separable_classes() -> None:
     vectors, labels = _separable_dataset()
     train_idx, test_idx = sentiment_eval.train_test_split_indices(labels)
 
-    accuracy = sentiment_eval.embedding_knn_accuracy(
-        vectors[train_idx], labels[train_idx], vectors[test_idx], labels[test_idx]
+    predictions = sentiment_eval.embedding_knn_predictions(
+        vectors[train_idx], labels[train_idx], vectors[test_idx]
     )
 
-    assert accuracy == 1.0
+    assert predictions.tolist() == labels[test_idx].tolist()
 
 
-def test_local_classifier_accuracy_is_high_on_separable_classes() -> None:
+def test_local_classifier_predictions_are_right_on_separable_classes() -> None:
     vectors, labels = _separable_dataset()
     train_idx, test_idx = sentiment_eval.train_test_split_indices(labels)
 
-    accuracy = sentiment_eval.local_classifier_accuracy(
-        vectors[train_idx], labels[train_idx], vectors[test_idx], labels[test_idx]
+    probabilities = sentiment_eval.local_classifier_negative_probabilities(
+        vectors[train_idx], labels[train_idx], vectors[test_idx]
+    )
+    predictions = sentiment_eval.predictions_at_threshold(probabilities, 0.5)
+
+    assert predictions.tolist() == labels[test_idx].tolist()
+
+
+def test_run_sentiment_eval_scores_the_classifier_at_each_threshold() -> None:
+    rng = np.random.default_rng(0)
+    # Overlapping classes, so a lower threshold has negatives left to find.
+    vectors = np.vstack([rng.normal(0.5, 1, (80, 4)), rng.normal(-0.5, 1, (20, 4))])
+    labels = ["positive"] * 80 + ["negative"] * 20
+    df = pl.DataFrame(
+        {
+            "embedding_vector": vectors.tolist(),
+            "sentiment": labels,
+            "conversation_text": [f"text {i}" for i in range(len(labels))],
+        }
     )
 
-    assert accuracy == 1.0
+    methods = sentiment_eval.run_sentiment_eval(
+        df,
+        embedding_dim=4,
+        sentiment_client=None,
+        classifier_negative_thresholds=(0.3, 0.2),
+    )["methods"]
+
+    assert list(methods) == [
+        "embedding_knn",
+        "local_classifier",
+        "local_classifier@0.3",
+        "local_classifier@0.2",
+    ]
+    predicted = [
+        methods[m]["n_predicted_negative"]
+        for m in ("local_classifier", "local_classifier@0.3", "local_classifier@0.2")
+    ]
+    assert predicted == sorted(predicted)
+
+
+def test_feedback_sentiment_eval_config_rejects_a_threshold_at_launch() -> None:
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        FeedbackSentimentEvalConfig(classifier_negative_thresholds=[50])
+
+
+def test_run_sentiment_eval_rejects_a_threshold_outside_zero_and_one() -> None:
+    vectors, labels = _separable_dataset(n_per_class=10)
+    df = pl.DataFrame(
+        {
+            "embedding_vector": vectors.tolist(),
+            "sentiment": labels.tolist(),
+            "conversation_text": [f"text {i}" for i in range(len(labels))],
+        }
+    )
+
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        sentiment_eval.run_sentiment_eval(
+            df,
+            embedding_dim=4,
+            sentiment_client=None,
+            classifier_negative_thresholds=(1.5,),
+        )
+
+
+def test_score_predictions_reports_negative_precision_and_recall() -> None:
+    labels = np.array(["positive"] * 6 + ["negative"] * 4)
+    predictions = ["positive"] * 5 + ["negative"] + ["negative"] * 2 + [None] * 2
+
+    scores = sentiment_eval.score_predictions(predictions, labels)
+
+    assert scores == {
+        "accuracy": 0.7,
+        "negative_precision": 2 / 3,
+        "negative_recall": 0.5,
+        "n_test_negative": 4,
+        "n_predicted_negative": 3,
+        "n_true_negative": 2,
+    }
+
+
+def test_score_predictions_leaves_precision_unset_with_no_negative_prediction() -> None:
+    scores = sentiment_eval.score_predictions(
+        ["positive", "positive"], np.array(["positive", "negative"])
+    )
+
+    assert scores["negative_precision"] is None
+    assert scores["negative_recall"] == 0.0
 
 
 def test_build_sentiment_client_uses_default_model_for_anthropic() -> None:
@@ -116,6 +224,32 @@ def test_build_sentiment_client_uses_bedrock_default_for_bedrock() -> None:
     assert client.model_version == sentiment_eval.BEDROCK_SENTIMENT_MODEL_VERSION
 
 
+def test_build_sentiment_client_fails_when_production_has_no_prompt_label(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _missing(*_args: object, **_kwargs: object) -> str:
+        msg = "No version of Opik prompt 'feedback-sentiment-classify' is labeled"
+        raise PromptLabelMissingError(msg)
+
+    monkeypatch.setattr(sentiment_eval, "render_prompt", _missing)
+
+    with pytest.raises(PromptLabelMissingError):
+        sentiment_eval.build_sentiment_client(
+            _FakeLLM(Anthropic(api_key="sk-ant-test"))  # pragma: allowlist secret
+        )
+
+
+def test_fetch_sentiment_prompt_rejects_a_template_without_the_placeholder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        sentiment_eval, "render_prompt", lambda *_args: "Classify: {{text}}"
+    )
+
+    with pytest.raises(ValueError, match="placeholder"):
+        sentiment_eval.fetch_sentiment_prompt()
+
+
 def test_build_sentiment_client_dispatches_to_openai() -> None:
     client = sentiment_eval.build_sentiment_client(
         _FakeLLM(OpenAI(api_key="sk-test")),  # pragma: allowlist secret
@@ -133,7 +267,7 @@ def test_build_sentiment_client_rejects_claude_model_for_real_openai() -> None:
                 OpenAI(api_key="sk-test"),  # pragma: allowlist secret
                 client_class="openai",
             ),
-            model_version="claude-haiku-4-5",
+            model_version="claude-haiku-5-5",
         )
 
 
@@ -146,11 +280,11 @@ def test_build_sentiment_client_allows_claude_model_for_openai_compatible() -> N
             ),
             client_class="openai_compatible",
         ),
-        model_version="claude-haiku-4-5",
+        model_version="claude-haiku-5-5",
     )
 
     assert isinstance(client, sentiment_eval.OpenAISentimentClient)
-    assert client.model_version == "claude-haiku-4-5"
+    assert client.model_version == "claude-haiku-5-5"
 
 
 class _FakeSentimentClient:
@@ -163,18 +297,15 @@ class _FakeSentimentClient:
         return next(self._canned)
 
 
-def test_llm_classifier_accuracy_counts_correct_predictions() -> None:
+def test_llm_classifier_predictions_returns_one_per_text() -> None:
     client = _FakeSentimentClient(["positive", "negative", "positive"])
 
-    accuracy, call_count = sentiment_eval.llm_classifier_accuracy(
-        client, ["a", "b", "c"], np.array(["positive", "negative", "negative"])
-    )
+    predictions = sentiment_eval.llm_classifier_predictions(client, ["a", "b", "c"])
 
-    assert call_count == 3
-    assert accuracy == 2 / 3
+    assert predictions == ["positive", "negative", "positive"]
 
 
-def test_llm_classifier_accuracy_treats_a_failed_call_as_wrong() -> None:
+def test_llm_classifier_predictions_leaves_a_failed_call_unset() -> None:
     class _FailingClient:
         model_version = "test-model"
 
@@ -182,12 +313,9 @@ def test_llm_classifier_accuracy_treats_a_failed_call_as_wrong() -> None:
             msg = "boom"
             raise ValueError(msg)
 
-    accuracy, call_count = sentiment_eval.llm_classifier_accuracy(
-        _FailingClient(), ["a"], np.array(["positive"])
-    )
+    predictions = sentiment_eval.llm_classifier_predictions(_FailingClient(), ["a"])
 
-    assert call_count == 1
-    assert accuracy == 0.0
+    assert predictions == [None]
 
 
 def test_run_sentiment_eval_skips_llm_arm_when_client_is_none() -> None:
@@ -204,7 +332,8 @@ def test_run_sentiment_eval_skips_llm_arm_when_client_is_none() -> None:
         df, embedding_dim=4, sentiment_client=None
     )
 
-    assert set(result["methods"].keys()) == {"embedding_knn", "local_classifier"}
+    assert "llm" not in result["methods"]
+    assert {"embedding_knn", "local_classifier"} <= set(result["methods"])
     assert result["n_train"] + result["n_test"] == len(labels)
 
 
@@ -225,3 +354,145 @@ def test_run_sentiment_eval_includes_llm_arm_when_client_given() -> None:
 
     assert "llm" in result["methods"]
     assert result["methods"]["llm"]["call_count"] == result["n_test"]
+
+
+def test_anthropic_sentiment_client_leaves_a_reply_naming_both_words_unlabeled() -> (
+    None
+):
+    client = sentiment_eval.AnthropicSentimentClient(
+        FakeAnthropicClient(
+            FakeMessage([TextBlock(type="text", text="Negative, nothing positive")])
+        ),
+        "claude-haiku-5-5",
+    )
+
+    assert client.classify("some conversation text") is None
+
+
+def test_anthropic_sentiment_client_reads_the_word_after_a_thinking_block() -> None:
+    """claude-haiku-5-5 thinks by default, so the reply opens with a thinking block."""
+    fake = FakeAnthropicClient(
+        FakeMessage(
+            [
+                ThinkingBlock(type="thinking", thinking="", signature="sig"),
+                TextBlock(type="text", text="Negative"),
+            ]
+        )
+    )
+    client = sentiment_eval.AnthropicSentimentClient(fake, "claude-haiku-5-5")
+
+    assert client.classify("some conversation text") == "negative"
+    assert fake.requests[0]["output_config"] == {
+        "effort": sentiment_eval.SENTIMENT_EFFORT
+    }
+
+
+def test_anthropic_sentiment_client_leaves_a_cut_off_reply_unlabeled() -> None:
+    client = sentiment_eval.AnthropicSentimentClient(
+        FakeAnthropicClient(
+            FakeMessage(
+                [ThinkingBlock(type="thinking", thinking="", signature="sig")],
+                stop_reason="max_tokens",
+            )
+        ),
+        "claude-haiku-5-5",
+    )
+
+    assert client.classify("some conversation text") is None
+
+
+@pytest.mark.parametrize("stop_reason", ["max_tokens", "model_context_window_exceeded"])
+def test_anthropic_sentiment_client_leaves_partial_text_unlabeled(
+    stop_reason: str,
+) -> None:
+    """A reply cut off mid-answer can still carry a sentiment word."""
+    client = sentiment_eval.AnthropicSentimentClient(
+        FakeAnthropicClient(
+            FakeMessage(
+                [TextBlock(type="text", text="negative")], stop_reason=stop_reason
+            )
+        ),
+        "claude-haiku-5-5",
+    )
+
+    assert client.classify("some conversation text") is None
+
+
+def test_feedback_sentiment_predicts_only_unrated_learn_zendesk_conversations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = resolve_embedding_model(None, 4)
+    vectors, labels = _separable_dataset(n_per_class=10)
+    # Rated on another platform: training uses every rated conversation.
+    rated = [
+        ("zendesk", "micromasters", "good" if label == "positive" else "bad", "")
+        for label in labels
+    ]
+    # Only the first three are in scope.
+    unrated = [
+        ("zendesk", "mitlearn", None, "I cannot log in"),
+        ("zendesk", "mitlearn", "offered", "Thanks"),
+        ("zendesk", "mitlearn", "unoffered", None),
+        ("zendesk", "mitlearn", None, "Idea: add a share button"),
+        ("zendesk", "mitlearn", None, "Idea"),
+        ("zendesk", "mitlearn", None, "Idea\n---\nAny update?"),
+        ("zendesk", "mitxpro", None, "Exports Compliance"),
+        ("learn_ai_tutor", "mitlearn", None, "What is a gradient?"),
+        ("content_feedback", "mitlearn", "idea", "More videos"),
+    ]
+    unrated_vectors = [[5.0] * 4, [-5.0] * 4, [5.0] * 4] + [[-5.0] * 4] * 6
+    rows = rated + unrated
+    pks = [f"pk{i}" for i in range(len(rows))]
+    tables = {
+        "int__feedback__conversation": pl.DataFrame(
+            {
+                "feedback_conversation_pk": pks,
+                "source_slug": [row[0] for row in rows],
+                "platform": [row[1] for row in rows],
+                "explicit_rating": [row[2] for row in rows],
+                "conversation_text": [row[3] for row in rows],
+            }
+        ),
+        "feedback_embeddings": pl.DataFrame(
+            {
+                "feedback_conversation_pk": [*pks, "other_model"],
+                "embedding_vector": [
+                    *vectors.tolist(),
+                    *unrated_vectors,
+                    [0.0] * 4,
+                ],
+                "embedding_model_version": [model.model_version] * len(pks)
+                + ["another-model"],
+                "embedding_dim": [4] * (len(pks) + 1),
+            }
+        ),
+    }
+    monkeypatch.setattr(
+        asset_module,
+        "get_dbt_model_as_dataframe",
+        lambda **kwargs: tables[kwargs["table_name"]].lazy(),
+    )
+    monkeypatch.setattr(
+        asset_module,
+        "load_rows_by_key",
+        lambda _database, table, columns, key_column, keys, equals: (
+            tables[table]
+            .filter(
+                pl.col(key_column).is_in(keys),
+                *(pl.col(column) == value for column, value in equals.items()),
+            )
+            .select(columns)
+        ),
+    )
+
+    result = asset_module.feedback_sentiment(
+        build_asset_context(),
+        asset_module.FeedbackSentimentConfig(embedding_dim=4),
+    )
+
+    assert result["feedback_conversation_pk"].to_list() == pks[len(rated) :][:3]
+    assert result["sentiment_slug"].to_list() == ["positive", "negative", "positive"]
+    assert result["sentiment_model_version"].unique().to_list() == [
+        "local_classifier@0.35"
+    ]
+    assert result.schema == asset_module.SENTIMENT_ASSIGNMENT_SCHEMA

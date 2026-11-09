@@ -1,0 +1,50 @@
+---
+metric:
+  name: actively_enrolled_learners
+  displayName: Actively enrolled learners
+  description: >-
+    Distinct learners with a course enrollment they have not left:
+    tfact_enrollment.enrollment_is_active, the platform's own flag, carried to
+    afact_learner_courserun_progress for the one enrollment it keeps per learner
+    and course run. tfact_enrollment also holds program enrollments, so a count
+    over it needs enrollment_type = 'course'. Says nothing about whether the
+    learner did any course work.
+
+    This is the enrollment meaning of "active" (glossary term Active
+    enrollment), not the behavioural one (metric active_learners).
+    mv_b2b_enrollment_completion_funnel, mv_b2b_contract_utilization,
+    mv_b2b_mit_admin_contract_health and the content engagement depth views
+    publish it as actively_enrolled_learners. The first three also publish it
+    under the deprecated name active_learners, and the depth views under the
+    deprecated name total_enrolled_learners, until ol-analytics-api and mit-learn
+    read the new name. The funnel's enrolled_learners and the contract views'
+    seats_consumed count learners with an enrollment whether or not it is still
+    active.
+  metricType: COUNT
+  unitOfMeasurement: COUNT
+  owners: [{type: team, name: data-platform}]
+  reviewers: [{type: team, name: b2b}]
+  tags:
+  - {tagFQN: open-learning.active-enrollment, source: Glossary, labelType: Manual,
+    state: Confirmed}
+  metricExpression:
+    language: SQL
+    code: count(distinct case when enrollment_is_active then user_fk end)
+status: Draft
+implemented_by:
+- dbt_model: afact_learner_courserun_progress
+  columns: [enrollment_is_active]
+- dbt_model: tfact_enrollment
+  columns: [enrollment_is_active]
+- dbt_model: mv_b2b_learner_enrollment
+  columns: [enrollment_is_active]
+- dbt_model: mv_b2b_enrollment_completion_funnel
+  columns: [actively_enrolled_learners]
+- dbt_model: mv_b2b_contract_utilization
+  columns: [actively_enrolled_learners]
+- dbt_model: mv_b2b_mit_admin_contract_health
+  columns: [actively_enrolled_learners]
+- dbt_model: mv_b2b_content_engagement_depth
+  columns: [actively_enrolled_learners]
+- dbt_model: mv_b2b_contract_content_engagement_depth
+  columns: [actively_enrolled_learners]

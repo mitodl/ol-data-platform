@@ -201,7 +201,7 @@ def test_vault_credentials_are_injected_at_connection_time(
         lambda mount, role: (f"v-{mount}", f"p-{role}"),
     )
     engine = create_engine("postgresql+psycopg2://example.rds.amazonaws.com/example")
-    database._vault_credential_injector(_SPEC)(engine)  # noqa: SLF001
+    database._vault_credential_injector(_SPEC, "production")(engine)  # noqa: SLF001
 
     connect_params: dict[str, str] = {}
     engine.dialect.dispatch.do_connect(engine.dialect, None, [], connect_params)

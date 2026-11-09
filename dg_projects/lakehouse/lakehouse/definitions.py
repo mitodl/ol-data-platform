@@ -42,6 +42,7 @@ from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 
 from lakehouse.assets.airbyte_drift import airbyte_inventory_drift
 from lakehouse.assets.iceberg_maintenance import (
+    WAREHOUSE_ENV,
     iceberg_dbt_layer_maintenance,
     iceberg_raw_layer_maintenance,
 )
@@ -87,6 +88,7 @@ from lakehouse.assets.superset import (
 from lakehouse.lib.automation_targets import (
     OCW_LEARN_MODELS,
     dbt_automation_target,
+    learn_integrations_qa_target,
     ocw_learn_target,
 )
 from lakehouse.lib.contract_freshness import (
@@ -98,6 +100,7 @@ from lakehouse.lib.contract_freshness import (
 )
 from lakehouse.lib.dbt_environment import (
     DBT_AUTOMATION_ENABLED,
+    ICEBERG_MAINTENANCE_ENGINE,
     STARROCKS_IS_LOCAL,
 )
 from lakehouse.lib.executor import executor_for_environment
@@ -114,6 +117,9 @@ from lakehouse.lib.scheduled_automation import schedules_for_environment
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 from lakehouse.resources.starrocks import StarRocksResource
+from lakehouse.resources.starrocks_iceberg_maintenance import (
+    StarRocksIcebergMaintenanceResource,
+)
 from lakehouse.resources.superset_api import SupersetApiClientFactory
 from lakehouse.sensors import (
     build_asset_check_openmetadata_sensor,
@@ -137,13 +143,15 @@ trino_catalog_map = {
     "production": "ol_data_lake_production",
 }
 
-# Hosts match the starrocks_qa / starrocks_production target defaults in
-# src/ol_dbt/profiles.yml. ci falls back to the QA FE for schema parity. dev is
-# the local-dev cluster, which Tilt forwards to this port on the host.
+# qa and production run Dagster in the same EKS cluster as their StarRocks, so
+# they reach the FE through its in-cluster service. From a QA pod the external
+# name lakehouse.qa.starrocks.ol.mit.edu times out. ci falls back to the QA FE
+# for schema parity. dev is the local-dev cluster, which Tilt forwards to this
+# port on the host.
 starrocks_host_map = {
     "dev": "127.0.0.1",
     "ci": "lakehouse.qa.starrocks.ol.mit.edu",
-    "qa": "lakehouse.qa.starrocks.ol.mit.edu",
+    "qa": "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local",
     "production": "lakehouse-starrocks-fe-service.starrocks.svc.cluster.local",
 }
 
@@ -657,7 +665,12 @@ posthog_staging_schedule = ScheduleDefinition(
 # never been created, because edX.org lists no active non-MicroMasters MIT
 # program (checked 2026-09-22: 23 retired, 2 unpublished) and dlt creates no
 # table from an empty load. Building it would fail the whole job every day.
-AWAITING_RAW_TABLE = {"stg__edxorg__discovery__api__programs"}
+# raw__canvas__s3__course_content is the same until canvas_content_ingest's first
+# load, which is started by hand. Remove it here once that has landed.
+AWAITING_RAW_TABLE = {
+    "stg__canvas__s3__course_content",
+    "stg__edxorg__discovery__api__programs",
+}
 
 non_airbyte_staging_models = sorted(
     staging_models_reading(
@@ -709,23 +722,26 @@ non_airbyte_staging_schedules = (
 # one ingestion unit unless it declares every one of them in qa_branches and the
 # committed QA observation shows them held (program_certificates lists the
 # empty mitxonline/mysql auth_user in qa_partial_tables), so a QA build is
-# complete relative to QA's apps rather than a silently partial union. The rest
-# wait on raw tables QA does not have: ocw_courses on the OCW live bucket (the
-# ocw__s3 unit is omitted in QA), and the dlt/API sources (mit_edx_programs on
-# the edX catalog, mitpe, mit_climate, oll, podcasts) whose loaders run in
-# production only.
+# complete relative to QA's apps rather than a silently partial union. The
+# YouTube, podcast, mitpe, mit_climate and oll views read public sources that
+# QA's data_loading schedules load daily, so QA holds close to production's
+# rows. Those schedules set no default status, so they run in QA because they
+# were started in its UI. ocw_courses waits on the OCW live bucket (the ocw__s3 unit is
+# omitted in QA).
 learn_integrations_qa_schedule = ScheduleDefinition(
     name="learn_integrations_qa_daily",
     job=define_asset_job(
         name="learn_integrations_qa_job",
-        selection=build_dbt_asset_selection(
-            [full_dbt_project],
-            dbt_select="+tag:qa_scheduled",
-        ),
+        selection=learn_integrations_qa_target(full_dbt_project),
     ),
     # The QA sync_and_stage schedules run at 00:00 (QA renders no inventory
-    # intervals, so every group takes the 24-hour default).
-    cron_schedule="0 3 * * *",
+    # intervals, so every group takes the 24-hour default). The dlt loads these
+    # views read land in QA from 03:00 (oll) to about 05:10 (YouTube), so a
+    # 03:00 build left them a day behind their raw. 05:30 rather than 06:00:
+    # qa_mirror_monthly_schedule drops and recreates the edX mirror tables this
+    # selection reads at 06:00 on the 1st, and their staging models build in
+    # the first minutes of the run.
+    cron_schedule="30 5 * * *",
     execution_timezone="UTC",
     default_status=DefaultScheduleStatus.RUNNING,
 )
@@ -734,10 +750,20 @@ DBT_ARTIFACTS_S3_PREFIX = os.environ.get(
     "DBT_ARTIFACTS_S3_PREFIX", "openmetadata/dbt-artifacts"
 ).rstrip("/")
 
-# Build resources dict, conditionally including airbyte
-resources_dict = {
-    "dbt": dbt_cli,
-    "trino_maintenance": TrinoMaintenanceResource(
+starrocks = StarRocksResource(
+    vault=vault,
+    vault_mount_point=STARROCKS_VAULT_MOUNT,
+    host=starrocks_host_map[DAGSTER_ENV],
+    database="b2b_analytics",
+    static_username="root" if STARROCKS_IS_LOCAL else None,
+)
+
+# Compaction and ANALYZE for iceberg_dbt_layer_maintenance, on the engine
+# ICEBERG_MAINTENANCE_ENGINE names. The StarRocks catalog is derived from
+# WAREHOUSE_ENV, the value that scopes the maintained schemas, so the two
+# cannot name different warehouses.
+iceberg_maintenance_engines = {
+    "trino": TrinoMaintenanceResource(
         host=os.environ.get("DAGSTER_TRINO_HOST", trino_host_map[DAGSTER_ENV]),
         catalog=os.environ.get("DAGSTER_TRINO_CATALOG", trino_catalog_map[DAGSTER_ENV]),
         vault=vault,
@@ -746,6 +772,18 @@ resources_dict = {
         # DBT_TRINO_PASSWORD env vars when vault_path is empty (local dev).
         vault_path=os.environ.get("DAGSTER_TRINO_VAULT_PATH", ""),
     ),
+    "starrocks": StarRocksIcebergMaintenanceResource(
+        starrocks=starrocks,
+        catalog=f"ol_data_lake_{WAREHOUSE_ENV}",
+    ),
+}
+
+# Build resources dict, conditionally including airbyte
+resources_dict = {
+    "dbt": dbt_cli,
+    "iceberg_maintenance_engine": iceberg_maintenance_engines[
+        ICEBERG_MAINTENANCE_ENGINE
+    ],
     "dbt_s3_artifacts": DbtS3ArtifactsResource(
         s3_bucket=os.environ.get("DBT_ARTIFACTS_S3_BUCKET", ""),
         s3_prefix=DBT_ARTIFACTS_S3_PREFIX,
@@ -768,13 +806,7 @@ resources_dict = {
         config_path="pipelines/openmetadata-dagster-bot",
         vault=vault,
     ),
-    "starrocks": StarRocksResource(
-        vault=vault,
-        vault_mount_point=STARROCKS_VAULT_MOUNT,
-        host=starrocks_host_map[DAGSTER_ENV],
-        database="b2b_analytics",
-        static_username="root" if STARROCKS_IS_LOCAL else None,
-    ),
+    "starrocks": starrocks,
     # Separate from "dbt" (pinned to a Trino target) -- see dbt_starrocks.py.
     "starrocks_dbt": starrocks_dbt_cli,
 }

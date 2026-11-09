@@ -13,13 +13,15 @@ with source as (
         and {{ json_query_string('context', "'$.user_id'") }} is not null
 
         {% if is_incremental() %}
-            and "time" > (select max(this.useractivity_timestamp) from {{ this }} as this)
+            and {{ adapter.quote('time') }} > (select max(this.useractivity_timestamp) from {{ this }} as this)
         {% endif %}
 )
 
+{# The table is frozen (ingestion/inventory/retired.yml), so no unit declares
+   its metadata columns for the inventory to resolve. #}
 {{ deduplicate_raw_table(
-    raw_table='raw__edxorg__s3__tracking_logs'
-    , partition_columns = 'username, context, event_source, event_type, event, "time"'
+    order_by=['_airbyte_extracted_at', '_ab_source_file_last_modified']
+    , partition_columns = 'username, context, event_source, event_type, event, ' ~ adapter.quote('time')
 ) }}
 , cleaned as (
     select
@@ -42,7 +44,7 @@ with source as (
         , {{ json_query_string('context', "'$.path'") }} as useractivity_path
         --- use regex here to preserve the nanoseconds as date_parse truncates the fraction of second to milliseconds
         , {{ format_timestamp_as_iso8601(from_iso8601_timestamp_nanos(
-            regexp_replace_with_backreferences('"time"', "'(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)'", "'$1T$2$3'")
+            regexp_replace_with_backreferences(adapter.quote('time'), "'(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)'", "'$1T$2$3'")
         )) }} as useractivity_timestamp
     from most_recent_source
 )

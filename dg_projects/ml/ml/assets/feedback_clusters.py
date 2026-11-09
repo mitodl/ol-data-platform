@@ -1,4 +1,3 @@
-import os
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -36,8 +35,8 @@ from ml.lib.cluster_run_lookup import (
     latest_identity_processed_run,
     run_already_applied,
 )
-from ml.lib.embed import EMBEDDING_DIM, default_embedding_model_version
-from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ml.lib.embed import resolve_embedding_model
+from ml.lib.warehouse import warehouse_database
 from ol_orchestrate.lib.failures import permanent_failure
 from ol_orchestrate.lib.glue_helper import (
     get_dbt_model_as_dataframe,
@@ -47,11 +46,7 @@ from pydantic import Field
 from pyiceberg.exceptions import NoSuchTableError
 from pyiceberg.expressions import EqualTo
 
-if DAGSTER_ENV == "dev":
-    _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
-    database_name = f"ol_warehouse_production_{_schema_suffix}_intermediate"
-else:
-    database_name = "ol_warehouse_production_intermediate"
+database_name = warehouse_database("intermediate")
 
 
 def _check_live_run(
@@ -194,12 +189,14 @@ class FeedbackClustersConfig(Config):
         description="Restrict to one embedding_input arm ('summary' or "
         "'concatenated_turns'). Set to null to cluster all arms together.",
     )
-    embedding_model_version: str | None = Field(
+    embedding_model: str | None = Field(
         default=None,
+        pattern=r"^[a-z0-9-]+:.+$",
         description=(
-            "Override the embedding model id to cluster. Unset uses whichever "
-            "model feedback_embeddings' default config would write (see "
-            "default_embedding_model_version, ml.lib.embed)."
+            "The embedding model to cluster, in ol-llm's provider:model form, as "
+            "feedback_embeddings' embedding_model takes it. Unset uses whichever "
+            "model feedback_embeddings' default config writes (EMBEDDING_MODEL, "
+            "ml.lib.embed)."
         ),
     )
     embedding_dim: int | None = Field(
@@ -295,10 +292,11 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
             "with is_promoted false and promote the run after a review."
         )
         raise permanent_failure(msg)
-    embedding_model_version = (
-        config.embedding_model_version or default_embedding_model_version()
+    embedding_model = resolve_embedding_model(
+        config.embedding_model, config.embedding_dim
     )
-    embedding_dim = config.embedding_dim or EMBEDDING_DIM
+    embedding_model_version = embedding_model.model_version
+    embedding_dim = embedding_model.dim
     embeddings_lazy = (
         get_dbt_model_as_dataframe(
             database_name=database_name,
@@ -307,10 +305,7 @@ def feedback_clusters(context: AssetExecutionContext, config: FeedbackClustersCo
         # Mixing vector spaces from different models/dimensions in one run is
         # meaningless -- only cluster the embeddings produced by the model
         # currently configured.
-        .filter(
-            (pl.col("embedding_model_version") == embedding_model_version)
-            & (pl.col("embedding_dim") == embedding_dim)
-        )
+        .filter(embedding_model.matches())
     )
     if config.embedding_input_filter is not None:
         # Filtered before collect(): applied lazily, so the other arm's rows

@@ -83,7 +83,7 @@ with chatbot as (
             ) as message_occurrence
         from tutorbot_flatten
         where human_message is not null
-    )
+    ) as subquery
     where message_occurrence = 1
 )
 

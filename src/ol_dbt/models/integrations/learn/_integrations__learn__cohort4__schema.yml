@@ -192,3 +192,148 @@ models:
       tags, e.g. ["Problem Sets"].
   - name: youtube_id
     description: str, YouTube id of a video resource, else null.
+- name: integrations__learn__canvas_content_files
+  description: >
+    One row per ContentFile of a Canvas course's run, for the warehouse pull that
+    replaces ingest_canvas_course. A scoped pull filters and prunes on
+    (etl_source, run_readable_id). Built from the newest export of each course in
+    the landing zone by the same rules as learning_resources/etl/canvas.py, with
+    the text Tika extracts. Tutor problem files are not here: ingest_canvas_course
+    also loads those, so flipping Canvas stops them unless Learn gets them another
+    way. Not at parity for PDFs: Learn converts a PDF of up to
+    OCR_PDF_MAX_PAGE_THRESHOLD pages with opendataloader and an LLM (mit-learn
+    #4126 changed that path), which keeps math and text in images and returns
+    markdown, and this model has Tika's plain text for every PDF. A scanned PDF has
+    no row here.
+  config:
+    meta:
+      # It reads the production landing zone, and canvas/s3 is qa: omit in the
+      # inventory.
+      qa_buildable: false
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [etl_source, run_readable_id, key]
+        quote_columns: true
+  columns:
+  - name: etl_source
+    description: str, always canvas. Half of the scoped pull's key.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [canvas]
+  - name: run_readable_id
+    description: str, <course_id>-<course_code>+canvas; equals ContentFile.run.run_id.
+      Half of the scoped pull's key.
+    tests: [not_null]
+  - name: key
+    quote: true
+    description: str, ContentFile.key, block-v1:<run>+type@<file's folder>+block@<file
+      name without its extension>. The extension is not part of it, so when a folder
+      holds a.pdf and a.docx they are one row, for the last path with text.
+    tests: [not_null]
+  - name: edx_module_id
+    description: str, same value as key.
+  - name: title
+    description: str, the title of the module item, file or page that publishes the
+      file, or one derived from the file name when it has none. Learn has this on
+      a read that reuses a file's text; on a file's first read, or the read after
+      its bytes change, Learn has the derived title.
+    tests: [not_null]
+  - name: description
+    description: str, always null.
+  - name: url
+    description: str, the file's, assignment's or page's Canvas URL, from the export's
+      metadata JSON. Null when that has no entry for the file.
+  - name: file_type
+    description: str, always null.
+  - name: content
+    description: str, the text Tika extracted, or an earlier read's text for the same
+      bytes. Null for a file that failed, which keeps its row so a scoped prune does
+      not unpublish it.
+  - name: content_title
+    description: str, the title of what publishes the file; empty for a file only
+      a page links to, null for a file at the root of the archive.
+  - name: content_author
+    description: str, always null.
+  - name: content_language
+    description: str, always null.
+  - name: content_type
+    description: str, always file.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [file]
+  - name: image_src
+    description: str, always null.
+  - name: uid
+    description: str, always null.
+  - name: source_path
+    description: str, the file's path in the archive.
+    tests: [not_null]
+  - name: file_extension
+    description: str, the file's extension with its dot, in lower case.
+  - name: checksum
+    description: str, MD5 of content; null when content is. Equals ContentFile.checksum
+      where the text matches.
+  - name: extraction_status
+    description: str, extracted, or failed (Tika could not read the file, it was over
+      the source's size limit, or pypdf could not read it, which Learn also treats
+      as a failure).
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [extracted, failed]
+  - name: published
+    description: boolean, always true. A file students cannot reach is not here.
+  - name: last_modified
+    description: str, ISO 8601 time the course was last read. It moves for every file
+      of a course when any of them changes.
+- name: integrations__learn__canvas_courses
+  description: >
+    One row per Canvas course with an export in the landing zone. ingest_canvas_course
+    writes a course and its content files from one archive, so Learn's (canvas, course)
+    and (canvas, content_file) ownership keys move together, and this is the course
+    half. Carries what run_for_canvas_archive writes. Each course has the one run
+    Learn creates for it. Learn keeps a Canvas resource unpublished and in test mode,
+    so neither flag is here.
+  config:
+    meta:
+      # It reads the production landing zone, and canvas/s3 is qa: omit in the
+      # inventory.
+      qa_buildable: false
+  columns:
+  - name: etl_source
+    description: str, always canvas.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values: [canvas]
+  - name: course_id
+    description: str, the Canvas course id.
+    tests: [not_null, unique]
+  - name: readable_id
+    description: str, <course_id>-<course_code>; LearningResource.readable_id.
+    tests: [not_null, unique]
+  - name: run_id
+    description: str, <readable_id>+canvas; equals run_readable_id in integrations__learn__canvas_content_files.
+    tests: [not_null, unique]
+  - name: course_code
+    description: str, course_code in the course's settings.
+  - name: title
+    description: str, title in the course's settings, or "canvas course <course_id>"
+      when it has none.
+    tests: [not_null]
+  - name: url
+    description: str, the course's home in Canvas.
+    tests: [not_null]
+  - name: start_date
+    description: str, start_at in the course's settings as Canvas wrote it.
+  - name: end_date
+    description: str, conclude_at in the course's settings as Canvas wrote it.
+  - name: last_modified
+    description: str, ISO 8601 time the course was last read.

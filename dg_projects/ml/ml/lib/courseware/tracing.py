@@ -1,9 +1,9 @@
 """Opik span details for the courseware model calls.
 
-Each model call (one scope's extraction) is its own @traced span. Opik times it;
-these attach what it cannot see on its own: the token usage, the identifying keys
-and the Prompt Library version, so a slow or expensive call can be traced back to
-the rows it produced.
+Each call (one scope's extraction, one adjudication batch, one description batch)
+is its own @traced span. Opik times it; these attach what it cannot see on its own:
+the token usage, the identifying keys and the Prompt Library version, so a slow or
+expensive call can be traced back to the rows it produced.
 """
 
 from typing import Any

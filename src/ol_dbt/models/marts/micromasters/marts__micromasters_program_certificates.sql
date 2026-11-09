@@ -1,6 +1,7 @@
 with program_certificates as (
     select *
     from {{ ref('int__micromasters__program_certificates') }}
+    where coalesce(programcertificate_is_revoked, false) = false
 )
 
 select

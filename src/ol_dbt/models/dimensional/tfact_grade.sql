@@ -191,7 +191,7 @@ with mitxonline_grades as (
 
 , final as (
     select
-        {{ dbt_utils.generate_surrogate_key(['grade_id', 'platform']) }} as grade_key
+        {{ dbt_utils.generate_surrogate_key(['gwf.grade_id', 'gwf.platform']) }} as grade_key
         , gwf.grade_id
         , gwf.grade_date_key
         , gwf.user_fk

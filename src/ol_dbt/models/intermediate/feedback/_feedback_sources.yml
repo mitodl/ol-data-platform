@@ -3,7 +3,7 @@ version: 2
 
 sources:
 # database/schema are target-derived, not literals, so they must keep resolving to
-# the same relation feedback_redacted.py's DAGSTER_ENV branch actually writes to
+# the same relation warehouse_database in dg_projects/ml/ml/lib/warehouse.py names
 # (dev -> production catalog + personal suffix, qa -> qa catalog, else -> production).
 # Verify both sides agree before changing either.
 - name: feedback_intermediate
@@ -147,16 +147,29 @@ sources:
     description: One row per conversation (upsert key feedback_conversation_pk), materialized
       by the feedback_summaries Dagster asset. Null conversation_summary/summary_model_version
       for a single-turn/short conversation, which the asset's skip rule never summarizes
-      (§A.1). No column tests here -- see feedback_cluster_run; not_null/unique coverage
-      lives on int__feedback__summary instead.
+      (§A.1), and for one the model's content filter stopped before it was ever summarized.
+      No column tests here -- see feedback_cluster_run; not_null/unique coverage lives
+      on int__feedback__summary instead.
     columns:
     - name: feedback_conversation_pk
       description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
     - name: prompt_version
-      description: str, the Opik Prompt Library version of feedback-summary active
-        when this row was summarized (or "local" if Opik wasn't configured).
+      description: str, the Opik version of the feedback-summary prompt that produced
+        this row's summary. Null when the run used the prompt embedded in the code
+        (tracing off, or Opik unreachable at the start of the run), and for a row
+        with no summary.
     - name: summarized_at
       description: timestamp, when this row's summary was generated.
+    - name: prompt_template_hash
+      description: str, SHA-256 of the prompt template that produced this row's summary,
+        the same whether the run fetched it from Opik or used the embedded copy.
+    - name: idempotency_key
+      description: str, ol-llm's batch key over the conversation text, prompt template,
+        and model. The asset re-summarizes a conversation when its current key differs.
+        For a conversation the content filter stopped, the key of the filtered text,
+        so it is not submitted again until its text, the prompt, or the model changes.
+        Its row keeps any earlier summary, which then misses the filtered turn. Null
+        for any other row with no summary.
   - name: feedback_embeddings
     config:
       meta:
@@ -172,3 +185,22 @@ sources:
       description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
     - name: embedded_at
       description: timestamp, when this row's embedding was generated.
+    - name: idempotency_key
+      description: str, a hash of the text embedded (the summary or the concatenated
+        turns, per embedding_input), the ol-llm model id, and the dimension. The asset
+        re-embeds a conversation when its current key differs. Null for a row embedded
+        before the column existed.
+  - name: feedback_sentiment_assignments
+    config:
+      meta:
+        dagster:
+          asset_key: [intermediate, feedback_sentiment_assignments]
+    description: One row per conversation the model scored, overwritten on each run,
+      materialized by the feedback_sentiment Dagster asset. Each run retrains the
+      classifier on the rated conversations. No column tests here -- see feedback_cluster_run;
+      not_null/unique coverage lives on int__feedback__sentiment instead.
+    columns:
+    - name: feedback_conversation_pk
+      description: str, surrogate key matching int__feedback__conversation.feedback_conversation_pk.
+    - name: predicted_at
+      description: timestamp, when this row's sentiment was predicted.

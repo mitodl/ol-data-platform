@@ -20,7 +20,7 @@ import math
 import sys
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, cast
+from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
 from cyclopts import App, Parameter
 from rich.console import Console
@@ -75,6 +75,14 @@ LOCAL_USER = "root"
 # it for the QA profile would send this command's root login to QA.
 LOCAL_HOST = "127.0.0.1"
 LOCAL_PORT = 9030
+# The `ci` target's lake. Its sources resolve to ol_warehouse_ci_raw whatever
+# schema_suffix a build passes, and CI builds every parent from these tables
+# rather than deferring to QA. Fixed for the same reason as the local catalog:
+# `load` drops tables, and no production or QA lake has this name.
+CI_CATALOG = "ol_data_lake_ci"
+CI_RAW_SCHEMA = "ol_warehouse_ci_raw"
+# The Vault database role that can create tables in the CI lake.
+CI_VAULT_ROLE = "admin"
 # Rows per INSERT. mysql-connector sends an executemany as one multi-row INSERT,
 # and one of ~10k rows of a 28-column table OOM-killed the local StarRocks. Each
 # batch commits one Iceberg snapshot.
@@ -141,12 +149,44 @@ def connect_local_lake(host: str = LOCAL_HOST, port: int = LOCAL_PORT) -> MySQLC
     )
 
 
-def _replace_table(cursor: Any, schema: str, table: TableFixture, parameters: list[tuple[Any, ...]]) -> None:
-    """Drop ``table`` in the local catalog's ``schema``, create it again and insert ``parameters``."""
-    cursor.execute(f"DROP TABLE IF EXISTS {qualified_name(LOCAL_CATALOG, schema, table.raw_table)} FORCE")
-    cursor.execute(create_table_sql(table, LOCAL_CATALOG, schema))
+def connect_ci_lake(vault_oidc_role: str) -> MySQLConnectionAbstract:
+    """Open the CI StarRocks with Vault-issued credentials over a port-forward.
+
+    The CI FE serves no TLS, and is reachable from a laptop only through
+    kubectl port-forward.
+    """
+    import mysql.connector  # noqa: PLC0415
+
+    # starrocks imports this module, so its helpers are imported here.
+    from ol_dbt_cli.commands._vault_auth import fetch_vault_db_credentials  # noqa: PLC0415
+    from ol_dbt_cli.commands.starrocks import _ENVS, _STARROCKS_PORT, _start_port_forward  # noqa: PLC0415
+
+    env_cfg = _ENVS["ci"]
+    username, password = fetch_vault_db_credentials(
+        env_cfg["vault_addr"], env_cfg["vault_mount"], "ci", CI_VAULT_ROLE, vault_oidc_role
+    )
+    _start_port_forward(env_cfg)
+    return cast(
+        "MySQLConnectionAbstract",
+        mysql.connector.connect(
+            host="127.0.0.1",
+            port=_STARROCKS_PORT,
+            user=username,
+            password=password,
+            ssl_disabled=True,
+            autocommit=True,
+        ),
+    )
+
+
+def _replace_table(
+    cursor: Any, catalog: str, schema: str, table: TableFixture, parameters: list[tuple[Any, ...]]
+) -> None:
+    """Drop ``table`` in ``catalog``'s ``schema``, create it again and insert ``parameters``."""
+    cursor.execute(f"DROP TABLE IF EXISTS {qualified_name(catalog, schema, table.raw_table)} FORCE")
+    cursor.execute(create_table_sql(table, catalog, schema))
     for start in range(0, len(parameters), INSERT_BATCH_ROWS):
-        cursor.executemany(insert_sql(table, LOCAL_CATALOG, schema), parameters[start : start + INSERT_BATCH_ROWS])
+        cursor.executemany(insert_sql(table, catalog, schema), parameters[start : start + INSERT_BATCH_ROWS])
 
 
 def _select(inventory_dir: Path, unit: list[str] | None) -> list[Unit]:
@@ -200,9 +240,24 @@ def load(
     *,
     inventory_dir: InventoryDir = DEFAULT_INVENTORY_DIR,
     unit: UnitKeys = None,
-    host: Annotated[str, Parameter(help="StarRocks FE host.")] = LOCAL_HOST,
-    port: Annotated[int, Parameter(help="StarRocks query port.")] = LOCAL_PORT,
-    schema: Annotated[str, Parameter(help="Raw schema to create the tables in.")] = LOCAL_RAW_SCHEMA,
+    env: Annotated[
+        Literal["dev", "ci"],
+        Parameter(
+            help=(
+                "Lake to load: dev is the local-dev cluster's ol_data_lake_local, ci is CI StarRocks' "
+                "ol_data_lake_ci (Vault credentials from vault-ci, kubectl port-forward to data-ci)."
+            )
+        ),
+    ] = "dev",
+    host: Annotated[str, Parameter(help="StarRocks FE host (--env dev only).")] = LOCAL_HOST,
+    port: Annotated[int, Parameter(help="StarRocks query port (--env dev only).")] = LOCAL_PORT,
+    schema: Annotated[
+        str | None,
+        Parameter(help=f"Raw schema to create the tables in (--env dev only). Default: {LOCAL_RAW_SCHEMA}."),
+    ] = None,
+    vault_oidc_role: Annotated[
+        str, Parameter(help="Vault OIDC auth role for --env ci, as for ol-dbt starrocks.")
+    ] = "developer",
     generate: Annotated[
         bool, Parameter(help="Add each factory package's generated rows. --no-generate loads the files' rows only.")
     ] = True,
@@ -214,8 +269,14 @@ def load(
     Each table is dropped and created again, so the lake holds exactly what the
     file and the unit's factory package make and a changed column list takes
     effect. Run it after the local-dev stack is up, then build with
-    `ol-dbt starrocks build --env dev`.
+    `ol-dbt starrocks build --env dev`. With --env ci it fills CI's raw schema,
+    which CI builds read in place of deferring to QA.
     """
+    # CI builds read raw from CI_RAW_SCHEMA only, and load drops every raw__*
+    # table in the schema it is given, so any other CI schema is the wrong one.
+    if env == "ci" and schema is not None:
+        err_console.print(f"[bold red]--schema cannot be used with --env ci: CI's raw schema is {CI_RAW_SCHEMA}.")
+        sys.exit(1)
     # Every row is made into parameters first, so a value that cannot be
     # written as JSON fails before a table is dropped.
     prepared = [
@@ -223,12 +284,17 @@ def load(
         for loaded in _table_rows(inventory_dir, unit, generate=generate, scale=scale, seed=seed)
     ]
 
-    connection = connect_local_lake(host, port)
+    if env == "ci":
+        catalog, schema = CI_CATALOG, schema or CI_RAW_SCHEMA
+        connection = connect_ci_lake(vault_oidc_role)
+    else:
+        catalog, schema = LOCAL_CATALOG, schema or LOCAL_RAW_SCHEMA
+        connection = connect_local_lake(host, port)
     cursor = connection.cursor()
-    cursor.execute(f"CREATE DATABASE IF NOT EXISTS {qualified_name(LOCAL_CATALOG, schema)}")
+    cursor.execute(f"CREATE DATABASE IF NOT EXISTS {qualified_name(catalog, schema)}")
     for loaded, parameters in prepared:
         table = loaded.table
-        _replace_table(cursor, schema, table, parameters)
+        _replace_table(cursor, catalog, schema, table, parameters)
         counts = (
             f"{len(loaded.hand_written)} row(s)"
             if loaded.generated is None
@@ -293,7 +359,7 @@ def load_dimensional(
     cursor = connection.cursor()
     cursor.execute(f"CREATE DATABASE IF NOT EXISTS {qualified_name(LOCAL_CATALOG, LOCAL_DIMENSIONAL_SCHEMA)}")
     for table, parameters in prepared:
-        _replace_table(cursor, LOCAL_DIMENSIONAL_SCHEMA, table, parameters)
+        _replace_table(cursor, LOCAL_CATALOG, LOCAL_DIMENSIONAL_SCHEMA, table, parameters)
         console.print(f"{LOCAL_DIMENSIONAL_SCHEMA}.{escape(table.raw_table)}: {len(parameters)} row(s)", soft_wrap=True)
     connection.close()
 

@@ -91,33 +91,13 @@ class MITLearnApiClient(BaseApiClient):
         """Send webhook notification for an OVS include_in_learn video."""
         return self._post_signed_webhook("/api/v1/webhooks/ovs_videos/", data)
 
-    def get_published_programs(self, platform: str) -> list[dict[str, Any]]:
-        """Return every program MIT Learn currently publishes for ``platform``.
-
-        Reads MIT Learn's public programs API, which lists published programs only,
-        following its pagination to the end.
-
-        Args:
-            platform: MIT Learn platform code, e.g. ``edx``.
-        """
-        programs: list[dict[str, Any]] = []
-        url: str | None = f"{self.base_url}/api/v1/programs/"
-        params: dict[str, Any] | None = {"platform": platform, "limit": 100}
-        while url:
-            response = self.http_client.get(url, params=params)
-            response.raise_for_status()
-            page = response.json()
-            programs.extend(page["results"])
-            # "next" is a complete URL that already carries the query parameters
-            url, params = page["next"], None
-        return programs
-
     def notify_learning_resources(
         self,
         resources: list[dict[str, Any]],
         endpoint: str = "/api/v1/webhooks/learning_resources/",
         *,
         sync: list[tuple[str, str]] | None = None,
+        allow_mass_unpublish: bool = False,
     ) -> dict[str, Any]:
         """Send a batch of pre-computed LearningResource dicts to MIT Learn.
 
@@ -141,6 +121,9 @@ class MITLearnApiClient(BaseApiClient):
                 resources in the batch, so a pair that has gone empty stays
                 published unless it is declared here. Learn accepts course,
                 program and document.
+            allow_mass_unpublish: Skip MIT Learn's limit on how much of a pair a
+                batch may unpublish. Without it, a batch over the limit is refused
+                with a 422 and nothing in it is loaded.
         """
         data: dict[str, Any] = {"resources": resources}
         if sync:
@@ -148,4 +131,6 @@ class MITLearnApiClient(BaseApiClient):
                 {"etl_source": etl_source, "resource_type": resource_type}
                 for etl_source, resource_type in sync
             ]
+        if allow_mass_unpublish:
+            data["allow_mass_unpublish"] = True
         return self._post_signed_webhook(endpoint, data)

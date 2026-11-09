@@ -35,7 +35,7 @@ params:
   - any_dedp_program_cert_ind
   - dedp_international_program_cert_ind
   - dedp_public_policy_program_cert_ind
-  - any_dedp_program_enroll_ind
+  - any_dedp_course_enroll_ind
   include_search: false
   matrixify_all_sort_by_columns: a_to_z
   matrixify_all_sort_by_rows: a_to_z

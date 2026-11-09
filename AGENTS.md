@@ -11,15 +11,21 @@ This guide provides essential information for coding agents working with the MIT
 **Repository Type**: Python uv workspace with 7+ Dagster code locations and a dbt project
 **Size**: ~209 Python dependencies, ~30 workspace projects
 **Python Version**: 3.13 (strictly ~=3.13,<3.14)
-**Package Manager**: uv 0.9+ (replaces pip/poetry)
+**Package Manager**: uv 0.9.11+ (replaces pip/poetry; `bin/uv-operations.py` needs `uv workspace list --paths`)
 
 **Key Technologies**:
 
 
 - **Orchestration**: [Dagster](https://dagster.io/) 1.11+ for asset-centric data pipelines
-- **Transformation**: [dbt](https://www.getdbt.com/) 1.10+ with Trino adapter for SQL transformations
+- **Transformation**: [dbt](https://www.getdbt.com/) 1.10+ with the Trino, StarRocks and DuckDB adapters
 - **Storage**: S3-based data lakehouse on AWS
-- **Query Engine**: Trino via Starburst Galaxy
+- **Query Engines**: Trino via Starburst Galaxy builds the production warehouse.
+  Self-hosted StarRocks serves Superset, ol-analytics-api, MIT Learn's warehouse pull
+  and the `b2b_analytics` materialized views, and will replace Trino as the only engine
+  (see `docs/STARROCKS_MIGRATION.md` and
+  [ol-infrastructure ADR 0012](https://github.com/mitodl/ol-infrastructure/blob/main/docs/adr/0012-trino-to-starrocks-cutover.md)).
+  Every layered model has to build on Trino until the cutover; engine-specific SQL goes
+  through the dispatch macros described in `docs/DBT_DIALECT_COMPATIBILITY.md`.
 - **BI & Visualization**: Apache Superset
 - **Secrets Management**: HashiCorp Vault (never hardcode secrets)
 
@@ -105,8 +111,11 @@ SKIP=sqlfluff-lint uv run prek run --all-files
 
 ### Common Errors & Solutions
 
+**Error: "The lockfile at `uv.lock` needs to be updated, but `--locked` was provided"** (image build)
+→ Solution: `uv run bin/uv-operations.py lock`. Every project outside the root workspace has its own lockfile, and a change to a shared `pyproject.toml` (e.g. `packages/ol-orchestrate-lib`) makes all of them stale. The `uv-lock` prek hook does this for you.
+
 **Error: "uv sync package conflicts"**
-→ Solution: `uv lock --upgrade && uv sync`
+→ Solution: `uv run bin/uv-operations.py lock --upgrade-package <package>`, never `uv lock` in the root alone
 
 **Error: "dbt deps fails" / "dbt not found"**
 → Solution: Ensure in `src/ol_dbt/` directory; run `uv sync` first
@@ -148,10 +157,12 @@ ol-dbt run --select my_model+
 ol-dbt run --target dev_qa
 ```
 
-**Run uv commands across all projects**:
+**Run uv commands in every project that has its own lockfile** (see `README.md`, "uv lockfiles"):
 ```bash
-python bin/uv-operations.py sync --continue-on-error
-python bin/uv-operations.py lock --upgrade
+uv run bin/uv-operations.py lock                  # relock whatever is stale
+uv run bin/uv-operations.py lock --check
+uv run bin/uv-operations.py lock --upgrade-package dagster
+uv run bin/uv-operations.py exec pip list
 ```
 
 ## Directory Structure & Key Files
@@ -162,7 +173,7 @@ python bin/uv-operations.py lock --upgrade
   - `resources/`: Reusable connections (databases, APIs, Vault)
   - `io_managers/`: S3FileObjectIOManager, FileObjectIOManager for asset persistence
   - `lib/`: Utilities, constants, helpers
-- `dg_projects/`: 8 Dagster code locations (canvas, data_loading, delivery, edxorg, lakehouse, legacy_openedx, ml, openedx). Being consolidated to 6 lifecycle-aligned locations -- see issue #2260. **Do not add a new one.**
+- `dg_projects/`: 7 Dagster code locations (data_loading, delivery, edxorg, lakehouse, legacy_openedx, ml, openedx). Being consolidated to 6 lifecycle-aligned locations -- see issue #2260. **Do not add a new one.**
   - Each has: `<project>/assets/`, `<project>/resources/`, `<project>/definitions.py`, `pyproject.toml`, `Dockerfile`
 - `dg_deployments/local/`: Local Docker deployment configuration
 - `src/ol_dbt/`: Complete dbt project
@@ -259,6 +270,7 @@ analysis, and validation. It is installed as part of `uv sync`.
 | `ol-dbt unit-test` | Run dbt unit tests on DuckDB with no warehouse credentials (also runs in dbt PR CI) |
 | `ol-dbt local setup` | Set up local DuckDB + Iceberg development environment |
 | `ol-dbt local register` | Register AWS Glue Iceberg tables as DuckDB views |
+| `ol-dbt starrocks build` | Run dbt against StarRocks (`--env dev` is the local-dev cluster; `qa`/`production`/`ci` fetch Vault credentials) |
 | `ol-dbt fixtures load` | Create the local lake's raw tables from `ingestion/inventory/fixtures/` and each unit's factory package (see `docs/LOCAL_LAKE.md`) |
 | `ol-dbt fixtures generate` | Write the rows `fixtures load` would insert as JSON lines, with no StarRocks connection |
 | `ol-dbt fixtures scaffold` | Write a unit's base factories from a dump of its Django app's models (`bin/django-model-dump.py`), or for a unit with no dump draft them from its staging models' dbt tests |

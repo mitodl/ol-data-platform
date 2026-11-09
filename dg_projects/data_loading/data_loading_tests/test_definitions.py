@@ -14,13 +14,18 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
+import dagster as dg
 import pytest
 from data_loading.definitions import defs
 from data_loading.defs.ingestion.assets import (
     MITXONLINE_APP_DLT_ENVIRONMENTS,
+    MITXONLINE_APP_KEYSET_ENVIRONMENTS,
+    MITXONLINE_APP_KEYSET_UNIT,
     XPRO_APP_DLT_ENVIRONMENTS,
 )
 from ol_dlt.sources import mitxonline_app, xpro_app
+
+from ol_dlt import keyset
 
 _REPO = defs.get_repository_def()
 
@@ -29,6 +34,21 @@ _REPO = defs.get_repository_def()
 # module-level import above cached.
 _ENVIRONMENT_SENSITIVE_ROOTS = frozenset({"data_loading", "ol_orchestrate"})
 
+# Moved from the canvas code location (issue #2260) with their keys unchanged,
+# so their materialization history and partitions carry over.
+_CANVAS_EXPORT_ASSET_KEYS = frozenset(
+    {"canvas/course_content", "canvas/course_metadata"}
+)
+
+# One partition per OCW course. It writes the raw table, whose own key stays
+# unpartitioned.
+_OCW_COURSE_LOAD_KEY = "ocw/course_content_load"
+
+# The Canvas instigators that were RUNNING in production in the canvas location.
+_CANVAS_INSTIGATOR_NAMES = frozenset(
+    {"canvas_course_export_schedule", "canvas_google_sheet_course_id_sensor"}
+)
+
 # The four tables RFC 12711 step 8's pilot slice reads.
 _B2B_PILOT_ASSET_KEYS = (
     "ol_warehouse_raw_data/raw__mitxonline__app__postgres__b2b_organizationpage",
@@ -36,6 +56,13 @@ _B2B_PILOT_ASSET_KEYS = (
     "ol_warehouse_raw_data/raw__mitxonline__app__postgres__courses_courserun",
     "ol_warehouse_raw_data/raw__mitxonline__app__postgres__courses_courserun_b2b_contracts",
 )
+
+
+def _is_mitxonline_app_table(key: str) -> bool:
+    """Return True for a MITx Online app raw table, and not its keyset."""
+    return "raw__mitxonline__app__postgres__" in key and not key.endswith(
+        keyset.KEYSET_SUFFIX
+    )
 
 
 @contextmanager
@@ -86,8 +113,15 @@ def _repository_for(environment: str) -> Iterator[Any]:
 def test_code_location_builds() -> None:
     asset_keys = {k.to_user_string() for k in _REPO.assets_defs_by_key}
     assert asset_keys, "code location exposed no assets"
-    # Every ingest asset lands under the raw-data key prefix...
-    assert all(k.startswith("ol_warehouse_raw_data/") for k in asset_keys)
+    # Every ingest asset lands under the raw-data key prefix, except the Canvas
+    # course exports, which keep the keys they had in the canvas location...
+    assert all(
+        k.startswith("ol_warehouse_raw_data/")
+        or k in _CANVAS_EXPORT_ASSET_KEYS
+        or k == _OCW_COURSE_LOAD_KEY
+        for k in asset_keys
+    )
+    assert asset_keys >= _CANVAS_EXPORT_ASSET_KEYS
     # ...and the headline sources (simple, edxorg S3, edxorg programs) are present.
     for expected in (
         "ol_warehouse_raw_data/raw__oll__google_sheets__courses",
@@ -119,6 +153,9 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__openedx__s3__course_file_exclusions",
         "ol_warehouse_raw_data/raw__ocw__s3__course_content",
         "ol_warehouse_raw_data/raw__edxorg__s3__program_learner_report",
+        "ol_warehouse_raw_data/raw__xpro__openedx__tracking_log_events",
+        "ol_warehouse_raw_data/raw__mitxonline__openedx__tracking_log_events",
+        "ol_warehouse_raw_data/raw__mitx__openedx__tracking_log_events",
     ):
         assert expected in asset_keys
 
@@ -135,12 +172,51 @@ def test_schedules_and_sensors_load() -> None:
         "posthog_events_ingest_hourly_schedule",
         "course_xml_blocks_ingest_daily_schedule",
         "edxorg_program_reports_ingest_daily_schedule",
+        "xpro_tracking_logs_ingest_schedule",
+        "mitxonline_tracking_logs_ingest_schedule",
+        "mitx_tracking_logs_ingest_schedule",
         "ocw_content_ingest_daily_schedule",
+        "canvas_content_ingest_daily_schedule",
     }
     assert {s.name for s in _REPO.sensor_defs} >= {
         "edxorg_upstream_changes_sensor",
         "ocw_content_publish_sensor",
     }
+
+
+@pytest.mark.parametrize("environment", ["dev", "ci", "qa", "production"])
+def test_canvas_instigators_start_running_in_production_only(environment: str) -> None:
+    """Read off the built repository, so the wiring and the status are both pinned.
+
+    Both were RUNNING in production in the canvas location and never ticked in
+    QA. Instigator state is keyed on location name, so without the production
+    default they would arrive STOPPED and the exports would stop.
+    """
+    expected = "RUNNING" if environment == "production" else "STOPPED"
+    with _repository_for(environment) as repo:
+        instigators = {
+            instigator.name: instigator
+            for instigator in [*repo.schedule_defs, *repo.sensor_defs]
+            if instigator.name in _CANVAS_INSTIGATOR_NAMES
+        }
+        assert set(instigators) == _CANVAS_INSTIGATOR_NAMES
+        assert {
+            instigator.default_status.value for instigator in instigators.values()
+        } == {expected}
+
+
+def test_canvas_sheet_sensor_requests_only_local_assets() -> None:
+    """The webhook asset is in delivery, and a sensor cannot launch it from here.
+
+    A run request naming canvas/course_content_metadata would fail at launch,
+    taking the new course's export with it.
+    """
+    sensor = _REPO.get_sensor_def("canvas_google_sheet_course_id_sensor")
+    selected = {
+        key.to_user_string()
+        for key in sensor.asset_selection.resolve(_REPO.asset_graph)
+    }
+    assert selected == _CANVAS_EXPORT_ASSET_KEYS
 
 
 def test_dlt_resource_present() -> None:
@@ -158,9 +234,9 @@ def test_mitxonline_app_assets_load_where_dlt_owns_the_unit(environment: str) ->
     with _repository_for(environment) as repo:
         asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
         assert set(_B2B_PILOT_ASSET_KEYS) <= asset_keys
-        assert len(
-            [key for key in asset_keys if "raw__mitxonline__app__postgres__" in key]
-        ) == len(mitxonline_app.MITXONLINE_APP_SPEC.tables)
+        assert len([key for key in asset_keys if _is_mitxonline_app_table(key)]) == len(
+            mitxonline_app.MITXONLINE_APP_SPEC.tables
+        )
         schedule = repo.get_schedule_def("mitxonline_app_ingest_schedule")
         # The MITx Online structure blocks share the "mitxonline" group and
         # read the production landing zone, so the app schedule must not
@@ -169,9 +245,7 @@ def test_mitxonline_app_assets_load_where_dlt_owns_the_unit(environment: str) ->
             key.to_user_string()
             for key in repo.get_job(schedule.job_name).asset_layer.selected_asset_keys
         }
-        assert scheduled == {
-            key for key in asset_keys if "raw__mitxonline__app__postgres__" in key
-        }
+        assert scheduled == {key for key in asset_keys if _is_mitxonline_app_table(key)}
 
 
 def test_mitxonline_app_dlt_does_not_run_in_production() -> None:
@@ -196,6 +270,37 @@ def test_mitxonline_app_dlt_does_not_run_in_production() -> None:
         assert "mitxonline_app_ingest_schedule" not in {
             s.name for s in repo.schedule_defs
         }
+
+
+@pytest.mark.parametrize("environment", sorted(MITXONLINE_APP_KEYSET_ENVIRONMENTS))
+def test_mitxonline_app_keysets_load_unscheduled(environment: str) -> None:
+    """One keyset asset per rendered table, and no schedule runs them.
+
+    The run after every load belongs to the keyset automation, which has to
+    order it after the load and before the snapshots.
+    """
+    with _repository_for(environment) as repo:
+        keyset_keys = {
+            key.to_user_string()
+            for key in repo.assets_defs_by_key
+            if key.to_user_string().endswith(keyset.KEYSET_SUFFIX)
+        }
+        assert keyset_keys == {
+            "ol_warehouse_raw_data/raw__mitxonline__app__postgres__"
+            f"{table.name}{keyset.KEYSET_SUFFIX}"
+            for table in keyset.inventory_keyset_tables()[MITXONLINE_APP_KEYSET_UNIT]
+        }
+        for schedule in repo.schedule_defs:
+            selected = repo.get_job(schedule.job_name).asset_layer.selected_asset_keys
+            assert not {key.to_user_string() for key in selected} & keyset_keys
+
+
+def test_mitxonline_app_keysets_do_not_run_in_production() -> None:
+    """Production keysets read the replica, whose address is not exported yet."""
+    with _repository_for("production") as repo:
+        asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
+        assert asset_keys, "code location exposed no assets under production"
+        assert not [key for key in asset_keys if key.endswith(keyset.KEYSET_SUFFIX)]
 
 
 @pytest.mark.parametrize("environment", sorted(XPRO_APP_DLT_ENVIRONMENTS))
@@ -258,6 +363,60 @@ def test_posthog_schedule_skips_while_a_run_is_in_flight(
     }
 
 
+_TRACKING_LOGS_DEPLOYMENTS = ("xpro", "mitxonline", "mitx")
+
+
+@pytest.mark.parametrize("deployment", _TRACKING_LOGS_DEPLOYMENTS)
+@pytest.mark.parametrize(("in_flight", "expected"), [(True, False), (False, True)])
+def test_tracking_logs_schedule_skips_while_a_run_is_in_flight(
+    deployment: str,
+    in_flight: bool,  # noqa: FBT001
+    expected: bool,  # noqa: FBT001
+) -> None:
+    from data_loading.defs.ingestion import schedules  # noqa: PLC0415
+
+    instance = _FakeInstance(in_flight)
+    schedule = schedules.tracking_logs_ingest_schedules[deployment]
+    # ScheduleDefinition keeps should_execute only as this private attribute.
+    should_execute = schedule._should_execute
+    assert should_execute(_FakeScheduleContext(instance)) is expected
+    (runs_filter,) = instance.filters
+    assert runs_filter.tags == {
+        "dagster/schedule_name": f"{deployment}_tracking_logs_ingest_schedule"
+    }
+
+
+def test_tracking_logs_schedules_start_an_hour_apart() -> None:
+    """Xpro keeps the times it had before mitxonline and mitx were added."""
+    from data_loading.defs.ingestion import schedules  # noqa: PLC0415
+
+    assert {
+        deployment: schedule.cron_schedule
+        for deployment, schedule in schedules.tracking_logs_ingest_schedules.items()
+    } == {
+        "xpro": "50 0-23/12 * * *",
+        "mitxonline": "50 1-23/12 * * *",
+        "mitx": "50 2-23/12 * * *",
+    }
+
+
+@pytest.mark.parametrize("deployment", _TRACKING_LOGS_DEPLOYMENTS)
+@pytest.mark.parametrize(
+    ("environment", "status"),
+    [
+        ("qa", dg.DefaultScheduleStatus.RUNNING),
+        ("production", dg.DefaultScheduleStatus.RUNNING),
+        ("dev", dg.DefaultScheduleStatus.STOPPED),
+    ],
+)
+def test_tracking_logs_schedule_runs_where_its_bucket_is_its_own(
+    deployment: str, environment: str, status: dg.DefaultScheduleStatus
+) -> None:
+    with _repository_for(environment) as repo:
+        schedule = repo.get_schedule_def(f"{deployment}_tracking_logs_ingest_schedule")
+        assert schedule.default_status == status
+
+
 def test_posthog_schedule_runs_get_the_memory_limit_and_runtime_cap() -> None:
     """The run pod must get the 16Gi limit a single large hour needs.
 
@@ -271,3 +430,17 @@ def test_posthog_schedule_runs_get_the_memory_limit_and_runtime_cap() -> None:
     container = get_user_defined_k8s_config(tags).container_config
     assert container["resources"]["limits"]["memory"] == "16Gi"
     assert tags["dagster/max_runtime"] == str(6 * 60 * 60)
+
+
+@pytest.mark.parametrize("deployment", _TRACKING_LOGS_DEPLOYMENTS)
+def test_tracking_logs_runs_get_the_memory_limit_and_runtime_cap(
+    deployment: str,
+) -> None:
+    from dagster_k8s.job import get_user_defined_k8s_config  # noqa: PLC0415
+    from data_loading.defs.ingestion import schedules  # noqa: PLC0415
+
+    tags = schedules.tracking_logs_ingest_schedules[deployment].tags
+    container = get_user_defined_k8s_config(tags).container_config
+    assert container["resources"]["limits"]["memory"] == "16Gi"
+    assert container["resources"]["requests"]["memory"] == "2Gi"
+    assert tags["dagster/max_runtime"] == str(11 * 60 * 60)

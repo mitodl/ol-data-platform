@@ -10,11 +10,18 @@ Two assets run on staggered nightly schedules:
     have to be re-pointed at the environment actually running.
 
     For each table it runs:
-    - OPTIMIZE  (Trino)   — compact small files; triggered when materialization
-                            count since last maintenance >= optimize_after_every_n_runs
-    - ANALYZE   (Trino)   — refresh query statistics; same threshold logic with
+    - OPTIMIZE  (engine)  — compact small files (on StarRocks, also rewrite
+                            away delete files); triggered when materialization
+                            count since last maintenance >=
+                            optimize_after_every_n_runs
+    - ANALYZE   (engine)  — refresh query statistics; same threshold logic with
                             analyze_after_every_n_runs
     - EXPIRE SNAPSHOTS (pyiceberg) — always runs; uses snapshot_retention_days
+
+    The engine is the ``iceberg_maintenance_engine`` resource: Trino
+    (``TrinoMaintenanceResource``) or StarRocks
+    (``StarRocksIcebergMaintenanceResource``), chosen per environment by
+    ``ICEBERG_MAINTENANCE_ENGINE`` in ``lakehouse.lib.dbt_environment``.
 
     Config comes from ``dbt_project.yml`` ``+meta.iceberg_maintenance`` blocks,
     compiled into each node's ``config.meta.iceberg_maintenance`` in the manifest.
@@ -51,11 +58,13 @@ from dagster import (
     EventRecordsFilter,
     MetadataValue,
     Output,
+    ResourceParam,
     asset,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.iceberg_maintenance import (
     AIRBYTE_STAGING_BRANCH,
+    IcebergMaintenanceEngine,
     TableMaintenanceConfig,
     expire_snapshots,
     get_glue_catalog,
@@ -67,7 +76,6 @@ from ol_orchestrate.lib.iceberg_maintenance import (
     raw_config_for_table,
     warehouse_env_for,
 )
-from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 from pyiceberg.catalog.glue import GlueCatalog
 
 from lakehouse.assets.lakehouse.dbt import dbt_project
@@ -143,7 +151,7 @@ def _run_table_maintenance(
     cfg: TableMaintenanceConfig,
     context: AssetExecutionContext,
     last_cursor: int | None,
-    trino_maintenance: TrinoMaintenanceResource,
+    engine: IcebergMaintenanceEngine,
     catalog: GlueCatalog,
 ) -> dict[str, Any]:
     """Run all maintenance operations for one dbt-layer table.
@@ -202,7 +210,7 @@ def _run_table_maintenance(
     # OPTIMIZE — only if enough materializations have accumulated
     if effective_count >= cfg.optimize_after_every_n_runs:
         try:
-            trino_maintenance.optimize(schema=cfg.schema_name, table=cfg.model_name)
+            engine.optimize(schema=cfg.schema_name, table=cfg.model_name)
             summary["optimized"] = True
         except Exception as exc:  # noqa: BLE001
             context.log.warning(
@@ -213,7 +221,7 @@ def _run_table_maintenance(
     # ANALYZE — only if enough materializations have accumulated
     if effective_count >= cfg.analyze_after_every_n_runs:
         try:
-            trino_maintenance.analyze(schema=cfg.schema_name, table=cfg.model_name)
+            engine.analyze(schema=cfg.schema_name, table=cfg.model_name)
             summary["analyzed"] = True
         except Exception as exc:  # noqa: BLE001
             context.log.warning(
@@ -226,7 +234,7 @@ def _run_table_maintenance(
 
 def _maintainable_dbt_layer_configs(
     context: AssetExecutionContext,
-    trino_maintenance: TrinoMaintenanceResource,
+    engine: IcebergMaintenanceEngine,
 ) -> tuple[list[TableMaintenanceConfig], list[str]]:
     """Return the configs this environment can actually maintain, and the rest.
 
@@ -252,15 +260,16 @@ def _maintainable_dbt_layer_configs(
         WAREHOUSE_ENV,
     )
 
-    base_tables = trino_maintenance.base_tables_in_schemas(
-        {cfg.schema_name for cfg in manifest_configs}
+    base_tables = engine.base_tables_among(
+        {(cfg.schema_name, cfg.model_name) for cfg in manifest_configs}
     )
     maintainable, unbacked = partition_by_catalog_presence(
         manifest_configs, base_tables
     )
     if unbacked:
         context.log.warning(
-            "Skipping %d of %d configs with no table in %s (view or absent): %s",
+            "Skipping %d of %d configs with no table in %s (view, absent or "
+            "unloadable): %s",
             len(unbacked),
             len(manifest_configs),
             WAREHOUSE_ENV,
@@ -287,17 +296,20 @@ def _maintainable_dbt_layer_configs(
     group_name="lakehouse_maintenance",
     description=(
         "Nightly Iceberg maintenance for all dbt-managed tables and non-dbt "
-        "singletons.  Runs OPTIMIZE and ANALYZE via Trino (threshold-gated by "
-        "materialization count) and EXPIRE SNAPSHOTS via pyiceberg.  Config is "
+        "singletons.  Runs OPTIMIZE and ANALYZE via Trino or StarRocks "
+        "(threshold-gated by materialization count) and EXPIRE SNAPSHOTS via "
+        "pyiceberg.  Config is "
         "read from manifest.json iceberg_maintenance meta blocks."
     ),
 )
 def iceberg_dbt_layer_maintenance(
     context: AssetExecutionContext,
-    trino_maintenance: TrinoMaintenanceResource,
+    iceberg_maintenance_engine: ResourceParam[IcebergMaintenanceEngine],
 ) -> Output[None]:
     """Run Iceberg maintenance for all dbt-managed tables and non-dbt singletons."""
-    all_configs, unbacked = _maintainable_dbt_layer_configs(context, trino_maintenance)
+    all_configs, unbacked = _maintainable_dbt_layer_configs(
+        context, iceberg_maintenance_engine
+    )
 
     # Cursor of the previous maintenance run — used to count dbt materializations
     # that occurred since the last time this asset ran.
@@ -329,7 +341,7 @@ def iceberg_dbt_layer_maintenance(
         tables_attempted += 1
         try:
             result = _run_table_maintenance(
-                cfg, context, last_cursor, trino_maintenance, catalog
+                cfg, context, last_cursor, iceberg_maintenance_engine, catalog
             )
             tables_processed += 1
             if result["optimized"]:
@@ -358,7 +370,7 @@ def iceberg_dbt_layer_maintenance(
     )
 
     # Fail the asset if maintenance failed for more than 5% of tables. This
-    # surfaces systemic failures (broken Trino credentials, Glue outage) that
+    # surfaces systemic failures (broken engine credentials, Glue outage) that
     # would otherwise accumulate silently in metadata while Dagster marks the
     # run SUCCESS, advancing the cursor and blocking retries.
     #

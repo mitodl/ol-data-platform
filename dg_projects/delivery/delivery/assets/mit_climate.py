@@ -16,6 +16,7 @@ Scheduling: once a day, after its integrations models have materialized since
 """
 
 import logging
+from collections.abc import Iterable, Mapping
 from typing import Any, cast
 
 import httpx2 as httpx
@@ -32,6 +33,8 @@ from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient, webhook_status
 
+from delivery.lib.learn_webhook import LearnDeliveryConfig, webhook_failure
+
 log = logging.getLogger(__name__)
 
 _GLUE_DB = (
@@ -42,20 +45,26 @@ _GLUE_DB = (
 _TABLE = "integrations__learn__mit_climate_articles"
 
 
-def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
+def _row_to_resource(row: Mapping[str, Any]) -> dict[str, Any]:
     """Map an integrations table row to the MIT Learn LearningResource shape."""
-    image_url = row.get("image_url")
-    image_alt = row.get("image_alt") or ""
-    topics_raw = row.get("topics") or ""
-    topics = [{"name": t.strip()} for t in topics_raw.split(",") if t.strip()]
+    image_url = row["image_url"]
+    description = row["description"]
 
     return {
         "readable_id": row["readable_id"],
         "title": row["title"],
-        "url": row.get("url"),
-        "description": row.get("description"),
-        "image": {"url": image_url, "alt": image_alt} if image_url else None,
-        "topics": topics,
+        "url": row["url"],
+        "description": description,
+        # MIT Learn's update only writes keys it is sent, so leaving this out would
+        # keep the stored text forever and give a new article none.
+        "full_description": "\n".join(
+            [description or "", row["footnotes"] or "", row["byline"] or ""]
+        ),
+        "image": {"url": image_url, "alt": row["image_alt"] or ""}
+        if image_url
+        else None,
+        # [] sends the article to MIT Learn's similar-topic lookup, as legacy ETL did
+        "topics": [{"name": topic} for topic in row["topics"] or []],
         "published": True,
         "etl_source": "mit_climate",
         "offered_by": {"code": "climate"},
@@ -65,8 +74,13 @@ def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
         # resource_category, so match that contract for the webhook path too.
         "resource_type": "document",
         "resource_category": "Article",
-        "created_on": row.get("last_modified"),
+        "created_on": row["last_modified"],
     }
+
+
+def build_resources(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Build the webhook batch, one document per integrations row."""
+    return [_row_to_resource(row) for row in rows]
 
 
 @asset(
@@ -82,6 +96,7 @@ def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
 )
 def mit_climate_webhook(
     context: AssetExecutionContext,
+    config: LearnDeliveryConfig,
     learn_api: ApiClientFactory,
 ) -> dict[str, Any]:
     """Deliver MIT Climate articles to MIT Learn via signed webhook."""
@@ -92,21 +107,19 @@ def mit_climate_webhook(
     ).collect()
     context.log.info("Loaded %d MIT Climate articles from Iceberg", len(df))
 
-    resources = [_row_to_resource(row) for row in df.iter_rows(named=True)]
+    resources = build_resources(df.iter_rows(named=True))
 
     context.log.info(
         "Delivering %d MIT Climate articles to MIT Learn webhook", len(resources)
     )
     try:
         response = cast(MITLearnApiClient, learn_api.client).notify_learning_resources(
-            resources
+            resources, allow_mass_unpublish=config.allow_mass_unpublish
         )
     except httpx.HTTPStatusError as exc:
-        msg = (
-            f"MIT Climate webhook failed with status {exc.response.status_code}: {exc}"
-        )
-        context.log.exception(msg)
-        raise RuntimeError(msg) from exc
+        failure = webhook_failure("MIT Climate", exc)
+        context.log.exception(failure.description)
+        raise failure from exc
 
     status = webhook_status(response)
     context.add_output_metadata(

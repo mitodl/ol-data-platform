@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-import httpx2 as httpx
 import jsonlines
 from dagster import (
     AssetExecutionContext,
@@ -19,7 +18,6 @@ from dagster._core.definitions.partitions.utils.multi import (
     MULTIPARTITION_KEY_DELIMITER,
 )
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
-from ol_orchestrate.lib.http_errors import http_failure
 from ol_orchestrate.lib.openedx import (
     process_course_xml,
     process_course_xml_blocks,
@@ -268,96 +266,3 @@ def extract_edxorg_courserun_metadata(  # noqa: PLR0915
     finally:
         for temp_file in temp_files:
             temp_file.unlink(missing_ok=True)
-
-
-@asset(
-    code_version="edxorg_course_export_webhook_v1",
-    key=AssetKey(["edxorg", "course_content_webhook"]),
-    group_name="course_content_metadata",
-    description="Notify Learn API via webhook after edx.org course XML export.",
-    automation_condition=upstream_or_code_changes(),
-    partitions_def=course_and_source_partitions,
-    ins={
-        "course_archive": AssetIn(key=AssetKey(["edxorg", "raw_data", "course_xml"])),
-    },
-    required_resource_keys={"learn_api"},
-    io_manager_key="default_io_manager",
-)
-def edxorg_course_content_webhook(
-    context: AssetExecutionContext, course_archive: UPath | None
-):
-    """Send webhook notification to Learn API after edx.org course XML export."""
-    # Parse the multipartition key to extract course_id
-    partition_parts = context.partition_key.split(MULTIPARTITION_KEY_DELIMITER)
-    partition_dict = {}
-    for partition_part in partition_parts:
-        if partition_part in ("prod", "edge"):
-            partition_dict["source_system"] = partition_part
-        else:
-            partition_dict["course_id"] = partition_part
-
-    course_id = partition_dict.get("course_id", context.partition_key)
-
-    # Build the content path from the course_archive UPath
-    content_path = str(course_archive).split("://", 1)[-1]  # Remove s3:// prefix
-    # Extract just the relative path portion
-    if "/" in content_path:
-        # Path is like: bucket/prefix/edxorg/raw_data/course_xml/...
-        # We want: /edxorg/raw_data/course_xml/...
-        parts = content_path.split("/")
-        try:
-            edxorg_idx = parts.index("edxorg")
-            content_path = "/".join(parts[edxorg_idx:])
-        except ValueError:
-            # If 'edxorg' not found, use the full path
-            pass
-
-    # Make sure path starts with a slash
-    content_path = f"/{content_path.lstrip('/')}"
-
-    data = {
-        "course_id": course_id,
-        "course_readable_id": course_id,
-        "content_path": content_path,
-        "source": "mit_edx",
-    }
-
-    context.log.info(
-        "Sending webhook notification to Learn API for course_id=%s and data=%s",
-        course_id,
-        data,
-    )
-
-    try:
-        response = context.resources.learn_api.client.notify_course_export(data)
-        context.log.info(
-            "Learn API webhook notification succeeded for course_id=%s, response=%s",
-            course_id,
-            response,
-        )
-        return Output(
-            value={"course_id": course_id},
-            metadata={
-                "status": "success",
-                "course_id": course_id,
-                "source": "mit_edx",
-                "response": response,
-            },
-        )
-
-    except httpx.HTTPStatusError as error:
-        context.log.exception(
-            "Learn API webhook notification failed for course_id=%s with status %s",
-            course_id,
-            error.response.status_code,
-        )
-        # A 405 here means the endpoint does not accept the method we send, and
-        # no number of reruns changes that -- this one was retried 5,363 times
-        # over six days before anyone noticed (DAGSTER-13). http_failure sorts
-        # that from the 5xx worth another attempt, and puts the course id in
-        # metadata rather than in the issue title.
-        raise http_failure(
-            error,
-            "Learn API webhook notification failed",
-            metadata={"course_id": course_id, "source": "mit_edx"},
-        ) from error

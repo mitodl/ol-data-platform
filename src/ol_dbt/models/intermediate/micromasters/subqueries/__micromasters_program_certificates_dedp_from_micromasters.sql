@@ -1,5 +1,3 @@
-{{ config(materialized='view') }}
-
 with mm_program_certificates as (
     select *
     from {{ ref('stg__micromasters__app__postgres__grades_programcertificate') }}
@@ -17,6 +15,8 @@ select
     , {{ generate_hash_id('mm_program_certificates.programcertificate_hash') }} as program_certificate_hashed_id
     , mm_program_certificates.programcertificate_created_on as program_completion_timestamp
     , mm_program_certificates.user_id as user_micromasters_id
+    -- MicroMasters has no certificate revocation
+    , cast(null as boolean) as programcertificate_is_revoked
 from mm_program_certificates
 left join programs
     on mm_program_certificates.program_id = programs.micromasters_program_id

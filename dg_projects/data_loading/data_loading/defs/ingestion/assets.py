@@ -14,16 +14,21 @@ from typing import Any
 from dagster import (
     AssetExecutionContext,
     AssetKey,
+    AssetMaterialization,
+    AssetRecordsFilter,
     AssetsDefinition,
-    Config,
+    BackfillPolicy,
     DagsterEventType,
     DataVersion,
     Definitions,
+    DynamicPartitionsDefinition,
     MaterializeResult,
 )
 from dagster._core.definitions.data_version import DATA_VERSION_TAG
 from dagster_dlt import DagsterDltResource, dlt_assets
+from dagster_dlt.translator import DltResourceTranslatorData
 from ol_dlt.sources import (
+    canvas_content,
     course_xml_blocks,
     edxorg_program_reports,
     edxorg_s3,
@@ -39,17 +44,18 @@ from ol_dlt.sources import (
     podcast_rss,
     posthog_events,
     see,
+    tracking_logs,
     xpro_app,
     youtube,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, EDXORG_DB_TABLES
 from ol_orchestrate.lib.failures import with_failure_hooks
-from pydantic import Field
 
 from data_loading.defs.ingestion.translators import (
     EdxorgDltTranslator,
     RawDataDltTranslator,
 )
+from ol_dlt import keyset
 
 
 def build_ingest_assets(
@@ -154,6 +160,27 @@ xpro_app_assets = (
         pipeline=xpro_app.xpro_app_pipeline,
     )
     if DAGSTER_ENV in XPRO_APP_DLT_ENVIRONMENTS
+    else None
+)
+# Keys-only reads of the MITx Online app database (ol_dlt.keyset), for the
+# history snapshots and staging to tell deleted keys from live ones. Run by hand
+# for now: the run after every load comes with the keyset automation (witan task
+# tk-run-each-unit-s-keysets-after-every-load-and-sta-4caeb1).
+#
+# Production is absent because its keysets read the RDS read replica, and the
+# MITx Online stack does not export the replica's address yet
+# (tk-export-production-read-replica-addresses-for-the-d2d989).
+# MITXONLINE_APP_DB_HOST in production is the primary.
+MITXONLINE_APP_KEYSET_ENVIRONMENTS = frozenset({"dev", "ci", "qa"})
+MITXONLINE_APP_KEYSET_UNIT = "mitxonline/app_postgres"
+
+mitxonline_app_keyset_assets = (
+    build_ingest_assets(
+        name="mitxonline_app_keyset",
+        source=keyset.build_unit_keyset_source(MITXONLINE_APP_KEYSET_UNIT),
+        pipeline=keyset.unit_keyset_pipeline(MITXONLINE_APP_KEYSET_UNIT),
+    )
+    if DAGSTER_ENV in MITXONLINE_APP_KEYSET_ENVIRONMENTS
     else None
 )
 see_assets = build_ingest_assets(
@@ -268,16 +295,26 @@ def load_in_batches(
     return results, batches, rows_loaded
 
 
-def _previous_data_version(
-    context: AssetExecutionContext, asset_key: AssetKey
-) -> DataVersion | None:
-    """Return the data version the asset's latest materialization recorded.
+def unreported_attempt(
+    context: AssetExecutionContext,
+    asset_key: AssetKey,
+    partitions: list[str] | None = None,
+) -> bool:
+    """Tell whether an earlier attempt could have loaded rows nothing reports.
 
-    None when an earlier attempt could have loaded rows that no
-    materialization reports: the run before this one planned the asset and did
-    not materialize it, or this step already started once in this run (a step
+    Either another run planned the asset after its last materialization and has
+    not materialized it, or this step already started once in this run (a step
     retry, or the daemon resuming a run whose pod died). Each batch commits its
     own cursor, so this attempt starts past those rows and reads as empty.
+
+    The order of the events decides it, not which run wrote them, because a
+    materialization can come from a run that did not plan the asset (the OCW
+    course load reports the raw table's).
+
+    :param context: The running step's context.
+    :param asset_key: The asset to check.
+    :param partitions: The partitions to check. A partition's run says nothing
+        about another's, and the sensor queues them side by side.
     """
     step_key = context.get_step_execution_context().step.key
     step_starts = context.instance.get_records_for_run(
@@ -285,20 +322,41 @@ def _previous_data_version(
         of_type={DagsterEventType.STEP_START, DagsterEventType.STEP_RESTARTED},
     ).records
     if sum(record.event_log_entry.step_key == step_key for record in step_starts) > 1:
-        return None
-    event = context.instance.get_latest_materialization_event(asset_key)
-    if event is None or event.asset_materialization is None:
-        return None
-    planned_runs = [
-        record.event_log_entry.run_id
+        return True
+    records_filter = AssetRecordsFilter(asset_key, asset_partitions=partitions)
+    # One planned event per partition of this run, then the one that matters.
+    planned = [
+        record
         for record in context.instance.fetch_planned_materializations(
-            asset_key, limit=2
+            records_filter, limit=len(partitions or [asset_key]) + 1
         ).records
         if record.event_log_entry.run_id != context.run.run_id
     ]
-    if planned_runs and planned_runs[0] != event.run_id:
+    if not planned:
+        return False
+    latest = context.instance.fetch_materializations(records_filter, limit=1).records
+    return not latest or planned[0].storage_id > latest[0].storage_id
+
+
+def _previous_data_version(
+    context: AssetExecutionContext,
+    asset_key: AssetKey,
+    partitions: list[str] | None = None,
+) -> DataVersion | None:
+    """Return the data version the asset's latest materialization recorded.
+
+    None when ``unreported_attempt`` says this load may not be as empty as it
+    looks, or when the asset has no materialization to take one from.
+    """
+    if unreported_attempt(context, asset_key, partitions):
         return None
-    value = event.asset_materialization.tags.get(DATA_VERSION_TAG)
+    records = context.instance.fetch_materializations(
+        AssetRecordsFilter(asset_key, asset_partitions=partitions), limit=1
+    ).records
+    if not records:
+        return None
+    event = records[0].event_log_entry.asset_materialization
+    value = event.tags.get(DATA_VERSION_TAG) if event else None
     return None if value is None else DataVersion(value)
 
 
@@ -323,6 +381,11 @@ def drain(
     would rebuild everything below the raw table.
     """
     (resource_name,) = build_source().resources
+    partitions = (
+        list(context.partition_keys)
+        if context.has_partition_key or context.has_partition_key_range
+        else None
+    )
     results, batches, rows_loaded = load_in_batches(
         context=context,
         dlt=dlt,
@@ -341,7 +404,7 @@ def drain(
             data_version=(
                 None
                 if rows_loaded
-                else _previous_data_version(context, result.asset_key)
+                else _previous_data_version(context, result.asset_key, partitions)
             ),
         )
 
@@ -450,6 +513,48 @@ edxorg_program_reports_assets = build_batched_assets(
 )
 
 
+# The Open edX tracking logs, one asset per deployment. xPro's replaced the
+# Airbyte-loaded raw__xpro__openedx__tracking_logs, which is kept as the
+# archive. MITx Online's and MITx's load beside their Airbyte tables until
+# staging is repointed. One listing per run: a full listing of a production
+# bucket (264,950 to 473,863 files on 2026-10-27) takes 50 to 89 s, and the
+# first runs walk ~331 (xpro), ~884 (mitxonline) and ~932 (mitx) batches.
+TRACKING_LOGS_DEPLOYMENTS = ("xpro", "mitxonline", "mitx")
+
+
+def tracking_logs_table(deployment: str) -> str:
+    """Return the raw table ol_dlt.sources.tracking_logs loads for a deployment."""
+    return f"raw__{deployment}__openedx__tracking_log_events"
+
+
+tracking_logs_assets = {
+    deployment: build_batched_assets(
+        name=f"{deployment}_tracking_logs",
+        build_source=partial(
+            tracking_logs.tracking_logs_source,
+            raw_table=tracking_logs_table(deployment),
+        ),
+        pipeline=tracking_logs.tracking_logs_pipeline_for(
+            tracking_logs_table(deployment)
+        ),
+        translator=RawDataDltTranslator(),
+        list_once=True,
+    )
+    for deployment in TRACKING_LOGS_DEPLOYMENTS
+}
+
+
+# Canvas course files and text for MIT Learn's ContentFiles. One load covers at
+# most canvas_content.BUDGET_BYTES of archive members, and the first run extracts
+# every course (~9,100 files through Tika).
+canvas_content_assets = build_batched_assets(
+    name="canvas_content_ingest",
+    build_source=canvas_content.build_source,
+    pipeline=canvas_content.canvas_content_pipeline,
+    translator=RawDataDltTranslator(),
+)
+
+
 # Resumes from the dlt cursor every run. A backfill is a deliberate
 # `posthog_events_source(start_date=...)` invocation (see the source's
 # __main__), not something a scheduled run can fall into.
@@ -468,28 +573,10 @@ posthog_events_assets = build_batched_assets(
 )
 
 
-class OcwContentLoadConfig(Config):
-    """Run config for the OCW content load."""
-
-    courses: list[str] | None = Field(
-        default=None,
-        description=(
-            "Course slugs to load on their own, each only if it changed. "
-            "Sweeps every course when unset."
-        ),
-    )
-
-
 # One load covers at most ocw_content.BUDGET_BYTES of course files, and each
 # load saves which courses it finished, so a run cut off mid-backlog resumes
 # there. The first run extracts every course (~70,000 files through Tika);
 # later runs read only the courses whose objects changed.
-#
-# Run config `courses` scopes the run to those courses, read only if changed and
-# drained a budget at a time the same way. That is how
-# ocw_content_publish_sensor loads a course soon after it is published, and how
-# a named set is loaded from the launchpad:
-#   ops: {ocw_content_ingest: {config: {courses: [<slug>, ...]}}}
 @dlt_assets(
     dlt_source=ocw_content.build_source(),
     dlt_pipeline=ocw_content.ocw_content_pipeline,
@@ -497,20 +584,99 @@ class OcwContentLoadConfig(Config):
     dagster_dlt_translator=RawDataDltTranslator(),
 )
 def ocw_content_assets(
-    context: AssetExecutionContext,
-    dlt: DagsterDltResource,
-    config: OcwContentLoadConfig,
+    context: AssetExecutionContext, dlt: DagsterDltResource
 ) -> Iterable[Any]:
-    """Sweep the OCW live bucket, or load the courses named in the run config."""
-    if config.courses is not None:
-        context.log.info(
-            "Loading %s named OCW courses: %s", len(config.courses), config.courses
-        )
+    """Sweep the OCW live bucket, the only load that unpublishes a course."""
     yield from drain(
         context=context,
         dlt=dlt,
-        build_source=partial(ocw_content.build_source, config.courses),
+        build_source=ocw_content.build_source,
         pipeline=ocw_content.ocw_content_pipeline,
+    )
+
+
+OCW_COURSE_SLUGS_NAME = "ocw_course_slugs"
+ocw_course_slugs = DynamicPartitionsDefinition(name=OCW_COURSE_SLUGS_NAME)
+OCW_COURSE_LOAD_KEY = AssetKey(["ocw", "course_content_load"])
+OCW_RAW_TABLE_KEY = AssetKey(["ol_warehouse_raw_data", ocw_content.RAW_TABLE])
+
+
+class OcwCourseLoadTranslator(RawDataDltTranslator):
+    """Key the per-course load apart from the table it writes.
+
+    The table's asset stays unpartitioned. With 100 or more upstream partitions
+    Dagster drops a dependency from data versioning
+    (SKIP_PARTITION_DATA_VERSION_DEPENDENCY_THRESHOLD), and the five OCW models
+    below the table rebuild on its data version.
+    """
+
+    def get_asset_spec(self, data: DltResourceTranslatorData) -> Any:
+        """Return the raw-data spec under the per-course load's key."""
+        return super().get_asset_spec(data).replace_attributes(key=OCW_COURSE_LOAD_KEY)
+
+
+def report_raw_table(
+    context: AssetExecutionContext,
+    results: Iterable[MaterializeResult],
+    courses: list[str],
+) -> Iterator[MaterializeResult]:
+    """Report the raw table for a course load, which is what its models watch.
+
+    An empty load reports it too when an earlier attempt, of this partition or
+    of a sweep, may have committed rows it never reported. Nothing else would
+    rebuild the models for them before the next sweep. The report comes first,
+    so a worker that dies after the result leaves no rows unreported.
+
+    :param context: The running step's context.
+    :param results: The load's results, from ``drain``.
+    :param courses: The run's partitions.
+    """
+    for result in results:
+        if (
+            result.metadata["rows_loaded"]
+            or unreported_attempt(context, OCW_COURSE_LOAD_KEY, courses)
+            or unreported_attempt(context, OCW_RAW_TABLE_KEY)
+        ):
+            context.log_event(
+                AssetMaterialization(
+                    asset_key=OCW_RAW_TABLE_KEY,
+                    metadata={"courses": courses},
+                    tags={DATA_VERSION_TAG: context.run_id},
+                )
+            )
+        yield result
+
+
+# One partition per course: its load history, and a retry or backfill of it from
+# the UI. A backfill of a contiguous range is one run, so a re-read of hundreds of
+# courses does not start a pod for each. ocw_content_publish_sensor requests these.
+# Launch one by hand with the OCW_CONTENT_RUN_TAGS run tag (ocw/content_load: true).
+# The run queue's one-at-a-time cap and ocw_content_run_in_flight match on that run
+# tag, and an asset's own tags do not become run tags, so an untagged run starts
+# beside a sensor's load and the two contend to commit to the raw table.
+@dlt_assets(
+    dlt_source=ocw_content.build_source(),
+    dlt_pipeline=ocw_content.ocw_course_pipeline,
+    name="ocw_course_content_load",
+    dagster_dlt_translator=OcwCourseLoadTranslator(),
+    partitions_def=ocw_course_slugs,
+    backfill_policy=BackfillPolicy.single_run(),
+)
+def ocw_course_load_assets(
+    context: AssetExecutionContext, dlt: DagsterDltResource
+) -> Iterable[Any]:
+    """Load the courses of the run's partitions, each only if it changed."""
+    courses = list(context.partition_keys)
+    context.log.info("Loading %s OCW courses: %s", len(courses), courses)
+    yield from report_raw_table(
+        context,
+        drain(
+            context=context,
+            dlt=dlt,
+            build_source=partial(ocw_content.build_source, courses),
+            pipeline=ocw_content.ocw_course_pipeline,
+        ),
+        courses,
     )
 
 
@@ -524,6 +690,7 @@ defs = Definitions(
             podcast_rss_assets,
             keycloak_assets,
             *([mitxonline_app_assets] if mitxonline_app_assets else []),
+            *([mitxonline_app_keyset_assets] if mitxonline_app_keyset_assets else []),
             *([xpro_app_assets] if xpro_app_assets else []),
             youtube_assets,
             see_assets,
@@ -531,9 +698,12 @@ defs = Definitions(
             medium_assets,
             posthog_events_assets,
             ocw_content_assets,
+            canvas_content_assets,
+            ocw_course_load_assets,
             *edxorg_s3_table_assets,
             *course_xml_blocks_assets,
             edxorg_program_reports_assets,
+            *tracking_logs_assets.values(),
         ]
     ),
 )

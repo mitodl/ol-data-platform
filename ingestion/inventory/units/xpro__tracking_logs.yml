@@ -1,6 +1,12 @@
 ---
-# Generated from a live Airbyte snapshot by bin/airbyte-inventory.py, then
-# resolved by hand. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+# Hand-written: a dlt source has no Airbyte connection, so
+# bin/airbyte-inventory.py cannot produce this unit. See
+# docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+#
+# ol_dlt.sources.tracking_logs loads the xPro tracking log into
+# raw__xpro__openedx__tracking_log_events. It replaced the Airbyte-loaded
+# raw__xpro__openedx__tracking_logs, which stays in place as the archive (see
+# retired.yml).
 schema_version: 1
 deployment: xpro
 layer: tracking_logs
@@ -8,25 +14,19 @@ scope: scoped
 strategies:
   qa: ingest
   local: fixture
-loader: airbyte
-table_prefix: raw__xpro__openedx__tracking_logs
-airbyte:
-  source_kind: source-s3
-  replication_method: n/a
-  connections:
-  - environment: production
-    name: xPro Tracking Logs → S3 Data Lake
-    status: active
-    sync_interval_hours: 12
-    streams:
-    - raw__xpro__openedx__tracking_logs
+loader: dlt
+# The load appends each log file once. Staging dedups events on their
+# business columns and reads new rows by event time, so this only orders
+# copies of the same event.
+raw_metadata_column: _file_modified_at
+table_prefix: raw__xpro__openedx__tracking_log
+dlt:
+  source_module: ol_dlt.sources.tracking_logs
+  write_disposition: append
 tables:
-- name: raw__xpro__openedx__tracking_logs
-  raw_table: raw__xpro__openedx__tracking_logs
+- name: raw__xpro__openedx__tracking_log_events
+  raw_table: raw__xpro__openedx__tracking_log_events
   sync_mode: incremental_append
   cursor_field:
-  - _ab_source_file_last_modified
+  - _file_modified_at
   modeled: true
-  raw_metadata_column:
-  - _airbyte_extracted_at
-  - _ab_source_file_last_modified

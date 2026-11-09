@@ -38,8 +38,11 @@ params:
     hasCustomLabel: true
     label: Correct%
     optionName: metric_i88s1ewi78_vq6dr3574xh
-    sqlExpression: "     ROUND(SUM(case\n               when problem_success= 'correct'\
-      \ then 1\n               else 0\n           end)  * 100.0 / count(*), 1)"
+    sqlExpression: |2-
+           ROUND(SUM(case
+                     when problem_success= 'correct' then 1
+                     else 0
+                 end)  * 100.0 / count(*), 1)
   - aggregate: null
     column: null
     datasourceWarning: false
@@ -47,8 +50,11 @@ params:
     hasCustomLabel: true
     label: Incorrect%
     optionName: metric_4um0opruu4d_oqzdnqf2cue
-    sqlExpression: "     ROUND(SUM(case\n               when problem_success= 'incorrect'\
-      \ then 1\n               else 0\n           end)  * 100.0 / count(*), 1)"
+    sqlExpression: |2-
+           ROUND(SUM(case
+                     when problem_success= 'incorrect' then 1
+                     else 0
+                 end)  * 100.0 / count(*), 1)
   order_by_cols: []
   order_desc: true
   percent_metrics: []

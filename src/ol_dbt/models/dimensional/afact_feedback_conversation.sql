@@ -1,6 +1,8 @@
 -- The analysis fact: one row per conversation. A complaint usually emerges over several
 -- turns, so the conversation is the unit that gets summarized, embedded, scored and
 -- clustered. Fully rebuildable without touching tfact_feedback.
+{% set verdicts = "('good', 'bad', 'like', 'dislike', 'positive', 'negative')" %}
+
 with conversation as (
     select * from {{ ref('int__feedback__conversation') }}
 )
@@ -28,7 +30,6 @@ with conversation as (
         , max(case when is_conversation_opening then user_fk end) as opened_by_user_fk
         -- a conversation is about one course run, so every turn carries the same key
         , max(courserun_fk) as courserun_fk
-        , max(nullif(explicit_rating, '')) as explicit_rating
     from feedback
     group by conversation_id, feedback_source_fk
 )
@@ -129,6 +130,10 @@ with conversation as (
     select * from {{ ref('int__feedback__embedding') }}
 )
 
+, model_sentiment as (
+    select * from {{ ref('int__feedback__sentiment') }}
+)
+
 -- Both ways feedback_cluster_assignment writes a row stamp the latest run's id, so
 -- the most recently assigned row names the run that is current.
 , current_cluster_run as (
@@ -152,25 +157,33 @@ select
     , conversation.conversation_text
     , ticket.ticket_status as final_status
     , ticket.ticket_priority as final_priority
-    , turn_aggregates.explicit_rating
+    , conversation.explicit_rating
     -- Tier 1 of the sentiment ladder. Zendesk 'good'/'bad', tutor 'like'/'dislike'
     -- and content feedback 'positive'/'negative' are verdicts; Zendesk's 'unoffered'
     -- (no survey sent) and 'offered' (sent, unanswered) are kinds of absence, and
-    -- content feedback's 'idea' is a suggestion, not a verdict, so all three stay
-    -- null for the model tier to fill.
-    , case turn_aggregates.explicit_rating
+    -- content feedback's 'idea' is a suggestion, not a verdict. The first two fall
+    -- through to the model tier (feedback_sentiment); 'idea' stays null.
+    , case conversation.explicit_rating
         when 'good' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
         when 'like' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
         when 'positive' then {{ dbt_utils.generate_surrogate_key(["'positive'"]) }}
         when 'bad' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
         when 'dislike' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
         when 'negative' then {{ dbt_utils.generate_surrogate_key(["'negative'"]) }}
+        when 'idea' then null
+        else model_sentiment.sentiment_fk
     end as sentiment_fk
     , case
-        when turn_aggregates.explicit_rating
-            in ('good', 'bad', 'like', 'dislike', 'positive', 'negative')
-            then 'explicit_rating'
+        when conversation.explicit_rating in {{ verdicts }} then 'explicit_rating'
+        when conversation.explicit_rating = 'idea' then null
+        when model_sentiment.sentiment_fk is not null then 'model'
     end as sentiment_source
+    -- A rating newer than the last prediction wins, so hide that stale model row's version.
+    , case
+        when conversation.explicit_rating in {{ verdicts }} or conversation.explicit_rating = 'idea'
+            then null
+        else model_sentiment.sentiment_model_version
+    end as sentiment_model_version
     , summary.conversation_summary
     , summary.summary_model_version
     , summary.prompt_version
@@ -220,3 +233,5 @@ left join summary
     on conversation.feedback_conversation_pk = summary.feedback_conversation_pk
 left join embedding
     on conversation.feedback_conversation_pk = embedding.feedback_conversation_pk
+left join model_sentiment
+    on conversation.feedback_conversation_pk = model_sentiment.feedback_conversation_pk

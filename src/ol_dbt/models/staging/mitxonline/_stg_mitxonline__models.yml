@@ -80,7 +80,7 @@ models:
         severity: warn
       arguments:
         datepart: day
-        field: from_iso8601_timestamp(concat(courserunenrollment_created_on, 'Z'))
+        field: "{{ from_iso8601_timestamp('courserunenrollment_created_on') }}"
         interval: 2
 - name: stg__mitxonline__app__postgres__courses_courserunenrollmentaudit
   description: >
@@ -1315,7 +1315,8 @@ models:
     - unique
     - not_null
   - name: courseruncertificate_url
-    description: str, the full URL to the certificate on MITx Online if it's not revoked
+    description: str, the full URL to the course certificate on learn.mit.edu if it's
+      not revoked
     tests:
     - unique
   - name: courserun_id

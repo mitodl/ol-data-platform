@@ -11,30 +11,6 @@ from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient, webhook_status
 from ol_orchestrate.resources.secrets.vault import Vault
 
-FIRST_PAGE = "https://learn.example.com/api/v1/programs/?platform=edx&limit=100"
-SECOND_PAGE = f"{FIRST_PAGE}&offset=100"
-
-
-def test_get_published_programs_follows_pagination() -> None:
-    """Every page is read, and the platform filter goes on the first request."""
-    requests: list[httpx.Request] = []
-    pages = {
-        FIRST_PAGE: {"results": [{"readable_id": "a"}], "next": SECOND_PAGE},
-        SECOND_PAGE: {"results": [{"readable_id": "b"}], "next": None},
-    }
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        requests.append(request)
-        return httpx.Response(200, json=pages[str(request.url)])
-
-    client = MITLearnApiClient(base_url="https://learn.example.com", token="t")
-    client._http_client = httpx.Client(transport=httpx.MockTransport(handler))
-
-    programs = client.get_published_programs("edx")
-
-    assert [p["readable_id"] for p in programs] == ["a", "b"]
-    assert len(requests) == 2
-
 
 def test_webhook_status_names_a_shadow_run() -> None:
     """A response carrying shadow counts was loaded and rolled back, not delivered."""
@@ -75,6 +51,15 @@ def test_notify_learning_resources_omits_sync_by_default() -> None:
     """A batch that declares nothing has the shape it always had."""
     resource = {"readable_id": "a", "etl_source": "oll", "resource_type": "course"}
     assert _sent_batch(resources=[resource]) == {"resources": [resource]}
+
+
+def test_notify_learning_resources_sends_allow_mass_unpublish_when_set() -> None:
+    """The override is in the signed body only when the caller asks for it."""
+    resource = {"readable_id": "a", "etl_source": "oll", "resource_type": "course"}
+    assert _sent_batch(resources=[resource], allow_mass_unpublish=True) == {
+        "resources": [resource],
+        "allow_mass_unpublish": True,
+    }
 
 
 LOCAL_LEARN = "https://api.learn.mit.dev"

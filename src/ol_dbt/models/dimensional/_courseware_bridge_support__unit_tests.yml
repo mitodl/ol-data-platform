@@ -1,0 +1,69 @@
+---
+unit_tests:
+- name: test_bridge_courserun_concept_counts_a_claim_once_per_concept
+  description: >
+    An assessment that lists "k-means" and "k-means clustering", two labels of one
+    concept, is one claim behind the assesses relation, not two.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, extraction_key: e2, claim_ordinal: 3, claim_kind: assessment_expectation,
+      label: k-means, concept_id: kmeans, review_status: accepted}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, extraction_key: e2, claim_ordinal: 3, claim_kind: assessment_expectation,
+      label: k-means clustering, concept_id: kmeans, review_status: accepted}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: r1, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      is_current: true}
+  - input: ref('dim_course')
+    rows: []
+  - input: ref('dim_concept')
+    rows: []
+  expect:
+    rows:
+    - {courserun_fk: r1, concept_fk: kmeans, relation: assesses, claim_count: 1, accepted_claim_count: 1}
+
+- name: test_bridge_courserun_concept_supports_an_inferred_requirement_only_before_teaching
+  description: >
+    Linear algebra is used in unit 1 by a rejected claim, taught in unit 2 and used
+    again in unit 3 by an accepted claim. The inference rests on unit 1, so the
+    requirement stays for review but no accepted claim supports it; the accepted
+    use comes after the teaching. Calculus, assumed by an accepted claim and never
+    taught, is supported.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, extraction_key: e1, claim_ordinal: 1, claim_kind: concept,
+      teaching_status: used, concept_id: linalg, review_status: rejected}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: u2,
+      scope_kind: unit, scope_position: 2, extraction_key: e2, claim_ordinal: 1, claim_kind: concept,
+      teaching_status: taught, concept_id: linalg, review_status: proposed}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: u3,
+      scope_kind: unit, scope_position: 3, extraction_key: e3, claim_ordinal: 1, claim_kind: concept,
+      teaching_status: used, concept_id: linalg, review_status: accepted}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: u1,
+      scope_kind: unit, scope_position: 1, extraction_key: e1, claim_ordinal: 2, claim_kind: assumed_knowledge,
+      concept_id: calculus, review_status: accepted}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: r1, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      is_current: true}
+  - input: ref('dim_course')
+    rows: []
+  - input: ref('dim_concept')
+    rows: []
+  expect:
+    rows:
+    - {courserun_fk: r1, concept_fk: linalg, relation: uses, requirement_source: null,
+      claim_count: 2, accepted_claim_count: 1}
+    - {courserun_fk: r1, concept_fk: linalg, relation: teaches, requirement_source: null,
+      claim_count: 1, accepted_claim_count: 0}
+    - {courserun_fk: r1, concept_fk: linalg, relation: requires, requirement_source: inferred,
+      claim_count: 2, accepted_claim_count: 0}
+    - {courserun_fk: r1, concept_fk: calculus, relation: requires, requirement_source: inferred,
+      claim_count: 1, accepted_claim_count: 1}

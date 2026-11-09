@@ -21,10 +21,11 @@
     name.
 
     That holds only while the target writes to default_catalog. A target whose
-    `catalog` is an Iceberg lake (starrocks_local) builds the same layered
-    warehouse the Trino targets do, and its readers address a layer as
-    `<target.schema>_<layer>` (MIT Learn's WAREHOUSE_SCHEMA, the `_raw` suffix
-    the source definitions add), so it keeps dbt's concatenation.
+    `catalog` is an Iceberg lake (starrocks_local, starrocks_qa_lake, ci, ...)
+    builds the same layered warehouse the Trino targets do, and its readers
+    address a layer as `<target.schema>_<layer>` (MIT Learn's WAREHOUSE_SCHEMA,
+    the `_raw` suffix the source definitions add), so it keeps dbt's
+    concatenation.
 
     Every other target keeps dbt's default concatenation: this macro file is
     shared by both dbt projects in this repo (the Trino-scoped one in dbt.py and
@@ -32,8 +33,9 @@
     models already depend on `<target.schema>_<custom>` naming for every mart.
     Guarding on target.type keeps this fix from silently relocating them.
 
-    On Trino the schema is a Glue database, and Glue accepts names that Iceberg's
-    GlueCatalog refuses to load (IcebergToGlueConverter.GLUE_DB_PATTERN,
+    On Trino, and on a StarRocks lake target, the schema is a Glue database
+    (the local lake gets the same check, so a name that works there works in
+    QA). Glue accepts names that Iceberg's GlueCatalog refuses to load (IcebergToGlueConverter.GLUE_DB_PATTERN,
     `[a-z0-9_]{1,252}`, enforced unless the catalog sets
     glue.skip-name-validation, which ours do not). Trino creates such a database
     without complaint, and then nothing that reads the lake through Iceberg
@@ -51,7 +53,8 @@
         {{ custom_schema_name | trim }}
     {%- else -%}
         {%- set schema_name = default__generate_schema_name(custom_schema_name, node) | trim -%}
-        {%- if target.type == 'trino' and not modules.re.fullmatch('[a-z0-9_]{1,252}', schema_name) -%}
+        {%- set is_lake = target.type == 'trino' or (target.type == 'starrocks' and target.catalog != 'default_catalog') -%}
+        {%- if is_lake and not modules.re.fullmatch('[a-z0-9_]{1,252}', schema_name) -%}
             {{ exceptions.raise_compiler_error(
                 "Schema name '" ~ schema_name ~ "' is not one Iceberg can load from Glue. "
                 ~ "It must be 1-252 characters of lowercase letters, digits and underscores. "

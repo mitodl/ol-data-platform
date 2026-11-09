@@ -4,9 +4,10 @@
     {{ log("DuckDB target detected: " ~ target.name, info=True) }}
     {{ log("Database path: " ~ target.path, info=True) }}
 
-    {# Load AWS credentials from chain #}
-    {% set _ = run_query("CALL load_aws_credentials()") %}
-    {{ log("Loaded AWS credentials", info=True) }}
+    {# DuckDB 2.0 removed CALL load_aws_credentials(). VALIDATION 'none' lets the
+       unit-test target, which reads no S3, start without AWS credentials. #}
+    {% set _ = run_query("CREATE OR REPLACE SECRET aws_credential_chain (TYPE S3, PROVIDER credential_chain, VALIDATION 'none')") %}
+    {{ log("Created the AWS credential chain secret", info=True) }}
   {% endif %}
 {% endmacro %}
 

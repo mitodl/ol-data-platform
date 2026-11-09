@@ -1,0 +1,33 @@
+---
+unit_tests:
+- name: test_bridge_courserun_concept_maps_declared_prerequisites_by_kind
+  description: >
+    Only a stated prerequisite is a requires edge. A corequisite and a recommended
+    background get their own relations. "No prerequisites" never reaches the bridge;
+    int__courseware__claims gives it no concept label key.
+  model: bridge_courserun_concept
+  given:
+  - input: ref('int__courseware__resolved_concept_mentions')
+    rows:
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: c,
+      scope_kind: context, scope_position: 0, claim_kind: declared_prerequisite, concept_id: calculus,
+      prerequisite_kind: prerequisite}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: c,
+      scope_kind: context, scope_position: 0, claim_kind: declared_prerequisite, concept_id: lab,
+      prerequisite_kind: corequisite}
+    - {platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026", scope_id: c,
+      scope_kind: context, scope_position: 0, claim_kind: declared_prerequisite, concept_id: jupyter,
+      prerequisite_kind: recommended}
+  - input: ref('dim_course_run')
+    rows:
+    - {courserun_pk: r1, platform: mitxonline, courserun_readable_id: "course-v1:X+Y+1T2026",
+      is_current: true}
+  - input: ref('dim_course')
+    rows: []
+  - input: ref('dim_concept')
+    rows: []
+  expect:
+    rows:
+    - {courserun_fk: r1, concept_fk: calculus, relation: requires, requirement_source: declared}
+    - {courserun_fk: r1, concept_fk: lab, relation: requires_concurrently, requirement_source: declared}
+    - {courserun_fk: r1, concept_fk: jupyter, relation: recommends, requirement_source: declared}

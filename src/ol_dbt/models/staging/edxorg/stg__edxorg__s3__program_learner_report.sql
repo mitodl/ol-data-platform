@@ -11,7 +11,10 @@ with source as (
             -- Try parsing once and handle both formats
                 coalesce(
                     {{ try_or_null(cast_timestamp_to_iso8601(date_parse('date_program_certificate_awarded', "'%Y-%m-%dT%H:%i:%sZ'", strict=false))) }}
-                    , {{ cast_timestamp_to_iso8601(date_parse('date_program_certificate_awarded', "'%Y-%m-%d %H:%i:%s Z'", strict=false)) }}
+                    , {{ cast_timestamp_to_iso8601(date_parse(
+                        'date_program_certificate_awarded', "'%Y-%m-%d %H:%i:%s Z'"
+                        , null_when="{} = 'null' or " ~ date_parse('{}', "'%Y-%m-%dT%H:%i:%sZ'", strict=false) ~ " is not null"
+                    )) }}
                 )
 
         end as program_certificate_awarded_at
@@ -73,7 +76,7 @@ with source as (
         , {{ cast_timestamp_to_iso8601(date_parse('date_first_enrolled', "'%Y-%m-%d %H:%i:%s Z'")) }} as courserunenrollment_created_on
         , case
             when date_completed = 'null' then null -- noqa: ST10
-            else {{ cast_timestamp_to_iso8601(date_parse('date_completed', "'%Y-%m-%d %H:%i:%s Z'", strict=false)) }}
+            else {{ cast_timestamp_to_iso8601(date_parse('date_completed', "'%Y-%m-%d %H:%i:%s Z'", null_when="{} = 'null'")) }}
         end as completed_course_on
         , case
             when last_activity_date = 'null' then null -- noqa: ST10
@@ -81,11 +84,11 @@ with source as (
         end as courseactivity_last_activity_date
         , case
             when date_last_unenrolled = 'null' then null -- noqa: ST10
-            else {{ cast_timestamp_to_iso8601(date_parse('date_last_unenrolled', "'%Y-%m-%d %H:%i:%s Z'", strict=false)) }}
+            else {{ cast_timestamp_to_iso8601(date_parse('date_last_unenrolled', "'%Y-%m-%d %H:%i:%s Z'", null_when="{} = 'null'")) }}
         end as courserunenrollment_unenrolled_on
         , case
             when date_first_upgraded_to_verified = 'null' then null -- noqa: ST10
-            else {{ cast_timestamp_to_iso8601(date_parse('date_first_upgraded_to_verified', "'%Y-%m-%d %H:%i:%s Z'", strict=false)) }}
+            else {{ cast_timestamp_to_iso8601(date_parse('date_first_upgraded_to_verified', "'%Y-%m-%d %H:%i:%s Z'", null_when="{} = 'null'")) }}
         end as courserunenrollment_upgraded_on
         , program_certificate_awarded_at as program_certificate_awarded_on
     from most_recent_source

@@ -6,7 +6,7 @@ deployment: mitpe
 layer: api
 scope: scoped
 strategies:
-  qa: omit
+  qa: ingest
   local: fixture
 loader: dlt
 table_prefix: raw__mitpe__api__

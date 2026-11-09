@@ -190,22 +190,24 @@ models:
 
 - name: int__courseware__extractions
   description: Every claim extraction, and whether it is current, the one its scope
-    part is read from now. A scope's newest complete reading is current, so a run
-    that extracts only some parts of a new reading changes nothing until the rest
-    succeed. A scope the run's extraction sources no longer have has no current extraction.
+    part is read from now. A scope's current reading is its first complete one by
+    the run's allowlist-approved extractor version, then matching the extractor's
+    latest read of the run (its text, then for v2 its course header), then newest,
+    so a run that extracts only some parts of a new reading changes nothing until
+    the rest succeed. A scope the run's extraction sources no longer have has no current
+    extraction.
   config:
     meta:
       # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
       qa_buildable: false
   columns:
   - name: extraction_key
-    description: str, sha256 of everything the call depended on (extractor, prompt
-      and schema versions, model, effort, run, scope and the full message text)
+    description: str, sha256 of what the extraction read (see the source's description)
     tests:
     - not_null
     - unique
   - name: extractor_id
-    description: str, the extractor, e.g. courseware_claims_v1
+    description: str, the extractor, e.g. courseware_claims_v2
   - name: prompt_version
     description: str, hash of the system prompt
   - name: schema_version
@@ -225,7 +227,8 @@ models:
   - name: scope_title
     description: str, the sequential title or the scope name
   - name: scope_position
-    description: int, the scope's order in the course; 0 for context, 9999 for materials
+    description: int, the scope's order in the course as it is now (as extracted for
+      a scope the sources do not list); 0 for context, 9999 for materials
   - name: scope_part
     description: int, which part of a scope split to fit the input budget, from 1
   - name: scope_part_count
@@ -235,6 +238,23 @@ models:
   - name: scope_part_checksums
     description: str, every part's input_text_checksum, in order and comma-separated,
       as the run that made this call split the scope
+  - name: header_version
+    description: str, hash of the course header the call read; null for extractions
+      recorded before it was
+  - name: text_extraction_key
+    description: str, the text-stage reading the claims came from; null for v1
+  - name: text_input_digest
+    description: str, sha256 of the text stage's exact input; extractions sharing
+      it read identical text, so their claims are one source's; null for v1
+  - name: text_platform
+    description: str, the platform of the run the text reading was made for (v2)
+  - name: text_courserun_readable_id
+    description: str, the run the text reading was made for; another run's when the
+      reading was reused across runs (v2)
+  - name: text_scope_id
+    description: str, the scope the text reading was made for (v2)
+  - name: context_input_digest
+    description: str, sha256 of the context stage's exact input; null for v1
   - name: source_count
     description: int, number of sources the call read
   - name: truncated_source_count
@@ -248,20 +268,108 @@ models:
   - name: stop_reason
     description: str, the response's stop_reason
   - name: input_tokens
-    description: int, uncached input tokens billed
+    description: int, uncached input tokens; a per-call diagnostic for one stage only
+      (v2, the context stage's call, 0 when no call was made; the text stage's are
+      on courseware_text_extraction). Cost is tracked in Opik, project dagster-ml,
+      tags courseware:text and courseware:context, not summed here
   - name: output_tokens
-    description: int, output tokens billed, thinking included
+    description: int, output tokens, thinking included; a per-call diagnostic for
+      one stage only (v2, the context stage's call, 0 when no call was made; the text
+      stage's are on courseware_text_extraction). Cost is tracked in Opik, project
+      dagster-ml, tags courseware:text and courseware:context, not summed here
   - name: cache_read_input_tokens
-    description: int, input tokens read from the prompt cache
+    description: int, input tokens read from the prompt cache; a per-call diagnostic
+      for one stage only (v2, the context stage's call, 0 when no call was made; the
+      text stage's are on courseware_text_extraction). Cost is tracked in Opik, project
+      dagster-ml, tags courseware:text and courseware:context, not summed here
   - name: cache_creation_input_tokens
-    description: int, input tokens written to the prompt cache
+    description: int, input tokens written to the prompt cache; a per-call diagnostic
+      for one stage only (v2, the context stage's call, 0 when no call was made; the
+      text stage's are on courseware_text_extraction). Cost is tracked in Opik, project
+      dagster-ml, tags courseware:text and courseware:context, not summed here
   - name: extracted_at
     description: timestamp, when the call returned
+  - name: is_approved_version
+    description: boolean, whether the call ran the extractor version (extractor, prompt
+      and schema) int__courseware__extraction_allowlist approves for the run; null
+      when the allowlist does not cover the run
+  - name: matches_current_input
+    description: boolean, whether the part's split and input text, and for v2 the
+      course header, are the ones the extractor's latest read of the run computed
+    tests:
+    - not_null
   - name: is_current
     description: boolean, whether this is the extraction its scope part is read from
       now
     tests:
     - not_null
+
+- name: int__courseware__scope_part_coverage
+  description: One row per scope part the extractor's latest read of a run expects,
+    with whether an extraction covers it. A part with no extraction has no row in
+    int__courseware__extractions, so a scope that grew to two parts whose part 2 failed
+    shows up only here.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the sequential block id, or 'context' or 'materials'
+  - name: scope_part
+    description: int, which part of the scope, from 1
+  - name: scope_part_count
+    description: int, how many parts the latest read split the scope into
+  - name: observed_at
+    description: timestamp, when the extractor read the run
+  - name: extraction_count
+    description: int, extractions of this scope part under any version or input
+  - name: has_approved_extraction
+    description: boolean, whether an extraction of the run's allowlist-approved version
+      covers the part (under any version when the allowlist does not cover the run)
+  - name: has_current_input_extraction
+    description: boolean, whether one of those has the part's current split and input
+      text (for v2, also the current course header); false for a part whose new text
+      or header failed to extract, whose older extraction may still be current
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [platform, courserun_readable_id, scope_id, scope_part]
+
+- name: int__courseware__latest_scope_inputs
+  description: Each course run's latest read by the courseware extractor, one row
+    per scope part it read (extracted or skipped), with the split and input text checksum
+    it computed.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the sequential block id, or 'context' or 'materials'
+  - name: scope_part
+    description: int, which part of the scope, from 1
+  - name: scope_part_count
+    description: int, how many parts the latest read split the scope into
+  - name: input_text_checksum
+    description: str, sha256 of the source text the part's call would read
+  - name: header_version
+    description: str, hash of the course header at the read; null for reads recorded
+      before it was
+  - name: observed_at
+    description: timestamp, when the extractor read the run
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: [platform, courserun_readable_id, scope_id, scope_part]
 
 - name: int__courseware__answer_document_review
   description: The course documents to review for answer keys, one row per document
@@ -349,6 +457,9 @@ models:
     description: str, the model that made the claim
   - name: extracted_at
     description: timestamp, when the extraction returned
+  - name: text_input_digest
+    description: str, sha256 of the text the claim was read from; claims sharing it
+      are one source's and not independent corroboration; null for v1
   - name: is_current
     description: boolean, whether the claim's extraction is the one its scope part
       is read from now (int__courseware__extractions)
@@ -363,7 +474,14 @@ models:
   - name: concept_kind
     description: str, concept, method, tool, dataset or application (concepts only)
   - name: teaching_status
-    description: str, taught, reviewed, used or mentioned (concepts and skills)
+    description: str, taught, reviewed, used or mentioned (concepts and skills), in
+      the course's context
+  - name: text_teaching_status
+    description: str, the status read from the text alone, before the course context
+      (v2); null for v1
+  - name: sense_hint
+    description: str, the field or sense the course means when the label is ambiguous
+      across fields (v2); null otherwise
   - name: how_used
     description: str, where the material relies on assumed knowledge
   - name: flagged_as_prior
@@ -382,13 +500,16 @@ models:
     description: str, the label as normalized by the courseware_label_key macro (lowercase,
       plus and hash signs spelled out, separators collapsed), for concept, assumed
       knowledge and declared prerequisite claims; null for a label with no letters
-      or numbers
+      or numbers and for a declared "no prerequisites" (explicitly_none)
   - name: evidence_count
     description: int, evidence passages quoted for the claim
   - name: verified_evidence_count
     description: int, passages found in the source text (exact or fuzzy)
   - name: is_verified
     description: boolean, whether at least one evidence passage was found in the source
+  - name: review_status
+    description: str, proposed, accepted or rejected; proposed until a review workflow
+      records decisions
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [extraction_key, claim_ordinal]
@@ -433,6 +554,625 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [platform, courserun_readable_id]
 
+- name: int__courseware__concept_mentions
+  description: One row per (current verified claim, concept label) it names, including
+    the concept labels assessments and learning outcomes list.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the scope the claim came from
+  - name: scope_kind
+    description: str, unit, context or materials
+  - name: scope_position
+    description: int, the scope's order in the course
+  - name: extraction_key
+    description: str, the extraction the claim came from
+  - name: claim_ordinal
+    description: int, the claim within the extraction
+  - name: extracted_at
+    description: timestamp, when the extraction returned
+  - name: claim_kind
+    description: str, the claim's kind; assessment_expectation and learning_outcome
+      rows are the labels those claims list
+  - name: teaching_status
+    description: str, taught, reviewed, used or mentioned; null for listed labels
+  - name: concept_kind
+    description: str, concept, method, tool, dataset or application; null for listed
+      labels
+  - name: description
+    description: str, the claim's description; null for listed labels
+  - name: label
+    description: str, the label as extracted
+  - name: concept_label_key
+    description: str, the normalized label key
+    tests:
+    - not_null
+  - name: prerequisite_kind
+    description: str, prerequisite, corequisite or recommended for declared prerequisites;
+      null otherwise. A declared "no prerequisites" (explicitly_none) has no concept
+      label key, so it has no row.
+  - name: review_status
+    description: str, the claim's review status
+
+- name: int__courseware__concept_labels
+  description: One row per normalized concept label key across every course, with
+    its most used surface form, kind and description. The input to concept resolution.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: concept_label_key
+    description: str, the normalized label key
+    tests:
+    - unique
+    - not_null
+  - name: preferred_label
+    description: str, the label's most used surface form
+  - name: concept_kind
+    description: str, the label's most used concept kind
+  - name: description
+    description: str, one claim description, from a taught mention where there is
+      one
+  - name: mention_count
+    description: int, mentions of the label
+  - name: taught_mention_count
+    description: int, mentions with teaching_status taught or reviewed
+  - name: courserun_count
+    description: int, distinct course runs that mention the label
+
+- name: int__courseware__concept_description_inputs
+  description: What the concept describer reads, up to five claim descriptions per
+    resolved concept from different course runs, taught ones first, with the course
+    title each came from.
+  config:
+    meta:
+      # It reads claims only the courseware extractor writes, which no QA run produces
+      # until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: concept_id
+    description: str, the concept's UUID
+    tests:
+    - not_null
+  - name: context_rank
+    description: int, the row's position within its concept, 1 to 5
+  - name: label
+    description: str, the label the claim used
+  - name: concept_kind
+    description: str, the claim's concept kind
+  - name: description
+    description: str, the claim's description of how its scope treats the concept
+  - name: course_title
+    description: str, the course the claim came from, for telling senses of a label
+      apart
+  - name: approved_prompt_version
+    description: str, the description prompt version courseware_description_approval
+      approves, the same on every row; null when it approves none or holds more than
+      one row, and then the describer refuses to run
+
+- name: int__courseware__concept_assignments
+  description: Which concept each normalized label belongs to, from the newest resolution
+    run. Labels extracted since that run have a null concept_id until the next run.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: concept_label_key
+    description: str, the normalized label key
+    tests:
+    - unique
+    - not_null
+  - name: preferred_label
+    description: str, the label's most used surface form
+  - name: mention_count
+    description: int, mentions of the label
+  - name: courserun_count
+    description: int, distinct course runs that mention the label
+  - name: concept_id
+    description: str, the opaque UUID of the active concept the label belongs to
+  - name: assignment_source
+    description: str, carried, exact_match, minted or rebuild_carried
+  - name: assigned_run_id
+    description: str, the resolution run that first made the assignment
+  - name: resolution_run_id
+    description: str, the newest resolution run, whose snapshot this is
+
+- name: int__courseware__concept_registry
+  description: Every concept id ever minted, as of the newest resolution run, with
+    its lifecycle status and redirect.
+  columns:
+  - name: concept_id
+    description: str, opaque UUID, minted once
+    tests:
+    - unique
+    - not_null
+  - name: concept_status
+    description: str, active, merged or deprecated
+    tests:
+    - accepted_values:
+        values: [active, merged, deprecated]
+  - name: merged_into_concept_id
+    description: str, the active concept a merged one redirects to
+  - name: minted_label
+    description: str, the label the concept was minted under
+  - name: minted_run_id
+    description: str, the resolution run that minted the id
+  - name: minted_at
+    description: timestamp, when the id was minted
+  - name: split_from_concept_id
+    description: str, for a concept minted as another sense of a label, the label's
+      primary concept it was split from
+  - name: resolution_run_id
+    description: str, the newest resolution run, whose snapshot this is
+
+- name: int__courseware__latest_resolution_run
+  description: The newest concept resolution run, whose snapshots the concept models
+    read.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: resolution_run_id
+    description: str, the newest resolution run's UUID
+    tests:
+    - unique
+    - not_null
+
+- name: int__courseware__concept_sense_inputs
+  description: Every concept mention with its course run and course title, the input
+    sense assignment reads to decide which sense of its label each course run uses.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: concept_label_key
+    description: str, the normalized label key
+    tests:
+    - not_null
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: course_title
+    description: str, the course's title, the main context for the label's sense
+  - name: label
+    description: str, the label as extracted
+  - name: concept_kind
+    description: str, the claim's concept kind; null for listed labels
+  - name: description
+    description: str, the claim's description; null for listed labels
+  - name: teaching_status
+    description: str, taught, reviewed, used or mentioned; null for listed labels
+
+- name: int__courseware__concept_aliases
+  description: Every sense of every normalized label, from the newest resolution run.
+    A label can name several concepts, its primary one and those split off it.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: concept_label_key
+    description: str, the normalized label key
+    tests:
+    - not_null
+  - name: concept_id
+    description: str, the active concept this sense is
+    tests:
+    - not_null
+  - name: sense_role
+    description: str, primary or split
+    tests:
+    - accepted_values:
+        values: [primary, split]
+  - name: sense_gloss
+    description: str, what the label means in this sense
+  - name: added_run_id
+    description: str, the run that first gave the label this sense
+  - name: resolution_run_id
+    description: str, the newest resolution run, whose snapshot this is
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [concept_label_key, concept_id]
+
+- name: int__courseware__concept_sense_assignments
+  description: Which sense of its label each course run uses, from the newest resolution
+    run. Rows with sense_status needs_review are the sense review queue.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: concept_label_key
+    description: str, the normalized label key
+    tests:
+    - not_null
+  - name: platform
+    description: str, the course run's platform
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: concept_id
+    description: str, the concept the run's sense of the label is; null when queued
+      for review
+  - name: sense_status
+    description: str, assigned or needs_review
+    tests:
+    - accepted_values:
+        values: [assigned, needs_review]
+  - name: assignment_source
+    description: str, single_sense, context_selected, new_sense or unsure
+  - name: assigned_run_id
+    description: str, the run that made the assignment
+  - name: resolution_run_id
+    description: str, the newest resolution run, whose snapshot this is
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [concept_label_key, platform, courserun_readable_id]
+
+- name: int__courseware__learn_course_runs
+  description: For each course Learn lists, the source-eligible run with the newest
+    extraction, which the knowledge release's resource projections publish.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: etl_source
+    description: str, Learn's etl_source for the course (mitxonline, xpro)
+    tests:
+    - not_null
+  - name: readable_id
+    description: str, the course readable_id as Learn keys it
+    tests:
+    - not_null
+  - name: course_title
+    description: str, the course's title
+  - name: courserun_fk
+    description: str, dim_course_run.courserun_pk of the extracted run
+  - name: courserun_readable_id
+    description: str, the extracted run
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [etl_source, readable_id]
+
+- name: int__courseware__resolved_concept_mentions
+  description: Concept mentions with the concept their course run's sense of the label
+    is. Mentions not yet assigned a sense, or queued for review, are left out.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the scope the claim came from
+  - name: scope_kind
+    description: str, unit, context or materials
+  - name: scope_position
+    description: int, the scope's order in the course
+  - name: extraction_key
+    description: str, the extraction the claim came from
+  - name: claim_ordinal
+    description: int, the claim within the extraction
+  - name: extracted_at
+    description: timestamp, when the extraction returned
+  - name: claim_kind
+    description: str, the claim's kind
+  - name: teaching_status
+    description: str, taught, reviewed, used or mentioned; null for listed labels
+  - name: concept_kind
+    description: str, the claim's concept kind; null for listed labels
+  - name: description
+    description: str, the claim's description; null for listed labels
+  - name: label
+    description: str, the label as extracted
+  - name: concept_label_key
+    description: str, the normalized label key
+  - name: concept_id
+    description: str, the concept's UUID
+    tests:
+    - not_null
+  - name: prerequisite_kind
+    description: str, prerequisite, corequisite or recommended for declared prerequisites;
+      null otherwise
+  - name: review_status
+    description: str, the claim's review status
+
+- name: int__courseware__adjudicated_concept_relations
+  description: Broader, close and related proposals from resolution adjudication,
+    as of the newest run, with when each was first proposed and the verdicts behind
+    them.
+  columns:
+  - name: from_concept_id
+    description: str, the narrower concept for broader; the lower id otherwise
+  - name: to_concept_id
+    description: str, the broader concept for broader; the higher id otherwise
+  - name: relation
+    description: str, broader, close or related
+    tests:
+    - accepted_values:
+        values: [broader, close, related]
+  - name: proposed_run_id
+    description: str, the resolution run that first proposed the relation
+  - name: proposed_at
+    description: timestamp, when that run started
+  - name: supporting_verdict_count
+    description: int, the newest verdict per (query label, candidate label) across
+      every run, where it agrees with the relation, by the newest run's label assignments
+      (for broader, those placing from under to; for related, related or either hierarchy
+      direction)
+  - name: contrary_verdict_count
+    description: int, distinct verdicts on the pair, plus for broader those placing
+      to under from
+  - name: pair_verdict_count
+    description: int, verdicts on the pair other than exact and distinct, i.e. saying
+      the two concepts are connected; the same on every relation of the pair
+
+- name: int__courseware__concept_relation_evidence
+  description: Every observation that two concepts are related, per relation, evidence
+    source (adjudication, course_sequence, co_taught, co_assessed), course run and
+    scope, with the extractor version of the scope's reading. A course_sequence row
+    is an instructional observation in one unit, not a dependency between the concepts.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: from_concept_id
+    description: str, the narrower, dependent or lower-id concept, as in bridge_concept_relation
+  - name: to_concept_id
+    description: str, the broader, built-on or higher-id concept
+  - name: relation
+    description: str, broader, close, related, builds_on, practiced_with or complements
+    tests:
+    - accepted_values:
+        values: [broader, close, related, builds_on, practiced_with, complements]
+  - name: evidence_source
+    description: str, adjudication, course_sequence, co_taught or co_assessed
+    tests:
+    - accepted_values:
+        values: [adjudication, course_sequence, co_taught, co_assessed]
+  - name: platform
+    description: str, the course run's platform; null for adjudication
+  - name: courserun_readable_id
+    description: str, the course run that showed the relation; null for adjudication
+  - name: scope_id
+    description: str, the unit that showed the relation; null for adjudication
+  - name: extractor_id
+    description: str, the extractor of the scope's current reading; null for adjudication
+  - name: prompt_version
+    description: str, the prompt version of the scope's current reading; null for
+      adjudication
+  - name: model_id
+    description: str, the model of the scope's current reading; null for adjudication
+  - name: scope_count
+    description: int, 1 for course evidence (one row per unit) and 0 for adjudication,
+      so summing it counts units
+  - name: observed_at
+    description: timestamp, the earliest extraction or resolution that showed it
+
+- name: int__courseware__latest_concept_graph_run
+  description: The newest concept graph run, which the graph-position and community
+    models read.
+  columns:
+  - name: graph_run_id
+    description: str, the newest graph run's UUID
+    tests:
+    - unique
+    - not_null
+- name: int__courseware__concept_tagging_aliases
+  description: The newest tagging run's dictionary, one row per (phrase, concept it
+    was tagged with), with the concept as of the newest resolution run and the ambiguity
+    flags recomputed for it.
+  columns:
+  - name: tagging_run_id
+    description: str, the newest tagging run
+  - name: pattern_key
+    description: str, the normalized phrase
+    tests:
+    - not_null
+  - name: concept_id
+    description: str, the concept's UUID as of the newest resolution run
+    tests:
+    - not_null
+  - name: tagged_concept_id
+    description: str, the concept's UUID as the tagging run recorded it
+  - name: concept_label_key
+    description: str, the label the phrase comes from
+  - name: variant
+    description: str, label, full_name, abbreviation, without_qualifier or plural
+  - name: surface
+    description: str, the phrase as spelled
+  - name: match_mode
+    description: str, caseless, case_sensitive or skipped
+  - name: is_short
+    description: boolean, the phrase is shorter than the case-sensitive threshold
+  - name: is_qualified
+    description: boolean, the phrase is a label's head without its qualifier
+  - name: is_single_word
+    description: boolean, the phrase is one common English word, or its plural, in
+      any case (e.g. data, None)
+  - name: has_multiple_concepts
+    description: boolean, the phrase belongs to more than one current concept
+  - name: is_ambiguous
+    description: boolean, any of the four flags
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [pattern_key, tagged_concept_id]
+
+- name: int__courseware__concept_tags
+  description: Every dictionary mention candidate of a known concept in courseware
+    text, as of the newest tagging run, with the matched phrase's mode, ambiguity
+    flags and whether the course run's sense of the label is this concept.
+  columns:
+  - name: tagging_run_id
+    description: str, the run that tagged the source, the newest run or an earlier
+      one with the same dictionary and tagger whose mentions the newest run kept
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the source's scope
+  - name: scope_kind
+    description: str, unit, context or materials
+  - name: source_ref
+    description: str, the block id, or the exported file's path
+  - name: source_kind
+    description: str, html, problem, video_transcript, document or a page kind
+  - name: concept_id
+    description: str, the concept's UUID as of the newest resolution run, following
+      the redirect of a concept merged since the tagging run
+    tests:
+    - not_null
+  - name: tagged_concept_id
+    description: str, the concept's UUID as the tagging run recorded it; the lowest
+      one when the run tagged the span for several concepts that have since merged
+  - name: pattern_key
+    description: str, the normalized phrase that matched
+  - name: concept_label_key
+    description: str, the label the phrase comes from
+  - name: variant
+    description: str, label, full_name, abbreviation, without_qualifier or plural
+    tests:
+    - accepted_values:
+        values: [label, full_name, abbreviation, without_qualifier, plural]
+  - name: match_mode
+    description: str, caseless or case_sensitive
+    tests:
+    - accepted_values:
+        values: [caseless, case_sensitive]
+  - name: is_short
+    description: boolean, the phrase is shorter than the case-sensitive threshold
+  - name: is_qualified
+    description: boolean, the phrase is a label's head without its qualifier
+  - name: is_single_word
+    description: boolean, the phrase is one common English word, or its plural, in
+      any case (e.g. data, None)
+  - name: has_multiple_concepts
+    description: boolean, the phrase belongs to more than one concept as of the newest
+      resolution run
+  - name: is_ambiguous
+    description: boolean, any of the four flags; a review signal, not a sense decision
+  - name: sense_status
+    description: str, course_sense (the course run's sense of the label is this concept),
+      needs_review (the run's sense is in the review queue) or candidate (nothing
+      has decided the label's sense in this run)
+    tests:
+    - accepted_values:
+        values: [course_sense, needs_review, candidate]
+  - name: matched_text
+    description: str, the text as it appears in the source
+  - name: char_start
+    description: int, offset of the mention in the source's source_text
+  - name: char_end
+    description: int, end offset of the mention
+
+- name: int__courseware__cited_concept_sources
+  description: Every source a current, verified claim quotes, per concept the claim
+    names.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, mitxonline, mitxpro or residential
+  - name: courserun_readable_id
+    description: str, the course run
+  - name: scope_id
+    description: str, the claim's scope
+  - name: source_ref
+    description: str, the quoted block id or file path
+  - name: concept_id
+    description: str, the concept's UUID
+  - name: claim_count
+    description: int, claims naming the concept that quote the source
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [platform, courserun_readable_id, scope_id, source_ref, concept_id]
+
+- name: int__courseware__concept_tagging_fan_out
+  description: Per dictionary phrase and concept, how many mentions the newest tagging
+    run produced and how often the extractor agrees. The review queue for the dictionary.
+  config:
+    meta:
+      # Same as dim_courseware_extraction: no QA form until the Dagster assets exist.
+      qa_buildable: false
+  columns:
+  - name: tagging_run_id
+    description: str, the newest tagging run
+  - name: pattern_key
+    description: str, the normalized phrase
+  - name: concept_id
+    description: str, the concept's UUID as of the newest resolution run, following
+      the redirect of a concept merged since the tagging run
+  - name: tagged_concept_id
+    description: str, the concept's UUID as the tagging run's dictionary recorded
+      it; the lowest one when concepts the run kept apart have since merged
+  - name: concept_label_key
+    description: str, the label the phrase comes from
+  - name: variant
+    description: str, label, full_name, abbreviation, without_qualifier or plural
+  - name: surface
+    description: str, the phrase as spelled
+  - name: match_mode
+    description: str, caseless, case_sensitive or skipped
+  - name: is_short
+    description: boolean, the phrase is shorter than the case-sensitive threshold
+  - name: is_qualified
+    description: boolean, the phrase is a label's head without its qualifier
+  - name: is_single_word
+    description: boolean, the phrase is one common English word, or its plural, in
+      any case (e.g. data, None)
+  - name: has_multiple_concepts
+    description: boolean, the phrase belongs to more than one concept
+  - name: is_ambiguous
+    description: boolean, any of the four flags
+  - name: is_merged_label
+    description: boolean, the concept has more than one label, so resolution merged
+      labels into it
+  - name: tagged_mention_count
+    description: int, mentions the phrase produced
+  - name: tagged_source_count
+    description: int, sources it tagged
+  - name: tagged_scope_count
+    description: int, scopes it tagged
+  - name: tagged_courserun_count
+    description: int, course runs it tagged
+  - name: share_of_tagged_mentions
+    description: float, its mentions over all mentions in the run
+  - name: extractor_scope_count
+    description: int, scopes where the extractor used the phrase's label itself
+  - name: amplification
+    description: float, tagged scopes over extractor scopes; null when the extractor
+      never used the label in a current claim
+  - name: compared_source_count
+    description: int, tagged sources in scopes with a current extraction
+  - name: source_agreement_rate
+    description: float, share of compared sources that a claim naming the concept
+      quotes
+  - name: scope_agreement_rate
+    description: float, share of compared sources whose scope has a claim naming the
+      concept
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [pattern_key, concept_id]
+
 - name: int__courseware__extraction_source_checksums
   description: One row per course run in int__courseware__extraction_sources that
     int__courseware__extraction_allowlist approves, with a checksum of the text its
@@ -474,6 +1214,274 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: [platform, courserun_readable_id]
+
+- name: int__courseware__source_eligibility
+  description: Whether each extracted course run's material may reach a learner-facing
+    projection, under courseware_source_eligibility, with the policy's version.
+  config:
+    meta:
+      qa_buildable: false
+  columns:
+  - name: platform
+    description: str, the run's platform
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the run
+    tests:
+    - not_null
+  - name: is_source_eligible
+    description: boolean, true when the run's own policy row, else its platform's,
+      makes it eligible; false when neither exists
+  - name: eligibility_level
+    description: str, courserun or platform, the policy row that decided; null when
+      none did
+  - name: source_policy_version
+    description: str, md5 of the whole policy, the same on every row
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [platform, courserun_readable_id]
+
+- name: int__courseware__release_concepts
+  description: The concepts the next knowledge release would publish, from the newest
+    run of each stage. Accepted, active concepts a source-eligible run names, with
+    labels and counts from eligible runs only and descriptions under the approved
+    prompt. ml.assets.courseware_release copies them into a release.
+  config:
+    meta:
+      qa_buildable: false
+  columns:
+  - name: concept_id
+    description: str, the concept's UUID
+    tests:
+    - unique
+    - not_null
+  - name: name
+    description: str, the surface form of the label key the concept's mentions in
+      source-eligible runs use most
+  - name: concept_kind
+    description: str, the kind the concept's mentions in source-eligible runs give
+      it most
+  - name: short_description
+    description: str, at most 12 words; null when the concept has no description under
+      the approved prompt yet, or no description inputs
+  - name: description
+    description: str, one or two course-agnostic sentences
+  - name: is_learner_facing
+    description: boolean, the describer's flag; null when undescribed
+  - name: review_status
+    description: str, accepted
+  - name: description_model_id
+    description: str, the model that wrote the description
+  - name: description_prompt_version
+    description: str, the approved prompt version it was written under; null when
+      undescribed
+  - name: description_input_checksum
+    description: str, the input_checksum the description was written from; the release
+      asset refuses a candidate whose descriptions predate their current inputs
+  - name: is_awaiting_description
+    description: boolean, true when the describer has inputs for the concept but no
+      description under the approved prompt yet; the release asset refuses a candidate
+      with any
+  - name: teaching_course_count
+    description: int, courses whose source-eligible run teaches the concept
+  - name: course_count
+    description: int, courses whose source-eligible run relates to the concept in
+      any way
+  - name: dbt_invocation_id
+    description: str, the dbt invocation that built this table; the release asset
+      checks it against int__courseware__release_manifest and does not copy it
+
+- name: int__courseware__release_resource_knowledge
+  description: Each Learn course's knowledge as the next knowledge release would publish
+    it, from the run int__courseware__learn_course_runs selects, naming only concepts
+    int__courseware__release_concepts publishes as learner-facing. The concept arrays
+    render context_document; integrations__learn__resource_knowledge does not publish
+    them as columns. ml.assets.courseware_release copies it into a release.
+  config:
+    meta:
+      qa_buildable: false
+  columns:
+  - name: etl_source
+    description: str, Learn's etl_source for the course (mitxonline, xpro)
+    tests:
+    - not_null
+  - name: readable_id
+    description: str, the course readable_id as Learn keys it
+    tests:
+    - not_null
+  - name: extracted_courserun_readable_id
+    description: str, the run the knowledge was extracted from
+  - name: course_title
+    description: str, the course's title
+  - name: concepts_taught
+    description: array of str, names of released concepts the run teaches, most claimed
+      first
+  - name: concepts_reviewed
+    description: array of str, names of released concepts the run reviews
+  - name: concepts_used
+    description: array of str, names of released concepts the run uses without teaching
+  - name: concepts_assessed
+    description: array of str, names of released concepts the run's assessments name
+  - name: prerequisites_declared
+    description: array of str, names of released concepts the course material states
+      as prerequisites
+  - name: prerequisites_inferred
+    description: array of str, names of released concepts the run relies on before
+      or without teaching them
+  - name: skills
+    description: array of str, skill statements
+  - name: learning_outcomes
+    description: array of str, stated learning outcomes
+  - name: audience
+    description: array of str, who the material says the course is for
+  - name: context_document
+    description: str, markdown rendered from the arrays in this row
+  - name: dbt_invocation_id
+    description: str, the dbt invocation that built this table; the release asset
+      checks it against int__courseware__release_manifest and does not copy it
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [etl_source, readable_id]
+
+- name: int__courseware__release_resource_concepts
+  description: Each Learn course's concepts by id as the next knowledge release would
+    publish them, one row per (course, concept, relation), from the run int__courseware__learn_course_runs
+    selects, naming only concepts int__courseware__release_concepts publishes as learner-facing
+    and relations an accepted claim supports (inferred requirements also passing the
+    support rule). ml.assets.courseware_release copies it into a release.
+  config:
+    meta:
+      qa_buildable: false
+  columns:
+  - name: etl_source
+    description: str, Learn's etl_source for the course (mitxonline, xpro)
+    tests:
+    - not_null
+  - name: readable_id
+    description: str, the course readable_id as Learn keys it
+    tests:
+    - not_null
+  - name: extracted_courserun_readable_id
+    description: str, the run the concepts were extracted from
+  - name: concept_id
+    description: str, dim_concept.concept_pk, the sense of the concept the course
+      uses
+    tests:
+    - not_null
+  - name: concept_name
+    description: str, the concept's name in int__courseware__release_concepts
+  - name: relation
+    description: str, teaches, reviews, uses, mentions, assesses, requires, requires_concurrently
+      or recommends
+  - name: requirement_source
+    description: str, declared or inferred for requires relations; null otherwise
+  - name: claim_count
+    description: int, accepted claims behind the relation
+  - name: first_scope_position
+    description: int, the first scope in the run that supports the relation
+  - name: dbt_invocation_id
+    description: str, the dbt invocation that built this table; the release asset
+      checks it against int__courseware__release_manifest and does not copy it
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: [etl_source, readable_id, concept_id, relation, requirement_source]
+
+- name: int__courseware__release_manifest
+  description: One row binding what the next knowledge release would be built from,
+    the resolution run, graph run, approved description prompt, current extractions
+    of eligible runs and source policy, with whether the graph was computed over that
+    resolution run.
+  config:
+    meta:
+      qa_buildable: false
+  columns:
+  - name: resolution_run_id
+    description: str, the resolution run dim_concept was built from
+  - name: resolver_id
+    description: str, that run's resolver version
+  - name: resolution_prompt_version
+    description: str, that run's adjudication prompt version
+  - name: sense_assignment_version
+    description: str, the sense_prompt_version of resolution_run_id, whose sense assignment
+      snapshot the concept ids come from; null for a run written before sense assignment
+  - name: graph_run_id
+    description: str, the newest graph run
+  - name: graph_version
+    description: str, that run's algorithm version
+  - name: graph_resolution_run_id
+    description: str, the resolution run that graph was computed over
+  - name: is_graph_current
+    description: boolean, whether the graph was computed over resolution_run_id; false
+      after a resolution run whose graph build failed or has not run yet
+  - name: description_prompt_version
+    description: str, the description prompt version courseware_description_approval
+      approves, read from the seed, so a release that retracts every described run
+      still has one; null when the seed has no row or more than one
+  - name: undescribed_concept_count
+    description: int, candidate concepts awaiting a description under that version
+  - name: concept_count
+    description: int, rows in int__courseware__release_concepts when this was built
+  - name: resource_count
+    description: int, rows in int__courseware__release_resource_knowledge when this
+      was built
+  - name: resource_concept_count
+    description: int, rows in int__courseware__release_resource_concepts when this
+      was built
+  - name: concepts_invocation_id
+    description: str, the dbt_invocation_id of int__courseware__release_concepts when
+      this was built; null when it was empty
+  - name: resources_invocation_id
+    description: str, the dbt_invocation_id of int__courseware__release_resource_knowledge
+      when this was built; null when it was empty
+  - name: resource_concepts_invocation_id
+    description: str, the dbt_invocation_id of int__courseware__release_resource_concepts
+      when this was built; null when it was empty
+  - name: extraction_selection_checksum
+    description: str, md5 of the current extraction keys of source-eligible runs;
+      a courseware_claims_v2 key covers both stages' exact inputs
+  - name: extraction_count
+    description: int, how many such extractions
+  - name: source_policy_version
+    description: str, int__courseware__source_eligibility.source_policy_version
+  tests:
+  - dbt_expectations.expect_table_row_count_to_equal:
+      arguments:
+        value: 1
+
+- name: int__courseware__published_release
+  description: The knowledge release the newest courseware_release_publication row
+    names, with its manifest. Every learner-facing courseware projection selects its
+    rows through it.
+  config:
+    meta:
+      qa_buildable: false
+  columns:
+  - name: release_id
+    description: str, the published release
+    tests:
+    - unique
+  - name: published_at
+    description: timestamp, when it was published
+  - name: built_at
+    description: timestamp, when the release was built
+  - name: output_schema_version
+    description: str, hash of the release projections' columns
+  - name: resolution_run_id
+    description: str, the release's resolution run
+  - name: sense_assignment_version
+    description: str, the sense_prompt_version of the release's resolution run
+  - name: graph_run_id
+    description: str, the release's graph run
+  - name: graph_version
+    description: str, that run's algorithm version
+  - name: description_prompt_version
+    description: str, the approved prompt the release's descriptions were written
+      under
+  - name: extraction_selection_checksum
+    description: str, md5 of the extraction keys the release was built from
+  - name: source_policy_version
+    description: str, the source policy the release was built under
 
 unit_tests:
 - name: test_int__courseware__ocw_files_scopes_unpublished_parents_and_answer_keys
@@ -1098,6 +2106,7 @@ unit_tests:
     vars:
       courseware_ocw_courses:
       - c1
+
 - name: test_int__courseware__ocw_table_rows_splits_tables_and_marks_session_pages
   description: >
     Each table row on a page is one row, the header row (row_index 2) included, and

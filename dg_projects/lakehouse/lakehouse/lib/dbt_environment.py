@@ -44,6 +44,7 @@ materialize dbt models unattended. Deciding it should is a separate, later act.
 
 import os
 from collections.abc import Mapping
+from typing import Literal, cast, get_args
 
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 
@@ -52,9 +53,14 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VALID_DAGSTER_ENVS
 # in definitions.py have pointed "qa" at the QA Starburst cluster and
 # ol_data_lake_qa all along. Only this map disagreed.
 #
-# NOTE: profiles.yml has no "ci" output, so that entry does not name a real
-# target. Pre-existing, and inert today because nothing runs dbt under
-# DAGSTER_ENVIRONMENT=ci; left alone rather than guessed at.
+# "ci" is not Trino. It is the StarRocks output that writes CI's own lake,
+# ol_data_lake_ci, as ol_warehouse_ci_<layer> (ol-infrastructure#6533), and the
+# `ci` lake target in ol_dbt_cli/commands/starrocks.py. Nothing runs this
+# project under DAGSTER_ENVIRONMENT=ci yet. Two things come before the first run
+# there: the "dbt" resource fetches no StarRocks credentials of its own (only
+# the StarRocks project's does), and ol_warehouse_ci does not exist in Glue.
+# `ol-dbt starrocks` creates it with a location; dbt run from here would create
+# it bare (see the profile's comment), and seeds would then fail.
 DBT_TARGET_MAP: Mapping[str, str] = {
     "dev": "dev_production",
     "ci": "ci",
@@ -256,6 +262,48 @@ DATA_LAKE_ENV = resolve_for_environment(
     DATA_LAKE_ENV_MAP,
     override_env_var="DAGSTER_DBT_DATA_LAKE_ENV",
     what="data lake environment",
+)
+
+# Which engine compacts and analyzes the dbt-built Iceberg tables in
+# iceberg_dbt_layer_maintenance. qa runs it on StarRocks ahead of the cutover
+# (ol-infrastructure ADR 0012), against the same Glue tables Trino still
+# builds there, so the StarRocks path is proven before production needs it.
+# The nightly schedule is production-only (lib/scheduled_automation.py), so in
+# qa the asset runs when materialized by hand.
+# Production flips at the cutover; DAGSTER_ICEBERG_MAINTENANCE_ENGINE
+# overrides the entry in one deployment without a release.
+#
+# "starrocks" in dev reaches the local cluster, whose only lake catalog is
+# ol_data_lake_local, while WAREHOUSE_ENV keeps dev on production schemas. The
+# catalog the resource names then does not exist there, and the asset fails.
+IcebergMaintenanceEngineName = Literal["trino", "starrocks"]
+
+ICEBERG_MAINTENANCE_ENGINE_MAP: Mapping[str, IcebergMaintenanceEngineName] = {
+    "dev": "trino",
+    "ci": "trino",
+    "qa": "starrocks",
+    "production": "trino",
+}
+
+
+def iceberg_maintenance_engine(name: str) -> IcebergMaintenanceEngineName:
+    """Return *name* as an engine name, or raise on one that names no engine.
+
+    :raises ValueError: when *name* is not one of ``trino`` or ``starrocks``.
+    """
+    engines = get_args(IcebergMaintenanceEngineName)
+    if name not in engines:
+        msg = f"Iceberg maintenance engine {name!r} is not one of {', '.join(engines)}."
+        raise ValueError(msg)
+    return cast("IcebergMaintenanceEngineName", name)
+
+
+ICEBERG_MAINTENANCE_ENGINE = iceberg_maintenance_engine(
+    resolve_for_environment(
+        ICEBERG_MAINTENANCE_ENGINE_MAP,
+        override_env_var="DAGSTER_ICEBERG_MAINTENANCE_ENGINE",
+        what="Iceberg maintenance engine",
+    )
 )
 
 # Exported to the dbt subprocess rather than passed as a --vars flag: dbt does

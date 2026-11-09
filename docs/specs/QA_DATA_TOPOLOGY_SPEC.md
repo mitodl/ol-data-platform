@@ -245,8 +245,8 @@ which reads five units, so a tagged union is now accepted on three conditions:
 
 `ingest` units carry no age limit, so an ingested branch that stopped loading still passes; the
 union is then consistent as of that branch's last load rather than missing it. A table that
-empties after the observation is caught by `qa_observation_drift_daily` (12:00 UTC, after the
-03:00 build), not by the build itself.
+empties after the observation is caught by `qa_observation_drift_daily` (05:00 UTC, before the
+05:30 build), not by the build itself.
 
 `integrations__learn__program_certificates` declares all five of its units and lists
 `raw__mitxonline__openedx__mysql__auth_user` as partial. QA's whole MITx Online Open edX unit is empty Iceberg shells from
@@ -266,14 +266,15 @@ redacted, year of birth nulled), while MITx Online and MicroMasters are QA's own
 do not join across platforms the way they do in production. A QA rehearsal of the Learn task
 checks that it reads, maps and writes rows, not certificate counts.
 
-The four edX.org tables this view's QA build reads from are also one learner in ten
-(`user_id % 10 = 0` on the IRx `email_opt_in`, `mitx_person_course` and `mitx_user_info_combo`,
-and on `user id` in the Airbyte `raw__edxorg__program_learner_report`). The other edX.org learner
-mirrors (`edxorg/mysql`, `edxorg/tracking_logs`, the dlt `edxorg/program_reports`) copy every
-learner, so a join from them to these four is one-sided in QA. QA's Trino cluster ran each stage of these queries as one task with a 4.48GB
-per-node limit, and on 2026-10-27 the staging dedups of `mitx_user_info_combo` (15.1M rows) and
+The edX.org tables this view's QA build reads from are also one learner in ten
+(`user_id % 10 = 0` on the IRx `email_opt_in`, `mitx_person_course` and `mitx_user_info_combo`
+and on the dlt `raw__edxorg__s3__program_learner_report`, and on `user id` in the Airbyte
+`raw__edxorg__program_learner_report`). The other edX.org learner mirrors (`edxorg/mysql`,
+`edxorg/tracking_logs`) copy every learner, so a join from them to these five is one-sided in QA.
+QA's Trino cluster ran each stage of these queries as one task with a 4.48GB per-node limit,
+and on 2026-10-27 the staging dedups of `mitx_user_info_combo` (15.1M rows) and
 the program learner report (15.7M) each exceeded it when run alone. On the sample they peaked at
-0.88GB and 0.93GB. The four take the same sample, so a sampled learner keeps all its rows in them.
+0.88GB and 0.93GB. The five take the same sample, so a sampled learner keeps all its rows in them.
 
 ---
 
@@ -637,7 +638,7 @@ masked:
   containing `@`, and the only ones with a run of seven or more digits are 24
   `content_cue_<uuid>` labels.
 
-Three tables are filtered:
+Three tables were filtered. The tracking-logs filter went with its unit, so two still are:
 
 - `raw__edxorg__program_learner_report`: 14.4B rows, 760 GB. Airbyte re-reads the same report
   files every day (their mtimes stop at 2025-03-13) and appends about 15M rows per sync. The
@@ -645,7 +646,8 @@ Three tables are filtered:
   one full report while syncs run a day apart, and two if a gap is shorter. The staging model
   dedupes on user, course run and program either way.
 - `raw__edxorg__s3__tracking_logs`: 2.2B rows, 245 GB. The mirror keeps 30 days of syncs and
-  drops `edx.user.settings.changed` events.
+  drops `edx.user.settings.changed` events. It stopped on 2026-10-28, when the unit was
+  retired as frozen history (`retired.yml`). QA keeps the copy it made on 2026-10-07.
 - `raw__edxorg__s3__tables__courseware_studentmodule`: 13.8B rows, 1,124 GB, in 30,373
   unpartitioned, unsorted data files (2026-10-15). The mirror keeps the `MITx/14.73x` runs, by
   a range on `course_id`. Iceberg truncates the file-level `course_id` bounds to 16

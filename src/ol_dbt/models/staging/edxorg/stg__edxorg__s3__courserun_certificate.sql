@@ -10,20 +10,20 @@ with source as (
         , course_id as courserun_readable_id
         , cast(user_id as integer) as user_id
         , name as courseruncertificate_user_full_name
-        , key as courseruncertificate_key
+        , {{ adapter.quote('key') }} as courseruncertificate_key
         , mode as courseruncertificate_mode
         , download_url as courseruncertificate_download_url
         , download_uuid as courseruncertificate_download_uuid
         , verify_uuid as courseruncertificate_verify_uuid
         , status as courseruncertificate_status
-        , try_cast(grade as decimal(38, 2)) as courseruncertificate_grade
+        , {{ try_cast('grade', 'decimal(38, 2)') }} as courseruncertificate_grade
         , case
             when lower(created_date) = 'null' or lower(created_date) = 'none' then null
-            else {{ cast_timestamp_to_iso8601(date_parse("created_date", "'%Y-%m-%d %H:%i:%s'", strict=false)) }}
+            else {{ cast_timestamp_to_iso8601(date_parse("created_date", "'%Y-%m-%d %H:%i:%s'", null_when="lower({}) = 'null' or lower({}) = 'none'")) }}
         end as courseruncertificate_created_on
         , case
             when lower(modified_date) = 'null' or lower(modified_date) = 'none' then null
-            else {{ cast_timestamp_to_iso8601(date_parse("modified_date", "'%Y-%m-%d %H:%i:%s'", strict=false)) }}
+            else {{ cast_timestamp_to_iso8601(date_parse("modified_date", "'%Y-%m-%d %H:%i:%s'", null_when="lower({}) = 'null' or lower({}) = 'none'")) }}
         end as courseruncertificate_updated_on
     from most_recent_source
 )
