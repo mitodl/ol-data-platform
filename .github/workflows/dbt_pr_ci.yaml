@@ -19,6 +19,7 @@ on:
     - "contracts/**"
     - "metrics/**"
     - "exposures/**"
+    - "glossary/**"
     - ".github/workflows/dbt_pr_ci.yaml"
   workflow_dispatch:
 
@@ -97,10 +98,12 @@ jobs:
     # since each engine names and evaluates them differently.
     # The exposure contract check fails when exposures/<name>.json no longer
     # matches the columns and cohort declarations an application exposure reads.
+    # The glossary terms check fails when a config.meta.openmetadata.glossary
+    # entry names a term glossary/ does not declare.
     - name: Project-wide validate checks
       run: |
         uv run ol-dbt validate \
-          --only dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat,cohort_policy,raw_json_calls,exposure_contract \
+          --only dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat,cohort_policy,raw_json_calls,exposure_contract,glossary_terms \
           --format json
 
     # Structural validation of the models changed in this PR. Scoped to changed
@@ -112,7 +115,7 @@ jobs:
         uv run ol-dbt validate \
           --changed-only \
           --base-ref "origin/${GITHUB_BASE_REF}" \
-          --skip dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat,cohort_policy,raw_json_calls,exposure_contract \
+          --skip dimensional_layering,qa_branch_contract,data_contract,metric_registry,pipe_concat,cohort_policy,raw_json_calls,exposure_contract,glossary_terms \
           --format json
 
     # Column-level blast radius of the changed models, posted as a PR comment.
