@@ -215,11 +215,10 @@ models:
     - not_null
   - name: comment_author_role
     description: str, who wrote the comment. 'requester' is the ticket requester;
-      'staff' is a Zendesk agent or admin, or any @mit.edu account (some support staff
-      reply from end-user accounts); 'other_end_user' is anyone else, such as a CC'd
-      learner or a partner contact. A CC'd learner with an @mit.edu email is counted
-      as staff, which is under 1% of staff comments. An author missing from stg__zendesk__user
-      is other_end_user.
+      'staff' is an author whose current Zendesk role is agent or admin; 'other_end_user'
+      is anyone else, such as a CC'd learner, a partner contact, or an author missing
+      from stg__zendesk__user. The role is today's role, so a former agent's replies
+      are other_end_user.
     tests:
     - not_null
     - accepted_values:
@@ -272,9 +271,9 @@ unit_tests:
     - {comment_id: 3, ticket_id: 30}
 - name: test_int__zendesk__ticket_conversation_labels_comment_author_roles
   description: >
-    The requester wins over any other label, even with an @mit.edu email. Agents,
-    admins and @mit.edu end-user accounts are staff. Other end users, and an author
-    missing from stg__zendesk__user, are other_end_user. Internal notes and Zendesk
+    The requester wins over any other label, even as an agent. Agents and admins
+    are staff. Other end users, an @mit.edu end user included, and an author missing
+    from stg__zendesk__user are other_end_user. Internal notes and Zendesk
     sample comments are dropped and leave no gap in turn_index.
   model: int__zendesk__ticket_conversation
   given:
@@ -302,7 +301,7 @@ unit_tests:
       comment_plain_body: unknown reply, comment_created_at: '2026-11-01 00:00:06'}
   - input: ref('stg__zendesk__user')
     rows:
-    - {user_id: 100, user_role: end-user, user_email: learner@mit.edu}
+    - {user_id: 100, user_role: agent, user_email: learner@example.com}
     - {user_id: 200, user_role: agent, user_email: agent@example.com}
     - {user_id: 300, user_role: admin, user_email: admin@example.com}
     - {user_id: 400, user_role: end-user, user_email: support@mit.edu}
@@ -312,7 +311,7 @@ unit_tests:
     - {comment_id: 1, turn_index: 1, comment_author_role: requester}
     - {comment_id: 2, turn_index: 2, comment_author_role: staff}
     - {comment_id: 3, turn_index: 3, comment_author_role: staff}
-    - {comment_id: 4, turn_index: 4, comment_author_role: staff}
+    - {comment_id: 4, turn_index: 4, comment_author_role: other_end_user}
     - {comment_id: 5, turn_index: 5, comment_author_role: other_end_user}
     - {comment_id: 6, turn_index: 6, comment_author_role: other_end_user}
 - name: test_int__zendesk__ticket_conversation_strips_the_appzi_template
