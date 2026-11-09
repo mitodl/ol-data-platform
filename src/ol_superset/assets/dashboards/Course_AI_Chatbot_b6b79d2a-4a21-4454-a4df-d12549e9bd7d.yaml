@@ -195,11 +195,9 @@ position:
     children: []
     id: MARKDOWN-XR1Hj4MhOd_ZezZ9ZW8cb
     meta:
-      code: '### Change Log
-
+      code: |
+        ### Change Log
         **3/23/26**: Add Course Run Readable ID filter
-
-        '
       height: 50
       width: 12
     parents:

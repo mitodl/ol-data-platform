@@ -7,6 +7,11 @@ tables the warehouse already maintains. The forum is delivered as a flat
 Parquet export of the irx__ model instead of a reconstructed Mongo dump: Mongo
 has not backed the forum since the forum-v2 cutover, so there is no dump shape
 left to match, and IRx adapts their tooling to the columns we actually have.
+Course tarballs are not re-copied into each night's courses/ the way legacy did
+it: each exported version is copied once to courses/{deployment}/ at the top of
+the bucket, which the 90-day drop expiry does not cover. The manifest names the
+copy of each listed run's newest export, and the runs left out because they
+have no export or their copy failed.
 The column-level contract is in src/ol_dbt/models/external/IRX_SIMEON_MAPPING.md.
 """
 
@@ -15,7 +20,9 @@ import io
 import itertools
 import json
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from functools import partial
 from typing import Any, cast
 
@@ -36,12 +43,15 @@ from dagster import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import load_dbt_model_table
+from ol_orchestrate.lib.utils import s3_uploads_bucket
 from pyiceberg.io.pyarrow import schema_to_pyarrow
 from pyiceberg.table import Table
 from upath import UPath
 
+from openedx.assets.openedx import course_xml
+
 IRX_EXPORT_GROUP = "irx_export"
-IRX_EXPORT_CODE_VERSION = "irx_export_v3"
+IRX_EXPORT_CODE_VERSION = "irx_export_v4"
 IRX_GLUE_DATABASE = "ol_warehouse_production_external"
 
 # end_offset=1 makes today the latest partition, so the scheduled run on
@@ -54,6 +64,15 @@ IRX_EXPORT_ROOTS = {
     "qa": "s3://ol-irx-partners-storage-qa",
 }
 IRX_EXPORT_SANDBOX_ROOT = "s3://ol-devops-sandbox/pipeline-storage/irx-export"
+
+# Outside {deployment}/, so the bucket's 90-day expiry of nightly drops leaves
+# the copies alone. ol-infrastructure scopes that rule to the deployment prefixes.
+COURSE_EXPORTS_PREFIX = "courses"
+COURSE_XML_SUFFIX = ".xml.tar.gz"
+# botocore's default connection pool size, which s3fs does not raise.
+COPY_WORKERS = 10
+# Failed copies, with none succeeding, before the run fails: one is a bad object.
+MIN_COPIES_TO_FAIL = 2
 
 LEGACY_DATETIME = "%Y-%m-%d %H:%M:%S"
 
@@ -361,6 +380,161 @@ def read_data_files(
             raise
 
 
+def course_xml_root(deployment: str) -> UPath:
+    """Where course_xml writes a deployment's {course_id}/{sha256}.xml.tar.gz."""
+    landing = s3_uploads_bucket(DAGSTER_ENV)
+    return UPath(f"s3://{landing['bucket']}").joinpath(
+        *filter(None, [landing["prefix"]]), deployment, *course_xml.key.path
+    )
+
+
+@dataclass(frozen=True)
+class CourseExport:
+    """The newest course_xml export of one course run."""
+
+    course_id: str
+    source: str
+    size_bytes: int
+    sha256: str
+    exported_at: datetime
+
+    @property
+    def file_name(self) -> str:
+        return f"{self.sha256}{COURSE_XML_SUFFIX}"
+
+
+def _last_modified(info: Mapping[str, Any]) -> datetime:
+    # s3fs reports LastModified; the local filesystem, in tests, reports mtime.
+    if "LastModified" in info:
+        return info["LastModified"]
+    return datetime.fromtimestamp(info["mtime"], tz=UTC)
+
+
+def latest_course_exports(
+    root: UPath, course_ids: Iterable[str]
+) -> tuple[list[CourseExport], list[str]]:
+    """Find the newest course_xml export of each listed run, and the runs with none.
+
+    course_xml writes each version of a course to {course_id}/{sha256}.xml.tar.gz
+    and never deletes the older ones, so the newest object is the version last
+    exported. That is what legacy delivered too, since it exported every course
+    fresh each night. One recursive listing rather than one per course: mitxonline
+    lists close to 4,900 runs.
+    """
+    fs = root.fs
+    prefix = f"{root.path.rstrip('/')}/"
+    newest: dict[str, CourseExport] = {}
+    for path, info in fs.find(root.path, detail=True).items():
+        course_id, _, name = path.removeprefix(prefix).rpartition("/")
+        if not course_id or not name.endswith(COURSE_XML_SUFFIX):
+            continue
+        export = CourseExport(
+            course_id=course_id,
+            source=path,
+            size_bytes=info["size"],
+            sha256=name.removesuffix(COURSE_XML_SUFFIX),
+            exported_at=_last_modified(info),
+        )
+        current = newest.get(course_id)
+        # The path breaks a tie in LastModified, so a rerun picks the same one.
+        if current is None or (export.exported_at, export.source) > (
+            current.exported_at,
+            current.source,
+        ):
+            newest[course_id] = export
+    listed = list(dict.fromkeys(course_ids))
+    return (
+        [newest[course_id] for course_id in listed if course_id in newest],
+        [course_id for course_id in listed if course_id not in newest],
+    )
+
+
+@dataclass
+class CourseExportDelivery:
+    """What one night's copy of course exports delivered, and what it did not."""
+
+    delivered: list[dict[str, Any]] = field(default_factory=list)
+    failed: list[dict[str, str]] = field(default_factory=list)
+    copied: int = 0
+
+
+def _copy_error(fs: Any, source: str, target: str) -> str | None:
+    # s3fs raises an S3 error response as an OSError subclass, chained to the
+    # botocore error that carries S3's code. Timeouts and dropped connections
+    # are OSErrors too, but carry no response; those are an outage, not a
+    # refusal of this object, and fail the run.
+    try:
+        fs.cp_file(source, target)
+    except OSError as error:
+        response = getattr(error.__cause__, "response", None)
+        if not response:
+            raise
+        get_dagster_logger().warning(
+            "Could not copy %s to %s: %s", source, target, error
+        )
+        # The class and S3's code only: S3's message can name the role that was
+        # denied, and the manifest is read outside MIT OL.
+        return f"{type(error).__name__} ({response['Error']['Code']})"
+    return None
+
+
+def copy_course_exports(
+    exports: Sequence[CourseExport], destination: UPath
+) -> CourseExportDelivery:
+    """Copy each export not already under destination.
+
+    A copy is named by the tarball's sha256, so one already present is that
+    same version and is left alone: a night copies only what changed since the
+    last one. S3 copies object to object without the bytes passing through
+    this process, and an object only appears once its copy completes. Both
+    roots are on one filesystem (S3, or local disk in tests).
+
+    A copy S3 refuses leaves that run out of the delivered list and names it
+    with its error, so one bad object doesn't cost IRx the night's drop. Legacy
+    did the same with a course whose export failed. The next night retries it.
+    Anything that is not an S3 error response (a timeout, a dropped connection
+    that outlasts s3fs's retries) fails the run, as an outage should.
+    """
+    fs = destination.fs
+    base = destination.path.rstrip("/")
+    present = set(fs.find(base))
+    targets = {
+        export.course_id: f"{base}/{export.course_id}/{export.file_name}"
+        for export in exports
+    }
+    pending = [export for export in exports if targets[export.course_id] not in present]
+    with ThreadPoolExecutor(max_workers=COPY_WORKERS) as pool:
+        errors = dict(
+            zip(
+                (export.course_id for export in pending),
+                pool.map(
+                    lambda export: _copy_error(
+                        fs, export.source, targets[export.course_id]
+                    ),
+                    pending,
+                ),
+                strict=True,
+            )
+        )
+    delivery = CourseExportDelivery(
+        copied=sum(error is None for error in errors.values())
+    )
+    for export in exports:
+        if error := errors.get(export.course_id):
+            delivery.failed.append({"course_id": export.course_id, "error": error})
+            continue
+        delivery.delivered.append(
+            {
+                "course_id": export.course_id,
+                "path": fs.unstrip_protocol(targets[export.course_id]),
+                "size_bytes": export.size_bytes,
+                "sha256": export.sha256,
+                "exported_at": export.exported_at.isoformat(),
+            }
+        )
+    return delivery
+
+
 def build_irx_export_asset(deployment: str) -> AssetsDefinition:
     """Build the nightly IRx drop for one deployment as a single multi-asset.
 
@@ -404,8 +578,11 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
             deps=[spec.key for spec in file_specs],
             description=(
                 f"{MANIFEST_NAME}: every file in the drop with its row count, size "
-                "and sha256. Written last, so its presence means the drop is "
-                "complete."
+                "and sha256; the copy of each listed course run's newest course "
+                "export under courses/ (course_exports); and the listed runs "
+                "with no export (course_exports_missing) or whose copy failed "
+                "(course_exports_failed). Written last, so its presence means "
+                "the drop is complete."
             ),
             code_version=IRX_EXPORT_CODE_VERSION,
         ),
@@ -491,8 +668,54 @@ def build_irx_export_asset(deployment: str) -> AssetsDefinition:
         )
         yield delivered["forum_contents.parquet"]
 
-        manifest = build_manifest(deployment, drop_date, context.run.run_id, delivered)
-        yield _write_manifest(manifest_key, manifest, manifest_path)
+        # A run with no export yet is left out and named, the way legacy left
+        # out a course whose export failed that night.
+        exports, missing = latest_course_exports(
+            course_xml_root(deployment), course_ids
+        )
+        if missing:
+            context.log.warning(
+                "%d listed course runs have no course export: %s",
+                len(missing),
+                missing,
+            )
+        courses = copy_course_exports(
+            exports, root / COURSE_EXPORTS_PREFIX / deployment
+        )
+        context.log.info(
+            "Copied %d of %d course exports; the rest were already delivered",
+            courses.copied,
+            len(exports),
+        )
+        if courses.failed:
+            context.log.error(
+                "%d course exports could not be copied: %s",
+                len(courses.failed),
+                courses.failed,
+            )
+            # One bad object is left out. Every copy failing, once there were
+            # at least two to try, is a broken grant or bucket, and a green run
+            # would hide it night after night.
+            if not courses.copied and len(courses.failed) >= MIN_COPIES_TO_FAIL:
+                raise Failure(
+                    description=(
+                        f"All {len(courses.failed)} course export copies to "
+                        f"{root / COURSE_EXPORTS_PREFIX / deployment} failed."
+                    )
+                )
+
+        manifest = build_manifest(
+            deployment,
+            drop_date,
+            context.run.run_id,
+            delivered,
+            {
+                "course_exports": courses.delivered,
+                "course_exports_missing": missing,
+                "course_exports_failed": courses.failed,
+            },
+        )
+        yield _write_manifest(manifest_key, manifest, manifest_path, courses.copied)
 
     return irx_export
 
@@ -526,11 +749,13 @@ def build_manifest(
     drop_date: str,
     run_id: str,
     delivered: Mapping[str, MaterializeResult],
+    courses: Mapping[str, Sequence[Any]],
 ) -> dict[str, Any]:
     """Describe a finished drop from what its files' materializations recorded.
 
     Built from the metadata each file's write already computed, not by reading
-    the files back.
+    the files back. Course exports are listed where their copies live, outside
+    the drop's own prefix.
     """
     return {
         "deployment": deployment,
@@ -546,11 +771,15 @@ def build_manifest(
             }
             for name, result in delivered.items()
         ],
+        **{section: list(entries) for section, entries in courses.items()},
     }
 
 
 def _write_manifest(
-    key: AssetKey, manifest: Mapping[str, Any], destination: UPath
+    key: AssetKey,
+    manifest: Mapping[str, Any],
+    destination: UPath,
+    course_exports_copied: int,
 ) -> MaterializeResult:
     data = json.dumps(manifest, indent=2).encode()
     destination.write_bytes(data)
@@ -560,6 +789,10 @@ def _write_manifest(
         data_version=DataVersion(sha256),
         metadata={
             "file_count": len(manifest["files"]),
+            "course_export_count": len(manifest["course_exports"]),
+            "course_exports_copied": course_exports_copied,
+            "course_exports_missing": len(manifest["course_exports_missing"]),
+            "course_exports_failed": len(manifest["course_exports_failed"]),
             "path": MetadataValue.path(str(destination)),
             "sha256": sha256,
         },

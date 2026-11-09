@@ -55,6 +55,7 @@ from data_loading.defs.ingestion.translators import (
     EdxorgDltTranslator,
     RawDataDltTranslator,
 )
+from ol_dlt import keyset
 
 
 def build_ingest_assets(
@@ -159,6 +160,27 @@ xpro_app_assets = (
         pipeline=xpro_app.xpro_app_pipeline,
     )
     if DAGSTER_ENV in XPRO_APP_DLT_ENVIRONMENTS
+    else None
+)
+# Keys-only reads of the MITx Online app database (ol_dlt.keyset), for the
+# history snapshots and staging to tell deleted keys from live ones. Run by hand
+# for now: the run after every load comes with the keyset automation (witan task
+# tk-run-each-unit-s-keysets-after-every-load-and-sta-4caeb1).
+#
+# Production is absent because its keysets read the RDS read replica, and the
+# MITx Online stack does not export the replica's address yet
+# (tk-export-production-read-replica-addresses-for-the-d2d989).
+# MITXONLINE_APP_DB_HOST in production is the primary.
+MITXONLINE_APP_KEYSET_ENVIRONMENTS = frozenset({"dev", "ci", "qa"})
+MITXONLINE_APP_KEYSET_UNIT = "mitxonline/app_postgres"
+
+mitxonline_app_keyset_assets = (
+    build_ingest_assets(
+        name="mitxonline_app_keyset",
+        source=keyset.build_unit_keyset_source(MITXONLINE_APP_KEYSET_UNIT),
+        pipeline=keyset.unit_keyset_pipeline(MITXONLINE_APP_KEYSET_UNIT),
+    )
+    if DAGSTER_ENV in MITXONLINE_APP_KEYSET_ENVIRONMENTS
     else None
 )
 see_assets = build_ingest_assets(
@@ -491,20 +513,35 @@ edxorg_program_reports_assets = build_batched_assets(
 )
 
 
-# The xPro tracking log, loaded in full beside the Airbyte-loaded
-# raw__xpro__openedx__tracking_logs until staging is repointed at it. One
-# listing per run: a full listing of the production bucket (264,950 files on
-# 2026-10-27) takes about 50 s, and the first runs walk ~331 batches.
-XPRO_TRACKING_LOGS_TABLE = "raw__xpro__openedx__tracking_log_events"
-xpro_tracking_logs_assets = build_batched_assets(
-    name="xpro_tracking_logs",
-    build_source=partial(
-        tracking_logs.tracking_logs_source, raw_table=XPRO_TRACKING_LOGS_TABLE
-    ),
-    pipeline=tracking_logs.tracking_logs_pipeline_for(XPRO_TRACKING_LOGS_TABLE),
-    translator=RawDataDltTranslator(),
-    list_once=True,
-)
+# The Open edX tracking logs, one asset per deployment. xPro's replaced the
+# Airbyte-loaded raw__xpro__openedx__tracking_logs, which is kept as the
+# archive. MITx Online's and MITx's load beside their Airbyte tables until
+# staging is repointed. One listing per run: a full listing of a production
+# bucket (264,950 to 473,863 files on 2026-10-27) takes 50 to 89 s, and the
+# first runs walk ~331 (xpro), ~884 (mitxonline) and ~932 (mitx) batches.
+TRACKING_LOGS_DEPLOYMENTS = ("xpro", "mitxonline", "mitx")
+
+
+def tracking_logs_table(deployment: str) -> str:
+    """Return the raw table ol_dlt.sources.tracking_logs loads for a deployment."""
+    return f"raw__{deployment}__openedx__tracking_log_events"
+
+
+tracking_logs_assets = {
+    deployment: build_batched_assets(
+        name=f"{deployment}_tracking_logs",
+        build_source=partial(
+            tracking_logs.tracking_logs_source,
+            raw_table=tracking_logs_table(deployment),
+        ),
+        pipeline=tracking_logs.tracking_logs_pipeline_for(
+            tracking_logs_table(deployment)
+        ),
+        translator=RawDataDltTranslator(),
+        list_once=True,
+    )
+    for deployment in TRACKING_LOGS_DEPLOYMENTS
+}
 
 
 # Canvas course files and text for MIT Learn's ContentFiles. One load covers at
@@ -653,6 +690,7 @@ defs = Definitions(
             podcast_rss_assets,
             keycloak_assets,
             *([mitxonline_app_assets] if mitxonline_app_assets else []),
+            *([mitxonline_app_keyset_assets] if mitxonline_app_keyset_assets else []),
             *([xpro_app_assets] if xpro_app_assets else []),
             youtube_assets,
             see_assets,
@@ -665,7 +703,7 @@ defs = Definitions(
             *edxorg_s3_table_assets,
             *course_xml_blocks_assets,
             edxorg_program_reports_assets,
-            xpro_tracking_logs_assets,
+            *tracking_logs_assets.values(),
         ]
     ),
 )

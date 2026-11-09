@@ -387,11 +387,9 @@ position:
     children: []
     id: MARKDOWN-NBlnARE3A_jrQ34WSXS-8
     meta:
-      code: '### Change Log
-
-        **2/2/26**: Enabled search functionality on Course Run Readable ID filter
-        **6/13/2025**: changed the content engagement chart from weekly aggregation
-        to daily'
+      code: |-
+        ### Change Log
+        **2/2/26**: Enabled search functionality on Course Run Readable ID filter **6/13/2025**: changed the content engagement chart from weekly aggregation to daily
       height: 50
       width: 4
     parents:
@@ -404,20 +402,16 @@ position:
     children: []
     id: MARKDOWN-d6V_tBs0Ck
     meta:
-      code: '
+      code: |2+
 
         [EdX definitions](https://edx.readthedocs.io/projects/devdata/en/latest/internal_data_formats/tracking_logs/student_event_types.html)
-
 
 
         [Video Engagement data platform column definition](https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__mitxonline_video_engagements)
 
 
-
         [Content Engagment data platform column definition](https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__mitxonline_course_engagements_daily)
 
-
-        '
       height: 50
       width: 4
     parents:

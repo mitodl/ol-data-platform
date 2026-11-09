@@ -1,5 +1,4 @@
 import contextlib
-import os
 
 import polars as pl
 from dagster import (
@@ -27,9 +26,9 @@ from ml.lib.summarize import (
     summarize_and_checkpoint,
     summary_use_case,
 )
-from ol_llm import BatchFailed
+from ml.lib.warehouse import warehouse_database
+from ol_llm import BatchFailed, LLMContentFiltered
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
-from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import (
     get_dbt_model_as_dataframe,
 )
@@ -37,11 +36,7 @@ from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
 from pydantic import Field
 from pyiceberg.exceptions import NoSuchTableError
 
-if DAGSTER_ENV == "dev":
-    _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
-    database_name = f"ol_warehouse_production_{_schema_suffix}_intermediate"
-else:
-    database_name = "ol_warehouse_production_intermediate"
+database_name = warehouse_database("intermediate")
 
 
 # Summaries only: clusters see just what was summarized, so they keep the shared default
@@ -129,7 +124,7 @@ class FeedbackSummariesConfig(Config):
 
 
 @asset(
-    code_version="feedback_summaries_v7",
+    code_version="feedback_summaries_v8",
     group_name="feedback",
     key=AssetKey(["intermediate", "feedback_summaries"]),
     deps=[AssetKey(["intermediate", "int__feedback__conversation"])],
@@ -241,20 +236,26 @@ def feedback_summaries(
 
     llm_call_count = report.succeeded
     failed_count = len(report.failures)
+    filtered_count = sum(
+        isinstance(failure.error, LLMContentFiltered) for failure in report.failures
+    )
     context.log.info(
         "Processed %d conversations (%d LLM calls, %d skipped for no text, "
         "%d failed, %d already summarized, %d total upstream)",
         summaries_df.height,
         llm_call_count,
-        summaries_df.height - llm_call_count,
+        summaries_df.height - llm_call_count - filtered_count,
         failed_count,
         already_summarized_df.height,
         source_df.height,
     )
     if failed_count:
         context.log.warning(
-            "%d conversation(s) failed to summarize this run; will retry next run. %s",
+            "%d conversation(s) failed to summarize this run; %d stopped by the "
+            "content filter are recorded and not retried, the rest retry next "
+            "run. %s",
             failed_count,
+            filtered_count,
             report.describe(),
         )
 
@@ -265,6 +266,7 @@ def feedback_summaries(
             "prompt_source": MetadataValue.text(summarizer.prompt.source),
             "llm_call_count": MetadataValue.int(llm_call_count),
             "failed_count": MetadataValue.int(failed_count),
+            "content_filtered_count": MetadataValue.int(filtered_count),
             "already_summarized_count": MetadataValue.int(already_summarized_df.height),
             "total_upstream_count": MetadataValue.int(source_df.height),
         }

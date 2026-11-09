@@ -129,9 +129,9 @@ models:
       of the operator node of the parent requirement for nested requirements. Only
       set for requirements from mitxonline
   - name: program_num_required_courses
-    description: int, indicating the number of required courses to earn certificate
-    tests:
-    - not_null
+    description: int, indicating the number of required courses to earn certificate.
+      Null for a MITx Online program with tracks, as the number depends on the track
+      a learner picks.
 
 - name: int__mitx__users
   description: MITx users combined from MITx Online, MicroMasters, and edX.org. For
@@ -559,7 +559,9 @@ models:
         column_list: ["user_mitxonline_username", "user_edxorg_username", "courserun_readable_id"]
 
 - name: int__mitx__program_certificates
-  description: MITx program certificates combined from MicroMasters and MITx Online
+  description: MITx program certificates combined from MicroMasters and MITx Online,
+    revoked ones included. DEDP certificates come through int__micromasters__program_certificates.
+    Filter on programcertificate_is_revoked to count certificates.
   config:
     meta:
       qa_branches:
@@ -589,6 +591,9 @@ models:
     description: timestamp, For MicroMasters Non DEDP programs, this is timestamp
       of the course certificate that completed the program. For other programs, this
       is timestamp for when program certificates were initially created
+  - name: programcertificate_is_revoked
+    description: boolean, whether MITx Online revoked the certificate. Null for MicroMasters
+      and edX.org certificates, which have no revocation.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:

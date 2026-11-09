@@ -289,6 +289,31 @@
 
 
 {#
+    format_fixed_decimal: A number as a string with exactly two decimal places,
+    rounded half away from zero, no grouping separators (Trino's format('%.2f', x)).
+    StarRocks has no format() for numbers, and DuckDB's printf rounds some half-way
+    values down (0.015 to 0.01). Casting to decimal(38, 2) rounds as Trino does on
+    StarRocks for decimal and double input, and on DuckDB for decimal input. DuckDB
+    rounds a double by its binary value (0.145 to 0.14, where Trino gives 0.15).
+#}
+{% macro format_fixed_decimal(number_expr) -%}
+    {{ adapter.dispatch('format_fixed_decimal', 'open_learning')(number_expr) }}
+{%- endmacro %}
+
+{% macro default__format_fixed_decimal(number_expr) -%}
+    format('%.2f', {{ number_expr }})
+{%- endmacro %}
+
+{% macro duckdb__format_fixed_decimal(number_expr) -%}
+    cast(cast({{ number_expr }} as decimal(38, 2)) as varchar)
+{%- endmacro %}
+
+{% macro starrocks__format_fixed_decimal(number_expr) -%}
+    cast(cast({{ number_expr }} as decimal(38, 2)) as varchar)
+{%- endmacro %}
+
+
+{#
     date_format: Format a date/timestamp using a MySQL-style format string (Trino date_format).
     DuckDB uses strftime with the same %-style format strings.
 #}
@@ -857,6 +882,33 @@
 
 
 {#
+    month_series: a SELECT returning one DATE column, col_name, for start_date and every
+    month after it up to end_date inclusive. start_date must be the first of a month and
+    no later than end_date, both DATE expressions. StarRocks has no sequence() over dates,
+    so it adds 0..months_diff months to start_date. months_diff counts whole months, which
+    matches Trino's sequence only from a first-of-month start: from the 31st, Trino clamps
+    to the end of a shorter month and months_diff drops it.
+#}
+{% macro month_series(start_date, end_date, col_name) -%}
+    {{ adapter.dispatch('month_series', 'open_learning')(start_date, end_date, col_name) }}
+{%- endmacro %}
+
+{% macro default__month_series(start_date, end_date, col_name) -%}
+    select {{ col_name }}
+    from unnest(sequence({{ start_date }}, {{ end_date }}, interval '1' month)) as t ({{ col_name }})
+{%- endmacro %}
+
+{% macro duckdb__month_series(start_date, end_date, col_name) -%}
+    select cast(unnest(generate_series({{ start_date }}, {{ end_date }}, interval 1 month)) as date) as {{ col_name }}
+{%- endmacro %}
+
+{% macro starrocks__month_series(start_date, end_date, col_name) -%}
+    select cast(months_add({{ start_date }}, month_offset) as date) as {{ col_name }}
+    from table(generate_series(0, months_diff({{ end_date }}, {{ start_date }}))) as t (month_offset)
+{%- endmacro %}
+
+
+{#
     try_cast: `expr` as `type`, or NULL where the value does not convert. StarRocks
     has no try_cast; its cast already returns NULL for a string that does not convert.
 #}
@@ -1000,6 +1052,17 @@
     {{ literal | replace('\\', '\\\\') }}
 {%- endmacro %}
 
+{#
+    dbt's escape_single_quotes on StarRocks. dbt builds unit-test fixture and expected
+    values with string_literal(escape_single_quotes(value)), and the default only doubles
+    quotes, so a fixture value with a backslash lost it on StarRocks (an expected
+    '<p>One \"quoted\"</p>' came back as '<p>One "quoted"</p>'). Root-project macros take
+    precedence over dbt's own in the dbt dispatch namespace.
+#}
+{% macro starrocks__escape_single_quotes(expression) -%}
+    {{ expression | replace('\\', '\\\\') | replace("'", "''") }}
+{%- endmacro %}
+
 
 {#
     regexp_extract_all: every match of `pattern` in `subject` (or of its capture group
@@ -1127,6 +1190,20 @@
 {% macro default__null_timestamptz() -%}cast(null as timestamp with time zone){%- endmacro %}
 
 {% macro starrocks__null_timestamptz() -%}cast(null as datetime){%- endmacro %}
+
+{#
+    null_timestamp: a NULL of the engine's zone-less timestamp type. StarRocks has
+    no `timestamp` type. A macro for the whole expression rather than
+    `cast(null as {{ dbt.type_timestamp() }})`, which ol-dbt validate's raw-SQL
+    parse cannot read.
+#}
+{% macro null_timestamp() -%}
+    {{ adapter.dispatch('null_timestamp', 'open_learning')() }}
+{%- endmacro %}
+
+{% macro default__null_timestamp() -%}cast(null as timestamp){%- endmacro %}
+
+{% macro starrocks__null_timestamp() -%}cast(null as datetime){%- endmacro %}
 
 {% macro current_timestamptz() -%}
     {{ adapter.dispatch('current_timestamptz', 'open_learning')() }}
@@ -1504,7 +1581,13 @@
 {%- endmacro %}
 
 
-{# json_object_from_pairs: a JSON object as varchar from [key, expression] pairs, in order. #}
+{# json_object_from_pairs: a JSON object as varchar from [key, expression] pairs.
+   StarRocks and DuckDB keep the pairs' order. Trino's json_object does not (the zendesk
+   pairs come out as ticket_status, group_name, ticket_priority, ...), so compare parsed
+   JSON, not strings, across engines. Values must be varchar, numeric or boolean: StarRocks'
+   json_object rejects DATETIME and DATE, so cast those to varchar at the call site (Trino
+   renders a timestamp in json_object as its varchar cast, so the cast changes nothing there).
+   StarRocks also drops trailing zeros from a decimal (1.50 becomes 1.5); Trino keeps them. #}
 {% macro json_object_from_pairs(pairs) -%}
     {{ adapter.dispatch('json_object_from_pairs', 'open_learning')(pairs) }}
 {%- endmacro %}
@@ -1525,13 +1608,16 @@
     ) as varchar)
 {%- endmacro %}
 
-{# StarRocks takes DuckDB's json_object(key, value, ...) form, not Trino's key: value. #}
+{# StarRocks' JSON type sorts object keys and casts to varchar with ": " separators, so
+   the object is assembled as a string in the pairs' order. Each value is still encoded
+   by json_object (quotes, backslashes, control characters, null), from a one-key object
+   whose wrapper is stripped. #}
 {% macro starrocks__json_object_from_pairs(pairs) -%}
-    cast(json_object(
+    concat('{', concat_ws(','
         {%- for key, expr in pairs %}
-        {% if not loop.first %}, {% endif %}'{{ key }}', {{ expr }}
+        , concat('"{{ key }}":', regexp_extract(cast(json_object('v', {{ expr }}) as varchar), {{ starrocks_string_literal("'^\\{\"v\": (.*)\\}$'") }}, 1))
         {%- endfor %}
-    ) as varchar)
+    ), '}')
 {%- endmacro %}
 
 

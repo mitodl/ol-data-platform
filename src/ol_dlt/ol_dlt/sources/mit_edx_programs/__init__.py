@@ -20,8 +20,7 @@ Airbyte connection that loaded their files into ``raw__edxorg__s3__*``. That
 connection inferred its schema from a sample of old files, so it dropped the
 fields #2721 added, and it re-appended every file the assets overwrote. Each
 row carries the ``retrieved_at`` of the extraction that wrote it, and staging
-treats the rows sharing the latest ``retrieved_at`` as what the API currently
-lists, so these tables only ever append.
+keeps each key's most recent row, so these tables only ever append.
 
 Nested values (images, subjects, seats, staff, a course's runs) are stored as
 JSON strings, which is what the Airbyte tables held and what staging parses.
@@ -58,8 +57,7 @@ EDX_PROGRAMS_API_URL = "https://discovery.edx.org/api/v1/programs/"
 # Catalog 10 is edX's MITx catalog.
 EDX_MITX_COURSES_API_URL = "https://discovery.edx.org/api/v1/catalogs/10/courses/"
 
-# MIT owner keys used by MIT Learn to identify MIT-authored edX content.
-# Kept in sync with learning_resources/etl/openedx.py MIT_OWNER_KEYS.
+# Owner keys that mark edX.org content as MIT-authored.
 _MIT_OWNER_KEYS = frozenset(
     [
         "MITx",
@@ -81,7 +79,7 @@ def _columns(text: tuple[str, ...], **typed: str) -> dict[str, dict[str, Any]]:
     These are the types the Airbyte tables held, which staging reads. Declaring
     all of them matters for three reasons. dlt's default iso_timestamp detection
     would otherwise load retrieved_at and the API's dates as timestamps, where
-    staging and the edX programs delivery parse ISO strings. dlt creates no
+    staging parses ISO strings. dlt creates no
     column that is null in every row of a load, so a day on which, say, no run
     has an announcement would drop a column staging selects. And the API sends
     estimated_hours as an int for whole hours and a float otherwise.
@@ -187,11 +185,7 @@ def _json(value: Any) -> str:  # noqa: ANN401
 
 
 def program_record(program: dict[str, Any], *, retrieved_at: str) -> dict[str, Any]:
-    """Flatten one edX discovery API program into a program row.
-
-    Marketing URL, banner image and level override are what MIT Learn's program
-    records are built from, alongside the program's courses and their runs.
-    """
+    """Flatten one edX discovery API program into a program row."""
     banner_image = program.get("banner_image") or {}
     return {
         "uuid": program["uuid"],
@@ -215,14 +209,11 @@ def program_course_records(
 ) -> list[dict[str, Any]]:
     """Flatten a program's courses into program_course rows.
 
-    ``course_runs`` is kept whole as a JSON string: MIT Learn derives a program's
-    dates, price, pace and availability from these runs as the program API reports
-    them.
+    ``course_runs`` is kept whole as a JSON string, as the program API reports it.
 
     The rows sharing the latest ``retrieved_at`` are the program's current
     courses; a course dropped from a program leaves no row there.
-    ``course_position`` keeps the API's course order, which MIT Learn uses to
-    order a program's courses.
+    ``course_position`` keeps the API's course order.
     """
     return [
         {

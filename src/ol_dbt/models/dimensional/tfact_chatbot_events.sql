@@ -131,7 +131,7 @@ with openedx_events as (
                  partition by session_id, block_id order by event_timestamp
             ) as next_canvas_object_id
         from canvas_events_with_learnai
-    )
+    ) as subquery
 )
 
 , combined as (

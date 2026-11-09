@@ -10,7 +10,6 @@ import polars as pl
 import pytest
 from delivery.assets import mitpe
 from delivery.assets.mit_climate import mit_climate_webhook
-from delivery.assets.mit_edx_programs import mit_edx_programs_webhook
 from delivery.assets.mitpe import mitpe_webhook
 from delivery.assets.open_learning_library import oll_webhook
 from delivery.lib.learn_webhook import webhook_failure
@@ -87,7 +86,7 @@ def _materialize_mitpe(
 
 @pytest.mark.parametrize(
     "webhook",
-    [mit_climate_webhook, mit_edx_programs_webhook, mitpe_webhook, oll_webhook],
+    [mit_climate_webhook, mitpe_webhook, oll_webhook],
 )
 def test_every_delivery_asset_defaults_the_override_off(
     webhook: dg.AssetsDefinition,

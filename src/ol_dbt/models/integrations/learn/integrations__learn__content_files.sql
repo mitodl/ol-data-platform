@@ -5,7 +5,7 @@
         if target.type == 'starrocks' else none
     ),
     properties=(
-        {"format": "'PARQUET'"} if target.type == 'starrocks'
+        none if target.type == 'starrocks'
         else {
             "format": "'PARQUET'",
             "partitioning": "ARRAY['etl_source', 'bucket(run_readable_id, " ~ run_buckets ~ ")']",

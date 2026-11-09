@@ -47,7 +47,7 @@ SENTIMENT_LABELS = ("positive", "negative")
 # The classifier labels a conversation negative when P(negative) >= threshold. Rows
 # below 0.5 trade precision for recall; 0.5 is the plain predict() decision.
 DEFAULT_NEGATIVE_THRESHOLD = 0.5
-CLASSIFIER_NEGATIVE_THRESHOLDS = (0.5, 0.4, 0.3, 0.25, 0.2)
+CLASSIFIER_NEGATIVE_THRESHOLDS = (0.5, 0.4, 0.35, 0.3, 0.25, 0.2)
 
 # How many neighbours the kNN candidate votes across. Small and odd (no ties on
 # a binary label) -- this is a bake-off, not the tuned production value.
@@ -218,6 +218,37 @@ def predictions_at_threshold(
 ) -> np.ndarray:
     """Label each row negative when its P(negative) is at least threshold."""
     return np.where(negative_probabilities >= threshold, "negative", "positive")
+
+
+def predict_unrated_sentiment(
+    labeled_df: pl.DataFrame,
+    unrated_df: pl.DataFrame,
+    embedding_dim: int,
+    negative_threshold: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Train the local classifier on every labeled row and score the unrated ones.
+
+    The production use of the classifier feedback_sentiment_eval scores, so the
+    two stay the same model.
+
+    Args:
+        labeled_df: output of labeled_sentiment_sample -- needs embedding_vector
+            and sentiment columns, with both labels present.
+        unrated_df: rows to predict -- needs embedding_vector.
+
+    Returns:
+        (P(negative), sentiment label) per unrated_df row, in its order.
+    """
+    if unrated_df.is_empty():
+        return np.empty(0), np.empty(0, dtype=object)
+    negative_probabilities = local_classifier_negative_probabilities(
+        labeled_df["embedding_vector"].list.to_array(embedding_dim).to_numpy(),
+        labeled_df["sentiment"].to_numpy(),
+        unrated_df["embedding_vector"].list.to_array(embedding_dim).to_numpy(),
+    )
+    return negative_probabilities, predictions_at_threshold(
+        negative_probabilities, negative_threshold
+    )
 
 
 def validate_negative_thresholds(thresholds: Sequence[float]) -> None:

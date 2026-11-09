@@ -16,12 +16,16 @@ import pytest
 import yaml
 
 from ol_dbt_cli.lib.inventory import (
+    LEARNER_ACTIVITY_TABLES,
+    RenderError,
     Unit,
+    keyset_tables,
     load_units,
     local_ingest_sources,
     raw_metadata_column,
     raw_metadata_columns,
     render_dbt_metadata_columns,
+    render_keyset_tables,
     validate_inventory,
 )
 from ol_dbt_cli.lib.validation import ValidationReport
@@ -696,5 +700,69 @@ class TestGeneratedMetadataMacro:
 
     def test_rendered_macro_emits_a_list_as_a_jinja_list(self) -> None:
         rendered = render_dbt_metadata_columns(load_units(REAL_INVENTORY))
-        expected = "'raw__edxorg__s3__tracking_logs': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],"
+        expected = "'raw__edxorg__program_learner_report': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],"
         assert expected in rendered
+
+
+class TestKeysetTables:
+    def test_committed_keyset_tables_are_current(self) -> None:
+        """ol_dlt.keyset reads this file at run time, so it must match the inventory.
+
+        A stale file means a table added to a unit gets no keyset and its
+        deletes go unseen, with nothing failing.
+        """
+        expected = render_keyset_tables(load_units(REAL_INVENTORY))
+        committed = REPO_ROOT / "src" / "ol_dlt" / "ol_dlt" / "keyset" / "tables.json"
+        assert committed.read_text() == expected, "Run `ol-dbt inventory keysets --write`."
+
+    def test_the_real_inventory_selects_bucket_1(self) -> None:
+        """124 tables in ten units, the count the 826b18 decision doc measured."""
+        selected = keyset_tables(load_units(REAL_INVENTORY))
+        assert sorted(selected) == [
+            "learn_ai/app_postgres",
+            "micromasters/app_postgres",
+            "mitlearn/app_postgres",
+            "mitx/mysql",
+            "mitxonline/app_postgres",
+            "mitxonline/mysql",
+            "ocw/app_postgres",
+            "ovs/app_postgres",
+            "xpro/app_postgres",
+            "xpro/mysql",
+        ]
+        assert sum(len(rows) for rows in selected.values()) == 124  # noqa: PLR2004
+
+    def test_learner_activity_tables_get_no_keyset(self) -> None:
+        units = load_units(REAL_INVENTORY)
+        raw_tables = {
+            str(table["raw_table"]): unit.key
+            for unit in units
+            for table in unit.tables
+            if table.get("raw_table") in LEARNER_ACTIVITY_TABLES
+        }
+        # Every name in the exclusion is a real table, so a typo cannot let one through.
+        assert set(raw_tables) == LEARNER_ACTIVITY_TABLES
+        selected = keyset_tables(units)
+        prefixes = {unit.key: unit.data["table_prefix"] for unit in units}
+        for raw_table, unit_key in raw_tables.items():
+            names = {row["table"] for row in selected.get(unit_key, [])}
+            assert raw_table.removeprefix(prefixes[unit_key]) not in names
+
+    def test_selects_only_modeled_incremental_deduped_tables(self) -> None:
+        data = copy.deepcopy(APP_UNIT)
+        data["tables"][0]["sync_mode"] = "incremental_deduped_history"
+        data["tables"][1].update(sync_mode="incremental_deduped_history", primary_key=[["id"]], modeled=False)
+        selected = keyset_tables([Unit(path=Path("mitxonline__mysql.yml"), data=data)])
+        assert selected == {"mitxonline/mysql": [{"table": "auth_user", "key": "id"}]}
+
+    def test_a_unit_on_dlt_replace_drops_out(self) -> None:
+        data = copy.deepcopy(APP_UNIT)
+        data["tables"][0]["sync_mode"] = "incremental_deduped_history"
+        data.update(loader="dlt", dlt={"source_module": "ol_dlt.sources.x", "write_disposition": "replace"})
+        assert keyset_tables([Unit(path=Path("mitxonline__mysql.yml"), data=data)]) == {}
+
+    def test_a_composite_key_stops_the_render(self) -> None:
+        data = copy.deepcopy(APP_UNIT)
+        data["tables"][0].update(sync_mode="incremental_deduped_history", primary_key=[["id"], ["course_id"]])
+        with pytest.raises(RenderError, match="not one column"):
+            keyset_tables([Unit(path=Path("mitxonline__mysql.yml"), data=data)])

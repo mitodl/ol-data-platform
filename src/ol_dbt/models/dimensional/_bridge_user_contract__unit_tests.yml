@@ -1,0 +1,116 @@
+---
+unit_tests:
+- name: test_bridge_user_contract_keeps_one_row_per_re_added_membership
+  description: >
+    Regression test for 2026-11-04. In production the raw userb2bcontract
+    table is loaded by Airbyte's xmin sync, which never carries a hard delete,
+    so a learner removed from a contract and re-added leaves one row per stint. Each
+    became its own bridge row and fanned out
+    mv_b2b_learner_enrollment (3 rows for one enrollment). The bridge must hold
+    one row for the (user, contract), from the most recently created membership,
+    and still carry the decision recorded on an earlier stint.
+  model: bridge_user_contract
+  given:
+  - input: ref('stg__mitxonline__app__postgres__b2b_userb2bcontract')
+    rows:
+    - userb2bcontract_id: 10
+      user_id: 6827
+      contract_id: 1904
+      userb2bcontract_consented_to_data_sharing: true
+      userb2bcontract_consent_modified_at: "2026-10-01T19:10:00.000"
+      userb2bcontract_created_on: "2026-10-01T19:09:50.350"
+      userb2bcontract_updated_on: "2026-10-01T19:10:00.000"
+    - userb2bcontract_id: 20
+      user_id: 6827
+      contract_id: 1904
+      userb2bcontract_consented_to_data_sharing:
+      userb2bcontract_consent_modified_at:
+      userb2bcontract_created_on: "2026-10-05T12:00:00.000"
+      userb2bcontract_updated_on: "2026-10-05T12:00:00.000"
+    - userb2bcontract_id: 30
+      user_id: 6827
+      contract_id: 1904
+      userb2bcontract_consented_to_data_sharing:
+      userb2bcontract_consent_modified_at:
+      userb2bcontract_created_on: "2026-10-08T16:13:11.506"
+      userb2bcontract_updated_on: "2026-10-08T16:13:11.506"
+  - input: ref('snapshot_mitxonline_b2b_userb2bcontract')
+    rows:
+    - user_id: 6827
+      contract_id: 1904
+      userb2bcontract_consented_to_data_sharing: true
+      userb2bcontract_consent_modified_at: "2026-10-01T19:10:00.000"
+      dbt_valid_from: "2026-10-01T20:00:00.000"
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "u-6827"
+      mitxonline_application_user_id: 6827
+  - input: ref('dim_contract')
+    rows:
+    - contract_pk: "c-1904"
+      contract_id: 1904
+      organization_fk: "o-1"
+  expect:
+    rows:
+    - user_fk: "u-6827"
+      contract_fk: "c-1904"
+      organization_fk: "o-1"
+      membership_is_current: true
+      consented_to_data_sharing: true
+      consent_modified_at: "2026-10-01T19:10:00.000"
+      membership_created_on: "2026-10-08T16:13:11.506"
+      membership_updated_on: "2026-10-08T16:13:11.506"
+- name: test_bridge_user_contract_newest_stint_decision_wins
+  description: >
+    The newest stint is chosen by created_on, not id, and its own decision wins
+    over an older stint's. Here the older stint declined, the newer one
+    consents, and the newer one has the lower id.
+  model: bridge_user_contract
+  given:
+  - input: ref('stg__mitxonline__app__postgres__b2b_userb2bcontract')
+    rows:
+    - userb2bcontract_id: 50
+      user_id: 7001
+      contract_id: 916
+      userb2bcontract_consented_to_data_sharing: false
+      userb2bcontract_consent_modified_at: "2026-10-01T09:00:00.000"
+      userb2bcontract_created_on: "2026-10-01T08:00:00.000"
+      userb2bcontract_updated_on: "2026-10-01T09:00:00.000"
+    - userb2bcontract_id: 40
+      user_id: 7001
+      contract_id: 916
+      userb2bcontract_consented_to_data_sharing: true
+      userb2bcontract_consent_modified_at: "2026-10-08T09:00:00.000"
+      userb2bcontract_created_on: "2026-10-08T08:00:00.000"
+      userb2bcontract_updated_on: "2026-10-08T09:00:00.000"
+  - input: ref('snapshot_mitxonline_b2b_userb2bcontract')
+    rows:
+    - user_id: 7001
+      contract_id: 916
+      userb2bcontract_consented_to_data_sharing: false
+      userb2bcontract_consent_modified_at: "2026-10-01T09:00:00.000"
+      dbt_valid_from: "2026-10-01T10:00:00.000"
+    - user_id: 7001
+      contract_id: 916
+      userb2bcontract_consented_to_data_sharing: true
+      userb2bcontract_consent_modified_at: "2026-10-08T09:00:00.000"
+      dbt_valid_from: "2026-10-08T10:00:00.000"
+  - input: ref('dim_user')
+    rows:
+    - user_pk: "u-7001"
+      mitxonline_application_user_id: 7001
+  - input: ref('dim_contract')
+    rows:
+    - contract_pk: "c-916"
+      contract_id: 916
+      organization_fk: "o-1"
+  expect:
+    rows:
+    - user_fk: "u-7001"
+      contract_fk: "c-916"
+      organization_fk: "o-1"
+      membership_is_current: true
+      consented_to_data_sharing: true
+      consent_modified_at: "2026-10-08T09:00:00.000"
+      membership_created_on: "2026-10-08T08:00:00.000"
+      membership_updated_on: "2026-10-08T09:00:00.000"

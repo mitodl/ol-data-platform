@@ -23,7 +23,6 @@
     "raw__edxorg__s3__tables__grades_persistentcoursegrade": {"iceberg": true, "present": true, "rows": 55491090, "snapshot_at": "2026-10-23T14:05:46.250000+00:00"},
     "raw__edxorg__s3__tables__student_courseaccessrole": {"iceberg": true, "present": true, "rows": 102831, "snapshot_at": "2026-10-23T14:05:51.693000+00:00"},
     "raw__edxorg__s3__tables__student_courseenrollment": {"iceberg": true, "present": true, "rows": 341836532, "snapshot_at": "2026-10-23T14:06:18.204000+00:00"},
-    "raw__edxorg__s3__tracking_logs": {"iceberg": true, "present": true, "rows": 2032395, "snapshot_at": "2026-10-07T19:28:15.583000+00:00"},
     "raw__emeritus__bigquery__api_enrollments": {"iceberg": true, "present": true, "rows": 15712105, "snapshot_at": "2026-10-09T17:16:59.300000+00:00"},
     "raw__global_alumni__bigquery__api_enrollments": {"iceberg": true, "present": true, "rows": 71870, "snapshot_at": "2026-10-09T17:09:08.532000+00:00"},
     "raw__irx__edxorg__bigquery__email_opt_in": {"iceberg": true, "present": true, "rows": 1521861, "snapshot_at": "2026-10-28T18:03:52.838000+00:00"},

@@ -6,7 +6,6 @@ metadata to MIT Learn over the webhook API. Sources currently delivered:
 - MIT Climate Portal articles
 - MIT Professional Education courses and programs
 - Open Learning Library courses
-- MIT edX programs
 
 It also pushes the instructor onboarding user list, read from the warehouse, to
 the access-forge GitHub repository, each B2B organization's administration
@@ -55,7 +54,6 @@ from delivery.assets.instructor_onboarding import (
     update_access_forge_repo,
 )
 from delivery.assets.mit_climate import mit_climate_webhook
-from delivery.assets.mit_edx_programs import mit_edx_programs_webhook
 from delivery.assets.mitpe import mitpe_webhook
 from delivery.assets.open_learning_library import oll_webhook
 from delivery.assets.ovs_videos import (
@@ -121,14 +119,6 @@ mitpe_webhook, mitpe_delivery_sensor = deliver_after_upstream(
 oll_webhook, oll_delivery_sensor = deliver_after_upstream(
     oll_webhook,
     "oll_delivery_sensor",
-    staging_cron=NON_AIRBYTE_STAGING_CRON,
-)
-mit_edx_programs_webhook, mit_edx_programs_delivery_sensor = deliver_after_upstream(
-    mit_edx_programs_webhook,
-    "mit_edx_programs_delivery_sensor",
-    # The edX discovery tables are dlt-loaded and staged at 06:00. Its MIT Learn
-    # Postgres inputs are staged by the midnight sync_and_stage job, so a
-    # midnight tick would deliver after that rebuild, on yesterday's edX data.
     staging_cron=NON_AIRBYTE_STAGING_CRON,
 )
 
@@ -235,8 +225,7 @@ defs = Definitions(
             vault=vault,
         ),
         "sloan_api": OAuthApiClientFactory(deployment="sloan", vault=vault),
-        # opens the unpublish-review issues mit_edx_programs_webhook files when edX
-        # lists no program, and commits the access-forge instructor user list
+        # commits the access-forge instructor user list
         "github_api": GithubApiClientFactory(vault=vault),
         "learn_api": ApiClientFactory(
             deployment="mit-learn",
@@ -258,7 +247,6 @@ defs = Definitions(
             mit_climate_webhook,
             mitpe_webhook,
             oll_webhook,
-            mit_edx_programs_webhook,
             # Warehouse data pushed to the access-forge repository
             generate_instructor_onboarding_user_list,
             update_access_forge_repo,
@@ -287,7 +275,6 @@ defs = Definitions(
             mit_climate_delivery_sensor,
             mitpe_delivery_sensor,
             oll_delivery_sensor,
-            mit_edx_programs_delivery_sensor,
             b2b_organization_list_sensor,
             canvas_course_export_webhook_sensor,
             *FAILURE_NOTIFICATION_SENSORS,

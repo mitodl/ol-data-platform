@@ -55,7 +55,7 @@ with mitxonline_products as (
             ) as _row_num
         from {{ ref('dim_course_run') }}
         where is_current = true
-    )
+    ) as subquery
     where _row_num = 1
 )
 
@@ -106,7 +106,7 @@ with mitxonline_products as (
         , product_is_active
         , created_date_key
         , current_timestamp as effective_date
-        , cast(null as timestamp) as end_date
+        , {{ null_timestamp() }} as end_date
         , true as is_current
     from products_with_fks
 )

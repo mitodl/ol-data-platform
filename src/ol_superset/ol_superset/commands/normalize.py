@@ -29,6 +29,7 @@ This module cleans up fields that cause erroneous diffs between exports:
 """
 
 import re
+import sys
 from pathlib import Path
 
 import cyclopts
@@ -117,6 +118,29 @@ def build_database_uuid_map(assets_dir: Path) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 # Per-file normalization
 # ---------------------------------------------------------------------------
+
+
+class _BlockStringDumper(yaml.SafeDumper):
+    pass
+
+
+def _represent_str(dumper: yaml.SafeDumper, value: str) -> yaml.ScalarNode:
+    # PyYAML falls back to a quoted style when a string cannot be a literal block
+    style = "|" if "\n" in value else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", value, style=style)
+
+
+_BlockStringDumper.add_representer(str, _represent_str)
+
+
+def _dump_yaml(data: dict[str, object]) -> str:
+    return yaml.dump(
+        data,
+        Dumper=_BlockStringDumper,
+        allow_unicode=True,
+        default_flow_style=False,
+        sort_keys=True,
+    )
 
 
 def _sorted_dict(d: dict[str, object]) -> dict[str, object]:
@@ -221,12 +245,7 @@ def normalize_chart(
     # 4. Sort all dict keys alphabetically for deterministic output
     data = _sorted_dict(data)
 
-    new_text = yaml.dump(
-        data,
-        allow_unicode=True,
-        default_flow_style=False,
-        sort_keys=True,
-    )
+    new_text = _dump_yaml(data)
 
     # 5. Annotate dataset_uuid with the human-readable dataset name
     dataset_uuid = data.get("dataset_uuid")
@@ -265,12 +284,7 @@ def normalize_dataset(
     # Sort all dict keys alphabetically
     data = _sorted_dict(data)
 
-    new_text = yaml.dump(
-        data,
-        allow_unicode=True,
-        default_flow_style=False,
-        sort_keys=True,
-    )
+    new_text = _dump_yaml(data)
 
     changed = new_text.strip() != original_text.strip()
 
@@ -309,12 +323,7 @@ def normalize_dashboard(
 
     data = _sorted_dict(data)
 
-    new_text = yaml.dump(
-        data,
-        allow_unicode=True,
-        default_flow_style=False,
-        sort_keys=True,
-    )
+    new_text = _dump_yaml(data)
 
     changed = new_text.strip() != original_text.strip()
 
@@ -379,6 +388,7 @@ def normalize(
     datasets: bool = False,
     dashboards: bool = False,
     dry_run: bool = False,
+    check: bool = False,
 ) -> None:
     """Normalize exported YAML assets to reduce erroneous diffs.
 
@@ -388,7 +398,9 @@ def normalize(
         datasets: Only normalize datasets
         dashboards: Only normalize dashboards
         dry_run: Show what would change without writing any files
+        check: Like dry_run, but exit with status 1 if any file would change or fails
     """
+    dry_run = dry_run or check
     process_all = not (charts or datasets or dashboards)
 
     if dry_run:
@@ -403,6 +415,7 @@ def normalize(
     charts_changed = charts_total = 0
     datasets_changed = datasets_total = 0
     dashboards_changed = dashboards_total = 0
+    files_failed = 0
 
     # --- Charts ---
     if process_all or charts:
@@ -424,6 +437,7 @@ def normalize(
                         action = "Would update" if dry_run else "Updated"
                         console.print(f"  [green]{action}:[/green] {yaml_file.name}")
                 except Exception as exc:  # noqa: BLE001
+                    files_failed += 1
                     console.print(
                         f"  [red]⚠ Error processing {yaml_file.name}: {exc}[/red]"
                     )
@@ -451,6 +465,7 @@ def normalize(
                         action = "Would update" if dry_run else "Updated"
                         console.print(f"  [green]{action}:[/green] {yaml_file.name}")
                 except Exception as exc:  # noqa: BLE001
+                    files_failed += 1
                     console.print(
                         f"  [red]⚠ Error processing {yaml_file.name}: {exc}[/red]"
                     )
@@ -474,6 +489,7 @@ def normalize(
                         action = "Would update" if dry_run else "Updated"
                         console.print(f"  [green]{action}:[/green] {yaml_file.name}")
                 except Exception as exc:  # noqa: BLE001
+                    files_failed += 1
                     console.print(
                         f"  [red]⚠ Error processing {yaml_file.name}: {exc}[/red]"
                     )
@@ -488,8 +504,10 @@ def normalize(
     if dry_run:
         console.print(
             f"[yellow]Would update {total_changed}/{total_files} file(s). "
-            "Run without --dry-run to apply.[/yellow]"
+            "Run `ol-superset normalize` to apply.[/yellow]"
         )
+        if check and (total_changed > 0 or files_failed > 0):
+            sys.exit(1)
     else:
         console.print(
             f"[bold green]✅ Done — updated {total_changed}/{total_files} "
