@@ -1887,7 +1887,8 @@ unit_tests:
 - name: test_program_summary_report_counts_verified_from_the_fact
   description: >
     verified_enrollments and unique_verified_users read tfact_enrollment.is_verified,
-    not the mode, across the mart's display platform names.
+    not the mode, across the mart's display platform names, from course enrollments
+    on the same platform only.
   model: program_summary_report
   given:
   - input: ref('marts__combined_course_enrollment_detail')
@@ -1912,6 +1913,10 @@ unit_tests:
     rows:
     - {platform: "mitxonline", enrollment_type: "course", enrollment_id: "6001", is_verified: true}
     - {platform: "mitxonline", enrollment_type: "course", enrollment_id: "6002", is_verified: false}
+    # A program enrollment and another platform's enrollment share 6002's id and leave it unverified.
+    - {platform: "mitxonline", enrollment_type: "program", enrollment_id: "6002",
+      is_verified: true}
+    - {platform: "mitxpro", enrollment_type: "course", enrollment_id: "6002", is_verified: true}
     - enrollment_id: "d2c262edd935f1303dc150a525096fe5"  # pragma: allowlist secret
       platform: "edxorg"
       enrollment_type: "course"
