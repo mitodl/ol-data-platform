@@ -1482,6 +1482,54 @@ models:
       arguments:
         column_list: ["platform", "user_email", "courserun_readable_id"]
 
+- name: discussion_detail_report
+  description: Report of forum discussion events with the course title, for the Learner
+    Engagement dashboard
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitlearn/app_postgres
+      - mitx/mysql
+      - mitx/tracking_logs
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
+      - xpro/app_postgres
+      - xpro/mysql
+      - xpro/tracking_logs
+  columns:
+  - name: platform
+    description: string, name of the platform (e.g. mitxonline, edxorg, mitxpro, residential)
+    tests:
+    - not_null
+  - name: course_title
+    description: string, title of the course run's current course, or the run title
+      when the run has no course
+  - name: courserun_readable_id
+    description: string, unique identifier for the course run formatted as course-v1:{org}+{course
+      code}+{run_tag}
+    tests:
+    - not_null
+  - name: event_type
+    description: string, type of the discussion event. e.g., edx.forum.comment.created,
+      edx.forum.thread.created, edx.forum.thread.viewed
+    tests:
+    - not_null
+  - name: post_title
+    description: string, title to identify the post
+  - name: post_content
+    description: string, content of the post that the user created
+  - name: discussion_component_name
+    description: string, display name for the discussion component or course-wide
+      discussion
+  - name: page_url
+    description: string, URL of the page where the discussion event occurred
+  - name: event_timestamp
+    description: timestamp, date and time when the discussion event was recorded
+    tests:
+    - not_null
+
 - name: data_detail_nav
   description: Report of navigatation events
   config:
