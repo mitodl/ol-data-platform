@@ -17,6 +17,7 @@ params:
   - resource_filename
   - resource_title
   - resource_type
+  - resource_uploaded_filename
   - resource_uuid
   - website_title
   - external_resource_is_broken
@@ -37,6 +38,7 @@ params:
   - video_youtube_id
   - video_youtube_speakers
   - video_youtube_tags
+  - video_archive_filename
   - video_archive_url
   - video_captions_file
   - video_thumbnail_file
