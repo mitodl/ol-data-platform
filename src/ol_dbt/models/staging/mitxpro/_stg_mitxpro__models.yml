@@ -2473,8 +2473,9 @@ models:
       root. e.g. original_images/course.jpg
   - name: image_url
     description: str, fully-qualified URL to the image, constructed by prepending
-      the xpro_media_url dbt variable (https://ol-xpro-app-production.s3.amazonaws.com/)
-      to image_file. e.g. https://ol-xpro-app-production.s3.amazonaws.com/original_images/course.jpg
+      the environment's xpro_media_url dbt variable to image_file. e.g. https://ol-xpro-app-production.s3.amazonaws.com/original_images/course.jpg
+      in production, https://ol-xpro-app-qa.s3.amazonaws.com/original_images/course.jpg
+      in QA
   - name: image_title
     description: str, title/label for the image as entered in the CMS
   - name: image_width
