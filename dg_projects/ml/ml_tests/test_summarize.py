@@ -12,6 +12,7 @@ from ml.resources import opik_auth
 from ol_llm import (
     BatchFailed,
     BatchKeys,
+    LLMContentFiltered,
     LLMInvalidOutput,
     ManagedPrompt,
     TextTemplate,
@@ -60,10 +61,14 @@ def _sent_text(messages: list[ModelMessage]) -> str:
 
 
 def _summarize(messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
-    """Echo the conversation back, and reject any containing "too long"."""
+    """Echo the conversation back, reject any containing "too long", and filter
+    any containing "blocked" the way Bedrock does, with no content.
+    """
     text = _sent_text(messages)
     if "too long" in text:
         raise ModelHTTPError(400, "claude-haiku-4-5", body="prompt is too long")
+    if "blocked" in text:
+        return ModelResponse(parts=[], finish_reason="content_filter")
     return ModelResponse(parts=[TextPart(f"summary of: {text}")])
 
 
@@ -524,6 +529,102 @@ def test_summarize_and_checkpoint_leaves_a_failed_conversation_out(
     assert _stored_rows(iceberg_catalog)["conversation_ref"].to_list() == ["2"]
     assert len(report.failures) == 1
     assert report.failures[0].row["conversation_ref"] == "1"
+
+
+def test_filtered_frame_keeps_the_key_and_no_summary() -> None:
+    frame = SUMMARIZER.filtered_frame([_conversation_row(conversation_ref="1")], {})
+
+    record = frame.row(0, named=True)
+    assert frame.schema == pl.Schema(summarize.SUMMARIZE_CHECKPOINT_SCHEMA)
+    assert record["idempotency_key"] == _key(TEXT)
+    assert record["conversation_summary"] is None
+    assert record["summary_model_version"] is None
+    assert record["prompt_template_hash"] is None
+    assert record["embedding_input"] == "concatenated_turns"
+
+
+def test_summarize_and_checkpoint_records_a_filtered_conversation(
+    iceberg_catalog: SqlCatalog,
+) -> None:
+    df = pl.DataFrame(
+        [
+            _conversation_row(conversation_ref="1", conversation_text="blocked"),
+            _conversation_row(conversation_ref="2"),
+        ]
+    )
+
+    with override_models(FunctionModel(_summarize)):
+        result, report = summarize.summarize_and_checkpoint(
+            df, SUMMARIZER, (iceberg_catalog, TABLE), max_concurrency=1
+        )
+
+    assert result["conversation_ref"].sort().to_list() == ["1", "2"]
+    assert type(report.failures[0].error) is LLMContentFiltered
+    stored = _stored_rows(iceberg_catalog)
+    assert stored["idempotency_key"].to_list() == [_key("blocked"), _key(TEXT)]
+    assert stored["conversation_summary"].is_null().to_list() == [True, False]
+
+
+def test_a_filtered_new_turn_keeps_the_stored_summary(
+    iceberg_catalog: SqlCatalog,
+) -> None:
+    """A summarized conversation stays in the summary arm, so its embedding and
+    cluster assignment stay consistent; only its key moves to the new text.
+    """
+    first = pl.DataFrame([_conversation_row(conversation_ref="1")])
+    with override_models(FunctionModel(_summarize)):
+        summarize.summarize_and_checkpoint(
+            first, SUMMARIZER, (iceberg_catalog, TABLE), max_concurrency=1
+        )
+    before = _stored_rows(iceberg_catalog).row(0, named=True)
+    new_turn = first.with_columns(
+        pl.lit(f"{TEXT}\n---\nblocked").alias("conversation_text"),
+        pl.lit(3).alias("turn_count"),
+    )
+
+    with (
+        override_models(FunctionModel(_summarize)),
+        pytest.raises(BatchFailed, match="1 of 1 rows failed"),
+    ):
+        summarize.summarize_and_checkpoint(
+            new_turn, SUMMARIZER, (iceberg_catalog, TABLE), max_concurrency=1
+        )
+
+    after = _stored_rows(iceberg_catalog).row(0, named=True)
+    assert after["idempotency_key"] == _key(f"{TEXT}\n---\nblocked")
+    assert {**after, "idempotency_key": None} == {**before, "idempotency_key": None}
+    assert after["embedding_input"] == "summary"
+
+
+def test_a_conversation_filtered_alone_fails_one_run_not_every_run(
+    iceberg_catalog: SqlCatalog,
+) -> None:
+    """Regression: a filtered conversation with nothing else new failed every run,
+    because it was never stored and so was submitted again each time.
+    """
+    df = pl.DataFrame(
+        [_conversation_row(conversation_ref="1", conversation_text="blocked")]
+    )
+
+    with (
+        override_models(FunctionModel(_summarize)),
+        pytest.raises(BatchFailed, match="1 of 1 rows failed"),
+    ):
+        summarize.summarize_and_checkpoint(
+            df, SUMMARIZER, (iceberg_catalog, TABLE), max_concurrency=1
+        )
+
+    next_run = summarize.filter_unsummarized(
+        df, _stored_rows(iceberg_catalog), SUMMARIZER.keys
+    )
+    assert next_run.height == 0
+    edited = df.with_columns(pl.lit("blocked, then edited").alias("conversation_text"))
+    assert (
+        summarize.filter_unsummarized(
+            edited, _stored_rows(iceberg_catalog), SUMMARIZER.keys
+        ).height
+        == 1
+    )
 
 
 def test_summarize_and_checkpoint_raises_when_every_call_fails(

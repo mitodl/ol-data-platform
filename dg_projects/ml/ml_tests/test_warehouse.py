@@ -61,3 +61,59 @@ def test_a_missing_table_reads_as_none_and_fails_a_required_read(monkeypatch):
     )
     with pytest.raises(Failure, match="has not been built yet"):
         warehouse.require_rows("integrations", "content_files", ["key"], key="a")
+
+
+def test_load_rows_by_key_reads_the_matching_rows_one_file_at_a_time(
+    catalog, monkeypatch
+):
+    catalog.load_table(
+        "ol_warehouse_production_test_integrations.content_files"
+    ).append(
+        pa.table(
+            {
+                "etl_source": ["mitxonline", "xpro"],
+                "run_readable_id": ["run-c", "run-c"],
+                "content": ["D of mitxonline.", "E of xpro."],
+                "key": ["d", "e"],
+            }
+        )
+    )
+    files_per_read = []
+    to_table = warehouse.ArrowScan.to_table
+
+    def recording_to_table(self, tasks):
+        tasks = list(tasks)
+        files_per_read.append(len(tasks))
+        return to_table(self, tasks)
+
+    monkeypatch.setattr(warehouse.ArrowScan, "to_table", recording_to_table)
+
+    rows = warehouse.load_rows_by_key(
+        "ol_warehouse_production_test_integrations",
+        "content_files",
+        ["content", "key"],
+        "key",
+        ["a", "c", "d", "e", "missing"],
+        equals={"etl_source": "mitxonline"},
+    )
+
+    assert rows.columns == ["content", "key"]
+    assert rows.sort("key").to_dicts() == [
+        {"content": "A of mitxonline.", "key": "a"},
+        {"content": "D of mitxonline.", "key": "d"},
+    ]
+    assert files_per_read == [1, 1]
+
+
+@pytest.mark.usefixtures("catalog")
+def test_load_rows_by_key_with_no_match_returns_the_columns_and_no_rows():
+    rows = warehouse.load_rows_by_key(
+        "ol_warehouse_production_test_integrations",
+        "content_files",
+        ["key", "content"],
+        "key",
+        ["missing"],
+    )
+
+    assert rows.columns == ["key", "content"]
+    assert rows.is_empty()

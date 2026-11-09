@@ -38,11 +38,11 @@ COPY ingestion/inventory ingestion/inventory
 WORKDIR /app/dg_projects/lakehouse
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv venv --relocatable && \
-    uv sync --frozen --no-install-project --no-dev --no-editable
+    uv sync --locked --no-install-project --no-dev --no-editable
 
 # Sync the project itself
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable
+    uv sync --locked --no-dev --no-editable
 
 # OpenTelemetry auto-instrumentation agent, activated by PYTHONPATH (see the
 # /opt/otel symlink in the final stage).
@@ -80,14 +80,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # because the SDK suppresses instrumentation around each export.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv \
-        opentelemetry-distro==0.66b1 \
-        opentelemetry-sdk==1.45.1 \
-        opentelemetry-exporter-otlp-proto-http==1.45.1 \
-        opentelemetry-instrumentation-sqlalchemy==0.66b1 \
-        opentelemetry-instrumentation-grpc==0.66b1 \
-        opentelemetry-instrumentation-botocore==0.66b1 \
-        opentelemetry-instrumentation-requests==0.66b1 \
-        opentelemetry-instrumentation-urllib3==0.66b1
+        opentelemetry-distro==0.66b2 \
+        opentelemetry-sdk==1.45.2 \
+        opentelemetry-exporter-otlp-proto-http==1.45.2 \
+        opentelemetry-instrumentation-sqlalchemy==0.66b2 \
+        opentelemetry-instrumentation-grpc==0.66b2 \
+        opentelemetry-instrumentation-botocore==0.66b2 \
+        opentelemetry-instrumentation-requests==0.66b2 \
+        opentelemetry-instrumentation-urllib3==0.66b2
 
 # Compile dbt to generate manifest.json (CRITICAL for @dbt_assets)
 WORKDIR /app/src/ol_dbt

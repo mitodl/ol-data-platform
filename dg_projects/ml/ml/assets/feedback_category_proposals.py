@@ -1,4 +1,3 @@
-import os
 from datetime import UTC, datetime
 
 import polars as pl
@@ -20,22 +19,15 @@ from ml.lib.categorize import (
 )
 from ml.lib.cluster_run_lookup import latest_identity_processed_run
 from ml.lib.iceberg_helpers import table_exists
+from ml.lib.warehouse import warehouse_database
 from ml.resources.llm import LLMClientFactory
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
-from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
 from pydantic import Field
 
-if DAGSTER_ENV == "dev":
-    _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
-    intermediate_database_name = (
-        f"ol_warehouse_production_{_schema_suffix}_intermediate"
-    )
-    dimensional_database_name = f"ol_warehouse_production_{_schema_suffix}_dimensional"
-else:
-    intermediate_database_name = "ol_warehouse_production_intermediate"
-    dimensional_database_name = "ol_warehouse_production_dimensional"
+intermediate_database_name = warehouse_database("intermediate")
+dimensional_database_name = warehouse_database("dimensional")
 
 
 class FeedbackCategoryProposalsConfig(Config):

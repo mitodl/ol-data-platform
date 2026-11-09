@@ -16,13 +16,13 @@ with source as (
         and {{ json_query_string('event', "'$.exception'") }} is null
 
     {% if is_incremental() %}
-        and "time" > (select max(this.useractivity_timestamp) from {{ this }} as this) --noqa
+        and {{ adapter.quote('time') }} > (select max(this.useractivity_timestamp) from {{ this }} as this) --noqa
     {% endif %}
 )
 
 {{ deduplicate_raw_table(
     raw_table='raw__mitxonline__openedx__tracking_logs'
-    , partition_columns = 'username, context, event_source, event_type, event, "time"'
+    , partition_columns = 'username, context, event_source, event_type, event, ' ~ adapter.quote('time')
 ) }}
 , cleaned as (
     select

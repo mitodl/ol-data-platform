@@ -1,9 +1,13 @@
 {{ config (
     materialized='table',
-    properties= {
-      "format": "'PARQUET'",
-      "partitioning": "ARRAY['organization_key']",
-    }
+    partition_by=(['organization_key'] if target.type == 'starrocks' else none),
+    properties=(
+      none if target.type == 'starrocks'
+      else {
+        "format": "'PARQUET'",
+        "partitioning": "ARRAY['organization_key']",
+      }
+    )
 )
 }}
 

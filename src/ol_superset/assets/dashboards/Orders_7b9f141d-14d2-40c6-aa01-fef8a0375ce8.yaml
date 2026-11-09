@@ -312,9 +312,9 @@ position:
     children: []
     id: MARKDOWN-jqUJsfZGh5XtIJ4W4pYzj
     meta:
-      code: '### Change Log:
-
-        11/13/25 added b2b contract number field'
+      code: |-
+        ### Change Log:
+        11/13/25 added b2b contract number field
       height: 43
       width: 6
     parents:
@@ -327,9 +327,14 @@ position:
     children: []
     id: MARKDOWN-sh-Mu5PLfC
     meta:
-      code: "<a href='https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__combined__orders#columns'\
-        \ target='_blank'>Column definition</a>\n\n<br>\n\nThis report's data is pulled\
-        \ from the mart table:\n - marts__combined__orders\n\n"
+      code: |+
+        <a href='https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__combined__orders#columns' target='_blank'>Column definition</a>
+
+        <br>
+
+        This report's data is pulled from the mart table:
+         - marts__combined__orders
+
       height: 51
       width: 6
     parents:

@@ -169,7 +169,7 @@ with content_types as (
         , cast(null as bigint) as comment_count
         , comments.created_at
         , comments.updated_at
-        , cast(null as timestamp) as last_activity_at
+        , {{ null_timestamp() }} as last_activity_at
         , votes.votes_up
         , votes.votes_down
         , abuse_flaggers.user_ids as abuse_flaggers

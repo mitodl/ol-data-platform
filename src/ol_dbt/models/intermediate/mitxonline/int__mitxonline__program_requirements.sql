@@ -16,6 +16,12 @@ with program_requirements as (
     where programrequirement_node_type = 'course'
 )
 
+, track_programs as (
+    select distinct program_id
+    from program_requirements
+    where programrequirement_node_type = 'track'
+)
+
 , course_node_requirements as (
     select
         operator_nodes.programrequirement_id as programrequirement_requirement_id
@@ -142,7 +148,7 @@ with program_requirements as (
 , core_courses_count as (
     select
         program_id
-        , count_if(programrequirement_type = 'Core') as program_num_core_courses
+        , count_if(programrequirement_is_required) as program_num_core_courses
     from combined_requirements
     group by program_id
 )
@@ -178,8 +184,13 @@ select
     , combined_requirements.electiveset_required_number
     , combined_requirements.programrequirement_parent_requirement_id
     , combined_requirements.programrequirement_is_a_nested_requirement
-    , coalesce(core_courses_count.program_num_core_courses, 0)
-    + coalesce(elective_courses_count.program_num_elective_courses, 0) as program_num_required_courses
+    -- Null for a program with tracks: the number depends on the track a learner picks.
+    , case
+        when track_programs.program_id is null
+            then
+                coalesce(core_courses_count.program_num_core_courses, 0)
+                + coalesce(elective_courses_count.program_num_elective_courses, 0)
+    end as program_num_required_courses
     , row_number() over (
         partition by combined_requirements.program_id
         order by combined_requirements.course_first_node_path
@@ -187,3 +198,4 @@ select
 from combined_requirements
 left join core_courses_count on combined_requirements.program_id = core_courses_count.program_id
 left join elective_courses_count on combined_requirements.program_id = elective_courses_count.program_id
+left join track_programs on combined_requirements.program_id = track_programs.program_id

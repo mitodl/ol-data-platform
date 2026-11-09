@@ -921,11 +921,11 @@ position:
     children: []
     id: MARKDOWN-V6K5JniAGHcEtHTkBbLH4
     meta:
-      code: '[Field Defintions](https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.afact_course_page_engagement)
+      code: |-
+        [Field Defintions](https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.afact_course_page_engagement)
 
 
-
-        Help Email: odl-data@mit.edu'
+        Help Email: odl-data@mit.edu
       height: 50
       width: 6
     parents:
@@ -939,11 +939,9 @@ position:
     children: []
     id: MARKDOWN-XawqPQL8D3MnkTWJ120IH
     meta:
-      code: '### Change Log
-
-        **2/2/26**: Standardized filter names: ''Learner Email'' → ''User Email'',
-        ''Course Title'' → ''Course''; Enabled search on User Email and Course Run
-        Readable ID filters'
+      code: |-
+        ### Change Log
+        **2/2/26**: Standardized filter names: 'Learner Email' → 'User Email', 'Course Title' → 'Course'; Enabled search on User Email and Course Run Readable ID filters
       height: 50
       width: 6
     parents:

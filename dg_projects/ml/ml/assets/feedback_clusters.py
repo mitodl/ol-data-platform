@@ -1,4 +1,3 @@
-import os
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -37,7 +36,7 @@ from ml.lib.cluster_run_lookup import (
     run_already_applied,
 )
 from ml.lib.embed import resolve_embedding_model
-from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ml.lib.warehouse import warehouse_database
 from ol_orchestrate.lib.failures import permanent_failure
 from ol_orchestrate.lib.glue_helper import (
     get_dbt_model_as_dataframe,
@@ -47,11 +46,7 @@ from pydantic import Field
 from pyiceberg.exceptions import NoSuchTableError
 from pyiceberg.expressions import EqualTo
 
-if DAGSTER_ENV == "dev":
-    _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
-    database_name = f"ol_warehouse_production_{_schema_suffix}_intermediate"
-else:
-    database_name = "ol_warehouse_production_intermediate"
+database_name = warehouse_database("intermediate")
 
 
 def _check_live_run(

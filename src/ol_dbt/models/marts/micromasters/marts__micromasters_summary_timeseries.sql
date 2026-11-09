@@ -15,10 +15,7 @@ with enrollments as (
 )
 
 , timeseries as (
-    select end_date
-    from unnest(
-        sequence(date '2014-01-01', current_date, interval '1' month)
-    ) as t(end_date) -- noqa
+    {{ month_series("date '2014-01-01'", 'current_date', 'end_date') }}
     union all
     select current_date as end_date
 )
@@ -28,7 +25,7 @@ with enrollments as (
         timeseries.end_date
         , enrollments.micromasters_program_id
         , enrollments.mitxonline_program_id
-        , arbitrary(enrollments.program_title) as program_title
+        , any_value(enrollments.program_title) as program_title
         , count(*) as total_enrollments
         , count(distinct enrollments.user_email) as unique_users
         , count(distinct enrollments.user_address_country) as unique_countries

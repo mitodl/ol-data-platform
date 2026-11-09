@@ -521,9 +521,9 @@ with mitxonline_enrollments as (
 , final as (
     select
         {{ dbt_utils.generate_surrogate_key([
-            'cast(enrollment_id as varchar)',
-            'platform',
-            'enrollment_scope'
+            'cast(ewf.enrollment_id as varchar)',
+            'ewf.platform',
+            'ewf.enrollment_scope'
         ]) }} as enrollment_key
         , ewf.enrollment_id
         , ewf.enrollment_scope as enrollment_type

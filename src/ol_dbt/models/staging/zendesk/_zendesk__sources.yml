@@ -332,3 +332,34 @@ sources:
       description: str, the time the field was created
     - name: updated_at
       description: str, the time of the last update of the field
+
+  - name: raw__thirdparty__zendesk_support__macros
+    description: Macros in Zendesk. A macro is a saved reply and set of ticket changes
+      that agents apply to tickets.
+    columns:
+    - name: id
+      description: int, primary key for the macro
+    - name: url
+      description: str, the API url of the macro
+    - name: title
+      description: str, the title of the macro. Double colons put it in a category.
+    - name: raw_title
+      description: str, the title of the macro before dynamic content is applied
+    - name: description
+      description: str, the description of the macro
+    - name: active
+      description: bool, if the macro is active
+    - name: default
+      description: bool, if the macro is a default macro created by Zendesk
+    - name: position
+      description: int, the position of the macro in the agent's macro list
+    - name: actions
+      description: array, JSON strings each with a field and a value. They set ticket
+        fields or add a comment when an agent applies the macro.
+    - name: restriction
+      description: str, JSON with the type (Group or User) and ids of who can use
+        the macro. Null means all agents can use it.
+    - name: created_at
+      description: timestamp, the time the macro was created
+    - name: updated_at
+      description: timestamp, the time of the last update of the macro

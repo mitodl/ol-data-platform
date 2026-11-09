@@ -25,11 +25,11 @@ COPY dg_projects/ml dg_projects/ml
 WORKDIR /app/dg_projects/ml
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv venv --relocatable && \
-    uv sync --frozen --no-install-project --no-dev --no-editable
+    uv sync --locked --no-install-project --no-dev --no-editable
 
 # Sync the project itself
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable
+    uv sync --locked --no-dev --no-editable
 
 # tiktoken downloads an encoding on first use. The embedding assets count chunk and
 # request sizes in cl100k_base, so it is fetched here into a cache the final image
@@ -73,14 +73,14 @@ RUN TIKTOKEN_CACHE_DIR=/app/dg_projects/ml/.tiktoken_cache \
 # because the SDK suppresses instrumentation around each export.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv \
-        opentelemetry-distro==0.66b1 \
-        opentelemetry-sdk==1.45.1 \
-        opentelemetry-exporter-otlp-proto-http==1.45.1 \
-        opentelemetry-instrumentation-sqlalchemy==0.66b1 \
-        opentelemetry-instrumentation-grpc==0.66b1 \
-        opentelemetry-instrumentation-botocore==0.66b1 \
-        opentelemetry-instrumentation-requests==0.66b1 \
-        opentelemetry-instrumentation-urllib3==0.66b1
+        opentelemetry-distro==0.66b2 \
+        opentelemetry-sdk==1.45.2 \
+        opentelemetry-exporter-otlp-proto-http==1.45.2 \
+        opentelemetry-instrumentation-sqlalchemy==0.66b2 \
+        opentelemetry-instrumentation-grpc==0.66b2 \
+        opentelemetry-instrumentation-botocore==0.66b2 \
+        opentelemetry-instrumentation-requests==0.66b2 \
+        opentelemetry-instrumentation-urllib3==0.66b2
 
 # Then, use a final image without uv
 FROM python:3.14-slim-bookworm

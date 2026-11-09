@@ -129,9 +129,9 @@ models:
       of the operator node of the parent requirement for nested requirements. Only
       set for requirements from mitxonline
   - name: program_num_required_courses
-    description: int, indicating the number of required courses to earn certificate
-    tests:
-    - not_null
+    description: int, indicating the number of required courses to earn certificate.
+      Null for a MITx Online program with tracks, as the number depends on the track
+      a learner picks.
 
 - name: int__mitx__users
   description: MITx users combined from MITx Online, MicroMasters, and edX.org. For

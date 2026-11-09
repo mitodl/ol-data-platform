@@ -31,7 +31,7 @@ Why every entry is production-only
 ----------------------------------
 Because that is the only place any of them has been observed to run. The
 RUNNING ones were read off production's instigator state, or its ticks, when
-each moved in. The four Cohort 2 delivery schedules have never executed anywhere --
+each moved in. The Cohort 2 delivery schedules have never executed anywhere --
 production Loki over 30 days and 1.86B lines has zero mentions of them, against
 12,585 for ``ovs_videos_api_schedule`` in the same location. They stay
 registered in production, still STOPPED, so the Cohort 2 enable remains a UI
@@ -95,7 +95,6 @@ INSTIGATOR_ENVIRONMENTS: Mapping[str, frozenset[str]] = {
     "mit_climate_delivery_sensor": frozenset({"production"}),
     "mitpe_delivery_sensor": frozenset({"production"}),
     "oll_delivery_sensor": frozenset({"production"}),
-    "mit_edx_programs_delivery_sensor": frozenset({"production"}),
     # Commits the instructor user list to the access forge GitHub repository's
     # default branch. There is one of those, not one per environment, so a tick
     # outside production would write the real repo. Moved from lakehouse, where

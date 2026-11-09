@@ -18,11 +18,11 @@ with source as (
         , payment_type as discount_source
         , case
             when discount_type = 'percent-off'
-                then concat(format('%.2f', amount), '%')
+                then concat({{ format_fixed_decimal('amount') }}, '%')
             when discount_type = 'dollars-off'
-                then concat('$', format('%.2f', amount))
+                then concat('$', {{ format_fixed_decimal('amount') }})
             when discount_type = 'fixed-price'
-                then concat('Fixed Price: ', format('%.2f', amount))
+                then concat('Fixed Price: ', {{ format_fixed_decimal('amount') }})
         end as discount_amount_text
         ,{{ cast_timestamp_to_iso8601('created_on') }} as discount_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as discount_updated_on

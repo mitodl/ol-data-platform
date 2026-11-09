@@ -1,4 +1,3 @@
-import os
 from datetime import UTC, datetime
 
 import polars as pl
@@ -13,25 +12,19 @@ from dagster import (
 from ml.lib.embed import resolve_embedding_model
 from ml.lib.sentiment_eval import (
     CLASSIFIER_NEGATIVE_THRESHOLDS,
+    EXPLICIT_RATING_TO_SENTIMENT,
     build_sentiment_client,
     labeled_sentiment_sample,
     run_sentiment_eval,
     validate_negative_thresholds,
 )
+from ml.lib.warehouse import load_rows_by_key, warehouse_database
 from ml.resources.llm import LLMClientFactory
-from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from pydantic import Field, field_validator
 
-if DAGSTER_ENV == "dev":
-    _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
-    intermediate_database_name = (
-        f"ol_warehouse_production_{_schema_suffix}_intermediate"
-    )
-    dimensional_database_name = f"ol_warehouse_production_{_schema_suffix}_dimensional"
-else:
-    intermediate_database_name = "ol_warehouse_production_intermediate"
-    dimensional_database_name = "ol_warehouse_production_dimensional"
+intermediate_database_name = warehouse_database("intermediate")
+dimensional_database_name = warehouse_database("dimensional")
 
 SENTIMENT_EVAL_RESULT_SCHEMA = {
     "eval_run_id": pl.String,
@@ -102,7 +95,7 @@ class FeedbackSentimentEvalConfig(Config):
 
 @asset(
     key=AssetKey(["intermediate", "feedback_sentiment_eval"]),
-    code_version="feedback_sentiment_eval_v3",
+    code_version="feedback_sentiment_eval_v4",
     group_name="feedback",
     io_manager_key="io_manager",
     pool="feedback_sentiment_eval",
@@ -140,24 +133,27 @@ def feedback_sentiment_eval(
             table_name="afact_feedback_conversation",
         )
         .select(["feedback_conversation_pk", "explicit_rating"])
+        .filter(pl.col("explicit_rating").is_in(list(EXPLICIT_RATING_TO_SENTIMENT)))
         .collect()
     )
-    embeddings_df = (
-        get_dbt_model_as_dataframe(
-            database_name=intermediate_database_name,
-            table_name="feedback_embeddings",
-        )
-        .filter(embedding_model.matches())
-        .select(["feedback_conversation_pk", "embedding_vector"])
-        .collect()
+    rated_pks = afact_df["feedback_conversation_pk"].to_list()
+    embeddings_df = load_rows_by_key(
+        intermediate_database_name,
+        "feedback_embeddings",
+        ["feedback_conversation_pk", "embedding_vector"],
+        "feedback_conversation_pk",
+        rated_pks,
+        equals={
+            "embedding_model_version": embedding_model.model_version,
+            "embedding_dim": embedding_model.dim,
+        },
     )
-    conversation_df = (
-        get_dbt_model_as_dataframe(
-            database_name=intermediate_database_name,
-            table_name="int__feedback__conversation",
-        )
-        .select(["feedback_conversation_pk", "conversation_text"])
-        .collect()
+    conversation_df = load_rows_by_key(
+        intermediate_database_name,
+        "int__feedback__conversation",
+        ["feedback_conversation_pk", "conversation_text"],
+        "feedback_conversation_pk",
+        rated_pks,
     )
 
     joined = afact_df.join(

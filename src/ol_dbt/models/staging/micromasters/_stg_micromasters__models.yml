@@ -836,6 +836,7 @@ models:
     description: str, unique hash used to identify the program certificate
     tests:
     - not_null
+    - unique
   - name: program_id
     description: id, int foreign key referece to courses_program
     tests:

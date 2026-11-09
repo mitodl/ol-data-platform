@@ -157,6 +157,17 @@ class TrinoMaintenanceResource(ConfigurableResource[None]):
         self.execute(sql)
         log.info("ANALYZE complete: %s.%s", schema, table)
 
+    def base_tables_among(
+        self, candidates: set[tuple[str, str]]
+    ) -> set[tuple[str, str]]:
+        """Return the *candidates* that exist as real tables.
+
+        One information_schema query answers for every candidate, so this narrows
+        `base_tables_in_schemas` rather than asking about each table.
+        """
+        schemas = {schema for schema, _ in candidates}
+        return self.base_tables_in_schemas(schemas) & candidates
+
     def base_tables_in_schemas(self, schemas: set[str]) -> set[tuple[str, str]]:
         """Return the ``(schema, table)`` pairs that exist as real tables.
 
