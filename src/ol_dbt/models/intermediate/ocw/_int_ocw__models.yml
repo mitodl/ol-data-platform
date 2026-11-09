@@ -393,8 +393,9 @@ models:
     and neither is a site ocw-studio has unpublished and not published again.
   config:
     meta:
-      # It reads the OCW live bucket, and ocw/s3 is qa: omit in the inventory.
-      qa_buildable: false
+      qa_branches:
+      - ocw/app_postgres
+      - ocw/s3
   columns:
   - name: course_slug
     description: str, the course's directory under courses/ in the bucket
@@ -457,8 +458,9 @@ models:
     it.
   config:
     meta:
-      # It reads the OCW live bucket, and ocw/s3 is qa: omit in the inventory.
-      qa_buildable: false
+      qa_branches:
+      - ocw/app_postgres
+      - ocw/s3
   columns:
   - name: courserun_readable_id
     description: str, the course's legacy_uid, or its site_uid when it has none, without

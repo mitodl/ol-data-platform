@@ -166,9 +166,11 @@ models:
     each resource's file. Not applied: Learn's nh3 sanitizing of a resource's
     description, so description is the HTML OCW published.
   config:
+    tags: [qa_scheduled]
     meta:
-      # It reads the OCW live bucket, and ocw/s3 is qa: omit in the inventory.
-      qa_buildable: false
+      qa_branches:
+      - ocw/app_postgres
+      - ocw/s3
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:

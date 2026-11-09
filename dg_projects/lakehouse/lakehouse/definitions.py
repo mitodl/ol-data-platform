@@ -729,8 +729,10 @@ non_airbyte_staging_schedules = (
 # YouTube, podcast, mitpe, mit_climate and oll views read public sources that
 # QA's data_loading schedules load daily, so QA holds close to production's
 # rows. Those schedules set no default status, so they run in QA because they
-# were started in its UI. ocw_courses waits on the OCW live bucket (the ocw__s3 unit is
-# omitted in QA).
+# were started in its UI. The OCW views read the production OCW live bucket,
+# which ocw_content_ingest_daily_schedule sweeps in QA from 04:35 (started in
+# QA's UI, since it defaults to STOPPED outside production), joined to QA
+# ocw-studio's published sites, so they hold only the courses both publish.
 learn_integrations_qa_schedule = ScheduleDefinition(
     name="learn_integrations_qa_daily",
     job=define_asset_job(
