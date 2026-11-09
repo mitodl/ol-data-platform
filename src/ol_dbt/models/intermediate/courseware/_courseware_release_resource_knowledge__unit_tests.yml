@@ -44,7 +44,9 @@ unit_tests:
     Each statement array holds every distinct accepted label of its kind once, in
     ascending order, whatever order the claims arrive in and however often a label
     repeats. context_document renders these arrays, so the order has to be the same
-    on every engine.
+    on every engine. ol-dbt unit-test runs on DuckDB, where array_agg_filter takes
+    the default branch, so this locks the Trino and DuckDB behavior only. Nothing
+    in CI runs the StarRocks branch.
   model: int__courseware__release_resource_knowledge
   given:
   - input: ref('int__courseware__learn_course_runs')
