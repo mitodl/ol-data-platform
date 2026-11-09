@@ -163,6 +163,7 @@ tables:
     # One learner in ten. QA's Trino cluster runs a stage as one task with a
     # 4.48GB per-node limit, and stg__edxorg__bigquery__mitx_user_info_combo's
     # dedup exceeded it on all 15.1M rows (2026-10-27) and needed 0.88GB on this
-    # sample. The other learner tables here and edxorg/s3's program learner
-    # report take the same sample, so a sampled learner's rows are all there.
+    # sample. The other learner tables here and edxorg/program_reports' program
+    # learner report take the same sample, so a sampled learner's rows are all
+    # there.
     where: user_id % 10 = 0

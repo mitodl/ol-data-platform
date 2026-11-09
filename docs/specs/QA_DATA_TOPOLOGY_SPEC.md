@@ -258,7 +258,8 @@ day, `micromasters/app_postgres` last on 2026-09-14, and the `edxorg/s3` and `ir
 mirrors copied 2026-10-07, so they are inside their 90-day limit until 2027-01-05. Mirror age is
 measured at observation time (§2), so nothing fails on that date by itself: the first observation
 refreshed after it fails this model until the mirrors are refreshed. Without a refresh the
-observation-age WARNING (30 days) is the signal.
+observation-age WARNING (30 days) is the signal. Since 2026-11-09 the edX.org input is
+`edxorg/program_reports`, whose mirror copied 2026-11-01, in place of the retired `edxorg/s3`.
 
 QA's copy of this view is not production's in kind, not only in size. The edX.org and IRx
 inputs are masked mirrors of production (§8: usernames and emails hashed, names and addresses
@@ -268,13 +269,14 @@ checks that it reads, maps and writes rows, not certificate counts.
 
 The edX.org tables this view's QA build reads from are also one learner in ten
 (`user_id % 10 = 0` on the IRx `email_opt_in`, `mitx_person_course` and `mitx_user_info_combo`
-and on the dlt `raw__edxorg__s3__program_learner_report`, and on `user id` in the Airbyte
-`raw__edxorg__program_learner_report`). The other edX.org learner mirrors (`edxorg/mysql`,
-`edxorg/tracking_logs`) copy every learner, so a join from them to these five is one-sided in QA.
+and on the dlt `raw__edxorg__s3__program_learner_report`; the retired Airbyte
+`raw__edxorg__program_learner_report` was sampled on `user id` the same way). The other edX.org
+learner mirrors (`edxorg/mysql`, `edxorg/tracking_logs`) copy every learner, so a join from them
+to these four is one-sided in QA.
 QA's Trino cluster ran each stage of these queries as one task with a 4.48GB per-node limit,
 and on 2026-10-27 the staging dedups of `mitx_user_info_combo` (15.1M rows) and
 the program learner report (15.7M) each exceeded it when run alone. On the sample they peaked at
-0.88GB and 0.93GB. The five take the same sample, so a sampled learner keeps all its rows in them.
+0.88GB and 0.93GB. The four take the same sample, so a sampled learner keeps all its rows in them.
 
 ---
 
@@ -638,13 +640,16 @@ masked:
   containing `@`, and the only ones with a run of seven or more digits are 24
   `content_cue_<uuid>` labels.
 
-Three tables were filtered. The tracking-logs filter went with its unit, so two still are:
+Four tables were filtered. The tracking-logs and Airbyte program-report filters went with
+their units, so two still are:
 
-- `raw__edxorg__program_learner_report`: 14.4B rows, 760 GB. Airbyte re-reads the same report
-  files every day (their mtimes stop at 2025-03-13) and appends about 15M rows per sync. The
-  mirror keeps the last day of syncs by `_airbyte_extracted_at` (epoch milliseconds). That is
-  one full report while syncs run a day apart, and two if a gap is shorter. The staging model
-  dedupes on user, course run and program either way.
+- `raw__edxorg__program_learner_report`: 14.4B rows, 760 GB. The mirror kept the last day of
+  syncs by `_airbyte_extracted_at` (epoch milliseconds), one learner in ten. It stopped on
+  2026-11-09, when the dlt-loaded `raw__edxorg__s3__program_learner_report`
+  (`edxorg/program_reports`) replaced the table (`retired.yml`). Airbyte read each new daily
+  report, and for 1,963 of the 23,550 files it held 2 to 5 copies of the same rows. The dlt
+  table's mirror keeps the newest 12 hours of reports, which is one full day, for the same
+  one learner in ten.
 - `raw__edxorg__s3__tracking_logs`: 2.2B rows, 245 GB. The mirror keeps 30 days of syncs and
   drops `edx.user.settings.changed` events. It stopped on 2026-10-28, when the unit was
   retired as frozen history (`retired.yml`). QA keeps the copy it made on 2026-10-07.

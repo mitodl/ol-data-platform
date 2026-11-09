@@ -23,10 +23,7 @@ from dagster_airbyte import (
     DagsterAirbyteTranslator,
     build_airbyte_assets_definitions,
 )
-from dagster_dbt import (
-    DbtCliResource,
-    build_dbt_asset_selection,
-)
+from dagster_dbt import DbtCliResource
 from dagster_dbt.asset_utils import (
     get_asset_key_for_model,
     get_manifest_and_translator_from_dbt_assets,
@@ -88,6 +85,7 @@ from lakehouse.assets.superset import (
 from lakehouse.lib.automation_targets import (
     OCW_LEARN_MODELS,
     dbt_automation_target,
+    dbt_job_target,
     learn_integrations_qa_target,
     ocw_learn_target,
 )
@@ -691,9 +689,8 @@ non_airbyte_staging_schedules = (
                 name="non_airbyte_staging_daily",
                 job=define_asset_job(
                     name="non_airbyte_staging_job",
-                    selection=build_dbt_asset_selection(
-                        [full_dbt_project],
-                        dbt_select=" ".join(non_airbyte_staging_models),
+                    selection=dbt_job_target(
+                        full_dbt_project, " ".join(non_airbyte_staging_models)
                     ),
                 ),
                 # After the cron-driven dlt ingests in data_loading (03:00 to

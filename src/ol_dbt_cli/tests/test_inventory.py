@@ -699,8 +699,10 @@ class TestGeneratedMetadataMacro:
         assert f"'{data['tables'][0]['raw_table']}': none," in rendered
 
     def test_rendered_macro_emits_a_list_as_a_jinja_list(self) -> None:
-        rendered = render_dbt_metadata_columns(load_units(REAL_INVENTORY))
-        expected = "'raw__edxorg__program_learner_report': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],"
+        data = copy.deepcopy(APP_UNIT)
+        data["tables"][0]["raw_metadata_column"] = ["_airbyte_extracted_at", "_ab_source_file_last_modified"]
+        rendered = render_dbt_metadata_columns([Unit(path=Path("mitxonline__mysql.yml"), data=data)])
+        expected = f"'{data['tables'][0]['raw_table']}': ['_airbyte_extracted_at', '_ab_source_file_last_modified'],"
         assert expected in rendered
 
 
