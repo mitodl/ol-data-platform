@@ -128,9 +128,8 @@ def rows(tmp_path: Path) -> dict[str, dict[str, Any]]:
     return {
         row["file_path"]: row
         for row in build_file_rows(
-            olx_root,
+            OlxArchive(olx_root, "mitxonline"),
             course_id="course-v1:MITx+7.05x+2T2026",
-            source_system="mitxonline",
             course_xml_version="abc",
         )
     }
@@ -214,7 +213,7 @@ def test_an_archive_without_course_xml_excludes_only_staff_only(tmp_path):
     assert not any(
         row["excluded"]
         for row in build_file_rows(
-            olx_root, course_id="c", source_system="xpro", course_xml_version="abc"
+            OlxArchive(olx_root, "xpro"), course_id="c", course_xml_version="abc"
         )
     )
 
@@ -226,7 +225,7 @@ def test_malformed_block_xml_fails_rather_than_guessing(tmp_path):
     olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
     with pytest.raises(ET.ParseError):
         build_file_rows(
-            olx_root, course_id="c", source_system="xpro", course_xml_version="abc"
+            OlxArchive(olx_root, "xpro"), course_id="c", course_xml_version="abc"
         )
 
 
@@ -243,7 +242,7 @@ def test_an_entity_declaration_fails_the_course_as_in_learn(tmp_path):
     olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
     with pytest.raises(EntitiesForbidden):
         build_file_rows(
-            olx_root, course_id="c", source_system="xpro", course_xml_version="abc"
+            OlxArchive(olx_root, "xpro"), course_id="c", course_xml_version="abc"
         )
 
 
@@ -254,7 +253,7 @@ def test_open_learning_library_keeps_the_about_page_prose(tmp_path):
     rows = {
         row["file_path"]: row
         for row in build_file_rows(
-            olx_root, course_id="c", source_system="oll", course_xml_version="abc"
+            OlxArchive(olx_root, "oll"), course_id="c", course_xml_version="abc"
         )
     }
     assert not rows["about/overview.html"]["excluded"]
@@ -275,7 +274,7 @@ def test_rows_carry_learns_release_dates(tmp_path):
     rows = {
         row["file_path"]: row["release_date"]
         for row in build_file_rows(
-            olx_root, course_id="c", source_system="xpro", course_xml_version="abc"
+            OlxArchive(olx_root, "xpro"), course_id="c", course_xml_version="abc"
         )
     }
     released = "2031-02-03T09:05:06.000000Z"
@@ -306,7 +305,7 @@ def test_unit_rows_list_learns_units_in_order(tmp_path):
     olx_root = unpack_olx_tree(pack(COURSE_FILES, tmp_path), tree)
     run = "course-v1:MITx+7.05x+2T2026"
     rows = build_unit_rows(
-        olx_root, course_id=run, source_system="mitxonline", course_xml_version="abc"
+        OlxArchive(olx_root, "mitxonline"), course_id=run, course_xml_version="abc"
     )
     assert [
         (row["unit_order"], row["external_id"], row["kind"], row["url_name"])
@@ -356,7 +355,7 @@ def test_a_course_whose_units_cannot_be_built_lands_no_unit_rows(tmp_path):
     olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
     assert (
         build_unit_rows(
-            olx_root, course_id="c", source_system="xpro", course_xml_version="abc"
+            OlxArchive(olx_root, "xpro"), course_id="c", course_xml_version="abc"
         )
         == []
     )

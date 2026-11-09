@@ -1255,7 +1255,7 @@ def format_release_date(release: datetime) -> str:
 
 
 def build_file_rows(
-    olx_root: Path, *, course_id: str, source_system: str, course_xml_version: str
+    archive: OlxArchive, *, course_id: str, course_xml_version: str
 ) -> list[dict[str, Any]]:
     """One row per file in the export, flagged with whether Learn excludes it.
 
@@ -1269,22 +1269,21 @@ def build_file_rows(
     the same export, so dbt can tell whether a course's blocks were checked.
     release_date is null for a file Learn leaves undated (any learner-visible
     path to it is undated, the run is self-paced, or the file is excluded).
+    The archive's etl_source is the row's source_system.
     """
-    # Learn's etl_source for an Open edX run is the deployment name.
-    archive = OlxArchive(olx_root, source_system)
     excluded = archive.excluded
     release_dates = archive.release_dates
     rows = []
-    for path in sorted(olx_root.rglob("*")):
+    for path in sorted(archive.root.rglob("*")):
         if not path.is_file():
             continue
         release = release_dates.get(path)
         rows.append(
             {
                 "course_id": course_id,
-                "source_system": source_system,
+                "source_system": archive.etl_source,
                 "course_xml_version": course_xml_version,
-                "file_path": path.relative_to(olx_root).as_posix(),
+                "file_path": path.relative_to(archive.root).as_posix(),
                 "excluded": path in excluded,
                 "exclusion_reason": excluded.get(path),
                 "release_date": format_release_date(release) if release else None,
@@ -1294,7 +1293,7 @@ def build_file_rows(
 
 
 def build_unit_rows(
-    olx_root: Path, *, course_id: str, source_system: str, course_xml_version: str
+    archive: OlxArchive, *, course_id: str, course_xml_version: str
 ) -> list[dict[str, Any]]:
     """One row per unit of the course, in the order Learn's OlxArchive.units lists them.
 
@@ -1307,22 +1306,22 @@ def build_unit_rows(
     (edx_shared.load_archive_units), so a failure here is logged and lands no
     rows, and the run's units view has no rows for it until the next export.
 
-    :param olx_root: the OLX root, as unpack_olx_tree returns it
+    :param archive: the export, the same OlxArchive build_file_rows read, so the
+        exclusion rules the units use run once
     :param course_id: the course run id, Learn's run_id
-    :param source_system: the deployment, Learn's etl_source for the run
     :param course_xml_version: the export's SHA-256, as on the file rows
     :returns: the unit rows
     :rtype: list[dict[str, Any]]
     """
     try:
-        units = OlxArchive(olx_root, source_system).units(course_id)
+        units = archive.units(course_id)
     except Exception:
         log.exception("Units not built for run %s", course_id)
         return []
     return [
         {
             "course_id": course_id,
-            "source_system": source_system,
+            "source_system": archive.etl_source,
             "course_xml_version": course_xml_version,
             "unit_order": unit_order,
             "external_id": unit["external_id"],
@@ -1387,18 +1386,13 @@ def extract_course_file_exclusions(context: AssetExecutionContext, course_xml: U
                 course_xml_version = hashlib.file_digest(handle, "sha256").hexdigest()
             tree_dir = Path(workdir, "tree")
             tree_dir.mkdir()
-            olx_root = unpack_olx_tree(archive_path, tree_dir)
+            # Learn's etl_source for an Open edX run is the deployment name.
+            archive = OlxArchive(unpack_olx_tree(archive_path, tree_dir), source_system)
             rows = build_file_rows(
-                olx_root,
-                course_id=course_id,
-                source_system=source_system,
-                course_xml_version=course_xml_version,
+                archive, course_id=course_id, course_xml_version=course_xml_version
             )
             unit_rows = build_unit_rows(
-                olx_root,
-                course_id=course_id,
-                source_system=source_system,
-                course_xml_version=course_xml_version,
+                archive, course_id=course_id, course_xml_version=course_xml_version
             )
 
         def object_key(output_name: str, data_version: str) -> str:
