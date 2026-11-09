@@ -19,18 +19,29 @@ Each file declares one glossary and its terms:
 
 dbt columns name a term by its fully qualified name in
 ``config.meta.openmetadata.glossary``, which the om-ingest-dbt job attaches in
-OpenMetadata.
+OpenMetadata. It skips an FQN OpenMetadata does not have, with only a warning
+in its log, so ``check_glossary_terms`` fails CI on one this directory does not
+declare.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal, Self
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from ol_dbt_cli.lib.validation import Severity, ValidationReport
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+GLOSSARY_TERMS_CHECK = "glossary_terms"
 DEFAULT_GLOSSARY_DIR = Path("glossary")
+
+# Where dbt reads YAML that can carry column or model meta.
+_DBT_YAML_ROOTS = ("models", "snapshots", "seeds", "analyses")
 
 
 class NamedPrincipal(BaseModel):
@@ -138,3 +149,64 @@ def load_glossaries(glossary_dir: Path) -> list[tuple[Path, GlossaryFile]]:
         msg = f"{glossary_dir}: glossary {', '.join(duplicates)} is declared in more than one file"
         raise ValueError(msg)
     return glossaries
+
+
+def _glossary_meta(node: Any, names: tuple[str, ...] = ()) -> Iterator[tuple[tuple[str, ...], Any]]:
+    """Yield every ``openmetadata.glossary`` value under *node*, with the ``name``s of the mappings above it.
+
+    It finds the block whether it sits under ``config.meta``, the older
+    column-level ``meta`` or a ``+meta`` in dbt_project.yml.
+    """
+    if isinstance(node, dict):
+        if isinstance(node.get("name"), str):
+            names = (*names, node["name"])
+        openmetadata = node.get("openmetadata")
+        if isinstance(openmetadata, dict) and "glossary" in openmetadata:
+            yield names, openmetadata["glossary"]
+        for value in node.values():
+            yield from _glossary_meta(value, names)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _glossary_meta(item, names)
+
+
+def check_glossary_terms(dbt_dir: Path, glossary_dir: Path, report: ValidationReport) -> None:
+    """Fail on every ``openmetadata.glossary`` FQN in the dbt project that ``glossary/`` does not declare.
+
+    :param dbt_dir: The dbt project directory.
+    :param glossary_dir: The directory of glossary files.
+    :param report: The report to add an ERROR to for each unknown or malformed entry.
+    """
+    try:
+        declared = {fqn for _, glossary in load_glossaries(glossary_dir) for fqn in glossary.term_fqns()}
+    except ValueError as exc:
+        report.add(GLOSSARY_TERMS_CHECK, Severity.ERROR, glossary_dir.name, str(exc))
+        return
+    paths = [dbt_dir / "dbt_project.yml"] + sorted(
+        p for root in _DBT_YAML_ROOTS for pattern in ("*.yml", "*.yaml") for p in (dbt_dir / root).rglob(pattern)
+    )
+    for path in paths:
+        relative = path.relative_to(dbt_dir).as_posix()
+        for names, terms in _glossary_meta(yaml.safe_load(path.read_text())):
+            where = ".".join(names) or relative
+            if not isinstance(terms, list) or not all(isinstance(t, str) for t in terms):
+                report.add(
+                    GLOSSARY_TERMS_CHECK,
+                    Severity.ERROR,
+                    where,
+                    f"openmetadata.glossary must be a list of glossary term FQNs, got {terms!r}",
+                    f"Declared in {relative}.",
+                )
+                continue
+            for fqn in terms:
+                if fqn not in declared:
+                    report.add(
+                        GLOSSARY_TERMS_CHECK,
+                        Severity.ERROR,
+                        where,
+                        f"Glossary term {fqn!r} is not declared in {glossary_dir.name}/",
+                        f"Declared in {relative}. Use the term's fully qualified name, e.g. "
+                        "open-learning.identifiability.direct-identifier, and add a new term to the glossary "
+                        "file in the same change. OpenMetadata's dbt ingestion skips an unknown term with only "
+                        "a warning.",
+                    )

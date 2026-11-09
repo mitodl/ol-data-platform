@@ -155,5 +155,7 @@ attaches the term to the column:
           - open-learning.active-enrollment
 ```
 
-Use the term's fully qualified name. OpenMetadata skips a name it does not know, with a
-warning in the ingestion log, so add the term to `glossary/open-learning.yaml` first.
+Use the term's fully qualified name. OpenMetadata skips a name it does not know, with only
+a warning in the ingestion log, so `ol-dbt validate --only glossary_terms` fails in PR CI on
+a name the glossary file does not declare. Add a new term to the glossary file in the same
+change.

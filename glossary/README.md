@@ -72,9 +72,26 @@ each as `skipped`. A failure on one term (e.g. a related term OpenMetadata does
 not have) is reported as `failed`, the rest still sync, and the command exits
 non-zero.
 
+## What CI checks
+
+`ol-dbt validate --only glossary_terms` runs in dbt PR CI on every PR that
+touches `glossary/`, the dbt project or the CLI. It fails when:
+
+- a file does not parse, sets a field it does not take, declares a term twice,
+  or names a `parent` or related term that is not declared above it;
+- a `config.meta.openmetadata.glossary` entry anywhere in the dbt project names
+  a term no file here declares, or is not a list of names.
+
+OpenMetadata's dbt ingestion skips a term it does not know with only a warning
+in its log, so without the check a typo or a renamed term would silently leave
+the column untagged.
+
 ## Commands
 
 ```bash
+# Credential-free, what CI runs.
+ol-dbt validate --only glossary_terms
+
 # Publish to OpenMetadata. Needs OM_SERVER_URL and OM_BOT_JWT_TOKEN.
 # --dry-run reads the catalog and writes nothing.
 ol-dbt glossary sync --dry-run
