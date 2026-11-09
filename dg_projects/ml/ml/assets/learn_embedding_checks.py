@@ -36,7 +36,12 @@ from ml.assets.learn_embeddings import (
     TOPIC_VECTORS_KEY,
     partition_run,
 )
-from ml.lib.learn_embeddings import CONTENT_FILE_SOURCES, strategies
+from ml.lib.learn_embeddings import (
+    CHUNK_SCHEMA,
+    CONTENT_FILE_SOURCES,
+    VECTOR_SCHEMA,
+    strategies,
+)
 from ml.lib.learn_parity import (
     MIN_COSINE_SIMILARITY,
     ParityReport,
@@ -46,7 +51,7 @@ from ml.lib.learn_parity import (
     retrieve_points,
     scroll_point_ids,
 )
-from ml.lib.warehouse import require_table
+from ml.lib.warehouse import require_rows, require_table
 from ol_orchestrate.lib.embeddings.learn import (
     LEARN_CONTENT_FILES_COLLECTION,
     LEARN_TOPICS_COLLECTION,
@@ -174,17 +179,21 @@ def content_file_vectors_match_learn(
 ) -> AssetCheckResult:
     """Compare one course run's chunks with Learn's points for the run."""
     etl_source, run = partition_run(context.multi_partition_key)
-    in_partition = (pl.col("etl_source") == etl_source) & (
-        pl.col("run_readable_id") == run
-    )
+    in_partition = {"etl_source": etl_source, "run_readable_id": run}
     strategy = strategies()[LEARN_V1_CONTENT_FILES_ID]
     platform = platform_chunks(
-        require_table(LAYER, CONTENT_FILE_CHUNKS_KEY.path[-1])
-        .filter(in_partition)
-        .collect(),
-        require_table(LAYER, CONTENT_FILE_VECTORS_KEY.path[-1])
-        .filter(in_partition)
-        .collect(),
+        require_rows(
+            LAYER,
+            CONTENT_FILE_CHUNKS_KEY.path[-1],
+            CHUNK_SCHEMA.names(),
+            **in_partition,
+        ),
+        require_rows(
+            LAYER,
+            CONTENT_FILE_VECTORS_KEY.path[-1],
+            VECTOR_SCHEMA.names(),
+            **in_partition,
+        ),
         strategy,
     )
     client = learn_qdrant.get_client()

@@ -22,11 +22,81 @@ with enrollment_detail as (
     select * from {{ ref('dim_program') }}
 )
 
+, tfact_enrollment as (
+    select * from {{ ref('tfact_enrollment') }}
+)
+
+, dim_user as (
+    select * from {{ ref('dim_user') }}
+)
+
+, dim_contract as (
+    select * from {{ ref('dim_contract') }}
+)
+
+, dim_organization as (
+    select * from {{ ref('dim_organization') }}
+)
+
+, dim_platform as (
+    select * from {{ ref('dim_platform') }}
+)
+
+, pre_org_details as (
+    select
+        dim_user.mitxonline_application_user_id
+        , program.program_title
+        , dim_organization.organization_name
+        , dim_platform.platform_name
+    from tfact_enrollment
+    inner join dim_user
+        on tfact_enrollment.user_fk = dim_user.user_pk
+    inner join dim_contract
+        on tfact_enrollment.contract_fk = dim_contract.contract_pk
+    inner join dim_organization
+        on dim_contract.organization_fk = dim_organization.organization_pk
+    inner join program
+        on tfact_enrollment.program_fk = program.program_pk
+    inner join dim_platform
+        on tfact_enrollment.platform_fk = dim_platform.platform_pk
+    where tfact_enrollment.enrollment_type = 'program'
+    group by
+        dim_user.mitxonline_application_user_id
+        , program.program_title
+        , dim_organization.organization_name
+        , dim_platform.platform_name
+)
+
+-- An enrollment row with a readable id matches the programs that carry it, and one
+-- without (an edX.org XSeries row) matches every program with its title, e.g. both the
+-- edX.org program and the MITx Online program it moved to. Each key's courses are
+-- counted once across all of its programs, so a row matches one courses_detail row.
+, program_course_match_keys as (
+    select
+        program_course.course_fk
+        , 'readable_id' as match_type
+        , program.program_readable_id as match_value
+    from program_course
+    inner join program
+        on program_course.program_fk = program.program_pk
+    where program.program_readable_id is not null
+
+    union all
+
+    select
+        program_course.course_fk
+        , 'title' as match_type
+        , program.program_title as match_value
+    from program_course
+    inner join program
+        on program_course.program_fk = program.program_pk
+)
+
 , courses_detail as (
     select
         course_enrollment_detail.platform
-        , program.program_title
-        , program.program_readable_id
+        , program_course_match_keys.match_type
+        , program_course_match_keys.match_value
         , course_enrollment_detail.user_email
         , count(
             distinct case
@@ -67,15 +137,14 @@ with enrollment_detail as (
         inner join course
             on course_enrollment_detail.course_readable_id = course.course_readable_id
             and course.is_current = true
-        inner join program_course
-            on course.course_pk = program_course.course_fk
-        inner join program
-            on program_course.program_fk = program.program_pk
+        inner join (select distinct course_fk, match_type, match_value from program_course_match_keys)
+            as program_course_match_keys
+            on course.course_pk = program_course_match_keys.course_fk
         {{ join_verified_course_enrollments('course_enrollment_detail') }}
     group by
         course_enrollment_detail.platform
-        , program.program_title
-        , program.program_readable_id
+        , program_course_match_keys.match_type
+        , program_course_match_keys.match_value
         , course_enrollment_detail.user_email
 )
 
@@ -102,6 +171,7 @@ select
     , enrollment_detail.programcertificate_is_revoked
     , enrollment_detail.programcertificate_uuid
     , enrollment_detail.programcertificate_url
+    , pre_org_details.organization_name
     , coalesce(
         combined_users.user_highest_education, combined_users2.user_highest_education
     ) as user_highest_education
@@ -132,6 +202,7 @@ select
         combined_users.user_address_postal_code, combined_users2.user_address_postal_code
     ) as user_address_postal_code
     , case when courses_detail.capstone_sum > 0 then 'Y' else 'N' end as capstone_ind
+    , enrollment_detail.program_completion_days
     , enrollment_detail.program_completion_days as program_complete_days
 from enrollment_detail
 left join combined_users
@@ -139,10 +210,18 @@ left join combined_users
     and enrollment_detail.user_id = combined_users.user_edxorg_id
 left join combined_users as combined_users2
     on enrollment_detail.user_hashed_id = combined_users2.user_hashed_id
+-- The course enrollment mart labels every enrollment from the xPRO app 'xPro', while the
+-- program mart's xPRO rows carry the program's own platform ('xPRO', 'Simplilearn').
 left join courses_detail
-    on enrollment_detail.platform_name = courses_detail.platform
-    and (
-            enrollment_detail.program_readable_id = courses_detail.program_readable_id
-        or (enrollment_detail.program_readable_id is null
-            and enrollment_detail.program_title = courses_detail.program_title))
+    on courses_detail.platform = if(
+        enrollment_detail.platform_name in ('{{ var("mitxonline") }}', '{{ var("edxorg") }}')
+        , enrollment_detail.platform_name
+        , '{{ var("mitxpro") }}'
+    )
+    and courses_detail.match_type = if(enrollment_detail.program_readable_id is not null, 'readable_id', 'title')
+    and coalesce(enrollment_detail.program_readable_id, enrollment_detail.program_title) = courses_detail.match_value
     and enrollment_detail.user_email = courses_detail.user_email
+left join pre_org_details
+    on enrollment_detail.platform_name = pre_org_details.platform_name
+    and enrollment_detail.user_id = pre_org_details.mitxonline_application_user_id
+    and enrollment_detail.program_title = pre_org_details.program_title

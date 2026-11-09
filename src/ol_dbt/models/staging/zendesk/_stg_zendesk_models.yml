@@ -24,7 +24,8 @@ models:
       "question", or "task".
   - name: ticket_status
     description: str, the state of the ticket. Possible values are "new", "open",
-      "pending", "hold", "solved", or "closed".
+      "pending", "hold", "solved", "closed", or "deleted". Staging keeps deleted tickets;
+      int__zendesk__ticket drops them.
     tests:
     - not_null
   - name: ticket_description
@@ -409,5 +410,54 @@ models:
     - not_null
   - name: field_updated_at
     description: timestamp, the time of the last update of the field
+    tests:
+    - not_null
+
+- name: stg__zendesk__macro
+  description: Macros in Zendesk. A macro is a saved reply and set of ticket changes
+    that agents apply to tickets.
+  columns:
+  - name: macro_id
+    description: int, primary key for the macro
+    tests:
+    - not_null
+    - unique
+  - name: macro_api_url
+    description: str, the API url of the macro
+  - name: macro_title
+    description: str, the title of the macro. Double colons put it in a category.
+    tests:
+    - not_null
+  - name: macro_raw_title
+    description: str, the title of the macro before dynamic content is applied
+  - name: macro_description
+    description: str, the description of the macro
+  - name: macro_is_active
+    description: bool, if the macro is active
+    tests:
+    - not_null
+  - name: macro_is_default
+    description: bool, if the macro is a default macro created by Zendesk
+  - name: macro_position
+    description: int, the position of the macro in the agent's macro list
+  - name: macro_actions
+    description: array, JSON strings each with a field and a value. They set ticket
+      fields or add a reply when an agent applies the macro. The reply is the comment_value_html
+      action, or comment_value in older macros.
+  - name: macro_restriction_type
+    description: str, who can use the macro. Group or User. Null means all agents.
+    tests:
+    - accepted_values:
+        arguments:
+          values: [Group, User]
+  - name: macro_restriction_group_ids
+    description: str, JSON array of the ids of the groups that can use the macro.
+      Null for macros restricted to one user.
+  - name: macro_created_at
+    description: timestamp, the time the macro was created
+    tests:
+    - not_null
+  - name: macro_updated_at
+    description: timestamp, the time of the last update of the macro
     tests:
     - not_null

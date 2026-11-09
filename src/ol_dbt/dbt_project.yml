@@ -65,6 +65,8 @@ vars:
     ocw_production_url: "https://ocw.mit.edu/"
     # MIT PE feed paths are root-relative (/courses/...), so no trailing slash
     mitpe_url: "https://professional.mit.edu"
+    # MIT Learn site, no trailing slash. MITx Online certificate URLs are built on it.
+    mitlearn_url: "https://learn.mit.edu"
     mitxonline_openedx_url: "https://courses.learn.mit.edu"
     mitxpro_openedx_url: "https://courses.xpro.mit.edu"
     # xPRO marketing site, no trailing slash. Course and program page URLs are built on it.
@@ -274,8 +276,14 @@ models:
           tier: Tier.Tier4
         iceberg_maintenance:
           enabled: false
-    +properties:
-      format: "'PARQUET'"
+    # Trino's Iceberg file-format property. dbt-starrocks writes every
+    # `properties` key into the Iceberg table's properties verbatim, so on
+    # StarRocks this would only add a `format` key, which is not an Iceberg
+    # setting. StarRocks writes parquet (write.format.default) by default.
+    # Per-model `properties` replace this dict, so a model that sets its own
+    # (e.g. Trino's `partitioning`) also needs a StarRocks branch.
+    +properties: "{{ none if target.type == 'starrocks' else {'format': \"'PARQUET'\"\
+      } }}"
     +meta:
       required_docs: true
       # Owner and criticality tier in OpenMetadata, applied by the nightly
@@ -318,8 +326,9 @@ snapshots:
       select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
         'ol_business_analyst', 'reverse_etl']
       all privileges: ["accountadmin", "ol_platform_admin"]
-    +properties:
-      format: "'PARQUET'"
+    # See models above.
+    +properties: "{{ none if target.type == 'starrocks' else {'format': \"'PARQUET'\"\
+      } }}"
     +meta:
       required_docs: true
       # See models above. No tier is decided for snapshots.

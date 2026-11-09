@@ -35,11 +35,13 @@ from dagster import (
     multi_observable_source_asset,
 )
 from ml.lib.learn_embeddings import (
+    CHUNK_SCHEMA,
     CONTENT_FILE_COLUMNS,
     CONTENT_FILE_SOURCES,
     EMBEDDED_SCHEMA,
     TOPIC_DOC_KIND,
     TOPICS_RELATION,
+    VECTOR_SCHEMA,
     active_chunkers,
     chunk_frame,
     chunkers_version,
@@ -54,6 +56,7 @@ from ml.lib.learn_embeddings import (
     topic_documents,
 )
 from ml.lib.warehouse import (
+    read_rows,
     read_table,
     require_rows,
     require_table,
@@ -440,16 +443,20 @@ def content_file_embedding_vectors(
 ):
     """Embed one course run's chunks, reusing every stored vector of the space."""
     etl_source, run = partition_run(context.partition_key)
-    in_partition = (pl.col("etl_source") == etl_source) & (
-        pl.col("run_readable_id") == run
-    )
-    chunks = (
-        require_table(LAYER, CONTENT_FILE_CHUNKS_KEY.path[-1])
-        .filter(in_partition)
-        .collect()
+    in_partition = {"etl_source": etl_source, "run_readable_id": run}
+    chunks = require_rows(
+        LAYER,
+        CONTENT_FILE_CHUNKS_KEY.path[-1],
+        CHUNK_SCHEMA.names(),
+        **in_partition,
     )
     vectors = read_table(LAYER, CONTENT_FILE_VECTORS_KEY.path[-1])
-    stored = vectors.filter(in_partition).collect() if vectors is not None else None
+    stored = read_rows(
+        LAYER,
+        CONTENT_FILE_VECTORS_KEY.path[-1],
+        VECTOR_SCHEMA.names(),
+        **in_partition,
+    )
     rows, metadata, failures = embed_vectors(
         context,
         config,

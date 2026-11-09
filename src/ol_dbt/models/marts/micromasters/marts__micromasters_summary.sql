@@ -11,6 +11,7 @@ with micromasters_enrollments as (
 , micromasters_program_certificates as (
     select *
     from {{ ref('int__micromasters__program_certificates') }}
+    where coalesce(programcertificate_is_revoked, false) = false
 )
 
 , mitx_programs as (

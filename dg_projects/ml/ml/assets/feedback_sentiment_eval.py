@@ -1,4 +1,3 @@
-import os
 from datetime import UTC, datetime
 
 import polars as pl
@@ -12,24 +11,20 @@ from dagster import (
 )
 from ml.lib.embed import resolve_embedding_model
 from ml.lib.sentiment_eval import (
+    CLASSIFIER_NEGATIVE_THRESHOLDS,
+    EXPLICIT_RATING_TO_SENTIMENT,
     build_sentiment_client,
     labeled_sentiment_sample,
     run_sentiment_eval,
+    validate_negative_thresholds,
 )
+from ml.lib.warehouse import load_rows_by_key, warehouse_database
 from ml.resources.llm import LLMClientFactory
-from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
-from pydantic import Field
+from pydantic import Field, field_validator
 
-if DAGSTER_ENV == "dev":
-    _schema_suffix = os.environ.get("DBT_SCHEMA_SUFFIX")
-    intermediate_database_name = (
-        f"ol_warehouse_production_{_schema_suffix}_intermediate"
-    )
-    dimensional_database_name = f"ol_warehouse_production_{_schema_suffix}_dimensional"
-else:
-    intermediate_database_name = "ol_warehouse_production_intermediate"
-    dimensional_database_name = "ol_warehouse_production_dimensional"
+intermediate_database_name = warehouse_database("intermediate")
+dimensional_database_name = warehouse_database("dimensional")
 
 SENTIMENT_EVAL_RESULT_SCHEMA = {
     "eval_run_id": pl.String,
@@ -60,6 +55,23 @@ class FeedbackSentimentEvalConfig(Config):
         default=0.2,
         description="Fraction of the labeled sample held out for scoring.",
     )
+    classifier_negative_thresholds: list[float] = Field(
+        default=list(CLASSIFIER_NEGATIVE_THRESHOLDS),
+        description=(
+            "The classifier is scored once per threshold: a conversation is "
+            "negative when P(negative) is at least the threshold. Lower values "
+            "find more complaints and add more false alarms. 0.5 is always "
+            "scored too."
+        ),
+    )
+
+    @field_validator("classifier_negative_thresholds")
+    @classmethod
+    def thresholds_between_zero_and_one(cls, thresholds: list[float]) -> list[float]:
+        """Reject a bad threshold at launch, before the warehouse reads."""
+        validate_negative_thresholds(thresholds)
+        return thresholds
+
     embedding_model: str | None = Field(
         default=None,
         pattern=r"^[a-z0-9-]+:.+$",
@@ -83,7 +95,7 @@ class FeedbackSentimentEvalConfig(Config):
 
 @asset(
     key=AssetKey(["intermediate", "feedback_sentiment_eval"]),
-    code_version="feedback_sentiment_eval_v2",
+    code_version="feedback_sentiment_eval_v4",
     group_name="feedback",
     io_manager_key="io_manager",
     pool="feedback_sentiment_eval",
@@ -121,30 +133,39 @@ def feedback_sentiment_eval(
             table_name="afact_feedback_conversation",
         )
         .select(["feedback_conversation_pk", "explicit_rating"])
+        .filter(pl.col("explicit_rating").is_in(list(EXPLICIT_RATING_TO_SENTIMENT)))
         .collect()
     )
-    embeddings_df = (
-        get_dbt_model_as_dataframe(
-            database_name=intermediate_database_name,
-            table_name="feedback_embeddings",
-        )
-        .filter(embedding_model.matches())
-        .select(["feedback_conversation_pk", "embedding_vector"])
-        .collect()
+    rated_pks = afact_df["feedback_conversation_pk"].to_list()
+    embeddings_df = load_rows_by_key(
+        intermediate_database_name,
+        "feedback_embeddings",
+        ["feedback_conversation_pk", "embedding_vector"],
+        "feedback_conversation_pk",
+        rated_pks,
+        equals={
+            "embedding_model_version": embedding_model.model_version,
+            "embedding_dim": embedding_model.dim,
+        },
     )
-    conversation_df = (
-        get_dbt_model_as_dataframe(
-            database_name=intermediate_database_name,
-            table_name="int__feedback__conversation",
-        )
-        .select(["feedback_conversation_pk", "conversation_text"])
-        .collect()
+    conversation_df = load_rows_by_key(
+        intermediate_database_name,
+        "int__feedback__conversation",
+        ["feedback_conversation_pk", "conversation_text"],
+        "feedback_conversation_pk",
+        rated_pks,
     )
 
     joined = afact_df.join(
         embeddings_df, on="feedback_conversation_pk", how="inner"
     ).join(conversation_df, on="feedback_conversation_pk", how="left")
     labeled_df = labeled_sentiment_sample(joined)
+    class_counts = labeled_df["sentiment"].value_counts()
+    context.log.info(
+        "Loaded %d explicitly rated conversations with an embedding (%d negative)",
+        labeled_df.height,
+        class_counts.filter(pl.col("sentiment") == "negative")["count"].sum(),
+    )
 
     if labeled_df.height < 10:  # noqa: PLR2004 -- below this, a train/test split is meaningless
         msg = (
@@ -158,7 +179,6 @@ def feedback_sentiment_eval(
     # test split, leaves LogisticRegression.fit a single-class training set to crash
     # on instead of producing the bake-off (train_test_split_indices stratifies the
     # split, but only once both classes exist here to stratify).
-    class_counts = labeled_df["sentiment"].value_counts()
     if class_counts.height < 2:  # noqa: PLR2004
         msg = (
             f"Only {class_counts.height} distinct sentiment label(s) "
@@ -172,6 +192,7 @@ def feedback_sentiment_eval(
         embedding_dim=embedding_model.dim,
         sentiment_client=sentiment_client,
         test_fraction=config.test_fraction,
+        classifier_negative_thresholds=config.classifier_negative_thresholds,
     )
 
     eval_run_id = context.run.root_run_id or context.run.run_id

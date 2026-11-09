@@ -43,11 +43,11 @@ select
     , opening_turn.source_url
     , conversation_fact.conversation_summary
     -- Keeps quoted email history: it is often the only copy of the email a learner
-    -- replied to, and the summarizer reads the same full text.
+    -- replied to, and the summarizer reads the same full text. HTML, because the
+    -- Feedback Cluster Conversations chart renders it to show line breaks.
     , replace(
-        {{ html_unescape('conversation_fact.conversation_text') }}
-        , {{ dbt.concat([codepoint_char(10), "'---'", codepoint_char(10)]) }}
-        , {{ dbt.concat([codepoint_char(10), "'———'", codepoint_char(10)]) }}
+        {{ text_to_html(html_unescape('conversation_fact.conversation_text')) }}
+        , '<br>---<br>', '<br><br>'
     ) as conversation_text
     , course_run.courserun_readable_id
     , course_run.courserun_title as course_title

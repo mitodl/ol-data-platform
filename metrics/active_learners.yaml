@@ -17,11 +17,12 @@ metric:
     per month and as engaged_learners per course run, both counting learners
     with an active enrollment under a contract.
     afact_learner_courserun_progress.last_active_on is a learner's latest such
-    day in a run. It is not the active_learners column of
+    day in a run. It is not the deprecated active_learners column of
     mv_b2b_enrollment_completion_funnel, mv_b2b_contract_utilization and
     mv_b2b_mit_admin_contract_health, which counts active enrollments (metric
-    actively_enrolled_learners). organization_administration_report's
-    active_count also counts the day a certificate is issued.
+    actively_enrolled_learners, the column that replaces it).
+    organization_administration_report's active_count also counts the day a
+    certificate is issued.
   metricType: COUNT
   unitOfMeasurement: COUNT
   owners: [{type: team, name: data-platform}]

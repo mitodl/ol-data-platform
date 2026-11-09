@@ -1,9 +1,21 @@
+-- In dev, empty until the student_risk_probability asset has materialized in this schema.
+{% set risk = dev_schema_source('reporting', 'student_risk_probability') %}
+
 with cheating_detection as (
     select * from {{ ref('cheating_detection_report') }}
 )
 
 , student_risk_probability as (
-   select * from {{ source('reporting','student_risk_probability') }}
+{% if not risk.is_unit_test and execute and not risk.resolved_relation %}
+    select
+        cast(null as varchar) as courserun_readable_id
+        , cast(null as bigint) as openedx_user_id
+        , cast(null as double) as risk_probability
+        , {{ null_timestamp() }} as created_timestamp
+    where false
+{% else %}
+    select * from {{ risk.relation_ref }}
+{% endif %}
 )
 
 , student_grades as (

@@ -36,6 +36,7 @@ from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient, webhook_status
 
+from delivery.lib.learn_webhook import LearnDeliveryConfig, webhook_failure
 from delivery.lib.sanitize import clean_html
 
 log = logging.getLogger(__name__)
@@ -185,6 +186,7 @@ def _read_table(context: AssetExecutionContext, table: str) -> pl.DataFrame:
 )
 def mitpe_webhook(
     context: AssetExecutionContext,
+    config: LearnDeliveryConfig,
     learn_api: ApiClientFactory,
 ) -> dict[str, Any]:
     """Deliver MIT PE courses and programs to MIT Learn via signed webhook."""
@@ -217,12 +219,14 @@ def mitpe_webhook(
     )
     try:
         response = cast(MITLearnApiClient, learn_api.client).notify_learning_resources(
-            resources, sync=[(_ETL_SOURCE, "program")]
+            resources,
+            sync=[(_ETL_SOURCE, "program")],
+            allow_mass_unpublish=config.allow_mass_unpublish,
         )
     except httpx.HTTPStatusError as exc:
-        msg = f"MIT PE webhook failed with status {exc.response.status_code}: {exc}"
-        context.log.exception(msg)
-        raise RuntimeError(msg) from exc
+        failure = webhook_failure("MIT PE", exc)
+        context.log.exception(failure.description)
+        raise failure from exc
 
     status = webhook_status(response)
     context.add_output_metadata(

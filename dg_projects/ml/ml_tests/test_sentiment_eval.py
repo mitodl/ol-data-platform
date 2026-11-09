@@ -5,7 +5,11 @@ import polars as pl
 import pytest
 from anthropic import Anthropic, AnthropicBedrock
 from anthropic.types import TextBlock, ThinkingBlock
+from dagster import build_asset_context
+from ml.assets import feedback_sentiment as asset_module
+from ml.assets.feedback_sentiment_eval import FeedbackSentimentEvalConfig
 from ml.lib import sentiment_eval
+from ml.lib.embed import resolve_embedding_model
 from ml.resources.opik_auth import PromptLabelMissingError
 from ml_tests.fake_anthropic import FakeAnthropicClient, FakeMessage
 from openai import OpenAI
@@ -112,11 +116,69 @@ def test_local_classifier_predictions_are_right_on_separable_classes() -> None:
     vectors, labels = _separable_dataset()
     train_idx, test_idx = sentiment_eval.train_test_split_indices(labels)
 
-    predictions = sentiment_eval.local_classifier_predictions(
+    probabilities = sentiment_eval.local_classifier_negative_probabilities(
         vectors[train_idx], labels[train_idx], vectors[test_idx]
     )
+    predictions = sentiment_eval.predictions_at_threshold(probabilities, 0.5)
 
     assert predictions.tolist() == labels[test_idx].tolist()
+
+
+def test_run_sentiment_eval_scores_the_classifier_at_each_threshold() -> None:
+    rng = np.random.default_rng(0)
+    # Overlapping classes, so a lower threshold has negatives left to find.
+    vectors = np.vstack([rng.normal(0.5, 1, (80, 4)), rng.normal(-0.5, 1, (20, 4))])
+    labels = ["positive"] * 80 + ["negative"] * 20
+    df = pl.DataFrame(
+        {
+            "embedding_vector": vectors.tolist(),
+            "sentiment": labels,
+            "conversation_text": [f"text {i}" for i in range(len(labels))],
+        }
+    )
+
+    methods = sentiment_eval.run_sentiment_eval(
+        df,
+        embedding_dim=4,
+        sentiment_client=None,
+        classifier_negative_thresholds=(0.3, 0.2),
+    )["methods"]
+
+    assert list(methods) == [
+        "embedding_knn",
+        "local_classifier",
+        "local_classifier@0.3",
+        "local_classifier@0.2",
+    ]
+    predicted = [
+        methods[m]["n_predicted_negative"]
+        for m in ("local_classifier", "local_classifier@0.3", "local_classifier@0.2")
+    ]
+    assert predicted == sorted(predicted)
+
+
+def test_feedback_sentiment_eval_config_rejects_a_threshold_at_launch() -> None:
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        FeedbackSentimentEvalConfig(classifier_negative_thresholds=[50])
+
+
+def test_run_sentiment_eval_rejects_a_threshold_outside_zero_and_one() -> None:
+    vectors, labels = _separable_dataset(n_per_class=10)
+    df = pl.DataFrame(
+        {
+            "embedding_vector": vectors.tolist(),
+            "sentiment": labels.tolist(),
+            "conversation_text": [f"text {i}" for i in range(len(labels))],
+        }
+    )
+
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        sentiment_eval.run_sentiment_eval(
+            df,
+            embedding_dim=4,
+            sentiment_client=None,
+            classifier_negative_thresholds=(1.5,),
+        )
 
 
 def test_score_predictions_reports_negative_precision_and_recall() -> None:
@@ -270,7 +332,8 @@ def test_run_sentiment_eval_skips_llm_arm_when_client_is_none() -> None:
         df, embedding_dim=4, sentiment_client=None
     )
 
-    assert set(result["methods"].keys()) == {"embedding_knn", "local_classifier"}
+    assert "llm" not in result["methods"]
+    assert {"embedding_knn", "local_classifier"} <= set(result["methods"])
     assert result["n_train"] + result["n_test"] == len(labels)
 
 
@@ -353,3 +416,83 @@ def test_anthropic_sentiment_client_leaves_partial_text_unlabeled(
     )
 
     assert client.classify("some conversation text") is None
+
+
+def test_feedback_sentiment_predicts_only_unrated_learn_zendesk_conversations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = resolve_embedding_model(None, 4)
+    vectors, labels = _separable_dataset(n_per_class=10)
+    # Rated on another platform: training uses every rated conversation.
+    rated = [
+        ("zendesk", "micromasters", "good" if label == "positive" else "bad", "")
+        for label in labels
+    ]
+    # Only the first three are in scope.
+    unrated = [
+        ("zendesk", "mitlearn", None, "I cannot log in"),
+        ("zendesk", "mitlearn", "offered", "Thanks"),
+        ("zendesk", "mitlearn", "unoffered", None),
+        ("zendesk", "mitlearn", None, "Idea: add a share button"),
+        ("zendesk", "mitlearn", None, "Idea"),
+        ("zendesk", "mitlearn", None, "Idea\n---\nAny update?"),
+        ("zendesk", "mitxpro", None, "Exports Compliance"),
+        ("learn_ai_tutor", "mitlearn", None, "What is a gradient?"),
+        ("content_feedback", "mitlearn", "idea", "More videos"),
+    ]
+    unrated_vectors = [[5.0] * 4, [-5.0] * 4, [5.0] * 4] + [[-5.0] * 4] * 6
+    rows = rated + unrated
+    pks = [f"pk{i}" for i in range(len(rows))]
+    tables = {
+        "int__feedback__conversation": pl.DataFrame(
+            {
+                "feedback_conversation_pk": pks,
+                "source_slug": [row[0] for row in rows],
+                "platform": [row[1] for row in rows],
+                "explicit_rating": [row[2] for row in rows],
+                "conversation_text": [row[3] for row in rows],
+            }
+        ),
+        "feedback_embeddings": pl.DataFrame(
+            {
+                "feedback_conversation_pk": [*pks, "other_model"],
+                "embedding_vector": [
+                    *vectors.tolist(),
+                    *unrated_vectors,
+                    [0.0] * 4,
+                ],
+                "embedding_model_version": [model.model_version] * len(pks)
+                + ["another-model"],
+                "embedding_dim": [4] * (len(pks) + 1),
+            }
+        ),
+    }
+    monkeypatch.setattr(
+        asset_module,
+        "get_dbt_model_as_dataframe",
+        lambda **kwargs: tables[kwargs["table_name"]].lazy(),
+    )
+    monkeypatch.setattr(
+        asset_module,
+        "load_rows_by_key",
+        lambda _database, table, columns, key_column, keys, equals: (
+            tables[table]
+            .filter(
+                pl.col(key_column).is_in(keys),
+                *(pl.col(column) == value for column, value in equals.items()),
+            )
+            .select(columns)
+        ),
+    )
+
+    result = asset_module.feedback_sentiment(
+        build_asset_context(),
+        asset_module.FeedbackSentimentConfig(embedding_dim=4),
+    )
+
+    assert result["feedback_conversation_pk"].to_list() == pks[len(rated) :][:3]
+    assert result["sentiment_slug"].to_list() == ["positive", "negative", "positive"]
+    assert result["sentiment_model_version"].unique().to_list() == [
+        "local_classifier@0.35"
+    ]
+    assert result.schema == asset_module.SENTIMENT_ASSIGNMENT_SCHEMA

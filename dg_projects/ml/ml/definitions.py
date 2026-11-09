@@ -3,8 +3,10 @@ import os
 from dagster import (
     AssetSelection,
     AutomationConditionSensorDefinition,
+    DefaultScheduleStatus,
     DefaultSensorStatus,
     Definitions,
+    ScheduleDefinition,
     define_asset_job,
 )
 from dagster_aws.s3 import S3Resource
@@ -28,6 +30,7 @@ from ml.assets.feedback_cluster_identity import feedback_cluster_identity
 from ml.assets.feedback_clusters import feedback_clusters
 from ml.assets.feedback_embeddings import feedback_embeddings
 from ml.assets.feedback_redacted import feedback_redacted
+from ml.assets.feedback_sentiment import feedback_sentiment
 from ml.assets.feedback_sentiment_eval import feedback_sentiment_eval
 from ml.assets.feedback_summaries import feedback_summaries
 from ml.assets.learn_embedding_checks import learn_parity_definitions
@@ -111,6 +114,18 @@ feedback_sentiment_eval_job = define_asset_job(
     selection=[feedback_sentiment_eval],
 )
 
+feedback_sentiment_job = define_asset_job(
+    name="feedback_sentiment_job",
+    selection=[feedback_sentiment],
+)
+feedback_sentiment_schedule = ScheduleDefinition(
+    name="feedback_sentiment_daily",
+    job=feedback_sentiment_job,
+    cron_schedule="0 12 * * *",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.STOPPED,
+)
+
 # Covers the feedback pipeline's auto-cascading assets (feedback_clusters itself
 # runs from feedback_clusters_growth_sensor). Re-enable in the UI after deploy if it was
 # previously on. Stopped by default.
@@ -156,11 +171,11 @@ courseware_automation_sensor = AutomationConditionSensorDefinition(
 )
 
 # Chunking and embedding of Learn's content files and topics. Every run it launches
-# carries LEARN_EMBEDDINGS_TAG for ol-infrastructure's run_coordinator
-# tag_concurrency_limits to bound the model calls and the concurrent commits to the
-# vector tables, as for courseware. That limit does not exist yet, so add it before
-# turning this on: a chunker change requests every course run at once. Stopped by
-# default: the first build of each table is a backfill launched by hand.
+# carries LEARN_EMBEDDINGS_TAG, which ol-infrastructure's run_coordinator
+# tag_concurrency_limits caps at one run at a time: a chunker change requests every
+# course run at once, and concurrent overwrites of the vector tables conflict at
+# commit. Stopped by default: the first build of each table is a backfill launched by
+# hand, which the limit caps only if it is launched with the tag.
 LEARN_EMBEDDINGS_TAG = "learn_embeddings/model_calls"
 learn_embeddings_automation_sensor = AutomationConditionSensorDefinition(
     name="learn_embeddings_automation_sensor",
@@ -271,6 +286,7 @@ defs = Definitions(
             feedback_cluster_identity,
             feedback_cluster_assignment,
             feedback_category_proposals,
+            feedback_sentiment,
             feedback_sentiment_eval,
             courseware_extraction_text,
             courseware_extraction,
@@ -296,7 +312,9 @@ defs = Definitions(
         feedback_embeddings_job,
         feedback_clusters_job,
         feedback_sentiment_eval_job,
+        feedback_sentiment_job,
     ],
+    schedules=[feedback_sentiment_schedule],
     sensors=[
         feedback_pipeline_automation_sensor,
         feedback_clusters_growth_sensor,

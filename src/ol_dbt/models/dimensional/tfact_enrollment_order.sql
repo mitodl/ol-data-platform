@@ -121,7 +121,7 @@ with enrollment as (
         select * from order_via_direct_fk
         union all
         select * from order_via_product
-    )
+    ) as subquery
 )
 
 , mitxonline_program_course_run_orders as (

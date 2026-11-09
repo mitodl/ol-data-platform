@@ -5,7 +5,7 @@
     on_schema_change='append_new_columns',
     partition_by=(['platform'] if target.type == 'starrocks' else none),
     properties=(
-        {"format": "'PARQUET'"} if target.type == 'starrocks'
+        none if target.type == 'starrocks'
         else {"partitioning": "ARRAY['platform']"}
     ),
 ) }}
@@ -620,7 +620,7 @@ with mitxonline_problem_events as (
                 order by event_timestamp
             ) as rn
         from combined
-    )
+    ) as subquery
     where rn = 1 or event_type != 'problem_check'
 )
 

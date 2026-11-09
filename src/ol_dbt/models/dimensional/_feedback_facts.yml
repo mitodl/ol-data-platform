@@ -252,11 +252,12 @@ models:
       AskTIM 'like'/'dislike', content feedback 'positive'/'negative'/'idea'. Non-numeric,
       so it does not average.
   - name: sentiment_fk
-    description: str, foreign key to dim_sentiment. Populated at MVP from the explicit
-      rating alone. Only a verdict ('good'/'bad' for Zendesk, 'like'/'dislike' for
-      AskTIM, 'positive'/'negative' for content feedback) resolves this; an unoffered
-      or unanswered survey leaves it null, because it is an absence of signal, not
-      a neutral one. Content feedback's 'idea' also stays null.
+    description: str, foreign key to dim_sentiment. A verdict ('good'/'bad' for Zendesk,
+      'like'/'dislike' for AskTIM, 'positive'/'negative' for content feedback) sets
+      it directly. An MIT Learn Zendesk conversation with no verdict takes the feedback_sentiment
+      asset's prediction once it has an embedding, except an Appzi 'Idea:' ticket.
+      Every other conversation with no verdict, and content feedback's 'idea', stays
+      null.
     tests:
     - relationships:
         arguments:
@@ -265,12 +266,16 @@ models:
         config:
           where: "sentiment_fk is not null"
   - name: sentiment_source
-    description: str, which tier produced the sentiment - 'explicit_rating' now, 'model'
-      once the ML asset upgrades the null rows.
+    description: str, which tier produced the sentiment - 'explicit_rating' for a
+      verdict, 'model' for a feedback_sentiment prediction. Null when sentiment_fk
+      is null.
     tests:
     - accepted_values:
         arguments:
           values: ['explicit_rating', 'model']
+  - name: sentiment_model_version
+    description: str, the method and threshold behind a 'model' sentiment, e.g. 'local_classifier@0.35'.
+      Null for any other sentiment_source.
   - name: conversation_summary
     description: str, LLM abstract of the assembled redacted turns. Null until feedback_summaries
       has materialized for this conversation, and permanently null for conversations

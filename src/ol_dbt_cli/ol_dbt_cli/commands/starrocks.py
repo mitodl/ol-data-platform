@@ -31,8 +31,8 @@ Workflow::
     # Your own copy of the QA warehouse in ol_data_lake_qa
     ol-dbt starrocks run --target starrocks_dev_qa --vars '{schema_suffix: alice}' --select +my_model
 
-    # A PR build in the CI lake
-    ol-dbt starrocks run --env ci --target ci --vars '{schema_suffix: pr_123}' --select my_model+
+    # A PR build in the CI lake: no deferral, so select the parents too
+    ol-dbt starrocks run --env ci --target ci --vars '{schema_suffix: pr_123}' --select +my_model
 
 dbt ``profiles.yml`` must reference the env vars this command injects::
 
@@ -488,7 +488,10 @@ def run(  # noqa: PLR0913
         IndirectSelection | None,
         Parameter(
             name="--indirect-selection",
-            help="dbt's --indirect-selection. Default: buildable for dev, dbt's own (eager) elsewhere.",
+            help=(
+                "dbt's --indirect-selection. Default: buildable for --env dev and for targets that "
+                "cannot defer (--target ci), dbt's own (eager) elsewhere."
+            ),
             show_default=False,
         ),
     ] = None,
@@ -537,6 +540,10 @@ def run(  # noqa: PLR0913
             )
             sys.exit(1)
         defer = False
+        # With no deferral, a relationships test whose other model is outside
+        # the selection reads a table this build never made (the same reason
+        # `dev` defaults to buildable).
+        indirect_selection = indirect_selection or "buildable"
     elif defer is None:
         defer = True
     if lake is not None and lake.env != env:

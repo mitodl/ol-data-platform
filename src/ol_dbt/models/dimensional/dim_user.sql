@@ -18,6 +18,9 @@ with mitx_users as (
         , user_job_title as job_title
         , user_industry as industry
         , user_address_state
+        , user_street_address
+        , user_address_city
+        , user_address_postal_code
         , user_is_active_on_mitxonline
         , user_is_active_on_edxorg
         , user_joined_on_mitxonline
@@ -60,6 +63,9 @@ with mitx_users as (
         user_id
         , user_address_country
         , user_address_state_or_territory
+        , user_street_address
+        , user_address_city
+        , user_address_postal_code
     from {{ ref('stg__mitxpro__app__postgres__users_legaladdress') }}
 )
 
@@ -90,6 +96,9 @@ with mitx_users as (
         , mitxpro_users.user_full_name
         , mitxpro_legaladdress.user_address_country
         , mitxpro_legaladdress.user_address_state_or_territory
+        , mitxpro_legaladdress.user_street_address
+        , mitxpro_legaladdress.user_address_city
+        , mitxpro_legaladdress.user_address_postal_code
         , mitxpro_profile.user_highest_education
         , mitxpro_profile.user_gender
         , mitxpro_profile.user_birth_year
@@ -116,6 +125,9 @@ with mitx_users as (
             , user_company
             , user_job_title
             , user_industry
+            , user_address_street
+            , user_address_city
+            , user_address_postal_code
             -- Enrollment rows often tie on both dates. The trailing columns make the pick
             -- deterministic, and must stay in step with int__combined__users.
             , row_number() over (
@@ -132,9 +144,13 @@ with mitx_users as (
                     , user_company asc
                     , user_job_title asc
                     , user_industry asc
+                    , user_address_street asc
+                    , user_address_city asc
+                    , user_address_state asc
+                    , user_address_postal_code asc
             ) as row_num
         from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
-    )
+    ) as subquery
     where row_num = 1
 )
 
@@ -149,6 +165,9 @@ with mitx_users as (
             , user_company
             , user_job_title
             , user_industry
+            , user_address_street
+            , user_address_city
+            , user_address_postal_code
             -- Same deterministic tie-break as emeritus_users.
             , row_number() over (
                 partition by user_email
@@ -163,9 +182,13 @@ with mitx_users as (
                     , user_company asc
                     , user_job_title asc
                     , user_industry asc
+                    , user_address_street asc
+                    , user_address_city asc
+                    , user_address_state asc
+                    , user_address_postal_code asc
             ) as row_num
         from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
-    )
+    ) as subquery
     where row_num = 1
 )
 
@@ -187,6 +210,7 @@ with mitx_users as (
         , user_highest_education
         , user_gender
         , user_birth_year
+        , user_address_city
         , user_id
     from {{ ref('stg__mitxresidential__openedx__auth_userprofile') }}
 )
@@ -200,6 +224,7 @@ with mitx_users as (
         , mitxresidential_profile.user_highest_education
         , mitxresidential_profile.user_gender
         , mitxresidential_profile.user_birth_year
+        , mitxresidential_profile.user_address_city
         , 'residential' as platform
         , mitxresidential_openedx_users.user_id
         , mitxresidential_openedx_users.user_is_active
@@ -235,6 +260,9 @@ with mitx_users as (
         , mitx_users.job_title
         , mitx_users.industry
         , mitx_users.user_address_state
+        , mitx_users.user_street_address
+        , mitx_users.user_address_city
+        , mitx_users.user_address_postal_code
         , mitx_users.user_is_active_on_mitxonline
         , mitx_users.user_joined_on_mitxonline
         , mitx_users.user_is_active_on_edxorg
@@ -256,7 +284,7 @@ with mitx_users as (
                 order by user_created_on desc
             ) as row_num
         from {{ ref('stg__mitlearn__app__postgres__users_user') }}
-    )
+    ) as subquery
     where row_num = 1
 )
 
@@ -271,7 +299,7 @@ with mitx_users as (
                 order by user_last_login desc nulls last, user_created_on desc nulls last, user_id desc
             ) as global_id_row_num
         from learn_user_deduped_by_email
-    )
+    ) as subquery
     where global_id_row_num = 1
 )
 
@@ -291,15 +319,33 @@ with mitx_users as (
 
 )
 
+-- Some Learn profile names are a Python dict repr, {'givenName': 'A', 'familyName': 'B'},
+-- where a missing part is None. Only a name that starts like that dict is parsed, so a display
+-- name like {Gaurav} Gaming is kept. A part that is None or not quoted extracts as null.
+{% set learn_dict_name = "'^[ ]*[{][''\"]givenName[''\"]: '" %}
+{% set learn_dict_given_name = "'[''\"]givenName[''\"]: [''\"](.*?)[''\"], [''\"]familyName[''\"]'" %}
+{% set learn_dict_family_name = "'[''\"]familyName[''\"]: [''\"](.*)[''\"][}]$'" %}
+
 , learn_user_view as(
     select
         learn_user.user_global_id
         , learn_user.user_id as mitlearn_user_id
         , learn_user.user_email as email
-        , case when learn_profile.user_name is not null and trim(learn_profile.user_name) <> ''
-            then learn_profile.user_name
-            else concat(learn_user.user_first_name, ' ', learn_user.user_last_name)
-        end as full_name
+        -- A blank name is null, not ' ', so the coalesce with the MITx name below can fall through.
+        , coalesce(
+            nullif(trim(
+                case
+                    when {{ regexp_like('learn_profile.user_name', learn_dict_name) }}
+                    then concat(
+                        coalesce({{ regexp_extract_or_null('learn_profile.user_name', learn_dict_given_name, 1) }}, '')
+                        , ' '
+                        , coalesce({{ regexp_extract_or_null('learn_profile.user_name', learn_dict_family_name, 1) }}, '')
+                    )
+                    else learn_profile.user_name
+                end
+            ), '')
+            , nullif(trim(concat(coalesce(learn_user.user_first_name, ''), ' ', coalesce(learn_user.user_last_name, ''))), '')
+        ) as full_name
         , learn_profile.user_current_education as highest_education
         , learn_user.user_is_active as user_is_active_on_mitlearn
         , learn_user.user_joined_on as user_joined_on_mitlearn
@@ -323,6 +369,9 @@ with mitx_users as (
         , mitx_users_view.job_title
         , mitx_users_view.industry
         , mitx_users_view.user_address_state
+        , mitx_users_view.user_street_address
+        , mitx_users_view.user_address_city
+        , mitx_users_view.user_address_postal_code
         , learn_user_view.user_is_active_on_mitlearn
         , learn_user_view.user_joined_on_mitlearn
         , mitx_users_view.user_is_active_on_mitxonline
@@ -375,6 +424,7 @@ with mitx_users as (
         , null as user_mitxpro_username
         , null as residential_openedx_user_id
         , null as user_residential_username
+        , null as user_bootcamps_username
         , edxorg_openedx_user_id
         , user_edxorg_username
         , null as emeritus_user_id
@@ -391,6 +441,9 @@ with mitx_users as (
         , job_title
         , industry
         , user_address_state as address_state
+        , user_street_address
+        , user_address_city
+        , user_address_postal_code
         , user_is_active_on_mitlearn
         , user_joined_on_mitlearn
         , user_is_active_on_mitxonline
@@ -426,6 +479,7 @@ with mitx_users as (
         , mitxpro_user_view.user_username as user_mitxpro_username
         , null as residential_openedx_user_id
         , null as user_residential_username
+        , null as user_bootcamps_username
         , null as edxorg_openedx_user_id
         , null as user_edxorg_username
         , null as emeritus_user_id
@@ -442,6 +496,9 @@ with mitx_users as (
         , mitxpro_user_view.user_job_title as job_title
         , mitxpro_user_view.user_industry as industry
         , mitxpro_user_view.user_address_state_or_territory as address_state
+        , mitxpro_user_view.user_street_address
+        , mitxpro_user_view.user_address_city
+        , mitxpro_user_view.user_address_postal_code
         , null as user_is_active_on_mitlearn
         , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
@@ -480,6 +537,7 @@ with mitx_users as (
         , null as user_mitxpro_username
         , null as residential_openedx_user_id
         , null as user_residential_username
+        , null as user_bootcamps_username
         , null as edxorg_openedx_user_id
         , null as user_edxorg_username
         , user_id as emeritus_user_id
@@ -499,6 +557,9 @@ with mitx_users as (
         , user_job_title as job_title
         , user_industry as industry
         , null as address_state
+        , user_address_street as user_street_address
+        , user_address_city
+        , user_address_postal_code
         , null as user_is_active_on_mitlearn
         , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
@@ -532,6 +593,7 @@ with mitx_users as (
         , null as user_mitxpro_username
         , null as residential_openedx_user_id
         , null as user_residential_username
+        , null as user_bootcamps_username
         , null as edxorg_openedx_user_id
         , null as user_edxorg_username
         , null as emeritus_user_id
@@ -549,6 +611,9 @@ with mitx_users as (
         , user_job_title as job_title
         , user_industry as industry
         , null as address_state
+        , user_address_street as user_street_address
+        , user_address_city
+        , user_address_postal_code
         , null as user_is_active_on_mitlearn
         , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
@@ -582,6 +647,7 @@ with mitx_users as (
         , null as user_mitxpro_username
         , mitxresidential_user_view.user_id as residential_openedx_user_id
         , mitxresidential_user_view.user_username as user_residential_username
+        , null as user_bootcamps_username
         , null as edxorg_openedx_user_id
         , null as user_edxorg_username
         , null as emeritus_user_id
@@ -598,6 +664,9 @@ with mitx_users as (
         , null as job_title
         , null as industry
         , null as address_state
+        , null as user_street_address
+        , mitxresidential_user_view.user_address_city
+        , null as user_address_postal_code
         , null as user_is_active_on_mitlearn
         , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
@@ -631,6 +700,7 @@ with mitx_users as (
         , null as user_mitxpro_username
         , null as residential_openedx_user_id
         , null as user_residential_username
+        , bootcamps_user_view.user_username as user_bootcamps_username
         , null as edxorg_openedx_user_id
         , null as user_edxorg_username
         , null as emeritus_user_id
@@ -647,6 +717,9 @@ with mitx_users as (
         , bootcamps_user_view.user_job_title as job_title
         , bootcamps_user_view.user_industry as industry
         , bootcamps_user_view.user_address_state_or_territory as address_state
+        , bootcamps_user_view.user_street_address
+        , bootcamps_user_view.user_address_city
+        , bootcamps_user_view.user_address_postal_code
         , null as user_is_active_on_mitlearn
         , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
@@ -700,33 +773,42 @@ with mitx_users as (
     from combined_accounts
 )
 
+-- The two windows below must stay identical. They're written out rather than shared through a
+-- named WINDOW clause, which StarRocks doesn't support.
 , account_identity as (
     select
         first_value(case
             when ranked_accounts.user_global_id is not null then 'global'
             when ranked_accounts.id_source_user_id is not null then ranked_accounts.id_source
             else 'email'
-        end) over w as user_identity_source
+        end) over (
+            partition by ranked_accounts.email
+            order by
+                ranked_accounts.has_no_source_id asc
+                , ranked_accounts.id_source_rank asc
+                , ranked_accounts.user_global_id desc
+                , ranked_accounts.sort_id desc nulls last
+                , ranked_accounts.id_source_user_id desc
+        ) as user_identity_source
         , first_value(coalesce(ranked_accounts.user_global_id, ranked_accounts.id_source_user_id, ranked_accounts.email))
-            over w as user_identity_id
+            over (
+                partition by ranked_accounts.email
+                order by
+                    ranked_accounts.has_no_source_id asc
+                    , ranked_accounts.id_source_rank asc
+                    , ranked_accounts.user_global_id desc
+                    , ranked_accounts.sort_id desc nulls last
+                    , ranked_accounts.id_source_user_id desc
+            ) as user_identity_id
         , ranked_accounts.*
     from ranked_accounts
-    window w as (
-        partition by email
-        order by
-            has_no_source_id asc
-            , id_source_rank asc
-            , user_global_id desc
-            , sort_id desc nulls last
-            , id_source_user_id desc
-    )
 )
 
 , combined_users as (
     select
         {{ dbt_utils.generate_surrogate_key([
-            'user_identity_source',
-            'user_identity_id'
+            'account_identity.user_identity_source',
+            'account_identity.user_identity_id'
         ]) }} as user_pk
         , account_identity.*
     from account_identity
@@ -765,7 +847,16 @@ with mitx_users as (
                 , industry asc
                 , address_state asc
                 , mitlearn_user_id asc
+                -- Last, so tied rows that differ only in address still pick the same one on every build.
+                , user_street_address asc
+                , user_address_city asc
+                , user_address_postal_code asc
         ) as row_num
+        , coalesce(
+            nullif(trim(user_street_address), '')
+            , nullif(trim(user_address_city), '')
+            , nullif(trim(user_address_postal_code), '')
+        ) is not null as has_street_address
     from combined_users
 )
 
@@ -812,6 +903,7 @@ with mitx_users as (
         , max(user_mitxpro_username) as user_mitxpro_username
         , max(residential_openedx_user_id) as residential_openedx_user_id
         , max(user_residential_username) as user_residential_username
+        , max(user_bootcamps_username) as user_bootcamps_username
         , max(edxorg_openedx_user_id) as edxorg_openedx_user_id
         , max(emeritus_user_id) as emeritus_user_id
         , max(global_alumni_user_id) as global_alumni_user_id
@@ -836,13 +928,54 @@ with mitx_users as (
         , max(user_joined_on_bootcamps) as user_joined_on_bootcamps
         -- Fallback full_name in case the base row (most recent platform) has a null name.
         -- Cross-platform users may have their base row on a platform with null full_name.
-        -- Takes the next account in base-row order that has one, so the pick is stable.
-        , min_by(full_name, row_num) filter (where full_name is not null) as agg_full_name
+        -- Takes the next account in base-row order that has a non-blank one, so the pick is stable.
+        -- The key is nulled on rows without one rather than using FILTER (WHERE ...), which
+        -- StarRocks can't parse on min_by. min_by skips null keys on Trino, StarRocks and DuckDB.
+        , min_by(trim(full_name), case when trim(full_name) <> '' then row_num end) as agg_full_name
         -- Fallback address_state for cross-platform users whose base row is from a platform
         -- that null-codes address_state (e.g. Emeritus, Global Alumni, Residential).
-        , min_by(address_state, row_num) filter (where address_state is not null) as agg_address_state
+        , min_by(address_state, case when address_state is not null then row_num end) as agg_address_state
     from ranked_users
     group by user_pk
+)
+
+-- Street, city and postal code come together from one account: the first in base-row order
+-- that has any of them, with accounts that have a street or postal code ahead of ones that
+-- have only a city (Residential), so a city-only account never replaces a fuller address.
+-- Take one row rather than min_by per column, which skips NULLs on DuckDB and would fill
+-- each part from a different account.
+-- Rows are ordered by row_num, using the same convention as the demographic columns: the
+-- latest signup date on the row, across every platform the row combines. The MITx row
+-- combines a user's Learn, MITx Online and edX.org accounts but takes its address only from
+-- MicroMasters, so a recent Learn or MITx Online signup can rank that address ahead of a newer
+-- MITx Pro or Bootcamps one.
+, ranked_addresses as (
+    select
+        user_pk
+        , user_street_address
+        , user_address_city
+        , user_address_postal_code
+        , row_number() over (
+            partition by user_pk
+            order by
+                (
+                    nullif(trim(user_street_address), '') is null
+                    and nullif(trim(user_address_postal_code), '') is null
+                ) asc
+                , row_num asc
+        ) as address_row_num
+    from ranked_users
+    where has_street_address
+)
+
+, address_view as (
+    select
+        user_pk
+        , nullif(trim(user_street_address), '') as user_street_address
+        , nullif(trim(user_address_city), '') as user_address_city
+        , nullif(trim(user_address_postal_code), '') as user_address_postal_code
+    from ranked_addresses
+    where address_row_num = 1
 )
 
 select
@@ -864,6 +997,7 @@ select
     , agg.user_mitxpro_username
     , agg.residential_openedx_user_id
     , agg.user_residential_username
+    , agg.user_bootcamps_username
     , agg.edxorg_openedx_user_id
     , agg.user_edxorg_username
     , agg.emeritus_user_id
@@ -872,7 +1006,7 @@ select
     , agg.global_alumni_identity_key
     , agg.micromasters_user_id
     , base.email
-    , coalesce(base.full_name, agg.agg_full_name) as full_name
+    , coalesce(nullif(trim(base.full_name), ''), agg.agg_full_name) as full_name
     , base.address_country
     , base.highest_education
     , base.gender
@@ -881,6 +1015,9 @@ select
     , base.job_title
     , base.industry
     , coalesce(base.address_state, agg.agg_address_state) as address_state
+    , address_view.user_street_address
+    , address_view.user_address_city
+    , address_view.user_address_postal_code
     , latest_income.latest_income_usd
     , latest_income.latest_original_income
     , latest_income.latest_original_currency
@@ -904,6 +1041,7 @@ select
     , agg.user_joined_on_bootcamps
 from base_info as base
 inner join agg_view as agg on base.user_pk = agg.user_pk
+left join address_view on base.user_pk = address_view.user_pk
 left join learn_profile on base.mitlearn_user_id = learn_profile.user_id
 left join learn_user_topic_interests on learn_profile.profile_id = learn_user_topic_interests.profile_id
 left join latest_income on agg.mitxonline_application_user_id = latest_income.user_id

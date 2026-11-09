@@ -13,9 +13,11 @@ params:
     isExtra: false
     isNew: false
     operator: null
-    sqlExpression: "chatsession_object_id LIKE '%UAI_ET+UAI.1+2025_C503%'\n   OR chatsession_object_id\
-      \ LIKE '%UAI_ET+UAI.2+2025_C503%'\n   OR chatsession_object_id LIKE '%UAI_ET+UAI.3+2025_C503%'\n\
-      \   OR chatsession_object_id LIKE '%UAI_ET+UAI.4+2025_C503%'"
+    sqlExpression: |-
+      chatsession_object_id LIKE '%UAI_ET+UAI.1+2025_C503%'
+         OR chatsession_object_id LIKE '%UAI_ET+UAI.2+2025_C503%'
+         OR chatsession_object_id LIKE '%UAI_ET+UAI.3+2025_C503%'
+         OR chatsession_object_id LIKE '%UAI_ET+UAI.4+2025_C503%'
     subject: null
   - clause: WHERE
     comparator: null

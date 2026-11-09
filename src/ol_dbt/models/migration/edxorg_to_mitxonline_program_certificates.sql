@@ -22,7 +22,7 @@ with edxorg_program_certificates_raw as (
                 order by program_certificate_awarded_on
             ) as row_num
         from edxorg_program_certificates_raw
-    )
+    ) as subquery
     where row_num = 1
 )
 

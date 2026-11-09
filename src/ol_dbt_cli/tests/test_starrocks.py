@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import yaml
 
+from ol_dbt_cli.commands.run import IndirectSelection
 from ol_dbt_cli.commands.starrocks import (
     _ENVS,
     _LAKE_TARGETS,
@@ -274,6 +275,23 @@ def test_ci_lake_target_refuses_defer(mock_fetch, mock_port_forward, mock_dbt_ru
     mock_fetch.assert_not_called()
     mock_connect.assert_not_called()
     mock_dbt_run.assert_not_called()
+
+
+@pytest.mark.parametrize(("given", "expected"), [(None, "buildable"), ("eager", "eager")])
+@patch("mysql.connector.connect")
+@patch("ol_dbt_cli.commands.starrocks._dbt_run")
+@patch("ol_dbt_cli.commands.starrocks._start_port_forward")
+@patch("ol_dbt_cli.commands.starrocks.fetch_vault_db_credentials")
+def test_ci_lake_target_defaults_to_buildable_tests(  # noqa: PLR0913
+    mock_fetch, mock_port_forward, mock_dbt_run, mock_connect, given: IndirectSelection | None, expected: str
+) -> None:
+    """With no deferral, a test on a model outside `+my_model` would read a table this build never made."""
+    mock_fetch.return_value = ("user", "pass")
+    run(env="ci", target="ci", indirect_selection=given)
+
+    _, kwargs = mock_dbt_run.call_args
+    assert kwargs["defer"] is False
+    assert kwargs["indirect_selection"] == expected
 
 
 @pytest.mark.parametrize(

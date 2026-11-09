@@ -1,0 +1,71 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: dlt
+  database: '{{ target.database | default(none) }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__canvas__s3__course_content
+    description: >
+      The newest Common Cartridge export of every Canvas course in the landing
+      zone (canvas/course_content/<course_id>/), parsed as MIT Learn parses it:
+      one row for the course and one for each published file of a type Learn
+      extracts text from, with the text Tika extracted. Loaded by the ol_dlt
+      canvas_content source, which appends a full set of rows for a course each
+      time its version changes; staging keeps each course's newest set.
+    columns:
+    - name: course_id
+      description: str, the Canvas course id, the export's folder in the landing zone
+    - name: content_kind
+      description: str, course, file, or unpublished for the one row marking a course
+        that left the landing zone
+    - name: archive_key
+      description: str, S3 key of the .imscc the row was read from; null on an unpublished
+        row
+    - name: run_readable_id
+      description: str, the id of the course's run in Learn, <course_id>-<course_code>+canvas
+    - name: course_code
+      description: str, course_code in the course's settings; on a course row
+    - name: course_title
+      description: str, title in the course's settings; on a course row
+    - name: course_url
+      description: str, the course's home in Canvas; on a course row
+    - name: course_start_at
+      description: str, start_at in the course's settings as Canvas wrote it; on a
+        course row
+    - name: course_end_at
+      description: str, conclude_at in the course's settings as Canvas wrote it; on
+        a course row
+    - name: file_key
+      description: str, ContentFile.key, an edX-style module id built from the file's
+        folder and name; on a file row
+    - name: source_path
+      description: str, the file's path in the archive
+    - name: file_extension
+      description: str, the file's extension with its dot, in lower case
+    - name: title
+      description: str, the title of the module item, file or page that publishes
+        the file, or one derived from the file name when it has none
+    - name: content_title
+      description: str, the title of the module item, file or page that publishes
+        the file; empty for a file only a page links to
+    - name: url
+      description: str, the file's, assignment's or page's Canvas URL, from the export's
+        metadata JSON; null when the metadata has no entry for it
+    - name: file_md5
+      description: str, MD5 of the file's bytes; null when the file was too large
+        to read
+    - name: file_size_bytes
+      description: bigint, uncompressed size of the file in the archive
+    - name: content
+      description: str, the text Tika extracted from the file. Null unless extraction_status
+        is extracted
+    - name: extraction_status
+      description: str, extracted, empty (Tika found no text), or failed
+    - name: course_version
+      description: str, digest of the archive's members, the course's published files
+        and its metadata JSON
+    - name: course_retrieved_at
+      description: timestamp, when this set of the course's rows was read

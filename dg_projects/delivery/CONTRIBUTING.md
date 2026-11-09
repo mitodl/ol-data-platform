@@ -5,7 +5,7 @@ assets that send catalog metadata to MIT Learn over its webhook API.
 
 | Pattern | Used by |
 |---|---|
-| Webhook push (REST API) | MIT Climate, MIT PE, OLL, MIT edX programs |
+| Webhook push (REST API) | MIT Climate, MIT PE, OLL |
 | Sensor-driven partitioned | OVS Videos (one asset execution per item ID) |
 
 The **pull** axes are not owned by a code location. Warehouse-pull reads
@@ -289,6 +289,32 @@ and give it an entry in `INSTIGATOR_ENVIRONMENTS`.
 Add a Vault secret at `secret-data/pipelines/my-source` containing the API
 credentials that `ApiClientFactory` expects. See the platform team runbook for
 the key/value format per client class.
+
+### 5. When MIT Learn refuses a batch
+
+MIT Learn refuses a learning_resources batch that would unpublish more than 10%
+of a source's published resources of a type. It answers `422` and loads nothing
+from the batch, so the run fails without retrying, with Learn's message, which
+names the pair and the counts, in the failure. A type with fewer than ten published resources is over the limit as
+soon as one goes (`mitpe` programs today), and `mitpe` delivers courses and
+programs together, so its courses stop updating as well.
+
+Find out why first: a truncated batch and a bad model build look the same as a
+real removal from Learn's side. Once the removal is explained, materialize the
+asset by hand with the override, in the launchpad's run config:
+
+```yaml
+ops:
+  mit_learn_delivery__mitpe_webhook:
+    config:
+      allow_mass_unpublish: true
+```
+
+The override applies to that run only. Take a webhook asset's run config from
+`delivery.lib.learn_webhook.LearnDeliveryConfig`, and pass
+`config.allow_mass_unpublish` to `notify_learning_resources`. Never default it on:
+a sensor run passes no run config, so a default would apply to every scheduled
+delivery and remove the limit.
 
 ---
 

@@ -261,3 +261,83 @@ def test_load_dimensional_with_a_bad_set_connects_to_nothing(
 
     with pytest.raises(SystemExit):
         fixtures_command.load_dimensional("demo", set_=assignments, fixtures_dir=tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("env", "connector", "catalog", "schema"),
+    [
+        ("dev", "connect_local_lake", "ol_data_lake_local", "ol_warehouse_local_raw"),
+        ("ci", "connect_ci_lake", "ol_data_lake_ci", "ol_warehouse_ci_raw"),
+    ],
+)
+def test_load_writes_each_env_s_raw_schema(
+    monkeypatch: pytest.MonkeyPatch, env: str, connector: str, catalog: str, schema: str
+) -> None:
+    table = TableFixture(raw_table="raw__demo__thing", columns={"id": "int"}, rows=[{"id": 1}])
+    loaded = fixtures_command._TableRows(table=table, hand_written=[{"id": 1}], generated=None)  # noqa: SLF001
+    monkeypatch.setattr(fixtures_command, "_table_rows", lambda *_, **__: [loaded])
+    connection = _Connection()
+    other = "connect_ci_lake" if connector == "connect_local_lake" else "connect_local_lake"
+
+    def refuse(*_: Any) -> None:
+        pytest.fail(f"--env {env} opened the other lake")
+
+    monkeypatch.setattr(fixtures_command, connector, lambda *_: connection)
+    monkeypatch.setattr(fixtures_command, other, refuse)
+
+    fixtures_command.load(env=env)
+
+    qualified = f"`{catalog}`.`{schema}`.`raw__demo__thing`"
+    assert [sql for sql, _ in connection.statements[:3]] == [
+        f"CREATE DATABASE IF NOT EXISTS `{catalog}`.`{schema}`",
+        f"DROP TABLE IF EXISTS {qualified} FORCE",
+        f"CREATE TABLE {qualified} (`id` INT)",
+    ]
+
+
+def test_connect_ci_lake_uses_vault_ci_admin_over_a_port_forward(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CI's FE has no TLS and no route from a laptop, and creating tables takes the admin role."""
+    import mysql.connector  # noqa: PLC0415
+
+    from ol_dbt_cli.commands import _vault_auth, starrocks  # noqa: PLC0415
+
+    calls: dict[str, Any] = {}
+
+    def fetch(*args: Any) -> tuple[str, str]:
+        calls["vault"] = args
+        return "v-ci-admin", "secret"
+
+    monkeypatch.setattr(_vault_auth, "fetch_vault_db_credentials", fetch)
+    monkeypatch.setattr(starrocks, "_start_port_forward", lambda cfg: calls.setdefault("port_forward", cfg))
+    monkeypatch.setattr(mysql.connector, "connect", lambda **kwargs: calls.setdefault("connect", kwargs))
+
+    fixtures_command.connect_ci_lake("my-oidc-role")
+
+    assert calls["vault"] == (
+        "https://vault-ci.odl.mit.edu",
+        "database-starrocks",
+        "ci",
+        "admin",
+        "my-oidc-role",
+    )
+    assert calls["port_forward"]["eks_context"] == "data-ci"
+    assert calls["connect"] == {
+        "host": "127.0.0.1",
+        "port": 9030,
+        "user": "v-ci-admin",
+        "password": "secret",  # pragma: allowlist secret
+        "ssl_disabled": True,
+        "autocommit": True,
+    }
+
+
+def test_load_refuses_another_schema_in_the_ci_lake(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Load drops every raw__* table in its schema, and CI builds read only CI's raw schema."""
+
+    def refuse(*_: Any) -> None:
+        pytest.fail("load connected before refusing --schema")
+
+    monkeypatch.setattr(fixtures_command, "connect_ci_lake", refuse)
+
+    with pytest.raises(SystemExit):
+        fixtures_command.load(env="ci", schema="ol_warehouse_ci_staging")

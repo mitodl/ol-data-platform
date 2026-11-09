@@ -26,8 +26,15 @@ model's table can be months old or absent: the 2026-10-07 QA Learn build failed
 with TABLE_NOT_FOUND on a ``relationships`` test attached to
 ``stg__mitxonline__app__postgres__courses_course_to_department``, pulled in
 through the selected ``courses_course`` it references. There
-``unselected_model_test_names`` skips every test held against a model the run
+``unselected_model_test_names`` skips every test attached to a model the run
 does not build, descendant or not.
+
+Neither function touches a check the run selected, and ``keep`` is how they
+know. A person can select a check on an unbuilt model on purpose. A job built
+on a bare ``build_dbt_asset_selection`` selects them by accident whenever a
+parent is selected, because that selection resolves checks from dbt's eager
+selection, so ``learn_integrations_qa_target`` removes them from the job's
+selection before the run starts.
 
 Pure functions only, for the reason ``surrogate_key_drift`` gives.
 """
@@ -58,12 +65,13 @@ def stale_descendant_test_names(
     Dagster models a test with an ``attached_node`` as an asset check on that
     model. The attached tests returned here belong to unselected models, so
     skipping them leaves no check of a selected asset without a result. A
-    check the run selected by name on an unselected asset is the exception,
-    which is what ``keep`` is for.
+    check the run selected on an unselected asset is the exception: Dagster
+    planned it, and excluding it would leave it skipped with no result, which
+    is what ``keep`` is for.
 
     :param manifest: The parsed dbt ``manifest.json``.
     :param selected_unique_ids: dbt unique ids of the models this run builds.
-    :param keep: Test names the run asked for explicitly, never returned.
+    :param keep: Names of the checks the run selected, never returned.
     :returns: Sorted test names, usable as a dbt ``--exclude`` value.
     :rtype: list[str]
     """
@@ -88,7 +96,7 @@ def unselected_model_test_names(
     selected_unique_ids: AbstractSet[str],
     keep: Collection[str] = (),
 ) -> list[str]:
-    """Return the tests a run would hold against a model it does not build.
+    """Return the tests a run would run on a model it does not build.
 
     A superset of ``stale_descendant_test_names``, for an environment where no
     automation builds the models outside the selection. Like it, an attached
@@ -97,7 +105,7 @@ def unselected_model_test_names(
 
     :param manifest: The parsed dbt ``manifest.json``.
     :param selected_unique_ids: dbt unique ids of the models this run builds.
-    :param keep: Test names the run asked for explicitly, never returned.
+    :param keep: Names of the checks the run selected, never returned.
     :returns: Sorted test names, usable as a dbt ``--exclude`` value.
     :rtype: list[str]
     """
