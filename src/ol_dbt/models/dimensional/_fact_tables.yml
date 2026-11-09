@@ -3259,7 +3259,9 @@ unit_tests:
     the verified mode, minus enrollments whose only order was refunded. A fulfilled
     MicroMasters order is paid there whatever the mode. MicroMasters orders stay out
     of the
-    order columns. Platforms the decision does not cover are null.
+    order columns. Platforms the decision does not cover are null. A MicroMasters
+    order's state comes from the app, since tfact_order keeps the state it had when
+    the order was created.
   model: tfact_enrollment_order
   given:
   - input: ref('tfact_enrollment')
@@ -3316,23 +3318,23 @@ unit_tests:
     - {order_key: "OK6", order_id: 7002, line_id: "6", user_fk: "U7", product_fk: "PROD_CR4",
       platform_fk: "P_XPRO", platform: "mitxpro", order_state: "refunded", order_updated_on: "2024-01-01"}
     - {order_key: "OK7", order_id: 501, line_id: "51", user_fk: "U5", product_fk: null,
-      platform_fk: "P_MM", platform: "micromasters", order_state: "fulfilled", order_updated_on: "2024-01-01"}
+      platform_fk: "P_MM", platform: "micromasters", order_state: "created", order_updated_on: "2024-01-01"}
     - {order_key: "OK8", order_id: 502, line_id: "52", user_fk: "U10", product_fk: null,
-      platform_fk: "P_MM", platform: "micromasters", order_state: "refunded", order_updated_on: "2024-01-01"}
+      platform_fk: "P_MM", platform: "micromasters", order_state: "fulfilled", order_updated_on: "2024-01-01"}
     - {order_key: "OK9", order_id: 503, line_id: "53", user_fk: "U11", product_fk: null,
       platform_fk: "P_MM", platform: "micromasters", order_state: "fulfilled", order_updated_on: "2024-01-01"}
     - {order_key: "OK10", order_id: 504, line_id: "54", user_fk: "U15", product_fk: null,
-      platform_fk: "P_MM", platform: "micromasters", order_state: "partially_refunded",
-      order_updated_on: "2024-01-01"}
+      platform_fk: "P_MM", platform: "micromasters", order_state: "fulfilled", order_updated_on: "2024-01-01"}
   - input: ref('int__micromasters__orders')
     rows:
-    - {order_id: 501, line_id: 51, courserun_readable_id: "course-v1:MITxT+14.100x+1T2022",
+    # tfact_order holds 501 and 502 in the state they were created in.
+    - {order_id: 501, line_id: 51, order_state: "fulfilled", courserun_readable_id: "course-v1:MITxT+14.100x+1T2022",
       courserun_edxorg_readable_id: "MITxT/14.100x/1T2022"}
-    - {order_id: 502, line_id: 52, courserun_readable_id: "course-v1:MITx+14.100x+1T2020",
+    - {order_id: 502, line_id: 52, order_state: "refunded", courserun_readable_id: "course-v1:MITx+14.100x+1T2020",
       courserun_edxorg_readable_id: "MITx/14.100x/1T2020"}
-    - {order_id: 503, line_id: 53, courserun_readable_id: "course-v1:MITx+14.100x+1T2020",
+    - {order_id: 503, line_id: 53, order_state: "fulfilled", courserun_readable_id: "course-v1:MITx+14.100x+1T2020",
       courserun_edxorg_readable_id: "MITx/14.100x/1T2020"}
-    - {order_id: 504, line_id: 54, courserun_readable_id: "course-v1:MITx+14.100x+1T2020",
+    - {order_id: 504, line_id: 54, order_state: "partially_refunded", courserun_readable_id: "course-v1:MITx+14.100x+1T2020",
       courserun_edxorg_readable_id: "MITx/14.100x/1T2020"}
   - input: ref('int__mitxonline__program_course_run_orders')
     rows: []
