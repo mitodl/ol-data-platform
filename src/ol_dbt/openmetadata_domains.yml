@@ -243,3 +243,134 @@ rules:
   - "*offeror*"
   - "*catalog*"
   - "*blockedcountry*"
+
+  # Raw tables no model reads yet whose business area is clear.
+- domain: engagement
+  match:
+  - "*openedx_notes__*"
+  - raw__techtv__mariadb__comments
+  - raw__techtv__mariadb__ratings
+  - raw__techtv__mariadb__search_phrases
+  - raw__techtv__mariadb__watch_items
+- domain: feedback
+  match:
+  - raw__techtv__mariadb__contact_messages
+  - raw__techtv__mariadb__survey_participations
+  - raw__techtv__mariadb__surveys
+- domain: courses-content
+  match:
+  - raw__techtv__mariadb__closed_caption_files
+  - raw__techtv__mariadb__collection_properties
+  - raw__techtv__mariadb__collection_property_values
+  - raw__techtv__mariadb__collections
+  - raw__techtv__mariadb__genres
+  - raw__techtv__mariadb__languages
+  - raw__techtv__mariadb__licenses
+- domain: learners-identity
+  match:
+  - raw__keycloak__app__postgres__federated_identity
+  # B2B organizations are Keycloak organizations
+  # (dim_organization.sso_organization_id).
+- domain: b2b
+  match:
+  - raw__keycloak__app__postgres__org
+  - raw__keycloak__app__postgres__org_domain
+- domain: enrollments-progress
+  match:
+  - "*digitalcredentials_*"
+  - "*sheets_deferralrequest"
+- domain: commerce
+  match:
+  - "*voucher_voucher"
+  - "*sheets_refundrequest"
+
+  # Lake tables the rules above leave unmatched and that belong in no domain.
+  # They come last so that they only take names nothing above places.
+  #
+  # HubSpot marketing CRM data, which no domain covers. The unprefixed and
+  # raw_hubspot_ tables are an older HubSpot load.
+- domain:
+  match:
+  - "*hubspot*"
+  - contacts
+  - deals
+  # Unprefixed Zendesk Support streams no model reads. The tickets dbt does read
+  # come from raw__thirdparty__zendesk_support__*, which "*zendesk*" places.
+- domain:
+  match:
+  - account_attributes
+  - brands
+  - categories
+  - group_memberships
+  - groups
+  - satisfaction_ratings
+  - sla_policies
+  - tags
+  - tickets
+  - ticket_*
+  # TechTV and OVS site administration, job queues, access lists and the
+  # TechTV to OVS migration map. Their Django tables are matched below.
+- domain:
+  match:
+  - raw__techtv__mariadb__admin_notices
+  - raw__techtv__mariadb__bdrb_job_queues
+  - raw__techtv__mariadb__contact_types
+  - raw__techtv__mariadb__delayed_jobs
+  - raw__techtv__mariadb__friend_messages
+  - raw__techtv__mariadb__pages
+  - raw__techtv__mariadb__roles
+  - raw__techtv__mariadb__schema_migrations
+  - raw__techtv__mariadb__shibboleth_strategies
+  - raw__techtv__mariadb__site_configurations
+  - raw__techtv__mariadb__tags
+  - raw__techtv__mariadb__watch_item_errors
+  - raw__ovs__postgres__techtv2ovs_techtvcollection
+  - raw__ovs__postgres__ui_moiralist
+  # Keycloak realm, client, role, group and identity provider configuration.
+- domain:
+  match:
+  - raw__keycloak__app__postgres__client
+  - raw__keycloak__app__postgres__group_attribute
+  - raw__keycloak__app__postgres__identity_provider
+  - raw__keycloak__app__postgres__keycloak_group
+  - raw__keycloak__app__postgres__keycloak_role
+  - raw__keycloak__app__postgres__realm
+  # Django and Wagtail framework housekeeping: sessions, migrations, caches,
+  # OAuth tokens, permissions, profiling, tagging, robots.txt and CMS admin.
+  # "*wagtail*" also takes the orphaned stg__mitxpro__app__postgres__wagtail_pagerevision
+  # table, whose model was removed in #1495.
+- domain:
+  match:
+  - "*django_admin_log"
+  - "*django_migrations"
+  - "*django_session"
+  - "*django_site"
+  - "*__durable_cache"
+  - "*__external_asset_cache"
+  - "*__imagekit_cache"
+  - "*guardian_*"
+  - "*oauth2_provider_*"
+  - "*silk_*"
+  - "*consumerthrottlelimit"
+  - "*robots_*"
+  - "*taggit_*"
+  - "*wagtail*"
+  - "*maxmind_*"
+  - "*sheets_filewatchrenewalattempt"
+  - "*sheets_googleapiauth"
+  - "*sheets_googlefilewatch"
+  - "*mailgun__*domains"
+  # App tables no model reads and no domain has claimed. Give one a domain
+  # above when a model starts reading it.
+- domain:
+  match:
+  - "*affiliate_*"
+  - "*compliance_exportsinquirylog"
+  - "*testimonials_*"
+  - "*widgets_*"
+  # Connection checks and test objects from Airbyte syncs.
+- domain:
+  match:
+  - airbyte_test_table_*
+  - testaccount
+  - testopportunity*
