@@ -1702,7 +1702,7 @@ requires-dist = [
     { name = "pygithub", specifier = ">=2.8.1" },
     { name = "pyiceberg", extras = ["polars"], specifier = ">=0.11.1" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "qdrant-client", marker = "extra == 'embeddings'", specifier = "~=1.18.0" },
+    { name = "qdrant-client", marker = "extra == 'embeddings'", specifier = "~=1.20.0" },
     { name = "s3fs", specifier = ">=2026.0.0,<2027.0.0" },
     { name = "sentry-sdk", specifier = "~=2.66" },
     { name = "slack-sdk", specifier = "~=3.36" },
