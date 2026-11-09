@@ -14,17 +14,26 @@ form SQL can walk. So this asset runs Learn's rules over the export and lands
 one row per file in it, flagged excluded or not and with its release date, for
 dbt to filter and date on.
 
+Learn also breaks each run into units (mit-learn#4095): one per visible
+sequential, plus the course context, each listing the ContentFile keys of its
+lessons. That walk needs the same tree, so the asset lands the units too, one
+row per unit, for integrations__learn__content_file_units.
+
 OlxArchive below is a port of learning_resources/etl/olx.py on mit-learn main
-as of c9f269c86 (2026-10-22, after mit-learn#4093 and #4106), less what needs
-a LearningResourceRun (units, keys, video metadata): dbt derives the keys. It
-is kept as close to the original as the setting allows, so a change there can
-be diffed across; the differences are noted where they occur.
+as of c9f269c86 (2026-10-22, after mit-learn#4093 and #4106; unchanged in it
+through 3128467e1, 2026-11-09), less video metadata. Learn's methods that take a
+LearningResourceRun take the run id here. Units carry the sequential's
+url_name, not Learn's jump URL, whose LMS root dbt adds. It is kept as close to
+the original as the setting allows, so a change there can be diffed across; the
+differences are noted where they occur.
 
 Data flow:
     openedx/raw_data/course_xml                        (tar.gz, per course run)
         -> extract_course_file_exclusions              (this asset)
             -> openedx/processed_data/course_file_exclusions  (JSONL in S3)
                 -> int__openedx__content_files         (dbt)
+            -> openedx/processed_data/course_units      (JSONL in S3)
+                -> integrations__learn__content_file_units  (dbt)
 """
 
 import copy
@@ -35,14 +44,16 @@ import logging
 import os
 import re
 import tarfile
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime
+from enum import StrEnum
 from functools import cached_property
+from itertools import accumulate
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from typing import Any
+from typing import Any, NamedTuple
 from urllib.parse import unquote
 from xml.etree.ElementTree import Element
 
@@ -50,9 +61,10 @@ from dagster import (
     AssetExecutionContext,
     AssetIn,
     AssetKey,
+    AssetOut,
     DataVersion,
     Output,
-    asset,
+    multi_asset,
 )
 from defusedxml import DefusedXmlException, ElementTree
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
@@ -115,6 +127,55 @@ NAME_PREFIX_LENGTH = 4
 # it to the course home. Of what it shows, only the prose is content: effort
 # and end date are single values, not prose.
 ABOUT_PAGE_FILES = frozenset({"overview.html", "short_description.html"})
+
+# Folders of course-wide pages rather than steps of the course: the about page,
+# the tabs and the handouts. Their files make up the run's context unit.
+OLX_CONTEXT_FOLDERS = ("about", "tabs", "info")
+TRANSCRIPT_EXTENSIONS = frozenset({".srt", ".sjson", ".vtt"})
+OLX_STRUCTURE_TAGS = frozenset({"sequential", "vertical"})
+# Blocks whose child elements are blocks too. In any other block, like html,
+# problem or video, the children are the block's own markup.
+OLX_CONTAINER_TAGS = OLX_STRUCTURE_TAGS | frozenset(
+    {"split_test", "conditional", "library_content", "randomize", "itembank"}
+)
+CONTEXT_UNIT_ID = "context"
+# A chapter holding a single sequential titled like this is the course's
+# introduction or conclusion: material about the course rather than a step in
+# it, so its files go to the context unit. A welcome or wrap-up is never a
+# lesson, so any title starting with one counts ("Welcome to 14.444x"). An
+# introduction, overview or summary counts only as the whole title, since
+# "Introduction to Probability", "Summary Statistics" and "Lecture 1 -
+# Introduction" are lessons. Either may follow "Course" or "Module".
+CONTEXT_SEQUENTIAL_TITLE_RE = re.compile(
+    r"""
+    ^(?:(?:course|module)\s+)?
+    (?:
+        (?:welcome|wrap[\s-]?up|wrapping\s+up|conclusions?|concluding)\b.*
+        | (?:introduction|intro|overview|summary)
+          (?:\s+(?:to|of)\s+(?:the|this)\s+(?:course|module))?
+    )
+    [\W_]*$
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+# Sequentials with these titles describe the module around them rather than
+# teach, so their files go to the context unit wherever they sit
+CONTEXT_SEQUENTIAL_TITLES = frozenset({"module overview and learning goals"})
+
+
+class UnitKind(StrEnum):
+    """mit-learn's Unit.Kind, less BIN, which no OLX unit uses"""
+
+    UNIT = "unit"
+    CONTEXT = "context"
+
+
+class Relation(StrEnum):
+    """mit-learn's UnitContentFile.Relation, less REFERENCE, which OLX doesn't use"""
+
+    CORE = "core"
+    ASSESSMENT = "assessment"
+    SUPPLEMENTARY = "supplementary"
 
 
 def _without_dated_blocks(element: Element) -> Element:
@@ -244,6 +305,78 @@ def _exclude(excluded: dict[Path, str], paths: Iterable[Path], reason: str) -> N
     """Learn's excluded.update(paths), keeping the first rule to name a path."""
     for path in paths:
         excluded.setdefault(path, reason)
+
+
+def get_edx_module_id(path: str, run_id: str) -> str:
+    """Return the XBlock ID for a path (Learn's takes the run, not its run id)"""
+    path = path.replace(" ", "_")
+    folder = path.split("/")[-2]
+
+    if folder == STATIC_DIR:
+        name = Path(path).name
+        key_type = "asset-v1"
+        module_type = "asset"
+    else:
+        name = Path(path).stem
+        key_type = "block-v1"
+        module_type = folder
+
+    return (
+        f"{key_type}:{run_id.replace('course-v1:', '')}+type@{module_type}+block@{name}"
+    )
+
+
+def _is_context_sequential(unit: dict[str, Any], chapter_size: int) -> bool:
+    """Whether a sequential's unit belongs to the course context"""
+    title = unit["title"]
+    return " ".join(title.split()).casefold() in CONTEXT_SEQUENTIAL_TITLES or (
+        chapter_size == 1
+        and bool(CONTEXT_SEQUENTIAL_TITLE_RE.match(" ".join(title.split())))
+    )
+
+
+def _is_set(attribute: str, *elements: Element) -> bool:
+    return any(element.get(attribute) == "true" for element in elements)
+
+
+def _visible_text(pointer: Element, element: Element, *, markup: bool) -> str:
+    """
+    Text a block contributes itself: its attributes, its own text and the text
+    between its children, and with markup, everything in its subtree too,
+    attributes included, since a component links assets from its markup. A
+    container's children add their own when the walk reaches them, so a
+    staff-only subtree, which the walk skips, adds nothing.
+    """
+    parts = [*pointer.attrib.values()]
+    if element is not pointer:
+        parts.extend(element.attrib.values())
+    parts.append(element.text or "")
+    for child in element:
+        if markup and isinstance(child.tag, str):
+            for node in child.iter():
+                if isinstance(node.tag, str):
+                    parts.extend(node.attrib.values())
+                parts.append(node.text or "")
+                if node is not child:
+                    parts.append(node.tail or "")
+        parts.append(child.tail or "")
+    return " ".join(parts)
+
+
+class _OlxBlock(NamedTuple):
+    """A visible block of a sequential, as the unit builder sees it"""
+
+    files: list[tuple[Path, str]]  # lesson files with their relation
+    texts: list[str]  # visible text that can link a static asset
+    video_ids: set[str]
+
+
+class _StaticTarget(NamedTuple):
+    """A static file a unit can link, with the names a link is matched on"""
+
+    path: Path
+    name: str  # normalized filename
+    legacy_video_id: str | None  # normalized video id of a legacy transcript
 
 
 # A _blocks entry: (tag, url_name, element, staff_only, release, inline)
@@ -674,6 +807,334 @@ class OlxArchive:
                 unreferenced.add(path)
         return referenced, unreferenced
 
+    def units(self, run_id: str) -> list[dict[str, Any]]:
+        """
+        Break the course into units: one per visible sequential (subsection),
+        in course-tree order, plus a context unit for the about page, tabs,
+        handouts, the static files those link to, and the introduction,
+        conclusion and module overview sequentials (see
+        _is_context_sequential). A unit holds the ContentFile keys of its
+        blocks, the html bodies and transcripts of those blocks, and the static
+        files they link to. Sequentials that are staff-only or hidden from the
+        table of contents, or in a chapter that is, produce no unit. Empty when
+        the tree is not an OLX export.
+
+        Learn's gives each unit a jump URL; this gives the sequential's
+        url_name ("" for the context unit), and dbt adds the LMS root.
+
+        Args:
+            run_id (str): The run the units belong to
+
+        Returns:
+            list of dict: unit data for load_course_units, ``content_files``
+                mapping each ContentFile key to its relation, in lesson order
+
+        Raises:
+            ValueError: the course, or a visible chapter or sequential, names a
+                block file the export doesn't have
+        """
+        course_pointer = self._course
+        if course_pointer is None:
+            return []
+        self._check_reference(course_pointer)
+        course = self._resolve(course_pointer)
+        course_file = self._block_file(course_pointer) or self.root / "course.xml"
+        context_files = {
+            get_edx_module_id(str(path), run_id): Relation.CORE
+            for folder in OLX_CONTEXT_FOLDERS
+            for path in sorted((self.root / folder).rglob("*"))
+            if path.is_file() and path not in self.excluded
+        }
+        for path in self._context_static_files():
+            context_files.setdefault(
+                get_edx_module_id(str(path), run_id),
+                Relation.SUPPLEMENTARY,
+            )
+        units = []
+        # hide_from_toc is inherited, so _children skipping a hidden chapter
+        # hides its sequentials
+        for chapter_pointer, chapter in self._children(course, "chapter"):
+            chapter_units = self._chapter_units(
+                run_id, chapter, self._block_file(chapter_pointer) or course_file
+            )
+            for unit in chapter_units:
+                if _is_context_sequential(unit, len(chapter_units)):
+                    for key, relation in unit["content_files"].items():
+                        context_files.setdefault(key, relation)
+                else:
+                    units.append(unit)
+        units.append(
+            {
+                "external_id": CONTEXT_UNIT_ID,
+                "kind": UnitKind.CONTEXT,
+                "title": "Course context",
+                "url_name": "",
+                "content_files": context_files,
+            }
+        )
+        return units
+
+    @cached_property
+    def _static_targets(self) -> list[_StaticTarget]:
+        """
+        The static files a unit can link: the ingested ones, as the rest have
+        no ContentFile to link to. Names are normalized once for every unit.
+        """
+        targets = []
+        for path in self._static_files:
+            if path in self.excluded:
+                continue
+            legacy = LEGACY_TRANSCRIPT_RE.match(path.name)
+            targets.append(
+                _StaticTarget(
+                    path,
+                    _normalize_asset_ref(path.name),
+                    _normalize_asset_ref(legacy.group(1)) if legacy else None,
+                )
+            )
+        return targets
+
+    @cached_property
+    def _target_names(self) -> _NameIndex:
+        """_static_targets' names, indexed once for every unit"""
+        return _NameIndex(target.name for target in self._static_targets)
+
+    def _block_file(self, pointer: Element) -> Path | None:
+        """Return the file a pointer's block is stored in, or None if inline"""
+        url_name = pointer.get("url_name")
+        path = self.root / pointer.tag / f"{url_name}.xml"
+        return path if url_name and path.is_file() else None
+
+    def _resolve(self, pointer: Element) -> Element:
+        """Return the block a pointer names: its own file if present, else it"""
+        url_name = pointer.get("url_name")
+        element = self._parse_block(pointer.tag, url_name) if url_name else None
+        return pointer if element is None else element
+
+    def _check_reference(self, pointer: Element) -> None:
+        """
+        Raise if a pointer names a block file the export doesn't have. Read as
+        an empty inline block, it would make an incomplete outline replace the
+        run's units. An inline block holds its children, so has no file to miss.
+        """
+        url_name = pointer.get("url_name")
+        if url_name and not len(pointer) and self._block_file(pointer) is None:
+            msg = f"{pointer.tag}/{url_name}.xml is missing"
+            raise ValueError(msg)
+
+    def _children(
+        self, element: Element, tag: str
+    ) -> Iterator[tuple[Element, Element]]:
+        """
+        Yield (pointer, block) for the children of an element with a tag that
+        are neither staff-only nor hidden from the table of contents. Raises
+        ValueError for such a child whose block file is missing; a hidden one
+        produces no unit, so its file isn't needed.
+        """
+        for pointer in element:
+            if pointer.tag != tag:
+                continue
+            block = self._resolve(pointer)
+            if not _is_set("visible_to_staff_only", pointer, block) and not _is_set(
+                "hide_from_toc", pointer, block
+            ):
+                self._check_reference(pointer)
+                yield pointer, block
+
+    def _chapter_units(
+        self, run_id: str, chapter: Element, container: Path | None
+    ) -> list[dict[str, Any]]:
+        """
+        Build the units of a chapter's sequentials that a learner can navigate
+        to. container is the file the chapter is stored in.
+        """
+        return [
+            self._sequential_unit(run_id, pointer, sequential, container)
+            for pointer, sequential in self._children(chapter, "sequential")
+            if pointer.get("url_name")
+        ]
+
+    def _sequential_unit(
+        self,
+        run_id: str,
+        pointer: Element,
+        sequential: Element,
+        container: Path | None,
+    ) -> dict[str, Any]:
+        """Build the unit data for one sequential, whose pointer is in container"""
+        url_name = pointer.get("url_name")
+        files = self._unit_files(
+            self._sequential_blocks(pointer, sequential, container)
+        )
+        return {
+            "external_id": get_edx_module_id(f"sequential/{url_name}.xml", run_id),
+            "kind": UnitKind.UNIT,
+            "title": sequential.get("display_name")
+            or pointer.get("display_name")
+            or url_name,
+            "url_name": url_name,
+            "content_files": {
+                get_edx_module_id(str(path), run_id): relation
+                for path, relation in files.items()
+            },
+        }
+
+    def _sequential_blocks(
+        self, pointer: Element, sequential: Element, container: Path | None
+    ) -> list[_OlxBlock]:
+        """
+        Walk one sequential, returning its visible blocks in course-tree order.
+        Staff-only subtrees are skipped, as in _staff_only. An outline file is
+        a lesson only when it holds a component inline, since the component's
+        text is then ingested under the outline file's key.
+
+        Args:
+            pointer: the sequential's pointer element
+            sequential: the sequential's block, as _resolve returns it
+            container (Path): the file the pointer element is in
+        """
+        blocks = []
+        seen: set[tuple[str, str]] = set()
+        # children are resolved when popped; the sequential already is
+        stack: list[tuple[Element, str, str | None, Path | None, Element | None]] = [
+            (pointer, "sequential", pointer.get("url_name"), container, sequential)
+        ]
+        while stack:
+            pointer, tag, block_name, container, element = stack.pop()
+            if element is None:
+                element = self._resolve(pointer)
+            own_file = (
+                None if element is pointer else self.root / tag / f"{block_name}.xml"
+            )
+            if _is_set("visible_to_staff_only", pointer, element):
+                continue
+            if tag in OLX_STRUCTURE_TAGS:
+                self._check_reference(pointer)
+            if block_name:
+                if (tag, block_name) in seen:
+                    continue
+                seen.add((tag, block_name))
+            relation = Relation.ASSESSMENT if tag == "problem" else Relation.CORE
+            # the block's own file, then its html body, then its transcripts
+            paths = sorted(
+                self._block_files(tag, block_name, element),
+                key=lambda path: (path.parent.name == STATIC_DIR, str(path)),
+            )
+            files: list[tuple[Path, str]] = (
+                [] if tag in OLX_STRUCTURE_TAGS else [(p, relation) for p in paths]
+            )
+            # an inline component's text is in the file that holds it, unless
+            # it is an html block whose body has a file of its own
+            has_body = tag == "html" and any(p.parent.name == "html" for p in paths)
+            if (
+                own_file is None
+                and tag not in OLX_STRUCTURE_TAGS
+                and container
+                and not has_body
+            ):
+                files.append((container, relation))
+            # XML is read from the walked elements, so staff-only descendants
+            # are left out; other files of the block, like an html body, are
+            # read whole
+            is_container = tag in OLX_CONTAINER_TAGS
+            texts = [_visible_text(pointer, element, markup=not is_container)] + [
+                path.read_text(errors="ignore")
+                for path in paths
+                if path.suffix.lower() in REFERENCE_SCAN_EXTENSIONS
+                and path.suffix.lower() != ".xml"
+            ]
+            blocks.append(
+                _OlxBlock(
+                    files=files,
+                    texts=texts,
+                    video_ids=self._video_ids_of(element) if tag == "video" else set(),
+                )
+            )
+            # a component's children are its markup, read above, unless one
+            # points at a block file of its own
+            stack.extend(
+                (child, child.tag, child.get("url_name"), own_file or container, None)
+                for child in reversed(element)
+                if isinstance(child.tag, str)
+                and (is_container or self._block_file(child) is not None)
+            )
+        return blocks
+
+    def _unit_files(self, blocks: list[_OlxBlock]) -> dict[Path, str]:
+        """
+        Order a unit's lesson files: each block's files in tree order, each
+        static file the unit links to right after the first block linking it.
+        Static files are matched the way _static_references matches them, so a
+        unit gets an asset only when the ETL would also have found the reference.
+        """
+        linked = self._linked_targets(blocks) if self._static_targets else {}
+        files: dict[Path, str] = {}
+        for position, block in enumerate(blocks):
+            for path, relation in block.files:
+                files.setdefault(path, relation)
+            for target in linked.get(position, ()):
+                files.setdefault(
+                    target.path,
+                    Relation.CORE
+                    if target.path.suffix.lower() in TRANSCRIPT_EXTENSIONS
+                    else Relation.SUPPLEMENTARY,
+                )
+        return files
+
+    def _linked_targets(
+        self, blocks: list[_OlxBlock]
+    ) -> dict[int, list[_StaticTarget]]:
+        """
+        Return the static targets a unit's blocks link, by the position of the
+        first block linking each. The unit's text is indexed once; a link split
+        across two blocks counts for the block it starts in.
+        """
+        indexes = [_reference_index(block.texts) for block in blocks]
+        offsets = list(accumulate((len(blob) for blob, _ in indexes), initial=0))
+        blob = "".join(blob for blob, _ in indexes)
+        starts = [
+            offset + start
+            for offset, (_, block_starts) in zip(offsets, indexes, strict=False)
+            for start in block_starts
+        ]
+        found = self._target_names.first_starts(blob, starts)
+        own = {path for block in blocks for path, _ in block.files}
+        linked: dict[int, list[_StaticTarget]] = defaultdict(list)
+        for target in self._static_targets:
+            if target.path in own:
+                continue
+            positions = []
+            if target.name in found:
+                position = bisect_right(offsets, found[target.name]) - 1
+                positions.append(min(position, len(blocks) - 1))
+            if target.legacy_video_id is not None:
+                positions.extend(
+                    position
+                    for position, block in enumerate(blocks)
+                    if target.legacy_video_id in block.video_ids
+                )
+            if positions:
+                linked[min(positions)].append(target)
+        return linked
+
+    def _context_static_files(self) -> list[Path]:
+        """
+        Return the static files the course-wide pages link to: reachable tabs,
+        the about pages the platform shows, handouts, and live announcements.
+        Matched as _static_references matches them, from the same sources.
+        """
+        if not self._static_targets:
+            return []
+        skip = self._unreachable_tabs | self._hidden_about_pages
+        texts = [
+            path.read_text(errors="ignore")
+            for path in self._reference_sources(skip)
+            if path.relative_to(self.root).parts[0] in OLX_CONTEXT_FOLDERS
+        ]
+        texts.append(self._live_updates)
+        found = self._target_names.first_starts(*_reference_index(texts))
+        return [target.path for target in self._static_targets if target.name in found]
+
     def _block_release_dates(self) -> dict[Path, datetime]:
         """
         Date each file owned by a learner-visible block. A file is undated if
@@ -794,7 +1255,7 @@ def format_release_date(release: datetime) -> str:
 
 
 def build_file_rows(
-    olx_root: Path, *, course_id: str, source_system: str, course_xml_version: str
+    archive: OlxArchive, *, course_id: str, course_xml_version: str
 ) -> list[dict[str, Any]]:
     """One row per file in the export, flagged with whether Learn excludes it.
 
@@ -808,22 +1269,21 @@ def build_file_rows(
     the same export, so dbt can tell whether a course's blocks were checked.
     release_date is null for a file Learn leaves undated (any learner-visible
     path to it is undated, the run is self-paced, or the file is excluded).
+    The archive's etl_source is the row's source_system.
     """
-    # Learn's etl_source for an Open edX run is the deployment name.
-    archive = OlxArchive(olx_root, source_system)
     excluded = archive.excluded
     release_dates = archive.release_dates
     rows = []
-    for path in sorted(olx_root.rglob("*")):
+    for path in sorted(archive.root.rglob("*")):
         if not path.is_file():
             continue
         release = release_dates.get(path)
         rows.append(
             {
                 "course_id": course_id,
-                "source_system": source_system,
+                "source_system": archive.etl_source,
                 "course_xml_version": course_xml_version,
-                "file_path": path.relative_to(olx_root).as_posix(),
+                "file_path": path.relative_to(archive.root).as_posix(),
                 "excluded": path in excluded,
                 "exclusion_reason": excluded.get(path),
                 "release_date": format_release_date(release) if release else None,
@@ -832,32 +1292,90 @@ def build_file_rows(
     return rows
 
 
-@asset(
-    key=AssetKey(("openedx", "processed_data", "course_file_exclusions")),
+def build_unit_rows(
+    archive: OlxArchive, *, course_id: str, course_xml_version: str
+) -> list[dict[str, Any]]:
+    """One row per unit of the course, in the order Learn's OlxArchive.units lists them.
+
+    Learn's load_course_units numbers the units of kind unit from this order and
+    the files of each unit from content_files' order, after dropping links to
+    files it has no published ContentFile for, so both orders are kept as built.
+    content_files is a list of [key, relation] pairs.
+
+    Learn logs any failure to build a run's units and keeps the ones it has
+    (edx_shared.load_archive_units), so a failure here is logged and lands no
+    rows, and the run's units view has no rows for it until the next export.
+
+    :param archive: the export, the same OlxArchive build_file_rows read, so the
+        exclusion rules the units use run once
+    :param course_id: the course run id, Learn's run_id
+    :param course_xml_version: the export's SHA-256, as on the file rows
+    :returns: the unit rows
+    :rtype: list[dict[str, Any]]
+    """
+    try:
+        units = archive.units(course_id)
+    except Exception:
+        log.exception("Units not built for run %s", course_id)
+        return []
+    return [
+        {
+            "course_id": course_id,
+            "source_system": archive.etl_source,
+            "course_xml_version": course_xml_version,
+            "unit_order": unit_order,
+            "external_id": unit["external_id"],
+            "kind": unit["kind"],
+            "title": unit["title"],
+            "url_name": unit["url_name"],
+            "content_files": list(unit["content_files"].items()),
+        }
+        for unit_order, unit in enumerate(units)
+    ]
+
+
+@multi_asset(
     group_name="openedx",
     ins={"course_xml": AssetIn(key=AssetKey(("openedx", "raw_data", "course_xml")))},
-    io_manager_key="s3file_io_manager",
-    automation_condition=upstream_or_code_changes(),
+    outs={
+        "course_file_exclusions": AssetOut(
+            key=AssetKey(("openedx", "processed_data", "course_file_exclusions")),
+            io_manager_key="s3file_io_manager",
+            automation_condition=upstream_or_code_changes(),
+            description=(
+                "Every file in a course export, flagged with whether MIT Learn "
+                "leaves it out of its ContentFiles (staff-only, asset manifests, "
+                "unreferenced static files), with the release date Learn gives it. "
+                "One JSONL row per file."
+            ),
+        ),
+        "course_units": AssetOut(
+            key=AssetKey(("openedx", "processed_data", "course_units")),
+            io_manager_key="s3file_io_manager",
+            automation_condition=upstream_or_code_changes(),
+            description=(
+                "The units MIT Learn breaks a course run into (one per visible "
+                "sequential, plus the course context), each with the ContentFile "
+                "keys of its lessons in order. One JSONL row per unit; none when "
+                "the units could not be built."
+            ),
+        ),
+    },
     required_resource_keys={"openedx"},
     # Each run downloads a whole course export, and a new asset or a code change
     # asks for every partition at once. As with openedx_course_export, naming the
     # pool only makes a limit settable (Deployment -> Concurrency).
     pool="openedx_file_exclusions",
-    description=(
-        "Every file in a course export, flagged with whether MIT Learn leaves it "
-        "out of its ContentFiles (staff-only, asset manifests, unreferenced "
-        "static files), with the release date Learn gives it. One JSONL row per "
-        "file."
-    ),
 )
 def extract_course_file_exclusions(context: AssetExecutionContext, course_xml: UPath):
-    """Run MIT Learn's ContentFile exclusion and release date rules over the export."""
+    """Run MIT Learn's ContentFile exclusion, release date and unit rules over the export."""  # noqa: E501
     source_system = context.resources.openedx.deployment
     course_id = context.partition_key
 
-    output_file = Path(
-        NamedTemporaryFile(delete=False, suffix="_file_exclusions.jsonl").name
-    )
+    output_files = {
+        name: Path(NamedTemporaryFile(delete=False, suffix=f"_{name}.jsonl").name)
+        for name in ("course_file_exclusions", "course_units")
+    }
     try:
         with TemporaryDirectory() as workdir:
             archive_path = Path(workdir, "course.tar.gz")
@@ -868,28 +1386,32 @@ def extract_course_file_exclusions(context: AssetExecutionContext, course_xml: U
                 course_xml_version = hashlib.file_digest(handle, "sha256").hexdigest()
             tree_dir = Path(workdir, "tree")
             tree_dir.mkdir()
+            # Learn's etl_source for an Open edX run is the deployment name.
+            archive = OlxArchive(unpack_olx_tree(archive_path, tree_dir), source_system)
             rows = build_file_rows(
-                unpack_olx_tree(archive_path, tree_dir),
-                course_id=course_id,
-                source_system=source_system,
-                course_xml_version=course_xml_version,
+                archive, course_id=course_id, course_xml_version=course_xml_version
+            )
+            unit_rows = build_unit_rows(
+                archive, course_id=course_id, course_xml_version=course_xml_version
             )
 
-        data_version = write_text_snapshot(rows, output_file)
-        object_key = (
-            f"{'/'.join(context.asset_key.path)}/{source_system}/"
-            f"{course_id}/{data_version}.jsonl"
-        )
+        def object_key(output_name: str, data_version: str) -> str:
+            asset_path = "/".join(context.asset_key_for_output(output_name).path)
+            return f"{asset_path}/{source_system}/{course_id}/{data_version}.jsonl"
+
+        data_version = write_text_snapshot(rows, output_files["course_file_exclusions"])
+        exclusions_key = object_key("course_file_exclusions", data_version)
         excluded = [row for row in rows if row["excluded"]]
         context.log.info(
             "%s: %d of %d files excluded", course_id, len(excluded), len(rows)
         )
         yield Output(
-            (output_file, object_key),
+            (output_files["course_file_exclusions"], exclusions_key),
+            output_name="course_file_exclusions",
             data_version=DataVersion(data_version),
             metadata={
                 "course_id": course_id,
-                "object_key": object_key,
+                "object_key": exclusions_key,
                 "course_xml_version": course_xml_version,
                 "file_count": len(rows),
                 "excluded_count": len(excluded),
@@ -906,5 +1428,25 @@ def extract_course_file_exclusions(context: AssetExecutionContext, course_xml: U
                 ),
             },
         )
+
+        # An empty file when the units could not be built: the load marks it,
+        # so staging takes it as the course's newest and the run has no units.
+        units_version = write_text_snapshot(unit_rows, output_files["course_units"])
+        units_key = object_key("course_units", units_version)
+        yield Output(
+            (output_files["course_units"], units_key),
+            output_name="course_units",
+            data_version=DataVersion(units_version),
+            metadata={
+                "course_id": course_id,
+                "object_key": units_key,
+                "course_xml_version": course_xml_version,
+                "unit_count": len(unit_rows),
+                "linked_file_count": sum(
+                    len(row["content_files"]) for row in unit_rows
+                ),
+            },
+        )
     finally:
-        output_file.unlink(missing_ok=True)
+        for output_file in output_files.values():
+            output_file.unlink(missing_ok=True)

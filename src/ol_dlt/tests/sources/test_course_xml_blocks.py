@@ -200,6 +200,33 @@ def test_file_exclusion_row_keeps_the_release_date() -> None:
     assert row["release_date"] == "2027-02-02T15:00:00.000000Z"
 
 
+def test_unit_row_keeps_its_order_and_files() -> None:
+    row = course_xml_blocks._row(  # noqa: SLF001
+        json.dumps(
+            {
+                "course_id": "course-v1:MITxT+7.05x+2T2026",
+                "source_system": "mitxonline",
+                "course_xml_version": "ee211fd8",
+                "unit_order": 0,
+                "external_id": "block-v1:MITxT+7.05x+2T2026+type@sequential+block@s1",
+                "kind": "unit",
+                "title": "Lecture 1",
+                "url_name": "s1",
+                "content_files": [
+                    ["block-v1:MITxT+7.05x+2T2026+type@html+block@h1", "core"]
+                ],
+                "extracted_at": "2026-11-09T00:00:00+00:00",
+            }
+        ),
+        course_xml_blocks.OPENEDX_COURSE_UNITS,
+    )
+    assert row["unit_order"] == 0
+    assert json.loads(row["content_files"]) == [
+        ["block-v1:MITxT+7.05x+2T2026+type@html+block@h1", "core"]
+    ]
+    assert list(row) == list(course_xml_blocks.COURSE_UNIT_FIELDS)
+
+
 def test_every_table_has_its_own_pipeline() -> None:
     """Two tables on one pipeline name would share, and fight over, one cursor."""
     names = [table.pipeline_name for table in course_xml_blocks.TABLES.values()]

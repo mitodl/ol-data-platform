@@ -13,7 +13,12 @@ from typing import Any
 
 import pytest
 from defusedxml import EntitiesForbidden
-from openedx.assets.content_file_exclusions import build_file_rows, unpack_olx_tree
+from openedx.assets.content_file_exclusions import (
+    OlxArchive,
+    build_file_rows,
+    build_unit_rows,
+    unpack_olx_tree,
+)
 
 COURSE_FILES = {
     "course.xml": '<course url_name="2T2026" org="MITx" course="7.05x"/>',
@@ -123,9 +128,8 @@ def rows(tmp_path: Path) -> dict[str, dict[str, Any]]:
     return {
         row["file_path"]: row
         for row in build_file_rows(
-            olx_root,
+            OlxArchive(olx_root, "mitxonline"),
             course_id="course-v1:MITx+7.05x+2T2026",
-            source_system="mitxonline",
             course_xml_version="abc",
         )
     }
@@ -209,7 +213,7 @@ def test_an_archive_without_course_xml_excludes_only_staff_only(tmp_path):
     assert not any(
         row["excluded"]
         for row in build_file_rows(
-            olx_root, course_id="c", source_system="xpro", course_xml_version="abc"
+            OlxArchive(olx_root, "xpro"), course_id="c", course_xml_version="abc"
         )
     )
 
@@ -221,7 +225,7 @@ def test_malformed_block_xml_fails_rather_than_guessing(tmp_path):
     olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
     with pytest.raises(ET.ParseError):
         build_file_rows(
-            olx_root, course_id="c", source_system="xpro", course_xml_version="abc"
+            OlxArchive(olx_root, "xpro"), course_id="c", course_xml_version="abc"
         )
 
 
@@ -238,7 +242,7 @@ def test_an_entity_declaration_fails_the_course_as_in_learn(tmp_path):
     olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
     with pytest.raises(EntitiesForbidden):
         build_file_rows(
-            olx_root, course_id="c", source_system="xpro", course_xml_version="abc"
+            OlxArchive(olx_root, "xpro"), course_id="c", course_xml_version="abc"
         )
 
 
@@ -249,7 +253,7 @@ def test_open_learning_library_keeps_the_about_page_prose(tmp_path):
     rows = {
         row["file_path"]: row
         for row in build_file_rows(
-            olx_root, course_id="c", source_system="oll", course_xml_version="abc"
+            OlxArchive(olx_root, "oll"), course_id="c", course_xml_version="abc"
         )
     }
     assert not rows["about/overview.html"]["excluded"]
@@ -270,7 +274,7 @@ def test_rows_carry_learns_release_dates(tmp_path):
     rows = {
         row["file_path"]: row["release_date"]
         for row in build_file_rows(
-            olx_root, course_id="c", source_system="xpro", course_xml_version="abc"
+            OlxArchive(olx_root, "xpro"), course_id="c", course_xml_version="abc"
         )
     }
     released = "2031-02-03T09:05:06.000000Z"
@@ -293,3 +297,65 @@ def test_static_text_pages_keep_their_bytes(tmp_path):
         "static/reading.html"
     ]
     assert (olx_root / "static/handout.pdf").stat().st_size == 0
+
+
+def test_unit_rows_list_learns_units_in_order(tmp_path):
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    olx_root = unpack_olx_tree(pack(COURSE_FILES, tmp_path), tree)
+    run = "course-v1:MITx+7.05x+2T2026"
+    rows = build_unit_rows(
+        OlxArchive(olx_root, "mitxonline"), course_id=run, course_xml_version="abc"
+    )
+    assert [
+        (row["unit_order"], row["external_id"], row["kind"], row["url_name"])
+        for row in rows
+    ] == [
+        (0, "block-v1:MITx+7.05x+2T2026+type@sequential+block@seq1", "unit", "seq1"),
+        (1, "context", "context", ""),
+    ]
+    assert rows[0]["title"] == "seq1"
+    assert rows[0]["content_files"] == [
+        ("block-v1:MITx+7.05x+2T2026+type@html+block@intro", "core"),
+        ("asset-v1:MITx+7.05x+2T2026+type@asset+block@handout.pdf", "supplementary"),
+        ("block-v1:MITx+7.05x+2T2026+type@video+block@lecture", "core"),
+        ("asset-v1:MITx+7.05x+2T2026+type@asset+block@shared-en.srt", "core"),
+        (
+            "asset-v1:MITx+7.05x+2T2026+type@asset+block@subs_abc123.srt.sjson",
+            "core",
+        ),
+    ]
+    # info/updates.html and the hidden tabs are excluded, so not course context
+    assert rows[1]["content_files"] == [
+        ("block-v1:MITx+7.05x+2T2026+type@tabs+block@syllabus", "core"),
+        ("asset-v1:MITx+7.05x+2T2026+type@asset+block@announced.pdf", "supplementary"),
+    ]
+    assert {row["course_xml_version"] for row in rows} == {"abc"}
+
+
+def test_units_do_not_need_static_bytes(tmp_path):
+    """Emptying static/ binaries for the exclusions leaves the units as Learn's."""
+    unpacked = tmp_path / "unpacked"
+    unpacked.mkdir()
+    olx_root = unpack_olx_tree(pack(COURSE_FILES, tmp_path), unpacked)
+    whole = tmp_path / "whole"
+    with tarfile.open(pack(COURSE_FILES, tmp_path), "r") as archive:
+        archive.extractall(whole, filter="data")
+    run = "course-v1:MITx+7.05x+2T2026"
+    assert OlxArchive(olx_root, "mitxonline").units(run) == OlxArchive(
+        whole / "course", "mitxonline"
+    ).units(run)
+
+
+def test_a_course_whose_units_cannot_be_built_lands_no_unit_rows(tmp_path):
+    """Learn keeps a run's units when its archive's can't be built."""
+    files = {k: v for k, v in COURSE_FILES.items() if k != "chapter/week1.xml"}
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    olx_root = unpack_olx_tree(pack(files, tmp_path), tree)
+    assert (
+        build_unit_rows(
+            OlxArchive(olx_root, "xpro"), course_id="c", course_xml_version="abc"
+        )
+        == []
+    )
