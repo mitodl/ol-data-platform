@@ -105,7 +105,8 @@ models:
   - name: courserun_is_live
     description: >
       Boolean indicating if course run is live. False for bootcamps. True for ocw,
-      whose runs are the course sites currently published.
+      whose runs are the course sites currently published; an unpublished site's
+      run is expired (is_current false).
   - name: courserun_created_on
     description: >
       Timestamp when the course run was created in the source system. Populated for
@@ -758,3 +759,51 @@ unit_tests:
     rows:
     - {courserun_readable_id: "c8a1b2d3e4f5061728394a5b6c7d8e9f", platform: "ocw",
       course_fk: "ocw_1806", courserun_title: "Linear Algebra", courserun_is_live: true}
+- name: test_dim_course_run_expires_unpublished_ocw_run
+  description: >
+    An OCW run whose site is unpublished drops out of int__ocw__live_courses. It
+    must be expired, since no replacement row triggers the expiry.
+  model: dim_course_run
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('stg__micromasters__app__postgres__courses_courserun')
+    rows: []
+  - input: ref('stg__micromasters__app__postgres__exams_examrun')
+    rows: []
+  - input: ref('int__mitxonline__course_runs')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__courses_course')
+    rows: []
+  - input: ref('int__mitxpro__course_runs')
+    rows: []
+  - input: ref('int__mitxpro__courses')
+    rows: []
+  - input: ref('stg__emeritus__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('stg__global_alumni__api__bigquery__user_enrollments')
+    rows: []
+  - input: ref('int__edxorg__mitx_courseruns')
+    rows: []
+  - input: ref('int__mitxresidential__courseruns')
+    rows: []
+  - input: ref('int__bootcamps__course_runs')
+    rows: []
+  - input: ref('int__ocw__live_courses')
+    rows: []
+  - input: ref('int__ocw__courses')
+    rows: []
+  - input: ref('dim_course')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: this
+    rows:
+    - {courserun_pk: "old_ocw", courserun_readable_id: "c8a1b2d3e4f5061728394a5b6c7d8e9f",
+      platform: "ocw", courserun_title: "Linear Algebra", courserun_is_live: true,
+      effective_date: "2026-11-01 00:00:00", is_current: true}
+  expect:
+    rows:
+    - {courserun_readable_id: "c8a1b2d3e4f5061728394a5b6c7d8e9f", platform: "ocw",
+      is_current: false}

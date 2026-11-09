@@ -488,9 +488,10 @@ with micromasters_courseruns as (
                     and existing.platform = new_records.platform
             )
             -- An Emeritus or Global Alumni run is dropped from the source once xPro holds a run
-            -- with its code, so it has no replacement row to trigger the expiry above
+            -- with its code, and an OCW run once its site is unpublished, so neither has a
+            -- replacement row to trigger the expiry above
             or (
-                existing.platform in ('emeritus', 'global_alumni')
+                existing.platform in ('emeritus', 'global_alumni', 'ocw')
                 and not exists (
                     select 1
                     from courseruns_with_all_fks
