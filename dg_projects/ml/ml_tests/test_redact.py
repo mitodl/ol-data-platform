@@ -10,7 +10,7 @@ import polars as pl
 import pyarrow as pa
 import pytest
 from dagster import AssetKey, materialize, mem_io_manager
-from ml.lib import redact
+from ml.lib import redact, warehouse
 from pyiceberg.expressions.visitors import bind
 from pyiceberg.io.pyarrow import expression_to_pyarrow
 from pyiceberg.schema import Schema
@@ -517,7 +517,7 @@ def test_checkpoint_redacted_chunk_skips_an_empty_chunk() -> None:
 
 def test_checkpoint_redacted_chunk_rejects_duplicate_keys() -> None:
     """Overwrite would keep both copies, so a duplicate key must fail first."""
-    table = _FakeTable(list(redact.REDACTED_SCHEMA))
+    table = _FakeTable(_redacted_chunk([]).columns)
 
     with pytest.raises(ValueError, match="Duplicate"):
         redact.checkpoint_redacted_chunk(
@@ -546,13 +546,12 @@ def test_redacted_asset_redacts_only_new_in_scope_rows_by_its_own_key(
             {"comment_id": [2], "redaction_version": [redact.REDACTION_VERSION]}
         ),
     }
-    monkeypatch.setattr(
-        redact,
-        "get_dbt_model_as_dataframe",
-        lambda database_name, table_name: tables[
-            (database_name.rsplit("_", 1)[-1], table_name)
-        ],
-    )
+
+    def read(database_name: str, table_name: str) -> pl.LazyFrame:
+        return tables[(database_name.rsplit("_", 1)[-1], table_name)]
+
+    monkeypatch.setattr(redact, "get_dbt_model_as_dataframe", read)
+    monkeypatch.setattr(warehouse, "get_dbt_model_as_dataframe", read)
     monkeypatch.setattr(redact, "get_glue_catalog", lambda: None)
     monkeypatch.setattr(
         redact, "_redact_text", lambda value: value.replace("PII", "<PERSON>")

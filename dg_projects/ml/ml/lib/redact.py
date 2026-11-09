@@ -1,6 +1,5 @@
 """Presidio PII redaction for text columns, and a factory for keyed redaction assets."""
 
-import contextlib
 import os
 import re
 
@@ -14,7 +13,7 @@ from dagster import (
     asset,
     get_dagster_logger,
 )
-from ml.lib.warehouse import warehouse_database
+from ml.lib.warehouse import read_table, warehouse_database
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.lib.iceberg_maintenance import get_glue_catalog
@@ -22,7 +21,6 @@ from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
 from presidio_anonymizer import AnonymizerEngine
 from pydantic import Field
 from pyiceberg.catalog import Catalog
-from pyiceberg.exceptions import NoSuchTableError
 from pyiceberg.expressions import And, BooleanExpression, EqualTo, In, Or
 
 # The feedback_redacted defaults; other assets pass their own key and text columns.
@@ -38,14 +36,6 @@ REDACTION_VERSION = "v3"
 REDACT_CHECKPOINT_BATCH_SIZE = int(
     os.environ.get("REDACT_CHECKPOINT_BATCH_SIZE", "20000")
 )
-
-REDACTED_SCHEMA = {
-    "source_slug": pl.String,
-    "source_record_ref": pl.String,
-    "title_redacted": pl.String,
-    "text_redacted": pl.String,
-    "redaction_version": pl.String,
-}
 
 EXCLUDED_ENTITIES = {"DATE_TIME", "URL"}
 
@@ -387,7 +377,9 @@ def build_redacted_asset(  # noqa: PLR0913
         name: the asset and output table name, in the intermediate schema.
         source: the dbt model's asset key, [<layer>, <model>]; the asset reads the
             model from that layer's warehouse database.
-        key_cols: the columns that identify a row.
+        key_cols: the columns that identify a row. They must be unique and
+            non-null. Put the column with the most distinct values last: the
+            overwrite filter has one IN list per value of the other columns.
         text_cols: the columns to redact.
         code_version: the asset's code version.
         group_name: the Dagster asset group.
@@ -435,10 +427,8 @@ def build_redacted_asset(  # noqa: PLR0913
         source_df = source_lazy.collect()
 
         already_redacted_df = source_df.select(key_cols).clear()
-        with contextlib.suppress(NoSuchTableError):
-            existing_lazy = get_dbt_model_as_dataframe(
-                database_name=database_name, table_name=name
-            )
+        existing_lazy = read_table("intermediate", name)
+        if existing_lazy is not None:
             if config.full_refresh:
                 # Rows from before redaction_version existed have no version, so a
                 # full refresh redoes them.

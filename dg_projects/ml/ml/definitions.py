@@ -228,9 +228,9 @@ defs = Definitions(
         # ["intermediate", ...]) is a literal Glue database name, not env-aware
         # -- it does not expand to ol_warehouse_production_<suffix>_reporting.
         # Each asset sets its own env-aware `metadata={"schema": ...}` instead
-        # (see risk_probability.py / feedback_redacted.py), which is what
-        # actually determines its write target; a shared namespace here would
-        # force both assets to the same schema.
+        # (see risk_probability.py / build_redacted_asset in ml/lib/redact.py),
+        # which is what actually determines its write target; a shared
+        # namespace here would force both assets to the same schema.
         "io_manager": PolarsIcebergIOManager(
             name="iceberg_io_manager",
             config=iceberg_catalog,
