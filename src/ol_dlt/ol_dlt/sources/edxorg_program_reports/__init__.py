@@ -11,9 +11,9 @@ copies them into the production landing zone:
 
 Each learner report is a full snapshot of its program: one row per learner and
 course run, so a day of reports repeats almost every row of the day before.
-The Airbyte source-s3 connection "S3 edX.org Program Credentials → S3 Data
-Lake" appends every report into raw__edxorg__program_learner_report. This
-source appends them into raw__edxorg__s3__program_learner_report, stamped with
+This source appends them into raw__edxorg__s3__program_learner_report, which
+replaced the Airbyte-loaded raw__edxorg__program_learner_report (now an archive,
+see ingestion/inventory/retired.yml). Each row is stamped with
 the file they came from, and staging keeps each key's row from its newest file.
 The newest file is not always the newest mtime: the backlog was copied into the
 landing zone in bulk (1,580 files on 2024-02-19), so older reports' mtimes do
@@ -193,8 +193,9 @@ def edxorg_program_reports_source(
             table_name=RAW_TABLE,
             # Append: every report is a new file of mostly unchanged rows, and
             # an Iceberg merge of ~15M rows a day does not finish (see
-            # edxorg_s3). deduplicate_raw_table orders by _file_modified_at,
-            # the unit's raw_metadata_column, as it did by Airbyte's columns.
+            # edxorg_s3). Staging's deduplicate_raw_table orders by the report
+            # date in _source_file, then _file_modified_at (the unit's
+            # raw_metadata_column).
             write_disposition="append",
             table_format=table_format or config.active_table_format(),
             columns={**config.DLT_LOAD_ID_COLUMN, **FILE_METADATA_COLUMNS},

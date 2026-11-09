@@ -258,7 +258,8 @@ day, `micromasters/app_postgres` last on 2026-09-14, and the `edxorg/s3` and `ir
 mirrors copied 2026-10-07, so they are inside their 90-day limit until 2027-01-05. Mirror age is
 measured at observation time (§2), so nothing fails on that date by itself: the first observation
 refreshed after it fails this model until the mirrors are refreshed. Without a refresh the
-observation-age WARNING (30 days) is the signal.
+observation-age WARNING (30 days) is the signal. Since 2026-11-09 the edX.org input is
+`edxorg/program_reports`, whose mirror copied 2026-11-01, in place of the retired `edxorg/s3`.
 
 QA's copy of this view is not production's in kind, not only in size. The edX.org and IRx
 inputs are masked mirrors of production (§8: usernames and emails hashed, names and addresses
@@ -268,13 +269,14 @@ checks that it reads, maps and writes rows, not certificate counts.
 
 The edX.org tables this view's QA build reads from are also one learner in ten
 (`user_id % 10 = 0` on the IRx `email_opt_in`, `mitx_person_course` and `mitx_user_info_combo`
-and on the dlt `raw__edxorg__s3__program_learner_report`, and on `user id` in the Airbyte
-`raw__edxorg__program_learner_report`). The other edX.org learner mirrors (`edxorg/mysql`,
-`edxorg/tracking_logs`) copy every learner, so a join from them to these five is one-sided in QA.
+and on the dlt `raw__edxorg__s3__program_learner_report`; the retired Airbyte
+`raw__edxorg__program_learner_report` was sampled on `user id` the same way). The other edX.org
+learner mirrors (`edxorg/mysql`, `edxorg/tracking_logs`) copy every learner, so a join from them
+to these four is one-sided in QA.
 QA's Trino cluster ran each stage of these queries as one task with a 4.48GB per-node limit,
 and on 2026-10-27 the staging dedups of `mitx_user_info_combo` (15.1M rows) and
 the program learner report (15.7M) each exceeded it when run alone. On the sample they peaked at
-0.88GB and 0.93GB. The five take the same sample, so a sampled learner keeps all its rows in them.
+0.88GB and 0.93GB. The four take the same sample, so a sampled learner keeps all its rows in them.
 
 ---
 
