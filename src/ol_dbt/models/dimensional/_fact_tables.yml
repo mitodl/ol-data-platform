@@ -176,8 +176,8 @@ models:
     description: >
       The enrollment counts as verified: enrollment_mode is verified and
       enrollment_status is not refunded, deferred, transferred or unenrolled
-      (https://github.com/mitodl/hq/issues/14160). This measures verified and still
-      enrolled, not paid. A deferral or transfer leaves the learner's verified
+      (https://github.com/mitodl/hq/issues/14160). It is not a payment flag. A deferral
+      or transfer leaves the learner's verified
       enrollment on the new run or account, which counts there. The rule reads the
       status alone, so edX.org and Residential enrollments, which have no status,
       keep
