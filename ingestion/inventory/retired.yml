@@ -1169,3 +1169,22 @@ retired:
     _airbyte_* and _ab_source_file_* columns.
   frozen: true
   modeled: false
+- deployment: edxorg
+  layer: s3
+  raw_tables:
+  - raw__edxorg__program_learner_report
+  retired_on: '2026-11-09'
+  reason: >-
+    Replaced by edxorg/program_reports' raw__edxorg__s3__program_learner_report,
+    which ol_dlt.sources.edxorg_program_reports loads from the same report files
+    in edxorg-program-credentials/reports_v2/MITx/ (#3124). On 2026-11-09 the dlt
+    table held every file this one did. 21,586 files had equal row counts. In the
+    other 1,963, this table holds repeat copies of the same rows (3,112,504,947
+    rows against 1,328,754,987 distinct, equal to the dlt table's), and one
+    2026-11-07 file was read partly written. The "S3 edX.org Program Credentials
+    → S3 Data Lake" connection was disabled the same day and is kept disabled,
+    not deleted. That retires the edxorg/s3 unit, whose last table this was. dbt
+    no longer reads the table. It stays in place, read-only, as the archive of
+    what Airbyte loaded, with its _airbyte_* and _ab_source_file_* columns.
+  frozen: true
+  modeled: false

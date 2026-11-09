@@ -638,13 +638,16 @@ masked:
   containing `@`, and the only ones with a run of seven or more digits are 24
   `content_cue_<uuid>` labels.
 
-Three tables were filtered. The tracking-logs filter went with its unit, so two still are:
+Four tables were filtered. The tracking-logs and Airbyte program-report filters went with
+their units, so two still are:
 
-- `raw__edxorg__program_learner_report`: 14.4B rows, 760 GB. Airbyte re-reads the same report
-  files every day (their mtimes stop at 2025-03-13) and appends about 15M rows per sync. The
-  mirror keeps the last day of syncs by `_airbyte_extracted_at` (epoch milliseconds). That is
-  one full report while syncs run a day apart, and two if a gap is shorter. The staging model
-  dedupes on user, course run and program either way.
+- `raw__edxorg__program_learner_report`: 14.4B rows, 760 GB. The mirror kept the last day of
+  syncs by `_airbyte_extracted_at` (epoch milliseconds), one learner in ten. It stopped on
+  2026-11-09, when the dlt-loaded `raw__edxorg__s3__program_learner_report`
+  (`edxorg/program_reports`) replaced the table (`retired.yml`). Airbyte read each new daily
+  report, and for 1,963 of the 23,550 files it held 2 to 5 copies of the same rows. The dlt
+  table's mirror keeps the newest 12 hours of reports, which is one full day, for the same
+  one learner in ten.
 - `raw__edxorg__s3__tracking_logs`: 2.2B rows, 245 GB. The mirror keeps 30 days of syncs and
   drops `edx.user.settings.changed` events. It stopped on 2026-10-28, when the unit was
   retired as frozen history (`retired.yml`). QA keeps the copy it made on 2026-10-07.

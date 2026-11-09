@@ -503,8 +503,8 @@ course_xml_blocks_assets = [
 
 
 # edX.org's daily program learner reports, which the edxorg code location copies
-# into the landing zone. Loads beside the Airbyte-loaded
-# raw__edxorg__program_learner_report until that connection is retired.
+# into the landing zone. Replaced the Airbyte-loaded
+# raw__edxorg__program_learner_report (ingestion/inventory/retired.yml).
 edxorg_program_reports_assets = build_batched_assets(
     name="edxorg_program_learner_report",
     build_source=edxorg_program_reports.edxorg_program_reports_source,

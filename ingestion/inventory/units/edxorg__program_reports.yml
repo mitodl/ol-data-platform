@@ -7,8 +7,8 @@
 # location copies into the landing zone
 # (edxorg-program-credentials/reports_v2/MITx/<program uuid>/) and
 # ol_dlt.sources.edxorg_program_reports loads. stg__edxorg__s3__program_learner_report
-# reads it. edxorg/s3's Airbyte-loaded raw__edxorg__program_learner_report still
-# loads beside it until that connection is retired.
+# reads it. It replaced edxorg/s3's Airbyte-loaded
+# raw__edxorg__program_learner_report (see retired.yml).
 schema_version: 1
 deployment: edxorg
 layer: program_reports
@@ -37,9 +37,9 @@ tables:
   - _file_modified_at
   modeled: true
   mirror:
-    # The same masking as edxorg/s3's Airbyte table, under the report's columns
-    # as this table names them. user_key (an institution-assigned learner key)
-    # and external_course_key are left out, as they are there.
+    # The same masking as the retired Airbyte table's mirror, under the report's
+    # columns as this table names them. user_key (an institution-assigned learner
+    # key) and external_course_key are left out, as they were there.
     columns:
       _file_modified_at: copy
       _source_file: copy
@@ -71,7 +71,7 @@ tables:
     # reports land within about 11 minutes of each other, a day apart, so 12
     # hours keeps the newest day and none of the one before. That day is still
     # too large for the staging dedup on QA's Trino cluster, as it was for the
-    # Airbyte table (edxorg/s3), so this takes the same one learner in ten, and
+    # retired Airbyte table, so this takes the same one learner in ten, and
     # a sampled learner keeps its rows here and in the irx/bigquery tables.
     where: >-
       _file_modified_at >=
