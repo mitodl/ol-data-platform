@@ -11,6 +11,7 @@ import pyarrow as pa
 import pytest
 from dagster import AssetKey, materialize, mem_io_manager
 from ml.lib import redact, warehouse
+from pyiceberg.exceptions import NoSuchTableError
 from pyiceberg.expressions.visitors import bind
 from pyiceberg.io.pyarrow import expression_to_pyarrow
 from pyiceberg.schema import Schema
@@ -526,29 +527,17 @@ def test_checkpoint_redacted_chunk_rejects_duplicate_keys() -> None:
     assert table.overwrites == []
 
 
-def test_redacted_asset_redacts_only_new_in_scope_rows_by_its_own_key(
+def _materialize_comment_asset(
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A staging source keyed on one integer column is read from the staging
-    database. Rows outside source_filter and rows already in the output are
-    skipped, and each text column gets its own <column>_redacted column.
-    """
-    tables = {
-        ("staging", "stg__zendesk__ticket_comment"): pl.LazyFrame(
-            {
-                "comment_id": [1, 2, 3],
-                "ticket_platform": ["mitlearn", "mitlearn", "ocw"],
-                "comment_body": ["Hi, I am PII", "already done", "out of scope"],
-                "ticket_subject": ["Refund for PII", "Refund", "Login"],
-            }
-        ),
-        ("intermediate", "zendesk_conversation_redacted"): pl.LazyFrame(
-            {"comment_id": [2], "redaction_version": [redact.REDACTION_VERSION]}
-        ),
-    }
-
+    tables: dict[tuple[str, str], pl.LazyFrame],
+    source_filter: pl.Expr | None = None,
+    run_config: dict[str, Any] | None = None,
+) -> list[tuple[pl.DataFrame, list[str]]]:
     def read(database_name: str, table_name: str) -> pl.LazyFrame:
-        return tables[(database_name.rsplit("_", 1)[-1], table_name)]
+        key = (database_name.rsplit("_", 1)[-1], table_name)
+        if key not in tables:
+            raise NoSuchTableError(table_name)
+        return tables[key]
 
     monkeypatch.setattr(redact, "get_dbt_model_as_dataframe", read)
     monkeypatch.setattr(warehouse, "get_dbt_model_as_dataframe", read)
@@ -572,12 +561,40 @@ def test_redacted_asset_redacts_only_new_in_scope_rows_by_its_own_key(
         code_version="test_v1",
         group_name="test",
         pool="test",
-        source_filter=pl.col("ticket_platform") == "mitlearn",
+        source_filter=source_filter,
+    )
+    result = materialize(
+        [asset_def], resources={"io_manager": mem_io_manager}, run_config=run_config
+    )
+    assert result.success
+    return written
+
+
+def test_redacted_asset_redacts_only_new_in_scope_rows_by_its_own_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A staging source keyed on one integer column is read from the staging
+    database. Rows outside source_filter and rows already in the output are
+    skipped, and each text column gets its own <column>_redacted column.
+    """
+    tables = {
+        ("staging", "stg__zendesk__ticket_comment"): pl.LazyFrame(
+            {
+                "comment_id": [1, 2, 3],
+                "ticket_platform": ["mitlearn", "mitlearn", "ocw"],
+                "comment_body": ["Hi, I am PII", "already done", "out of scope"],
+                "ticket_subject": ["Refund for PII", "Refund", "Login"],
+            }
+        ),
+        ("intermediate", "zendesk_conversation_redacted"): pl.LazyFrame(
+            {"comment_id": [2], "redaction_version": [redact.REDACTION_VERSION]}
+        ),
+    }
+
+    written = _materialize_comment_asset(
+        monkeypatch, tables, source_filter=pl.col("ticket_platform") == "mitlearn"
     )
 
-    result = materialize([asset_def], resources={"io_manager": mem_io_manager})
-
-    assert result.success
     ((chunk_df, key_cols),) = written
     assert key_cols == ["comment_id"]
     assert chunk_df.to_dicts() == [
@@ -588,6 +605,41 @@ def test_redacted_asset_redacts_only_new_in_scope_rows_by_its_own_key(
             "redaction_version": redact.REDACTION_VERSION,
         }
     ]
+
+
+def test_redacted_asset_keys_config_keeps_rows_matching_every_column(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keys compares values as strings, so "1" matches the integer comment_id 1,
+    and a row must match every column given.
+    """
+    tables = {
+        ("staging", "stg__zendesk__ticket_comment"): pl.LazyFrame(
+            {
+                "comment_id": [1, 2, 3],
+                "ticket_platform": ["mitlearn", "mitlearn", "ocw"],
+                "comment_body": ["one", "two", "three"],
+                "ticket_subject": ["a", "b", "c"],
+            }
+        ),
+    }
+    run_config = {
+        "ops": {
+            "intermediate__zendesk_conversation_redacted": {
+                "config": {
+                    "keys": {
+                        "comment_id": ["1", "3"],
+                        "ticket_platform": ["mitlearn"],
+                    }
+                }
+            }
+        }
+    }
+
+    written = _materialize_comment_asset(monkeypatch, tables, run_config=run_config)
+
+    ((chunk_df, _),) = written
+    assert chunk_df["comment_id"].to_list() == [1]
 
 
 def test_key_filter_on_one_column_matches_only_the_batch_keys() -> None:
