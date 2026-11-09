@@ -2071,7 +2071,7 @@ requires-dist = [
     { name = "pypdf", extras = ["crypto"], specifier = ">=6.9.1,<7" },
     { name = "python-dateutil", specifier = ">=2.9" },
     { name = "requests", specifier = ">=2.32" },
-    { name = "sqlglot", specifier = "<30.22" },
+    { name = "sqlglot", specifier = "<30.31" },
     { name = "youtube-transcript-api", specifier = ">=1.0,<2" },
 ]
 
