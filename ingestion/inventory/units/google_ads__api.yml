@@ -1,0 +1,118 @@
+---
+# Hand-written: this unit has no Airbyte connection, so bin/airbyte-inventory.py
+# cannot produce it. See docs/specs/INGESTION_INVENTORY_SPEC.md §3.
+# Every table is merge except customer_clients (replace). qa stays omit until
+# ol-infrastructure writes the credentials to QA's secret-data/pipelines/google_ads.
+schema_version: 1
+deployment: google_ads
+layer: api
+scope: scoped
+strategies:
+  qa: omit
+  local: fixture
+loader: dlt
+table_prefix: raw__google_ads__api__
+dlt:
+  source_module: ol_dlt.sources.google_ads
+  write_disposition: merge
+tables:
+- name: raw__google_ads__api__customer_clients
+  raw_table: raw__google_ads__api__customer_clients
+  sync_mode: full_refresh_overwrite_deduped
+  primary_key:
+  - - customer_client__id
+  modeled: false
+- name: raw__google_ads__api__keyword_daily
+  raw_table: raw__google_ads__api__keyword_daily
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - segments__date
+  primary_key:
+  - - customer_id
+  - - segments__date
+  - - segments__ad_network_type
+  - - ad_group__id
+  - - ad_group_criterion__criterion_id
+  modeled: false
+- name: raw__google_ads__api__keyword_conversions_daily
+  raw_table: raw__google_ads__api__keyword_conversions_daily
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - segments__date
+  primary_key:
+  - - customer_id
+  - - segments__date
+  - - segments__ad_network_type
+  - - ad_group__id
+  - - ad_group_criterion__criterion_id
+  - - segments__conversion_action
+  modeled: false
+- name: raw__google_ads__api__campaign_daily
+  raw_table: raw__google_ads__api__campaign_daily
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - segments__date
+  primary_key:
+  - - customer_id
+  - - segments__date
+  - - campaign__id
+  modeled: false
+- name: raw__google_ads__api__change_events
+  raw_table: raw__google_ads__api__change_events
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - change_event__change_date_time
+  primary_key:
+  - - customer_id
+  - - change_event__resource_name
+  modeled: false
+- name: raw__google_ads__api__campaign_snapshots
+  raw_table: raw__google_ads__api__campaign_snapshots
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - snapshot_date
+  primary_key:
+  - - customer_id
+  - - snapshot_date
+  - - campaign__resource_name
+  modeled: false
+- name: raw__google_ads__api__keyword_snapshots
+  raw_table: raw__google_ads__api__keyword_snapshots
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - snapshot_date
+  primary_key:
+  - - customer_id
+  - - snapshot_date
+  - - ad_group_criterion__resource_name
+  modeled: false
+- name: raw__google_ads__api__campaign_criterion_snapshots
+  raw_table: raw__google_ads__api__campaign_criterion_snapshots
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - snapshot_date
+  primary_key:
+  - - customer_id
+  - - snapshot_date
+  - - campaign_criterion__resource_name
+  modeled: false
+- name: raw__google_ads__api__campaign_shared_set_snapshots
+  raw_table: raw__google_ads__api__campaign_shared_set_snapshots
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - snapshot_date
+  primary_key:
+  - - customer_id
+  - - snapshot_date
+  - - campaign_shared_set__resource_name
+  modeled: false
+- name: raw__google_ads__api__shared_criterion_snapshots
+  raw_table: raw__google_ads__api__shared_criterion_snapshots
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - snapshot_date
+  primary_key:
+  - - customer_id
+  - - snapshot_date
+  - - shared_criterion__resource_name
+  modeled: false

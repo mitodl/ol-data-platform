@@ -32,6 +32,7 @@ from ol_dlt.sources import (
     course_xml_blocks,
     edxorg_program_reports,
     edxorg_s3,
+    google_ads,
     keycloak,
     medium,
     mit_climate,
@@ -102,6 +103,11 @@ podcast_rss_assets = build_ingest_assets(
     name="podcast_rss_ingest",
     source=podcast_rss.build_source(),
     pipeline=podcast_rss.podcast_rss_pipeline,
+)
+google_ads_assets = build_ingest_assets(
+    name="google_ads_ingest",
+    source=google_ads.build_source(),
+    pipeline=google_ads.google_ads_pipeline,
 )
 keycloak_assets = build_ingest_assets(
     name="keycloak_ingest",
@@ -685,6 +691,7 @@ defs = Definitions(
         [
             oll_assets,
             mitpe_assets,
+            google_ads_assets,
             mit_climate_assets,
             mit_edx_programs_assets,
             podcast_rss_assets,

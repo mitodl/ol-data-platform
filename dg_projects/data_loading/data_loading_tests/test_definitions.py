@@ -142,6 +142,8 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__youtube__api__playlists",
         "ol_warehouse_raw_data/raw__youtube__api__playlist_items",
         "ol_warehouse_raw_data/raw__youtube__api__videos",
+        "ol_warehouse_raw_data/raw__google_ads__api__keyword_daily",
+        "ol_warehouse_raw_data/raw__google_ads__api__change_events",
         "ol_warehouse_raw_data/raw__edxorg__s3__course_xml_blocks",
         "ol_warehouse_raw_data/raw__edxorg__s3__course_structure_blocks",
         "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks",
@@ -164,6 +166,7 @@ def test_schedules_and_sensors_load() -> None:
     assert {s.name for s in _REPO.schedule_defs} >= {
         "oll_ingest_daily_schedule",
         "mitpe_ingest_daily_schedule",
+        "google_ads_ingest_daily_schedule",
         "mit_climate_ingest_daily_schedule",
         "mit_edx_programs_ingest_daily_schedule",
         "podcast_rss_ingest_daily_schedule",

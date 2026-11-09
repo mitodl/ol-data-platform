@@ -65,6 +65,8 @@ deployments:
 - irx
   # Vendor SaaS, read through their APIs
 - github
+  # Google Ads Search campaigns under the MIT Open Learning manager account.
+- google_ads
 - hubspot
 - mailgun
 - salesforce
