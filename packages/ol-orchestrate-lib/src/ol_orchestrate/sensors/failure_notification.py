@@ -59,9 +59,22 @@ from ol_orchestrate.lib.utils import authenticate_vault
 RETRY_NUMBER_TAG = "dagster/retry_number"
 
 # What a run that ran out of resume attempts is reported as. Its step failures
-# are all interruptions, so without a type of its own it would be titled and
-# grouped as DagsterExecutionInterruptedError, which reads as the code's fault.
+# are all interruptions, or there are none, so without a type of its own it
+# would be titled and grouped as DagsterExecutionInterruptedError (which reads
+# as the code's fault) or as a run with no step failure.
 RESUMES_EXHAUSTED = "RunResumesExhausted"
+
+# What an interrupted run that failed with resume attempts left is reported as.
+# See failure_to_report for what fails such a run.
+RUN_NOT_RESUMED = "RunNotResumed"
+
+# The step key a failure of the whole run is reported and fingerprinted under.
+RUN_STEP_KEY = "run"
+
+# RunFailureReason.STEP_FAILURE's value, which the run worker records when it
+# fails a run because steps failed. Compared as the value because dagster does
+# not export RunFailureReason.
+STEP_FAILURE_REASON = "STEP_FAILURE"
 
 DAGSTER_URL_BY_ENV = {
     "dev": "http://localhost:3000",
@@ -311,7 +324,7 @@ def sentry_fingerprint(
     """
     location = code_location_of(context.dagster_run)
     if failure is None:
-        return failure_fingerprint(location, "run", "run_failure")
+        return failure_fingerprint(location, RUN_STEP_KEY, "run_failure")
     return failure_fingerprint(location, failure.step_key, failure.error_type)
 
 
@@ -334,6 +347,9 @@ def sentry_message(
         return (
             f"Dagster run failed with no step failure: {context.dagster_run.job_name}"
         )
+    # A failure reported against the whole run has no step to name.
+    if failure.step_key == RUN_STEP_KEY:
+        return f"{failure.error_type}: {context.dagster_run.job_name}"
     return f"{failure.error_type}: {failure.step_key}"
 
 
@@ -370,51 +386,98 @@ def is_an_interrupted_worker(failure: StepFailure | None) -> bool:
     return failure is not None and failure.error_type in INTERRUPTION_ERRORS
 
 
-def ran_out_of_resumes(
-    failure: StepFailure | None, resume_attempts: int, max_resume_attempts: int
-) -> bool:
-    """Whether an interrupted run failed because run monitoring stopped resuming it.
+def resume_attempt_limit(instance: Any) -> int:
+    """How many times run monitoring resumes a run, or 0 if it never does.
 
-    A worker interrupted while the run still has resume attempts left does not
-    fail the run: Dagster logs "not treating as failure because run will be
-    resumed" and run monitoring launches a new worker. Both decide that with
-    the same comparison used here (``DagsterInstance.run_will_resume``: resume
-    count below ``run_monitoring_max_resume_run_attempts``). Run 82b3d642 on
-    2026-11-03 lost workers to node drains until its attempts ran out and was
-    skipped as a plain interruption.
-
-    A run with no resume attempts configured (run monitoring off, as in dev)
-    has nothing to run out of, so its interruption stays the deploy or drain
-    the skip exists for.
+    Mirrors ``DagsterInstance.run_will_resume``, which checks that run
+    monitoring is enabled before comparing the count against the maximum.
     """
-    return (
-        is_an_interrupted_worker(failure)
-        and max_resume_attempts > 0
-        and resume_attempts >= max_resume_attempts
-    )
+    if not instance.run_monitoring_enabled:
+        return 0
+    return instance.run_monitoring_max_resume_run_attempts
 
 
-def as_resumes_exhausted(failure: StepFailure) -> StepFailure:
-    """Report a run that ran out of resumes as that, not as its interruption."""
+def as_resumes_exhausted(failure: StepFailure | None) -> StepFailure:
+    """Report a run that ran out of resumes as that, not as its interruption.
+
+    A run whose workers all died without logging a step failure (SIGKILL or
+    OOM each time) has no failure to relabel, so it is reported against the
+    run, the same step key a run with no step failure is fingerprinted under.
+    """
+    if failure is None:
+        return StepFailure(
+            step_key=RUN_STEP_KEY, error_type=RESUMES_EXHAUSTED, error=None
+        )
     return replace(failure, error_type=RESUMES_EXHAUSTED)
 
 
+def failed_on_its_steps(failure_event: Any) -> bool:
+    """Whether the run worker failed the run because its steps failed.
+
+    A run worker that is itself interrupted never fails the run this way:
+    ``ActiveExecution`` raises DagsterExecutionInterruptedError on exit, and
+    ``execute_run_iterator`` handles that before it looks at failed steps. So a
+    run whose step failures are all interruptions and that failed on its steps
+    had its step processes or pods interrupted (a preempted or evicted step
+    pod under k8s_job_executor) while the worker kept running.
+
+    ``event_specific_data`` is None for a run failed by ``report_run_failed``
+    without failure data, as the run monitoring daemon and the gRPC server do.
+    """
+    reason = getattr(failure_event.event_specific_data, "failure_reason", None)
+    return reason is not None and reason.value == STEP_FAILURE_REASON
+
+
 def failure_to_report(
-    instance: Any, run_id: str, failure: StepFailure | None
+    instance: Any,
+    run_id: str,
+    failure: StepFailure | None,
+    *,
+    failed_on_steps: bool,
 ) -> tuple[StepFailure | None, int] | None:
     """Return the failure to report and the run's resume count, or None to skip.
 
-    Counting resumes is a second event-log read, so only an interrupted run
-    pays for it; every other failure reports as it is with a count of 0.
+    A failure in user code reports as it is, with a count of 0. The rest are
+    runs whose step failures are all interruptions, or that have none:
+
+    - Interrupted step pods under a live worker (``failed_on_steps``): the
+      preemption or eviction the skip exists for, whatever the resume count.
+    - Nothing resumes runs here (run monitoring off, as in dev): an interrupted
+      worker is the deploy or drain the skip exists for. A run with no step
+      failure reports as it is.
+    - The resume count reached the limit: reported as RunResumesExhausted.
+      Run 82b3d642 on 2026-11-03 lost workers to node drains until its
+      attempts ran out. A run whose workers all died without logging a step
+      failure is failed by the run monitoring daemon the same way ("surpassed
+      the configured maximum attempts to resume"), so it is relabelled too.
+    - Interrupted with attempts left: reported as RunNotResumed. Dagster does
+      not fail an interrupted worker's run it will resume (it logs "not
+      treating as failure because run will be resumed"), so something else
+      failed it: a resumed worker interrupted during startup, before that check
+      is in place (run 254815a2 on 2026-11-09), a resume launch that raised,
+      or the max-runtime timeout. The run failure message is what says which,
+      so the interruption traceback is dropped and Sentry falls back to it.
+
+    Counting resumes is a second event-log read, paid only by an interrupted
+    run or one with no step failure, and only where run monitoring resumes.
     """
-    if failure is None or not is_an_interrupted_worker(failure):
+    interrupted = is_an_interrupted_worker(failure)
+    if failure is not None and not interrupted:
         return failure, 0
-    resume_attempts = instance.count_resume_run_attempts(run_id)
-    if not ran_out_of_resumes(
-        failure, resume_attempts, instance.run_monitoring_max_resume_run_attempts
-    ):
+    if interrupted and failed_on_steps:
         return None
-    return as_resumes_exhausted(failure), resume_attempts
+    limit = resume_attempt_limit(instance)
+    if limit == 0:
+        return None if interrupted else (failure, 0)
+    resume_attempts = instance.count_resume_run_attempts(run_id)
+    if resume_attempts >= limit:
+        return as_resumes_exhausted(failure), resume_attempts
+    if failure is not None:
+        return (
+            replace(failure, error_type=RUN_NOT_RESUMED, error=None),
+            resume_attempts,
+        )
+    return None, 0
 
 
 def capture_run_failure_to_sentry(
@@ -431,7 +494,7 @@ def capture_run_failure_to_sentry(
         return None
 
     run = context.dagster_run
-    step_key = failure.step_key if failure else "run"
+    step_key = failure.step_key if failure else RUN_STEP_KEY
     error_type = failure.error_type if failure else "run_failure"
 
     with sentry_sdk.new_scope() as scope:
@@ -477,22 +540,75 @@ def capture_run_failure_to_sentry(
     return event_id
 
 
+# Room for the summary's prose and the step list after the run failure message,
+# which is a code block and must not be cut through its closing fence.
+MAX_RUN_FAILURE_MESSAGE_LENGTH = 1000
+
+
+def summarize_resumes(
+    failure: StepFailure | None,
+    resume_attempts: int,
+    step_failure_events: Sequence[Any],
+    run_failure_message: str | None,
+) -> str | None:
+    """Explain a run reported as RunResumesExhausted or RunNotResumed.
+
+    Returns None for any other failure, whose step failures say what broke.
+    The run failure message says what ended the run: the daemon's message
+    carries the dead worker's pod status, and a run failed by a resume launch
+    error or the max-runtime timeout says so only there.
+    """
+    error_type = failure.error_type if failure is not None else None
+    if error_type not in {RESUMES_EXHAUSTED, RUN_NOT_RESUMED}:
+        return None
+    steps = ", ".join(sorted({event.step_key for event in step_failure_events}))
+    retries = (
+        "If run retries launch it again, a failure of those attempts is not "
+        "reported separately."
+    )
+    if error_type == RESUMES_EXHAUSTED:
+        headline = (
+            f"*Ran out of resumes* -- run monitoring resumed this run "
+            f"{resume_attempts} time(s) after its worker died or was terminated "
+            "(OOM, node drain, eviction or deploy), then stopped."
+        )
+    else:
+        headline = (
+            "*Interrupted and not resumed* -- this run's worker was interrupted "
+            f"and run monitoring had resumed it {resume_attempts} time(s), with "
+            "attempts left, but the run failed instead of resuming. The run "
+            "failure below says what ended it."
+        )
+    message = truncate_text(
+        run_failure_message or "No detail available", MAX_RUN_FAILURE_MESSAGE_LENGTH
+    )
+    lines = [
+        f"{headline} No step failed in its own code. {retries}",
+        f"*Run failure:*\n```{message}```",
+    ]
+    if steps:
+        lines.append(f"*Interrupted step(s):* {steps}")
+    # A fan-out run can interrupt hundreds of steps, and Slack rejects a
+    # section over its text limit. The step list is last, so only it is cut.
+    return truncate_text("\n".join(lines))
+
+
 def error_message(
     context: RunFailureSensorContext,
     step_failure_events: Sequence[Any],
     *,
+    resume_summary: str | None = None,
     sentry_event_id: str | None = None,
     suppressed_repeats: int = 0,
-    resume_attempts: int = 0,
 ) -> list[dict[str, Any]]:
     """Format error message for Slack notification.
 
     Takes the step failure events rather than re-reading them: the sensor has
     already paid for that query once by the time it gets here.
 
-    ``resume_attempts`` is non-zero only for a run that ran out of resumes
-    (``ran_out_of_resumes``). Its step failures are all interruption
-    tracebacks, which say nothing about why the run is down.
+    ``resume_summary`` (from ``summarize_resumes``) replaces the step failures
+    of a run reported as RunResumesExhausted or RunNotResumed. They are all
+    interruption tracebacks, which say nothing about why the run is down.
     """
 
     def format_error(error_event):
@@ -515,25 +631,9 @@ def error_message(
         for event in step_failure_events
     ]
 
-    if resume_attempts:
-        steps = ", ".join(sorted({event.step_key for event in step_failure_events}))
+    if resume_summary is not None:
         error_details = [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    # A fan-out run can interrupt hundreds of steps, and Slack
-                    # rejects a section over its text limit.
-                    "text": truncate_text(
-                        f"*Ran out of resumes* -- run monitoring resumed this run "
-                        f"{resume_attempts} time(s) after its worker was terminated "
-                        "(node drain, eviction or deploy), then stopped. No step "
-                        "failed in its own code. If run retries launch it again, "
-                        "a failure of those attempts is not reported separately.\n"
-                        f"*Interrupted step(s):* {steps}"
-                    ),
-                },
-            }
+            {"type": "section", "text": {"type": "mrkdwn", "text": resume_summary}}
         ]
 
     # A run killed by OOM or reaped by run monitoring produces no step failure
@@ -760,11 +860,17 @@ def run_failure_notification_sensor(context: RunFailureSensorContext) -> None:
     step_failure_events = context.get_step_failure_events()
     failure = step_failure_of(step_failure_events)
 
-    reportable = failure_to_report(context.instance, run.run_id, failure)
+    reportable = failure_to_report(
+        context.instance,
+        run.run_id,
+        failure,
+        failed_on_steps=failed_on_its_steps(context.failure_event),
+    )
     if reportable is None:
         context.log.info(
-            "Skipping notification for run %s: its worker was terminated "
-            "(deploy, eviction or drain) rather than failing.",
+            "Skipping notification for run %s: its steps or worker were "
+            "terminated (preemption, eviction, drain or deploy) and run "
+            "monitoring does not resume it.",
             run.run_id,
         )
         return
@@ -805,9 +911,14 @@ def run_failure_notification_sensor(context: RunFailureSensorContext) -> None:
         blocks=error_message(
             context,
             step_failure_events,
+            resume_summary=summarize_resumes(
+                failure,
+                resume_attempts,
+                step_failure_events,
+                context.failure_event.message,
+            ),
             sentry_event_id=sentry_event_id,
             suppressed_repeats=repeats,
-            resume_attempts=resume_attempts,
         ),
         text=f"Dagster {DAGSTER_ENV} run failure: {run.job_name}",
     )
