@@ -160,14 +160,15 @@ models:
     tests:
     - not_null
   - name: verified_enrollments
-    description: int, count of verified (paid) enrollments in the program's courses.
-      On the total row an enrollment counts once, however many programs its course
-      is in, the same as total_enrollments.
+    description: int, count of enrollments in the program's courses that tfact_enrollment.is_verified
+      marks verified. On the total row an enrollment counts once, however many programs
+      its course is in, the same as total_enrollments.
   - name: unique_verified_users
-    description: int, count of unique verified users enrolled in the program's courses.
-      Email is used to dedupe users accross mitxonline and edxorg so this number might
-      be slightly higher than the actual since some users may use  differnt email
-      addresses for their edxorg and mitxonline logins
+    description: int, count of unique users with an enrollment in the program's courses
+      that tfact_enrollment.is_verified marks verified. Email is used to dedupe users
+      accross mitxonline and edxorg so this number might be slightly higher than the
+      actual since some users may use  differnt email addresses for their edxorg and
+      mitxonline logins
   - name: course_certificates
     description: int, count of course certificate earned for the courses in the program
   - name: unique_course_certificate_earners
@@ -209,14 +210,16 @@ models:
     tests:
     - not_null
   - name: verified_enrollments
-    description: int, count of verified (paid) enrollments in the program's courses.
+    description: int, count of enrollments in the program's courses that tfact_enrollment.is_verified
+      marks verified
     tests:
     - not_null
   - name: unique_verified_users
-    description: int, count of unique verified users enrolled in the program's courses.
-      Email is used to dedupe users accross mitxonline and edxorg so this number might
-      be slightly higher than the actual since some users may use  differnt email
-      addresses for their edxorg and mitxonline logins
+    description: int, count of unique users with an enrollment in the program's courses
+      that tfact_enrollment.is_verified marks verified. Email is used to dedupe users
+      accross mitxonline and edxorg so this number might be slightly higher than the
+      actual since some users may use  differnt email addresses for their edxorg and
+      mitxonline logins
     tests:
     - not_null
   - name: course_certificates
@@ -317,6 +320,58 @@ models:
       Design of Policy (DEDP) program
 
 unit_tests:
+- name: test_marts_micromasters_summary_counts_verified_from_the_fact
+  description: >
+    verified_enrollments and unique_verified_users read tfact_enrollment.is_verified,
+    not the mode: enrollment 6002 is in verified mode but unenrolled, so the fact
+    does
+    not mark it. MITx Online enrollments match the fact on their id and edX.org ones
+    on
+    its learner and run key. A program enrollment or an xPRO enrollment with the same
+    id
+    must not match.
+  model: marts__micromasters_summary
+  given:
+  - input: ref('int__micromasters__course_enrollments')
+    rows:
+    - {micromasters_program_id: 1, mitxonline_program_id: null, program_title: "Statistics",
+      platform: "MITx Online", courserunenrollment_id: 6001, user_id: 1, user_email: "a@example.com",
+      courserun_readable_id: "course-v1:MITxT+1", courserunenrollment_enrollment_mode: "verified"}
+    - {micromasters_program_id: 1, mitxonline_program_id: null, program_title: "Statistics",
+      platform: "MITx Online", courserunenrollment_id: 6002, user_id: 2, user_email: "b@example.com",
+      courserun_readable_id: "course-v1:MITxT+1", courserunenrollment_enrollment_mode: "verified"}
+    - {micromasters_program_id: 1, mitxonline_program_id: null, program_title: "Statistics",
+      platform: "edX.org", courserunenrollment_id: null, user_id: 777, user_email: "c@example.com",
+      courserun_readable_id: "MITx/6.00x/2T2019", courserunenrollment_enrollment_mode: "verified"}
+    - {micromasters_program_id: 1, mitxonline_program_id: null, program_title: "Statistics",
+      platform: "edX.org", courserunenrollment_id: null, user_id: 778, user_email: "d@example.com",
+      courserun_readable_id: "MITx/6.00x/2T2019", courserunenrollment_enrollment_mode: "audit"}
+  - input: ref('int__micromasters__course_certificates')
+    rows: []
+  - input: ref('int__micromasters__program_certificates')
+    rows: []
+  - input: ref('int__mitx__programs')
+    rows:
+    - {micromasters_program_id: 1, mitxonline_program_id: 10, is_dedp_program: false}
+  - input: ref('tfact_enrollment')
+    rows:
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_id: "6001", is_verified: true}
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_id: "6002", is_verified: false}
+    - {platform: "mitxonline", enrollment_type: "program", enrollment_id: "6002",
+      is_verified: true}
+    - {platform: "mitxpro", enrollment_type: "course", enrollment_id: "6002", is_verified: true}
+    - enrollment_id: "d2c262edd935f1303dc150a525096fe5"  # pragma: allowlist secret
+      platform: "edxorg"
+      enrollment_type: "course"
+      is_verified: true
+    - enrollment_id: "6d4115445a1e0702aa9f8debe4bed9bb"  # pragma: allowlist secret
+      platform: "edxorg"
+      enrollment_type: "course"
+      is_verified: false
+  expect:
+    rows:
+    - {program_title: "Statistics", total_enrollments: 4, unique_users: 4, verified_enrollments: 2,
+      unique_verified_users: 2}
 - name: test_marts__micromasters_program_certificates_leaves_out_revoked_certificates
   description: >
     int__micromasters__program_certificates keeps revoked certificates; this

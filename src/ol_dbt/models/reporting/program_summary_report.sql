@@ -6,7 +6,10 @@ with program_enrollments as (
 -- in different letter case
 , course_enrollments as (
     select
-        course_readable_id
+        platform
+        , courserunenrollment_id
+        , user_id
+        , course_readable_id
         , courserun_readable_id
         , lower(user_email) as user_email
         , user_country_code
@@ -47,13 +50,13 @@ with program_enrollments as (
         , count(distinct course_enrollments.user_country_code) as unique_countries
         , count(
             distinct case
-                when course_enrollments.courserunenrollment_enrollment_mode = 'verified'
+                when verified_course_enrollments.is_verified
                     then {{ dbt.concat(["course_enrollments.courserun_readable_id", "course_enrollments.user_email"]) }}
             end
         ) as verified_enrollments
         , count(
             distinct case
-                when course_enrollments.courserunenrollment_enrollment_mode = 'verified'
+                when verified_course_enrollments.is_verified
                     then course_enrollments.user_email
             end
         ) as unique_verified_users
@@ -71,6 +74,7 @@ with program_enrollments as (
         ) as unique_course_certificate_earners
     from course_enrollments
     inner join program_course_keys on course_enrollments.course_readable_id = program_course_keys.course_readable_id
+    {{ join_verified_course_enrollments('course_enrollments') }}
     group by program_course_keys.program_key
 )
 

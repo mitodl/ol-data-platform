@@ -74,13 +74,13 @@ models:
     tests:
     - not_null
   - name: verified_enrollments
-    description: int, count of verified (paid) enrollments in the program's courses,
-      aggregated by lowercased user_email and courserun_readable_id
+    description: int, count of enrollments in the program's courses that tfact_enrollment.is_verified
+      marks verified, aggregated by lowercased user_email and courserun_readable_id
     tests:
     - not_null
   - name: unique_verified_users
-    description: int, count of unique verified users enrolled in the program's courses,
-      aggregated by lowercased user_email
+    description: int, count of unique users with an enrollment in the program's courses
+      that tfact_enrollment.is_verified marks verified, aggregated by lowercased user_email
     tests:
     - not_null
   - name: course_certificates
@@ -801,8 +801,8 @@ models:
       on that particular activity date for a user and courserun
   - name: verified_count
     data_type: bigint
-    description: int, count of enrollments that have a enrollment mode status of verified
-      on that particular activity date for a user and courserun
+    description: int, count of active enrollments that tfact_enrollment.is_verified
+      marks verified on that particular activity date for a user and courserun
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -1306,9 +1306,10 @@ models:
     description: string, country of the user. Coalesced from edX.org and hashed ID
       user matches.
   - name: verified_courses_taken_in_program
-    description: int, count of distinct verified courses the user has taken within
-      the program. 0 on rows from the xPRO app (xPRO, Simplilearn) unless an enrollment
-      there is mode verified. An enrollment with an order is no-id-professional.
+    description: int, count of distinct courses the user has taken within the program
+      on an enrollment tfact_enrollment.is_verified marks verified. 0 on rows from
+      the xPRO app (xPRO, Simplilearn) unless an enrollment there is mode verified.
+      An enrollment with an order is no-id-professional.
   - name: course_certificate_sum
     description: int, count of distinct courses for which the user has earned a certificate
       within the program
@@ -1316,8 +1317,8 @@ models:
     description: int, the same value as verified_courses_taken_in_program, under the
       older name that existing charts read.
   - name: verified_courses_passed_in_program
-    description: int, count of distinct verified courses the user has passed within
-      the program
+    description: int, count of distinct courses the user has passed within the program
+      on an enrollment tfact_enrollment.is_verified marks verified
   - name: all_courses_passed_in_program
     description: int, count of distinct courses the user has passed within the program
   - name: user_street_address
@@ -2012,6 +2013,91 @@ models:
         column_list: ["source", "conversation_id"]
 
 unit_tests:
+- name: test_program_summary_report_counts_verified_from_the_fact
+  description: >
+    verified_enrollments and unique_verified_users read tfact_enrollment.is_verified,
+    not the mode, across the mart's display platform names, from course enrollments
+    on the same platform only.
+  model: program_summary_report
+  given:
+  - input: ref('marts__combined_course_enrollment_detail')
+    rows:
+    - {platform: "MITx Online", courserunenrollment_id: 6001, user_id: "1", user_email: "a@example.com",
+      course_readable_id: "course-v1:MITxT+1", courserun_readable_id: "course-v1:MITxT+1+1T2024",
+      courserunenrollment_enrollment_mode: "verified"}
+    - {platform: "MITx Online", courserunenrollment_id: 6002, user_id: "2", user_email: "b@example.com",
+      course_readable_id: "course-v1:MITxT+1", courserun_readable_id: "course-v1:MITxT+1+1T2024",
+      courserunenrollment_enrollment_mode: "verified"}
+    - {platform: "edX.org", courserunenrollment_id: null, user_id: "777", user_email: "c@example.com",
+      course_readable_id: "course-v1:MITxT+1", courserun_readable_id: "MITx/6.00x/2T2019",
+      courserunenrollment_enrollment_mode: "verified"}
+  - input: ref('marts__combined_coursesinprogram')
+    rows:
+    - {program_name: "Statistics", course_readable_id: "course-v1:MITxT+1", program_report_key: "Statistics"}
+  - input: ref('marts__combined_program_enrollment_detail')
+    rows:
+    - {program_name: "Statistics", program_type: "MicroMasters", user_email: "a@example.com",
+      user_has_completed_program: false, program_report_key: "Statistics", report_program_name: "Statistics",
+      report_program_type: "MicroMasters"}
+  - input: ref('tfact_enrollment')
+    rows:
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_id: "6001", is_verified: true}
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_id: "6002", is_verified: false}
+    # A program enrollment and another platform's enrollment share 6002's id and leave it unverified.
+    - {platform: "mitxonline", enrollment_type: "program", enrollment_id: "6002",
+      is_verified: true}
+    - {platform: "mitxpro", enrollment_type: "course", enrollment_id: "6002", is_verified: true}
+    - enrollment_id: "d2c262edd935f1303dc150a525096fe5"  # pragma: allowlist secret
+      platform: "edxorg"
+      enrollment_type: "course"
+      is_verified: true
+  expect:
+    rows:
+    - {program_name: "Statistics", total_enrollments: 3, verified_enrollments: 2,
+      unique_verified_users: 2}
+- name: test_enrollment_activity_counts_dataset_counts_active_verified_from_the_fact
+  description: >
+    verified_count reads tfact_enrollment.is_verified, not the mode, and counts only
+    active enrollments. An edX.org enrollment matches the fact on the learner and
+    run.
+  model: Enrollment_Activity_Counts_Dataset
+  given:
+  - input: ref('marts__combined_course_enrollment_detail')
+    rows:
+    - {platform: "MITx Online", courserunenrollment_id: 7001, user_id: "1", user_email: "a@example.com",
+      course_readable_id: "course-v1:MITxT+1", courserun_readable_id: "course-v1:MITxT+1+1T2024",
+      courserunenrollment_enrollment_mode: "verified", courserunenrollment_is_active: true,
+      courserunenrollment_created_on: "2024-01-01T00:00:00Z", courseruncertificate_is_earned: false}
+    # Refunded: the mode is still verified, the fact is not.
+    - {platform: "MITx Online", courserunenrollment_id: 7002, user_id: "2", user_email: "b@example.com",
+      course_readable_id: "course-v1:MITxT+1", courserun_readable_id: "course-v1:MITxT+1+1T2024",
+      courserunenrollment_enrollment_mode: "verified", courserunenrollment_is_active: true,
+      courserunenrollment_created_on: "2024-01-01T00:00:00Z", courseruncertificate_is_earned: false}
+    - {platform: "MITx Online", courserunenrollment_id: 7003, user_id: "3", user_email: "c@example.com",
+      course_readable_id: "course-v1:MITxT+1", courserun_readable_id: "course-v1:MITxT+1+1T2024",
+      courserunenrollment_enrollment_mode: "verified", courserunenrollment_is_active: false,
+      courserunenrollment_created_on: "2024-01-01T00:00:00Z", courseruncertificate_is_earned: false}
+    - {platform: "edX.org", courserunenrollment_id: null, user_id: "888", user_email: "d@example.com",
+      course_readable_id: "course-v1:MITxT+1", courserun_readable_id: "MITx/6.00x/2T2019",
+      courserunenrollment_enrollment_mode: "verified", courserunenrollment_is_active: true,
+      courserunenrollment_created_on: "2024-01-01T00:00:00Z", courseruncertificate_is_earned: false}
+  - input: ref('marts__combined__orders')
+    rows: []
+  - input: ref('tfact_enrollment')
+    rows:
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_id: "7001", is_verified: true}
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_id: "7002", is_verified: false}
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_id: "7003", is_verified: true}
+    - enrollment_id: "50ba52fe1e0bf300a362521c6177c64f"  # pragma: allowlist secret
+      platform: "edxorg"
+      enrollment_type: "course"
+      is_verified: true
+  expect:
+    rows:
+    - {user_email: "a@example.com", enrollment_count: 1, unenrolled_count: 0, verified_count: 1}
+    - {user_email: "b@example.com", enrollment_count: 1, unenrolled_count: 0, verified_count: 0}
+    - {user_email: "c@example.com", enrollment_count: 0, unenrolled_count: 1, verified_count: 0}
+    - {user_email: "d@example.com", enrollment_count: 1, unenrolled_count: 0, verified_count: 1}
 - name: test_program_summary_report_groups_on_mart_program_key
   description: >
     The report groups on the program_report_key both marts carry. Rows from two
@@ -2048,16 +2134,20 @@ unit_tests:
       program_report_key: Computer Science}
   - input: ref('marts__combined_course_enrollment_detail')
     rows:
-    - {course_readable_id: "course-v1:MITxT+A", courserun_readable_id: "course-v1:MITxT+A+1T2020",
-      user_email: a@example.com, user_country_code: US, courserunenrollment_enrollment_mode: verified,
-      courseruncertificate_is_earned: false}
-    - {course_readable_id: "course-v1:MITxT+A", courserun_readable_id: "course-v1:MITxT+A+1T2020",
-      user_email: A@EXAMPLE.COM, user_country_code: US, courserunenrollment_enrollment_mode: verified,
-      courseruncertificate_is_earned: false}
+    - {platform: MITx Online, courserunenrollment_id: 8001, course_readable_id: "course-v1:MITxT+A",
+      courserun_readable_id: "course-v1:MITxT+A+1T2020", user_email: a@example.com,
+      user_country_code: US, courserunenrollment_enrollment_mode: verified, courseruncertificate_is_earned: false}
+    - {platform: MITx Online, courserunenrollment_id: 8002, course_readable_id: "course-v1:MITxT+A",
+      courserun_readable_id: "course-v1:MITxT+A+1T2020", user_email: A@EXAMPLE.COM,
+      user_country_code: US, courserunenrollment_enrollment_mode: verified, courseruncertificate_is_earned: false}
     - {course_readable_id: "MITx/B", courserun_readable_id: "MITx/B/1T2015", user_email: b@example.com,
       user_country_code: FR, courserunenrollment_enrollment_mode: audit, courseruncertificate_is_earned: true}
     - {course_readable_id: "MITx/CS1", courserun_readable_id: "MITx/CS1/1T2016", user_email: c@example.com,
       user_country_code: IN, courserunenrollment_enrollment_mode: audit, courseruncertificate_is_earned: false}
+  - input: ref('tfact_enrollment')
+    rows:
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_id: "8001", is_verified: true}
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_id: "8002", is_verified: true}
   expect:
     rows:
     - {program_readable_id: "program-v1:MITxT+SDS", program_title: SDS, program_type: MicroMasters,
@@ -2135,16 +2225,23 @@ unit_tests:
     - {course_pk: cc, course_readable_id: "course-v1:MITxT+C", course_title: C, is_current: true}
   - input: ref('marts__combined_course_enrollment_detail')
     rows:
-    - {platform: edX.org, user_email: learner@example.com, course_readable_id: "course-v1:MITxT+A",
-      courserunenrollment_enrollment_mode: verified}
-    - {platform: edX.org, user_email: learner@example.com, course_readable_id: "course-v1:MITxT+B",
-      courserunenrollment_enrollment_mode: verified}
-    - {platform: edX.org, user_email: learner@example.com, course_readable_id: "course-v1:MITxT+C",
-      courserunenrollment_enrollment_mode: verified}
-    - {platform: MITx Online, user_email: learner@example.com, course_readable_id: "course-v1:MITxT+C",
-      courserunenrollment_enrollment_mode: verified}
+    - {platform: edX.org, user_id: "7", user_email: learner@example.com, course_readable_id: "course-v1:MITxT+A",
+      courserun_readable_id: "MITx/A/1T2020", courserunenrollment_enrollment_mode: verified}
+    - {platform: edX.org, user_id: "7", user_email: learner@example.com, course_readable_id: "course-v1:MITxT+B",
+      courserun_readable_id: "MITx/B/1T2020", courserunenrollment_enrollment_mode: verified}
+    - {platform: edX.org, user_id: "7", user_email: learner@example.com, course_readable_id: "course-v1:MITxT+C",
+      courserun_readable_id: "MITx/C/1T2020", courserunenrollment_enrollment_mode: verified}
+    - {platform: MITx Online, courserunenrollment_id: 9001, user_email: learner@example.com,
+      course_readable_id: "course-v1:MITxT+C", courserunenrollment_enrollment_mode: verified}
   - input: ref('tfact_enrollment')
-    rows: []
+    rows:
+    - {platform: "edxorg", enrollment_type: "course", enrollment_id: "9d2bc1cb37d51c16980c98f3b38ec31e",
+      is_verified: true}
+    - {platform: "edxorg", enrollment_type: "course", enrollment_id: "5441d1783f17e9cb6ec71b2afbdd099d",
+      is_verified: true}
+    - {platform: "edxorg", enrollment_type: "course", enrollment_id: "edbbb7a331cb71b23cb17d8a6f3d95e9",
+      is_verified: true}
+    - {platform: "mitxonline", enrollment_type: "course", enrollment_id: "9001", is_verified: true}
   - input: ref('dim_user')
     rows: []
   - input: ref('dim_contract')
