@@ -355,9 +355,15 @@ def test_related_terms_are_declared_on_the_later_term(server: FakeOpenMetadata, 
         ([{"name": "a"}, {"name": "A"}], "declared twice"),
         ([{"name": "a.b"}], "pattern"),
         ([{"name": "a", "entityStatus": "Approved"}], "Extra inputs are not permitted"),
+        ([{"name": "a", "description": "one row per <platform>"}], "HTML sanitizer"),
     ],
 )
 def test_a_malformed_glossary_file_is_refused(glossary_dir: Path, terms: list[dict[str, Any]], problem: str) -> None:
     _write(glossary_dir, terms)
     with pytest.raises(ValueError, match=problem):
         load_glossaries(glossary_dir)
+
+
+def test_a_missing_glossary_directory_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="no such glossary directory"):
+        load_glossaries(tmp_path / "glossary")

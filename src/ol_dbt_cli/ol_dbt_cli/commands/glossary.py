@@ -204,7 +204,7 @@ def sync(
         for subject, step in steps:
             try:
                 step()
-            except (ValueError, RuntimeError) as exc:
+            except (ValueError, RuntimeError, OSError) as exc:
                 _say("bold red", "failed", subject, str(exc))
                 failures += 1
     if failures:

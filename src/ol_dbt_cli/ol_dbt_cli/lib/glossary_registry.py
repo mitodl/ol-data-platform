@@ -27,10 +27,10 @@ declare.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Self
+from typing import TYPE_CHECKING, Annotated, Any, Literal, Self
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
 
@@ -42,6 +42,20 @@ DEFAULT_GLOSSARY_DIR = Path("glossary")
 
 # Where dbt reads YAML that can carry column or model meta.
 _DBT_YAML_ROOTS = ("models", "snapshots", "seeds", "analyses")
+
+
+def _no_angle_bracket(description: str) -> str:
+    # OpenMetadata runs a description containing "<" through an HTML sanitizer
+    # (it drops e.g. "<platform>" and entity-encodes backticks), so the stored
+    # text never equals the declared one and every sync would patch the term,
+    # sending it back to In Review.
+    if "<" in description:
+        msg = "contains '<', which OpenMetadata's HTML sanitizer rewrites; reword it"
+        raise ValueError(msg)
+    return description
+
+
+Description = Annotated[str, Field(min_length=1), AfterValidator(_no_angle_bracket)]
 
 
 class NamedPrincipal(BaseModel):
@@ -69,7 +83,7 @@ class GlossarySpec(BaseModel):
 
     name: str = Field(min_length=1, pattern=r"^[^.]+$")
     displayName: str  # noqa: N815
-    description: str = Field(min_length=1)
+    description: Description
     mutuallyExclusive: bool = False  # noqa: N815
     owners: list[NamedPrincipal] = Field(min_length=1)
     reviewers: list[NamedPrincipal] = Field(min_length=1)
@@ -82,7 +96,7 @@ class GlossaryTermSpec(BaseModel):
 
     name: str = Field(min_length=1, pattern=r"^[^.]+$")
     displayName: str  # noqa: N815
-    description: str = Field(min_length=1)
+    description: Description
     synonyms: list[str] = []
     references: list[TermReference] = []
     mutuallyExclusive: bool | None = None  # noqa: N815
@@ -129,12 +143,14 @@ def load_glossaries(glossary_dir: Path) -> list[tuple[Path, GlossaryFile]]:
     """Load every ``*.yaml`` / ``*.yml`` glossary in *glossary_dir*, sorted by path.
 
     :param glossary_dir: directory holding one file per glossary.
-    :returns: each file's path and parsed glossary; empty when the directory does not exist.
+    :returns: each file's path and parsed glossary.
     :rtype: list[tuple[Path, GlossaryFile]]
-    :raises ValueError: when a file does not fit ``GlossaryFile``, or two files declare one glossary.
+    :raises ValueError: when the directory does not exist, a file does not fit ``GlossaryFile``,
+        or two files declare one glossary.
     """
     if not glossary_dir.is_dir():
-        return []
+        msg = f"{glossary_dir}: no such glossary directory"
+        raise ValueError(msg)
     glossaries: list[tuple[Path, GlossaryFile]] = []
     for path in sorted(p for p in glossary_dir.iterdir() if p.suffix in {".yaml", ".yml"}):
         try:
@@ -177,8 +193,14 @@ def check_glossary_terms(dbt_dir: Path, glossary_dir: Path, report: ValidationRe
     :param glossary_dir: The directory of glossary files.
     :param report: The report to add an ERROR to for each unknown or malformed entry.
     """
+    # With no glossary directory every FQN is unknown, which the loop below reports.
+    glossaries = glossary_dir.is_dir()
     try:
-        declared = {fqn for _, glossary in load_glossaries(glossary_dir) for fqn in glossary.term_fqns()}
+        declared = (
+            {fqn for _, glossary in load_glossaries(glossary_dir) for fqn in glossary.term_fqns()}
+            if glossaries
+            else set()
+        )
     except ValueError as exc:
         report.add(GLOSSARY_TERMS_CHECK, Severity.ERROR, glossary_dir.name, str(exc))
         return
