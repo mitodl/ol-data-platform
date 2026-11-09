@@ -23,6 +23,11 @@ whether MIT Learn excludes it (staff-only, manifests, unreferenced static files)
         {mitx,mitxonline,xpro}/openedx/processed_data/course_file_exclusions/
             <deployment>/<course>/<version hash>.jsonl
 
+and the units MIT Learn breaks each run into, one row per unit:
+
+        {mitx,mitxonline,xpro}/openedx/processed_data/course_units/
+            <deployment>/<course>/<version hash>.jsonl
+
 Nothing loaded those files into the warehouse, so the raw tables below did not
 exist and their staging models could not build. This source appends every
 file's rows, stamped with the file they came from, and staging keeps the rows
@@ -173,6 +178,20 @@ FILE_EXCLUSION_FIELDS = (
     "extracted_at",
     "release_date",
 )
+# The row the file exclusions asset writes for each unit. content_files is a
+# list of [key, relation] pairs, which lands as JSON text.
+COURSE_UNIT_FIELDS = (
+    "course_id",
+    "source_system",
+    "course_xml_version",
+    "unit_order",
+    "external_id",
+    "kind",
+    "title",
+    "url_name",
+    "content_files",
+    "extracted_at",
+)
 
 
 @dataclass(frozen=True)
@@ -293,6 +312,20 @@ OPENEDX_FILE_EXCLUSIONS = XmlBlocksTable(
     optional_fields=frozenset({"extracted_at", "release_date"}),
     pipeline_name="course_file_exclusions__openedx",
 )
+OPENEDX_COURSE_UNITS = XmlBlocksTable(
+    raw_table="raw__openedx__s3__course_units",
+    pipeline_prefix="openedx",
+    file_globs=tuple(
+        f"{deployment}/openedx/processed_data/course_units/**/*.jsonl"
+        for deployment in _OPENEDX_DEPLOYMENTS
+    ),
+    fields=COURSE_UNIT_FIELDS,
+    integer_fields=frozenset({"unit_order"}),
+    pipeline_name="course_units__openedx",
+    # The asset writes an empty file when it can't build a run's units, which
+    # has to replace the run's last units in staging.
+    marks_empty_files=True,
+)
 TABLES = {
     table.raw_table: table
     for table in (
@@ -303,6 +336,7 @@ TABLES = {
         OPENEDX_DOCUMENT_TEXT,
         OPENEDX_TRANSCRIPT_TEXT,
         OPENEDX_FILE_EXCLUSIONS,
+        OPENEDX_COURSE_UNITS,
     )
 }
 

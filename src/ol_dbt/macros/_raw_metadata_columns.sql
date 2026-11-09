@@ -601,6 +601,7 @@
         'raw__openedx__s3__course_document_text': '_file_modified_at',
         'raw__openedx__s3__course_file_exclusions': '_file_modified_at',
         'raw__openedx__s3__course_transcript_text': '_file_modified_at',
+        'raw__openedx__s3__course_units': '_file_modified_at',
         'raw__openedx__s3__course_xml_blocks': '_file_modified_at',
         'raw__openlearning__api__events': '_dlt_load_id',
         'raw__ovs__postgres__auth_group': '_airbyte_extracted_at',
