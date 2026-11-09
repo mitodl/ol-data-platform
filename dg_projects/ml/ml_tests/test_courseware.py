@@ -34,6 +34,7 @@ from ml.lib.courseware.schemas import (
     ConceptClaim,
     ContextJudgment,
     Evidence,
+    LearningOutcomeClaim,
     ScopeExtraction,
 )
 from ml.lib.courseware.verify import verify_passage
@@ -394,6 +395,41 @@ def test_context_revisions_sent_as_a_json_string_are_decoded():
 
     assert model.calls == ["record_extraction", "record_context"]
     assert tables.claims["sense_hint"].to_list() == ["ml"]
+
+
+@pytest.mark.parametrize(
+    ("notes", "expected"),
+    [
+        (
+            "The outline gives only lecture titles.",
+            ["The outline gives only lecture titles."],
+        ),
+        ('["a note"]', ["a note"]),
+        ("  ", []),
+    ],
+)
+def test_context_notes_sent_as_one_string_become_a_list(notes, expected):
+    judgment = ContextJudgment.model_validate({"revisions": [], "notes": notes})
+    assert judgment.notes == expected
+
+
+@pytest.mark.parametrize("notes", ['["a note", "b"', '["a note"] and more'])
+def test_context_notes_that_are_a_broken_json_array_still_fail(notes):
+    with pytest.raises(ValidationError, match="list_type"):
+        ContextJudgment.model_validate({"revisions": [], "notes": notes})
+
+
+def test_other_string_lists_still_reject_a_plain_string():
+    with pytest.raises(ValidationError, match="list_type"):
+        LearningOutcomeClaim.model_validate(
+            {
+                "statement": "s",
+                "bloom_process": "apply",
+                "knowledge_type": "procedural",
+                "concept_labels": "a, b",
+                "evidence": [],
+            }
+        )
 
 
 def test_context_stage_retries_a_revision_of_a_claim_it_was_not_given():
