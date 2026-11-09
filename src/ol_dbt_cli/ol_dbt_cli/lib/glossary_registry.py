@@ -26,6 +26,7 @@ declare.
 
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, Self
 
@@ -159,8 +160,8 @@ def load_glossaries(glossary_dir: Path) -> list[tuple[Path, GlossaryFile]]:
             msg = f"{path}: {exc}"
             raise ValueError(msg) from exc
         glossaries.append((path, parsed))
-    names = [g.glossary.name for _, g in glossaries]
-    duplicates = sorted({n for n in names if names.count(n) > 1})
+    counts = Counter(g.glossary.name for _, g in glossaries)
+    duplicates = sorted(n for n, count in counts.items() if count > 1)
     if duplicates:
         msg = f"{glossary_dir}: glossary {', '.join(duplicates)} is declared in more than one file"
         raise ValueError(msg)
