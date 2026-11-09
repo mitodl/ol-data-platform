@@ -154,6 +154,8 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__ocw__s3__course_content",
         "ol_warehouse_raw_data/raw__edxorg__s3__program_learner_report",
         "ol_warehouse_raw_data/raw__xpro__openedx__tracking_log_events",
+        "ol_warehouse_raw_data/raw__mitxonline__openedx__tracking_log_events",
+        "ol_warehouse_raw_data/raw__mitx__openedx__tracking_log_events",
     ):
         assert expected in asset_keys
 
@@ -171,6 +173,8 @@ def test_schedules_and_sensors_load() -> None:
         "course_xml_blocks_ingest_daily_schedule",
         "edxorg_program_reports_ingest_daily_schedule",
         "xpro_tracking_logs_ingest_schedule",
+        "mitxonline_tracking_logs_ingest_schedule",
+        "mitx_tracking_logs_ingest_schedule",
         "ocw_content_ingest_daily_schedule",
         "canvas_content_ingest_daily_schedule",
     }
@@ -359,24 +363,44 @@ def test_posthog_schedule_skips_while_a_run_is_in_flight(
     }
 
 
+_TRACKING_LOGS_DEPLOYMENTS = ("xpro", "mitxonline", "mitx")
+
+
+@pytest.mark.parametrize("deployment", _TRACKING_LOGS_DEPLOYMENTS)
 @pytest.mark.parametrize(("in_flight", "expected"), [(True, False), (False, True)])
-def test_xpro_tracking_logs_schedule_skips_while_a_run_is_in_flight(
+def test_tracking_logs_schedule_skips_while_a_run_is_in_flight(
+    deployment: str,
     in_flight: bool,  # noqa: FBT001
     expected: bool,  # noqa: FBT001
 ) -> None:
     from data_loading.defs.ingestion import schedules  # noqa: PLC0415
 
     instance = _FakeInstance(in_flight)
-    assert (
-        schedules.no_xpro_tracking_logs_run_in_flight(_FakeScheduleContext(instance))
-        is expected
-    )
+    schedule = schedules.tracking_logs_ingest_schedules[deployment]
+    # ScheduleDefinition keeps should_execute only as this private attribute.
+    should_execute = schedule._should_execute
+    assert should_execute(_FakeScheduleContext(instance)) is expected
     (runs_filter,) = instance.filters
     assert runs_filter.tags == {
-        "dagster/schedule_name": schedules.XPRO_TRACKING_LOGS_SCHEDULE_NAME
+        "dagster/schedule_name": f"{deployment}_tracking_logs_ingest_schedule"
     }
 
 
+def test_tracking_logs_schedules_start_an_hour_apart() -> None:
+    """Xpro keeps the times it had before mitxonline and mitx were added."""
+    from data_loading.defs.ingestion import schedules  # noqa: PLC0415
+
+    assert {
+        deployment: schedule.cron_schedule
+        for deployment, schedule in schedules.tracking_logs_ingest_schedules.items()
+    } == {
+        "xpro": "50 0-23/12 * * *",
+        "mitxonline": "50 1-23/12 * * *",
+        "mitx": "50 2-23/12 * * *",
+    }
+
+
+@pytest.mark.parametrize("deployment", _TRACKING_LOGS_DEPLOYMENTS)
 @pytest.mark.parametrize(
     ("environment", "status"),
     [
@@ -385,11 +409,11 @@ def test_xpro_tracking_logs_schedule_skips_while_a_run_is_in_flight(
         ("dev", dg.DefaultScheduleStatus.STOPPED),
     ],
 )
-def test_xpro_tracking_logs_schedule_runs_where_its_bucket_is_its_own(
-    environment: str, status: dg.DefaultScheduleStatus
+def test_tracking_logs_schedule_runs_where_its_bucket_is_its_own(
+    deployment: str, environment: str, status: dg.DefaultScheduleStatus
 ) -> None:
     with _repository_for(environment) as repo:
-        schedule = repo.get_schedule_def("xpro_tracking_logs_ingest_schedule")
+        schedule = repo.get_schedule_def(f"{deployment}_tracking_logs_ingest_schedule")
         assert schedule.default_status == status
 
 
@@ -408,11 +432,14 @@ def test_posthog_schedule_runs_get_the_memory_limit_and_runtime_cap() -> None:
     assert tags["dagster/max_runtime"] == str(6 * 60 * 60)
 
 
-def test_xpro_tracking_logs_runs_get_the_memory_limit_and_runtime_cap() -> None:
+@pytest.mark.parametrize("deployment", _TRACKING_LOGS_DEPLOYMENTS)
+def test_tracking_logs_runs_get_the_memory_limit_and_runtime_cap(
+    deployment: str,
+) -> None:
     from dagster_k8s.job import get_user_defined_k8s_config  # noqa: PLC0415
     from data_loading.defs.ingestion import schedules  # noqa: PLC0415
 
-    tags = schedules.xpro_tracking_logs_ingest_schedule.tags
+    tags = schedules.tracking_logs_ingest_schedules[deployment].tags
     container = get_user_defined_k8s_config(tags).container_config
     assert container["resources"]["limits"]["memory"] == "16Gi"
     assert container["resources"]["requests"]["memory"] == "2Gi"
