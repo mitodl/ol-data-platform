@@ -41,6 +41,12 @@ with source as (
                     then program_certificate_awarded_at
             end
         ) as earliest_program_cert_award_on
+        , max(
+            case
+                when report_date not between '2024-12-10' and '2024-12-16'
+                    then program_certificate_awarded_at
+            end
+        ) as latest_program_cert_award_on
         , max(completed_program) as ever_completed_program
     from source
     group by 1, 2, 3
@@ -120,6 +126,7 @@ select
     , cleaned.courserunenrollment_unenrolled_on
     , cleaned.courserunenrollment_upgraded_on
     , aggregated_program_certificate.earliest_program_cert_award_on as program_certificate_awarded_on
+    , aggregated_program_certificate.latest_program_cert_award_on as program_certificate_last_awarded_on
     , {{ regexp_extract_or_null('cleaned.program_title', "'\((.*?)\)'", 1) }} as program_track
 from cleaned
 left join aggregated_program_certificate

@@ -435,7 +435,10 @@ models:
     - not_null
   - name: program_certificate_awarded_on
     description: timestamp, the date in ISO-8601 format that the learner has passed
-      each of the courses in the program and was awarded a program certificate.
+      each of the courses in the program and was awarded a program certificate. edX.org's
+      award date is used unless it is more than a day before the learner's last course
+      completion (the latest of each course's first certificate). Then it is the latest
+      award within 60 days after that completion, else the completion itself.
   - name: micromasters_program_id
     description: int, foreign key to program in the MicroMasters database
   tests:
@@ -974,3 +977,66 @@ models:
   - name: credit_hours
     description: str, the number of credit hours that learners who pass the course
       earn.
+
+unit_tests:
+- name: test_int__edxorg__mitx_program_certificates_award_date_rule
+  description: >
+    An award on or after the last course completion is kept (user 1). An award
+    more than a day before it is replaced by the latest award when that falls within
+    60 days after completion (user 3, a failed final-exam cohort date), else by the
+    completion itself (user 2). Completion takes the course certificate's created
+    date when the report's completed date is a later regeneration (user 2's second
+    course). A completer with no award date keeps none (user 4). A rerun titled
+    "(with Proctored Final Exam)" is the same course, so completing it a week
+    later does not move completion past the award (user 5). An award with no
+    completed course is kept (user 6).
+  model: int__edxorg__mitx_program_certificates
+  given:
+  - input: ref('stg__edxorg__s3__program_learner_report')
+    rows:
+    - {user_id: 1, program_uuid: p, program_type: XSeries, program_title: P, course_title: A,
+      courserun_readable_id: a1, user_has_completed_program: true, completed_course_on: "2020-01-01T00:00:00.000",
+      program_certificate_awarded_on: "2020-02-03T00:00:00.000", program_certificate_last_awarded_on: "2020-02-03T00:00:00.000"}
+    - {user_id: 1, program_uuid: p, program_type: XSeries, program_title: P, course_title: B,
+      courserun_readable_id: b1, user_has_completed_program: true, completed_course_on: "2020-02-01T00:00:00.000",
+      program_certificate_awarded_on: "2020-02-03T00:00:00.000", program_certificate_last_awarded_on: "2020-02-03T00:00:00.000"}
+    - {user_id: 2, program_uuid: p, program_type: XSeries, program_title: P, course_title: A,
+      courserun_readable_id: a1, user_has_completed_program: true, completed_course_on: "2016-01-01T00:00:00.000",
+      program_certificate_awarded_on: "2016-05-06T23:30:00.000", program_certificate_last_awarded_on: "2018-10-09T15:40:54.000"}
+    - {user_id: 2, program_uuid: p, program_type: XSeries, program_title: P, course_title: B,
+      courserun_readable_id: b1, user_has_completed_program: true, completed_course_on: "2017-04-19T14:20:00.000",
+      program_certificate_awarded_on: "2016-05-06T23:30:00.000", program_certificate_last_awarded_on: "2018-10-09T15:40:54.000"}
+    - {user_id: 3, program_uuid: p, program_type: XSeries, program_title: P, course_title: A,
+      courserun_readable_id: a1, user_has_completed_program: true, completed_course_on: "2024-01-01T00:00:00.000",
+      program_certificate_awarded_on: "2024-11-26T00:00:00.000", program_certificate_last_awarded_on: "2025-05-20T00:00:00.000"}
+    - {user_id: 3, program_uuid: p, program_type: XSeries, program_title: P, course_title: CFx,
+      courserun_readable_id: c2, user_has_completed_program: true, completed_course_on: "2025-05-08T00:00:00.000",
+      program_certificate_awarded_on: "2024-11-26T00:00:00.000", program_certificate_last_awarded_on: "2025-05-20T00:00:00.000"}
+    - {user_id: 4, program_uuid: p, program_type: XSeries, program_title: P, course_title: A,
+      courserun_readable_id: a1, user_has_completed_program: true, completed_course_on: "2020-01-01T00:00:00.000"}
+    - {user_id: 5, program_uuid: p, program_type: XSeries, program_title: P, course_title: Derivatives,
+      courserun_readable_id: d1, user_has_completed_program: true, completed_course_on: "2023-12-10T00:00:00.000",
+      program_certificate_awarded_on: "2023-12-10T00:00:00.000", program_certificate_last_awarded_on: "2023-12-10T00:00:00.000"}
+    - {user_id: 5, program_uuid: p, program_type: XSeries, program_title: P, course_title: Derivatives
+        (with Proctored Final Exam), courserun_readable_id: d1a, user_has_completed_program: true,
+      completed_course_on: "2023-12-17T00:00:00.000", program_certificate_awarded_on: "2023-12-10T00:00:00.000",
+      program_certificate_last_awarded_on: "2023-12-10T00:00:00.000"}
+    - {user_id: 6, program_uuid: p, program_type: XSeries, program_title: P, course_title: A,
+      courserun_readable_id: a1, user_has_completed_program: true, program_certificate_awarded_on: "2021-03-01T00:00:00.000",
+      program_certificate_last_awarded_on: "2021-03-01T00:00:00.000"}
+  - input: ref('stg__edxorg__s3__courserun_certificate')
+    rows:
+    - {user_id: 2, courserun_readable_id: b1, courseruncertificate_status: downloadable,
+      courseruncertificate_created_on: "2016-05-10T00:00:00.000"}
+    - {user_id: 3, courserun_readable_id: c2, courseruncertificate_status: notpassing,
+      courseruncertificate_created_on: "2024-11-20T00:00:00.000"}
+  - input: ref('int__micromasters__programs')
+    rows: []
+  expect:
+    rows:
+    - {user_id: 1, program_certificate_awarded_on: "2020-02-03T00:00:00.000"}
+    - {user_id: 2, program_certificate_awarded_on: "2016-05-10T00:00:00.000"}
+    - {user_id: 3, program_certificate_awarded_on: "2025-05-20T00:00:00.000"}
+    - {user_id: 4, program_certificate_awarded_on: null}
+    - {user_id: 5, program_certificate_awarded_on: "2023-12-10T00:00:00.000"}
+    - {user_id: 6, program_certificate_awarded_on: "2021-03-01T00:00:00.000"}
