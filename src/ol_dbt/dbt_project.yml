@@ -69,13 +69,25 @@ vars:
     mitlearn_url: "https://learn.mit.edu"
     mitxonline_openedx_url: "https://courses.learn.mit.edu"
     mitxpro_openedx_url: "https://courses.xpro.mit.edu"
-    # xPRO marketing site, no trailing slash. Course and program page URLs are built on it.
-    mitxpro_url: "https://xpro.mit.edu"
+    # xPRO marketing site per warehouse environment (macro warehouse_var), no trailing
+    # slash. Course and program page URLs are built on it, so QA's rows, loaded from
+    # rc.xpro.mit.edu, link there. local has no xPRO app; local-dev's MIT Learn reads
+    # xpro.mit.edu. Values from MITXPRO_BASE_URL in ol-infrastructure's xpro stacks.
+    mitxpro_url:
+      production: "https://xpro.mit.edu"
+      qa: "https://rc.xpro.mit.edu"
+      ci: "https://xpro-ci.odl.mit.edu"
+      local: "https://xpro.mit.edu"
     # Base URLs for Wagtail-uploaded media files (prepended to wagtailimages_image.file paths).
     # The image file column contains paths like 'original_images/course.jpg' — these vars
     # supply the scheme+host prefix to form a complete URL. Verify against the Django
     # MEDIA_URL setting for each app in production.
-    xpro_media_url: "https://ol-xpro-app-production.s3.amazonaws.com/"
+    # xPRO's media bucket is ol-xpro-app-<env> (ol-infrastructure applications/xpro).
+    xpro_media_url:
+      production: "https://ol-xpro-app-production.s3.amazonaws.com/"
+      qa: "https://ol-xpro-app-qa.s3.amazonaws.com/"
+      ci: "https://ol-xpro-app-ci.s3.amazonaws.com/"
+      local: "https://ol-xpro-app-production.s3.amazonaws.com/"
     mitxonline_media_url: "https://mitxonline.mit.edu/media/"
     micromasters_media_url: "https://ol-micromasters-app-production.s3.amazonaws.com/"
     micromasters_production_url: "https://micromasters.mit.edu/"

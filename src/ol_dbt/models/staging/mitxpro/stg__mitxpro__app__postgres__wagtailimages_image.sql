@@ -11,7 +11,7 @@ with source as (
     select
         id as image_id
         , file as image_file
-        , concat('{{ var("xpro_media_url") }}', file) as image_url
+        , concat('{{ warehouse_var("xpro_media_url") }}', file) as image_url
         , title as image_title
         , width as image_width
         , height as image_height
