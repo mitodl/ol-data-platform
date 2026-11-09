@@ -14,9 +14,11 @@ models:
     its one run from. Sourced from int__ocw__live_courses, which reads each
     course's published data.json.
   config:
+    tags: [qa_scheduled]
     meta:
-      # It reads the OCW live bucket, and ocw/s3 is qa: omit in the inventory.
-      qa_buildable: false
+      qa_branches:
+      - ocw/app_postgres
+      - ocw/s3
   columns:
   - name: readable_id
     description: >

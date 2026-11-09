@@ -6,7 +6,7 @@ deployment: ocw
 layer: s3
 scope: scoped
 strategies:
-  qa: omit
+  qa: ingest
   local: fixture
 loader: dlt
 # The load appends a full set of rows each time a course changes, stamped with
