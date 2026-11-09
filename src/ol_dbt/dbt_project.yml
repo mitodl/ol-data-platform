@@ -258,6 +258,7 @@ models:
         update: []
         delete: []
         all privileges: []
+      # null, not {}, as in b2b_analytics above
       +properties:
       +meta:
         required_docs: true
