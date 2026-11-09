@@ -155,7 +155,7 @@ schema: ol_warehouse_production_reporting
 sql: |
   select
       de.platform,
-      cr.courserun_title as course_title,
+      ct.course_title,
       de.courserun_readable_id,
       de.event_type,
       de.post_title,
@@ -164,9 +164,27 @@ sql: |
       de.page_url,
       de.event_timestamp
   from ol_warehouse_production_dimensional.tfact_discussion_events as de
-  inner join ol_warehouse_production_dimensional.dim_course_run as cr
-      on de.courserun_fk = cr.courserun_pk
-      and cr.is_current = true
+  inner join (
+      select courserun_readable_id, platform, course_title
+      from (
+          select
+              dcr.courserun_readable_id,
+              dcr.platform,
+              coalesce(dc.course_title, dcr.courserun_title) as course_title,
+              row_number() over (
+                  partition by dcr.platform, dcr.courserun_readable_id
+                  order by dcr.effective_date desc nulls last, dc.effective_date desc nulls last
+              ) as _row_num
+          from ol_warehouse_production_dimensional.dim_course_run as dcr
+          left join ol_warehouse_production_dimensional.dim_course as dc
+              on dcr.course_fk = dc.course_pk
+              and dc.is_current = true
+          where dcr.is_current = true
+      )
+      where _row_num = 1
+  ) as ct
+      on de.courserun_readable_id = ct.courserun_readable_id
+      and de.platform = ct.platform
 table_name: discussion_detail_report
 template_params: null
 uuid: ec0fc17c-ebca-44ae-94ae-2072da856d24
