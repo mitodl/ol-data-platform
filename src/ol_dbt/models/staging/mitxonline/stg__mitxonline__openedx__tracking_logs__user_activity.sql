@@ -20,6 +20,18 @@ with source as (
 
     {% if is_incremental() %}
         and {{ adapter.quote('time') }} > (select max(this.useractivity_timestamp) from {{ this }} as this) --noqa
+
+        -- load the API enrollments from before this model kept them, without a full refresh.
+        -- a separate scan with a literal bound is fast; an "or" in the filter above made each run 4x slower
+        {% set api_enrollment_start = run_query(
+            "select coalesce(min(useractivity_timestamp), '9999') from " ~ this ~ " where user_username = ''"
+        ).columns[0].values()[0] %}
+        union all
+        select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__tracking_logs') }}
+        where
+            username = '' and event_type like 'edx.course.enrollment.%'
+            and {{ json_query_string('event', "'$.exception'") }} is null
+            and {{ adapter.quote('time') }} < '{{ api_enrollment_start }}' --noqa
     {% endif %}
 )
 
@@ -27,20 +39,9 @@ with source as (
     raw_table='raw__mitxonline__openedx__tracking_logs'
     , partition_columns = 'username, context, event_source, event_type, event, ' ~ adapter.quote('time')
 ) }}
-, tracking_logs as (
-    select
-        most_recent_source.*
-        , auth_user.username as auth_user_username
-    from most_recent_source
-    left join {{ source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__auth_user') }} as auth_user
-        on
-            most_recent_source.username = ''
-            and auth_user.id = {{ try_cast(json_query_string('most_recent_source.event', "'$.user_id'"), 'integer') }}
-)
-
 , cleaned as (
     select
-        coalesce(nullif(username, ''), auth_user_username) as user_username
+        username as user_username
         , context as useractivity_context_object
         , event as useractivity_event_object
         , event_source as useractivity_event_source
@@ -65,8 +66,7 @@ with source as (
         , {{ format_timestamp_as_iso8601(from_iso8601_timestamp_nanos(
             regexp_replace_with_backreferences('time', "'(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)'", "'$1T$2$3'")
         )) }} as useractivity_timestamp -- noqa
-    from tracking_logs
+    from most_recent_source
 )
 
 select * from cleaned
-where user_username is not null

@@ -1466,12 +1466,13 @@ models:
 - name: stg__mitxonline__openedx__tracking_logs__user_activity
   description: This table is cleaned to remove duplicate events, events without user
     identifiers, and events that represent server errors. Enrollment events sent through
-    the edX API have no user context, so they are kept with the learner from event.user_id
+    the edX API have no user context, so this model keeps them and takes the learner
+    from event.user_id.
   columns:
   - name: user_username
     description: str, username of the open edX user who caused the event to be emitted.
-      For enrollment events sent through the edX API, it is the enrolled learner's
-      username from auth_user.
+      It is empty for enrollment events sent through the edX API. Join auth_user on
+      openedx_user_id to get the learner's username.
     tests:
     - not_null
   - name: openedx_user_id
