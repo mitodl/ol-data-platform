@@ -225,12 +225,19 @@ models:
     - accepted_values:
         arguments:
           values: [requester, staff, other_end_user]
+  - name: comment_author_email
+    description: str, the email of the comment's author, from stg__zendesk__user.
+      Null when the author is missing there.
   - name: comment_body
     description: str, the comment's plain-text body. An Appzi survey email is reduced
-      to its feedback type and answer, the same text as int__feedback__zendesk. Any
-      other comment is kept as written, with any quoted email history. Never empty.
+      to its feedback type and answer. Any other comment is kept as written, with
+      any quoted email history. Empty when the comment has no text, such as a web
+      form sent with only a subject; ticket_subject then holds the learner's question.
     tests:
     - not_null
+  - name: appzi_page_url
+    description: str, the page an Appzi survey was sent from, decoded from the email's
+      Feedback Origin link without its EMAIL parameter. Null for other comments.
   - name: comment_source_channel
     description: str, the channel through which the comment was created. e.g. "web",
       "email"
@@ -308,3 +315,28 @@ unit_tests:
     - {comment_id: 4, turn_index: 4, comment_author_role: staff}
     - {comment_id: 5, turn_index: 5, comment_author_role: other_end_user}
     - {comment_id: 6, turn_index: 6, comment_author_role: other_end_user}
+- name: test_int__zendesk__ticket_conversation_strips_the_appzi_template
+  description: >
+    Appzi emails keep only the feedback type and answer, digests drop out, a changed
+    template keeps the whole email in either layout, other comments pass through,
+    and appzi_page_url is the decoded page URL without its EMAIL parameter. Spacing
+    does not matter:
+    the old layout, the table layout that wraps each block in "|" rows, an email
+    cut off before its first question, and a notification with nothing typed above
+    the reply line are all parsed. A two-word answer is not read as a feedback type,
+    and a "|" in an answer is kept.
+    The emails are in tests/fixtures/int__zendesk__ticket_conversation__appzi_*.csv.
+  model: int__zendesk__ticket_conversation
+  given:
+  - input: ref('int__zendesk__ticket_comment')
+    format: csv
+    fixture: int__zendesk__ticket_conversation__appzi_comments
+  - input: ref('int__zendesk__ticket')
+    rows:
+    - {ticket_id: 1, ticket_requester_user_id: 10, ticket_updated_at: '2026-10-09T00:00:00'}
+  - input: ref('stg__zendesk__user')
+    rows:
+    - {user_id: 10, user_role: end-user}
+  expect:
+    format: csv
+    fixture: int__zendesk__ticket_conversation__appzi_expected
