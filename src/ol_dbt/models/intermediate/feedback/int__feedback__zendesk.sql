@@ -100,7 +100,7 @@ select
     , {{ json_object_from_pairs([
         ['ticket_status', "ticket.ticket_status"]
         , ['ticket_priority', "ticket.ticket_priority"]
-        , ['ticket_due_at', "ticket.ticket_due_at"]
+        , ['ticket_due_at', "cast(ticket.ticket_due_at as varchar)"]
         , ['brand_name', "ticket.brand_name"]
         , ['brand_subdomain', "ticket.brand_subdomain"]
         , ['group_name', "ticket.group_name"]
