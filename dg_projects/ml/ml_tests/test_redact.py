@@ -65,7 +65,7 @@ def fake_analyzer(monkeypatch: pytest.MonkeyPatch) -> _FakeAnalyzer:
 
 
 @pytest.mark.usefixtures("fake_analyzer")
-def test_redact_titles_and_text_masks_pii_and_keeps_the_join_key() -> None:
+def test_redact_columns_masks_pii_and_keeps_the_join_key() -> None:
     """PII is masked, and source_slug/source_record_ref survive for the left-join."""
     df = pl.DataFrame(
         {
@@ -76,7 +76,7 @@ def test_redact_titles_and_text_masks_pii_and_keeps_the_join_key() -> None:
         }
     )
 
-    result = redact.redact_titles_and_text(df)
+    result = redact.redact_columns(df)
 
     row = result.row(0, named=True)
     assert row["source_slug"] == "zendesk"
@@ -361,7 +361,7 @@ def test_redact_and_checkpoint_writes_each_batch_with_the_current_version(
     monkeypatch.setattr(
         redact,
         "checkpoint_redacted_chunk",
-        lambda _catalog, _table, chunk_df: written.append(chunk_df),
+        lambda _catalog, _table, chunk_df, _key_cols: written.append(chunk_df),
     )
     df = pl.DataFrame(
         {

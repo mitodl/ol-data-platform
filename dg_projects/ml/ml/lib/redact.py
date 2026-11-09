@@ -1,4 +1,4 @@
-"""Presidio-based PII redaction for feedback title/text."""
+"""Presidio-based PII redaction for text columns, keyed so a run redacts new rows."""
 
 import os
 import re
@@ -10,7 +10,9 @@ from presidio_anonymizer import AnonymizerEngine
 from pyiceberg.catalog import Catalog
 from pyiceberg.expressions import And, BooleanExpression, EqualTo, In, Or
 
+# The feedback_redacted defaults; other assets pass their own key and text columns.
 JOIN_COLS = ["source_slug", "source_record_ref"]
+TEXT_COLS = ["title", "text"]
 
 # Bump when the masking rules or the upstream text change. A full refresh
 # re-redacts only rows stored with another version, so it resumes after a crash.
@@ -211,59 +213,71 @@ def _redact_text(value: str | None) -> str | None:
 
 
 def filter_unredacted(
-    source_df: pl.DataFrame, already_redacted_df: pl.DataFrame
+    source_df: pl.DataFrame,
+    already_redacted_df: pl.DataFrame,
+    key_cols: list[str] = JOIN_COLS,
 ) -> pl.DataFrame:
-    """Drop rows already present in the feedback_redacted output."""
-    return source_df.join(
-        already_redacted_df.select(JOIN_COLS), on=JOIN_COLS, how="anti"
-    )
+    """Drop rows already present in the redacted output."""
+    return source_df.join(already_redacted_df.select(key_cols), on=key_cols, how="anti")
 
 
-def redact_titles_and_text(df: pl.DataFrame) -> pl.DataFrame:
-    """Mask PII in the title/text columns of a feedback frame.
+def redact_columns(
+    df: pl.DataFrame,
+    key_cols: list[str] = JOIN_COLS,
+    text_cols: list[str] = TEXT_COLS,
+) -> pl.DataFrame:
+    """Mask PII in the text columns of a frame.
 
     Args:
-        df: a frame with (at least) source_slug, source_record_ref, title, text
-            columns, e.g. int__feedback__unioned.
+        df: a frame with (at least) the key and text columns.
+        key_cols: the columns that identify a row, kept as they are.
+        text_cols: the columns to redact. Each becomes <column>_redacted.
 
     Returns:
-        pl.DataFrame: source_slug, source_record_ref, title_redacted, text_redacted,
-            redaction_version - keyed the same way feedback_pk is minted, for
-            tfact_feedback to left-join.
+        pl.DataFrame: the key columns, one <column>_redacted per text column, and
+            redaction_version.
     """
     return df.select(
-        pl.col("source_slug"),
-        pl.col("source_record_ref"),
-        pl.col("title")
-        .map_elements(_redact_text, return_dtype=pl.String)
-        .alias("title_redacted"),
-        pl.col("text")
-        .map_elements(_redact_text, return_dtype=pl.String)
-        .alias("text_redacted"),
+        *key_cols,
+        *(
+            pl.col(column)
+            .map_elements(_redact_text, return_dtype=pl.String)
+            .alias(f"{column}_redacted")
+            for column in text_cols
+        ),
         pl.lit(REDACTION_VERSION).alias("redaction_version"),
     )
 
 
-def _key_filter(chunk_df: pl.DataFrame) -> BooleanExpression:
+def _key_filter(
+    chunk_df: pl.DataFrame, key_cols: list[str] = JOIN_COLS
+) -> BooleanExpression:
     # Not pyiceberg's upsert: it ORs one (slug AND ref) pair per row, and at 5,000
-    # rows its scan ran for over 19 minutes. One IN list per source takes ~10s.
-    parts: list[BooleanExpression] = [
-        And(EqualTo("source_slug", slug), In("source_record_ref", refs))
-        for slug, refs in chunk_df.group_by("source_slug")
-        .agg(pl.col("source_record_ref"))
-        .iter_rows()
-    ]
+    # rows its scan ran for over 19 minutes. One IN list per group takes ~10s.
+    *group_cols, last_col = key_cols
+    if not group_cols:
+        return In(last_col, chunk_df[last_col].to_list())
+    parts: list[BooleanExpression] = []
+    for row in chunk_df.group_by(group_cols).agg(pl.col(last_col)).iter_rows():
+        *group_values, values = row
+        condition: BooleanExpression = In(last_col, values)
+        for column, value in zip(group_cols, group_values, strict=True):
+            condition = And(EqualTo(column, value), condition)
+        parts.append(condition)
     return parts[0] if len(parts) == 1 else Or(*parts)
 
 
 def checkpoint_redacted_chunk(
-    catalog: Catalog, table_identifier: str, chunk_df: pl.DataFrame
+    catalog: Catalog,
+    table_identifier: str,
+    chunk_df: pl.DataFrame,
+    key_cols: list[str] = JOIN_COLS,
 ) -> None:
-    """Replace one redacted chunk's rows in the feedback_redacted table."""
+    """Replace one redacted chunk's rows in the redacted table."""
     if chunk_df.height == 0:
         return
-    if chunk_df.select(JOIN_COLS).is_duplicated().any():
-        msg = f"Duplicate {JOIN_COLS} in a redacted chunk; overwrite would keep both"
+    if chunk_df.select(key_cols).is_duplicated().any():
+        msg = f"Duplicate {key_cols} in a redacted chunk; overwrite would keep both"
         raise ValueError(msg)
     table = catalog.create_table_if_not_exists(
         table_identifier, schema=chunk_df.to_arrow().schema
@@ -274,7 +288,8 @@ def checkpoint_redacted_chunk(
     # The write casts by position, so match the table's column order.
     ordered_chunk_df = chunk_df.select([field.name for field in table.schema().fields])
     table.overwrite(
-        df=ordered_chunk_df.to_arrow(), overwrite_filter=_key_filter(chunk_df)
+        df=ordered_chunk_df.to_arrow(),
+        overwrite_filter=_key_filter(chunk_df, key_cols),
     )
 
 
@@ -282,6 +297,8 @@ def redact_and_checkpoint(
     df: pl.DataFrame,
     checkpoint_target: tuple[Catalog, str],
     batch_size: int = REDACT_CHECKPOINT_BATCH_SIZE,
+    key_cols: list[str] = JOIN_COLS,
+    text_cols: list[str] = TEXT_COLS,
 ) -> int:
     """Redact df in chunks, writing each as it completes. Returns rows written."""
     log = get_dagster_logger()
@@ -289,8 +306,10 @@ def redact_and_checkpoint(
     chunk_starts = range(0, df.height, batch_size)
     written = 0
     for chunk_index, chunk_start in enumerate(chunk_starts, start=1):
-        chunk_df = redact_titles_and_text(df.slice(chunk_start, batch_size))
-        checkpoint_redacted_chunk(catalog, table_identifier, chunk_df)
+        chunk_df = redact_columns(
+            df.slice(chunk_start, batch_size), key_cols, text_cols
+        )
+        checkpoint_redacted_chunk(catalog, table_identifier, chunk_df, key_cols)
         written += chunk_df.height
         log.info(
             "Wrote chunk %d/%d (%d rows) to %s",
