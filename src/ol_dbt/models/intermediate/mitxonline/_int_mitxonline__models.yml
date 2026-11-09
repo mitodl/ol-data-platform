@@ -2060,6 +2060,11 @@ models:
 
 - name: int__mitxonline__user_courseactivities_daily
   description: MITx Online daily aggregate learner activities within a course
+  config:
+    meta:
+      qa_branches:
+      - mitxonline/mysql
+      - mitxonline/tracking_logs
   columns:
   - name: user_username
     description: str, username of the open edX user who caused the event to be emitted.
