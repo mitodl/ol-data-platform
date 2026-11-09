@@ -64,6 +64,7 @@ REPORT_CHUNK_DAYS = 31
 # The API keeps 30 days of change events and caps a query at 10,000 rows.
 CHANGE_EVENT_RETENTION_DAYS = 29
 CHANGE_EVENT_LIMIT = 10_000
+CHANGE_EVENT_MIN_WINDOW = timedelta(minutes=1)
 
 CUSTOMER_CLIENT_FIELDS = (
     "customer_client.id",
@@ -235,6 +236,9 @@ def _plain(value: Any) -> Any:  # noqa: ANN401
             use_integers_for_enums=False,
             preserving_proto_field_name=True,
             indent=None,
+            # Otherwise every unset field prints as its default, which reads as a
+            # change when staging compares old_resource with new_resource.
+            always_print_fields_with_no_presence=False,
         )
     if hasattr(value, "paths"):
         return ",".join(value.paths)
@@ -288,6 +292,11 @@ def report_window(
     return (first, end) if first <= end else None
 
 
+def manager_id(value: object) -> str:
+    """Return a customer id without the hyphens the Ads UI shows."""
+    return str(value).replace("-", "")
+
+
 def load_client() -> GoogleAdsClient:
     """Build the Google Ads client for the active profile."""
     if config.active_profile() not in config.DEPLOYED_PROFILES:
@@ -305,7 +314,7 @@ def load_client() -> GoogleAdsClient:
         return GoogleAdsClient.load_from_dict(
             {
                 "developer_token": secret["google_developer_token"],
-                "login_customer_id": str(secret["google_manager_account"]),
+                "login_customer_id": manager_id(secret["google_manager_account"]),
                 "json_key_file_path": key_file.name,
                 "use_proto_plus": True,
             }
@@ -352,22 +361,37 @@ def google_ads_source(
             for row in batch.results:
                 yield flatten_row(row, fields)
 
-    def _accounts() -> list[dict[str, Any]]:
-        manager_id = str(_client().login_customer_id)
-        query = build_query(
-            "customer_client", CUSTOMER_CLIENT_FIELDS, "customer_client.level <= 1"
+    # Every table resource is a transformer of this one, and dlt runs a shared
+    # parent once per extraction, so a run reads the account list once and every
+    # table sees the same accounts.
+    @dlt.resource(name="google_ads_accounts", selected=False)
+    def accounts() -> Iterator[dict[str, Any]]:
+        login_id = manager_id(_client().login_customer_id)
+        # No level filter: client accounts under a sub-manager sit below level 1.
+        rows = list(
+            _search(
+                login_id,
+                build_query("customer_client", CUSTOMER_CLIENT_FIELDS),
+                CUSTOMER_CLIENT_FIELDS,
+            )
         )
-        rows = list(_search(manager_id, query, CUSTOMER_CLIENT_FIELDS))
-        logger.info("Found %d accounts under manager %s", len(rows), manager_id)
-        return rows
-
-    def _client_ids() -> list[str]:
-        return [
+        client_ids = [
             str(a["customer_client__id"])
-            for a in _accounts()
+            for a in rows
             if not a["customer_client__manager"]
             and a["customer_client__status"] == "ENABLED"
         ]
+        logger.info(
+            "Found %d enabled client accounts under manager %s",
+            len(client_ids),
+            login_id,
+        )
+        # Without this a lost grant loads nothing and still materializes, so the
+        # change-event freshness check would pass while history ages out.
+        if not client_ids:
+            msg = f"No enabled client accounts under manager {login_id}"
+            raise ValueError(msg)
+        yield {"accounts": rows, "client_ids": client_ids}
 
     def _table(name: str, primary_key: tuple[str, ...]) -> dict[str, Any]:
         return {
@@ -378,26 +402,27 @@ def google_ads_source(
             "schema_contract": config.JSON_API_SCHEMA_CONTRACT,
         }
 
-    @dlt.resource(
+    @dlt.transformer(
+        data_from=accounts,
         name="raw__google_ads__api__customer_clients",
         primary_key="customer_client__id",
         write_disposition="replace",
         table_format=table_format,
         schema_contract=config.JSON_API_SCHEMA_CONTRACT,
     )
-    def customer_clients() -> Iterator[dict[str, Any]]:
+    def customer_clients(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:
         retrieved_at = _now()
-        for account in _accounts():
+        for account in listing["accounts"]:
             yield {**account, "retrieved_at": retrieved_at}
 
     def _daily_report(
-        resource: str, fields: tuple[str, ...], where: str
+        client_ids: list[str], resource: str, fields: tuple[str, ...], where: str
     ) -> Iterator[dict[str, Any]]:
         last_loaded: dict[str, str] = dlt.current.resource_state().setdefault(
             "last_loaded_date", {}
         )
         run_date, retrieved_at = _run_date(), _now()
-        for customer_id in _client_ids():
+        for customer_id in client_ids:
             window = report_window(
                 last_loaded.get(customer_id), start_date, lookback_days, run_date
             )
@@ -425,65 +450,101 @@ def google_ads_source(
         "ad_group_criterion__criterion_id",
     )
 
-    @dlt.resource(**_table("raw__google_ads__api__keyword_daily", keyword_key))
-    def keyword_daily() -> Iterator[dict[str, Any]]:
+    @dlt.transformer(
+        data_from=accounts, **_table("raw__google_ads__api__keyword_daily", keyword_key)
+    )
+    def keyword_daily(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:
         yield from _daily_report(
-            "keyword_view", KEYWORD_DAILY_FIELDS, "metrics.impressions > 0"
+            listing["client_ids"],
+            "keyword_view",
+            KEYWORD_DAILY_FIELDS,
+            "metrics.impressions > 0",
         )
 
-    @dlt.resource(
+    @dlt.transformer(
+        data_from=accounts,
         **_table(
             "raw__google_ads__api__keyword_conversions_daily",
             (*keyword_key, "segments__conversion_action"),
-        )
+        ),
     )
-    def keyword_conversions_daily() -> Iterator[dict[str, Any]]:
+    def keyword_conversions_daily(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:
         yield from _daily_report(
-            "keyword_view", KEYWORD_CONVERSION_FIELDS, "metrics.all_conversions > 0"
+            listing["client_ids"],
+            "keyword_view",
+            KEYWORD_CONVERSION_FIELDS,
+            "metrics.all_conversions > 0",
         )
 
-    @dlt.resource(
+    @dlt.transformer(
+        data_from=accounts,
         **_table(
             "raw__google_ads__api__campaign_daily",
             ("customer_id", "segments__date", "campaign__id"),
-        )
+        ),
     )
-    def campaign_daily() -> Iterator[dict[str, Any]]:
+    def campaign_daily(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:
         yield from _daily_report(
-            "campaign", CAMPAIGN_DAILY_FIELDS, "metrics.impressions > 0"
+            listing["client_ids"],
+            "campaign",
+            CAMPAIGN_DAILY_FIELDS,
+            "metrics.impressions > 0",
         )
 
-    @dlt.resource(
+    types = ", ".join(f"'{t}'" for t in CHANGE_EVENT_RESOURCE_TYPES)
+
+    def _change_events_between(
+        customer_id: str, first: datetime, last: datetime
+    ) -> Iterator[dict[str, Any]]:
+        query = build_query(
+            "change_event",
+            CHANGE_EVENT_FIELDS,
+            f"change_event.change_date_time >= '{first:%Y-%m-%d %H:%M:%S}' "
+            f"AND change_event.change_date_time < '{last:%Y-%m-%d %H:%M:%S}' "
+            f"AND change_event.change_resource_type IN ({types}) "
+            f"ORDER BY change_event.change_date_time "
+            f"LIMIT {CHANGE_EVENT_LIMIT}",
+        )
+        rows = list(_search(customer_id, query, CHANGE_EVENT_FIELDS))
+        if len(rows) < CHANGE_EVENT_LIMIT:
+            yield from rows
+            return
+        # A full page may be truncated. Halve the window rather than fail: every
+        # run re-reads 29 days, so one failure would repeat until the day aged out.
+        if last - first <= CHANGE_EVENT_MIN_WINDOW:
+            logger.error(
+                "Account %s has %d or more change events from %s to %s; loading "
+                "the first %d",
+                customer_id,
+                CHANGE_EVENT_LIMIT,
+                first,
+                last,
+                CHANGE_EVENT_LIMIT,
+            )
+            yield from rows
+            return
+        middle = first + (last - first) // 2
+        yield from _change_events_between(customer_id, first, middle)
+        yield from _change_events_between(customer_id, middle, last)
+
+    @dlt.transformer(
+        data_from=accounts,
         **_table(
             "raw__google_ads__api__change_events",
             ("customer_id", "change_event__resource_name"),
-        )
+        ),
     )
-    def change_events() -> Iterator[dict[str, Any]]:
-        types = ", ".join(f"'{t}'" for t in CHANGE_EVENT_RESOURCE_TYPES)
+    def change_events(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:
         run_date, retrieved_at = _run_date(), _now()
         oldest = run_date - timedelta(days=CHANGE_EVENT_RETENTION_DAYS)
-        for customer_id in _client_ids():
-            # One day per query keeps each under the row limit. Re-pulling all
-            # 29 days is cheap and the merge key makes it idempotent.
+        for customer_id in listing["client_ids"]:
+            # Re-pulling all 29 days is cheap and the merge key makes it
+            # idempotent.
             for day, _ in date_chunks(oldest, run_date, 1):
-                query = build_query(
-                    "change_event",
-                    CHANGE_EVENT_FIELDS,
-                    f"change_event.change_date_time >= '{day}' "
-                    f"AND change_event.change_date_time < '{day + timedelta(days=1)}' "
-                    f"AND change_event.change_resource_type IN ({types}) "
-                    f"ORDER BY change_event.change_date_time "
-                    f"LIMIT {CHANGE_EVENT_LIMIT}",
-                )
-                rows = list(_search(customer_id, query, CHANGE_EVENT_FIELDS))
-                if len(rows) >= CHANGE_EVENT_LIMIT:
-                    msg = (
-                        f"Account {customer_id} has {len(rows)} change events on "
-                        f"{day}, at the API limit; split the day before loading."
-                    )
-                    raise RuntimeError(msg)
-                for record in rows:
+                first = datetime.combine(day, datetime.min.time())
+                for record in _change_events_between(
+                    customer_id, first, first + timedelta(days=1)
+                ):
                     yield {
                         "customer_id": customer_id,
                         **record,
@@ -494,11 +555,14 @@ def google_ads_source(
         resource, fields, where = _SNAPSHOTS[name]
         key_column = column_name(fields[0])
 
-        @dlt.resource(**_table(name, ("customer_id", "snapshot_date", key_column)))
-        def snapshot() -> Iterator[dict[str, Any]]:
+        @dlt.transformer(
+            data_from=accounts,
+            **_table(name, ("customer_id", "snapshot_date", key_column)),
+        )
+        def snapshot(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:
             query = build_query(resource, fields, where)
             snapshot_date, retrieved_at = _run_date().isoformat(), _now()
-            for customer_id in _client_ids():
+            for customer_id in listing["client_ids"]:
                 for record in _search(customer_id, query, fields):
                     yield {
                         "customer_id": customer_id,
@@ -509,6 +573,7 @@ def google_ads_source(
 
         return snapshot
 
+    yield accounts
     yield customer_clients
     yield keyword_daily
     yield keyword_conversions_daily
