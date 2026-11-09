@@ -1,75 +1,43 @@
 -- Grain: one public, requester-authored comment = one turn.
-with ticket_comment as (
+with requester_turns as (
     select
-        *
-        , {{ appzi_normalize('comment_plain_body') }} as appzi_body
-    from {{ ref('int__zendesk__ticket_comment') }}
+        comment_id
+        , ticket_id
+        , comment_body
+        , appzi_page_url
+        , comment_author_email
+        , comment_source_channel
+        , comment_created_at
+        -- Counts the requester's turns only, so it differs from the conversation's turn_index
+        , row_number() over (
+            partition by ticket_id
+            order by comment_created_at, comment_id
+        ) as turn_index
+    from {{ ref('int__zendesk__ticket_conversation') }}
+    where comment_author_role = 'requester'
 )
 
 , ticket as (
     select * from {{ ref('int__zendesk__ticket') }}
 )
 
-, requester_turns as (
-    select
-        ticket_comment.comment_id
-        , ticket_comment.ticket_id
-        , ticket_comment.comment_plain_body
-        , ticket_comment.comment_author_email
-        , ticket_comment.comment_source_channel
-        , ticket_comment.comment_created_at
-        -- comment_id breaks ties: two comments sharing a created_at would otherwise get
-        -- a nondeterministic turn_index and fail the compound-uniqueness test
-        , row_number() over (
-            partition by ticket_comment.ticket_id
-            order by ticket_comment.comment_created_at, ticket_comment.comment_id
-        ) as turn_index
-        , ticket_comment.appzi_body
-        , {{ is_appzi_email('ticket_comment.appzi_body') }} as is_appzi
-    from ticket_comment
-    inner join ticket on ticket_comment.ticket_id = ticket.ticket_id
-    where
-        ticket_comment.comment_is_public = true
-        and ticket_comment.comment_author_user_id = ticket.ticket_requester_user_id
-        -- Zendesk's own demo content, not feedback anyone gave us.
-        and coalesce(ticket_comment.comment_source_channel, '') != 'sample_ticket'
-        and not {{ is_appzi_notice('ticket_comment.appzi_body') }}
-)
-
-, parsed_turns as (
-    select
-        requester_turns.*
-        , case
-            when requester_turns.is_appzi
-                then {{ appzi_feedback_text(
-                    'requester_turns.appzi_body', 'requester_turns.comment_plain_body'
-                ) }}
-            else requester_turns.comment_plain_body
-        end as text
-        , case
-            when requester_turns.is_appzi
-                then {{ appzi_page_url('requester_turns.appzi_body') }}
-        end as appzi_page_url
-    from requester_turns
-)
-
 select
     'zendesk' as source_slug
-    , parsed_turns.comment_created_at as occurred_at
-    , cast(parsed_turns.comment_id as varchar) as source_record_ref
-    , parsed_turns.text
+    , requester_turns.comment_created_at as occurred_at
+    , cast(requester_turns.comment_id as varchar) as source_record_ref
+    , requester_turns.comment_body as text
     , ticket.ticket_subject as title
-    , cast(parsed_turns.ticket_id as varchar) as conversation_ref
-    , parsed_turns.turn_index
-    , parsed_turns.turn_index = 1 as is_conversation_opening
+    , cast(requester_turns.ticket_id as varchar) as conversation_ref
+    , requester_turns.turn_index
+    , requester_turns.turn_index = 1 as is_conversation_opening
     -- last-resort identity path: Zendesk exposes no openedx user id, only an email
-    , parsed_turns.comment_author_email as subject_user_ref
+    , requester_turns.comment_author_email as subject_user_ref
     , ticket.ticket_api_url as source_url
     -- An unmapped value stays null here but not downstream: generate_surrogate_key
     -- hashes the null, so it surfaces as an orphan feedback_channel_fk that fails the
     -- fact's relationships test. That is the intended loud failure, not a catch-all.
     --
-    , case parsed_turns.comment_source_channel
+    , case requester_turns.comment_source_channel
         when 'email' then 'email'
         when 'web' then 'web_form'
         when 'api' then 'api'
@@ -77,21 +45,12 @@ select
     end as channel_slug
     , cast(null as varchar) as courserun_readable_id
     , cast(null as varchar) as block_id
-    -- MIT Learn by group: support routes it to three groups, two with their own
-    -- brand. Others by brand: their groups are support teams that span platforms.
-    , case
-        when ticket.group_name in ('MIT Learn', 'Universal AI', 'upGrad UAI')
-            then 'mitlearn'
-        when ticket.brand_subdomain = 'mitxonline' then 'mitxonline'
-        when ticket.brand_subdomain = 'xpro' then 'mitxpro'
-        when ticket.brand_subdomain = 'mitocw' then 'ocw'
-        when ticket.brand_subdomain = 'mitx-micromasters' then 'micromasters'
-    end as platform
-    , case when parsed_turns.appzi_page_url is not null then 'page_url' else 'unspecified' end as subject_type
+    , ticket.ticket_platform as platform
+    , case when requester_turns.appzi_page_url is not null then 'page_url' else 'unspecified' end as subject_type
     , cast(null as varchar) as subject_ref
-    , parsed_turns.appzi_page_url as subject_url
+    , requester_turns.appzi_page_url as subject_url
     , ticket.ticket_satisfaction_rating_score as explicit_rating
-    , parsed_turns.comment_created_at as created_at
+    , requester_turns.comment_created_at as created_at
     , ticket.ticket_updated_at as updated_at
     -- carried for bridge_feedback_tag to explode; not part of the event contract
     , ticket.ticket_tags
@@ -106,5 +65,5 @@ select
         , ['group_name', "ticket.group_name"]
         , ['organization_name', "ticket.organization_name"]
     ]) }} as source_metadata
-from parsed_turns
-inner join ticket on parsed_turns.ticket_id = ticket.ticket_id
+from requester_turns
+inner join ticket on requester_turns.ticket_id = ticket.ticket_id

@@ -90,6 +90,16 @@ select
     , brand.brand_name
     , brand.brand_subdomain
     , groups.group_name
+    -- MIT Learn by group: support routes it to three groups, two with their own
+    -- brand. Others by brand: their groups are support teams that span platforms.
+    , case
+        when groups.group_name in ('MIT Learn', 'Universal AI', 'upGrad UAI')
+            then 'mitlearn'
+        when brand.brand_subdomain = 'mitxonline' then 'mitxonline'
+        when brand.brand_subdomain = 'xpro' then 'mitxpro'
+        when brand.brand_subdomain = 'mitocw' then 'ocw'
+        when brand.brand_subdomain = 'mitx-micromasters' then 'micromasters'
+    end as ticket_platform
     , organization.organization_name
     , named_custom_fields.custom_fields
     , ticket.ticket_due_at

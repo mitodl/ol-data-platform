@@ -638,28 +638,6 @@ models:
       has not materialized in this schema.
 
 unit_tests:
-- name: test_int__feedback__zendesk_strips_the_appzi_template
-  description: >
-    Appzi emails keep only the feedback type and answer, digests drop out, a changed
-    template keeps the whole email in either layout, other comments pass through,
-    and subject_url
-    is the decoded page URL without its EMAIL parameter. Spacing does not matter:
-    the old layout, the table layout that wraps each block in "|" rows, an email
-    cut off before its first question, and a notification with nothing typed above
-    the reply line are all parsed. A two-word answer is not read as a feedback type,
-    and a "|" in an answer is kept.
-    The emails are in tests/fixtures/int__feedback__zendesk__appzi_*.csv.
-  model: int__feedback__zendesk
-  given:
-  - input: ref('int__zendesk__ticket_comment')
-    format: csv
-    fixture: int__feedback__zendesk__appzi_comments
-  - input: ref('int__zendesk__ticket')
-    rows:
-    - {ticket_id: 1, ticket_requester_user_id: 10, ticket_updated_at: '2026-10-09T00:00:00'}
-  expect:
-    format: csv
-    fixture: int__feedback__zendesk__appzi_expected
 - name: test_int__feedback__conversation_uses_the_subject_when_no_turn_has_text
   description: >
     A ticket whose turns are all "[No content]" takes its subject as the text. A

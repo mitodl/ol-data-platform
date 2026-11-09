@@ -645,6 +645,7 @@
         'raw__thirdparty__zendesk_support__categories': '_airbyte_extracted_at',
         'raw__thirdparty__zendesk_support__group_memberships': '_airbyte_extracted_at',
         'raw__thirdparty__zendesk_support__groups': '_airbyte_extracted_at',
+        'raw__thirdparty__zendesk_support__macros': '_airbyte_extracted_at',
         'raw__thirdparty__zendesk_support__organizations': '_airbyte_extracted_at',
         'raw__thirdparty__zendesk_support__satisfaction_ratings': '_airbyte_extracted_at',
         'raw__thirdparty__zendesk_support__sections': '_airbyte_extracted_at',
