@@ -22,6 +22,7 @@ Examples:
 - `integrations__learn__ocw_courses`
 - `integrations__learn__mitxonline_programs`
 - `integrations__learn__content_files`
+- `integrations__learn__content_file_units`
 - `integrations__learn__ocw_content_files`
 - `integrations__learn__canvas_content_files`
 
@@ -308,6 +309,29 @@ pull filters and prunes on; see
 `description`, `file_type`, `content_author`, `content_language`, `image_src` and
 `uid` are present and null, as Learn's Open edX ETL leaves them unset.
 
+`integrations__learn__content_file_units` has the units MIT Learn breaks the
+same runs into (`Unit` and `UnitContentFile`, mit-learn#4095): one per visible
+sequential, plus the course context, as Learn's `OlxArchive.units` builds them from
+the export the run's content files came from. It has the same scope key. A run has
+no rows when its units could not be built from that export, and Learn then keeps the
+units it has. A sequential the outline names twice has two rows, and
+`load_course_units` keeps the first it loads.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `etl_source` | string | `mitxonline` or `xpro` |
+| `run_readable_id` | string | Course run id; equals `Unit.run.run_id` |
+| `external_id` | string | `Unit.external_id`: the sequential's usage key, or `context` |
+| `kind` | string | `Unit.kind`: `unit` or `context` |
+| `title` | string | The sequential's display name, else its `url_name`; `Course context` for the context unit |
+| `url` | string | The sequential's LMS jump URL; empty for the context unit |
+| `unit_order` | bigint | The unit's place in the list `OlxArchive.units` returns, from 0. Unique within a run |
+| `content_files` | string | JSON array of `[key, relation]` pairs in lesson order, `key` being the run's `integrations__learn__content_files` key and `relation` `core`, `assessment` or `supplementary` |
+
+The rows are the units before `load_course_units`, which drops links to keys Learn has
+no published `ContentFile` for, drops a unit (other than the context) left with none,
+and numbers `Unit.position` and `UnitContentFile.position` from the two orders.
+
 `integrations__learn__ocw_content_files` carries the same columns for OCW, read
 from the `data.json` files of the OCW live bucket as Learn's OCW ETL reads them:
 
@@ -381,6 +405,7 @@ columns are described in
 
 - **Catalog models** (`integrations__learn__<source>_courses`, `integrations__learn__<source>_programs`): One row per resource
 - **Content file models** (`integrations__learn__content_files`, `integrations__learn__ocw_content_files`, `integrations__learn__canvas_content_files`): One row per content file
+- **Content file units** (`integrations__learn__content_file_units`): One row per unit of a run, keyed by (`etl_source`, `run_readable_id`, `unit_order`)
 - **Media models**: One row per channel, playlist, video, podcast or episode; `integrations__learn__youtube_playlist_videos` is one row per video in a playlist
 
 ## Nullability Rules
@@ -426,3 +451,4 @@ The `etl_source` column must match one of the following `ETLSource` enum values 
 | 2026-10-27 | Tobias Macey | Added `platform_code` to `integrations__learn__xpro_runs`, Learn's platform code for the run's course, so the content-file embedding chunks key an xPRO file's points under its course's platform and not always `xpro`. |
 | 2026-11-02 | Tobias Macey | Added `integrations__learn__canvas_content_files` and `integrations__learn__canvas_courses`. |
 | 2026-11-04 | Matt Bertrand | Drop MIT edX programs. MIT Learn removed its `mit_edx` program ETL (mit-learn#4193), so `integrations__learn__mit_edx_programs` and `integrations__learn__mit_edx_program_instructors` are gone, along with the MIT edX programs columns and `mit_edx` from the source values. |
+| 2026-11-09 | Tobias Macey | Added `integrations__learn__content_file_units`, the units of the MITx Online and xPRO runs in `integrations__learn__content_files` (mit-learn#4095). |

@@ -1,0 +1,41 @@
+---
+unit_tests:
+- name: test_integrations__learn__content_file_units_from_the_blocks_export
+  description: >
+    A run's units come through only when they were built from the export its
+    blocks came from: R2's are from an older export, and mitx is not a Learn
+    source. A unit's URL is Learn's jump URL; the context unit has none.
+  model: integrations__learn__content_file_units
+  given:
+  - input: ref('stg__openedx__s3__course_units')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", unit_source_system: xpro, unit_course_xml_version: v1,
+      unit_order: 0, unit_external_id: "block-v1:X+Y+R1+type@sequential+block@s1",
+      unit_kind: unit, unit_title: Lecture 1, unit_url_name: s1, unit_content_files: '[["block-v1:X+Y+R1+type@html+block@h1",
+        "core"]]'}
+    - {courserun_readable_id: "course-v1:X+Y+R1", unit_source_system: xpro, unit_course_xml_version: v1,
+      unit_order: 1, unit_external_id: context, unit_kind: context, unit_title: Course
+        context, unit_url_name: '', unit_content_files: '[]'}
+    - {courserun_readable_id: "course-v1:X+Y+R2", unit_source_system: mitxonline,
+      unit_course_xml_version: v1, unit_order: 0, unit_external_id: context, unit_kind: context,
+      unit_title: Course context, unit_url_name: '', unit_content_files: '[]'}
+    - {courserun_readable_id: "course-v1:X+Y+R3", unit_source_system: mitx, unit_course_xml_version: v1,
+      unit_order: 0, unit_external_id: context, unit_kind: context, unit_title: Course
+        context, unit_url_name: '', unit_content_files: '[]'}
+  - input: ref('stg__openedx__s3__course_xml_blocks')
+    rows:
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_archive_version: v1}
+    - {courserun_readable_id: "course-v1:X+Y+R1", coursestructure_xml_source_system: xpro,
+      coursestructure_xml_archive_version: v1}
+    - {courserun_readable_id: "course-v1:X+Y+R2", coursestructure_xml_source_system: mitxonline,
+      coursestructure_xml_archive_version: v2}
+    - {courserun_readable_id: "course-v1:X+Y+R3", coursestructure_xml_source_system: mitx,
+      coursestructure_xml_archive_version: v1}
+  expect:
+    rows:
+    - {etl_source: xpro, run_readable_id: "course-v1:X+Y+R1", external_id: "block-v1:X+Y+R1+type@sequential+block@s1",
+      kind: unit, url: "https://courses.xpro.mit.edu/courses/course-v1:X+Y+R1/jump_to_id/s1",
+      unit_order: 0, content_files: '[["block-v1:X+Y+R1+type@html+block@h1", "core"]]'}
+    - {etl_source: xpro, run_readable_id: "course-v1:X+Y+R1", external_id: context,
+      kind: context, url: '', unit_order: 1, content_files: '[]'}

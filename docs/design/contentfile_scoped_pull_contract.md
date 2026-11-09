@@ -386,7 +386,7 @@ reconciliation sweep is not a substitute for that latency. Not designed here.
 | Task | View |
 |---|---|
 | `SyncOCWContentFilesTask` | `integrations.integrations__learn__ocw_content_files` |
-| `SyncOpenEdXContentFilesTask` | `integrations.integrations__learn__content_files` |
+| `SyncOpenEdXContentFilesTask` | `integrations.integrations__learn__content_files`, then `integrations.integrations__learn__content_file_units` for the run's units (`Unit`, `UnitContentFile`), which Learn's archive ETL builds after the files |
 | Canvas's content-file task | `integrations.integrations__learn__canvas_content_files`, and `integrations.integrations__learn__canvas_courses` for the course and its run: `ingest_canvas_course` writes both from one archive, so `canvas`/`course` and `canvas`/`content_file` flip together |
 
 Each content-file view must expose at minimum the scope key, `etl_source` (needed by the
