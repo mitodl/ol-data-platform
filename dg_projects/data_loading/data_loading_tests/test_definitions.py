@@ -184,6 +184,7 @@ def test_schedules_and_sensors_load() -> None:
     assert {s.name for s in _REPO.sensor_defs} >= {
         "edxorg_upstream_changes_sensor",
         "ocw_content_publish_sensor",
+        "google_ads_freshness_sensor",
     }
 
 
@@ -447,3 +448,10 @@ def test_tracking_logs_runs_get_the_memory_limit_and_runtime_cap(
     assert container["resources"]["limits"]["memory"] == "16Gi"
     assert container["resources"]["requests"]["memory"] == "2Gi"
     assert tags["dagster/max_runtime"] == str(11 * 60 * 60)
+
+
+def test_google_ads_change_events_have_a_freshness_check() -> None:
+    key = dg.AssetKey(["ol_warehouse_raw_data", "raw__google_ads__api__change_events"])
+    assert any(
+        check_key.asset_key == key for check_key in _REPO.asset_checks_defs_by_key
+    )
