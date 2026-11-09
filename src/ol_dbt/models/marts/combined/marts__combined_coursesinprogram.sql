@@ -41,16 +41,41 @@ with mitx_programs as (
     where mitx__courses.is_on_mitxonline = false
 )
 
+-- edX.org's programs API can list one program under two titles (Finance and MIT Finance)
+-- that map to one report key, so a course keeps one title per key
+, edxorg_program_api_course_titles as (
+    select
+        edxorg_mitx_program_courses.*
+        , row_number() over (
+            partition by
+                edxorg_mitx_program_courses.mitx_course_readable_id
+                , coalesce(program_report_key.program_key, edxorg_mitx_program_courses.program_title)
+            order by
+                case
+                    when edxorg_mitx_program_courses.program_title = edxorg_mitx_program_courses.program_name
+                        then 0
+                    else 1
+                end
+                , edxorg_mitx_program_courses.program_title
+        ) as title_rank
+    from edxorg_mitx_program_courses
+    left join program_report_key
+        on
+            program_report_key.lookup_type = 'title'
+            and edxorg_mitx_program_courses.program_title = program_report_key.lookup_value
+)
+
 , edxorg_program_api_courses as (
     select
         '{{ var("edxorg") }}' as platform
-        , edxorg_mitx_program_courses.course_title
-        , edxorg_mitx_program_courses.program_title
-        , edxorg_mitx_program_courses.program_name
+        , course_title
+        , program_title
+        , program_name
         , null as program_id
-        , edxorg_mitx_program_courses.mitx_course_readable_id as course_readable_id
+        , mitx_course_readable_id as course_readable_id
         , null as program_readable_id
-    from edxorg_mitx_program_courses
+    from edxorg_program_api_course_titles
+    where title_rank = 1
 )
 
 , program_courses as (

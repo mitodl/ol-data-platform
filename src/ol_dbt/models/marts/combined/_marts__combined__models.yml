@@ -59,9 +59,12 @@ models:
     tests:
     - not_null
   tests:
+  # One row per course and report key. program_readable_id stays in the grain because a
+  # MITx Online course can come once with a program readable id and once without under the
+  # same key (e.g. Finance, Supply Chain Management).
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["platform", "program_title", "program_readable_id", "course_readable_id"]
+        column_list: ["platform", "program_readable_id", "course_readable_id", "program_report_key"]
 
 - name: marts__combined__users
   description: Mart model for users from different platforms
@@ -1338,6 +1341,49 @@ unit_tests:
     - {platform: edX.org, program_title: Finance, course_readable_id: "MITx+F1", program_report_key: "program-v1:MITxT+FIN"}
     - {platform: edX.org, program_title: Retired Old Version, course_readable_id: "MITx+R1",
       program_report_key: Retired Old Version}
+
+- name: test_coursesinprogram_keeps_one_edxorg_title_per_program_course
+  description: >
+    edX.org's programs API lists the Finance MicroMasters as both Finance and MIT
+    Finance, and both titles map to one program. A course both list is one row,
+    under the title that matches program_name. A course only one lists keeps that
+    title.
+  model: marts__combined_coursesinprogram
+  given:
+  - input: ref('int__mitx__program_requirements')
+    rows: []
+  - input: ref('int__mitx__courses')
+    rows: []
+  - input: ref('int__mitxpro__courses')
+    rows: []
+  - input: ref('int__mitxpro__programs')
+    rows: []
+  - input: ref('int__mitxonline__programs')
+    rows: []
+  - input: ref('int__edxorg__mitx_program_courses')
+    rows:
+    - {program_title: MIT Finance, program_name: Finance, course_title: Finance One,
+      mitx_course_readable_id: "course-v1:MITxT+F1"}
+    - {program_title: Finance, program_name: Finance, course_title: Finance One, mitx_course_readable_id: "course-v1:MITxT+F1"}
+    - {program_title: Finance, program_name: Finance, course_title: Finance Two, mitx_course_readable_id: "course-v1:MITxT+F2"}
+    - {program_title: MIT Finance, program_name: Finance, course_title: Finance Two,
+      mitx_course_readable_id: "course-v1:MITxT+F2"}
+    - {program_title: MIT Finance, program_name: Finance, course_title: Finance Three,
+      mitx_course_readable_id: "course-v1:MITxT+F3"}
+  - input: ref('dim_program_report_key')
+    rows:
+    - {lookup_type: title, lookup_value: Finance, program_key: "program-v1:MITxT+FIN",
+      mapped_by: seed}
+    - {lookup_type: title, lookup_value: MIT Finance, program_key: "program-v1:MITxT+FIN",
+      mapped_by: seed}
+  expect:
+    rows:
+    - {platform: edX.org, program_title: Finance, course_readable_id: "course-v1:MITxT+F1",
+      program_report_key: "program-v1:MITxT+FIN"}
+    - {platform: edX.org, program_title: Finance, course_readable_id: "course-v1:MITxT+F2",
+      program_report_key: "program-v1:MITxT+FIN"}
+    - {platform: edX.org, program_title: MIT Finance, course_readable_id: "course-v1:MITxT+F3",
+      program_report_key: "program-v1:MITxT+FIN"}
 
 - name: test_program_enrollment_detail_matches_courses_on_own_platform
   description: >
