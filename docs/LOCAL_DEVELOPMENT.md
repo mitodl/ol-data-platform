@@ -288,7 +288,7 @@ du -sh ~/.ol-dbt/temp/
 
 If you've been using the legacy `--target dev_qa` or `--target dev_production` workflow with suffixed schemas, you can clean up old data. Everything in this section runs through Galaxy, so it stops working once Galaxy access is revoked (M4 in [ADR 0012](https://github.com/mitodl/ol-infrastructure/blob/main/docs/adr/0012-trino-to-starrocks-cutover.md)). Clean up before then.
 
-Use the `ol-dbt local cleanup` command:
+Use the `ol-dbt local cleanup` command. It drops every table and view in the schemas carrying your suffix, whether or not the project still defines it. It does not drop only the relations missing from the project, as the removed `trino__drop_old_relations` macro did, so there is no way left to clear orphaned models while keeping the rest.
 
 ```bash
 # Dry run (see what would be deleted)
