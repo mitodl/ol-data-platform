@@ -267,7 +267,8 @@ unit_tests:
   description: >
     The requester wins over any other label, even with an @mit.edu email. Agents,
     admins and @mit.edu end-user accounts are staff. Other end users, and an author
-    missing from stg__zendesk__user, are other_end_user.
+    missing from stg__zendesk__user, are other_end_user. Internal notes and Zendesk
+    sample comments are dropped and leave no gap in turn_index.
   model: int__zendesk__ticket_conversation
   given:
   - input: ref('int__zendesk__ticket')
@@ -279,10 +280,15 @@ unit_tests:
       comment_plain_body: question, comment_created_at: '2026-11-01 00:00:01'}
     - {comment_id: 2, ticket_id: 10, comment_author_user_id: 200, comment_is_public: true,
       comment_plain_body: agent reply, comment_created_at: '2026-11-01 00:00:02'}
+    - {comment_id: 7, ticket_id: 10, comment_author_user_id: 200, comment_is_public: false,
+      comment_plain_body: internal note, comment_created_at: '2026-11-01 00:00:02.5'}
     - {comment_id: 3, ticket_id: 10, comment_author_user_id: 300, comment_is_public: true,
       comment_plain_body: admin reply, comment_created_at: '2026-11-01 00:00:03'}
     - {comment_id: 4, ticket_id: 10, comment_author_user_id: 400, comment_is_public: true,
       comment_plain_body: support reply, comment_created_at: '2026-11-01 00:00:04'}
+    - {comment_id: 8, ticket_id: 10, comment_author_user_id: 200, comment_is_public: true,
+      comment_source_channel: sample_ticket, comment_plain_body: sample comment, comment_created_at: '2026-11-01
+        00:00:04.5'}
     - {comment_id: 5, ticket_id: 10, comment_author_user_id: 500, comment_is_public: true,
       comment_plain_body: cc reply, comment_created_at: '2026-11-01 00:00:05'}
     - {comment_id: 6, ticket_id: 10, comment_author_user_id: 600, comment_is_public: true,
