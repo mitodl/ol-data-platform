@@ -39,9 +39,7 @@ with enrollment as (
 
 , order_fact as (
     select * from {{ ref('tfact_order') }}
-    where
-        order_state in ('fulfilled', 'refunded')
-        or (platform = 'micromasters' and order_state = 'partially_refunded')
+    where order_state in ('fulfilled', 'refunded')
 )
 
 , course_run as (
@@ -283,22 +281,27 @@ with enrollment as (
 -- columns: tfact_order files them under their own platform, their ids overlap MITx
 -- Online's, and enrollment_detail_report joins payments on order_id and the enrollment's
 -- platform, so a MicroMasters id there would pick up another learner's receipt.
+-- tfact_order gives only the learner. Its MicroMasters rows use the creation time as the
+-- update time, so its incremental build never picks up a later fulfillment or refund,
+-- and the state comes from the app's order instead.
 , micromasters_orders as (
     select
         enrollment.enrollment_key
         -- A partial refund leaves a payment standing.
-        , max(case when order_fact.order_state != 'refunded' then 1 else 0 end) = 1 as has_fulfilled_order
+        , max(case when micromasters_line.order_state != 'refunded' then 1 else 0 end) = 1
+        as has_fulfilled_order
     from enrollment
     inner join course_run
         on enrollment.courserun_fk = course_run.courserun_pk
-    inner join order_fact
-        on enrollment.user_fk = order_fact.user_fk
+    inner join {{ ref('tfact_order') }} as micromasters_order
+        on enrollment.user_fk = micromasters_order.user_fk
     inner join {{ ref('int__micromasters__orders') }} as micromasters_line
         on
-            order_fact.order_id = micromasters_line.order_id
-            and order_fact.line_id = cast(micromasters_line.line_id as varchar)
+            micromasters_order.order_id = micromasters_line.order_id
+            and micromasters_order.line_id = cast(micromasters_line.line_id as varchar)
     where
-        order_fact.platform = 'micromasters'
+        micromasters_order.platform = 'micromasters'
+        and micromasters_line.order_state in ('fulfilled', 'partially_refunded', 'refunded')
         and enrollment.platform in ('edxorg', 'mitxonline')
         and course_run.courserun_readable_id in (
             micromasters_line.courserun_readable_id
