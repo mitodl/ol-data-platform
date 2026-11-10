@@ -7,24 +7,18 @@ from pathlib import Path
 import pytest
 
 from ol_dbt_cli.lib.pipe_concat import PIPE_CONCAT_CHECK, check_pipe_concat
-from ol_dbt_cli.lib.validation import Severity, ValidationReport
+from tests.source_checks import error_messages, make_dbt_dir
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.fixture
 def dbt_dir(tmp_path: Path) -> Path:
-    for name in ("models", "macros"):
-        (tmp_path / name).mkdir()
-    (tmp_path / "dbt_project.yml").write_text("name: p\n")
-    return tmp_path
+    return make_dbt_dir(tmp_path)
 
 
 def _messages(dbt_dir: Path) -> list[str]:
-    report = ValidationReport()
-    check_pipe_concat(dbt_dir, report)
-    assert all(i.check == PIPE_CONCAT_CHECK and i.severity == Severity.ERROR for i in report.issues)
-    return [i.message for i in report.issues]
+    return error_messages(check_pipe_concat, PIPE_CONCAT_CHECK, dbt_dir)
 
 
 def test_reports_the_operator_in_a_model_with_its_line(dbt_dir: Path) -> None:

@@ -30,6 +30,7 @@ from ol_dbt_cli.lib.sql_source import (
     other_engine_spans,
     sql_code,
     starrocks_macro_names,
+    without_jinja_comments,
     yaml_sql_strings,
 )
 from ol_dbt_cli.lib.validation import Severity, ValidationReport
@@ -139,6 +140,11 @@ def _ascending_keys(
         yield SortKey(key_start, key_end)
 
 
+def _macro_body(offset: int, macros: list[tuple[tuple[int, int], tuple[int, int]]]) -> tuple[int, int] | None:
+    """Return the span of the macro body *offset* is in, or None outside every macro."""
+    return next((body for _, body in macros if body[0] <= offset < body[1]), None)
+
+
 def _query_bound(
     offset: int,
     statements: list[tuple[int, int]],
@@ -149,9 +155,9 @@ def _query_bound(
     for start, end in statements:
         if start <= offset < end:
             return end
-    for (_, _), (body_start, body_end) in macros:
-        if body_start <= offset < body_end:
-            return body_end
+    body = _macro_body(offset, macros)
+    if body is not None:
+        return body[1]
     return min((start for (start, _), _ in macros if start > offset), default=default)
 
 
@@ -162,7 +168,8 @@ def ascending_sort_keys(source: str) -> Iterator[SortKey]:
     :returns: The span of each key, in no particular order.
     :rtype: Iterator[SortKey]
     """
-    code = sql_code(source)
+    # A quoted identifier (`order by "created_on"`) is a key, so it is kept as `_` filler.
+    code = sql_code(source, keep_identifiers=True)
     # sql_code keeps the strings in a `{% if target.name == 'dev' %}` as code, which would
     # read as part of the key before it. A sort list is read with every statement blanked,
     # unless the ORDER BY is itself in a statement's string (`{% set x = "... order by y" %}`).
@@ -189,11 +196,25 @@ def ascending_sort_keys(source: str) -> Iterator[SortKey]:
         if _ROW_LIMIT.match(view, limit_end):
             yield from _ascending_keys(source, view, match.end(), list_end, _QUERY_LIST_END)
 
-    variables = {m.group("name"): m.span("value") for m in _SET_STRING.finditer(source)}
-    for call in _ORDER_BY_ARG.finditer(source):
-        span = call.span("literal") if call.group("literal") is not None else variables.get(call.group("name"))
-        if span is not None:
-            yield from _ascending_keys(source, code, *span)
+    # A call or a `{% set %}` inside a Jinja comment never renders.
+    rendered = without_jinja_comments(source)
+    assignments = list(_SET_STRING.finditer(rendered))
+    for call in _ORDER_BY_ARG.finditer(rendered):
+        if call.group("literal") is not None:
+            yield from _ascending_keys(source, code, *call.span("literal"))
+            continue
+        # The value a variable holds at the call: its last assignment before it in the same macro, or
+        # outside every macro for a call outside them.
+        scope = _macro_body(call.start(), macros)
+        visible = [
+            m
+            for m in assignments
+            if m.group("name") == call.group("name")
+            and m.start() < call.start()
+            and _macro_body(m.start(), macros) == scope
+        ]
+        if visible:
+            yield from _ascending_keys(source, code, *visible[-1].span("value"))
 
 
 def check_null_ordering(dbt_dir: Path, report: ValidationReport) -> None:

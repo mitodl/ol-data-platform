@@ -45,7 +45,7 @@ _OTHER_ENGINE_PREFIXES = ("trino__", "duckdb__")
 _NON_SQL_KEYS = frozenset({"description", "rows", "meta", "tags"})
 
 
-def sql_code(source: str) -> str:
+def sql_code(source: str, *, keep_identifiers: bool = False) -> str:
     """Return *source* with its comments, quoted text and Jinja blanked out.
 
     Blanking keeps every offset and newline, so a match in the result indexes
@@ -54,18 +54,23 @@ def sql_code(source: str) -> str:
     ``{{ from_iso8601_timestamp("created_on || 'Z'") }}``.
 
     :param source: The text of a SQL file, or a SQL string from YAML.
+    :param keep_identifiers: Fill a double-quoted identifier with ``_`` rather than
+        blanking it, so ``"created_on"`` still reads as a term without matching a keyword.
     :returns: *source* with only its SQL code left in place.
     :rtype: str
     """
     chars = list(source)
     for match in _TOKEN.finditer(source):
         start, end = match.span()
-        chars[start:end] = _NOT_NEWLINE.sub(" ", match.group())
+        identifier = keep_identifiers and match.group().startswith('"')
+        chars[start:end] = _NOT_NEWLINE.sub("_" if identifier else " ", match.group())
         if match.group("jinja"):
             for string in _JINJA_STRING.finditer(match.group("jinja")):
                 group = "single" if string.group("single") is not None else "double"
                 string_start, string_end = string.span(group)
-                chars[start + string_start : start + string_end] = sql_code(string.group(group))
+                chars[start + string_start : start + string_end] = sql_code(
+                    string.group(group), keep_identifiers=keep_identifiers
+                )
     return "".join(chars)
 
 
@@ -83,16 +88,24 @@ def jinja_statement_spans(source: str) -> list[tuple[int, int]]:
     ]
 
 
+def without_jinja_comments(source: str) -> str:
+    """Return *source* with its ``{# ... #}`` comments blanked, keeping every offset and newline.
+
+    :param source: The text of a SQL file.
+    :returns: *source* with only its rendered text and Jinja left in place.
+    :rtype: str
+    """
+    return _JINJA_COMMENT.sub(lambda m: _NOT_NEWLINE.sub(" ", m.group()), source)
+
+
 def macro_declarations(source: str) -> Iterator[re.Match[str]]:
     """Find the macros *source* defines. A macro inside a Jinja comment defines nothing.
-
-    The comments are blanked rather than removed so offsets still index *source*.
 
     :param source: The text of a SQL file.
     :returns: A match per macro, with ``name`` and ``body`` groups.
     :rtype: Iterator[re.Match[str]]
     """
-    return _MACRO.finditer(_JINJA_COMMENT.sub(lambda m: _NOT_NEWLINE.sub(" ", m.group()), source))
+    return _MACRO.finditer(without_jinja_comments(source))
 
 
 def starrocks_macro_names(sources: Iterable[str]) -> frozenset[str]:

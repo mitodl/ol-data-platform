@@ -7,24 +7,18 @@ from pathlib import Path
 import pytest
 
 from ol_dbt_cli.lib.null_ordering import NULL_ORDERING_CHECK, ascending_sort_keys, check_null_ordering
-from ol_dbt_cli.lib.validation import Severity, ValidationReport
+from tests.source_checks import error_messages, make_dbt_dir
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.fixture
 def dbt_dir(tmp_path: Path) -> Path:
-    for name in ("models", "macros"):
-        (tmp_path / name).mkdir()
-    (tmp_path / "dbt_project.yml").write_text("name: p\n")
-    return tmp_path
+    return make_dbt_dir(tmp_path)
 
 
 def _messages(dbt_dir: Path) -> list[str]:
-    report = ValidationReport()
-    check_null_ordering(dbt_dir, report)
-    assert all(i.check == NULL_ORDERING_CHECK and i.severity == Severity.ERROR for i in report.issues)
-    return [i.message for i in report.issues]
+    return error_messages(check_null_ordering, NULL_ORDERING_CHECK, dbt_dir)
 
 
 def _keys(sql: str) -> list[str]:
@@ -97,6 +91,23 @@ def test_ignores_explicit_keys_and_query_order(sql: str) -> None:
         ("select {{ array_agg_filter('x', 'c', order_by='x nulls last', distinct=true) }}", []),
         ("select {{ array_agg_filter('x', 'c', order_by=unknown_name) }}", []),
         ("select {{ array_agg_filter('coalesce(cast(x as varchar), y)', 'c', order_by='a') }}", ["a"]),
+        (
+            "{% set o = 'a' %}\nselect {{ array_agg_filter('x', 'c', order_by=o) }}\n"
+            "{% set o = 'b nulls last' %}\nselect {{ array_agg_filter('x', 'c', order_by=o) }}",
+            ["a"],
+        ),
+        ("{{ array_agg_filter('x', 'c', order_by=o) }}\n{% set o = 'a' %}", []),
+        (
+            "{% set o = 'a' %}\n{% macro m() %}{{ array_agg_filter('x', 'c', order_by=o) }}{% endmacro %}",
+            [],
+        ),
+        (
+            "{% macro m() %}{% set o = 'a' %}{{ array_agg_filter('x', 'c', order_by=o) }}{% endmacro %}",
+            ["a"],
+        ),
+        ("{% set o = 'a' %}\n{# {{ array_agg_filter('x', 'c', order_by=o) }} #}", []),
+        ("{# {% set o = 'a' %} #}{% set o = 'b nulls last' %}{{ array_agg_filter('x', 'c', order_by=o) }}", []),
+        ("{# {{ array_agg_filter('x', 'c', order_by='a') }} #}", []),
     ],
 )
 def test_reads_sql_and_order_by_passed_as_jinja_strings(sql: str, keys: list[str]) -> None:
@@ -158,6 +169,23 @@ def test_a_window_list_ends_at_another_branchs_order_by() -> None:
 
 def test_a_window_list_does_not_end_at_offset() -> None:
     assert _keys("select row_number() over (partition by p order by offset) from t") == ["offset"]
+
+
+@pytest.mark.parametrize(
+    ("sql", "keys"),
+    [
+        ('select row_number() over (order by "created_on") from t', ['"created_on"']),
+        ('select row_number() over (order by "created_on" desc, "id") from t', ['"id"']),
+        ('select array_agg(x order by "created_on") from t', ['"created_on"']),
+        ('select * from t order by "created_on" limit 1', ['"created_on"']),
+        ("select row_number() over (order by `created_on`) from t", ["`created_on`"]),
+        ('select row_number() over (order by "created_on" nulls last) from t', []),
+        ('select row_number() over (order by "t"."range", b) from t', ['"t"."range"', "b"]),
+        ("""select row_number() over (order by 'literal', "order by") from t""", ['"order by"']),
+    ],
+)
+def test_a_quoted_identifier_is_a_key(sql: str, keys: list[str]) -> None:
+    assert _keys(sql) == keys
 
 
 def test_a_qualified_column_named_like_a_frame_word_is_a_key() -> None:
