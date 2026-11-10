@@ -67,9 +67,10 @@ If a snapshot run recreated the table before step 1, its name is taken and `regi
 fails. The new table holds the versions captured since the incident, which the old
 table does not have, so keep both:
 
-1. Drop the new table's Glue entry (`aws glue delete-table`, which leaves its files)
-   and register its directory again as `<table>__after_<date>` with `register
-   --metadata-location` set to that table's own last metadata file.
+1. Record the new table's committed metadata file while Glue still has it
+   (`aws glue get-table`, `Parameters.metadata_location`). Drop its Glue entry
+   (`aws glue delete-table`, which leaves its files) and register its directory again
+   as `<table>__after_<date>` with `register --metadata-location` set to that file.
 2. Register the old directory under the original name and resume the snapshot. Its
    next run compares against raw as of that run, so the changes in between are only in
    `<table>__after_<date>`.

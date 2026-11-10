@@ -9,8 +9,8 @@ dropped, or whose files were deleted, comes back in two steps:
   undelete   remove the delete markers placed on the table directory's objects
              since a given time, which makes each object's previous version
              current again
-  register   register the table in Glue from the newest metadata file in its
-             directory
+  register   register the table in Glue from a metadata file in its directory,
+             the newest unless one is named
 
 Both print what they would do and change nothing without ``--execute``. The
 runbook is docs/HISTORY_LAYER_RESTORE.md.
@@ -181,7 +181,9 @@ def register(
             )
             raise RuntimeError(msg)
         metadata_location = f"s3://{bucket}/{versions[0][1]}"
-    elif not normalize(metadata_location).startswith(f"{bucket}/{prefix}/metadata/"):
+    elif normalize(metadata_location).startswith(f"{bucket}/{prefix}/metadata/"):
+        metadata_location = f"s3://{normalize(metadata_location)}"
+    else:
         msg = f"{metadata_location} is not in s3://{bucket}/{prefix}/metadata/"
         raise ValueError(msg)
     print(f"{table}: registering from {metadata_location}")
