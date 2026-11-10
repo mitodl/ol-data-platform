@@ -18,6 +18,7 @@ members = [
 ]
 constraints = [
     { name = "certifi", specifier = ">=2026.10.19" },
+    { name = "filelock", specifier = ">=4.2.1" },
     { name = "sqlalchemy", specifier = "<2.1" },
 ]
 overrides = [{ name = "grpcio-health-checking", specifier = "<1.82.0" }]
