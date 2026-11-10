@@ -243,9 +243,11 @@ models:
     not a copy, for the same program, gets two rows on purpose, as before this model
     read MITx Online for every date, because the later certificate's hash is already
     in MIT Learn. When both rows carry the same email, the unique test on user_email
-    and program_readable_id fails. Non-DEDP certificates come from 2U's program learner
-    report. User's profile fields are chosen in the order of MITx Online, MicroMasters,
-    and edX.org, whichever is not null.
+    and program_readable_id counts them, and under the project's error_if of >10 it
+    warns and only errors past 10 failures. integrations__learn__program_certificates
+    errors on the first. Non-DEDP certificates come from 2U's program learner report.
+    User's profile fields are chosen in the order of MITx Online, MicroMasters, and
+    edX.org, whichever is not null.
   config:
     meta:
       qa_branches:
