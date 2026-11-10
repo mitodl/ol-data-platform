@@ -20,6 +20,7 @@ from ol_dbt_cli.lib.inventory import (
     RenderError,
     Unit,
     keyset_tables,
+    lake_metadata_overrides,
     load_units,
     local_ingest_sources,
     raw_metadata_column,
@@ -669,6 +670,46 @@ class TestRawMetadataColumn:
         # makes the edxorg entry above removable rather than permanent.
         mapping = raw_metadata_columns(load_units(REAL_INVENTORY))
         assert mapping["raw__keycloak__app__postgres__client"] == "_dlt_load_id"
+
+    def test_dlt_first_unit_takes_the_dlt_column_where_its_strategy_ingests(self) -> None:
+        # Production is still Airbyte, but the unit's dlt source loads QA, so a
+        # QA table carries `_dlt_load_id` and no Airbyte column.
+        data = copy.deepcopy(APP_UNIT)
+        data["dlt"] = {"source_module": "ol_dlt.sources.mitxonline_edxapp", "write_disposition": "replace"}
+        unit = Unit(path=Path("mitxonline__mysql.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0]) == "_airbyte_extracted_at"
+        assert raw_metadata_column(unit, unit.tables[0], "qa") == "_dlt_load_id"
+        # `local: fixture` means fixtures, which stamp the production loader's columns.
+        assert raw_metadata_column(unit, unit.tables[0], "local") == "_airbyte_extracted_at"
+
+    def test_unit_without_a_dlt_source_keeps_its_loader_in_every_lake(self) -> None:
+        unit = Unit(path=Path("mitxonline__mysql.yml"), data=copy.deepcopy(APP_UNIT))
+        assert raw_metadata_column(unit, unit.tables[0], "qa") == "_airbyte_extracted_at"
+
+    def test_declaration_holds_in_every_lake(self) -> None:
+        data = copy.deepcopy(APP_UNIT)
+        data["dlt"] = {"source_module": "ol_dlt.sources.mitxonline_edxapp", "write_disposition": "replace"}
+        data["raw_metadata_column"] = None
+        unit = Unit(path=Path("mitxonline__mysql.yml"), data=data)
+        assert raw_metadata_column(unit, unit.tables[0], "qa") is None
+
+    def test_overrides_list_only_the_tables_that_differ_from_production(self) -> None:
+        data = copy.deepcopy(APP_UNIT)
+        data["dlt"] = {"source_module": "ol_dlt.sources.mitxonline_edxapp", "write_disposition": "replace"}
+        straddling = Unit(path=Path("mitxonline__mysql.yml"), data=data)
+        dlt_only = Unit(path=Path("edxorg__s3.yml"), data=copy.deepcopy(DLT_UNIT))
+        overrides = lake_metadata_overrides([straddling, dlt_only])
+        assert overrides == {
+            "qa": {table["raw_table"]: "_dlt_load_id" for table in straddling.tables},
+        }
+
+    def test_rendered_macro_carries_the_lake_overrides(self) -> None:
+        data = copy.deepcopy(APP_UNIT)
+        data["dlt"] = {"source_module": "ol_dlt.sources.mitxonline_edxapp", "write_disposition": "replace"}
+        rendered = render_dbt_metadata_columns([Unit(path=Path("mitxonline__mysql.yml"), data=data)])
+        overrides = rendered.split("{% macro raw_metadata_column_lake_overrides() %}")[1]
+        raw_table = data["tables"][0]["raw_table"]
+        assert f"'qa': {{\n            '{raw_table}': '_dlt_load_id'," in overrides
 
     def test_real_inventory_dedups_airbyte_loaded_course_structure_tables(self) -> None:
         # The unit is a Dagster pipeline, but an Airbyte S3 connection loads the

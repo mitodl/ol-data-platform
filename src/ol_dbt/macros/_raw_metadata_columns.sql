@@ -8,6 +8,10 @@
     pick the newest copy of a record key, or a list of columns in precedence
     order. `none` means the table carries no metadata column, so it must not
     be deduplicated.
+
+    raw_metadata_column_map() is the production lake. A unit whose `dlt:`
+    source loads another lake ahead of its production cutover has different
+    columns there, listed per lake in raw_metadata_column_lake_overrides().
 -#}
 {% macro raw_metadata_column_map() %}
     {% do return({
@@ -953,5 +957,10 @@
         'raw__youtube__api__playlist_items': '_dlt_load_id',
         'raw__youtube__api__playlists': '_dlt_load_id',
         'raw__youtube__api__videos': '_dlt_load_id',
+    }) %}
+{% endmacro %}
+
+{% macro raw_metadata_column_lake_overrides() %}
+    {% do return({
     }) %}
 {% endmacro %}
