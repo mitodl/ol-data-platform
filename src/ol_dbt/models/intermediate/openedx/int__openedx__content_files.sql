@@ -247,7 +247,7 @@ with blocks as (
     ) }}
     where
         blocks.coursestructure_xml_block_path like 'course/video/%'
-        and {{ json_query_string('blocks.coursestructure_xml_block_attributes', "'$.url_name'") }} is not null
+        and nullif({{ json_query_string('blocks.coursestructure_xml_block_attributes', "'$.url_name'") }}, '') is not null
 )
 
 , video_transcript_map as (

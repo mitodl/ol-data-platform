@@ -79,9 +79,10 @@ log = logging.getLogger(__name__)
 
 STATIC_DIR = "static"
 
-# The mit-learn commit the port follows, as the outputs' code version. Bumping
-# it is what re-runs every course export: upstream_or_code_changes only sees a
-# code change through the code version.
+# The mit-learn commit the port follows, as the outputs' code version.
+# upstream_or_code_changes only sees a code change through the code version, and
+# Dagster's code_version_changed ignores the first one an asset gets, so this
+# value re-runs nothing; changing it later re-runs every course export.
 OLX_PORT_VERSION = "mit-learn-5da30ef30"
 
 # mit-learn learning_resources/constants.py
