@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from dagster import build_asset_context
+from dagster import AssetObservation, build_asset_context
 from lakehouse.assets import lake_orphan_sweep as module
 from lakehouse.assets.lake_orphan_sweep import (
     LakeOrphanSweepConfig,
@@ -26,6 +26,7 @@ ORPHANS = [
         "bytes": 105,
         "newest": datetime(2026, 9, 1, tzinfo=UTC),
         "age_days": 35,
+        "history": False,
         "eligible": True,
     },
     {
@@ -35,9 +36,20 @@ ORPHANS = [
         "bytes": 7,
         "newest": datetime(2026, 10, 4, tzinfo=UTC),
         "age_days": 2,
+        "history": False,
         "eligible": False,
     },
 ]
+HISTORY_ORPHAN = {
+    "bucket": "lake-history-qa",
+    "prefix": f"snapshot_dropped-{UUID}",
+    "objects": 3,
+    "bytes": 14,
+    "newest": datetime(2026, 9, 1, tzinfo=UTC),
+    "age_days": 35,
+    "history": True,
+    "eligible": False,
+}
 
 
 def _result(outcomes: list[PrefixOutcome] | None, **overrides: Any) -> SweepResult:
@@ -141,6 +153,7 @@ def test_report_run_says_delete_did_not_run(
     assert metadata["eligible_bytes"] == ORPHANS[0]["bytes"]
     assert metadata["orphan_details"][0]["path"] == f"s3://lake-mart-qa/gone-{UUID}/"
     assert metadata["unsuffixed_unreferenced_prefixes"] == 1
+    assert metadata["history_orphan_prefixes"] == 0
     assert metadata["unreadable_glue_databases"] == ["ol_warehouse_production_mart"]
     assert (
         "Report only: 2 orphan prefixes, 1 eligible (105 bytes). Unreadable Glue "
@@ -192,6 +205,49 @@ def test_delete_errors_fail_the_run(monkeypatch: pytest.MonkeyPatch):
         lake_orphan_sweep(
             build_asset_context(), LakeOrphanSweepConfig(min_age_days=7, delete=True)
         )
+
+
+@pytest.mark.parametrize("outcomes", [None, []], ids=["report", "delete"])
+def test_a_history_orphan_fails_the_run(
+    monkeypatch: pytest.MonkeyPatch, outcomes: list[PrefixOutcome] | None
+):
+    _enable_delete(monkeypatch)
+    _returning(monkeypatch, _result(outcomes, orphans=[*ORPHANS, HISTORY_ORPHAN]))
+    config = LakeOrphanSweepConfig(min_age_days=7, delete=outcomes is not None)
+
+    with pytest.raises(
+        RuntimeError, match="history layer have no Glue table"
+    ) as raised:
+        lake_orphan_sweep(build_asset_context(), config)
+
+    assert f"s3://lake-history-qa/snapshot_dropped-{UUID}/" in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    "errors", [[], ["k: AccessDenied no"]], ids=["clean", "delete-errors"]
+)
+def test_a_history_orphan_keeps_the_runs_deletion_record(
+    monkeypatch: pytest.MonkeyPatch, errors: list[str]
+):
+    _enable_delete(monkeypatch)
+    deleted = PrefixOutcome(
+        "lake-mart-qa", f"gone-{UUID}", "deleted", objects=2, bytes=105, errors=errors
+    )
+    _returning(monkeypatch, _result([deleted], orphans=[*ORPHANS, HISTORY_ORPHAN]))
+    context = build_asset_context()
+    # A direct invocation unbinds the context when the asset raises, which drops
+    # its events, so they are caught as they are logged.
+    logged: list[Any] = []
+    monkeypatch.setattr(context, "log_event", logged.append)
+
+    with pytest.raises(RuntimeError, match="history layer") as raised:
+        lake_orphan_sweep(context, LakeOrphanSweepConfig(min_age_days=7, delete=True))
+
+    assert ("could not be deleted" in str(raised.value)) == bool(errors)
+    [observation] = [event for event in logged if isinstance(event, AssetObservation)]
+    assert observation.metadata["deleted_prefixes"].value == 1
+    assert observation.metadata["history_orphan_prefixes"].value == 1
+    assert observation.metadata["delete_error_count"].value == len(errors)
 
 
 def test_a_scope_that_resolves_to_nothing_fails(monkeypatch: pytest.MonkeyPatch):

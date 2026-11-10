@@ -644,8 +644,8 @@ models:
 - name: integrations__learn__program_certificates
   description: >
     MicroMasters + MITx Online program certificates exposed for MIT Learn's
-    warehouse-pull ETL, replacing the Hightouch sync into MIT Learn's
-    external.programcertificate table (mitodl/hq#12954). One row per
+    warehouse-pull ETL into its external.programcertificate table
+    (mitodl/hq#12954). One row per
     certificate. Sourced from int__micromasters__program_certificates.
     NOTE: this model does not follow the readable_id/title/etl_source-enum
     shape from docs/learn_marts_contract.md — that contract targets catalog

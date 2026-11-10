@@ -16,6 +16,12 @@ after a person has read a deletion list for it. QA and production are on the
 list: production's first report (2026-10-25) was 67 eligible prefixes, all
 ``__dbt_tmp-<uuid>`` directories.
 
+The history layer is never deleted from, in any environment: its tables are
+snapshots that cannot be rebuilt. A uuid-suffixed history directory with no
+Glue table (every dbt-trino table directory has the suffix) is reported and
+fails the run, so a person restores it or removes it by hand. One without the
+suffix is listed with the other unsuffixed prefixes, as everywhere.
+
 The data lake buckets are versioned, so a deleted prefix stays recoverable,
 and billed, until its noncurrent versions expire: 30 days in the dbt layer
 buckets, 90 in raw and history.
@@ -25,7 +31,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 import boto3
-from dagster import AssetExecutionContext, Config, MetadataValue, Output, asset
+from dagster import (
+    AssetExecutionContext,
+    AssetObservation,
+    Config,
+    MetadataValue,
+    Output,
+    asset,
+)
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.iceberg_maintenance import warehouse_env_for
 from ol_orchestrate.lib.lake_orphan_sweep import SweepResult, sweep_warehouse
@@ -70,10 +83,46 @@ def _detail_rows(result: SweepResult) -> list[dict[str, Any]]:
             "objects": row["objects"],
             "bytes": row["bytes"],
             "age_days": row["age_days"],
+            "history": row["history"],
             "eligible": row["eligible"],
         }
         for row in rows[:METADATA_DETAIL_ROWS]
     ]
+
+
+def _history_orphan_problem(result: SweepResult) -> list[str]:
+    """Name the history-layer directories with no Glue table, if there are any.
+
+    History tables cannot be rebuilt, so one that lost its Glue entry is restored
+    from S3 rather than swept, and a person has to look at it. The sweep never
+    deletes there, whatever its age, and fails the run until it is dealt with.
+    """
+    if not (orphans := result.history_orphans):
+        return []
+    paths = [f"s3://{row['bucket']}/{row['prefix']}/" for row in orphans]
+    msg = (
+        f"{len(paths)} directories in the history layer have no Glue table: "
+        f"{paths[:METADATA_DETAIL_ROWS]}. The sweep leaves them alone. Restore "
+        "the table (docs/HISTORY_LAYER_RESTORE.md), or delete the directory by "
+        "hand if it was dropped on purpose."
+    )
+    return [msg]
+
+
+def _fail_on(
+    context: AssetExecutionContext, problems: list[str], metadata: dict[str, Any]
+) -> None:
+    """Raise with every problem, after recording the run's metadata.
+
+    Raising drops the Output's metadata, so it goes out first as an observation.
+    A history orphan stays until someone acts, so without this every weekly run
+    until then would delete prefixes and record none of them.
+    """
+    if problems:
+        context.log_event(
+            AssetObservation(asset_key=context.asset_key, metadata=metadata)
+        )
+        raise RuntimeError(" ".join(problems))
 
 
 @asset(
@@ -134,6 +183,7 @@ def lake_orphan_sweep(
         "eligible_prefixes": MetadataValue.int(len(eligible)),
         "eligible_objects": MetadataValue.int(sum(r["objects"] for r in eligible)),
         "eligible_bytes": MetadataValue.int(sum(r["bytes"] for r in eligible)),
+        "history_orphan_prefixes": MetadataValue.int(len(result.history_orphans)),
         "orphan_details": MetadataValue.json(_detail_rows(result)),
         # Unreferenced, but without dbt's uuid suffix, so never deleted and
         # never measured. Listed because a person may still want to look.
@@ -163,6 +213,7 @@ def lake_orphan_sweep(
             sum(r["bytes"] for r in eligible),
             sorted(result.unreadable_databases),
         )
+        _fail_on(context, _history_orphan_problem(result), metadata)
         return Output(value=None, metadata=metadata)
 
     deleted = [o for o in result.outcomes if o.action == "deleted"]
@@ -191,13 +242,13 @@ def lake_orphan_sweep(
         ),
         "delete_error_count": MetadataValue.int(len(errors)),
     }
+    problems = _history_orphan_problem(result)
     if errors:
-        # Raising drops the metadata above. The sweep has already logged every
-        # prefix it deleted from to context.log, so the run's log is the record.
         msg = (
             f"{len(errors)} objects could not be deleted across "
             f"{sum(1 for o in deleted if o.errors)} prefixes. First errors: "
-            f"{errors[:5]}"
+            f"{errors[:5]}."
         )
-        raise RuntimeError(msg)
+        problems.insert(0, msg)
+    _fail_on(context, problems, metadata)
     return Output(value=None, metadata=metadata)

@@ -1,8 +1,8 @@
 {#
   integrations__learn__program_certificates
   Exposes MicroMasters + MITx Online program certificates for MIT Learn's
-  warehouse-pull ETL, replacing the Hightouch sync into MIT Learn's
-  external.programcertificate table (mitodl/hq#12954). Column set mirrors
+  warehouse-pull ETL into its external.programcertificate table
+  (mitodl/hq#12954). Column set mirrors
   the fields profiles.ProgramCertificate actually stores in MIT Learn,
   which is wider than the "core" catalog contract (includes recipient
   name/contact fields, not just program identity).

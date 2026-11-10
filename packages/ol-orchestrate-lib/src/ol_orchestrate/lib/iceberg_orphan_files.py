@@ -38,6 +38,7 @@ from pyiceberg.manifest import ManifestFile, read_manifest_list
 from pyiceberg.table import Table
 
 from ol_orchestrate.lib.lake_orphan_sweep import (
+    HISTORY_DATABASE_SUFFIX,
     S3_DELETE_BATCH_SIZE,
     glue_tables,
     refuse_to_delete_blind,
@@ -550,9 +551,11 @@ def remove_database_orphan_files(  # noqa: PLR0913
 
     :param catalog_factory: Called once per worker thread. A pyiceberg catalog
         and its FileIO must not be shared between threads.
-    :param delete: Refused when Glue denies this caller any database: a table
-        in one of them could be located inside a directory this pass lists.
-        Needs ``record_deletion``, checked before any table is scanned.
+    :param delete: Refused for a history-layer database, whose tables cannot
+        be rebuilt (see ``lake_orphan_sweep.HISTORY_DATABASE_SUFFIX``), and when
+        Glue denies this caller any database: a table in one of them could be
+        located inside a directory this pass lists. Needs ``record_deletion``,
+        checked before any table is scanned.
     :param claims_max_age_seconds: Before a table's delete, its directory is
         checked again against a Glue listing no older than this. A table
         registered or moved into the directory since the pass began, or the
@@ -561,6 +564,9 @@ def remove_database_orphan_files(  # noqa: PLR0913
         so it must be safe to call from several threads at once.
     """
     require_minimum_age(min_age_days)
+    if delete and database.endswith(HISTORY_DATABASE_SUFFIX):
+        msg = f"Refusing a delete run over the history layer database {database}."
+        raise ValueError(msg)
     if delete:
         _required_recorder(record_deletion)
     claims = _GlueClaims(glue, delete=delete)

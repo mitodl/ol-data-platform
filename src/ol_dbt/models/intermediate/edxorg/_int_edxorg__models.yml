@@ -449,7 +449,10 @@ models:
         column_list: ["user_id", "program_uuid"]
 
 - name: int__edxorg__mitx_program_enrollments
-  description: learners who enrolled in MicroMasters and XSeries programs on edX.org
+  description: >
+    learners who enrolled in MicroMasters and XSeries programs on edX.org. Rows for
+    edX's demo course are left out, so a program whose only course it is has no
+    rows here, e.g. Self-Driving Cars and the Future of Real Estate.
   config:
     meta:
       qa_branches:
@@ -915,7 +918,9 @@ models:
     - not_null
 
 - name: int__edxorg__mitx_program_courses
-  description: MITx program and its courses on edX.org
+  description: >
+    MITx program and its courses on edX.org. edX's demo course is left out, so a program
+    whose only course it is has no rows here, see mitodl/hq#14172.
   config:
     meta:
       qa_branches:
@@ -942,6 +947,14 @@ models:
     description: str, readable ID for the course in {org}/{course} format. e.g., MITx/15.415.1x
     tests:
     - not_null
+  - name: mitx_course_readable_id
+    description: str, the course's key in int__mitx__courses, which learners' course
+      enrollments carry, found by the course number of its edX.org runs. The MITx
+      Online key when the course moved there, e.g. course-v1:MITxT+16.101x for MITx/16.101x_2,
+      else its edX.org key. A course whose runs carry no course number keeps the programs
+      API key, e.g. MITx+MITENB01, which is dim_course's key for it.
+    tests:
+    - not_null
   - name: course_title
     description: str, title of the course
   - name: course_type
@@ -950,6 +963,10 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["program_uuid", "course_readable_id"]
+      # course_number isn't unique in int__mitx__courses (UAI courses), so a duplicate
+      # that reaches the join fans out the course's row. Fail on the first one.
+      config:
+        error_if: ">0"
 
 - name: int__edxorg__mitx_product
   description: MITx course available modes and prices on edX.org
@@ -1123,3 +1140,75 @@ unit_tests:
     - {user_id: 8, program_certificate_awarded_on: "2014-02-02T00:00:00.000"}
     - {user_id: 9, program_certificate_awarded_on: "2020-05-02T00:00:00.000"}
     - {user_id: 10, program_certificate_awarded_on: "2020-09-01T00:00:00.000"}
+- name: test_int__edxorg__mitx_program_enrollments_leaves_out_the_demo_course
+  description: >
+    2U's report lists a learner per program and course run. A learner's other
+    run keeps the row, and a program with only demo course rows has no rows.
+  model: int__edxorg__mitx_program_enrollments
+  given:
+  - input: ref('stg__edxorg__s3__program_learner_report')
+    rows:
+    - {program_uuid: u1, program_title: Aerodynamics, program_type: XSeries, user_id: 1,
+      courserun_readable_id: "MITx/16.101x/3T2016"}
+    - {program_uuid: u1, program_title: Aerodynamics, program_type: XSeries, user_id: 1,
+      courserun_readable_id: "edX/DemoX/Demo_Course"}
+    - {program_uuid: u2, program_title: Placeholder, program_type: XSeries, user_id: 1,
+      courserun_readable_id: "edX/DemoX/Demo_Course"}
+    - {program_uuid: u2, program_title: Placeholder, program_type: XSeries, user_id: 2,
+      courserun_readable_id: "edX/DemoX/Demo_Course"}
+  - input: ref('int__micromasters__programs')
+    rows: []
+  expect:
+    rows:
+    - {program_uuid: u1, user_id: 1}
+
+- name: test_int__edxorg__mitx_program_courses_resolves_course_keys
+  description: >
+    A course edX.org re-created under a suffixed key runs under its course number,
+    which int__mitx__courses keys to MITx Online when the course moved there. A
+    course that stayed on edX.org takes its edX.org key from int__mitx__courses.
+    A course only BigQuery has runs for keys them MITx/{course}, and still finds
+    its number. A course with a later run carrying another course's number takes
+    the number most of its runs carry. A course whose runs carry no course number
+    keeps the programs API key. A program that lists only edX's demo course has
+    no rows.
+  model: int__edxorg__mitx_program_courses
+  given:
+  - input: ref('stg__edxorg__s3__programs')
+    rows:
+    - {program_uuid: u1, program_title: Aerodynamics, program_type: XSeries, program_organization: MITx}
+    - {program_uuid: u2, program_title: Placeholder, program_type: XSeries, program_organization: MITx}
+  - input: ref('stg__edxorg__s3__program_courses')
+    rows:
+    - {program_uuid: u2, course_readable_id: "edX/DemoX", course_key: "edX+DemoX"}
+    - {program_uuid: u1, course_readable_id: "MITx/16.101x_2", course_key: "MITx+16.101x_2"}
+    - {program_uuid: u1, course_readable_id: "MITx/EDX.1x", course_key: "MITx+EDX.1x"}
+    - {program_uuid: u1, course_readable_id: "MITx/BQ.1x", course_key: "MITx+BQ.1x"}
+    - {program_uuid: u1, course_readable_id: "MITx/15.762x", course_key: "MITx+15.762x"}
+    - {program_uuid: u1, course_readable_id: "MITx/NONUM", course_key: "MITx+NONUM"}
+  - input: ref('int__micromasters__programs')
+    rows: []
+  - input: ref('int__edxorg__mitx_courseruns')
+    rows:
+    - {course_readable_id: "MITx+16.101x_2", course_number: 16.101x, courserun_start_date: "2018-01-01"}
+    - {course_readable_id: "MITx+16.101x_2", course_number: 16.101x, courserun_start_date: "2019-01-01"}
+    - {course_readable_id: "MITx+EDX.1x", course_number: EDX.1x, courserun_start_date: "2018-01-01"}
+    - {course_readable_id: "MITx/BQ.1x", course_number: BQ.1x, courserun_start_date: "2014-01-01"}
+    - {course_readable_id: "MITx+15.762x", course_number: 15.762x, courserun_start_date: "2025-01-01"}
+    - {course_readable_id: "MITx+15.762x", course_number: 15.762x, courserun_start_date: "2026-01-01"}
+    - {course_readable_id: "MITx/15.762x", course_number: 2.961.1x, courserun_start_date: "2026-10-01"}
+    - {course_readable_id: "MITx+NONUM", course_number: null, courserun_start_date: "2023-01-01"}
+  - input: ref('int__mitx__courses')
+    rows:
+    - {course_number: 16.101x, course_readable_id: "course-v1:MITxT+16.101x"}
+    - {course_number: EDX.1x, course_readable_id: "MITx+EDX.1x"}
+    - {course_number: BQ.1x, course_readable_id: "MITx/BQ.1x"}
+    - {course_number: 15.762x, course_readable_id: "course-v1:MITxT+15.762x"}
+    - {course_number: 2.961.1x, course_readable_id: "course-v1:MITxT+2.961.1x"}
+  expect:
+    rows:
+    - {course_readable_id: "MITx/16.101x_2", mitx_course_readable_id: "course-v1:MITxT+16.101x"}
+    - {course_readable_id: "MITx/EDX.1x", mitx_course_readable_id: "MITx+EDX.1x"}
+    - {course_readable_id: "MITx/BQ.1x", mitx_course_readable_id: "MITx/BQ.1x"}
+    - {course_readable_id: "MITx/15.762x", mitx_course_readable_id: "course-v1:MITxT+15.762x"}
+    - {course_readable_id: "MITx/NONUM", mitx_course_readable_id: "MITx+NONUM"}

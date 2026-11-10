@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 from dagster import build_init_resource_context
+from hvac.exceptions import InvalidPath
 from ol_llm import KeycloakClient, Settings, TracingConfig
 from ol_orchestrate.lib.embeddings.learn import LEARN_V1_CONTENT_FILES
 from ol_orchestrate.resources import embeddings
@@ -197,6 +198,42 @@ def test_tracing_is_off_without_the_keycloak_client_location(
         TracingConfig(enabled=False, include_content=False)
     )
     vault_client.secrets.kv.v1.read_secret.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "secret_read",
+    [
+        # Production run 955d444b: the deployment named the secret before
+        # Keycloak wrote it
+        InvalidPath("no secret at secret-opik/sdk-client"),
+        # a secret without the client's fields
+        {"data": {"url": "https://sso.example.com/realms/ol"}},
+    ],
+)
+def test_an_unreadable_keycloak_client_leaves_tracing_off(
+    ol_llm_setup: tuple[MagicMock, MagicMock],
+    vault_client: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    secret_read: Exception | dict[str, Any],
+) -> None:
+    """Tracing is observability: a failed read is logged, not a failed run"""
+    monkeypatch.setenv("OPIK_URL_OVERRIDE", "https://opik.example.com/api")
+    monkeypatch.setenv("OPIK_KEYCLOAK_VAULT_MOUNT", "secret-opik")
+    monkeypatch.setenv("OPIK_KEYCLOAK_VAULT_PATH", "sdk-client")
+    if isinstance(secret_read, Exception):
+        vault_client.secrets.kv.v1.read_secret.side_effect = secret_read
+    else:
+        vault_client.secrets.kv.v1.read_secret.side_effect = None
+        vault_client.secrets.kv.v1.read_secret.return_value = secret_read
+    _, configure_tracing = ol_llm_setup
+
+    _set_up(EmbeddingsResource(vault=_vault(), environment="production"))
+
+    configure_tracing.assert_called_once_with(
+        TracingConfig(enabled=False, include_content=False)
+    )
+    assert "Opik tracing stays disabled" in caplog.text
 
 
 def test_tracing_authenticates_with_the_vault_keycloak_client(

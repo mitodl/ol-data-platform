@@ -86,7 +86,7 @@ with source as (
         end as completed_course_on
         , case
             when last_activity_date = 'null' then null -- noqa: ST10
-            else {{ cast_date_to_iso8601('last_activity_date') }}
+            else {{ cast_date_to_iso8601('last_activity_date', null_when="{} = 'null'") }}
         end as courseactivity_last_activity_date
         , case
             when date_last_unenrolled = 'null' then null -- noqa: ST10
