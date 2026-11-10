@@ -436,10 +436,11 @@ models:
   - name: program_certificate_awarded_on
     description: timestamp, the date in ISO-8601 format that the learner has passed
       each of the courses in the program and was awarded a program certificate. edX.org's
-      award date is used unless it is more than a day before the learner's last course
-      completion (the latest of each course's first certificate). Then it is the latest
-      award when that falls between a day before and 60 days after that completion,
-      else the completion itself.
+      award date is used unless it is more than a day before the learner's program
+      completion, which is the first certificate of the last course the program requires
+      (a MicroMasters program's required number of courses, in completion order, else
+      every course). Then it is the latest award when that falls between a day before
+      and 60 days after that completion, else the completion itself.
   - name: micromasters_program_id
     description: int, foreign key to program in the MicroMasters database
   tests:
@@ -1033,6 +1034,8 @@ unit_tests:
       courseruncertificate_created_on: "2024-11-20T00:00:00.000"}
   - input: ref('int__micromasters__programs')
     rows: []
+  - input: ref('edxorg_course_name_aliases')
+    rows: []
   expect:
     rows:
     - {user_id: 1, program_certificate_awarded_on: "2020-02-03T00:00:00.000"}
@@ -1041,3 +1044,82 @@ unit_tests:
     - {user_id: 4, program_certificate_awarded_on: null}
     - {user_id: 5, program_certificate_awarded_on: "2023-12-10T00:00:00.000"}
     - {user_id: 6, program_certificate_awarded_on: "2021-03-01T00:00:00.000"}
+- name: test_int__edxorg__mitx_program_certificates_counts_only_required_courses
+  description: >
+    A retake of a course under a title that differs only by a trailing period (user
+    7)
+    or under its earlier name in edxorg_course_name_aliases (user 8) is the same course,
+    so it does not move completion past the award. A MicroMasters learner who finishes
+    a course beyond the number the program requires completed the program with the
+    required one, and keeps the award (user 9). One who reached that number after
+    the
+    award still has it replaced by that completion (user 10).
+  model: int__edxorg__mitx_program_certificates
+  given:
+  - input: ref('stg__edxorg__s3__program_learner_report')
+    rows:
+    - {user_id: 7, program_uuid: ctp, program_type: XSeries, program_title: Computational
+        Thinking using Python, course_title: Introduction to Computer Science and
+        Programming Using Python, courserun_readable_id: a2016, user_has_completed_program: true,
+      completed_course_on: "2016-01-01T00:00:00.000", program_certificate_awarded_on: "2016-03-02T00:00:00.000",
+      program_certificate_last_awarded_on: "2016-03-02T00:00:00.000"}
+    - {user_id: 7, program_uuid: ctp, program_type: XSeries, program_title: Computational
+        Thinking using Python, course_title: Introduction to Computational Thinking
+        and Data Science, courserun_readable_id: b2016, user_has_completed_program: true,
+      completed_course_on: "2016-03-01T00:00:00.000", program_certificate_awarded_on: "2016-03-02T00:00:00.000",
+      program_certificate_last_awarded_on: "2016-03-02T00:00:00.000"}
+    - {user_id: 7, program_uuid: ctp, program_type: XSeries, program_title: Computational
+        Thinking using Python, course_title: Introduction to Computer Science and
+        Programming Using Python., courserun_readable_id: a2025, user_has_completed_program: true,
+      completed_course_on: "2025-06-01T00:00:00.000", program_certificate_awarded_on: "2016-03-02T00:00:00.000",
+      program_certificate_last_awarded_on: "2016-03-02T00:00:00.000"}
+    - {user_id: 8, program_uuid: ctp, program_type: XSeries, program_title: Computational
+        Thinking using Python, course_title: Introduction to Computer Science and
+        Programming, courserun_readable_id: a2013, user_has_completed_program: true,
+      completed_course_on: "2013-12-01T00:00:00.000", program_certificate_awarded_on: "2014-02-02T00:00:00.000",
+      program_certificate_last_awarded_on: "2014-02-02T00:00:00.000"}
+    - {user_id: 8, program_uuid: ctp, program_type: XSeries, program_title: Computational
+        Thinking using Python, course_title: Introduction to Computational Thinking
+        and Data Science, courserun_readable_id: b2014, user_has_completed_program: true,
+      completed_course_on: "2014-02-01T00:00:00.000", program_certificate_awarded_on: "2014-02-02T00:00:00.000",
+      program_certificate_last_awarded_on: "2014-02-02T00:00:00.000"}
+    - {user_id: 8, program_uuid: ctp, program_type: XSeries, program_title: Computational
+        Thinking using Python, course_title: Introduction to Computer Science and
+        Programming Using Python, courserun_readable_id: a2016, user_has_completed_program: true,
+      completed_course_on: "2015-06-01T00:00:00.000", program_certificate_awarded_on: "2014-02-02T00:00:00.000",
+      program_certificate_last_awarded_on: "2014-02-02T00:00:00.000"}
+    - {user_id: 9, program_uuid: sds, program_type: MicroMasters, program_title: Statistics
+        and Data Science (General Track), course_title: C1, courserun_readable_id: c1,
+      user_has_completed_program: true, completed_course_on: "2020-01-01T00:00:00.000",
+      program_certificate_awarded_on: "2020-05-02T00:00:00.000", program_certificate_last_awarded_on: "2020-05-02T00:00:00.000"}
+    - {user_id: 9, program_uuid: sds, program_type: MicroMasters, program_title: Statistics
+        and Data Science (General Track), course_title: C2, courserun_readable_id: c2,
+      user_has_completed_program: true, completed_course_on: "2020-05-01T00:00:00.000",
+      program_certificate_awarded_on: "2020-05-02T00:00:00.000", program_certificate_last_awarded_on: "2020-05-02T00:00:00.000"}
+    - {user_id: 9, program_uuid: sds, program_type: MicroMasters, program_title: Statistics
+        and Data Science (General Track), course_title: C3, courserun_readable_id: c3,
+      user_has_completed_program: true, completed_course_on: "2021-01-01T00:00:00.000",
+      program_certificate_awarded_on: "2020-05-02T00:00:00.000", program_certificate_last_awarded_on: "2020-05-02T00:00:00.000"}
+    - {user_id: 10, program_uuid: sds, program_type: MicroMasters, program_title: Statistics
+        and Data Science (General Track), course_title: C1, courserun_readable_id: c1,
+      user_has_completed_program: true, completed_course_on: "2020-01-01T00:00:00.000",
+      program_certificate_awarded_on: "2020-02-01T00:00:00.000", program_certificate_last_awarded_on: "2020-02-01T00:00:00.000"}
+    - {user_id: 10, program_uuid: sds, program_type: MicroMasters, program_title: Statistics
+        and Data Science (General Track), course_title: C2, courserun_readable_id: c2,
+      user_has_completed_program: true, completed_course_on: "2020-09-01T00:00:00.000",
+      program_certificate_awarded_on: "2020-02-01T00:00:00.000", program_certificate_last_awarded_on: "2020-02-01T00:00:00.000"}
+  - input: ref('stg__edxorg__s3__courserun_certificate')
+    rows: []
+  - input: ref('int__micromasters__programs')
+    rows:
+    - {program_id: 9, program_title: Statistics and Data Science, program_num_required_courses: 2}
+  - input: ref('edxorg_course_name_aliases')
+    rows:
+    - {alias_course_name: introduction to computer science and programming, course_name: introduction
+        to computer science and programming using python}
+  expect:
+    rows:
+    - {user_id: 7, program_certificate_awarded_on: "2016-03-02T00:00:00.000"}
+    - {user_id: 8, program_certificate_awarded_on: "2014-02-02T00:00:00.000"}
+    - {user_id: 9, program_certificate_awarded_on: "2020-05-02T00:00:00.000"}
+    - {user_id: 10, program_certificate_awarded_on: "2020-09-01T00:00:00.000"}

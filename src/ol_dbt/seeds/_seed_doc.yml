@@ -58,6 +58,23 @@ seeds:
     tests:
     - not_null
 
+- name: edxorg_course_name_aliases
+  description: Maps an edX.org course's earlier title to its current one, so int__edxorg__mitx_program_certificates
+    counts runs of a renamed course as one course. e.g. 6.00.1x's 3T2013 run is titled
+    "Introduction to Computer Science and Programming", later runs add "Using Python".
+    Names are the program learner report's course titles normalized the way that model
+    does (lowercased, trailing parenthetical and period removed).
+  columns:
+  - name: alias_course_name
+    description: string, the earlier normalized course title
+    tests:
+    - not_null
+    - unique
+  - name: course_name
+    description: string, the current normalized course title it maps to
+    tests:
+    - not_null
+
 - name: legacy_edx_certificate_revision_mapping
   description: Mapping edX certificates to MITx Online certificate revisions for legacy
     edX courses that were missing signatory information from edX course export.These
