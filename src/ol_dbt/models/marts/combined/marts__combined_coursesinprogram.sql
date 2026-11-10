@@ -55,8 +55,8 @@ with mitx_programs as (
                     when edxorg_mitx_program_courses.program_title = edxorg_mitx_program_courses.program_name
                         then 0
                     else 1
-                end
-                , edxorg_mitx_program_courses.program_title
+                end nulls last
+                , edxorg_mitx_program_courses.program_title nulls last
         ) as title_rank
     from edxorg_mitx_program_courses
     left join program_report_key
