@@ -638,7 +638,7 @@ intuition is backwards:
 
 | figure | how it is computed | key-sensitive? |
 |---|---|---|
-| per-column mismatch rate | `compare_column_values`: `full outer join b_query on a_query.<pk> = b_query.<pk>` | **yes — corrupted by a weak key** |
+| per-column mismatch rate | one `full outer join b_query on a_query.<pk> = b_query.<pk>` for all columns (`compare_column_values`' buckets) | **yes — corrupted by a weak key** |
 | "rows without an exact match" | `compare_queries`: `EXCEPT` on full row content; `primary_key` appears only in an `order by` | no |
 | sample mismatch rows | same `EXCEPT` branch (`summarize=false`) | no |
 
