@@ -11,6 +11,9 @@ strategies:
 mirror_max_age_days: 90
 loader: airbyte
 table_prefix: raw__edxorg__program_entitlement
+# Each sync reads the whole sheet, so a row missing from it was removed.
+history:
+  absence: deleted
 airbyte:
   source_kind: source-google-sheets
   replication_method: n/a

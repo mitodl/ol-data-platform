@@ -1,0 +1,1731 @@
+---
+# GENERATED FILE - DO NOT EDIT.
+# Regenerate with `ol-dbt inventory history --write`; CI fails if this file and
+# ingestion/inventory/ disagree. The keyset tables of the history tables
+# whose deletes only a keys-only read of the source shows.
+version: 2
+sources:
+- name: ol_warehouse_raw_data
+  loader: dlt
+  database: '{{ target.database | default(none) }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__learn_ai__app__postgres__ai_chatbots_chatresponserating__keyset
+    description: >-
+      Primary key of every current record of raw__learn_ai__app__postgres__ai_chatbots_chatresponserating,
+      read from the learn_ai/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: checkpoint_id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__cms_programpage__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__cms_programpage,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: page_ptr_id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__courses_courserun__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__courses_courserun,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__courses_electivecourse__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__courses_electivecourse,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__courses_electivesset__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__courses_electivesset,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__courses_program__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__courses_program,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__django_content_type__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__django_content_type,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__ecommerce_coupon__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__ecommerce_coupon,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__ecommerce_couponinvoice__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__ecommerce_couponinvoice,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__ecommerce_line__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__ecommerce_line,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__ecommerce_order__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__ecommerce_order,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__ecommerce_receipt__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__ecommerce_receipt,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__ecommerce_redeemedcoupon__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__ecommerce_redeemedcoupon,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__ecommerce_usercoupon__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__ecommerce_usercoupon,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__exams_examrun__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__exams_examrun,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__grades_combinedfinalgrade__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__grades_combinedfinalgrade,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__grades_finalgrade__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__grades_finalgrade,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__grades_micromasterscoursecertificate__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__grades_micromasterscoursecertificate,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__grades_proctoredexamgrade__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__grades_proctoredexamgrade,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__profiles_education__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__profiles_education,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__profiles_employment__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__profiles_employment,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__social_auth_usersocialauth__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__social_auth_usersocialauth,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__wagtailcore_page__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__wagtailcore_page,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__micromasters__app__postgres__wagtailimages_image__keyset
+    description: >-
+      Primary key of every current record of raw__micromasters__app__postgres__wagtailimages_image,
+      read from the micromasters/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitlearn__app__postgres__content_feedback_contentfeedback__keyset
+    description: >-
+      Primary key of every current record of raw__mitlearn__app__postgres__content_feedback_contentfeedback,
+      read from the mitlearn/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitlearn__app__postgres__learning_resources_learningresourcetopic__keyset
+    description: >-
+      Primary key of every current record of raw__mitlearn__app__postgres__learning_resources_learningresourcetopic,
+      read from the mitlearn/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitlearn__app__postgres__learning_resources_learningresourcetopicmapping__keyset
+    description: >-
+      Primary key of every current record of raw__mitlearn__app__postgres__learning_resources_learningresourcetopicmapping,
+      read from the mitlearn/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitlearn__app__postgres__learning_resources_search_percolatequery__keyset
+    description: >-
+      Primary key of every current record of raw__mitlearn__app__postgres__learning_resources_search_percolatequery,
+      read from the mitlearn/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitlearn__app__postgres__learning_resources_search_percolatequery_users__keyset
+    description: >-
+      Primary key of every current record of raw__mitlearn__app__postgres__learning_resources_search_percolatequery_users,
+      read from the mitlearn/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitlearn__app__postgres__learning_resources_userlist__keyset
+    description: >-
+      Primary key of every current record of raw__mitlearn__app__postgres__learning_resources_userlist,
+      read from the mitlearn/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitlearn__app__postgres__learning_resources_userlist_topics__keyset
+    description: >-
+      Primary key of every current record of raw__mitlearn__app__postgres__learning_resources_userlist_topics,
+      read from the mitlearn/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitlearn__app__postgres__learning_resources_userlistrelationship__keyset
+    description: >-
+      Primary key of every current record of raw__mitlearn__app__postgres__learning_resources_userlistrelationship,
+      read from the mitlearn/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitlearn__app__postgres__profiles_profile_topic_interests__keyset
+    description: >-
+      Primary key of every current record of raw__mitlearn__app__postgres__profiles_profile_topic_interests,
+      read from the mitlearn/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitx__openedx__mysql__certificates_generatedcertificate__keyset
+    description: >-
+      Primary key of every current record of raw__mitx__openedx__mysql__certificates_generatedcertificate,
+      read from the mitx/mysql source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitx__openedx__mysql__course_overviews_courseoverview__keyset
+    description: >-
+      Primary key of every current record of raw__mitx__openedx__mysql__course_overviews_courseoverview,
+      read from the mitx/mysql source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitx__openedx__mysql__credit_crediteligibility__keyset
+    description: >-
+      Primary key of every current record of raw__mitx__openedx__mysql__credit_crediteligibility,
+      read from the mitx/mysql source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitx__openedx__mysql__grades_persistentcoursegrade__keyset
+    description: >-
+      Primary key of every current record of raw__mitx__openedx__mysql__grades_persistentcoursegrade,
+      read from the mitx/mysql source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitx__openedx__mysql__grades_persistentsubsectiongrade__keyset
+    description: >-
+      Primary key of every current record of raw__mitx__openedx__mysql__grades_persistentsubsectiongrade,
+      read from the mitx/mysql source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitx__openedx__mysql__grades_persistentsubsectiongradeoverride__keyset
+    description: >-
+      Primary key of every current record of raw__mitx__openedx__mysql__grades_persistentsubsectiongradeoverride,
+      read from the mitx/mysql source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitx__openedx__mysql__workflow_assessmentworkflow__keyset
+    description: >-
+      Primary key of every current record of raw__mitx__openedx__mysql__workflow_assessmentworkflow,
+      read from the mitx/mysql source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__b2b_userb2bcontract__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__b2b_userb2bcontract,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__courses_blockedcountry__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__courses_blockedcountry,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__courses_courserun_b2b_contracts__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__courses_courserun_b2b_contracts,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__courses_courseruncertificate__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__courses_courseruncertificate,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__courses_courserunenrollment__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__courses_courserunenrollment,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__courses_courserunenrollmentaudit__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__courses_courserunenrollmentaudit,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__courses_courserungrade__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__courses_courserungrade,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__courses_coursestopic__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__courses_coursestopic,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__courses_department__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__courses_department,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__courses_programcertificate__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__courses_programcertificate,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__courses_programenrollment__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__courses_programenrollment,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__courses_programenrollmentaudit__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__courses_programenrollmentaudit,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__django_content_type__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__django_content_type,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__ecommerce_basket__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__ecommerce_basket,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__ecommerce_basketdiscount__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__ecommerce_basketdiscount,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__ecommerce_basketitem__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__ecommerce_basketitem,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__ecommerce_discount__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__ecommerce_discount,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__ecommerce_discountproduct__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__ecommerce_discountproduct,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__ecommerce_discountredemption__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__ecommerce_discountredemption,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__ecommerce_product__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__ecommerce_product,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__flexiblepricing_countryincomethreshold__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__flexiblepricing_countryincomethreshold,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__flexiblepricing_currencyexchangerate__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__flexiblepricing_currencyexchangerate,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__flexiblepricing_flexiblepricetier__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__flexiblepricing_flexiblepricetier,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__openedx_openedxuser__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__openedx_openedxuser,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__reversion_revision__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__reversion_revision,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__reversion_version__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__reversion_version,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__wagtailcore_page__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__wagtailcore_page,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__app__postgres__wagtailimages_image__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__app__postgres__wagtailimages_image,
+      read from the mitxonline/app_postgres source database by ol_dlt.keyset after
+      each load and replaced each time. A key in raw that is missing here was deleted
+      at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__openedx__mysql__grades_persistentcoursegrade__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__openedx__mysql__grades_persistentcoursegrade,
+      read from the mitxonline/mysql source database by ol_dlt.keyset after each load
+      and replaced each time. A key in raw that is missing here was deleted at the
+      source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__openedx__mysql__grades_persistentsubsectiongradeoverride__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__openedx__mysql__grades_persistentsubsectiongradeoverride,
+      read from the mitxonline/mysql source database by ol_dlt.keyset after each load
+      and replaced each time. A key in raw that is missing here was deleted at the
+      source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__openedx__mysql__student_anonymoususerid__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__openedx__mysql__student_anonymoususerid,
+      read from the mitxonline/mysql source database by ol_dlt.keyset after each load
+      and replaced each time. A key in raw that is missing here was deleted at the
+      source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__mitxonline__openedx__mysql__submissions_submission__keyset
+    description: >-
+      Primary key of every current record of raw__mitxonline__openedx__mysql__submissions_submission,
+      read from the mitxonline/mysql source database by ol_dlt.keyset after each load
+      and replaced each time. A key in raw that is missing here was deleted at the
+      source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__ocw__studio__postgres__gdrive_sync_drivefile__keyset
+    description: >-
+      Primary key of every current record of raw__ocw__studio__postgres__gdrive_sync_drivefile,
+      read from the ocw/app_postgres source database by ol_dlt.keyset after each load
+      and replaced each time. A key in raw that is missing here was deleted at the
+      source.
+    columns:
+    - name: file_id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__ovs__postgres__dj_elastictranscoder_encodejob__keyset
+    description: >-
+      Primary key of every current record of raw__ovs__postgres__dj_elastictranscoder_encodejob,
+      read from the ovs/app_postgres source database by ol_dlt.keyset after each load
+      and replaced each time. A key in raw that is missing here was deleted at the
+      source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__ovs__postgres__ui_collection__keyset
+    description: >-
+      Primary key of every current record of raw__ovs__postgres__ui_collection, read
+      from the ovs/app_postgres source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__ovs__postgres__ui_collectionedxendpoint__keyset
+    description: >-
+      Primary key of every current record of raw__ovs__postgres__ui_collectionedxendpoint,
+      read from the ovs/app_postgres source database by ol_dlt.keyset after each load
+      and replaced each time. A key in raw that is missing here was deleted at the
+      source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__ovs__postgres__ui_edxendpoint__keyset
+    description: >-
+      Primary key of every current record of raw__ovs__postgres__ui_edxendpoint, read
+      from the ovs/app_postgres source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__ovs__postgres__ui_encodejob__keyset
+    description: >-
+      Primary key of every current record of raw__ovs__postgres__ui_encodejob, read
+      from the ovs/app_postgres source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__ovs__postgres__ui_video__keyset
+    description: >-
+      Primary key of every current record of raw__ovs__postgres__ui_video, read from
+      the ovs/app_postgres source database by ol_dlt.keyset after each load and replaced
+      each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__b2b_ecommerce_b2bcoupon__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__b2b_ecommerce_b2bcoupon,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__b2b_ecommerce_b2bcouponaudit__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__b2b_ecommerce_b2bcouponaudit,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__b2b_ecommerce_b2bcouponredemption__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__b2b_ecommerce_b2bcouponredemption,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__b2b_ecommerce_b2border__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__b2b_ecommerce_b2border,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__b2b_ecommerce_b2borderaudit__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__b2b_ecommerce_b2borderaudit,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__b2b_ecommerce_b2breceipt__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__b2b_ecommerce_b2breceipt,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__cms_externalprogrampage__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__cms_externalprogrampage,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: page_ptr_id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__cms_programpage__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__cms_programpage,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: page_ptr_id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__cms_signatorypage__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__cms_signatorypage,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: page_ptr_id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__courses_course__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__courses_course,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__courses_courseruncertificate__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__courses_courseruncertificate,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__courses_courserunenrollment__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__courses_courserunenrollment,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__courses_courserungrade__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__courses_courserungrade,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__courses_platform__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__courses_platform,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__courses_program__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__courses_program,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__courses_programcertificate__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__courses_programcertificate,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__courses_programenrollment__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__courses_programenrollment,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__courses_programrun__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__courses_programrun,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__django_content_type__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__django_content_type,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_basket__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_basket,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_basketitem__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_basketitem,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_bulkcouponassignment__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_bulkcouponassignment,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_company__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_company,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_coupon__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_coupon,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_couponeligibility__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_couponeligibility,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_couponpayment__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_couponpayment,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_couponpaymentversion__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_couponpaymentversion,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_couponredemption__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_couponredemption,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_couponselection__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_couponselection,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_couponversion__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_couponversion,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_line__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_line,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_linerunselection__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_linerunselection,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_order__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_order,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_orderaudit__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_orderaudit,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_productcouponassignment__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_productcouponassignment,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_programrunline__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_programrunline,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_receipt__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_receipt,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__ecommerce_taxrate__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__ecommerce_taxrate,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__app__postgres__wagtailimages_image__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__app__postgres__wagtailimages_image,
+      read from the xpro/app_postgres source database by ol_dlt.keyset after each
+      load and replaced each time. A key in raw that is missing here was deleted at
+      the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__openedx__mysql__certificates_generatedcertificate__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__openedx__mysql__certificates_generatedcertificate,
+      read from the xpro/mysql source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__openedx__mysql__credit_crediteligibility__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__openedx__mysql__credit_crediteligibility,
+      read from the xpro/mysql source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__openedx__mysql__grades_persistentcoursegrade__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__openedx__mysql__grades_persistentcoursegrade,
+      read from the xpro/mysql source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__openedx__mysql__grades_persistentsubsectiongrade__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__openedx__mysql__grades_persistentsubsectiongrade,
+      read from the xpro/mysql source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__openedx__mysql__grades_persistentsubsectiongradeoverride__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__openedx__mysql__grades_persistentsubsectiongradeoverride,
+      read from the xpro/mysql source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.
+  - name: raw__xpro__openedx__mysql__workflow_assessmentworkflow__keyset
+    description: >-
+      Primary key of every current record of raw__xpro__openedx__mysql__workflow_assessmentworkflow,
+      read from the xpro/mysql source database by ol_dlt.keyset after each load and
+      replaced each time. A key in raw that is missing here was deleted at the source.
+    columns:
+    - name: id
+      description: primary key of a current source record.
+    - name: _keyset_read_started_at
+      description: >-
+        source database clock read before the load's first keyset select, one value
+        per load. A raw row the loader wrote after this existed when the keyset was
+        read.

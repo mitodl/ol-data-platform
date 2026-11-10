@@ -1,0 +1,40 @@
+---
+# GENERATED FILE - DO NOT EDIT.
+# Regenerate with `ol-dbt inventory history --write`; CI fails if this file and
+# ingestion/inventory/units/learn_ai__app_postgres.yml disagree.
+version: 2
+snapshots:
+- name: snapshot_raw__learn_ai__app__postgres__ai_chatbots_chatresponserating
+  description: >-
+    History of raw__learn_ai__app__postgres__ai_chatbots_chatresponserating (learn_ai/app_postgres,
+    table ai_chatbots_chatresponserating): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__learn_ai__app__postgres__ai_chatbots_chatresponserating__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: learn_ai/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: checkpoint_id
+    description: >-
+      primary key of the learn_ai/app_postgres ai_chatbots_chatresponserating record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.

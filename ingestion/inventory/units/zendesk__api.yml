@@ -11,6 +11,10 @@ strategies:
 mirror_max_age_days: 90
 loader: airbyte
 table_prefix: raw__thirdparty__zendesk_support__
+# The full-refresh streams list every current record. The incremental ones
+# never drop a row from raw, and carry Zendesk's own deleted flags instead.
+history:
+  absence: deleted
 airbyte:
   source_kind: source-zendesk-support
   replication_method: n/a

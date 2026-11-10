@@ -325,6 +325,10 @@ tables:
   primary_key:
   - - page_ptr_id
   modeled: true
+  # One of the eight raw history pilot tables (#2902), built in production
+  # since 2026-10-08 ahead of the rest of the unit.
+  history:
+    live: true
 - name: cms_commoncomponentindexpage
   raw_table: raw__xpro__app__postgres__cms_commoncomponentindexpage
   sync_mode: incremental_deduped_history
@@ -388,6 +392,8 @@ tables:
   primary_key:
   - - page_ptr_id
   modeled: true
+  history:
+    live: true
 - name: cms_externalcoursepage_topics
   raw_table: raw__xpro__app__postgres__cms_externalcoursepage_topics
   sync_mode: full_refresh_overwrite
@@ -395,6 +401,8 @@ tables:
   primary_key:
   - - id
   modeled: true
+  history:
+    live: true
 - name: cms_externalprogrampage
   raw_table: raw__xpro__app__postgres__cms_externalprogrampage
   sync_mode: incremental_deduped_history
@@ -619,6 +627,8 @@ tables:
   primary_key:
   - - id
   modeled: true
+  history:
+    live: true
 - name: courses_courseruncertificate
   raw_table: raw__xpro__app__postgres__courses_courseruncertificate
   sync_mode: incremental_deduped_history
@@ -661,6 +671,8 @@ tables:
   primary_key:
   - - id
   modeled: true
+  history:
+    live: true
 - name: courses_platform
   raw_table: raw__xpro__app__postgres__courses_platform
   sync_mode: incremental_deduped_history
@@ -920,6 +932,8 @@ tables:
   primary_key:
   - - id
   modeled: true
+  history:
+    live: true
 - name: ecommerce_productcouponassignment
   raw_table: raw__xpro__app__postgres__ecommerce_productcouponassignment
   sync_mode: incremental_deduped_history
@@ -934,6 +948,8 @@ tables:
   primary_key:
   - - id
   modeled: true
+  history:
+    live: true
 - name: ecommerce_programrunline
   raw_table: raw__xpro__app__postgres__ecommerce_programrunline
   sync_mode: incremental_deduped_history
@@ -1305,6 +1321,8 @@ tables:
   primary_key:
   - - id
   modeled: true
+  history:
+    live: true
 - name: wagtailcore_pagelogentry
   raw_table: raw__xpro__app__postgres__wagtailcore_pagelogentry
   sync_mode: incremental_deduped_history

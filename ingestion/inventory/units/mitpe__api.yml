@@ -10,6 +10,10 @@ strategies:
   local: fixture
 loader: dlt
 table_prefix: raw__mitpe__api__
+# The catalog API lists every current course, so one missing from a load was
+# taken down.
+history:
+  absence: deleted
 dlt:
   source_module: ol_dlt.sources.mitpe
   write_disposition: replace
