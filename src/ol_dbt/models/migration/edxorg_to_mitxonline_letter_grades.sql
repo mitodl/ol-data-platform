@@ -28,5 +28,5 @@ inner join edxorg_grade
     and course_runs.courserun_readable_id = edxorg_grade.courserun_readable_id
 where
     course_runs.courserun_readable_id like 'course-v1:MITx+%'
-    and coalesce(grade.courserungrade_letter_grade, '') = ''
-    and edxorg_grade.courserungrade_letter_grade <> ''
+    and grade.courserungrade_letter_grade is null
+    and edxorg_grade.courserungrade_letter_grade is not null
