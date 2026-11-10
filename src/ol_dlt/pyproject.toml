@@ -31,6 +31,7 @@ dependencies = [
     # Backfill entrypoints (ol_dlt.sources.posthog_events.__main__) take real
     # arguments -- a date window and a chunk size -- rather than env vars.
     "cyclopts~=5.4.0",
+    "google-ads>=29,<32",
 ]
 
 [dependency-groups]

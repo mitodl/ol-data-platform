@@ -45,6 +45,7 @@ def test_every_source_package_is_covered() -> None:
         "course_xml_blocks",
         "edxorg_program_reports",
         "edxorg_s3",
+        "google_ads",
         "keycloak",
         "medium",
         "mit_climate",

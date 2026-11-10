@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.13, <3.15"
 resolution-markers = [
     "python_full_version >= '3.14' and platform_python_implementation != 'PyPy' and sys_platform != 'emscripten'",
@@ -1108,6 +1108,25 @@ wheels = [
 ]
 
 [[package]]
+name = "google-ads"
+version = "31.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core" },
+    { name = "google-auth-oauthlib" },
+    { name = "googleapis-common-protos" },
+    { name = "grpcio" },
+    { name = "grpcio-status" },
+    { name = "proto-plus" },
+    { name = "protobuf" },
+    { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/68/2e/c90d8aed68a711b99f0d1aa1e6ed87741a28da73e8f1cb85d6e15faea593/google_ads-31.4.0.tar.gz", hash = "sha256:038e502608afc1e88888e2e4ae367bc7a7878b5c3206910753c6a089f0b463cc", size = 12455947, upload-time = "2026-08-19T14:12:53.79Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5d/59/27f19973bee9d6ae64e052d20767e2f586067b8237dd935254927f9009b5/google_ads-31.4.0-py3-none-any.whl", hash = "sha256:210a7f6a7b5d40ef544090216dceeb90c9d2e7fba51c72329a690c9e5bb94474", size = 23712034, upload-time = "2026-08-19T14:12:50.698Z" },
+]
+
+[[package]]
 name = "google-api-core"
 version = "2.44.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2047,6 +2066,7 @@ dependencies = [
     { name = "defusedxml" },
     { name = "dlt", extra = ["filesystem", "parquet", "pyiceberg", "sql-database"] },
     { name = "duckdb" },
+    { name = "google-ads" },
     { name = "hvac" },
     { name = "psycopg2-binary" },
     { name = "pyiceberg", extra = ["glue"] },
@@ -2064,6 +2084,7 @@ requires-dist = [
     { name = "defusedxml", specifier = ">=0.7" },
     { name = "dlt", extras = ["filesystem", "parquet", "pyiceberg", "sql-database"], specifier = ">=1.32,<2" },
     { name = "duckdb", specifier = ">=1.2,!=1.5.0,!=1.5.1,<2" },
+    { name = "google-ads", specifier = ">=29,<32" },
     { name = "hvac", specifier = ">=2.3" },
     { name = "psycopg2-binary", specifier = ">=2.9" },
     { name = "pyiceberg", extras = ["glue"], specifier = ">=0.9" },
