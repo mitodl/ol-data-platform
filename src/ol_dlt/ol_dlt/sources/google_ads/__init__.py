@@ -17,6 +17,13 @@ Data flow, per client account:
     campaign_criterion  -> raw__google_ads__api__campaign_criterion_snapshots
     campaign_shared_set -> raw__google_ads__api__campaign_shared_set_snapshots
     shared_criterion    -> raw__google_ads__api__shared_criterion_snapshots
+    (every report and snapshot fetch) -> raw__google_ads__api__fetch_log (merge)
+
+A merge never deletes, so a conversion Google retracts, or an entity removed
+between two snapshots on one day, keeps its old row. The fetch log records each
+account window a report or snapshot table re-read, with that fetch's
+``retrieved_at``. Staging keeps a row only if its ``retrieved_at`` is the latest
+fetch covering its date (or snapshot date); this holds for empty fetches too.
 
 Credentials: the qa and production profiles read Vault
 ``secret-data/pipelines/google_ads``, which ol-infrastructure's dagster stack
@@ -46,6 +53,7 @@ from typing import Any
 
 import dlt
 import proto
+from dateutil.relativedelta import relativedelta
 from google.ads.googleads.client import GoogleAdsClient
 
 from ol_dlt import config, vault
@@ -60,11 +68,29 @@ DEFAULT_START_DATE = "2021-01-01"
 # and Google restates past days' conversions, so each run re-pulls this window.
 DEFAULT_LOOKBACK_DAYS = 90
 REPORT_CHUNK_DAYS = 31
+# Google rejects segments.date older than 37 months, since 2026-06-01:
+# https://ads-developers.googleblog.com/2026/05/new-data-retention-policy-for-google.html
+REPORT_RETENTION = relativedelta(months=37)
 
 # The API keeps 30 days of change events and caps a query at 10,000 rows.
 CHANGE_EVENT_RETENTION_DAYS = 29
 CHANGE_EVENT_LIMIT = 10_000
-CHANGE_EVENT_MIN_WINDOW = timedelta(minutes=1)
+CHANGE_EVENT_MIN_WINDOW = timedelta(seconds=1)
+
+FETCH_LOG_TABLE = "raw__google_ads__api__fetch_log"
+FETCH_LOG_KEY = (
+    "customer_id",
+    "table_name",
+    "window_start",
+    "window_end",
+    "retrieved_at",
+)
+FETCH_LOG_COLUMNS: dict[str, dict[str, Any]] = {
+    **{name: {"data_type": "text", "nullable": False} for name in FETCH_LOG_KEY},
+    # The same type dlt infers for retrieved_at on the data tables, so they join.
+    "retrieved_at": {"data_type": "timestamp", "nullable": False},
+    **config.DLT_LOAD_ID_COLUMN,
+}
 
 CUSTOMER_CLIENT_FIELDS = (
     "customer_client.id",
@@ -284,7 +310,9 @@ def report_window(
 ) -> tuple[date, date] | None:
     """Return the dates to pull for one account, or None when it is current."""
     end = today - timedelta(days=1)
-    first = date.fromisoformat(start_date)
+    # One day inside the retention limit, so a run late in the day stays inside it.
+    oldest = today - REPORT_RETENTION + timedelta(days=1)
+    first = max(date.fromisoformat(start_date), oldest)
     if last_loaded:
         first = max(
             first, date.fromisoformat(last_loaded) - timedelta(days=lookback_days)
@@ -402,6 +430,30 @@ def google_ads_source(
             "schema_contract": config.JSON_API_SCHEMA_CONTRACT,
         }
 
+    def _fetch_log(
+        table: str, customer_id: str, first: str, last: str, retrieved_at: str
+    ) -> Any:  # noqa: ANN401
+        return dlt.mark.with_hints(
+            {
+                "customer_id": customer_id,
+                "table_name": table,
+                "window_start": first,
+                "window_end": last,
+                "retrieved_at": retrieved_at,
+            },
+            dlt.mark.make_hints(
+                table_name=FETCH_LOG_TABLE,
+                # Its own key: a variant otherwise inherits the parent's, which
+                # these rows don't have.
+                write_disposition="merge",
+                primary_key=list(FETCH_LOG_KEY),
+                columns=FETCH_LOG_COLUMNS,
+                table_format=table_format,
+                schema_contract=config.JSON_API_SCHEMA_CONTRACT,
+            ),
+            create_table_variant=True,
+        )
+
     @dlt.transformer(
         data_from=accounts,
         name="raw__google_ads__api__customer_clients",
@@ -416,8 +468,12 @@ def google_ads_source(
             yield {**account, "retrieved_at": retrieved_at}
 
     def _daily_report(
-        client_ids: list[str], resource: str, fields: tuple[str, ...], where: str
-    ) -> Iterator[dict[str, Any]]:
+        table: str,
+        client_ids: list[str],
+        resource: str,
+        fields: tuple[str, ...],
+        where: str,
+    ) -> Iterator[Any]:
         last_loaded: dict[str, str] = dlt.current.resource_state().setdefault(
             "last_loaded_date", {}
         )
@@ -440,6 +496,13 @@ def google_ads_source(
                         **record,
                         "retrieved_at": retrieved_at,
                     }
+            yield _fetch_log(
+                table,
+                customer_id,
+                window[0].isoformat(),
+                window[1].isoformat(),
+                retrieved_at,
+            )
             last_loaded[customer_id] = window[1].isoformat()
 
     keyword_key = (
@@ -455,6 +518,7 @@ def google_ads_source(
     )
     def keyword_daily(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:
         yield from _daily_report(
+            "raw__google_ads__api__keyword_daily",
             listing["client_ids"],
             "keyword_view",
             KEYWORD_DAILY_FIELDS,
@@ -470,6 +534,7 @@ def google_ads_source(
     )
     def keyword_conversions_daily(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:
         yield from _daily_report(
+            "raw__google_ads__api__keyword_conversions_daily",
             listing["client_ids"],
             "keyword_view",
             KEYWORD_CONVERSION_FIELDS,
@@ -485,6 +550,7 @@ def google_ads_source(
     )
     def campaign_daily(listing: dict[str, Any]) -> Iterator[dict[str, Any]]:
         yield from _daily_report(
+            "raw__google_ads__api__campaign_daily",
             listing["client_ids"],
             "campaign",
             CAMPAIGN_DAILY_FIELDS,
@@ -509,21 +575,17 @@ def google_ads_source(
         if len(rows) < CHANGE_EVENT_LIMIT:
             yield from rows
             return
-        # A full page may be truncated. Halve the window rather than fail: every
-        # run re-reads 29 days, so one failure would repeat until the day aged out.
+        # A full page may be truncated, so halve the window. A full one-second
+        # window can't be split further; fail loudly rather than load a page that
+        # may be missing events, which the freshness check would not notice.
         if last - first <= CHANGE_EVENT_MIN_WINDOW:
-            logger.error(
-                "Account %s has %d or more change events from %s to %s; loading "
-                "the first %d",
-                customer_id,
-                CHANGE_EVENT_LIMIT,
-                first,
-                last,
-                CHANGE_EVENT_LIMIT,
+            msg = (
+                f"Account {customer_id} has {CHANGE_EVENT_LIMIT} or more change "
+                f"events from {first} to {last}; the API can't return them all"
             )
-            yield from rows
-            return
-        middle = first + (last - first) // 2
+            raise RuntimeError(msg)
+        # Whole seconds: the query compares change_date_time at second precision.
+        middle = first + timedelta(seconds=(last - first).total_seconds() // 2)
         yield from _change_events_between(customer_id, first, middle)
         yield from _change_events_between(customer_id, middle, last)
 
@@ -570,6 +632,9 @@ def google_ads_source(
                         **record,
                         "retrieved_at": retrieved_at,
                     }
+                yield _fetch_log(
+                    name, customer_id, snapshot_date, snapshot_date, retrieved_at
+                )
 
         return snapshot
 

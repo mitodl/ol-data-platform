@@ -73,6 +73,8 @@ class FakeClient:
         self.change_event_times = change_event_times
         # Stamped on keyword rows, so a test can tell which run wrote a row.
         self.clicks = 0
+        # Dates the next keyword fetch leaves out, as if Google retracted them.
+        self.dropped_dates: set[str] = set()
 
     def get_service(self, _name: str) -> "FakeClient":
         return self
@@ -86,7 +88,11 @@ class FakeClient:
             ]
         elif resource == "keyword_view" and "metrics.impressions" in query:
             first, last = _match(r"BETWEEN '([\d-]+)' AND '([\d-]+)'", query).groups()
-            rows = [_keyword_row(first, self.clicks), _keyword_row(last, self.clicks)]
+            rows = [
+                _keyword_row(day, self.clicks)
+                for day in (first, last)
+                if day not in self.dropped_dates
+            ]
         elif resource == "change_event":
             start, end = _match(r">= '([^']+)' AND .* < '([^']+)'", query).groups()
             limit = int(_match(r"LIMIT (\d+)", query).group(1))
@@ -116,7 +122,11 @@ def test_daily_reports_skip_managers_and_unset_share_is_null() -> None:
     source = google_ads.google_ads_source(
         client_factory=lambda: client, start_date="2026-10-01", today=TODAY
     )
-    rows = list(source.resources["raw__google_ads__api__keyword_daily"])
+    rows = [
+        r
+        for r in source.resources["raw__google_ads__api__keyword_daily"]
+        if isinstance(r, dict)
+    ]
 
     assert {c for c, q in client.queries if "FROM keyword_view" in q} == {COURSE_ID}
     assert _keyword_windows(client) == [
@@ -143,6 +153,24 @@ def test_full_change_event_window_is_split_not_failed(
     assert sorted(r["change_event__change_date_time"] for r in rows) == list(times)
 
 
+def test_full_one_second_window_fails_the_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(google_ads, "CHANGE_EVENT_LIMIT", 3)
+    client = FakeClient(change_event_times=("2026-11-08 05:00:00",) * 4)
+    source = google_ads.google_ads_source(client_factory=lambda: client, today=TODAY)
+
+    with pytest.raises(Exception, match="can't return them all"):
+        list(source.resources["raw__google_ads__api__change_events"])
+
+
+def test_report_window_stays_inside_the_retention_limit() -> None:
+    assert google_ads.report_window(None, "2021-01-01", 90, TODAY) == (
+        date(2023, 10, 10),
+        date(2026, 11, 8),
+    )
+
+
 def test_no_client_accounts_fails_the_run() -> None:
     client = FakeClient(client_accounts=())
     source = google_ads.google_ads_source(client_factory=lambda: client, today=TODAY)
@@ -155,13 +183,13 @@ def test_no_client_accounts_fails_the_run() -> None:
 def test_one_source_object_advances_each_run(
     sqlite_iceberg_lake: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    clock = {"today": TODAY}
+    clock: dict[str, Any] = {"today": TODAY, "minute": 0}
 
     class FakeDatetime(datetime):
         @classmethod
         def now(cls, tz: Any = None) -> "FakeDatetime":  # noqa: ANN401
             day = clock["today"]
-            return cls(day.year, day.month, day.day, 10, tzinfo=tz)
+            return cls(day.year, day.month, day.day, 10, clock["minute"], tzinfo=tz)
 
     monkeypatch.setattr(google_ads, "datetime", FakeDatetime)
     client = FakeClient()
@@ -184,6 +212,7 @@ def test_one_source_object_advances_each_run(
 
     def run(today: date) -> None:
         clock["today"] = today
+        clock["minute"] += 1
         client.queries.clear()
         client.clicks += 1
         assert not pipeline.run(source).has_failed_jobs
@@ -193,11 +222,28 @@ def test_one_source_object_advances_each_run(
     assert _keyword_windows(client) == [("2026-11-01", "2026-11-11")]
     run(date(2026, 11, 12))
     assert _keyword_windows(client) == [("2026-11-04", "2026-11-11")]
+    client.dropped_dates = {"2026-11-11"}
+    run(date(2026, 11, 12))
 
-    table = pipeline.dataset()["raw__google_ads__api__keyword_daily"].arrow()
-    dates = table.column("segments__date").to_pylist()
-    clicks = dict(zip(dates, table.column("metrics__clicks").to_pylist(), strict=True))
-    # Runs 2 and 3 both re-pull 11-11: one row, holding run 3's value.
-    assert dates.count("2026-11-11") == 1
-    assert clicks["2026-11-11"] == 3  # noqa: PLR2004
+    dataset = pipeline.dataset()
+    table = dataset["raw__google_ads__api__keyword_daily"].arrow().to_pylist()
+    dates = [r["segments__date"] for r in table]
     assert len(dates) == len(set(dates))
+    by_date = {r["segments__date"]: r for r in table}
+    # Runs 3 and 4 both re-pull 11-04: one row, holding run 4's value.
+    assert by_date["2026-11-04"]["metrics__clicks"] == 4  # noqa: PLR2004
+
+    fetches = dataset["raw__google_ads__api__fetch_log"].arrow().to_pylist()
+    assert len(fetches) == 4  # noqa: PLR2004
+
+    def is_current(row: dict[str, Any]) -> bool:
+        covering = [
+            f["retrieved_at"]
+            for f in fetches
+            if f["window_start"] <= row["segments__date"] <= f["window_end"]
+        ]
+        return row["retrieved_at"] == max(covering)
+
+    # Run 4 re-read 11-11 and Google no longer returned it, so staging drops it.
+    assert is_current(by_date["2026-11-04"])
+    assert not is_current(by_date["2026-11-11"])

@@ -117,3 +117,15 @@ tables:
   - - snapshot_date
   - - shared_criterion__resource_name
   modeled: false
+- name: raw__google_ads__api__fetch_log
+  raw_table: raw__google_ads__api__fetch_log
+  sync_mode: incremental_deduped_history
+  cursor_field:
+  - retrieved_at
+  primary_key:
+  - - customer_id
+  - - table_name
+  - - window_start
+  - - window_end
+  - - retrieved_at
+  modeled: false
