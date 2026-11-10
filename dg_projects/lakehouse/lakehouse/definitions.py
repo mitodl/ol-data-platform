@@ -663,14 +663,8 @@ posthog_staging_schedule = ScheduleDefinition(
 # never been created, because edX.org lists no active non-MicroMasters MIT
 # program (checked 2026-09-22: 23 retired, 2 unpublished) and dlt creates no
 # table from an empty load. Building it would fail the whole job every day.
-# raw__openedx__s3__course_units is the same until course_xml_blocks_ingest's
-# first load after the openedx course_units output lands its first files; remove
-# stg__openedx__s3__course_units then. integrations__learn__content_file_units
-# waits on it without being listed: dbt_automation_sensor's condition holds a
-# model while any_deps_missing, and nothing else schedules it.
 AWAITING_RAW_TABLE = {
     "stg__edxorg__discovery__api__programs",
-    "stg__openedx__s3__course_units",
 }
 
 non_airbyte_staging_models = sorted(
