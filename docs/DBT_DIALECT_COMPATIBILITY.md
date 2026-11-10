@@ -69,6 +69,39 @@ Many more exist (JSON extraction and construction, date formatting and parsing,
 regex replace and split, unnesting, `try_cast`, hashing). Search `macros/` before
 writing a new one.
 
+These replace the bare aggregate, array and string calls:
+
+7. **`arbitrary(expr)`** - Any non-null value in the group
+   - Trino: `arbitrary(x)` (native)
+   - DuckDB: `any_value(x)` (DuckDB's `arbitrary()` is `first()` and can return NULL)
+   - StarRocks: `any_value(x)` (no `arbitrary()`)
+   - `marts__micromasters_summary_timeseries` still calls `arbitrary()` directly
+
+8. **`approx_percentile(expr, percentage)`** - Approximate percentile
+   - Trino: `approx_percentile(x, p)`, a value of `x`'s type
+   - DuckDB: `approx_quantile(x, p)`
+   - StarRocks: `percentile_approx(x, p)`, interpolated and a double, so values can differ
+
+9. **`split_part_or_null(string, delimiter, index)`** - One field of a split string
+   - Trino: `split_part(s, d, i)`, NULL past the last field
+   - DuckDB, StarRocks: count the fields first. StarRocks' `split_part()` returns `''` past
+     the last field and for a NULL string; DuckDB's returns `''` past the last field
+
+10. **`array_sort(array)`** - Ascending sort with NULL elements last
+    - Trino: `array_sort(arr)` (native)
+    - StarRocks: sorts the non-null elements and appends the NULLs (its `array_sort()` puts
+      NULLs first)
+
+11. **`array_agg_filter(expr, condition, order_by, distinct)`** - `array_agg(...) filter (where ...)`
+    - Trino, DuckDB: the `FILTER` clause (native)
+    - StarRocks: aggregates `(condition, expr)` pairs and keeps the pairs whose condition is
+      true. Its own `FILTER` rewrite (`array_agg_if`) puts a NULL in the array for every row
+      that fails the condition, and fails to analyze with an `ORDER BY`
+
+12. **`try_cast(expr, type)`**, **`date_diff(unit, date1, date2)`**, **`dbt.dateadd`** - existing
+    macros, now used for every bare `try_cast`, `date_diff` and `date_add` in the models.
+    StarRocks' `date_diff()` is `date1 - date2`, the reverse of Trino's.
+
 ## Known gaps
 
 - SQL in YAML is not dispatched. `loaded_at_field` and test `field:` expressions

@@ -29,7 +29,7 @@ with source as (
         , case
             when lower(year_of_birth) = 'null' then null
             when year_of_birth = '' then null
-            else try_cast(year_of_birth as integer)
+            else {{ try_cast('year_of_birth', 'integer') }}
         end as user_year_of_birth
         , case
             when lower(country) = 'null' then null

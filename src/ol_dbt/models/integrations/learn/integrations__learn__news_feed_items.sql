@@ -45,7 +45,7 @@ with medium_posts as (
             regexp_extract_or_null('post_content', "'<figure>(<img[^>]*>)?'"), "'<img[^>]*>'"
         ) }} as figure_img
         , {{ json_extract_varchar_array('post_creators_json', "'$'") }} as authors
-        , array_sort({{ json_extract_varchar_array('post_categories_json', "'$'") }}) as topics
+        , {{ array_sort(json_extract_varchar_array('post_categories_json', "'$'")) }} as topics
         -- Both publish dates are built here as a timestamp(3), which Trino
         -- renders with three fractional digits.
         , {{ format_timestamp_as_iso8601(

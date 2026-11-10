@@ -461,11 +461,11 @@ select
     , final_combined_programs.unique_courses_taken_in_program
     , case when final_combined_programs.capstone_sum > 0 then 'Y' else 'N' end
         as capstone_indicator
-    , date_diff(
-        'day'
-        , final_combined_programs.first_courserun_start_on_date
-        , final_combined_programs.programcertificate_created_on_date
-    ) as program_completion_days
+    , {{ date_diff(
+        "'day'"
+        , 'final_combined_programs.first_courserun_start_on_date'
+        , 'final_combined_programs.programcertificate_created_on_date'
+    ) }} as program_completion_days
     -- The program the row counts toward in program reports. A MITx Online or xPRO readable
     -- id names it, including the MITx Online id a MicroMasters row carries; any other row
     -- (an edX.org row's readable id is generated) is looked up by its title.
