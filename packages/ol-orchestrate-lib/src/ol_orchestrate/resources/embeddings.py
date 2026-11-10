@@ -4,6 +4,7 @@ Requires the ``embeddings`` extra.
 """
 
 import dataclasses
+import logging
 import os
 from collections.abc import Callable
 from functools import cache
@@ -16,6 +17,7 @@ from dagster import (
     InitResourceContext,
     ResourceDependency,
 )
+from hvac.exceptions import VaultError
 from ol_llm import (
     Attribution,
     KeycloakClient,
@@ -32,6 +34,8 @@ from ol_orchestrate.lib.embeddings.models import OlLlmEmbedder
 from ol_orchestrate.lib.embeddings.strategy import EmbeddingStrategy, QdrantTarget
 from ol_orchestrate.lib.opik import opik_keycloak_vault_location
 from ol_orchestrate.resources.secrets.vault import Vault
+
+log = logging.getLogger(__name__)
 
 QDRANT_GRPC_PORT = 6334
 QDRANT_TIMEOUT_SECONDS = 10
@@ -176,18 +180,34 @@ class EmbeddingsResource(ConfigurableResource[None]):
         self._run_id = context.run_id
 
     def _tracing_config(self) -> TracingConfig:
+        """Trace to Opik when it is configured and its Keycloak client is readable.
+
+        A failed read is logged and leaves tracing off, as ml's opik_auth does:
+        tracing is observability, not a pipeline dependency. That covers any
+        error Vault answers with (missing path, denied, expired token) and a
+        secret without the client's fields. Unlike opik_auth, which catches
+        every exception, a Vault that can't be reached at all still fails the
+        setup.
+        """
+        untraced = TracingConfig(enabled=False, include_content=self.trace_content)
         location = opik_keycloak_vault_location()
         if not os.environ.get("OPIK_URL_OVERRIDE") or location is None:
-            return TracingConfig(enabled=False, include_content=self.trace_content)
-        secret = _read_kv1_secret(self.vault, *location)
-        return TracingConfig(
-            keycloak=KeycloakClient(
+            return untraced
+        try:
+            secret = _read_kv1_secret(self.vault, *location)
+            keycloak = KeycloakClient(
                 token_url=f"{secret['url']}/protocol/openid-connect/token",
                 client_id=secret["client_id"],
                 client_secret=secret["client_secret"],
-            ),
-            include_content=self.trace_content,
-        )
+            )
+        except (VaultError, KeyError):
+            log.warning(
+                "Failed to read %s/%s from Vault; Opik tracing stays disabled",
+                *location,
+                exc_info=True,
+            )
+            return untraced
+        return TracingConfig(keycloak=keycloak, include_content=self.trace_content)
 
     def embedder(self, strategy: EmbeddingStrategy) -> OlLlmEmbedder:
         """Return an embedder for a strategy's model.
