@@ -3,11 +3,15 @@
 with edxorg_grade as (
     select
         coalesce(mitx_users_by_email.user_mitxonline_id, mitx__users.user_mitxonline_id) as user_mitxonline_id
-        -- The export mixes {org}/{course}/{run} and course-v1 IDs
-        , {{ format_course_id("replace(edxorg_grade.courserun_readable_id, 'course-v1:', '')", false) }}
-            as courserun_readable_id
+        -- The export mixes {org}/{course}/{run} and course-v1 IDs. edX.org has the wrong
+        -- year (1T1015) on one run that MITx Online has as 1T2015
+        , replace(
+            {{ format_course_id("replace(edxorg_grade.courserun_readable_id, 'course-v1:', '')", false) }}
+            , '15.390.1x_SPA+1T1015', '15.390.1x_SPA+1T2015'
+        ) as courserun_readable_id
         -- Some course grading policies have a zero-width space before the label
-        , replace(edxorg_grade.courserungrade_letter_grade, chr(8203), '') as courserungrade_letter_grade
+        , replace(edxorg_grade.courserungrade_letter_grade, {{ codepoint_char(8203) }}, '')
+            as courserungrade_letter_grade
     from {{ ref('stg__edxorg__s3__courserun_grade') }} as edxorg_grade
     inner join {{ ref('int__mitx__users') }} as mitx__users
         on cast(edxorg_grade.user_id as varchar) = cast(mitx__users.user_edxorg_id as varchar)
