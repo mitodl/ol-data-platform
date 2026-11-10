@@ -58,10 +58,6 @@ from ol_dbt_cli.lib.yaml_registry import YamlRegistry, build_yaml_registry
 console = Console()
 err_console = Console(stderr=True)
 
-# Cap on how many columns we run a per-column value comparison for, to bound the
-# number of dbt invocations. When exceeded we log it (never silently truncate).
-_MAX_PER_COLUMN_COMPARISONS = 25
-
 # Model and column names are interpolated into inline Jinja SQL passed to
 # `dbt show --inline`, so they must be plain dbt identifiers — anything else
 # (quotes, braces, whitespace) could inject Jinja/SQL and is rejected up front.
@@ -482,11 +478,21 @@ def _compare_relations_sql(
     )
 
 
-def _compare_column_sql(
+def _column_bucket_aliases(index: int) -> tuple[str, str, str]:
+    """Output aliases for column *index*'s three non-matching buckets in :func:`_compare_columns_sql`.
+
+    Positional rather than derived from the column name, so a column name can
+    never collide with an alias or another column's, and stays lower case since
+    Trino folds unquoted output names to lower case.
+    """
+    return f"c{index}_mismatched", f"c{index}_missing_in_old", f"c{index}_missing_in_new"
+
+
+def _compare_columns_sql(
     old: str,
     new: str,
     primary_key: list[str],
-    column: str,
+    columns: list[str],
     *,
     old_raw: bool = False,
     new_raw: bool = False,
@@ -495,20 +501,27 @@ def _compare_column_sql(
     old_database: str | None = None,
     new_database: str | None = None,
 ) -> str:
-    """Build inline SQL calling ``audit_helper.compare_column_values`` for one column.
+    """Build one inline query that buckets every compared column's values at once.
 
-    ``compare_column_values`` supports only a *scalar* primary key: it emits
-    ``a_query.{{ primary_key }} = b_query.{{ primary_key }}`` (plus a coalesce
-    and several null checks), so the key has to be one column name that exists
-    in both queries. A composite key therefore cannot be passed through --
-    neither as a Jinja list (which reaches the database as the literal text
-    ``['k1', 'k2']``) nor comma-joined (``a.k1, k2 = b.k1, k2``).
+    This replaces one ``audit_helper.compare_column_values`` call per column,
+    which cost a ``dbt show`` process and a full outer join per column. Here
+    the two sides are joined once on the key and each column's rows are counted
+    into buckets with conditional aggregates, so the result is a single row:
+    ``total_rows`` plus the three aliases from :func:`_column_bucket_aliases`
+    per column, in *columns* order.
 
-    For a composite key we instead synthesize a single hashed join column with the
-    project's ``diff_composite_key`` macro inside a_query/b_query and hand
-    audit_helper *that* column name. One side effect is better than the scalar
-    path: the macro encodes nulls rather than dropping them, so rows whose key
-    components are null still pair up, where a plain equi-join drops them.
+    The CASE ladder copies ``default__compare_column_values`` (audit_helper
+    0.12) branch for branch, because the order decides which bucket a row
+    lands in. Equal values and both-null are a match; then a key missing from
+    a (old) or from b (new); anything else (values differ, or null on one side
+    only) is a mismatch. So a row missing from one side whose value is null on
+    the other side counts as a match, as it did under audit_helper.
+
+    The key has to be one column present on both sides for the equi-join. For a
+    composite key a single join column is synthesized on each side with the
+    project's ``diff_composite_key`` macro. The macro encodes nulls instead of
+    dropping them, so rows whose key components are null still pair up, where
+    a plain equi-join drops them.
 
     ``dbt_utils.generate_surrogate_key`` is deliberately NOT used here: it joins
     components with a literal ``-`` before hashing, without encoding component
@@ -519,38 +532,37 @@ def _compare_column_sql(
     """
     a_expr = _relation_jinja(old, raw=old_raw, database=old_database, schema=old_schema)
     b_expr = _relation_jinja(new, raw=new_raw, database=new_database, schema=new_schema)
-    # Only the primary key(s) + the one column being compared are needed here --
-    # `compare_column_values` does a full outer join on a_query/b_query, and
-    # selecting every column (as this used to) forces that join to carry the
-    # whole row width for a single-column comparison, which is needless I/O on
-    # wide tables.
+    # Only the key and the compared columns are selected, so the join carries no
+    # column that is excluded or exists on one side only.
     if len(primary_key) > 1:
-        # Guard against every identifier that could appear alongside the alias --
-        # `column` is the only other one emitted today, but including the key
-        # columns keeps this correct if they are ever selected again.
-        alias = _surrogate_alias([*primary_key, column])
-        pk = f"'{alias}'"
+        key = _surrogate_alias([*primary_key, *columns])
         key_expr = f"{{{{ diff_composite_key({_jinja_list(primary_key)}) }}}}"
-        select_cols = f"{key_expr} as {alias}, {column}"
+        select_cols = ", ".join([f"{key_expr} as {key}", *columns])
     else:
-        pk = f"'{primary_key[0]}'"
-        select_cols = ", ".join(dict.fromkeys([*primary_key, column]))
-    # a_query/b_query are built with {% set %}/{% endset %} so `a_expr`/`b_expr`
-    # (a ref()/api.Relation.create() call) are rendered by Jinja BEFORE
-    # compare_column_values ever sees the string. Embedding `{{ ... }}` directly
-    # inside a quoted string argument (the previous approach) is inert: Jinja
-    # treats string literals atomically and never re-parses braces inside them,
-    # so the literal text `{{ ref(...) }}` reached the database unrendered --
-    # a real, pre-existing bug (every diff with a primary key hit this).
+        key = primary_key[0]
+        select_cols = ", ".join(dict.fromkeys([key, *columns]))
+
+    aggregates = ["count(*) as total_rows"]
+    for index, column in enumerate(columns):
+        a_col, b_col = f"a_query.{column}", f"b_query.{column}"
+        matched = f"when {a_col} = {b_col} then null when {a_col} is null and {b_col} is null then null"
+        mismatched, missing_in_old, missing_in_new = _column_bucket_aliases(index)
+        aggregates.extend(
+            [
+                f"count(case {matched} when a_query.{key} is null then 1 end) as {missing_in_old}",
+                f"count(case {matched} when a_query.{key} is null then null"
+                f" when b_query.{key} is null then 1 end) as {missing_in_new}",
+                f"count(case {matched} when a_query.{key} is null then null"
+                f" when b_query.{key} is null then null else 1 end) as {mismatched}",
+            ]
+        )
+    # Rendered by dbt as a Jinja template, not executed here; the identifiers
+    # are validated against _IDENTIFIER_RE or come from the model's own columns.
     return (
-        "{% set a_query %}"  # noqa: S608
-        f"select {select_cols} from {{{{ {a_expr} }}}}"
-        "{% endset %}"
-        "{% set b_query %}"
-        f"select {select_cols} from {{{{ {b_expr} }}}}"
-        "{% endset %}"
-        "{{ audit_helper.compare_column_values("
-        f"a_query=a_query, b_query=b_query, primary_key={pk}, column_to_compare='{column}') }}}}"
+        f"with a_query as (select {select_cols} from {{{{ {a_expr} }}}}), "  # noqa: S608
+        f"b_query as (select {select_cols} from {{{{ {b_expr} }}}}) "
+        f"select {', '.join(aggregates)} "
+        f"from a_query full outer join b_query on a_query.{key} = b_query.{key}"
     )
 
 
@@ -1133,26 +1145,25 @@ def diff(
             # The join key can never hold differing values.
             pk_lower = {k.lower() for k in primary_key_list}
             cols = [c for c in recon.compared if c.lower() not in pk_lower]
-            if len(cols) > _MAX_PER_COLUMN_COMPARISONS:
-                notes.append(f"Per-column comparison capped at {_MAX_PER_COLUMN_COMPARISONS} of {len(cols)} columns.")
-                cols = cols[:_MAX_PER_COLUMN_COMPARISONS]
-            for col in cols:
-                mismatch = _compare_single_column(
-                    old,
-                    new,
-                    primary_key_list,
-                    col,
-                    dbt_dir,
-                    target,
-                    old_raw=old_raw,
-                    new_raw=new_raw,
-                    old_schema=old_schema,
-                    new_schema=new_schema,
-                    old_database=old_database,
-                    new_database=new_database,
-                )
-                if mismatch is not None and mismatch.mismatched_rows > 0:
-                    column_mismatches.append(mismatch)
+            if cols:
+                column_mismatches = [
+                    mismatch
+                    for mismatch in _compare_columns(
+                        old,
+                        new,
+                        primary_key_list,
+                        cols,
+                        dbt_dir,
+                        target,
+                        old_raw=old_raw,
+                        new_raw=new_raw,
+                        old_schema=old_schema,
+                        new_schema=new_schema,
+                        old_database=old_database,
+                        new_database=new_database,
+                    )
+                    if mismatch.mismatched_rows > 0
+                ]
         elif not primary_key_list:
             notes.append("Per-column mismatch rates require --primary-key; skipped.")
     except RuntimeError as exc:
@@ -1196,11 +1207,11 @@ def _emit_and_exit(result: DiffResult, output_format: str) -> None:
         sys.exit(1)
 
 
-def _compare_single_column(
+def _compare_columns(
     old: str,
     new: str,
     primary_key: list[str],
-    column: str,
+    columns: list[str],
     dbt_dir: Path,
     target: str,
     *,
@@ -1210,20 +1221,20 @@ def _compare_single_column(
     new_schema: str | None = None,
     old_database: str | None = None,
     new_database: str | None = None,
-) -> ColumnMismatch | None:
-    """Run a per-column value comparison, returning its mismatch rate.
+) -> list[ColumnMismatch]:
+    """Compare every column's values in one ``dbt show``, returning one result per column.
 
-    audit_helper.compare_column_values tags rows by ``match_status``: "✅"
-    perfect match, "❌" values differ, and two "🤷" buckets for rows missing from
-    one side. Only "❌" counts toward the mismatch rate (see
-    :class:`ColumnMismatch`); the denominator stays the full joined row count.
+    Only value differences count toward the mismatch rate; rows missing from
+    one side are reported apart (see :class:`ColumnMismatch`), and the
+    denominator stays the full joined row count. Returns an empty list when the
+    join has no rows.
     """
     rows = _run_dbt_show(
-        _compare_column_sql(
+        _compare_columns_sql(
             old,
             new,
             primary_key,
-            column,
+            columns,
             old_raw=old_raw,
             new_raw=new_raw,
             old_schema=old_schema,
@@ -1233,31 +1244,26 @@ def _compare_single_column(
         ),
         dbt_dir,
         target,
-        limit=1000,
+        limit=1,
     )
-    total = 0
-    mismatched = 0
-    missing_in_old = 0
-    missing_in_new = 0
-    for row in rows:
-        count = _int(row.get("count_records") or row.get("count"))
-        total += count
-        status = str(row.get("match_status", ""))
-        if status.startswith("✅"):
-            continue
-        # audit_helper names the sides a/b; a is --old, b is --new.
-        if "missing from a" in status:
-            missing_in_old += count
-        elif "missing from b" in status:
-            missing_in_new += count
-        else:
-            mismatched += count
+    if len(rows) != 1:
+        msg = f"per-column comparison returned {len(rows)} rows; an ungrouped aggregate returns exactly one."
+        raise RuntimeError(msg)
+    row = {key.lower(): value for key, value in rows[0].items()}
+    total = int(row["total_rows"])
     if total == 0:
-        return None
-    return ColumnMismatch(
-        column=column,
-        mismatch_rate=mismatched / total,
-        mismatched_rows=mismatched,
-        missing_in_old=missing_in_old,
-        missing_in_new=missing_in_new,
-    )
+        return []
+    results = []
+    for index, column in enumerate(columns):
+        mismatched_alias, missing_in_old_alias, missing_in_new_alias = _column_bucket_aliases(index)
+        mismatched = int(row[mismatched_alias])
+        results.append(
+            ColumnMismatch(
+                column=column,
+                mismatch_rate=mismatched / total,
+                mismatched_rows=mismatched,
+                missing_in_old=int(row[missing_in_old_alias]),
+                missing_in_new=int(row[missing_in_new_alias]),
+            )
+        )
+    return results

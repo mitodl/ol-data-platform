@@ -5,9 +5,9 @@
 {% macro default__diff_composite_key(field_list) %}
 {#-
   Collapse a composite key into ONE unambiguous scalar join column, for
-  `ol-dbt diff`'s per-column comparison. audit_helper.compare_column_values
-  emits `a_query.{{ primary_key }} = b_query.{{ primary_key }}`, so it can only
-  join on a single column; this is what that column is built from.
+  `ol-dbt diff`'s per-column comparison, which joins the two sides on
+  `a_query.<key> = b_query.<key>` and so needs a single column; this is what
+  that column is built from.
 
   Why not dbt_utils.generate_surrogate_key: it joins components with a literal
   '-' before hashing, which does not encode component boundaries. It therefore

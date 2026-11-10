@@ -11,7 +11,8 @@ from ol_dbt_cli.commands import diff as diff_mod
 from ol_dbt_cli.commands.diff import (
     InvalidIdentifierError,
     Verdict,
-    _compare_column_sql,
+    _column_bucket_aliases,
+    _compare_columns_sql,
     _compare_relations_sql,
     _extract_show_rows,
     _format_sample_mismatches,
@@ -26,6 +27,26 @@ from ol_dbt_cli.commands.diff import (
     diff,
     reconcile_columns,
 )
+
+
+def _is_column_query(inline_sql: str) -> bool:
+    """Whether *inline_sql* is the per-column comparison (the only query with a full outer join)."""
+    return "full outer join" in inline_sql
+
+
+def _column_row(total: int, buckets: list[tuple[int, int, int]]) -> dict[str, int]:
+    """Build the per-column comparison's one result row.
+
+    *buckets* holds ``(mismatched, missing_in_old, missing_in_new)`` per column, in column order.
+    """
+    row = {"total_rows": total}
+    for index, counts in enumerate(buckets):
+        row.update(zip(_column_bucket_aliases(index), counts, strict=True))
+    return row
+
+
+def _all_match_row(n_columns: int, total: int) -> dict[str, int]:
+    return _column_row(total, [(0, 0, 0)] * n_columns)
 
 
 class TestReconcileColumns:
@@ -229,8 +250,8 @@ class TestSplitColumnsCaseInsensitivity:
 
     def test_a_case_duplicate_collapses_to_the_single_key_path(self) -> None:
         # Consequence of the above: one real column must not take the composite path.
-        sql = _compare_column_sql("old_m", "new_m", _split_columns(("id,ID",)), "some_col")
-        assert "primary_key='id'" in sql
+        sql = _compare_columns_sql("old_m", "new_m", _split_columns(("id,ID",)), ["some_col"])
+        assert "on a_query.id = b_query.id" in sql
         assert "diff_composite_key" not in sql
 
     def test_distinct_names_are_not_collapsed(self) -> None:
@@ -357,12 +378,12 @@ class TestRelationJinja:
         assert "api.Relation.create(database=target.database, schema='main', identifier='glue__x__y')" in sql
         assert "ref('new_m')" in sql
 
-    def test_compare_column_sql_with_both_raw(self) -> None:
-        sql = _compare_column_sql(
+    def test_compare_columns_sql_with_both_raw(self) -> None:
+        sql = _compare_columns_sql(
             "old_tbl",
             "new_tbl",
             ["id"],
-            "some_col",
+            ["some_col"],
             old_raw=True,
             old_database="db_a",
             old_schema="schema_a",
@@ -374,88 +395,120 @@ class TestRelationJinja:
         assert "api.Relation.create(database='db_b', schema='schema_b', identifier='new_tbl')" in sql
         assert "ref(" not in sql
 
-    def test_compare_column_sql_narrows_to_primary_key_and_column(self) -> None:
-        # Narrows to primary key + compared column instead of `select *`, since
-        # compare_column_values' full outer join doesn't need the rest of the row.
-        sql = _compare_column_sql("old_m", "new_m", ["id"], "some_col")
-        assert "select id, some_col from" in sql
+    def test_compare_columns_sql_narrows_to_primary_key_and_columns(self) -> None:
+        # Only the key and the compared columns ride through the join.
+        sql = _compare_columns_sql("old_m", "new_m", ["id"], ["some_col", "other_col"])
+        assert sql.count("select id, some_col, other_col from") == 2
         assert "select *" not in sql
 
-    def test_compare_column_sql_composite_pk_uses_a_surrogate_join_key(self) -> None:
-        # compare_column_values only supports a scalar primary key -- it emits
-        # `a_query.{{ primary_key }} = b_query.{{ primary_key }}`. A composite key
-        # is collapsed into one hashed column inside a_query/b_query instead, so no
-        # Jinja list (or comma-joined list) ever lands in the emitted SQL.
-        sql = _compare_column_sql("old_m", "new_m", ["k1", "k2"], "some_col")
-        assert "primary_key='ol_dbt_diff_surrogate_key'" in sql
+    def test_compare_columns_sql_is_one_join_for_every_column(self) -> None:
+        columns = [f"col{n}" for n in range(40)]
+        sql = _compare_columns_sql("old_m", "new_m", ["id"], columns)
+        assert sql.count("full outer join") == 1
+        assert "count(*) as total_rows" in sql
+        for index, column in enumerate(columns):
+            assert f"a_query.{column} = b_query.{column}" in sql
+            for alias in _column_bucket_aliases(index):
+                assert f"as {alias}" in sql
+
+    def test_compare_columns_sql_follows_audit_helpers_bucket_order(self) -> None:
+        # The order decides the bucket: equal and both-null rows are matches
+        # before a missing key is considered, as in compare_column_values.
+        sql = _compare_columns_sql("old_m", "new_m", ["id"], ["amt"])
+        matched = "when a_query.amt = b_query.amt then null when a_query.amt is null and b_query.amt is null then null"
+        assert f"count(case {matched} when a_query.id is null then 1 end) as c0_missing_in_old" in sql
+        assert (
+            f"count(case {matched} when a_query.id is null then null when b_query.id is null then 1 end)"
+            " as c0_missing_in_new"
+        ) in sql
+        assert (
+            f"count(case {matched} when a_query.id is null then null when b_query.id is null then null else 1 end)"
+            " as c0_mismatched"
+        ) in sql
+
+    def test_compare_columns_sql_composite_pk_uses_a_surrogate_join_key(self) -> None:
+        # The equi-join needs one key column on both sides, so a composite key is
+        # collapsed into one hashed column inside a_query/b_query.
+        sql = _compare_columns_sql("old_m", "new_m", ["k1", "k2"], ["some_col"])
+        assert "on a_query.ol_dbt_diff_surrogate_key = b_query.ol_dbt_diff_surrogate_key" in sql
         # Must NOT be dbt_utils.generate_surrogate_key -- it joins components with
         # a literal '-' without encoding boundaries, so ('a-b','c') and ('a','b-c')
         # collide and would pair two distinct keys as one row.
         assert "generate_surrogate_key" not in sql
-        assert "{{ diff_composite_key(['k1', 'k2']) }} as ol_dbt_diff_surrogate_key" in sql
-        assert "primary_key=['k1', 'k2']" not in sql
-        assert "primary_key='k1, k2'" not in sql
+        assert "a_query.k1" not in sql
 
-    def test_compare_column_sql_composite_pk_selects_key_on_both_sides(self) -> None:
+    def test_compare_columns_sql_composite_pk_selects_key_on_both_sides(self) -> None:
         # The surrogate must exist in a_query AND b_query for the join to resolve.
-        sql = _compare_column_sql("old_m", "new_m", ["k1", "k2"], "some_col")
+        sql = _compare_columns_sql("old_m", "new_m", ["k1", "k2"], ["some_col"])
         select_clause = "select {{ diff_composite_key(['k1', 'k2']) }} as ol_dbt_diff_surrogate_key, some_col from"
         assert sql.count(select_clause) == 2
 
-    def test_compare_column_sql_alias_does_not_shadow_the_compared_column(self) -> None:
+    def test_compare_columns_sql_alias_does_not_shadow_a_compared_column(self) -> None:
         # Regression for the silent false negative: comparing a column that is
         # itself named ol_dbt_diff_surrogate_key must not emit that identifier
-        # twice in one select.
-        sql = _compare_column_sql("old_m", "new_m", ["k1", "k2"], "ol_dbt_diff_surrogate_key")
+        # twice in one select, wherever it sits in the column list.
+        sql = _compare_columns_sql("old_m", "new_m", ["k1", "k2"], ["a", "ol_dbt_diff_surrogate_key"])
         assert "as ol_dbt_diff_surrogate_key," not in sql
-        assert "as ol_dbt_diff_surrogate_key_x, ol_dbt_diff_surrogate_key" in sql
-        assert "primary_key='ol_dbt_diff_surrogate_key_x'" in sql
-        assert "column_to_compare='ol_dbt_diff_surrogate_key'" in sql
+        assert "as ol_dbt_diff_surrogate_key_x, a, ol_dbt_diff_surrogate_key from" in sql
+        assert "on a_query.ol_dbt_diff_surrogate_key_x = b_query.ol_dbt_diff_surrogate_key_x" in sql
+        assert "a_query.ol_dbt_diff_surrogate_key = b_query.ol_dbt_diff_surrogate_key then" in sql
 
-    def test_compare_column_sql_single_pk_keeps_the_real_column(self) -> None:
+    def test_compare_columns_sql_single_pk_keeps_the_real_column(self) -> None:
         # No surrogate for a single key -- the real column joins directly.
-        sql = _compare_column_sql("old_m", "new_m", ["id"], "some_col")
-        assert "primary_key='id'" in sql
+        sql = _compare_columns_sql("old_m", "new_m", ["id"], ["some_col"])
+        assert "on a_query.id = b_query.id" in sql
         assert "surrogate_key" not in sql
 
 
-class TestCompareSingleColumn:
-    """Bucket accounting for audit_helper.compare_column_values."""
+class TestCompareColumns:
+    """Bucket accounting for the one-row per-column comparison."""
 
-    # Glyphs must match real audit_helper 0.12 output — the parser keys off them.
-    _ROWS = [
-        {"match_status": "✅: perfect match", "count_records": 2},
-        {"match_status": "🤷: missing from a", "count_records": 1},
-        {"match_status": "🤷: missing from b", "count_records": 3},
-        {"match_status": "❌: ‍values do not match", "count_records": 4},
-    ]
+    def _run(
+        self,
+        rows: list[dict[str, Any]],
+        columns: list[str],
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> list[diff_mod.ColumnMismatch]:
+        calls: list[str] = []
 
-    def _run(self, rows: list[dict[str, object]], tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setattr(diff_mod, "_run_dbt_show", lambda *a, **k: rows)
-        return diff_mod._compare_single_column("old_m", "new_m", ["id"], "amt", tmp_path, "dev_local")
+        def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            calls.append(inline_sql)
+            return rows
+
+        monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
+        result = diff_mod._compare_columns("old_m", "new_m", ["id"], columns, tmp_path, "dev_local")
+        assert len(calls) == 1
+        return result
 
     def test_only_value_differences_count_toward_mismatch_rate(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        result = self._run(self._ROWS, tmp_path, monkeypatch)
-        assert result is not None
-        assert result.mismatched_rows == 4
-        assert result.mismatch_rate == 0.4  # 4 of 10 joined rows
-        assert result.missing_in_old == 1
-        assert result.missing_in_new == 3
+        rows = [_column_row(10, [(4, 1, 3), (0, 1, 3)])]
+        amt, name = self._run(rows, ["amt", "name"], tmp_path, monkeypatch)
+        assert (amt.column, amt.mismatched_rows, amt.mismatch_rate) == ("amt", 4, 0.4)  # 4 of 10 joined rows
+        assert (amt.missing_in_old, amt.missing_in_new) == (1, 3)
+        # Rows present on one side only are not a value mismatch.
+        assert (name.column, name.mismatched_rows, name.mismatch_rate) == ("name", 0, 0.0)
+        assert (name.missing_in_old, name.missing_in_new) == (1, 3)
 
-    def test_presence_only_differences_yield_no_value_mismatch(
+    def test_upper_case_output_names_are_read(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        rows = [{key.upper(): value for key, value in _column_row(5, [(2, 0, 0)]).items()}]
+        (amt,) = self._run(rows, ["amt"], tmp_path, monkeypatch)
+        assert amt.mismatched_rows == 2
+
+    def test_returns_nothing_when_the_join_is_empty(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        assert self._run([_all_match_row(1, 0)], ["amt"], tmp_path, monkeypatch) == []
+
+    def test_a_result_that_is_not_one_row_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        with pytest.raises(RuntimeError, match="returned 0 rows"):
+            self._run([], ["amt"], tmp_path, monkeypatch)
+
+    def test_a_missing_bucket_raises_rather_than_reading_as_zero(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        rows = [r for r in self._ROWS if not str(r["match_status"]).startswith("❌")]
-        result = self._run(rows, tmp_path, monkeypatch)
-        assert result is not None
-        assert result.mismatched_rows == 0
-        assert result.mismatch_rate == 0.0
-        assert (result.missing_in_old, result.missing_in_new) == (1, 3)
-
-    def test_returns_none_when_no_rows(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        assert self._run([], tmp_path, monkeypatch) is None
+        with pytest.raises(KeyError):
+            self._run([{"total_rows": 10}], ["amt"], tmp_path, monkeypatch)
 
 
 class TestResolveRawColumns:
@@ -568,15 +621,51 @@ class TestDiffCommand:
         compared: list[str] = []
 
         def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
-            if "compare_column_values" in inline_sql:
+            if _is_column_query(inline_sql):
                 compared.append(inline_sql)
-                return [{"match_status": "✅: perfect match", "count_records": 10}]
+                return [_all_match_row(1, 10)]
             return [{"in_a": True, "in_b": True, "count": 10}]
 
         monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
         diff(old="m_old", new="m_new", primary_key=("id",), dbt_dir_path=str(dbt_dir))
         assert len(compared) == 1
-        assert "column_to_compare='name'" in compared[0]
+        assert "a_query.name = b_query.name" in compared[0]
+        assert "a_query.id = b_query.id then" not in compared[0]
+        assert "c1_mismatched" not in compared[0]
+
+    def test_every_column_of_a_wide_model_is_compared_in_one_query(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        import json
+
+        columns = [f"col{n:02d}" for n in range(30)]
+        select = "select 1 as id, " + ", ".join(f"1 as {c}" for c in columns)
+        dbt_dir = _make_project(tmp_path, select, select)
+        compared: list[str] = []
+
+        def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            if _is_column_query(inline_sql):
+                compared.append(inline_sql)
+                # Only the last column, past where the old 25-column cap cut off, differs.
+                return [_column_row(10, [(0, 0, 0)] * 29 + [(1, 0, 0)])]
+            return [{"in_a": True, "in_b": True, "count": 10}]
+
+        monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
+        with pytest.raises(SystemExit) as exc:
+            diff(old="m_old", new="m_new", primary_key=("id",), dbt_dir_path=str(dbt_dir), output_format="json")
+        assert exc.value.code == 1
+        assert len(compared) == 1
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["column_mismatches"] == [
+            {
+                "column": "col29",
+                "mismatch_rate": 0.1,
+                "mismatched_rows": 1,
+                "missing_in_old": 0,
+                "missing_in_new": 0,
+            }
+        ]
+        assert not [note for note in payload["notes"] if "capped" in note]
 
     def test_comma_separated_primary_key_reaches_comparison_as_composite(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -592,9 +681,9 @@ class TestDiffCommand:
         seen: list[str] = []
 
         def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
-            if "compare_column_values" in inline_sql:
+            if _is_column_query(inline_sql):
                 seen.append(inline_sql)
-                return [{"match_status": "✅: perfect match", "count_records": 10}]
+                return [_all_match_row(1, 10)]
             return [{"in_a": True, "in_b": True, "count": 10}]
 
         monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
@@ -602,7 +691,8 @@ class TestDiffCommand:
 
         # Only `name` is compared -- both key columns were recognised as keys.
         assert len(seen) == 1
-        assert "column_to_compare='name'" in seen[0]
+        assert "a_query.name = b_query.name" in seen[0]
+        assert "c1_mismatched" not in seen[0]
         assert "diff_composite_key(['k1', 'k2'])" in seen[0]
 
     def test_comma_and_repeated_primary_key_produce_identical_sql(
@@ -619,8 +709,8 @@ class TestDiffCommand:
 
             def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
                 captured.append(inline_sql)
-                if "compare_column_values" in inline_sql:
-                    return [{"match_status": "✅: perfect match", "count_records": 10}]
+                if _is_column_query(inline_sql):
+                    return [_all_match_row(1, 10)]
                 return [{"in_a": True, "in_b": True, "count": 10}]
 
             monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
@@ -641,8 +731,8 @@ class TestDiffCommand:
 
         def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
             seen.append(inline_sql)
-            if "compare_column_values" in inline_sql:
-                return [{"match_status": "✅: perfect match", "count_records": 10}]
+            if _is_column_query(inline_sql):
+                return [_all_match_row(1, 10)]
             return [{"in_a": True, "in_b": True, "count": 10}]
 
         monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
@@ -656,7 +746,7 @@ class TestDiffCommand:
         relations = [q for q in seen if "compare_relations" in q]
         assert "exclude_columns=['a', 'b']" in relations[0]
         # Both excluded, so nothing is left to compare per-column.
-        assert not [q for q in seen if "compare_column_values" in q]
+        assert not [q for q in seen if _is_column_query(q)]
 
     def test_empty_primary_key_exits_1_instead_of_silently_skipping(self, tmp_path: Path) -> None:
         # `-k ""` must not degrade into "no --primary-key given", which would
@@ -697,8 +787,8 @@ class TestDiffCommand:
         dbt_dir = _make_project(tmp_path, "select 1 as id, 'x' as name", "select 1 as id, 'x' as name")
 
         def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
-            if "compare_column_values" in inline_sql:
-                return [{"match_status": "✅: perfect match", "count_records": 1}]
+            if _is_column_query(inline_sql):
+                return [_all_match_row(1, 1)]
             return [{"in_a": True, "in_b": True, "count": 1}]
 
         monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)

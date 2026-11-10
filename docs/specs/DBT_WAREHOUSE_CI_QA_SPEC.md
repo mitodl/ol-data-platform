@@ -168,11 +168,12 @@ loudly instead of silently falling to text.
    - `compare_relations` → `compare_queries` uses `primary_key` **only** in the `order by` of
      the `summarize=false` branch (it is unused when `summarize=true`). A comma-joined column
      list (`'k1, k2'`) is the correct form there.
-   - `compare_column_values` (the per-column mismatch path) emits
-     `a_query.{{ primary_key }} = b_query.{{ primary_key }}`, so it requires a **scalar** column
-     name present in both sides. A composite key is therefore collapsed into a single hashed
-     join column inside the `a_query`/`b_query` blocks, and that column's name is what gets
-     passed. Build that column with the project's `diff_composite_key` macro
+   - The per-column mismatch path joins `a_query.<key> = b_query.<key>` once and buckets every
+     compared column with conditional aggregates that copy `compare_column_values`' CASE order,
+     so the whole pass is one `dbt show` and one join (it used to call `compare_column_values`
+     once per column, capped at 25 columns). The join needs a **scalar** column name present on
+     both sides. A composite key is therefore collapsed into a single hashed join column inside
+     the `a_query`/`b_query` CTEs. Build that column with the project's `diff_composite_key` macro
      (`src/ol_dbt/macros/diff_composite_key.sql`) — **not**
      `dbt_utils.generate_surrogate_key`, which joins components with a literal `-` without
      encoding component boundaries, so `('a-b', 'c')` and `('a', 'b-c')` hash identically
