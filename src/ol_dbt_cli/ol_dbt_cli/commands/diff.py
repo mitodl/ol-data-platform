@@ -32,6 +32,7 @@ import json
 import re
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -62,6 +63,11 @@ err_console = Console(stderr=True)
 # `dbt show --inline`, so they must be plain dbt identifiers — anything else
 # (quotes, braces, whitespace) could inject Jinja/SQL and is rejected up front.
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# `dbt show --inline` takes the SQL as one argv element, and Linux caps one
+# argument at MAX_ARG_STRLEN (128 KiB). The per-column comparison splits its
+# columns across queries to stay under half of that.
+_MAX_INLINE_SQL_BYTES = 64 * 1024
 
 
 class InvalidIdentifierError(ValueError):
@@ -237,7 +243,7 @@ def _resolve_raw_columns(
     """
     expr = _relation_jinja(name, raw=True, database=database, schema=schema)
     # Rendered into a Jinja template compiled by dbt (not executed as a raw query
-    # here), so the S608 heuristic is a false positive — same as _compare_column_sql.
+    # here), so the S608 heuristic is a false positive — same as _compare_columns_sql.
     # No literal LIMIT here: `dbt show` already wraps the compiled query in its own
     # limiting logic via --limit below; a second, literal `limit 1` in the SQL text
     # collides with that wrapper and breaks the DuckDB parser.
@@ -361,6 +367,11 @@ def _run_dbt_show(
     except FileNotFoundError as exc:
         msg = f"{dbt_executable()} not found; run `uv sync` from the repo root to install dbt."
         raise RuntimeError(msg) from exc
+    except OSError as exc:
+        # e.g. E2BIG: the inline SQL is one argv element, which Linux caps at
+        # MAX_ARG_STRLEN (128 KiB).
+        msg = f"could not run dbt show ({len(inline_sql)} characters of inline SQL): {exc}"
+        raise RuntimeError(msg) from exc
 
     rows = _extract_show_rows(result.stdout)
     if rows is None:
@@ -380,7 +391,7 @@ def _jinja_list(values: list[str]) -> str:
 
 
 # Base alias for the synthetic single-column join key that stands in for a
-# composite primary key in the per-column comparison (see `_compare_column_sql`).
+# composite primary key in the per-column comparison (see `_compare_columns_sql`).
 # Deliberately tool-namespaced, but see `_surrogate_alias` -- "unlikely to
 # collide" is not the same as "cannot", and the collision failed silently.
 _SURROGATE_PK = "ol_dbt_diff_surrogate_key"
@@ -389,13 +400,13 @@ _SURROGATE_PK = "ol_dbt_diff_surrogate_key"
 def _surrogate_alias(taken: list[str]) -> str:
     """Pick a surrogate-key alias that cannot collide with a real column name.
 
-    If the compared column is itself called ``ol_dbt_diff_surrogate_key``, the
+    If a compared column is itself called ``ol_dbt_diff_surrogate_key``, the
     emitted select would carry that identifier twice -- once for the generated
-    key, once for the real column -- and audit_helper would then use the same
-    name as both ``primary_key`` and ``column_to_compare``. DuckDB does not
-    reject that: it binds to the *first* match, so the comparison compares the
-    generated key against itself and reports a perfect match no matter how much
-    the real values differ. A silent false negative is the worst outcome for a
+    key, once for the real column -- and the comparison would use the same name
+    as both the join key and the compared column. DuckDB does not reject that:
+    it binds to the *first* match, so the comparison compares the generated key
+    against itself and reports a perfect match no matter how much the real
+    values differ. A silent false negative is the worst outcome for a
     tool whose job is detecting differences, so the alias is derived rather than
     assumed safe.
 
@@ -1222,34 +1233,69 @@ def _compare_columns(
     old_database: str | None = None,
     new_database: str | None = None,
 ) -> list[ColumnMismatch]:
-    """Compare every column's values in one ``dbt show``, returning one result per column.
+    """Compare every column's values, returning one result per column.
+
+    All columns go into one ``dbt show`` unless the query would pass
+    :data:`_MAX_INLINE_SQL_BYTES`, in which case they are split into as few
+    queries as fit.
 
     Only value differences count toward the mismatch rate; rows missing from
     one side are reported apart (see :class:`ColumnMismatch`), and the
     denominator stays the full joined row count. Returns an empty list when the
     join has no rows.
     """
-    rows = _run_dbt_show(
-        _compare_columns_sql(
+
+    def build(batch: list[str]) -> str:
+        return _compare_columns_sql(
             old,
             new,
             primary_key,
-            columns,
+            batch,
             old_raw=old_raw,
             new_raw=new_raw,
             old_schema=old_schema,
             new_schema=new_schema,
             old_database=old_database,
             new_database=new_database,
-        ),
-        dbt_dir,
-        target,
-        limit=1,
-    )
+        )
+
+    results: list[ColumnMismatch] = []
+    for batch in _batch_columns(columns, build):
+        rows = _run_dbt_show(build(batch), dbt_dir, target, limit=1)
+        results.extend(_column_mismatches_from(rows, batch))
+    return results
+
+
+def _batch_columns(columns: list[str], build: Callable[[list[str]], str]) -> list[list[str]]:
+    """Split *columns* into as few batches as keep each ``build(batch)`` under :data:`_MAX_INLINE_SQL_BYTES`.
+
+    A single column always forms a batch, however long its SQL.
+    """
+    batches: list[list[str]] = []
+    current: list[str] = []
+    for column in columns:
+        candidate = [*current, column]
+        if current and len(build(candidate).encode()) > _MAX_INLINE_SQL_BYTES:
+            batches.append(current)
+            current = [column]
+        else:
+            current = candidate
+    if current:
+        batches.append(current)
+    return batches
+
+
+def _column_mismatches_from(rows: list[dict[str, Any]], columns: list[str]) -> list[ColumnMismatch]:
+    """Read :func:`_compare_columns_sql`'s one result row into a result per column."""
     if len(rows) != 1:
         msg = f"per-column comparison returned {len(rows)} rows; an ungrouped aggregate returns exactly one."
         raise RuntimeError(msg)
     row = {key.lower(): value for key, value in rows[0].items()}
+    expected = ["total_rows", *(alias for index in range(len(columns)) for alias in _column_bucket_aliases(index))]
+    missing = [alias for alias in expected if alias not in row]
+    if missing:
+        msg = f"per-column comparison result is missing {', '.join(missing)}."
+        raise RuntimeError(msg)
     total = int(row["total_rows"])
     if total == 0:
         return []

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -137,6 +137,18 @@ class TestRunDbtShowParseAnomaly:
         fake = subprocess.CompletedProcess(args=["dbt"], returncode=0, stdout='{"show": []}', stderr="")
         monkeypatch.setattr(diff_mod.subprocess, "run", lambda *a, **k: fake)
         assert diff_mod._run_dbt_show("{{ x }}", tmp_path, "dev_local", 10) == []
+
+
+class TestRunDbtShowOSError:
+    def test_an_oversized_argument_becomes_a_runtime_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def too_long(*a: Any, **k: Any) -> Any:
+            raise OSError(7, "Argument list too long")
+
+        monkeypatch.setattr(diff_mod.subprocess, "run", too_long)
+        with pytest.raises(RuntimeError, match="Argument list too long"):
+            diff_mod._run_dbt_show("select 1", tmp_path, "dev_local", limit=1)
 
 
 class TestSummarizeRelations:
@@ -507,8 +519,93 @@ class TestCompareColumns:
     def test_a_missing_bucket_raises_rather_than_reading_as_zero(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        with pytest.raises(KeyError):
+        with pytest.raises(RuntimeError, match="missing c0_mismatched, c0_missing_in_old, c0_missing_in_new"):
             self._run([{"total_rows": 10}], ["amt"], tmp_path, monkeypatch)
+
+    def test_columns_past_the_inline_sql_budget_split_into_more_queries(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        columns = [f"a_rather_long_column_name_number_{n:03d}" for n in range(400)]
+        queries: list[str] = []
+
+        def fake_show(inline_sql: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            queries.append(inline_sql)
+            return [_column_row(10, [(1, 0, 0)] * inline_sql.count("_mismatched"))]
+
+        monkeypatch.setattr(diff_mod, "_run_dbt_show", fake_show)
+        result = diff_mod._compare_columns("old_m", "new_m", ["id"], columns, tmp_path, "dev_local")
+        assert len(queries) > 1
+        assert all(len(q.encode()) <= diff_mod._MAX_INLINE_SQL_BYTES for q in queries)
+        assert [m.column for m in result] == columns
+
+    def test_one_query_while_under_the_budget(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        columns = [f"col{n}" for n in range(40)]
+        result = self._run([_column_row(10, [(0, 0, 0)] * 40)], columns, tmp_path, monkeypatch)
+        assert [m.column for m in result] == columns
+
+
+class TestCompareColumnsSqlOnDuckDB:
+    """Run the generated SQL, so the bucket rules are checked against an engine and not only as text.
+
+    Each key covers one case audit_helper's compare_column_values buckets
+    differently; the expected counts are what its 0.12 macro returns for the
+    same rows.
+    """
+
+    _OLD = [
+        (1, "a", "same", 1),  # equal
+        (2, "a", "old", 2),  # values differ
+        (3, "a", None, None),  # both null
+        (4, "a", None, 4),  # null in old only
+        (5, "a", "five", None),  # null in new only
+        (6, "a", "x", 6),  # only in old, non-null: missing from new
+        (8, "a", None, None),  # only in old, null: counts as both-null, a match
+        (10, None, "nullkey", 10),  # k2 null on both sides
+    ]
+    _NEW = [
+        (1, "a", "same", 1),
+        (2, "a", "new", 3),
+        (3, "a", None, None),
+        (4, "a", "four", 4),
+        (5, "a", None, 5),
+        (7, "a", None, None),  # only in new, null: a match
+        (9, "a", "y", 9),  # only in new, non-null: missing from old
+        (10, None, "nullkey", 11),
+    ]
+
+    def _run(self, primary_key: list[str]) -> dict[str, tuple[int, ...]]:
+        import duckdb
+
+        con = duckdb.connect()
+        for name, rows in (("old_t", self._OLD), ("new_t", self._NEW)):
+            con.execute(f"create table {name} (k1 int, k2 varchar, c1 varchar, c2 int)")
+            con.executemany(f"insert into {name} values (?, ?, ?, ?)", rows)  # noqa: S608
+        sql = (
+            _compare_columns_sql("old_m", "new_m", primary_key, ["c1", "c2"])
+            .replace("{{ ref('old_m') }}", "old_t")
+            .replace("{{ ref('new_m') }}", "new_t")
+            # Stands in for the diff_composite_key macro, which needs dbt to render.
+            .replace(
+                "{{ diff_composite_key(['k1', 'k2']) }}",
+                "coalesce(cast(k1 as varchar), '~') || '|' || coalesce(k2, '~')",
+            )
+        )
+        cursor = con.execute(sql)
+        row = dict(zip([d[0] for d in cursor.description], cursor.fetchone() or (), strict=True))
+        return {
+            column: (row["total_rows"], *(row[alias] for alias in _column_bucket_aliases(index)))
+            for index, column in enumerate(["c1", "c2"])
+        }
+
+    # (total, mismatched, missing_in_old, missing_in_new) per column.
+    _EXPECTED: ClassVar[dict[str, tuple[int, ...]]] = {"c1": (10, 3, 1, 1), "c2": (10, 3, 1, 1)}
+
+    def test_scalar_key(self) -> None:
+        assert self._run(["k1"]) == self._EXPECTED
+
+    def test_composite_key(self) -> None:
+        # The composite key encodes k2's null instead of dropping it, so key 10 still pairs.
+        assert self._run(["k1", "k2"]) == self._EXPECTED
 
 
 class TestResolveRawColumns:
