@@ -164,6 +164,7 @@ with blocks as (
     select
         candidate_files.*
         , file_exclusions.content_file_release_date as release_date
+        , file_exclusions.content_file_key as exclusions_key
     from candidate_files
     inner join checked_runs
         on candidate_files.courserun_readable_id = checked_runs.courserun_readable_id
@@ -199,14 +200,19 @@ with blocks as (
 , module_files as (
     select
         *
-        , case
+        -- Learn's OlxArchive.key, as the exclusions asset computed it. A block
+        -- stored below its type folder (url_name a:b in html/a/b.xml) is keyed
+        -- by its url_name, which the path alone can't always spell (a::b). The
+        -- path rule below is get_edx_module_id, the same key for every other
+        -- file, and covers runs whose exclusion rows predate the key.
+        , coalesce(exclusions_key, case
             when folder = 'static'
                 then concat('asset-v1:', run_key, '+type@asset+block@', file_name)
             else concat(
                 'block-v1:', run_key, '+type@', folder, '+block@'
                 , {{ regexp_replace_all('file_name', "'\\.[^.]*$'", "''") }}
             )
-        end as edx_module_id
+        end) as edx_module_id
         , {{ regexp_replace_all('original_file_name', "'\\.[^.]*$'", "''") }} as original_stem
     from keyed_files
 )
@@ -222,7 +228,7 @@ with blocks as (
 )
 
 -- get_video_metadata: every transcript a video/*.xml block names, mapped to that
--- video's id and display name.
+-- video's id (its url_name, so video/a/b.xml is a:b) and display name.
 , video_transcripts as (
     select
         blocks.courserun_readable_id
@@ -233,10 +239,7 @@ with blocks as (
             , replace({{ html_unescape('transcript.src') }}, ' ', '_')
         ) as transcript_module_id
         , {{ regexp_replace_all(
-            element_at_array(
-                "split(blocks.coursestructure_xml_block_path, '/')"
-                , array_length("split(blocks.coursestructure_xml_block_path, '/')")
-            )
+            "replace(substring(blocks.coursestructure_xml_block_path, length('course/video/') + 1), '/', ':')"
             , "'\\.[^.]*$'", "''"
         ) }} as video_id
         , blocks.coursestructure_xml_block_display_name as video_title
@@ -282,11 +285,14 @@ with blocks as (
         , {{ openedx_lms_root_url('module_files.source_system') }} as root_url
         , video_transcript_map.video_id
         -- get_title_for_content: a transcript takes its video's name, an XML
-        -- block its display_name, an HTML file the display_name of its html/
-        -- pointer, and anything else a title made from the file name.
+        -- block its display_name, an HTML file the display_name of the html
+        -- block beside it (html/a/b.html: html/a/b.xml), else of the html/
+        -- block of its name, and anything else a title made from the file name.
         , coalesce(
             nullif(case
                 when module_files.file_extension = '.xml' then module_files.xml_display_name
+                when module_files.file_extension = '.html' and html_titles_beside.xml_path is not null
+                    then html_titles_beside.display_name
                 when module_files.file_extension = '.html' then html_titles.display_name
                 else video_transcript_map.video_title
             end, '')
@@ -297,6 +303,11 @@ with blocks as (
         on module_files.courserun_readable_id = video_transcript_map.courserun_readable_id
         and module_files.source_system = video_transcript_map.source_system
         and module_files.edx_module_id = video_transcript_map.transcript_module_id
+    left join html_titles as html_titles_beside
+        on module_files.file_extension = '.html'
+        and module_files.courserun_readable_id = html_titles_beside.courserun_readable_id
+        and module_files.source_system = html_titles_beside.source_system
+        and html_titles_beside.xml_path = {{ regexp_replace_all('module_files.source_path', "'\\.html$'", "'.xml'") }}
     left join html_titles
         on module_files.file_extension = '.html'
         and module_files.courserun_readable_id = html_titles.courserun_readable_id

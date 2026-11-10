@@ -188,6 +188,11 @@ models:
       null when Learn leaves it undated (an undated learner-visible path to it, a
       self-paced run, an excluded file) and for a course whose newest file predates
       the asset dating files
+  - name: content_file_key
+    description: str, the file's ContentFile key from Learn's OlxArchive.key, which
+      keys a block stored below its type folder (url_name a:b in <type>/a/b.xml) by
+      its url_name; null for a course whose newest file predates the asset keying
+      files
   - name: content_file_checked_at
     description: timestamp, S3 modification time of the file the row came from
     data_type: timestamp
