@@ -80,8 +80,9 @@ with program_learner_report as (
 -- days before the final course certificate existed; and Supply Chain Management carries
 -- the cohort date of a failed final-exam attempt until the learner passes. So an award
 -- more than a day before the program completion is replaced: by the latest award when
--- that falls within 60 days after completion (the cohort actually passed), else by the
--- completion itself. An award on or after completion is kept unchanged.
+-- that falls between a day before and 60 days after completion (the cohort actually
+-- passed), else by the completion itself. Both checks allow the same day of slack, so an
+-- award no more than a day before completion is kept unchanged.
 , program_certificate_dates as (
     select
         program_awards.user_id

@@ -438,7 +438,8 @@ models:
       each of the courses in the program and was awarded a program certificate. edX.org's
       award date is used unless it is more than a day before the learner's last course
       completion (the latest of each course's first certificate). Then it is the latest
-      award within 60 days after that completion, else the completion itself.
+      award when that falls between a day before and 60 days after that completion,
+      else the completion itself.
   - name: micromasters_program_id
     description: int, foreign key to program in the MicroMasters database
   tests:
