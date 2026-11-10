@@ -183,7 +183,11 @@ class EmbeddingsResource(ConfigurableResource[None]):
         """Trace to Opik when it is configured and its Keycloak client is readable.
 
         A failed read is logged and leaves tracing off, as ml's opik_auth does:
-        tracing is observability, not a pipeline dependency.
+        tracing is observability, not a pipeline dependency. That covers any
+        error Vault answers with (missing path, denied, expired token) and a
+        secret without the client's fields. Unlike opik_auth, which catches
+        every exception, a Vault that can't be reached at all still fails the
+        setup.
         """
         untraced = TracingConfig(enabled=False, include_content=self.trace_content)
         location = opik_keycloak_vault_location()
