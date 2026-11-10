@@ -228,8 +228,10 @@ with blocks as (
 )
 
 -- get_video_metadata: every transcript a video/*.xml block names, mapped to that
--- video's id and display name. The id is the url_name on the video file's root
--- (a:b for video/a/b.xml), and a video file without one maps nothing.
+-- video's id and display name. The id is the url_name on the video file's root,
+-- else the url_name the file's path spells: Open edX exports url_name a:b to
+-- video/a/b.xml (xmodule name_to_pathname). Learn maps nothing for a root without
+-- a url_name; no production video file lacked one on 2026-11-10.
 , video_transcripts as (
     select
         blocks.courserun_readable_id
@@ -239,15 +241,22 @@ with blocks as (
             , '+type@asset+block@'
             , replace({{ html_unescape('transcript.src') }}, ' ', '_')
         ) as transcript_module_id
-        , {{ json_query_string('blocks.coursestructure_xml_block_attributes', "'$.url_name'") }} as video_id
+        , coalesce(
+            nullif({{ json_query_string('blocks.coursestructure_xml_block_attributes', "'$.url_name'") }}, '')
+            , replace(
+                {{ regexp_replace_all(
+                    regexp_replace_all('blocks.coursestructure_xml_block_path', "'^course/video/'", "''")
+                    , "'\\.[^.]*$'", "''"
+                ) }}
+                , '/', ':'
+            )
+        ) as video_id
         , blocks.coursestructure_xml_block_display_name as video_title
     from blocks
     cross join {{ unnest_regexp_matches(
         'blocks.coursestructure_xml_raw_xml', "'<transcript\\s[^>]*src=\"([^\"]*)\"'", 'transcript', 'src'
     ) }}
-    where
-        blocks.coursestructure_xml_block_path like 'course/video/%'
-        and nullif({{ json_query_string('blocks.coursestructure_xml_block_attributes', "'$.url_name'") }}, '') is not null
+    where blocks.coursestructure_xml_block_path like 'course/video/%'
 )
 
 , video_transcript_map as (
