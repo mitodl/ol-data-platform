@@ -62,6 +62,47 @@
       "default": true,
       "description": "False asserts that no dbt model depends on this unit, which is the only way a connection may be named so that Dagster's selector drops it (§3.3 rule 6)."
     },
+    "history": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How the unit's raw history snapshots behave (INGESTION_INVENTORY_SPEC.md §11). `ol-dbt inventory history --write` generates the snapshots from this and from each table's own `history`.",
+      "properties": {
+        "absence": {
+          "enum": ["deleted", "aged_out"],
+          "description": "What it means when a record stops appearing in a load. `deleted` writes a dbt_is_deleted 'True' row (hard_deletes: new_record). `aged_out` records nothing (hard_deletes: ignore), for a source that only ever returns recent records, such as a feed. A database unit defaults to `deleted`; any other unit with a table in history scope must state it."
+        },
+        "live": {
+          "type": "boolean",
+          "default": false,
+          "description": "True builds the unit's snapshots; false generates them disabled. History is rolled out a unit at a time, and a unit's snapshots have to run on its Airbyte tables for at least one load before its dlt cutover. A table's own `history.live` wins."
+        },
+        "markers": {
+          "type": "array",
+          "description": "Times at which a loader cutover or a source schema change wrote extra versions of every row, so reports can discount versions starting then. Copied into each snapshot's meta.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["at", "kind", "note"],
+            "properties": {
+              "at": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?Z$",
+                "description": "UTC, e.g. 2026-11-12T14:00Z."
+              },
+              "kind": {"enum": ["loader_cutover", "schema_change"]},
+              "tables": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"type": "string"},
+                "description": "Table `name`s the marker applies to. Omit for every table of the unit."
+              },
+              "note": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
     "airbyte": {
       "type": "object",
       "additionalProperties": false,
@@ -208,6 +249,38 @@
           "renamed_from": {
             "type": "string",
             "description": "The full previous raw_table this table replaces, so the removal check does not fire (§7.2). Not the bare stream name."
+          },
+          "history": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "description": "This table's raw history settings (INGESTION_INVENTORY_SPEC.md §11). A modeled table synced full_refresh_overwrite, full_refresh_overwrite_deduped or incremental_deduped_history with a primary_key is in history scope unless it says `in_scope: false`.",
+            "properties": {
+              "in_scope": {
+                "const": false,
+                "description": "Takes the table out of history scope. Requires `reason`."
+              },
+              "reason": {"type": "string", "minLength": 1},
+              "live": {
+                "type": "boolean",
+                "description": "Overrides the unit's `history.live` for this table."
+              },
+              "exclude_columns": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1},
+                "description": "Columns the snapshot does not store, on top of the columns the raw_history_snapshot macro always drops (the loader's, and names matching a secret pattern such as password, secret, token or api_key)."
+              },
+              "ignore_columns": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1},
+                "description": "Columns the snapshot stores but does not compare, so a change to them alone writes no new version."
+              }
+            },
+            "dependentRequired": {"in_scope": ["reason"], "reason": ["in_scope"]}
           },
           "mirror": {
             "type": "object",

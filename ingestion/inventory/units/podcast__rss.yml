@@ -10,6 +10,10 @@ strategies:
   local: fixture
 loader: dlt
 table_prefix: raw__podcast__rss__
+# An RSS feed may carry only a show's recent episodes, so an episode that drops
+# out of the feed was not necessarily deleted.
+history:
+  absence: aged_out
 dlt:
   source_module: ol_dlt.sources.podcast_rss
   write_disposition: merge

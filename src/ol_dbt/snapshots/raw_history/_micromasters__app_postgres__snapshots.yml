@@ -1,0 +1,954 @@
+---
+# GENERATED FILE - DO NOT EDIT.
+# Regenerate with `ol-dbt inventory history --write`; CI fails if this file and
+# ingestion/inventory/units/micromasters__app_postgres.yml disagree.
+version: 2
+snapshots:
+- name: snapshot_raw__micromasters__app__postgres__auth_user
+  description: >-
+    History of raw__micromasters__app__postgres__auth_user (micromasters/app_postgres,
+    table auth_user): one row per version of each record, with every source column
+    except the loader's, secret-pattern columns and any the inventory excludes. Resolution
+    is one snapshot run, and history starts at the first run. A record that leaves
+    the source gets a final row with dbt_is_deleted 'True', since every load reads
+    the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the micromasters/app_postgres auth_user record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__cms_programpage
+  description: >-
+    History of raw__micromasters__app__postgres__cms_programpage (micromasters/app_postgres,
+    table cms_programpage): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__micromasters__app__postgres__cms_programpage__keyset) has been read;
+    until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: page_ptr_id
+    description: >-
+      primary key of the micromasters/app_postgres cms_programpage record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__courses_course
+  description: >-
+    History of raw__micromasters__app__postgres__courses_course (micromasters/app_postgres,
+    table courses_course): one row per version of each record, with every source column
+    except the loader's, secret-pattern columns and any the inventory excludes. Resolution
+    is one snapshot run, and history starts at the first run. A record that leaves
+    the source gets a final row with dbt_is_deleted 'True', since every load reads
+    the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres courses_course record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__courses_courserun
+  description: >-
+    History of raw__micromasters__app__postgres__courses_courserun (micromasters/app_postgres,
+    table courses_courserun): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__micromasters__app__postgres__courses_courserun__keyset) has been
+    read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres courses_courserun record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__courses_electivecourse
+  description: >-
+    History of raw__micromasters__app__postgres__courses_electivecourse (micromasters/app_postgres,
+    table courses_electivecourse): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__micromasters__app__postgres__courses_electivecourse__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres courses_electivecourse record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__courses_electivesset
+  description: >-
+    History of raw__micromasters__app__postgres__courses_electivesset (micromasters/app_postgres,
+    table courses_electivesset): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__micromasters__app__postgres__courses_electivesset__keyset) has been
+    read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres courses_electivesset record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__courses_program
+  description: >-
+    History of raw__micromasters__app__postgres__courses_program (micromasters/app_postgres,
+    table courses_program): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__micromasters__app__postgres__courses_program__keyset) has been read;
+    until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres courses_program record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__dashboard_programenrollment
+  description: >-
+    History of raw__micromasters__app__postgres__dashboard_programenrollment (micromasters/app_postgres,
+    table dashboard_programenrollment): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres dashboard_programenrollment record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__django_content_type
+  description: >-
+    History of raw__micromasters__app__postgres__django_content_type (micromasters/app_postgres,
+    table django_content_type): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__micromasters__app__postgres__django_content_type__keyset) has been
+    read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres django_content_type record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__ecommerce_coupon
+  description: >-
+    History of raw__micromasters__app__postgres__ecommerce_coupon (micromasters/app_postgres,
+    table ecommerce_coupon): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__micromasters__app__postgres__ecommerce_coupon__keyset) has been read;
+    until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres ecommerce_coupon record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__ecommerce_couponinvoice
+  description: >-
+    History of raw__micromasters__app__postgres__ecommerce_couponinvoice (micromasters/app_postgres,
+    table ecommerce_couponinvoice): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__micromasters__app__postgres__ecommerce_couponinvoice__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres ecommerce_couponinvoice record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__ecommerce_line
+  description: >-
+    History of raw__micromasters__app__postgres__ecommerce_line (micromasters/app_postgres,
+    table ecommerce_line): one row per version of each record, with every source column
+    except the loader's, secret-pattern columns and any the inventory excludes. Resolution
+    is one snapshot run, and history starts at the first run. A record deleted at
+    the source gets a final row with dbt_is_deleted 'True' once the unit's keyset
+    (raw__micromasters__app__postgres__ecommerce_line__keyset) has been read; until
+    then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres ecommerce_line record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__ecommerce_order
+  description: >-
+    History of raw__micromasters__app__postgres__ecommerce_order (micromasters/app_postgres,
+    table ecommerce_order): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__micromasters__app__postgres__ecommerce_order__keyset) has been read;
+    until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres ecommerce_order record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__ecommerce_receipt
+  description: >-
+    History of raw__micromasters__app__postgres__ecommerce_receipt (micromasters/app_postgres,
+    table ecommerce_receipt): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__micromasters__app__postgres__ecommerce_receipt__keyset) has been
+    read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres ecommerce_receipt record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__ecommerce_redeemedcoupon
+  description: >-
+    History of raw__micromasters__app__postgres__ecommerce_redeemedcoupon (micromasters/app_postgres,
+    table ecommerce_redeemedcoupon): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__micromasters__app__postgres__ecommerce_redeemedcoupon__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres ecommerce_redeemedcoupon record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__ecommerce_usercoupon
+  description: >-
+    History of raw__micromasters__app__postgres__ecommerce_usercoupon (micromasters/app_postgres,
+    table ecommerce_usercoupon): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__micromasters__app__postgres__ecommerce_usercoupon__keyset) has been
+    read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres ecommerce_usercoupon record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__exams_examrun
+  description: >-
+    History of raw__micromasters__app__postgres__exams_examrun (micromasters/app_postgres,
+    table exams_examrun): one row per version of each record, with every source column
+    except the loader's, secret-pattern columns and any the inventory excludes. Resolution
+    is one snapshot run, and history starts at the first run. A record deleted at
+    the source gets a final row with dbt_is_deleted 'True' once the unit's keyset
+    (raw__micromasters__app__postgres__exams_examrun__keyset) has been read; until
+    then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres exams_examrun record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__grades_combinedfinalgrade
+  description: >-
+    History of raw__micromasters__app__postgres__grades_combinedfinalgrade (micromasters/app_postgres,
+    table grades_combinedfinalgrade): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__micromasters__app__postgres__grades_combinedfinalgrade__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres grades_combinedfinalgrade record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__grades_finalgrade
+  description: >-
+    History of raw__micromasters__app__postgres__grades_finalgrade (micromasters/app_postgres,
+    table grades_finalgrade): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__micromasters__app__postgres__grades_finalgrade__keyset) has been
+    read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres grades_finalgrade record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__grades_micromasterscoursecertificate
+  description: >-
+    History of raw__micromasters__app__postgres__grades_micromasterscoursecertificate
+    (micromasters/app_postgres, table grades_micromasterscoursecertificate): one row
+    per version of each record, with every source column except the loader's, secret-pattern
+    columns and any the inventory excludes. Resolution is one snapshot run, and history
+    starts at the first run. A record deleted at the source gets a final row with
+    dbt_is_deleted 'True' once the unit's keyset (raw__micromasters__app__postgres__grades_micromasterscoursecertificate__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres grades_micromasterscoursecertificate
+      record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__grades_micromastersprogramcertificate
+  description: >-
+    History of raw__micromasters__app__postgres__grades_micromastersprogramcertificate
+    (micromasters/app_postgres, table grades_micromastersprogramcertificate): one
+    row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres grades_micromastersprogramcertificate
+      record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__grades_proctoredexamgrade
+  description: >-
+    History of raw__micromasters__app__postgres__grades_proctoredexamgrade (micromasters/app_postgres,
+    table grades_proctoredexamgrade): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__micromasters__app__postgres__grades_proctoredexamgrade__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres grades_proctoredexamgrade record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__profiles_education
+  description: >-
+    History of raw__micromasters__app__postgres__profiles_education (micromasters/app_postgres,
+    table profiles_education): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__micromasters__app__postgres__profiles_education__keyset) has been
+    read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres profiles_education record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__profiles_employment
+  description: >-
+    History of raw__micromasters__app__postgres__profiles_employment (micromasters/app_postgres,
+    table profiles_employment): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__micromasters__app__postgres__profiles_employment__keyset) has been
+    read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres profiles_employment record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__profiles_profile
+  description: >-
+    History of raw__micromasters__app__postgres__profiles_profile (micromasters/app_postgres,
+    table profiles_profile): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres profiles_profile record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__social_auth_usersocialauth
+  description: >-
+    History of raw__micromasters__app__postgres__social_auth_usersocialauth (micromasters/app_postgres,
+    table social_auth_usersocialauth): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__micromasters__app__postgres__social_auth_usersocialauth__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres social_auth_usersocialauth record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__wagtailcore_page
+  description: >-
+    History of raw__micromasters__app__postgres__wagtailcore_page (micromasters/app_postgres,
+    table wagtailcore_page): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__micromasters__app__postgres__wagtailcore_page__keyset) has been read;
+    until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres wagtailcore_page record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__micromasters__app__postgres__wagtailimages_image
+  description: >-
+    History of raw__micromasters__app__postgres__wagtailimages_image (micromasters/app_postgres,
+    table wagtailimages_image): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__micromasters__app__postgres__wagtailimages_image__keyset) has been
+    read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: micromasters/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the micromasters/app_postgres wagtailimages_image record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.

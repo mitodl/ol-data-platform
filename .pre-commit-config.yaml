@@ -17,7 +17,9 @@ repos:
   rev: 0.2.3
   hooks:
   - id: yamlfmt
-    exclude: src/ol_superset/assets
+    # The raw history YAML is generated, and `ol-dbt inventory history` fails
+    # on any change to it, so reformatting it would make the two checks fight.
+    exclude: src/ol_superset/assets|src/ol_dbt/snapshots/raw_history/|src/ol_dbt/models/staging/_raw_keysets__sources\.yml
     args:
     - --mapping
     - '2'
@@ -47,7 +49,7 @@ repos:
     - src/ol_dbt/package-lock.yml
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
-  rev: 'v0.17.3'
+  rev: 'v0.17.4'
   hooks:
   - id: ruff-format
   - id: ruff-check
@@ -106,7 +108,7 @@ repos:
     pass_filenames: false
     require_serial: true
 - repo: https://github.com/zizmorcore/zizmor-pre-commit
-  rev: v1.31.1
+  rev: v1.32.0
   hooks:
   - id: zizmor
     args: [--no-progress, --min-severity=medium, --min-confidence=medium]

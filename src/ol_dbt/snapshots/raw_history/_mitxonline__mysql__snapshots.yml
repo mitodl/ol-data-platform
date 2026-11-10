@@ -1,0 +1,1712 @@
+---
+# GENERATED FILE - DO NOT EDIT.
+# Regenerate with `ol-dbt inventory history --write`; CI fails if this file and
+# ingestion/inventory/units/mitxonline__mysql.yml disagree.
+version: 2
+snapshots:
+- name: snapshot_raw__mitxonline__openedx__mysql__assessment_assessment
+  description: >-
+    History of raw__mitxonline__openedx__mysql__assessment_assessment (mitxonline/mysql,
+    table assessment_assessment): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql assessment_assessment record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__assessment_assessmentfeedback
+  description: >-
+    History of raw__mitxonline__openedx__mysql__assessment_assessmentfeedback (mitxonline/mysql,
+    table assessment_assessmentfeedback): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql assessment_assessmentfeedback record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__assessment_assessmentfeedback_assessments
+  description: >-
+    History of raw__mitxonline__openedx__mysql__assessment_assessmentfeedback_assessments
+    (mitxonline/mysql, table assessment_assessmentfeedback_assessments): one row per
+    version of each record, with every source column except the loader's, secret-pattern
+    columns and any the inventory excludes. Resolution is one snapshot run, and history
+    starts at the first run. A record that leaves the source gets a final row with
+    dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql assessment_assessmentfeedback_assessments
+      record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__assessment_assessmentfeedback_options
+  description: >-
+    History of raw__mitxonline__openedx__mysql__assessment_assessmentfeedback_options
+    (mitxonline/mysql, table assessment_assessmentfeedback_options): one row per version
+    of each record, with every source column except the loader's, secret-pattern columns
+    and any the inventory excludes. Resolution is one snapshot run, and history starts
+    at the first run. A record that leaves the source gets a final row with dbt_is_deleted
+    'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql assessment_assessmentfeedback_options record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__assessment_assessmentfeedbackoption
+  description: >-
+    History of raw__mitxonline__openedx__mysql__assessment_assessmentfeedbackoption
+    (mitxonline/mysql, table assessment_assessmentfeedbackoption): one row per version
+    of each record, with every source column except the loader's, secret-pattern columns
+    and any the inventory excludes. Resolution is one snapshot run, and history starts
+    at the first run. A record that leaves the source gets a final row with dbt_is_deleted
+    'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql assessment_assessmentfeedbackoption record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__assessment_assessmentpart
+  description: >-
+    History of raw__mitxonline__openedx__mysql__assessment_assessmentpart (mitxonline/mysql,
+    table assessment_assessmentpart): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql assessment_assessmentpart record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__assessment_criterion
+  description: >-
+    History of raw__mitxonline__openedx__mysql__assessment_criterion (mitxonline/mysql,
+    table assessment_criterion): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql assessment_criterion record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__assessment_criterionoption
+  description: >-
+    History of raw__mitxonline__openedx__mysql__assessment_criterionoption (mitxonline/mysql,
+    table assessment_criterionoption): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql assessment_criterionoption record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__assessment_peerworkflow
+  description: >-
+    History of raw__mitxonline__openedx__mysql__assessment_peerworkflow (mitxonline/mysql,
+    table assessment_peerworkflow): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql assessment_peerworkflow record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__assessment_peerworkflowitem
+  description: >-
+    History of raw__mitxonline__openedx__mysql__assessment_peerworkflowitem (mitxonline/mysql,
+    table assessment_peerworkflowitem): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql assessment_peerworkflowitem record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__assessment_rubric
+  description: >-
+    History of raw__mitxonline__openedx__mysql__assessment_rubric (mitxonline/mysql,
+    table assessment_rubric): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql assessment_rubric record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__assessment_studenttrainingworkflow
+  description: >-
+    History of raw__mitxonline__openedx__mysql__assessment_studenttrainingworkflow
+    (mitxonline/mysql, table assessment_studenttrainingworkflow): one row per version
+    of each record, with every source column except the loader's, secret-pattern columns
+    and any the inventory excludes. Resolution is one snapshot run, and history starts
+    at the first run. A record that leaves the source gets a final row with dbt_is_deleted
+    'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql assessment_studenttrainingworkflow record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__assessment_studenttrainingworkflowitem
+  description: >-
+    History of raw__mitxonline__openedx__mysql__assessment_studenttrainingworkflowitem
+    (mitxonline/mysql, table assessment_studenttrainingworkflowitem): one row per
+    version of each record, with every source column except the loader's, secret-pattern
+    columns and any the inventory excludes. Resolution is one snapshot run, and history
+    starts at the first run. A record that leaves the source gets a final row with
+    dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql assessment_studenttrainingworkflowitem record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__assessment_trainingexample
+  description: >-
+    History of raw__mitxonline__openedx__mysql__assessment_trainingexample (mitxonline/mysql,
+    table assessment_trainingexample): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql assessment_trainingexample record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__assessment_trainingexample_options_selected
+  description: >-
+    History of raw__mitxonline__openedx__mysql__assessment_trainingexample_options_selected
+    (mitxonline/mysql, table assessment_trainingexample_options_selected): one row
+    per version of each record, with every source column except the loader's, secret-pattern
+    columns and any the inventory excludes. Resolution is one snapshot run, and history
+    starts at the first run. A record that leaves the source gets a final row with
+    dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql assessment_trainingexample_options_selected
+      record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__auth_user
+  description: >-
+    History of raw__mitxonline__openedx__mysql__auth_user (mitxonline/mysql, table
+    auth_user): one row per version of each record, with every source column except
+    the loader's, secret-pattern columns and any the inventory excludes. Resolution
+    is one snapshot run, and history starts at the first run. A record that leaves
+    the source gets a final row with dbt_is_deleted 'True', since every load reads
+    the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql auth_user record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__auth_userprofile
+  description: >-
+    History of raw__mitxonline__openedx__mysql__auth_userprofile (mitxonline/mysql,
+    table auth_userprofile): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql auth_userprofile record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__bulk_email_optout
+  description: >-
+    History of raw__mitxonline__openedx__mysql__bulk_email_optout (mitxonline/mysql,
+    table bulk_email_optout): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql bulk_email_optout record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__certificates_generatedcertificate
+  description: >-
+    History of raw__mitxonline__openedx__mysql__certificates_generatedcertificate
+    (mitxonline/mysql, table certificates_generatedcertificate): one row per version
+    of each record, with every source column except the loader's, secret-pattern columns
+    and any the inventory excludes. Resolution is one snapshot run, and history starts
+    at the first run. A record that leaves the source gets a final row with dbt_is_deleted
+    'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql certificates_generatedcertificate record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__course_groups_cohortmembership
+  description: >-
+    History of raw__mitxonline__openedx__mysql__course_groups_cohortmembership (mitxonline/mysql,
+    table course_groups_cohortmembership): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql course_groups_cohortmembership record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__course_groups_courseusergroup
+  description: >-
+    History of raw__mitxonline__openedx__mysql__course_groups_courseusergroup (mitxonline/mysql,
+    table course_groups_courseusergroup): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql course_groups_courseusergroup record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__credit_creditcourse
+  description: >-
+    History of raw__mitxonline__openedx__mysql__credit_creditcourse (mitxonline/mysql,
+    table credit_creditcourse): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql credit_creditcourse record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__credit_crediteligibility
+  description: >-
+    History of raw__mitxonline__openedx__mysql__credit_crediteligibility (mitxonline/mysql,
+    table credit_crediteligibility): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql credit_crediteligibility record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__django_comment_client_role
+  description: >-
+    History of raw__mitxonline__openedx__mysql__django_comment_client_role (mitxonline/mysql,
+    table django_comment_client_role): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql django_comment_client_role record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__django_comment_client_role_users
+  description: >-
+    History of raw__mitxonline__openedx__mysql__django_comment_client_role_users (mitxonline/mysql,
+    table django_comment_client_role_users): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql django_comment_client_role_users record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__django_content_type
+  description: >-
+    History of raw__mitxonline__openedx__mysql__django_content_type (mitxonline/mysql,
+    table django_content_type): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql django_content_type record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__edxval_coursevideo
+  description: >-
+    History of raw__mitxonline__openedx__mysql__edxval_coursevideo (mitxonline/mysql,
+    table edxval_coursevideo): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql edxval_coursevideo record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__edxval_video
+  description: >-
+    History of raw__mitxonline__openedx__mysql__edxval_video (mitxonline/mysql, table
+    edxval_video): one row per version of each record, with every source column except
+    the loader's, secret-pattern columns and any the inventory excludes. Resolution
+    is one snapshot run, and history starts at the first run. A record that leaves
+    the source gets a final row with dbt_is_deleted 'True', since every load reads
+    the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql edxval_video record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__forum_abuseflagger
+  description: >-
+    History of raw__mitxonline__openedx__mysql__forum_abuseflagger (mitxonline/mysql,
+    table forum_abuseflagger): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql forum_abuseflagger record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__forum_comment
+  description: >-
+    History of raw__mitxonline__openedx__mysql__forum_comment (mitxonline/mysql, table
+    forum_comment): one row per version of each record, with every source column except
+    the loader's, secret-pattern columns and any the inventory excludes. Resolution
+    is one snapshot run, and history starts at the first run. A record that leaves
+    the source gets a final row with dbt_is_deleted 'True', since every load reads
+    the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql forum_comment record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__forum_commentthread
+  description: >-
+    History of raw__mitxonline__openedx__mysql__forum_commentthread (mitxonline/mysql,
+    table forum_commentthread): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql forum_commentthread record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__forum_historicalabuseflagger
+  description: >-
+    History of raw__mitxonline__openedx__mysql__forum_historicalabuseflagger (mitxonline/mysql,
+    table forum_historicalabuseflagger): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql forum_historicalabuseflagger record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__forum_mongocontent
+  description: >-
+    History of raw__mitxonline__openedx__mysql__forum_mongocontent (mitxonline/mysql,
+    table forum_mongocontent): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql forum_mongocontent record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__forum_uservote
+  description: >-
+    History of raw__mitxonline__openedx__mysql__forum_uservote (mitxonline/mysql,
+    table forum_uservote): one row per version of each record, with every source column
+    except the loader's, secret-pattern columns and any the inventory excludes. Resolution
+    is one snapshot run, and history starts at the first run. A record that leaves
+    the source gets a final row with dbt_is_deleted 'True', since every load reads
+    the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql forum_uservote record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__grades_persistentcoursegrade
+  description: >-
+    History of raw__mitxonline__openedx__mysql__grades_persistentcoursegrade (mitxonline/mysql,
+    table grades_persistentcoursegrade): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__mitxonline__openedx__mysql__grades_persistentcoursegrade__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql grades_persistentcoursegrade record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__grades_persistentsubsectiongradeoverride
+  description: >-
+    History of raw__mitxonline__openedx__mysql__grades_persistentsubsectiongradeoverride
+    (mitxonline/mysql, table grades_persistentsubsectiongradeoverride): one row per
+    version of each record, with every source column except the loader's, secret-pattern
+    columns and any the inventory excludes. Resolution is one snapshot run, and history
+    starts at the first run. A record deleted at the source gets a final row with
+    dbt_is_deleted 'True' once the unit's keyset (raw__mitxonline__openedx__mysql__grades_persistentsubsectiongradeoverride__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql grades_persistentsubsectiongradeoverride
+      record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__grades_visibleblocks
+  description: >-
+    History of raw__mitxonline__openedx__mysql__grades_visibleblocks (mitxonline/mysql,
+    table grades_visibleblocks): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql grades_visibleblocks record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__organizations_organization
+  description: >-
+    History of raw__mitxonline__openedx__mysql__organizations_organization (mitxonline/mysql,
+    table organizations_organization): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql organizations_organization record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__organizations_organizationcourse
+  description: >-
+    History of raw__mitxonline__openedx__mysql__organizations_organizationcourse (mitxonline/mysql,
+    table organizations_organizationcourse): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql organizations_organizationcourse record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__student_anonymoususerid
+  description: >-
+    History of raw__mitxonline__openedx__mysql__student_anonymoususerid (mitxonline/mysql,
+    table student_anonymoususerid): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__mitxonline__openedx__mysql__student_anonymoususerid__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql student_anonymoususerid record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__student_courseaccessrole
+  description: >-
+    History of raw__mitxonline__openedx__mysql__student_courseaccessrole (mitxonline/mysql,
+    table student_courseaccessrole): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql student_courseaccessrole record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__student_courseenrollment
+  description: >-
+    History of raw__mitxonline__openedx__mysql__student_courseenrollment (mitxonline/mysql,
+    table student_courseenrollment): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql student_courseenrollment record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__student_languageproficiency
+  description: >-
+    History of raw__mitxonline__openedx__mysql__student_languageproficiency (mitxonline/mysql,
+    table student_languageproficiency): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql student_languageproficiency record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__submissions_score
+  description: >-
+    History of raw__mitxonline__openedx__mysql__submissions_score (mitxonline/mysql,
+    table submissions_score): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql submissions_score record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__submissions_scoresummary
+  description: >-
+    History of raw__mitxonline__openedx__mysql__submissions_scoresummary (mitxonline/mysql,
+    table submissions_scoresummary): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql submissions_scoresummary record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__submissions_studentitem
+  description: >-
+    History of raw__mitxonline__openedx__mysql__submissions_studentitem (mitxonline/mysql,
+    table submissions_studentitem): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql submissions_studentitem record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__submissions_submission
+  description: >-
+    History of raw__mitxonline__openedx__mysql__submissions_submission (mitxonline/mysql,
+    table submissions_submission): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__mitxonline__openedx__mysql__submissions_submission__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql submissions_submission record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__teams_courseteam
+  description: >-
+    History of raw__mitxonline__openedx__mysql__teams_courseteam (mitxonline/mysql,
+    table teams_courseteam): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitxonline/mysql teams_courseteam record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__teams_courseteammembership
+  description: >-
+    History of raw__mitxonline__openedx__mysql__teams_courseteammembership (mitxonline/mysql,
+    table teams_courseteammembership): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql teams_courseteammembership record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__user_api_usercoursetag
+  description: >-
+    History of raw__mitxonline__openedx__mysql__user_api_usercoursetag (mitxonline/mysql,
+    table user_api_usercoursetag): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql user_api_usercoursetag record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__workflow_assessmentworkflow
+  description: >-
+    History of raw__mitxonline__openedx__mysql__workflow_assessmentworkflow (mitxonline/mysql,
+    table workflow_assessmentworkflow): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql workflow_assessmentworkflow record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitxonline__openedx__mysql__workflow_assessmentworkflowstep
+  description: >-
+    History of raw__mitxonline__openedx__mysql__workflow_assessmentworkflowstep (mitxonline/mysql,
+    table workflow_assessmentworkflowstep): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitxonline/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitxonline/mysql workflow_assessmentworkflowstep record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.

@@ -512,6 +512,75 @@ def _check_cross_unit(units: list[Unit], report: ValidationReport) -> None:
             seen_tables.setdefault(raw_table, unit.key)
 
 
+def _check_history(unit: Unit, report: ValidationReport) -> None:
+    """Check the raw history settings the snapshot generator reads (§11)."""
+    in_scope = [table for table in unit.tables if history_in_scope(table)]
+    if in_scope and history_absence(unit) is None:
+        report.add(
+            CHECK,
+            Severity.ERROR,
+            unit.key,
+            f"{len(in_scope)} table(s) are in history scope but the unit states no history.absence",
+            "Only a database unit defaults to `deleted`. Say whether a record that stops "
+            "appearing in this source was deleted (`deleted`) or only aged out of what the "
+            "source returns (`aged_out`).",
+        )
+
+    names = {str(table.get("name")) for table in unit.tables}
+    history = unit.data.get("history")
+    markers = history.get("markers", []) if isinstance(history, dict) else []
+    for marker in markers:
+        if unknown := sorted(set(marker.get("tables", [])) - names):
+            report.add(
+                CHECK, Severity.ERROR, unit.key, f"history marker at {marker.get('at')} names unknown tables {unknown}"
+            )
+
+    for table in unit.tables:
+        raw_table = table.get("raw_table", "")
+        settings = table.get("history")
+        if history_candidate(table) and not table.get("primary_key"):
+            report.add(
+                CHECK,
+                Severity.INFO,
+                unit.key,
+                f"{raw_table} is left out of raw history because it declares no primary_key",
+            )
+        keys = table.get("primary_key") or []
+        if history_in_scope(table) and any(len(path) != 1 for path in keys):
+            report.add(
+                CHECK,
+                Severity.ERROR,
+                unit.key,
+                f"{raw_table} is in history scope but its primary key {keys!r} has a nested path",
+                "A snapshot keys on columns. Take it out with `history.in_scope: false` and a reason.",
+            )
+        if not isinstance(settings, dict):
+            continue
+        configured = sorted(set(settings) - {"in_scope", "reason"})
+        if configured and not history_in_scope(table):
+            report.add(
+                CHECK,
+                Severity.ERROR,
+                unit.key,
+                f"{raw_table} sets history {configured} but is not in history scope",
+                "Nothing reads these settings for a table without a snapshot.",
+            )
+            continue
+        key_columns = {path[0].lower() for path in keys if path}
+        excluded = {column.lower() for column in settings.get("exclude_columns", [])}
+        ignored = {column.lower() for column in settings.get("ignore_columns", [])}
+        if clash := sorted((excluded | ignored) & key_columns):
+            report.add(CHECK, Severity.ERROR, unit.key, f"{raw_table} excludes or ignores its key column(s) {clash}")
+        if overlap := sorted(excluded & ignored):
+            report.add(
+                CHECK,
+                Severity.ERROR,
+                unit.key,
+                f"{raw_table} both excludes and ignores {overlap}",
+                "An excluded column is not stored, so there is nothing to ignore.",
+            )
+
+
 def validate_inventory(inventory_dir: Path, report: ValidationReport) -> list[Unit]:
     """Run every rule over the inventory, adding findings to `report`."""
     vocabulary = load_vocabulary(inventory_dir)
@@ -529,6 +598,7 @@ def validate_inventory(inventory_dir: Path, report: ValidationReport) -> list[Un
         _check_tables(unit, report)
         _check_mirror(unit, report)
         _check_connections(unit, report)
+        _check_history(unit, report)
         well_formed.append(unit)
 
     # Only well-formed units: two units missing `deployment` both key as `?/?`,
@@ -1007,6 +1077,49 @@ LEARNER_ACTIVITY_TABLES = frozenset(
 )
 
 KEYSET_TABLES_PATH = Path("src/ol_dlt/ol_dlt/keyset/tables.json")
+# ol_dlt.keyset.KEYSET_SUFFIX; ol_dlt is not a dependency of this package.
+KEYSET_SUFFIX = "__keyset"
+
+# The sync modes whose raw table holds the current state of every key, so a
+# snapshot of it is that table's history (8430c2 item 13). Append modes already
+# keep every version in raw.
+HISTORY_SYNC_MODES = frozenset(
+    {"full_refresh_overwrite", "full_refresh_overwrite_deduped", INCREMENTAL_DEDUPED_HISTORY}
+)
+
+
+def history_candidate(table: dict[str, Any]) -> bool:
+    """Return True for a table the history scope rule covers, key or not.
+
+    Every modeled table in a replaced or key-deduped sync mode, except the
+    learner-activity tables and a table that opts out with `history.in_scope`.
+    """
+    history = table.get("history")
+    opted_out = isinstance(history, dict) and history.get("in_scope") is False
+    return (
+        bool(table.get("modeled"))
+        and table.get("sync_mode") in HISTORY_SYNC_MODES
+        and table.get("raw_table") not in LEARNER_ACTIVITY_TABLES
+        and not opted_out
+    )
+
+
+def history_in_scope(table: dict[str, Any]) -> bool:
+    """Return True for a table that gets a raw history snapshot.
+
+    A candidate without a declared primary key stays out until one is declared:
+    a snapshot needs the key to tell a changed record from a new one.
+    """
+    return history_candidate(table) and bool(table.get("primary_key"))
+
+
+def history_absence(unit: Unit) -> str | None:
+    """Return the unit's absence setting, defaulting a database unit to `deleted`."""
+    history = unit.data.get("history")
+    declared = history.get("absence") if isinstance(history, dict) else None
+    if isinstance(declared, str):
+        return declared
+    return "deleted" if unit.data.get("layer") in DATABASE_LAYERS else None
 
 
 def _cut_over_to_dlt_replace(unit: Unit) -> bool:
@@ -1018,10 +1131,10 @@ def _cut_over_to_dlt_replace(unit: Unit) -> bool:
 def keyset_tables(units: list[Unit]) -> dict[str, list[dict[str, str]]]:
     """Map each unit key to the `{table, key}` rows whose deletes only a keyset shows.
 
-    A modeled table synced `incremental_deduped_history` from a database never
-    loses a row in raw when the source deletes it (826b18, bucket 1). A unit
-    production loads by dlt replace already carries deletes and drops out; its
-    keysets retire in the cutover change.
+    A table in history scope synced `incremental_deduped_history` from a
+    database never loses a row in raw when the source deletes it (826b18,
+    bucket 1). A unit production loads by dlt replace already carries deletes
+    and drops out; its keysets retire in the cutover change.
 
     A composite key stops the render: the keyset module reads one key column,
     and leaving such a table out would be a table with no delete capture that
@@ -1033,11 +1146,7 @@ def keyset_tables(units: list[Unit]) -> dict[str, list[dict[str, str]]]:
             continue
         rows = []
         for table in unit.tables:
-            if (
-                table.get("sync_mode") != INCREMENTAL_DEDUPED_HISTORY
-                or not table.get("modeled")
-                or table.get("raw_table") in LEARNER_ACTIVITY_TABLES
-            ):
+            if table.get("sync_mode") != INCREMENTAL_DEDUPED_HISTORY or not history_in_scope(table):
                 continue
             primary_key = table.get("primary_key") or []
             if len(primary_key) != 1 or len(primary_key[0]) != 1:
@@ -1050,6 +1159,20 @@ def keyset_tables(units: list[Unit]) -> dict[str, list[dict[str, str]]]:
         if rows:
             selected[unit.key] = sorted(rows, key=lambda row: row["table"])
     return selected
+
+
+def keyset_raw_tables(units: list[Unit]) -> set[str]:
+    """Return the raw names of every keyset table, `<raw_table>__keyset`.
+
+    A keyset is loaded beside the unit's tables rather than declared in it, so
+    reconcile counts these as accounted for on both the dbt and warehouse side.
+    """
+    prefixes = {unit.key: str(unit.data.get("table_prefix", "")) for unit in units}
+    return {
+        f"{prefixes[unit_key]}{row['table']}{KEYSET_SUFFIX}"
+        for unit_key, rows in keyset_tables(units).items()
+        for row in rows
+    }
 
 
 def render_keyset_tables(units: list[Unit]) -> str:
@@ -1151,7 +1274,8 @@ def reconcile_warehouse(
     table the warehouse still holds is named as retired, not as unclaimed.
     """
     owners = tables_by_raw_name(units)
-    result = reconcile_tables(set(owners), warehouse_tables - frozen)
+    keysets = keyset_raw_tables(units)
+    result = reconcile_tables(set(owners), warehouse_tables - frozen - keysets)
 
     for raw_table in sorted(frozen - warehouse_tables):
         report.add(
@@ -1247,7 +1371,8 @@ def reconcile_dbt(
     frozen = frozen_tables(entries)
     frozen_modeled = frozen_tables(entries, modeled_only=True)
     owners = tables_by_raw_name(units)
-    result = reconcile_tables(set(owners), dbt_tables - frozen)
+    keysets = keyset_raw_tables(units)
+    result = reconcile_tables(set(owners), dbt_tables - frozen - keysets)
 
     for raw_table in sorted((frozen - frozen_modeled) & dbt_tables):
         report.add(

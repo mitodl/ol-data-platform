@@ -11,6 +11,10 @@ strategies:
 mirror_max_age_days: 90
 loader: airbyte
 table_prefix: raw__thirdparty__salesforce___destination_v2__
+# Incremental, so raw never drops a row and nothing reads as deleted. Stated
+# for the day a full read replaces it.
+history:
+  absence: deleted
 airbyte:
   source_kind: source-salesforce
   replication_method: n/a

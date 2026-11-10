@@ -1,0 +1,101 @@
+---
+# GENERATED FILE - DO NOT EDIT.
+# Regenerate with `ol-dbt inventory history --write`; CI fails if this file and
+# ingestion/inventory/units/zendesk__api.yml disagree.
+version: 2
+snapshots:
+- name: snapshot_raw__thirdparty__zendesk_support__brands
+  description: >-
+    History of raw__thirdparty__zendesk_support__brands (zendesk/api, table brands):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: zendesk/api
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the zendesk/api brands record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__thirdparty__zendesk_support__organizations
+  description: >-
+    History of raw__thirdparty__zendesk_support__organizations (zendesk/api, table
+    organizations): one row per version of each record, with every source column except
+    the loader's, secret-pattern columns and any the inventory excludes. Resolution
+    is one snapshot run, and history starts at the first run. A record that leaves
+    the source gets a final row with dbt_is_deleted 'True', since every load reads
+    the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: zendesk/api
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the zendesk/api organizations record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__thirdparty__zendesk_support__users
+  description: >-
+    History of raw__thirdparty__zendesk_support__users (zendesk/api, table users):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. Deletes are not recorded: the load is
+    incremental, so raw keeps every record it has seen and nothing tells this table
+    which ones the source has deleted.
+  config:
+    meta:
+      raw_history:
+        unit: zendesk/api
+        absence: deleted
+        delete_capture: none
+  columns:
+  - name: id
+    description: primary key of the zendesk/api users record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.

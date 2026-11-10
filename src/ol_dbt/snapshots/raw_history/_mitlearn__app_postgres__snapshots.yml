@@ -1,0 +1,383 @@
+---
+# GENERATED FILE - DO NOT EDIT.
+# Regenerate with `ol-dbt inventory history --write`; CI fails if this file and
+# ingestion/inventory/units/mitlearn__app_postgres.yml disagree.
+version: 2
+snapshots:
+- name: snapshot_raw__mitlearn__app__postgres__content_feedback_contentfeedback
+  description: >-
+    History of raw__mitlearn__app__postgres__content_feedback_contentfeedback (mitlearn/app_postgres,
+    table content_feedback_contentfeedback): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__mitlearn__app__postgres__content_feedback_contentfeedback__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: mitlearn/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitlearn/app_postgres content_feedback_contentfeedback record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitlearn__app__postgres__learning_resources_learningresourcetopic
+  description: >-
+    History of raw__mitlearn__app__postgres__learning_resources_learningresourcetopic
+    (mitlearn/app_postgres, table learning_resources_learningresourcetopic): one row
+    per version of each record, with every source column except the loader's, secret-pattern
+    columns and any the inventory excludes. Resolution is one snapshot run, and history
+    starts at the first run. A record deleted at the source gets a final row with
+    dbt_is_deleted 'True' once the unit's keyset (raw__mitlearn__app__postgres__learning_resources_learningresourcetopic__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: mitlearn/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitlearn/app_postgres learning_resources_learningresourcetopic
+      record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitlearn__app__postgres__learning_resources_learningresourcetopicmapping
+  description: >-
+    History of raw__mitlearn__app__postgres__learning_resources_learningresourcetopicmapping
+    (mitlearn/app_postgres, table learning_resources_learningresourcetopicmapping):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record deleted at the source gets
+    a final row with dbt_is_deleted 'True' once the unit's keyset (raw__mitlearn__app__postgres__learning_resources_learningresourcetopicmapping__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: mitlearn/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitlearn/app_postgres learning_resources_learningresourcetopicmapping
+      record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitlearn__app__postgres__learning_resources_search_percolatequery
+  description: >-
+    History of raw__mitlearn__app__postgres__learning_resources_search_percolatequery
+    (mitlearn/app_postgres, table learning_resources_search_percolatequery): one row
+    per version of each record, with every source column except the loader's, secret-pattern
+    columns and any the inventory excludes. Resolution is one snapshot run, and history
+    starts at the first run. A record deleted at the source gets a final row with
+    dbt_is_deleted 'True' once the unit's keyset (raw__mitlearn__app__postgres__learning_resources_search_percolatequery__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: mitlearn/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitlearn/app_postgres learning_resources_search_percolatequery
+      record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitlearn__app__postgres__learning_resources_search_percolatequery_users
+  description: >-
+    History of raw__mitlearn__app__postgres__learning_resources_search_percolatequery_users
+    (mitlearn/app_postgres, table learning_resources_search_percolatequery_users):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record deleted at the source gets
+    a final row with dbt_is_deleted 'True' once the unit's keyset (raw__mitlearn__app__postgres__learning_resources_search_percolatequery_users__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: mitlearn/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitlearn/app_postgres learning_resources_search_percolatequery_users
+      record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitlearn__app__postgres__learning_resources_userlist
+  description: >-
+    History of raw__mitlearn__app__postgres__learning_resources_userlist (mitlearn/app_postgres,
+    table learning_resources_userlist): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__mitlearn__app__postgres__learning_resources_userlist__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: mitlearn/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitlearn/app_postgres learning_resources_userlist record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitlearn__app__postgres__learning_resources_userlist_topics
+  description: >-
+    History of raw__mitlearn__app__postgres__learning_resources_userlist_topics (mitlearn/app_postgres,
+    table learning_resources_userlist_topics): one row per version of each record,
+    with every source column except the loader's, secret-pattern columns and any the
+    inventory excludes. Resolution is one snapshot run, and history starts at the
+    first run. A record deleted at the source gets a final row with dbt_is_deleted
+    'True' once the unit's keyset (raw__mitlearn__app__postgres__learning_resources_userlist_topics__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: mitlearn/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitlearn/app_postgres learning_resources_userlist_topics
+      record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitlearn__app__postgres__learning_resources_userlistrelationship
+  description: >-
+    History of raw__mitlearn__app__postgres__learning_resources_userlistrelationship
+    (mitlearn/app_postgres, table learning_resources_userlistrelationship): one row
+    per version of each record, with every source column except the loader's, secret-pattern
+    columns and any the inventory excludes. Resolution is one snapshot run, and history
+    starts at the first run. A record deleted at the source gets a final row with
+    dbt_is_deleted 'True' once the unit's keyset (raw__mitlearn__app__postgres__learning_resources_userlistrelationship__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: mitlearn/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitlearn/app_postgres learning_resources_userlistrelationship
+      record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitlearn__app__postgres__profiles_profile
+  description: >-
+    History of raw__mitlearn__app__postgres__profiles_profile (mitlearn/app_postgres,
+    table profiles_profile): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitlearn/app_postgres
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitlearn/app_postgres profiles_profile record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitlearn__app__postgres__profiles_profile_topic_interests
+  description: >-
+    History of raw__mitlearn__app__postgres__profiles_profile_topic_interests (mitlearn/app_postgres,
+    table profiles_profile_topic_interests): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__mitlearn__app__postgres__profiles_profile_topic_interests__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: mitlearn/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the mitlearn/app_postgres profiles_profile_topic_interests record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__mitlearn__app__postgres__users_user
+  description: >-
+    History of raw__mitlearn__app__postgres__users_user (mitlearn/app_postgres, table
+    users_user): one row per version of each record, with every source column except
+    the loader's, secret-pattern columns and any the inventory excludes. Resolution
+    is one snapshot run, and history starts at the first run. A record that leaves
+    the source gets a final row with dbt_is_deleted 'True', since every load reads
+    the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: mitlearn/app_postgres
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the mitlearn/app_postgres users_user record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.

@@ -142,6 +142,8 @@ def test_code_location_builds() -> None:
         "ol_warehouse_raw_data/raw__youtube__api__playlists",
         "ol_warehouse_raw_data/raw__youtube__api__playlist_items",
         "ol_warehouse_raw_data/raw__youtube__api__videos",
+        "ol_warehouse_raw_data/raw__google_ads__api__keyword_daily",
+        "ol_warehouse_raw_data/raw__google_ads__api__change_events",
         "ol_warehouse_raw_data/raw__edxorg__s3__course_xml_blocks",
         "ol_warehouse_raw_data/raw__edxorg__s3__course_structure_blocks",
         "ol_warehouse_raw_data/raw__openedx__s3__course_xml_blocks",
@@ -165,6 +167,7 @@ def test_schedules_and_sensors_load() -> None:
     assert {s.name for s in _REPO.schedule_defs} >= {
         "oll_ingest_daily_schedule",
         "mitpe_ingest_daily_schedule",
+        "google_ads_ingest_daily_schedule",
         "mit_climate_ingest_daily_schedule",
         "mit_edx_programs_ingest_daily_schedule",
         "podcast_rss_ingest_daily_schedule",
@@ -182,6 +185,7 @@ def test_schedules_and_sensors_load() -> None:
     assert {s.name for s in _REPO.sensor_defs} >= {
         "edxorg_upstream_changes_sensor",
         "ocw_content_publish_sensor",
+        "google_ads_freshness_sensor",
     }
 
 
@@ -445,3 +449,25 @@ def test_tracking_logs_runs_get_the_memory_limit_and_runtime_cap(
     assert container["resources"]["limits"]["memory"] == "16Gi"
     assert container["resources"]["requests"]["memory"] == "2Gi"
     assert tags["dagster/max_runtime"] == str(11 * 60 * 60)
+
+
+def test_google_ads_schedule_selects_every_google_ads_table() -> None:
+    schedule = _REPO.get_schedule_def("google_ads_ingest_daily_schedule")
+    scheduled = {
+        key.to_user_string()
+        for key in _REPO.get_job(schedule.job_name).asset_layer.selected_asset_keys
+    }
+    google_ads_keys = {
+        key.to_user_string()
+        for key in _REPO.assets_defs_by_key
+        if key.path[-1].startswith("raw__google_ads__api__")
+    }
+    assert "ol_warehouse_raw_data/raw__google_ads__api__change_events" in scheduled
+    assert scheduled == google_ads_keys
+
+
+def test_google_ads_change_events_have_a_freshness_check() -> None:
+    key = dg.AssetKey(["ol_warehouse_raw_data", "raw__google_ads__api__change_events"])
+    assert any(
+        check_key.asset_key == key for check_key in _REPO.asset_checks_defs_by_key
+    )

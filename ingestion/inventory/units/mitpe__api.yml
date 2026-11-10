@@ -10,6 +10,10 @@ strategies:
   local: fixture
 loader: dlt
 table_prefix: raw__mitpe__api__
+# Each load pages through the course feed until an empty page, so a course
+# missing from a load has left the feed.
+history:
+  absence: deleted
 dlt:
   source_module: ol_dlt.sources.mitpe
   write_disposition: replace

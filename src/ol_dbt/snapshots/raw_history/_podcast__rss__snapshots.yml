@@ -1,0 +1,64 @@
+---
+# GENERATED FILE - DO NOT EDIT.
+# Regenerate with `ol-dbt inventory history --write`; CI fails if this file and
+# ingestion/inventory/units/podcast__rss.yml disagree.
+version: 2
+snapshots:
+- name: snapshot_raw__podcast__rss__channels
+  description: >-
+    History of raw__podcast__rss__channels (podcast/rss, table raw__podcast__rss__channels):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that stops appearing in the
+    source is not marked deleted (absence: aged_out), because the source only returns
+    its recent records; the table has no dbt_is_deleted column.
+  config:
+    meta:
+      raw_history:
+        unit: podcast/rss
+        absence: aged_out
+        delete_capture: aged_out
+  columns:
+  - name: readable_id
+    description: >-
+      primary key of the podcast/rss raw__podcast__rss__channels record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+- name: snapshot_raw__podcast__rss__episodes
+  description: >-
+    History of raw__podcast__rss__episodes (podcast/rss, table raw__podcast__rss__episodes):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that stops appearing in the
+    source is not marked deleted (absence: aged_out), because the source only returns
+    its recent records; the table has no dbt_is_deleted column.
+  config:
+    meta:
+      raw_history:
+        unit: podcast/rss
+        absence: aged_out
+        delete_capture: aged_out
+  columns:
+  - name: readable_id
+    description: >-
+      primary key of the podcast/rss raw__podcast__rss__episodes record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.

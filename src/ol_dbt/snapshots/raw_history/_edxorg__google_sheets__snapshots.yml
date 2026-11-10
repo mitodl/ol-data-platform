@@ -1,0 +1,41 @@
+---
+# GENERATED FILE - DO NOT EDIT.
+# Regenerate with `ol-dbt inventory history --write`; CI fails if this file and
+# ingestion/inventory/units/edxorg__google_sheets.yml disagree.
+version: 2
+snapshots:
+- name: snapshot_raw__edxorg__program_entitlement
+  description: >-
+    History of raw__edxorg__program_entitlement (edxorg/google_sheets, table raw__edxorg__program_entitlement):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: edxorg/google_sheets
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: Email
+    description: >-
+      primary key of the edxorg/google_sheets raw__edxorg__program_entitlement record.
+  - name: Program Title
+    description: >-
+      primary key of the edxorg/google_sheets raw__edxorg__program_entitlement record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.

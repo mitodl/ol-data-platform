@@ -630,6 +630,17 @@ class TestRemoveDatabaseOrphanFiles:
             glue, lambda: catalog, LocalStore(), **(kwargs | overrides)
         )
 
+    def test_a_delete_run_over_a_history_database_is_refused(
+        self, catalog: SqlCatalog
+    ) -> None:
+        glue = FakeGlue({"ol_warehouse_qa_history": []})
+
+        with pytest.raises(ValueError, match="history layer"):
+            self._run(glue, catalog, database="ol_warehouse_qa_history", delete=True)
+
+        # A report over it is allowed.
+        assert self._run(glue, catalog, database="ol_warehouse_qa_history").tables == []
+
     def test_only_the_named_databases_iceberg_tables_are_examined(
         self, catalog: SqlCatalog
     ) -> None:

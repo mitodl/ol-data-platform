@@ -1,0 +1,202 @@
+---
+# GENERATED FILE - DO NOT EDIT.
+# Regenerate with `ol-dbt inventory history --write`; CI fails if this file and
+# ingestion/inventory/units/ovs__app_postgres.yml disagree.
+version: 2
+snapshots:
+- name: snapshot_raw__ovs__postgres__dj_elastictranscoder_encodejob
+  description: >-
+    History of raw__ovs__postgres__dj_elastictranscoder_encodejob (ovs/app_postgres,
+    table dj_elastictranscoder_encodejob): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__ovs__postgres__dj_elastictranscoder_encodejob__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: ovs/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the ovs/app_postgres dj_elastictranscoder_encodejob record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__ovs__postgres__ui_collection
+  description: >-
+    History of raw__ovs__postgres__ui_collection (ovs/app_postgres, table ui_collection):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record deleted at the source gets
+    a final row with dbt_is_deleted 'True' once the unit's keyset (raw__ovs__postgres__ui_collection__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: ovs/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: primary key of the ovs/app_postgres ui_collection record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__ovs__postgres__ui_collectionedxendpoint
+  description: >-
+    History of raw__ovs__postgres__ui_collectionedxendpoint (ovs/app_postgres, table
+    ui_collectionedxendpoint): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__ovs__postgres__ui_collectionedxendpoint__keyset) has been read; until
+    then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: ovs/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the ovs/app_postgres ui_collectionedxendpoint record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__ovs__postgres__ui_edxendpoint
+  description: >-
+    History of raw__ovs__postgres__ui_edxendpoint (ovs/app_postgres, table ui_edxendpoint):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record deleted at the source gets
+    a final row with dbt_is_deleted 'True' once the unit's keyset (raw__ovs__postgres__ui_edxendpoint__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: ovs/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: primary key of the ovs/app_postgres ui_edxendpoint record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__ovs__postgres__ui_encodejob
+  description: >-
+    History of raw__ovs__postgres__ui_encodejob (ovs/app_postgres, table ui_encodejob):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record deleted at the source gets
+    a final row with dbt_is_deleted 'True' once the unit's keyset (raw__ovs__postgres__ui_encodejob__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: ovs/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: primary key of the ovs/app_postgres ui_encodejob record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__ovs__postgres__ui_video
+  description: >-
+    History of raw__ovs__postgres__ui_video (ovs/app_postgres, table ui_video): one
+    row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record deleted at the source gets
+    a final row with dbt_is_deleted 'True' once the unit's keyset (raw__ovs__postgres__ui_video__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: ovs/app_postgres
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: primary key of the ovs/app_postgres ui_video record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.

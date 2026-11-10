@@ -34,6 +34,7 @@ from ol_dbt_cli.lib.inventory import (
     check_drift,
     check_removals,
     frozen_tables,
+    keyset_raw_tables,
     load_retired,
     load_snapshot,
     load_snapshot_at_ref,
@@ -54,6 +55,7 @@ from ol_dbt_cli.lib.qa_observation import (
     observed_tables,
     render_observation,
 )
+from ol_dbt_cli.lib.raw_history import render_history, stale_history_files, write_history_files
 from ol_dbt_cli.lib.validation import Severity, ValidationIssue, ValidationReport
 from ol_dbt_cli.lib.yaml_registry import collect_source_tables
 
@@ -317,6 +319,49 @@ def keysets(
     sys.exit(1)
 
 
+@inventory_app.command
+def history(
+    *,
+    inventory_dir: Annotated[
+        Path,
+        Parameter(name=["--inventory-dir", "-i"], help="Directory holding units/."),
+    ] = DEFAULT_INVENTORY_DIR,
+    write: Annotated[
+        bool,
+        Parameter(help="Write the files. Without it, check they are current and exit 1 if not."),
+    ] = False,
+) -> None:
+    """Render the raw history snapshots, their docs and the keyset sources.
+
+    Writes one snapshot file and one docs YAML per unit under
+    src/ol_dbt/snapshots/raw_history/ for every table in history scope, the dbt
+    sources of the keyset tables, and the delete-filter map the snapshot macro
+    reads. Every file under raw_history/ is generated, so `--write` deletes one
+    no unit produces any more. Run without `--write` in CI, where a hand edit or
+    an inventory change that was not regenerated fails.
+    """
+    try:
+        repo_root = get_repo_root(inventory_dir if inventory_dir.exists() else Path.cwd())
+        rendered = render_history(load_units(inventory_dir))
+    except (RenderError, RuntimeError) as error:
+        err_console.print(f"[bold red]{escape(str(error))}")
+        sys.exit(1)
+
+    if write:
+        changed = write_history_files(repo_root, rendered)
+        console.print(f"Wrote {len(changed)} file(s); {len(rendered)} generated in all.")
+        return
+
+    stale = stale_history_files(repo_root, rendered)
+    if not stale:
+        console.print(f"{len(rendered)} generated history file(s) are current.")
+        return
+    for path in stale:
+        err_console.print(f"[red]stale: {escape(str(path))}")
+    err_console.print("[bold red]Regenerate with `ol-dbt inventory history --write`.")
+    sys.exit(1)
+
+
 RAW_SOURCE_NAME = "ol_warehouse_raw_data"
 
 
@@ -423,7 +468,8 @@ def reconcile(
         _emit_text(report.issues)
         console.print(
             f"\n[bold]dbt sources:[/] {len(dbt_result.both)} of {len(dbt_tables)} declared raw table(s) map to a unit, "
-            f"{len(dbt_tables & frozen)} to frozen history in {RETIRED_FILENAME}."
+            f"{len(dbt_tables & frozen)} to frozen history in {RETIRED_FILENAME}, "
+            f"{len(dbt_tables & keyset_raw_tables(units))} are keyset tables."
         )
         if warehouse_result is None:
             console.print(

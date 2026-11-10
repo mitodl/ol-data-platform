@@ -586,7 +586,9 @@ def _delete(
         s3,
         "lake-mart-qa",
         prefix,
-        lambda: GlueReferences(tables=referenced, databases=set()),
+        lambda: GlueReferences(
+            tables=referenced, databases=set(), history_buckets=set()
+        ),
         min_age_days=min_age_days,
         now=NOW,
         execute=execute,
@@ -643,3 +645,67 @@ def test_delete_reports_per_key_errors():
     outcome = _delete(s3, f"gone__dbt_tmp-{UUID_B}", set())
 
     assert outcome.errors == [f"{key}: AccessDenied no"]
+
+
+def _with_history(glue: FakeGlue, s3: FakeS3) -> str:
+    """Add a QA history layer holding one live table and one orphan.
+
+    Returns the orphan's prefix: a history table whose Glue entry was dropped.
+    """
+    glue.databases["ol_warehouse_qa_history"] = "s3://lake-history-qa/"
+    # A developer's history schema must not make the staging bucket a history one.
+    glue.databases["ol_warehouse_qa_dev_history"] = (
+        "s3://lake-staging-qa/processed/ol_warehouse_qa_dev_history"
+    )
+    glue.tables["ol_warehouse_qa_history"] = [
+        {"name": "kept", "location": f"s3://lake-history-qa/snapshot_kept-{UUID_A}"}
+    ]
+    s3.objects["lake-history-qa"] = {
+        f"snapshot_kept-{UUID_A}/data/1.parquet": (4, OLD),
+        f"snapshot_dropped-{UUID_B}/data/1.parquet": (8, OLD),
+        f"snapshot_dropped-{UUID_B}/metadata/1.metadata.json": (2, OLD),
+    }
+    return f"snapshot_dropped-{UUID_B}"
+
+
+def test_history_buckets_are_root_located_history_databases_only():
+    glue, s3 = _lake()
+    _with_history(glue, s3)
+
+    assert delete_references(glue).history_buckets == {"lake-history-qa"}
+
+
+def test_delete_refuses_a_history_layer_prefix():
+    glue, s3 = _lake()
+    prefix = _with_history(glue, s3)
+
+    outcome = delete_prefix(
+        s3,
+        "lake-history-qa",
+        prefix,
+        lambda: delete_references(glue),
+        min_age_days=MIN_AGE_DAYS,
+        now=NOW,
+        execute=True,
+    )
+
+    assert (outcome.action, outcome.reason) == ("refused", "history layer bucket")
+    assert f"{prefix}/data/1.parquet" in s3.objects["lake-history-qa"]
+
+
+def test_sweep_reports_a_history_orphan_and_never_deletes_it():
+    glue, s3 = _lake()
+    prefix = _with_history(glue, s3)
+    history_before = dict(s3.objects["lake-history-qa"])
+
+    result = _sweep(glue, s3, delete=True)
+
+    assert [(row["bucket"], row["prefix"]) for row in result.history_orphans] == [
+        ("lake-history-qa", prefix)
+    ]
+    assert not result.history_orphans[0]["eligible"]
+    assert s3.objects["lake-history-qa"] == history_before
+    assert result.outcomes is not None
+    assert "lake-history-qa" not in {o.bucket for o in result.outcomes}
+    # The rest of the warehouse is still swept.
+    assert f"gone__dbt_tmp-{UUID_B}/data/1.parquet" not in s3.objects["lake-mart-qa"]

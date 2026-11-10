@@ -318,6 +318,12 @@ tables:
   primary_key:
   - - id
   modeled: true
+  # extra_data is python-social-auth's JSON, and in production it holds
+  # access_token and refresh_token (257,406 rows, read 2026-11-10). No column
+  # name pattern catches it.
+  history:
+    exclude_columns:
+    - extra_data
 - name: wagtailcore_page
   raw_table: raw__micromasters__app__postgres__wagtailcore_page
   sync_mode: incremental_deduped_history
