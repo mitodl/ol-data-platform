@@ -38,9 +38,10 @@ from ol_orchestrate.lib.lake_orphan_sweep import S3_DELETE_BATCH_SIZE, normalize
 
 app = App(name="history-table-restore")
 
-# Iceberg names a table's metadata files <version>-<uuid>.metadata.json, with a
-# zero-padded version that grows by one per commit.
-METADATA_FILE = re.compile(r"/metadata/(\d+)-[0-9a-f-]+\.metadata\.json$")
+# Iceberg names a table's metadata files <version>-<uuid>[.gz].metadata.json,
+# with a zero-padded version that grows by one per commit.
+METADATA_FILE = re.compile(r"/metadata/(\d+)-[0-9a-f-]+(\.gz)?\.metadata\.json$")
+CANDIDATES_SHOWN = 3
 
 
 @cache
@@ -68,22 +69,11 @@ def undelete(location: str, *, deleted_after: datetime, execute: bool = False) -
         so an object deleted on purpose before the incident stays deleted.
     execute: Without it, print what would be restored and change nothing.
     """
+    if deleted_after.tzinfo is None:
+        msg = f"--deleted-after needs a timezone, e.g. {deleted_after.isoformat()}Z"
+        raise ValueError(msg)
     bucket, prefix = _split(location)
-    markers: list[dict[str, str]] = []
-    older = 0
-    pages = (
-        s3()
-        .get_paginator("list_object_versions")
-        .paginate(Bucket=bucket, Prefix=f"{prefix}/")
-    )
-    for page in pages:
-        for marker in page.get("DeleteMarkers", []):
-            if not marker["IsLatest"]:
-                continue
-            if marker["LastModified"] >= deleted_after:
-                markers.append({"Key": marker["Key"], "VersionId": marker["VersionId"]})
-            else:
-                older += 1
+    markers, older = _latest_markers(bucket, prefix, deleted_after)
     print(
         f"s3://{bucket}/{prefix}/: {len(markers)} objects deleted since "
         f"{deleted_after.isoformat()}, {older} deleted before it (left alone)"
@@ -104,16 +94,60 @@ def undelete(location: str, *, deleted_after: datetime, execute: bool = False) -
         msg = f"{len(errors)} delete markers could not be removed: {errors[:5]}"
         raise RuntimeError(msg)
     print(f"Removed {len(markers)} delete markers.")
+    # An object deleted twice since the cutoff has a second marker under the
+    # first, which is now the latest version.
+    remaining, _ = _latest_markers(bucket, prefix, deleted_after)
+    if remaining:
+        msg = (
+            f"{len(remaining)} objects are still deleted (more than one delete "
+            "marker since the cutoff). Run undelete again."
+        )
+        raise RuntimeError(msg)
+
+
+def _latest_markers(
+    bucket: str, prefix: str, deleted_after: datetime
+) -> tuple[list[dict[str, str]], int]:
+    """Return the latest delete markers since the cutoff, and how many predate it."""
+    markers: list[dict[str, str]] = []
+    older = 0
+    pages = (
+        s3()
+        .get_paginator("list_object_versions")
+        .paginate(Bucket=bucket, Prefix=f"{prefix}/")
+    )
+    for page in pages:
+        for marker in page.get("DeleteMarkers", []):
+            if not marker["IsLatest"]:
+                continue
+            if marker["LastModified"] >= deleted_after:
+                markers.append({"Key": marker["Key"], "VersionId": marker["VersionId"]})
+            else:
+                older += 1
+    return markers, older
 
 
 @app.command
-def register(location: str, *, table: str, execute: bool = False) -> None:
-    """Register a table in Glue from the newest metadata file in its directory.
+def register(
+    location: str,
+    *,
+    table: str,
+    metadata_location: str | None = None,
+    execute: bool = False,
+) -> None:
+    """Register a table in Glue from a metadata file in its directory.
+
+    The newest metadata file is not always the last committed one: a commit that
+    failed after writing its file leaves one Glue never pointed at. The newest
+    few are listed with their write times, to compare with the last snapshot run
+    that succeeded.
 
     Parameters
     ----------
     location: The table directory, s3://<bucket>/<table>-<uuid>.
     table: The Glue identifier to register it as, <database>.<table>.
+    metadata_location: The metadata file to register from. Defaults to the
+        newest, and is required when two files share the newest version.
     execute: Without it, print the metadata file it would use and change nothing.
     """
     bucket, prefix = _split(location)
@@ -122,17 +156,35 @@ def register(location: str, *, table: str, execute: bool = False) -> None:
         .get_paginator("list_objects_v2")
         .paginate(Bucket=bucket, Prefix=f"{prefix}/metadata/")
     )
-    versions = [
-        (int(match.group(1)), obj["Key"])
-        for page in pages
-        for obj in page.get("Contents", [])
-        if (match := METADATA_FILE.search(f"/{obj['Key']}"))
-    ]
+    versions = sorted(
+        (
+            (int(match.group(1)), obj["Key"], obj["LastModified"])
+            for page in pages
+            for obj in page.get("Contents", [])
+            if (match := METADATA_FILE.search(f"/{obj['Key']}"))
+        ),
+        reverse=True,
+    )
     if not versions:
         msg = f"No current metadata file under s3://{bucket}/{prefix}/metadata/"
         raise RuntimeError(msg)
-    metadata_location = f"s3://{bucket}/{max(versions)[1]}"
-    print(f"{table}: newest of {len(versions)} metadata files is {metadata_location}")
+    for version, key, written in versions[:CANDIDATES_SHOWN]:
+        print(
+            f"  version {version}, written {written.isoformat()}: s3://{bucket}/{key}"
+        )
+    if metadata_location is None:
+        tied = len(versions) > 1 and versions[0][0] == versions[1][0]
+        if tied:
+            msg = (
+                f"Two metadata files share version {versions[0][0]}. Pick the "
+                "committed one with --metadata-location."
+            )
+            raise RuntimeError(msg)
+        metadata_location = f"s3://{bucket}/{versions[0][1]}"
+    elif not normalize(metadata_location).startswith(f"{bucket}/{prefix}/metadata/"):
+        msg = f"{metadata_location} is not in s3://{bucket}/{prefix}/metadata/"
+        raise ValueError(msg)
+    print(f"{table}: registering from {metadata_location}")
     if not execute:
         return
     restored = get_glue_catalog().register_table(table, metadata_location)

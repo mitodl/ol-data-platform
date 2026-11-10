@@ -44,7 +44,8 @@ in the history database.
    # check the count, then add --execute
    ```
 
-4. Register the table from the newest metadata file in its directory:
+4. Register the table from its last committed metadata file. Skip this step if the
+   table's Glue entry still exists (only the files were deleted).
 
    ```bash
    uv run python bin/history-table-restore.py register \
@@ -52,17 +53,28 @@ in the history database.
    # check the metadata file, then add --execute
    ```
 
-   It prints the snapshot count, the current snapshot id and the record count. Compare
-   them with what the table held before, e.g. from the last snapshot run's row count.
+   It lists the newest metadata files with their write times and picks the newest. A
+   commit that failed after writing its file leaves a newer file Glue never pointed at,
+   so check that the chosen file's write time matches the last snapshot run that
+   succeeded in Dagster. If it doesn't, or two files share the newest version (the
+   command refuses), pass the right one with `--metadata-location`. After `--execute` it
+   prints the snapshot count, the current snapshot id and the record count. Compare them
+   with what the table held before, e.g. from the last snapshot run's row count.
 5. Read the table from Trino (`select count(*)` and `select * from "<table>$snapshots"`)
    and resume the snapshot.
 
 If a snapshot run recreated the table before step 1, its name is taken and `register`
-fails. Register the old directory as `<table>__restored` first and compare the two.
-The new table holds only the versions captured since the incident. Then drop the new
-table's Glue entry (`aws glue delete-table`, which leaves its files), register the old
-directory under the original name, and delete the new table's directory by hand. The
-sweep reports that directory and fails until it is gone.
+fails. The new table holds the versions captured since the incident, which the old
+table does not have, so keep both:
+
+1. Drop the new table's Glue entry (`aws glue delete-table`, which leaves its files)
+   and register its directory again as `<table>__after_<date>` with `register
+   --metadata-location` set to that table's own last metadata file.
+2. Register the old directory under the original name and resume the snapshot. Its
+   next run compares against raw as of that run, so the changes in between are only in
+   `<table>__after_<date>`.
+3. Merging the two is a separate decision. Until then both stay registered, so the
+   sweep sees neither as an orphan.
 
 ## Rehearsal
 
