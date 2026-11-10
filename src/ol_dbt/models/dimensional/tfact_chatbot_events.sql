@@ -28,19 +28,19 @@ with openedx_events as (
         , {{ json_query_string('useractivity_event_object', "'$.value'") }} as event_value
         , coalesce(
               {{ json_query_string('useractivity_event_object', "'$.thread_id'") }},
-              regexp_extract(
-                  {{ json_query_string('useractivity_event_object', "'$.value'") }},
-                  '"thread_id": "([^"]+)"',
+              {{ regexp_extract_or_null(
+                  json_query_string('useractivity_event_object', "'$.value'"),
+                  "'\"thread_id\": \"([^\"]+)\"'",
                   1
-              )
+              ) }}
          ) AS thread_id
          , coalesce(
               {{ json_query_string('useractivity_event_object', "'$.checkpoint_pk'") }},
-              regexp_extract(
-                  {{ json_query_string('useractivity_event_object', "'$.value'") }},
-                  '"checkpoint_pk": ([0-9]+)',
+              {{ regexp_extract_or_null(
+                  json_query_string('useractivity_event_object', "'$.value'"),
+                  "'\"checkpoint_pk\": ([0-9]+)'",
                   1
-              )
+              ) }}
          ) AS checkpoint_pk
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
         , useractivity_timestamp as event_timestamp_iso8601
@@ -81,19 +81,19 @@ with openedx_events as (
         end as event_value
         , coalesce(
               {{ json_query_string('useractivity_event_object', "'$.thread_id'") }},
-              regexp_extract(
-                  {{ json_query_string('useractivity_event_object', "'$.value'") }},
-                  '"thread_id": "([^"]+)"',
+              {{ regexp_extract_or_null(
+                  json_query_string('useractivity_event_object', "'$.value'"),
+                  "'\"thread_id\": \"([^\"]+)\"'",
                   1
-              )
+              ) }}
          ) AS thread_id
          , coalesce(
               {{ json_query_string('useractivity_event_object', "'$.checkpoint_pk'") }},
-              regexp_extract(
-                  {{ json_query_string('useractivity_event_object', "'$.value'") }},
-                  '"checkpoint_pk": ([0-9]+)',
+              {{ regexp_extract_or_null(
+                  json_query_string('useractivity_event_object', "'$.value'"),
+                  "'\"checkpoint_pk\": ([0-9]+)'",
                   1
-              )
+              ) }}
          ) AS checkpoint_pk
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where

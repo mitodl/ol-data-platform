@@ -22,7 +22,7 @@ with mitxonline_navigation_events as (
         , {{ json_query_string('useractivity_event_object', "'$.target_url'") }} as ending_url
         , case
             when {{ json_query_string('useractivity_event_object', "'$.id'") }} not like 'block-v1%'
-                then regexp_extract({{ json_query_string('useractivity_event_object', "'$.id'") }}, 'block-v1.*')
+                then {{ regexp_extract_or_null(json_query_string('useractivity_event_object', "'$.id'"), "'block-v1.*'") }}
             else {{ json_query_string('useractivity_event_object', "'$.id'") }}
         end as block_id
         , {{ json_query_string('useractivity_event_object', "'$.current_tab'") }} as current_tab
@@ -50,7 +50,7 @@ with mitxonline_navigation_events as (
         , {{ json_query_string('useractivity_event_object', "'$.target_url'") }} as ending_url
         , case
             when {{ json_query_string('useractivity_event_object', "'$.id'") }} not like 'block-v1%'
-                then regexp_extract({{ json_query_string('useractivity_event_object', "'$.id'") }}, 'block-v1.*')
+                then {{ regexp_extract_or_null(json_query_string('useractivity_event_object', "'$.id'"), "'block-v1.*'") }}
             else {{ json_query_string('useractivity_event_object', "'$.id'") }}
         end as block_id
         , {{ json_query_string('useractivity_event_object', "'$.current_tab'") }} as current_tab
@@ -78,7 +78,7 @@ with mitxonline_navigation_events as (
         , {{ json_query_string('useractivity_event_object', "'$.target_url'") }} as ending_url
         , case
             when {{ json_query_string('useractivity_event_object', "'$.id'") }} not like 'block-v1%'
-                then regexp_extract({{ json_query_string('useractivity_event_object', "'$.id'") }}, 'block-v1.*')
+                then {{ regexp_extract_or_null(json_query_string('useractivity_event_object', "'$.id'"), "'block-v1.*'") }}
             else {{ json_query_string('useractivity_event_object', "'$.id'") }}
         end as block_id
         , {{ json_query_string('useractivity_event_object', "'$.current_tab'") }} as current_tab
@@ -106,7 +106,7 @@ with mitxonline_navigation_events as (
         , {{ json_query_string('useractivity_event_object', "'$.target_url'") }} as ending_url
         , case
             when {{ json_query_string('useractivity_event_object', "'$.id'") }} not like 'block-v1%'
-                then regexp_extract({{ json_query_string('useractivity_event_object', "'$.id'") }}, 'block-v1.*')
+                then {{ regexp_extract_or_null(json_query_string('useractivity_event_object', "'$.id'"), "'block-v1.*'") }}
             else {{ json_query_string('useractivity_event_object', "'$.id'") }}
         end as block_id
         , {{ json_query_string('useractivity_event_object', "'$.current_tab'") }} as current_tab
