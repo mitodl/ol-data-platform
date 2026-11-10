@@ -9,6 +9,9 @@
     "every weekend"
   ],
   "timezone": "US/Eastern",
+  "gitIgnoredAuthors": [
+    "114827586+autofix-ci[bot]@users.noreply.github.com"
+  ],
   "pre-commit": {
     "enabled": true
   },
