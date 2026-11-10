@@ -2,14 +2,40 @@ with program_learner_report as (
     select * from {{ ref('stg__edxorg__s3__program_learner_report') }}
 )
 
+, course_grades as (
+    select * from {{ ref('stg__edxorg__s3__courserun_grade') }}
+)
+
+-- When a learner earned a course certificate: the row's created date, or the grade's first
+-- pass when that is later. A row can be created before the pass (edX bulk-created rows
+-- for 2T2021 runs on 2021-06-15..22, which turned downloadable on passing). The first-pass
+-- time is not used when it equals the grade row's creation, which is how grades
+-- backfilled in May 2017 look (e.g. every CTL.SC3x 2T2016 certificate), or when it is
+-- more than a day after the certificate was last modified.
 , course_certificates as (
     select
-        user_id
-        , courserun_readable_id
-        , min(courseruncertificate_created_on) as courseruncertificate_created_on
-    from {{ ref('stg__edxorg__s3__courserun_certificate') }}
-    where courseruncertificate_status = 'downloadable'
-    group by user_id, courserun_readable_id
+        course_certificates.user_id
+        , course_certificates.courserun_readable_id
+        , min(
+            case
+                when
+                    {{ date_diff("'second'", from_iso8601_timestamp("course_certificates.courseruncertificate_created_on"), from_iso8601_timestamp("course_grades.courserungrade_first_passed_on")) }}
+                    > 0
+                    and abs({{ date_diff("'second'", from_iso8601_timestamp("course_grades.courserungrade_created_on"), from_iso8601_timestamp("course_grades.courserungrade_first_passed_on")) }})
+                    > 60
+                    and {{ date_diff("'second'", from_iso8601_timestamp("course_certificates.courseruncertificate_updated_on"), from_iso8601_timestamp("course_grades.courserungrade_first_passed_on")) }}
+                    <= 86400
+                    then {{ cast_timestamp_to_iso8601(from_iso8601_timestamp("course_grades.courserungrade_first_passed_on")) }}
+                else course_certificates.courseruncertificate_created_on
+            end
+        ) as courseruncertificate_earned_on
+    from {{ ref('stg__edxorg__s3__courserun_certificate') }} as course_certificates
+    left join course_grades
+        on
+            course_certificates.user_id = course_grades.user_id
+            and course_certificates.courserun_readable_id = course_grades.courserun_readable_id
+    where course_certificates.courseruncertificate_status = 'downloadable'
+    group by course_certificates.user_id, course_certificates.courserun_readable_id
 )
 
 , completed_program_learners as (
@@ -35,7 +61,7 @@ with program_learner_report as (
 -- runs is mapped to one name by edxorg_course_name_aliases. The report's completed date
 -- follows the course certificate's modified date, which a regeneration moves (e.g.
 -- CTL.SC3x 2T2016 certificates created 2016-11-10 were all modified 2017-04-19), so the
--- certificate's created date is used when it is earlier.
+-- date the certificate was earned is used when it is earlier.
 , course_run_completions as (
     select
         program_learner_report.user_id
@@ -43,8 +69,8 @@ with program_learner_report as (
         , lower(trim({{ regexp_replace_all('program_learner_report.course_title', "'\\s*(\\([^)]*\\))?\\s*\\.?\\s*$'", "''") }}))
             as course_name
         , case
-            when course_certificates.courseruncertificate_created_on < program_learner_report.completed_course_on
-                then course_certificates.courseruncertificate_created_on
+            when course_certificates.courseruncertificate_earned_on < program_learner_report.completed_course_on
+                then course_certificates.courseruncertificate_earned_on
             else program_learner_report.completed_course_on
         end as course_completed_on
     from program_learner_report

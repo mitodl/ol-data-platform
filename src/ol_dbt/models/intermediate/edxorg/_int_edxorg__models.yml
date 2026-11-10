@@ -1008,7 +1008,13 @@ unit_tests:
     course). A completer with no award date keeps none (user 4). A rerun titled
     "(with Proctored Final Exam)" is the same course, so completing it a week
     later does not move completion past the award (user 5). An award with no
-    completed course is kept (user 6).
+    completed course is kept (user 6). A certificate row created before the grade
+    passed is earned at the pass, whether its last modification is the pass (user
+    7)
+    or later (user 9). The pass time is not used when it is more than a day after
+    the
+    certificate's last modification (user 2's second course) or equal to the grade's
+    created time, as the May 2017 grades backfill left it (user 8).
   model: int__edxorg__mitx_program_certificates
   given:
   - input: ref('stg__edxorg__s3__program_learner_report')
@@ -1043,12 +1049,37 @@ unit_tests:
     - {user_id: 6, program_uuid: p, program_type: XSeries, program_title: P, course_title: A,
       courserun_readable_id: a1, user_has_completed_program: true, program_certificate_awarded_on: "2021-03-01T00:00:00.000",
       program_certificate_last_awarded_on: "2021-03-01T00:00:00.000"}
+    - {user_id: 7, program_uuid: p, program_type: XSeries, program_title: P, course_title: A,
+      courserun_readable_id: a1, user_has_completed_program: true, completed_course_on: "2021-08-03T22:41:00.000",
+      program_certificate_awarded_on: "2021-07-01T00:00:00.000", program_certificate_last_awarded_on: "2021-08-05T00:00:00.000"}
+    - {user_id: 8, program_uuid: p, program_type: XSeries, program_title: P, course_title: A,
+      courserun_readable_id: a1, user_has_completed_program: true, completed_course_on: "2017-05-11T15:20:00.000",
+      program_certificate_awarded_on: "2016-11-12T00:00:00.000", program_certificate_last_awarded_on: "2016-11-12T00:00:00.000"}
+    - {user_id: 9, program_uuid: p, program_type: XSeries, program_title: P, course_title: A,
+      courserun_readable_id: a1, user_has_completed_program: true, completed_course_on: "2021-09-10T00:00:00.000",
+      program_certificate_awarded_on: "2021-07-01T00:00:00.000", program_certificate_last_awarded_on: "2021-08-05T00:00:00.000"}
   - input: ref('stg__edxorg__s3__courserun_certificate')
     rows:
     - {user_id: 2, courserun_readable_id: b1, courseruncertificate_status: downloadable,
-      courseruncertificate_created_on: "2016-05-10T00:00:00.000"}
+      courseruncertificate_created_on: "2016-05-10T00:00:00.000", courseruncertificate_updated_on: "2017-04-19T14:20:00.000"}
     - {user_id: 3, courserun_readable_id: c2, courseruncertificate_status: notpassing,
       courseruncertificate_created_on: "2024-11-20T00:00:00.000"}
+    - {user_id: 7, courserun_readable_id: a1, courseruncertificate_status: downloadable,
+      courseruncertificate_created_on: "2021-06-15T20:48:21.000", courseruncertificate_updated_on: "2021-08-03T22:41:00.000"}
+    - {user_id: 8, courserun_readable_id: a1, courseruncertificate_status: downloadable,
+      courseruncertificate_created_on: "2016-11-10T00:00:00.000", courseruncertificate_updated_on: "2017-05-11T15:20:00.000"}
+    - {user_id: 9, courserun_readable_id: a1, courseruncertificate_status: downloadable,
+      courseruncertificate_created_on: "2021-06-15T20:48:21.000", courseruncertificate_updated_on: "2021-09-10T00:00:00.000"}
+  - input: ref('stg__edxorg__s3__courserun_grade')
+    rows:
+    - {user_id: 2, courserun_readable_id: b1, courserungrade_first_passed_on: "2017-05-11T15:20:17.705000000Z",
+      courserungrade_created_on: "2016-04-01T00:00:00.000000000Z"}
+    - {user_id: 7, courserun_readable_id: a1, courserungrade_first_passed_on: "2021-08-03T22:40:53.885000000Z",
+      courserungrade_created_on: "2021-06-20T10:00:00.000000000Z"}
+    - {user_id: 8, courserun_readable_id: a1, courserungrade_first_passed_on: "2017-05-11T15:20:17.705000000Z",
+      courserungrade_created_on: "2017-05-11T15:20:17.705000000Z"}
+    - {user_id: 9, courserun_readable_id: a1, courserungrade_first_passed_on: "2021-08-03T22:40:53.885000000Z",
+      courserungrade_created_on: "2021-06-20T10:00:00.000000000Z"}
   - input: ref('int__micromasters__programs')
     rows: []
   - input: ref('edxorg_course_name_aliases')
@@ -1061,6 +1092,9 @@ unit_tests:
     - {user_id: 4, program_certificate_awarded_on: null}
     - {user_id: 5, program_certificate_awarded_on: "2023-12-10T00:00:00.000"}
     - {user_id: 6, program_certificate_awarded_on: "2021-03-01T00:00:00.000"}
+    - {user_id: 7, program_certificate_awarded_on: "2021-08-05T00:00:00.000"}
+    - {user_id: 8, program_certificate_awarded_on: "2016-11-12T00:00:00.000"}
+    - {user_id: 9, program_certificate_awarded_on: "2021-08-05T00:00:00.000"}
 - name: test_int__edxorg__mitx_program_certificates_counts_only_required_courses
   description: >
     A retake of a course under a title that differs only by a trailing period (user
@@ -1126,6 +1160,8 @@ unit_tests:
       user_has_completed_program: true, completed_course_on: "2020-09-01T00:00:00.000",
       program_certificate_awarded_on: "2020-02-01T00:00:00.000", program_certificate_last_awarded_on: "2020-02-01T00:00:00.000"}
   - input: ref('stg__edxorg__s3__courserun_certificate')
+    rows: []
+  - input: ref('stg__edxorg__s3__courserun_grade')
     rows: []
   - input: ref('int__micromasters__programs')
     rows:
