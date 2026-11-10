@@ -15,10 +15,9 @@
     one. This normalizes the no-match result to NULL on every adapter so `is not null`
     means the same thing everywhere.
 
-    `group` selects a capture group; omitted, the whole match is returned. The same ''
-    divergence also affects the 3-arg `regexp_extract(x, p, n)` calls in
-    tfact_chatbot_events.sql (inside coalesce), tfact_course_navigation_events.sql and
-    stg__edxorg__s3__program_learner_report.sql, which could move onto `group`.
+    `group` selects a capture group; omitted, the whole match is returned. Use this rather
+    than a bare regexp_extract so a non-matching value is NULL on every adapter. On DuckDB
+    and StarRocks a group that matches the empty string also comes back NULL.
   #}
   {{ return(adapter.dispatch('regexp_extract_or_null', 'open_learning')(subject, pattern, group)) }}
 {% endmacro %}

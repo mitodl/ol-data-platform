@@ -66,7 +66,7 @@ select
     , search_page_url
     -- Path only: everything from the host up to the query string or fragment.
     -- `url_extract_path` is Trino-only and this model also compiles on DuckDB.
-    , nullif(regexp_extract(search_page_url, '^https?://[^/]+([^?#]*)', 1), '')
+    , nullif({{ regexp_extract_or_null('search_page_url', "'^https?://[^/]+([^?#]*)'", 1) }}, '')
         as search_page_path
     , search_term_from_event
     , search_term_from_url

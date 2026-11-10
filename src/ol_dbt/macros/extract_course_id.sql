@@ -42,14 +42,16 @@
     ---Output: course_readable_id in course-v1:{org}+{course number} format
     ---Input: courserun_readable_id in course-v1:{org}+{course number}+{run tag} for courses created since Fall 2014,
     --- {org}/{course number}/{run tag} for courses created before Fall 2014
+    {#- dbt.concat, not concat(): DuckDB's concat() skips a NULL argument, so a legacy id
+        that doesn't match would come out as 'course-v1:' instead of NULL. #}
      case
           when {{ courserun_readable_id }} like '%course-v%'
-             then regexp_extract({{ courserun_readable_id }}, 'course-v(\d{1}):([\w\.\-]+)\+([a-zA-Z0-9.-]+)')
+             then {{ regexp_extract_or_null(courserun_readable_id, "'course-v(\\d{1}):([\\w\\.\\-]+)\\+([a-zA-Z0-9.-]+)'") }}
           else
-             concat(
-                  'course-v1:'
-                  , replace(regexp_extract({{ courserun_readable_id }}, '([\w]+)/([a-zA-Z0-9.-]+)'), '/', '+')
-             )
+             {{ dbt.concat([
+                  "'course-v1:'"
+                  , "replace(" ~ regexp_extract_or_null(courserun_readable_id, "'([\\w]+)/([a-zA-Z0-9.-]+)'") ~ ", '/', '+')"
+             ]) }}
       end
 {% endmacro %}
 
