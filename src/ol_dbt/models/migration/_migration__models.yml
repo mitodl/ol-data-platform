@@ -122,6 +122,42 @@ models:
       arguments:
         column_list: ["user_email", "courserun_readable_id", "courseruncertificate_created_on"]
 
+- name: edxorg_to_mitxonline_letter_grades
+  description: >
+    edX.org letter grades for MITx Online course run grades that have no letter
+    grade, such as grades that the edX.org migration created. Excludes grades set
+    by an admin. Used by the MITx Online `migrate_edx_data --type letter_grades` command.
+  config:
+    meta:
+      qa_branches:
+      - micromasters/app_postgres
+      - mitx/mysql
+      - mitxonline/app_postgres
+      - mitxonline/mysql
+      - xpro/app_postgres
+  columns:
+  - name: user_mitxonline_id
+    description: int, foreign key to the users table in the mitxonline database
+    tests:
+    - not_null
+  - name: courserun_id
+    description: int, foreign key to the course runs table in the mitxonline database
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, MITx Online course run readable ID formatted as course-v1:{org}+{course}+{run}
+    tests:
+    - not_null
+  - name: courserungrade_letter_grade
+    description: str, letter grade from the edX.org course grading policy, for example
+      A, B or Pass. Zero-width spaces are removed.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["user_mitxonline_id", "courserun_id"]
+
 
 - name: edxorg_to_mitxonline_users
   description: >
