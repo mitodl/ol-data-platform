@@ -80,7 +80,12 @@ with content as (
         , {{ json_extract_scalar('transcript.element', "'$.file'") }} as transcript_file
         , {{ json_extract_scalar('transcript.element', "'$.language'") }} as transcript_language
     from resources
-    cross join {{ unnest_with_ordinality('resources.video_transcript_entries', 'transcript', 'element', 'idx') }}  -- noqa: PRS
+    cross join {{ unnest_with_ordinality(
+        'resources.video_transcript_entries'
+        , 'transcript'
+        , 'element'
+        , 'idx'
+    ) }}  -- noqa: PRS
     where
         resources.is_video
         and resources.is_current_format

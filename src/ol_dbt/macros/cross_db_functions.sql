@@ -1387,7 +1387,7 @@
     StarRocks unnest_with_ordinality names its array twice):
       , {{ json_extract_json_array('chat_json', "'$.chat_history'") }} as chat_history
       ...
-      cross join {{ unnest_with_ordinality('history.chat_history', 't', 'element', 'idx') }}
+      cross join {{ unnest_with_ordinality('tutorbot_history.chat_history', 't', 'element', 'idx') }}
 #}
 {% macro json_extract_json_array(json_col, json_path) -%}
     {{ adapter.dispatch('json_extract_json_array', 'open_learning')(json_col, json_path) }}
