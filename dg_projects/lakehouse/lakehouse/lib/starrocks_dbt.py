@@ -730,16 +730,16 @@ def stamp_change_log(
 
     Call this only straight after the view's REFRESH succeeds, which is what
     `refresh_materialized_views`' `after_refresh` does. `changed_on` is built
-    to be an inclusive `updated_since` cursor. ol-analytics-api does not read
-    it yet: its b2b_learner_records queries filter `record_updated_on` on
-    mv_b2b_learner and mv_b2b_learner_enrollment and read no change log. A
-    client passes the `as_of` of its previous read, which is the MV's last
-    refresh time. Stamping after the refresh that first exposes a change puts
-    `changed_on` at or after that refresh's finish time, and so at or after
-    every `as_of` the client could hold from before it saw the change. A
-    reader's comparison has to stay inclusive (`>=`) for that to mean the
-    change is never skipped. A source timestamp such as `record_updated_on`
-    can't give this: the change reaches the MV some time after it was made.
+    to be an inclusive `updated_since` cursor. ol-analytics-api reads it as one
+    (tenants/b2b_learner_records/queries.py) and serves `is_deleted` rows as
+    removed records. A client passes the `as_of` of its previous read, which
+    is the MV's last refresh time. Stamping after the refresh that first
+    exposes a change puts `changed_on` at or after that refresh's finish time,
+    and so at or after every `as_of` the client could hold from before it saw
+    the change. A reader's comparison has to stay inclusive (`>=`) for that to
+    mean the change is never skipped. A source timestamp such as
+    `record_updated_on` can't give this: the change reaches the MV some time
+    after it was made.
 
     A view that was not refreshed must not be stamped. `dbt build`
     recreates an MV empty, and an MV whose refresh then fails
