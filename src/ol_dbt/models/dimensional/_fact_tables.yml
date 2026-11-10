@@ -974,9 +974,11 @@ unit_tests:
     - {payment_id: 8, platform: mitxpro, is_successful: false}
 - name: test_tfact_payment_fills_zero_mitxonline_amounts_from_req_amount
   description: >
-    A MITx Online payment takes req_amount only where the app wrote 0. Where the app
-    wrote an amount it stands, even if req_amount disagrees. A zero-dollar order has
-    no req_amount, and stays at 0 rather than going null.
+    A MITx Online payment the processor accepted takes req_amount only where the app
+    wrote 0. Where the app wrote an amount it stands, even if req_amount disagrees.
+    A
+    zero-dollar order has no req_amount, and stays at 0 rather than going null. An
+    attempt the processor did not accept keeps the app's amount.
   model: tfact_payment
   overrides:
     macros:
@@ -985,11 +987,13 @@ unit_tests:
   - input: ref('int__mitxonline__ecommerce_transaction')
     rows:
     - {transaction_id: 1, transaction_amount: 0.00, transaction_payment_amount: 500.00,
-      transaction_created_on: "2024-01-15T00:00:00"}
+      transaction_status: ACCEPT, transaction_created_on: "2024-01-15T00:00:00"}
     - {transaction_id: 2, transaction_amount: 300.00, transaction_payment_amount: 350.00,
-      transaction_created_on: "2024-01-15T00:00:00"}
+      transaction_status: ACCEPT, transaction_created_on: "2024-01-15T00:00:00"}
     - {transaction_id: 3, transaction_amount: 0.00, transaction_payment_amount: null,
-      transaction_created_on: "2024-01-15T00:00:00"}
+      transaction_status: ACCEPT, transaction_created_on: "2024-01-15T00:00:00"}
+    - {transaction_id: 4, transaction_amount: 0.00, transaction_payment_amount: 500.00,
+      transaction_status: DECLINE, transaction_created_on: "2024-01-15T00:00:00"}
   - input: ref('int__mitxpro__ecommerce_receipt')
     rows: []
   - input: ref('stg__mitxonline__app__postgres__ecommerce_order')
@@ -1007,6 +1011,7 @@ unit_tests:
     - {payment_id: 1, transaction_amount: 500.00}
     - {payment_id: 2, transaction_amount: 300.00}
     - {payment_id: 3, transaction_amount: 0.00}
+    - {payment_id: 4, transaction_amount: 0.00}
 - name: test_tfact_payment_repairs_stored_rows_on_a_plain_build
   description: >
     Rows written before a rule changed are behind the created_on watermark, so the

@@ -23,8 +23,11 @@ with mitxonline_payments as (
         , null as user_id
         -- The app wrote 0 on some accepted payments, so those take the processor's
         -- req_amount. Zero-dollar orders have no req_amount and stay at 0.
-        , coalesce(nullif(transaction_amount, 0), transaction_payment_amount, transaction_amount)
-            as transaction_amount
+        , case
+            when transaction_status = 'ACCEPT'
+                then coalesce(nullif(transaction_amount, 0), transaction_payment_amount, transaction_amount)
+            else transaction_amount
+        end as transaction_amount
         , transaction_type
         , transaction_status
         , transaction_payment_method as payment_method
