@@ -438,6 +438,11 @@ def _render_delete_filter_macro(selected: dict[str, list[HistoryTable]]) -> str:
 
 def render_history(units: list[Unit]) -> dict[Path, str]:
     """Render every generated file, keyed by its path relative to the repo root."""
+    if not units:
+        # A wrong --inventory-dir loads nothing, and rendering that would have
+        # --write delete every snapshot file as a leftover.
+        msg = "Found no inventory units, so there is nothing to render. Check --inventory-dir."
+        raise RenderError(msg)
     selected = history_tables(units)
     rendered: dict[Path, str] = {}
     for unit_key, tables in selected.items():
