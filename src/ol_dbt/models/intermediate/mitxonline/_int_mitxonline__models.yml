@@ -572,7 +572,21 @@ models:
     tests:
     - not_null
   - name: product_price
-    description: numeric, the price of the product for order line item
+    data_type: decimal(38,2)
+    description: numeric, the product's price today, which moves when the price changes.
+      Use line_price for the price at purchase.
+    tests:
+    - not_null
+  - name: line_price
+    description: numeric, the list price at purchase, read from the product version
+      on the line. A migrated MicroMasters order (MM- reference number) has no list
+      price, as its version is a $1,000 placeholder from the October 2022 migration,
+      so this is the price paid, matching MicroMasters' own line_price.
+    tests:
+    - not_null
+  - name: line_discounted_unit_price
+    description: numeric, the price of the line after any discount, as recorded at
+      purchase
     tests:
     - not_null
   - name: product_type
@@ -602,14 +616,12 @@ models:
       redemption for the order. It can be percent-off which is <dollar amount>% off,
       dollars-off which is $<dollar amount> off or fixed-price
   - name: discount_amount
-    description: numeric, discount dollar amount off product_price. percent-off is
-      product_price * percentage / 100, dollars-off is the amount capped at product_price,
-      and fixed-price is product_price minus the fixed price, or 0 when the fixed
-      price is above product_price (MITx Online charges the lower of the two). product_price
-      is the product's current price and the discount's current amount, so this is
-      not what the line was charged when either changed after purchase. Null for a
-      paid-amount-off discount, whose amount is resolved at checkout and not stored
-      on the discount.
+    description: numeric, the dollar amount off the line, line_price minus line_discounted_unit_price.
+      It reads what the line was charged, so it holds for every discount type and
+      does not move when a product or a discount changes later. Non-zero on a line
+      with no discount_id when the price was reduced without a redemption, e.g. a
+      discount not yet redeemed on a pending order. Null on a migrated MicroMasters
+      order, which has no list price to subtract from.
   - name: discount_redemption_type
     description: str, one of  "one-time",  "one-time-per-user" and "unlimited"
   - name: discount_id
@@ -2944,74 +2956,61 @@ unit_tests:
       programrequirement_is_required: false, programrequirement_is_a_nested_requirement: false,
       programrequirement_parent_requirement_id: null, course_order_in_program: 3}
 
-- name: test_int__mitxonline__ecommerce_order_discount_amount_is_dollars_off
+- name: test_int__mitxonline__ecommerce_order_measures_lines_from_the_price_at_purchase
   description: >
-    discount_amount is the dollar amount taken off product_price for every discount
-    type. A fixed-price discount's stored amount is the price the learner pays, so
-    the amount off is product_price minus it, and 0 when it is above product_price,
-    as MITx Online charges the lower of the two. dollars-off cannot take more than
-    product_price off, as MITx Online charges max(0, price - amount).
+    line_price is the product version's price, not the product's price today, and
+    discount_amount is line_price minus what the line was charged, whatever the
+    discount's type or its amount today. The product now costs 2000.00. Line 1 was
+    sold at 1000.00 with no discount, line 2 at 1000.00 for 750.00 on a discount now
+    worth 50%, and line 3 at 900.00 for 300.00 on a fixed-price discount now at 200.00.
+    Line 4 is a migrated MicroMasters order, whose version price is not a list price,
+    so it carries the 300.00 it paid and no amount off.
   model: int__mitxonline__ecommerce_order
   given:
   - input: ref('stg__mitxonline__app__postgres__ecommerce_line')
     rows:
-    - {line_id: 1, order_id: 1, product_version_id: 100}
-    - {line_id: 2, order_id: 2, product_version_id: 100}
-    - {line_id: 3, order_id: 3, product_version_id: 100}
-    - {line_id: 4, order_id: 4, product_version_id: 100}
-    - {line_id: 5, order_id: 5, product_version_id: 100}
-    - {line_id: 6, order_id: 6, product_version_id: 100}
-    - {line_id: 7, order_id: 7, product_version_id: 100}
-    - {line_id: 8, order_id: 8, product_version_id: 100}
+    - {line_id: 1, order_id: 1, product_version_id: 100, line_discounted_unit_price: 1000.00}
+    - {line_id: 2, order_id: 2, product_version_id: 100, line_discounted_unit_price: 750.00}
+    - {line_id: 3, order_id: 3, product_version_id: 101, line_discounted_unit_price: 300.00}
+    - {line_id: 4, order_id: 4, product_version_id: 100, line_discounted_unit_price: 300.00}
   - input: ref('stg__mitxonline__app__postgres__django_contenttype')
     rows:
     - {contenttype_id: 9, contenttype_full_name: ecommerce_product}
   - input: ref('stg__mitxonline__app__postgres__reversion_version')
     rows:
-    - {version_id: 100, version_object_id: 50, contenttype_id: 9}
+    - version_id: 100
+      version_object_id: 50
+      contenttype_id: 9
+      version_object_serialized_data: '[{"fields": {"price": "1000.00"}}]'
+    - version_id: 101
+      version_object_id: 50
+      contenttype_id: 9
+      version_object_serialized_data: '[{"fields": {"price": "900.00"}}]'
   - input: ref('stg__mitxonline__app__postgres__ecommerce_order')
     rows:
     - {order_id: 1, order_state: fulfilled, order_purchaser_user_id: 7}
     - {order_id: 2, order_state: fulfilled, order_purchaser_user_id: 7}
     - {order_id: 3, order_state: fulfilled, order_purchaser_user_id: 7}
-    - {order_id: 4, order_state: fulfilled, order_purchaser_user_id: 7}
-    - {order_id: 5, order_state: fulfilled, order_purchaser_user_id: 7}
-    - {order_id: 6, order_state: fulfilled, order_purchaser_user_id: 7}
-    - {order_id: 7, order_state: fulfilled, order_purchaser_user_id: 7}
-    - {order_id: 8, order_state: fulfilled, order_purchaser_user_id: 7}
+    - {order_id: 4, order_state: fulfilled, order_purchaser_user_id: 7, order_reference_number: MM-prod-4}
   - input: ref('int__mitxonline__users')
     rows:
     - {user_id: 7}
   - input: ref('int__mitxonline__ecommerce_product')
     rows:
-    - {product_id: 50, product_price: 1000.00}
+    - {product_id: 50, product_price: 2000.00}
   - input: ref('stg__mitxonline__app__postgres__ecommerce_discount')
     rows:
-    - {discount_id: 11, discount_type: percent-off, discount_amount: 25.00}
-    - {discount_id: 12, discount_type: dollars-off, discount_amount: 150.00}
-    - {discount_id: 13, discount_type: dollars-off, discount_amount: 1500.00}
-    - {discount_id: 14, discount_type: fixed-price, discount_amount: 300.00}
-    - {discount_id: 15, discount_type: fixed-price, discount_amount: 1200.00}
-    - {discount_id: 16, discount_type: percent-off, discount_amount: 12.50000}
-    - {discount_id: 17, discount_type: paid-amount-off, discount_amount: 0.00000}
+    - {discount_id: 11, discount_type: percent-off, discount_amount: 50.00}
+    - {discount_id: 12, discount_type: fixed-price, discount_amount: 200.00}
   - input: ref('stg__mitxonline__app__postgres__ecommerce_discountredemption')
     rows:
-    - {order_id: 1, discount_id: 11, discountredemption_timestamp: '2026-01-01T00:00:00'}
-    - {order_id: 2, discount_id: 12, discountredemption_timestamp: '2026-01-01T00:00:00'}
-    - {order_id: 3, discount_id: 13, discountredemption_timestamp: '2026-01-01T00:00:00'}
-    - {order_id: 4, discount_id: 14, discountredemption_timestamp: '2026-01-01T00:00:00'}
-    - {order_id: 6, discount_id: 15, discountredemption_timestamp: '2026-01-01T00:00:00'}
-    - {order_id: 7, discount_id: 16, discountredemption_timestamp: '2026-01-01T00:00:00'}
-    - {order_id: 8, discount_id: 17, discountredemption_timestamp: '2026-01-01T00:00:00'}
+    - {order_id: 2, discount_id: 11, discountredemption_timestamp: '2026-01-01T00:00:00'}
+    - {order_id: 3, discount_id: 12, discountredemption_timestamp: '2026-01-01T00:00:00'}
   - input: ref('int__mitxonline__ecommerce_transaction')
     rows: []
   expect:
     rows:
-    - {line_id: 1, discount_amount: 250.00}
-    - {line_id: 2, discount_amount: 150.00}
-    - {line_id: 3, discount_amount: 1000.00}
-    - {line_id: 4, discount_amount: 700.00}
-    - {line_id: 5, discount_amount: null}
-    - {line_id: 6, discount_amount: 0.00}
-    - {line_id: 7, discount_amount: 125.00}
-    - {line_id: 8, discount_amount: null}
+    - {line_id: 1, product_price: 2000.00, line_price: 1000.00, discount_amount: 0.00}
+    - {line_id: 2, product_price: 2000.00, line_price: 1000.00, discount_amount: 250.00}
+    - {line_id: 3, product_price: 2000.00, line_price: 900.00, discount_amount: 600.00}
+    - {line_id: 4, product_price: 2000.00, line_price: 300.00, discount_amount: null}

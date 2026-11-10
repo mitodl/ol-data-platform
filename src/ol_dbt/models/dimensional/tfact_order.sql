@@ -2,13 +2,33 @@
     materialized='incremental',
     unique_key='order_key',
     incremental_strategy='delete+insert',
-    on_schema_change='append_new_columns'
+    on_schema_change='append_new_columns',
+    post_hook="delete from {{ this }}
+    where platform = 'micromasters'
+    and order_id in (
+        select order_id
+        from {{ ref('int__micromasters__orders') }}
+        where order_is_migrated_to_mitxonline
+    )"
 ) }}
 
+{#- The first incremental run after discount_amount is added reads a target without the column.
+    In a unit test `this` is the fixture's name, a string, which always has it. -#}
+{%- set target_has_discount_amount = false -%}
+{%- if is_incremental() and this is string -%}
+    {%- set target_has_discount_amount = true -%}
+{%- elif is_incremental() -%}
+    {%- set target_columns = adapter.get_columns_in_relation(this) | map(attribute='name') | map('lower') | list -%}
+    {%- set target_has_discount_amount = 'discount_amount' in target_columns -%}
+{%- endif %}
+
+-- The post_hook deletes MicroMasters orders counted under mitxonline, which delete+insert
+-- would otherwise keep: it only deletes keys the run selects.
 -- E-commerce order line fact table. Grain: one row per (order_id, line_id, platform).
 -- All source models are natively at line grain (one product per line).
 -- order_total_price_paid is a repeated order-header value — NOT additive across lines
--- of the same order. Use line_price for revenue aggregations.
+-- of the same order. line_price is the list price at purchase; subtract discount_amount
+-- for what the line was charged.
 with mitxonline_orders as (
     -- int__mitxonline__ecommerce_order grain: (order_id, line_id)
     select
@@ -16,7 +36,8 @@ with mitxonline_orders as (
         , order_id
         , user_id
         , product_id
-        , product_price as line_price
+        , line_price
+        , discount_amount
         , order_state
         , order_total_price_paid
           --- placeholder for tax information on MITx Online orders, which is not currently implemented.
@@ -30,12 +51,7 @@ with mitxonline_orders as (
         , 'mitxonline' as platform
         , discount_id
         , discount_code
-        , case
-            when discount_amount_text like 'Fixed Price: 0%' then 'free'
-            when substr(discount_amount_text, length(discount_amount_text), 1) = '%' then 'percentage'
-            when substr(discount_amount_text, 1, 1) = '$' then 'fixed_amount'
-            else null
-          end as discount_type_code
+        , line_discounted_unit_price as line_price_paid
     from {{ ref('int__mitxonline__ecommerce_order') }}
 )
 
@@ -48,6 +64,9 @@ with mitxonline_orders as (
         , orders.order_purchaser_user_id as user_id
         , lines.product_id
         , lines.product_price as line_price
+        -- Every multi-line xPRO order has a total of 0, so the header total is each line's
+        -- price paid (assert_xpro_multi_line_orders_paid_nothing warns if that changes)
+        , lines.product_price - orders.order_total_price_paid as discount_amount
         , orders.order_state
         , orders.order_total_price_paid
         , orders.order_total_price_paid_plus_tax
@@ -60,11 +79,7 @@ with mitxonline_orders as (
         , 'mitxpro' as platform
         , orders.coupon_id as discount_id
         , orders.coupon_code as discount_code
-        , case
-            when orders.couponpaymentversion_discount_type = 'percent-off' then 'percentage'
-            when orders.couponpaymentversion_discount_type = 'dollars-off' then 'fixed_amount'
-            else null
-          end as discount_type_code
+        , orders.order_total_price_paid as line_price_paid
     from {{ ref('int__mitxpro__ecommerce_order') }} as orders
     inner join {{ ref('int__mitxpro__ecommerce_line') }} as lines
         on orders.order_id = lines.order_id
@@ -79,6 +94,7 @@ with mitxonline_orders as (
         , order_purchaser_user_id as user_id
         , cast(null as bigint) as product_id  -- no dim_product coverage for bootcamps
         , line_price
+        , cast(null as decimal(38, 2)) as discount_amount
         , order_state
         , order_total_price_paid
         , order_total_price_paid as order_total_price_paid_plus_tax
@@ -91,7 +107,7 @@ with mitxonline_orders as (
         , 'bootcamps' as platform
         , cast(null as bigint) as discount_id
         , cast(null as varchar) as discount_code
-        , cast(null as varchar) as discount_type_code
+        , order_total_price_paid as line_price_paid
     from {{ ref('int__bootcamps__ecommerce_order') }}
 )
 
@@ -103,6 +119,7 @@ with mitxonline_orders as (
         , user_id
         , cast(null as bigint) as product_id  -- no dim_product coverage for micromasters
         , line_price
+        , cast(null as decimal(38, 2)) as discount_amount  -- line_price is already post-coupon
         , order_state
         , order_total_price_paid
         , order_total_price_paid as order_total_price_paid_plus_tax
@@ -115,8 +132,10 @@ with mitxonline_orders as (
         , 'micromasters' as platform
         , coupon_id as discount_id
         , coupon_code as discount_code
-        , null as discount_type_code
+        , order_total_price_paid as line_price_paid
     from {{ ref('int__micromasters__orders') }}
+    -- counted under mitxonline
+    where not order_is_migrated_to_mitxonline
 )
 
 , combined_orders as (
@@ -157,7 +176,7 @@ with mitxonline_orders as (
 )
 
 , dim_discount as (
-    select discount_pk, source_discount_id, platform_code
+    select discount_pk, source_discount_id, platform_code, discount_type_code
     from {{ ref('dim_discount') }}
 )
 
@@ -205,14 +224,19 @@ with mitxonline_orders as (
         and combined_orders.user_id = ul_micromasters.micromasters_user_id
     left join dim_platform_lookup
         on combined_orders.platform = dim_platform_lookup.platform_readable_id
-    left join dim_discount_type
-        on combined_orders.discount_type_code = dim_discount_type.discount_type_code
-    left join dim_product
-        on cast(combined_orders.product_id as varchar) = cast(dim_product.source_product_id as varchar)
-        and combined_orders.platform = dim_product.platform
     left join dim_discount
         on combined_orders.discount_id = dim_discount.source_discount_id
         and combined_orders.platform = dim_discount.platform_code
+    -- free describes the line, not the discount, so a 100% discount and a fixed price
+    -- of 0 count the same way
+    left join dim_discount_type
+        on case
+            when combined_orders.line_price_paid = 0 then 'free'
+            else dim_discount.discount_type_code
+        end = dim_discount_type.discount_type_code
+    left join dim_product
+        on cast(combined_orders.product_id as varchar) = cast(dim_product.source_product_id as varchar)
+        and combined_orders.platform = dim_product.platform
     left join dim_tax_rate
         on combined_orders.order_tax_country_code = dim_tax_rate.country_code
 )
@@ -232,10 +256,15 @@ with mitxonline_orders as (
 -- change, so the activity-timestamp watermark alone would never catch it). One row per
 -- key: a key a past run wrote twice would otherwise match each source row twice and be
 -- written twice again. It is re-selected instead, so delete+insert leaves one copy.
+-- The stored measures do the same job for a rule change, which the watermark can't see.
 , stale_user_fk_lookup as (
     select
         order_key
         , max(user_fk) as stored_user_fk
+        , max(line_price) as stored_line_price
+        , max(discount_type_fk) as stored_discount_type_fk
+        , {% if target_has_discount_amount %}max(discount_amount){% else %}cast(null as decimal(38, 2)){% endif %}
+            as stored_discount_amount
         , count(*) > 1 as stored_has_copies
     from {{ this }}
     group by order_key
@@ -261,6 +290,7 @@ with mitxonline_orders as (
         , owf.platform
         , owf.order_state
         , owf.line_price
+        , owf.discount_amount
         , owf.order_total_price_paid
         , owf.tax_rate_fk
         , owf.order_total_price_paid_plus_tax
@@ -287,6 +317,10 @@ with mitxonline_orders as (
         or owf.order_updated_on is null
         -- dim_user re-key: re-select rows whose resolved user_fk no longer matches the target
         or sufk.stored_user_fk is distinct from owf.user_fk
+        -- a price or discount rule changed, including every row on the run that adds discount_amount
+        or sufk.stored_line_price is distinct from owf.line_price
+        or sufk.stored_discount_type_fk is distinct from owf.discount_type_fk
+        or sufk.stored_discount_amount is distinct from owf.discount_amount
         or sufk.stored_has_copies
     )
     {% endif %}
@@ -309,6 +343,7 @@ select
     , platform
     , order_state
     , line_price
+    , discount_amount
     , order_total_price_paid
     , tax_rate_fk
     , order_total_price_paid_plus_tax

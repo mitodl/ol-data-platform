@@ -286,7 +286,11 @@ models:
     Transaction fact table for e-commerce order lines across platforms.
     Grain: one row per (order_id, line_id, platform) — one line per product ordered.
     order_total_price_paid is a repeated order-header value and is NOT additive across
-    lines of the same order. Use line_price for revenue aggregations.
+    lines of the same order. line_price is the list price at purchase, so subtract
+    discount_amount for what a line was charged. A MicroMasters order migrated to
+    MITx
+    Online appears once, under mitxonline. The copy keeps the original order date
+    but not the order's coupon.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
@@ -390,12 +394,24 @@ models:
     tests:
     - not_null
   - name: line_price
-    description: Price of the product on this line (additive revenue measure)
+    description: >
+      List price of the product at purchase, additive across lines. MITx Online and
+      xPRO read the product version on the line. MicroMasters records only the price
+      after any coupon, so its line_price is what the line paid, and that holds for
+      a
+      migrated MicroMasters order under mitxonline too.
+  - name: discount_amount
+    description: >
+      Dollar amount off the line, line_price minus what the line was charged. Null
+      for Bootcamps, which has no modeled discounts, and for MicroMasters, including
+      an order migrated to mitxonline, which has no list price to subtract from.
+      Non-zero on a MITx Online line with no discount when the price was reduced
+      without a redemption, e.g. an unredeemed discount on a pending order.
   - name: order_total_price_paid
     description: >
       Total amount paid for the entire order. Repeated across all lines of the same
       order —
-      NOT additive across lines. Use line_price for revenue aggregations.
+      NOT additive across lines.
   - name: order_total_price_paid_plus_tax
     description: >
       Total amount paid for the entire order plus tax. Repeated across all lines of
@@ -418,13 +434,18 @@ models:
   - name: order_updated_on
     description: Order last update timestamp (for incremental processing)
   - name: discount_type_fk
-    description: Foreign key to dim_discount_type; null when no discount was applied
-      to this order line
+    description: >
+      Foreign key to dim_discount_type. free on any line whose price paid is 0, with
+      or without a discount. Otherwise the mechanism of the line's discount, from
+      dim_discount.discount_type_code. Null when the line paid something and has no
+      discount, or a discount with no code (paid-amount-off).
 
 - name: tfact_payment
   description: >
     Transaction fact table for payments/transactions.
-    Grain: One row per payment transaction.
+    Grain: One row per payment transaction, including every attempt the processor
+    did not accept. is_successful marks the attempts it accepted. Summing payments
+    takes is_successful and transaction_type together, as refunds are rows here too.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
@@ -499,11 +520,38 @@ models:
         field: payment_method_pk
         where: "payment_method_fk is not null"
   - name: transaction_amount
-    description: Transaction amount (additive measure)
+    description: >
+      Transaction amount (additive measure). xPRO reads the processor's req_amount.
+      MITx Online reads the app's amount, and req_amount where the app wrote 0.
   - name: transaction_type
     description: Type of transaction (payment, refund, etc.)
   - name: transaction_status
-    description: Transaction status (success, failed, pending)
+    description: >
+      The payment processor's decision, e.g. ACCEPT, CANCEL, DECLINE, ERROR, REVIEW.
+      Null on MITx Online's zero-dollar payments, which never reach the processor,
+      and on
+      most of its refunds. 100 is CyberSource's reason code for success, which
+      mitol-payment-gateway writes as the decision on a payment recovered through
+      CyberSource's transaction details API rather than the checkout callback.
+  - name: is_successful
+    tests:
+    # A null here is a row the incremental filter failed to repair, and readers filter
+    # on the flag, so one row fails the build and stops them.
+    - not_null:
+        config:
+          error_if: "!=0"
+    description: >
+      True when the processor's decision is ACCEPT, and false for anything else,
+      including no decision. It describes the attempt, not money received, in two
+      ways.
+      A refund the processor accepted is true and stored with a positive amount, so
+      a
+      sum of payments also filters on transaction_type. And a MITx Online payment
+      recorded without an ACCEPT is false even on a fulfilled order, e.g. a decision
+      of
+      100. REVIEW is not successful: no REVIEW attempt on either platform has an accepted
+      payment on its order, and the orders end failed or canceled, or are still in
+      review.
   - name: transaction_created_on
     description: Transaction creation timestamp (for incremental processing)
 
@@ -876,6 +924,150 @@ unit_tests:
       transaction_type: "payment"
       transaction_status: "fulfilled"
       transaction_created_on: "2024-01-15T00:00:00"
+- name: test_tfact_payment_flags_accepted_attempts_as_successful
+  description: >
+    tfact_payment keeps every attempt, and is_successful marks the ones the processor
+    accepted. REVIEW is not successful, and a MITx Online zero-dollar payment with
+    no
+    decision is false, not null, so filtering on the flag needs no null handling.
+  model: tfact_payment
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__ecommerce_transaction')
+    rows:
+    - {transaction_id: 1, transaction_type: payment, transaction_status: ACCEPT, transaction_created_on: "2024-01-15T00:00:00"}
+    - {transaction_id: 2, transaction_type: payment, transaction_status: REVIEW, transaction_created_on: "2024-01-15T00:00:00"}
+    - {transaction_id: 3, transaction_type: payment, transaction_status: null, transaction_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__mitxpro__ecommerce_receipt')
+    rows:
+    - {receipt_id: 4, receipt_transaction_type: sale, receipt_transaction_status: ACCEPT,
+      receipt_created_on: "2024-01-15T00:00:00"}
+    - {receipt_id: 5, receipt_transaction_type: sale, receipt_transaction_status: CANCEL,
+      receipt_created_on: "2024-01-15T00:00:00"}
+    - {receipt_id: 6, receipt_transaction_type: sale, receipt_transaction_status: DECLINE,
+      receipt_created_on: "2024-01-15T00:00:00"}
+    - {receipt_id: 7, receipt_transaction_type: sale, receipt_transaction_status: ERROR,
+      receipt_created_on: "2024-01-15T00:00:00"}
+    - {receipt_id: 8, receipt_transaction_type: sale, receipt_transaction_status: REVIEW,
+      receipt_created_on: "2024-01-15T00:00:00"}
+  - input: ref('stg__mitxonline__app__postgres__ecommerce_order')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__ecommerce_order')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: ref('dim_payment_method')
+    rows: []
+  expect:
+    rows:
+    - {payment_id: 1, platform: mitxonline, is_successful: true}
+    - {payment_id: 2, platform: mitxonline, is_successful: false}
+    - {payment_id: 3, platform: mitxonline, is_successful: false}
+    - {payment_id: 4, platform: mitxpro, is_successful: true}
+    - {payment_id: 5, platform: mitxpro, is_successful: false}
+    - {payment_id: 6, platform: mitxpro, is_successful: false}
+    - {payment_id: 7, platform: mitxpro, is_successful: false}
+    - {payment_id: 8, platform: mitxpro, is_successful: false}
+- name: test_tfact_payment_fills_zero_mitxonline_amounts_from_req_amount
+  description: >
+    A MITx Online payment the processor accepted takes req_amount only where the app
+    wrote 0. Where the app wrote an amount it stands, even if req_amount disagrees.
+    A
+    zero-dollar order has no req_amount, and stays at 0 rather than going null. An
+    attempt the processor did not accept keeps the app's amount.
+  model: tfact_payment
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__ecommerce_transaction')
+    rows:
+    - {transaction_id: 1, transaction_amount: 0.00, transaction_payment_amount: 500.00,
+      transaction_status: ACCEPT, transaction_created_on: "2024-01-15T00:00:00"}
+    - {transaction_id: 2, transaction_amount: 300.00, transaction_payment_amount: 350.00,
+      transaction_status: ACCEPT, transaction_created_on: "2024-01-15T00:00:00"}
+    - {transaction_id: 3, transaction_amount: 0.00, transaction_payment_amount: null,
+      transaction_status: ACCEPT, transaction_created_on: "2024-01-15T00:00:00"}
+    - {transaction_id: 4, transaction_amount: 0.00, transaction_payment_amount: 500.00,
+      transaction_status: DECLINE, transaction_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__mitxpro__ecommerce_receipt')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__ecommerce_order')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__ecommerce_order')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: ref('dim_payment_method')
+    rows: []
+  expect:
+    rows:
+    - {payment_id: 1, transaction_amount: 500.00}
+    - {payment_id: 2, transaction_amount: 300.00}
+    - {payment_id: 3, transaction_amount: 0.00}
+    - {payment_id: 4, transaction_amount: 0.00}
+- name: test_tfact_payment_repairs_stored_rows_on_a_plain_build
+  description: >
+    Rows written before a rule changed are behind the created_on watermark, so the
+    incremental filter has to find them. A row with no is_successful, or an amount
+    that no longer matches, is re-selected and rewritten, which is what lets a plain
+    dbt build deploy these columns with no full refresh. A row that already matches
+    is left alone.
+  model: tfact_payment
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__ecommerce_transaction')
+    rows:
+    - {transaction_id: 1, transaction_amount: 900.00, transaction_type: payment, transaction_status: ACCEPT,
+      transaction_created_on: "2024-01-15T00:00:00"}
+    - {transaction_id: 2, transaction_amount: 0.00, transaction_payment_amount: 500.00,
+      transaction_type: payment, transaction_status: ACCEPT, transaction_created_on: "2024-01-15T00:00:00"}
+    - {transaction_id: 3, transaction_amount: 900.00, transaction_type: payment, transaction_status: ACCEPT,
+      transaction_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__mitxpro__ecommerce_receipt')
+    rows: []
+  - input: ref('stg__mitxonline__app__postgres__ecommerce_order')
+    rows: []
+  - input: ref('stg__mitxpro__app__postgres__ecommerce_order')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: ref('dim_payment_method')
+    rows: []
+  - input: this
+    rows:
+    - payment_key: "1b16c8768900a8d2fb97398ef90eb5f9"  # pragma: allowlist secret
+      payment_id: 1
+      platform: mitxonline
+      transaction_amount: 900.00
+      is_successful:
+      transaction_created_on: "2024-01-15T00:00:00"
+    - payment_key: "a9361ca8be319129734a0845d02580d1"  # pragma: allowlist secret
+      payment_id: 2
+      platform: mitxonline
+      transaction_amount: 0.00
+      is_successful: true
+      transaction_created_on: "2024-01-15T00:00:00"
+    - payment_key: "1e614ca8f988484a59e0ed224b649893"  # pragma: allowlist secret
+      payment_id: 3
+      platform: mitxonline
+      transaction_amount: 900.00
+      is_successful: true
+      transaction_created_on: "2024-01-15T00:00:00"
+  expect:
+    rows:
+    - {payment_id: 1, transaction_amount: 900.00, is_successful: true}
+    - {payment_id: 2, transaction_amount: 500.00, is_successful: true}
 - name: test_tfact_certificate_refreshes_stale_user_fk_after_dim_user_rekey
   description: >
     Regression test for the dim_user re-key incident: when dim_user.user_pk changes
@@ -2534,7 +2726,7 @@ unit_tests:
     - line_id: 1
       order_id: 9001
       user_id: 555
-      product_price: 100.00
+      line_price: 100.00
       order_state: "fulfilled"
       order_total_price_paid: 100.00
       order_reference_number: "REF1"
@@ -2609,6 +2801,253 @@ unit_tests:
       order_total_price_paid: 100.00
       order_reference_number: "REF1"
       order_updated_on: "2024-01-15T00:00:00"
+- name: test_tfact_order_measures_lines_from_the_price_at_purchase
+  description: >
+    line_price is the price at purchase and discount_amount is what came off it.
+    A MITx Online line takes both from the intermediate order, not from the product's
+    price today. An xPRO line subtracts the order's total from the version price.
+    A
+    MicroMasters line has no list price to subtract from, and Bootcamps has no modeled
+    discounts.
+  model: tfact_order
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows:
+    - {line_id: 1, order_id: 1, product_price: 2000.00, line_price: 1000.00, discount_amount: 250.00,
+      order_total_price_paid: 750.00, order_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__mitxpro__ecommerce_order')
+    rows:
+    - {order_id: 2, order_total_price_paid: 800.00, order_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__mitxpro__ecommerce_line')
+    rows:
+    - {line_id: 2, order_id: 2, product_price: 1000.00}
+  - input: ref('int__bootcamps__ecommerce_order')
+    rows:
+    - {line_id: 3, order_id: 3, line_price: 1000.00, order_total_price_paid: 1000.00,
+      order_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__micromasters__orders')
+    rows:
+    - {line_id: 4, order_id: 4, line_price: 500.00, order_total_price_paid: 500.00,
+      order_is_migrated_to_mitxonline: false, order_created_on: "2024-01-15T00:00:00"}
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_discount_type')
+    rows: []
+  - input: ref('dim_product')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: ref('dim_discount')
+    rows: []
+  - input: ref('dim_tax_rate')
+    rows: []
+  expect:
+    rows:
+    - {platform: mitxonline, line_id: "1", line_price: 1000.00, discount_amount: 250.00}
+    - {platform: mitxpro, line_id: "2", line_price: 1000.00, discount_amount: 200.00}
+    - {platform: bootcamps, line_id: "3", line_price: 1000.00, discount_amount: null}
+    - {platform: micromasters, line_id: "4", line_price: 500.00, discount_amount: null}
+- name: test_tfact_order_classifies_lines_by_discount_type
+  description: >
+    A line takes its discount's mechanism from dim_discount, on every platform, and
+    any line that paid 0 is free, whether by a 100% discount, a fixed price of 0 or
+    no discount at all. A paid line with no discount or an unmapped one has no type.
+  model: tfact_order
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows:
+    - {line_id: 1, order_id: 1, discount_id: 11, line_discounted_unit_price: 750.00,
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 2, order_id: 2, discount_id: 12, line_discounted_unit_price: 800.00,
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 3, order_id: 3, discount_id: 13, line_discounted_unit_price: 300.00,
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 4, order_id: 4, discount_id: 13, line_discounted_unit_price: 0.00,
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 5, order_id: 5, discount_id: 11, line_discounted_unit_price: 0.00,
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 6, order_id: 6, discount_id: 14, line_discounted_unit_price: 500.00,
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 7, order_id: 7, discount_id: null, line_discounted_unit_price: 1000.00,
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 8, order_id: 8, discount_id: null, line_discounted_unit_price: 0.00,
+      order_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__mitxpro__ecommerce_order')
+    rows:
+    - {order_id: 9, coupon_id: 21, order_total_price_paid: 500.00, order_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__mitxpro__ecommerce_line')
+    rows:
+    - {line_id: 9, order_id: 9}
+  - input: ref('int__bootcamps__ecommerce_order')
+    rows: []
+  - input: ref('int__micromasters__orders')
+    rows:
+    - {line_id: 10, order_id: 10, coupon_id: 31, order_total_price_paid: 300.00, order_is_migrated_to_mitxonline: false,
+      order_created_on: "2024-01-15T00:00:00"}
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_discount_type')
+    rows:
+    - {discount_type_pk: 1, discount_type_code: percentage}
+    - {discount_type_pk: 2, discount_type_code: fixed_amount}
+    - {discount_type_pk: 3, discount_type_code: free}
+    - {discount_type_pk: 4, discount_type_code: fixed_price}
+  - input: ref('dim_product')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: ref('dim_discount')
+    rows:
+    - {discount_pk: d11, source_discount_id: 11, platform_code: mitxonline, discount_type_code: percentage}
+    - {discount_pk: d12, source_discount_id: 12, platform_code: mitxonline, discount_type_code: fixed_amount}
+    - {discount_pk: d13, source_discount_id: 13, platform_code: mitxonline, discount_type_code: fixed_price}
+    - {discount_pk: d14, source_discount_id: 14, platform_code: mitxonline, discount_type_code: null}
+    - {discount_pk: d21, source_discount_id: 21, platform_code: mitxpro, discount_type_code: percentage}
+    - {discount_pk: d31, source_discount_id: 31, platform_code: micromasters, discount_type_code: fixed_amount}
+  - input: ref('dim_tax_rate')
+    rows: []
+  expect:
+    rows:
+    - {line_id: "1", discount_type_fk: 1}
+    - {line_id: "2", discount_type_fk: 2}
+    - {line_id: "3", discount_type_fk: 4}
+    - {line_id: "4", discount_type_fk: 3}
+    - {line_id: "5", discount_type_fk: 3}
+    - {line_id: "6", discount_type_fk: null}
+    - {line_id: "7", discount_type_fk: null}
+    - {line_id: "8", discount_type_fk: 3}
+    - {line_id: "9", discount_type_fk: 1}
+    - {line_id: "10", discount_type_fk: 2}
+- name: test_tfact_order_counts_a_migrated_micromasters_order_once
+  description: >
+    A MicroMasters order migrated to MITx Online is counted as its MITx Online copy.
+    A MicroMasters order with no copy stays.
+  model: tfact_order
+  overrides:
+    macros:
+      is_incremental: false
+  given:
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows:
+    - {line_id: 1, order_id: 1, order_reference_number: MM-prod-1, order_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__mitxpro__ecommerce_order')
+    rows: []
+  - input: ref('int__mitxpro__ecommerce_line')
+    rows: []
+  - input: ref('int__bootcamps__ecommerce_order')
+    rows: []
+  - input: ref('int__micromasters__orders')
+    rows:
+    - {line_id: 1, order_id: 1, order_is_migrated_to_mitxonline: true, order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 2, order_id: 2, order_is_migrated_to_mitxonline: false, order_created_on: "2024-01-15T00:00:00"}
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_discount_type')
+    rows: []
+  - input: ref('dim_product')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: ref('dim_discount')
+    rows: []
+  - input: ref('dim_tax_rate')
+    rows: []
+  expect:
+    rows:
+    - {platform: mitxonline, order_id: 1}
+    - {platform: micromasters, order_id: 2}
+- name: test_tfact_order_repairs_stored_rows_on_a_plain_build
+  description: >
+    Rows written before a rule changed are behind the order_updated_on watermark,
+    so
+    the incremental filter has to find them. A row with an old line_price, an old
+    discount type or no discount_amount is re-selected and rewritten, which is what
+    lets a plain dbt build deploy these columns with no full refresh. A row that
+    already matches is left alone.
+  model: tfact_order
+  overrides:
+    macros:
+      is_incremental: true
+  given:
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows:
+    - {line_id: 1, order_id: 1, line_price: 1000.00, discount_amount: 250.00, discount_id: 11,
+      line_discounted_unit_price: 750.00, order_updated_on: "2024-01-15T00:00:00",
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 2, order_id: 2, line_price: 1000.00, discount_amount: 250.00, discount_id: 11,
+      line_discounted_unit_price: 750.00, order_updated_on: "2024-01-15T00:00:00",
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 3, order_id: 3, line_price: 1000.00, discount_amount: 250.00, discount_id: 11,
+      line_discounted_unit_price: 750.00, order_updated_on: "2024-01-15T00:00:00",
+      order_created_on: "2024-01-15T00:00:00"}
+    - {line_id: 4, order_id: 4, line_price: 1000.00, discount_amount: 250.00, discount_id: 11,
+      line_discounted_unit_price: 750.00, order_updated_on: "2024-01-15T00:00:00",
+      order_created_on: "2024-01-15T00:00:00"}
+  - input: ref('int__mitxpro__ecommerce_order')
+    rows: []
+  - input: ref('int__mitxpro__ecommerce_line')
+    rows: []
+  - input: ref('int__bootcamps__ecommerce_order')
+    rows: []
+  - input: ref('int__micromasters__orders')
+    rows: []
+  - input: ref('dim_user')
+    rows: []
+  - input: ref('dim_discount_type')
+    rows:
+    - {discount_type_pk: 1, discount_type_code: percentage}
+  - input: ref('dim_product')
+    rows: []
+  - input: ref('dim_platform')
+    rows: []
+  - input: ref('dim_discount')
+    rows:
+    - {discount_pk: d11, source_discount_id: 11, platform_code: mitxonline, discount_type_code: percentage}
+  - input: ref('dim_tax_rate')
+    rows: []
+  - input: this
+    rows:
+    - order_key: "058dc01263c19e4d97dea23d64b34c0d"  # pragma: allowlist secret
+      platform: mitxonline
+      line_price: 2000.00
+      discount_type_fk: 1
+      discount_amount: 250.00
+      order_updated_on: "2024-01-15T00:00:00"
+    - order_key: "eecdbca2ed706df9118d22804279ff7a"  # pragma: allowlist secret
+      platform: mitxonline
+      line_price: 1000.00
+      discount_type_fk:
+      discount_amount: 250.00
+      order_updated_on: "2024-01-15T00:00:00"
+    - order_key: "2911a854d6b9f9b29d50a4492e024052"  # pragma: allowlist secret
+      platform: mitxonline
+      line_price: 1000.00
+      discount_type_fk: 1
+      discount_amount:
+      order_updated_on: "2024-01-15T00:00:00"
+    - order_key: "cc1228081040251a75005dff6f6090de"  # pragma: allowlist secret
+      platform: mitxonline
+      line_price: 1000.00
+      discount_type_fk: 1
+      discount_amount: 250.00
+      order_updated_on: "2024-01-15T00:00:00"
+    - order_key: "unrelated-later-order"
+      platform: mitxonline
+      line_price: 1000.00
+      discount_type_fk: 1
+      discount_amount: 250.00
+      order_updated_on: "2024-02-01T00:00:00"
+  expect:
+    rows:
+    - {line_id: "1", line_price: 1000.00, discount_type_fk: 1, discount_amount: 250.00}
+    - {line_id: "2", line_price: 1000.00, discount_type_fk: 1, discount_amount: 250.00}
+    - {line_id: "3", line_price: 1000.00, discount_type_fk: 1, discount_amount: 250.00}
 - name: test_tfact_enrollment_order_resolves_program_order_id
   description: >
     An xPRO enrollment on a program order carries that order as its program order,

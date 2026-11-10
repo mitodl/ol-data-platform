@@ -78,7 +78,7 @@ with enrollment as (
         -- cancelled, declined and errored attempts beside the accepted one
         where
             transaction_type = 'payment'
-            or (transaction_type = 'sale' and transaction_status = 'ACCEPT')
+            or (transaction_type = 'sale' and is_successful)
     ) as subquery
     where row_num = 1
 )

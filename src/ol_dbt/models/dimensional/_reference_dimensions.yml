@@ -28,7 +28,10 @@ models:
 
 - name: dim_discount_type
   description: >
-    Reference dimension for discount types. Defines how discounts are calculated.
+    Reference dimension for discount types. percentage, fixed_amount and fixed_price
+    name a discount's mechanism: a percent off, a dollar amount off, or a stated price
+    that replaces the list price. free is a property of an order line, not of a
+    discount, so only tfact_order sets it.
   columns:
   - name: discount_type_pk
     description: Primary key

@@ -179,7 +179,8 @@ models:
         row_condition: "platforms not in ('xPRO Emeritus', 'xPRO Global Alumni', 'MIT\
           \ Learn')"
 - name: marts__combined__orders
-  description: ecommerce regular b2c orders
+  description: ecommerce regular b2c orders. A MicroMasters order migrated to MITx
+    Online appears once, as its MITx Online copy.
   config:
     meta:
       qa_branches:
@@ -231,7 +232,13 @@ models:
   - name: discount
     description: str, discount applied to the order in a readable format. The value
       is always an amount taken off the list price of the order, e.g., "$100" means
-      $100 was taken off the price. "30%" means the price was reduced by 30%.
+      $100 was taken off the price. "30%" means the price was reduced by 30%. A MITx
+      Online fixed-price discount is worked out from the product's price today, so
+      it can disagree with discount_amount when the price changed after purchase.
+  - name: discount_amount
+    description: numeric, dollar amount off the order line, unit_price minus what
+      the line was charged. Null for Bootcamps, edX.org and migrated MicroMasters
+      orders under MITx Online, which have no list price to subtract from.
   - name: order_created_on
     description: timestamp, specifying when the order was initially created. If this
       is a b2b order it will be the timestamp that order was created otherwise it
@@ -334,7 +341,9 @@ models:
     description: string, cybersource req_reference_number from cybersource payment
       transaction, e.g., mitxonline-production-1
   - name: unit_price
-    description: numeric, price for the order line item before discount
+    description: numeric, list price at purchase for the order line item, before discount.
+      For edX.org and migrated MicroMasters orders under MITx Online it is the price
+      after any coupon, as MicroMasters records no list price.
   - name: user_email
     description: str, user email associated with their account on the corresponding
       platform
@@ -1506,3 +1515,63 @@ unit_tests:
     rows:
     - {user_hashed_id: "mixed", num_of_course_enrolled: 2, num_of_course_passed: 1,
       number_of_courserun_certificates: 1, total_amount_paid_orders: 150.0, has_program_certificate: true}
+- name: test_marts__combined__orders_measures_lines_and_counts_migrated_orders_once
+  description: >
+    unit_price is the price at purchase and discount_amount is what came off it, while
+    the discount column keeps the text Finance reads, including a fixed-price
+    discount worked out from the product's price today. A MicroMasters order migrated
+    to MITx Online appears only as its MITx Online copy, so the edX.org row goes.
+    An
+    unmigrated order on an edX.org run stays, and one on a MITx Online run stays
+    filtered out.
+  model: marts__combined__orders
+  given:
+  - input: ref('int__mitxonline__ecommerce_order')
+    rows:
+    - {order_id: 1, line_id: 1, product_price: 2000.00, line_price: 1000.00, discount_amount: 700.00,
+      discount_amount_text: "Fixed Price: 300.00", user_id: 7}
+    - {order_id: 2, line_id: 2, product_price: 1000.00, line_price: 1000.00, discount_amount: 250.00,
+      discount_amount_text: "25.00%", user_id: 7}
+  - input: ref('int__mitxonline__ecommerce_transaction')
+    rows: []
+  - input: ref('int__mitxpro__ecommerce_allorders')
+    rows:
+    - {order_id: 6, line_id: 6}
+  - input: ref('int__mitxpro__ecommerce_order')
+    rows:
+    - {order_id: 6, order_total_price_paid: 800.00, couponpaymentversion_discount_amount_text: "20.00%"}
+  - input: ref('int__mitxpro__ecommerce_line')
+    rows:
+    - {line_id: 6, order_id: 6, product_price: 1000.00}
+  - input: ref('int__mitxpro__ecommerce_receipt')
+    rows: []
+  - input: ref('int__mitxpro__program_runs')
+    rows: []
+  - input: ref('int__mitxpro__ecommerce_allcoupons')
+    rows: []
+  - input: ref('int__mitxpro__users')
+    rows: []
+  - input: ref('int__mitxpro__ecommerce_couponpaymentversion')
+    rows: []
+  - input: ref('int__mitxpro__ecommerce_company')
+    rows: []
+  - input: ref('int__bootcamps__ecommerce_order')
+    rows: []
+  - input: ref('int__bootcamps__ecommerce_receipt')
+    rows: []
+  - input: ref('int__micromasters__orders')
+    rows:
+    - {order_id: 3, line_id: 3, line_price: 450.00, coupon_discount_amount_text: "$50.00",
+      courserun_platform: edX.org, order_is_migrated_to_mitxonline: false}
+    - {order_id: 4, line_id: 4, line_price: 450.00, coupon_discount_amount_text: "$50.00",
+      courserun_platform: edX.org, order_is_migrated_to_mitxonline: true}
+    - {order_id: 5, line_id: 5, line_price: 450.00, coupon_discount_amount_text: "$50.00",
+      courserun_platform: MITx Online, order_is_migrated_to_mitxonline: false}
+  expect:
+    rows:
+    - {platform: MITx Online, order_id: 1, unit_price: 1000.00, discount: "1700.00",
+      discount_amount: 700.00}
+    - {platform: MITx Online, order_id: 2, unit_price: 1000.00, discount: "25.00%",
+      discount_amount: 250.00}
+    - {platform: xPro, order_id: 6, unit_price: 1000.00, discount: "20.00%", discount_amount: 200.00}
+    - {platform: edX.org, order_id: 3, unit_price: 450.00, discount: "$50.00", discount_amount: null}
