@@ -124,17 +124,17 @@ models:
 
 - name: edxorg_to_mitxonline_letter_grades
   description: >
-    edX.org letter grades for MITx Online course run grades that have no letter
-    grade, such as grades that the edX.org migration created. Excludes grades set
-    by an admin. Used by the MITx Online `migrate_edx_data --type letter_grades` command.
+    edX.org letter grades for migrated course-v1:MITx+ course run grades in
+    MITx Online that have no letter grade. Used by the MITx Online
+    `migrate_edx_data --type letter_grades` command.
   config:
     meta:
       qa_branches:
+      - edxorg/mysql
+      - irx/bigquery
       - micromasters/app_postgres
-      - mitx/mysql
       - mitxonline/app_postgres
       - mitxonline/mysql
-      - xpro/app_postgres
   columns:
   - name: user_mitxonline_id
     description: int, foreign key to the users table in the mitxonline database
