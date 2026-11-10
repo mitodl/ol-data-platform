@@ -547,6 +547,12 @@ def unreadable_base_tables(
 # Model `meta` key that opts a materialized view into a change log.
 CHANGE_TRACKING_META_KEY = "change_tracking"
 CHANGE_LOG_SUFFIX = "_changes"
+# How long a removed row stays in a change log. ol-analytics-api refuses an
+# `updated_since` older than this (REMOVED_RECORD_RETENTION in
+# tenants/b2b_learner_records/queries.py), so an older removal can never be
+# served. The two must match: a shorter window here drops removals that a
+# cursor the API accepts still needs.
+TOMBSTONE_RETENTION_DAYS = 90
 
 # ASCII unit and record separators. A value is cast to varchar before hashing,
 # so a separator that can appear in an email or a title would let two different
@@ -690,6 +696,13 @@ def stamp_change_log_sql(view: ChangeTrackedView) -> str:
 
     The join is null-safe (`<=>`) so a null key column matches itself rather
     than being read as one row leaving and another arriving on every run.
+
+    A removed row whose removal is older than TOMBSTONE_RETENTION_DAYS is left
+    out of the rewrite. Doing it here rather than in a DELETE keeps it in the
+    one atomic statement, and StarRocks refuses a DELETE on these
+    duplicate-key tables whose predicate isn't a literal. A live row is never
+    dropped, however old its `changed_on`: that is a record that hasn't
+    changed.
     """
     join = " and ".join(f"m.`{column}` <=> c.`{column}`" for column in view.key)
     select = [f"coalesce(m.`{column}`, c.`{column}`)" for column in view.key]
@@ -719,7 +732,11 @@ def stamp_change_log_sql(view: ChangeTrackedView) -> str:
         f"insert overwrite {view.change_log} ({columns}) "  # noqa: S608
         f"select {', '.join(select)} "
         f"from ({_current_rows_sql(view)}) m "
-        f"full outer join {view.change_log} c on {join}"
+        f"full outer join {view.change_log} c on {join} "
+        # coalesce: a null is_deleted or changed_on must keep the row, not let
+        # WHERE drop it as unknown.
+        "where not coalesce(m.row_hash is null and c.is_deleted and c.changed_on < "
+        f"date_sub(utc_timestamp(), interval {TOMBSTONE_RETENTION_DAYS} day), false)"
     )
 
 
