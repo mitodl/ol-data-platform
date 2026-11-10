@@ -3,7 +3,7 @@
 {% endmacro %}
 
 {% macro default__generate_hash_id(string) %}
-    -- Be cautious about changing the hash function as it will impact the primary key used by Hightouch
+    -- Be cautious about changing the hash function: program_certificate_hashed_id is the primary key of MIT Learn's ProgramCertificate (record_hash)
    lower(
        to_hex(
           sha256(

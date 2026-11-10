@@ -137,7 +137,7 @@ models:
       +materialized: table
       +schema: staging
       +grants:
-        select: ["read_only_production", "ol_data_analyst", "reverse_etl"]
+        select: ["read_only_production", "ol_data_analyst"]
       +meta:
         openmetadata:
           owner: data-platform
@@ -146,7 +146,7 @@ models:
       +materialized: table
       +schema: migration
       +grants:
-        select: ["read_only_production", "ol_data_analyst", "reverse_etl"]
+        select: ["read_only_production", "ol_data_analyst"]
       +meta:
         openmetadata:
           owner: data-platform
@@ -156,7 +156,7 @@ models:
       +schema: dimensional
       +grants:
         select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
-          'ol_business_analyst', 'reverse_etl']
+          'ol_business_analyst']
       # Incremental dims use delete+insert and accumulate one small file per run.
       # 14-day snapshot retention provides a time-travel window for point-in-time
       # queries and safe re-runs across two weekly optimize cycles.
@@ -173,7 +173,7 @@ models:
       +schema: intermediate
       +grants:
         select: ["read_only_production", "ol_data_analyst", "business_intelligence",
-          "ol_business_analyst", "reverse_etl"]
+          "ol_business_analyst"]
       +meta:
         openmetadata:
           owner: data-platform
@@ -183,7 +183,7 @@ models:
       +schema: mart
       +grants:
         select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
-          'ol_business_analyst', 'reverse_etl', 'finance']
+          'ol_business_analyst', 'finance']
       # 14-day retention so mart snapshots survive a missed nightly run.
       +meta:
         openmetadata:
@@ -198,7 +198,7 @@ models:
       +schema: reporting
       +grants:
         select: ["read_only_production", "ol_data_analyst", "business_intelligence",
-          "ol_business_analyst", "reverse_etl"]
+          "ol_business_analyst"]
       +meta:
         openmetadata:
           owner: data-platform
@@ -207,7 +207,7 @@ models:
       +materialized: table
       +schema: integrations
       +grants:
-        select: ["read_only_production", "ol_data_analyst", "reverse_etl", "mit_learn_etl"]
+        select: ["read_only_production", "ol_data_analyst", "mit_learn_etl"]
     b2b_analytics:
       # StarRocks' own tables, so only on a target writing default_catalog. A
       # lake target (catalog ol_data_lake_<env>) would put them in
@@ -281,7 +281,7 @@ models:
       +schema: external
       +grants:
         select: ["read_only_production", "ol_data_analyst", "business_intelligence",
-          "ol_business_analyst", "reverse_etl", "mit_irx"]
+          "ol_business_analyst", "mit_irx"]
       # Every build replaces these tables whole, so a compacted copy lasts only
       # until the next build, there are no old snapshots to expire, and the
       # CREATE TABLE AS already writes statistics.
@@ -340,7 +340,7 @@ snapshots:
   open_learning:
     +grants:
       select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
-        'ol_business_analyst', 'reverse_etl']
+        'ol_business_analyst']
       all privileges: ["accountadmin", "ol_platform_admin"]
     # See models above.
     +properties: "{{ none if target.type == 'starrocks' else {'format': \"'PARQUET'\"\
