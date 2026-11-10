@@ -90,31 +90,39 @@ def _detail_rows(result: SweepResult) -> list[dict[str, Any]]:
     ]
 
 
-def _refuse_history_orphans(
-    context: AssetExecutionContext, result: SweepResult, metadata: dict[str, Any]
-) -> None:
-    """Fail the run when a history-layer bucket holds an unreferenced directory.
+def _history_orphan_problem(result: SweepResult) -> list[str]:
+    """Name the history-layer directories with no Glue table, if there are any.
 
     History tables cannot be rebuilt, so one that lost its Glue entry is restored
     from S3 rather than swept, and a person has to look at it. The sweep never
-    deletes there, whatever its age.
-
-    The run's metadata is recorded as an observation first. A history orphan
-    stays until someone acts, so without it every weekly run until then would
-    delete prefixes and record none of them.
+    deletes there, whatever its age, and fails the run until it is dealt with.
     """
-    if orphans := result.history_orphans:
+    if not (orphans := result.history_orphans):
+        return []
+    paths = [f"s3://{row['bucket']}/{row['prefix']}/" for row in orphans]
+    msg = (
+        f"{len(paths)} directories in the history layer have no Glue table: "
+        f"{paths[:METADATA_DETAIL_ROWS]}. The sweep leaves them alone. Restore "
+        "the table (docs/HISTORY_LAYER_RESTORE.md), or delete the directory by "
+        "hand if it was dropped on purpose."
+    )
+    return [msg]
+
+
+def _fail_on(
+    context: AssetExecutionContext, problems: list[str], metadata: dict[str, Any]
+) -> None:
+    """Raise with every problem, after recording the run's metadata.
+
+    Raising drops the Output's metadata, so it goes out first as an observation.
+    A history orphan stays until someone acts, so without this every weekly run
+    until then would delete prefixes and record none of them.
+    """
+    if problems:
         context.log_event(
             AssetObservation(asset_key=context.asset_key, metadata=metadata)
         )
-        paths = [f"s3://{row['bucket']}/{row['prefix']}/" for row in orphans]
-        msg = (
-            f"{len(paths)} directories in the history layer have no Glue table: "
-            f"{paths[:METADATA_DETAIL_ROWS]}. The sweep leaves them alone. "
-            "Restore the table (docs/HISTORY_LAYER_RESTORE.md), or delete the "
-            "directory by hand if it was dropped on purpose."
-        )
-        raise RuntimeError(msg)
+        raise RuntimeError(" ".join(problems))
 
 
 @asset(
@@ -205,7 +213,7 @@ def lake_orphan_sweep(
             sum(r["bytes"] for r in eligible),
             sorted(result.unreadable_databases),
         )
-        _refuse_history_orphans(context, result, metadata)
+        _fail_on(context, _history_orphan_problem(result), metadata)
         return Output(value=None, metadata=metadata)
 
     deleted = [o for o in result.outcomes if o.action == "deleted"]
@@ -234,14 +242,13 @@ def lake_orphan_sweep(
         ),
         "delete_error_count": MetadataValue.int(len(errors)),
     }
+    problems = _history_orphan_problem(result)
     if errors:
-        # Raising drops the metadata above. The sweep has already logged every
-        # prefix it deleted from to context.log, so the run's log is the record.
         msg = (
             f"{len(errors)} objects could not be deleted across "
             f"{sum(1 for o in deleted if o.errors)} prefixes. First errors: "
-            f"{errors[:5]}"
+            f"{errors[:5]}."
         )
-        raise RuntimeError(msg)
-    _refuse_history_orphans(context, result, metadata)
+        problems.insert(0, msg)
+    _fail_on(context, problems, metadata)
     return Output(value=None, metadata=metadata)
