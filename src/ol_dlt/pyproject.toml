@@ -21,7 +21,7 @@ dependencies = [
     "defusedxml>=0.7",
     # Parsing a Canvas Common Cartridge (ol_dlt.sources.canvas_content).
     "beautifulsoup4>=4.12",
-    "pypdf[crypto]>=6.9.1,<7",
+    "pypdf[crypto]>=7,<8",
     "python-dateutil>=2.9",
     # Relational sources (ol_dlt.database) and their Vault-issued credentials.
     "psycopg2-binary>=2.9",
