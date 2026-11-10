@@ -61,4 +61,5 @@ override-dependencies = [
 constraint-dependencies = [
     "sqlalchemy<2.1",
     "certifi>=2026.10.19",  # eMudhra CA compromise: never resolve a certifi that trusts the compromised CAs
+    "filelock>=4.2.1",  # GHSA-v4x8-3wr5-3wq8
 ]
