@@ -6,11 +6,9 @@ authors = [{ name = "MIT Open Learning Engineering", email = "ol-data@mit.edu" }
 requires-python = "~=3.13,<3.15"
 license = "BSD-3-Clause"
 dependencies = [
-    "dlt[filesystem,parquet,pyiceberg,sql_database]>=1.28,<2",
-    # sqlglot 30.22.0 removed qualify()'s `infer_schema` argument, which dlt
-    # through 1.31.0 still passes, so every load fails in lineage. Drop the cap
-    # once a dlt release includes https://github.com/dlt-hub/dlt/pull/4538.
-    "sqlglot<30.22",
+    # >=1.32: earlier releases pass qualify() the `infer_schema` argument that
+    # sqlglot 30.22.0 removed, so every load fails in lineage.
+    "dlt[filesystem,parquet,pyiceberg,sql_database]>=1.32,<2",
     "pyiceberg[glue]>=0.9",
     "requests>=2.32",
     # >=1.2 for the CSV reader's `strict_mode` argument (edxorg_s3 source).
