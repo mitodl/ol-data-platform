@@ -958,6 +958,10 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["program_uuid", "course_readable_id"]
+      # course_number isn't unique in int__mitx__courses (UAI courses), so a duplicate
+      # that reaches the join fans out the course's row. Fail on the first one.
+      config:
+        error_if: ">0"
 
 - name: int__edxorg__mitx_product
   description: MITx course available modes and prices on edX.org
