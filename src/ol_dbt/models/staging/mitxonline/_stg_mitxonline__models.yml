@@ -698,6 +698,14 @@ models:
     description: string, readable id for the order. Shared with micromasters
     tests:
     - not_null
+    # int__micromasters__orders finds a migrated MicroMasters order by this number, so
+    # a repeated one would duplicate its rows. Warn only: its order_id unique test
+    # fails on that and blocks only the MicroMasters models, not every model built on
+    # MITx Online orders.
+    - unique:
+        config:
+          where: "order_reference_number like 'MM-%'"
+          severity: warn
   - name: order_payment_processor
     description: string, captures what payment processor was used for an order
   - name: order_total_price_paid
