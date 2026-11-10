@@ -3125,6 +3125,8 @@ unit_tests:
     rows: []
   - input: ref('int__micromasters__orders')
     rows: []
+  - input: ref('dim_user')
+    rows: []
   - input: ref('int__mitxonline__course_runs')
     rows: []
   - input: ref('int__mitxonline__ecommerce_order')
@@ -3211,6 +3213,8 @@ unit_tests:
     - {order_id: 9004, courserun_id: 101}
   - input: ref('int__micromasters__orders')
     rows: []
+  - input: ref('dim_user')
+    rows: []
   - input: ref('int__mitxonline__course_runs')
     rows: []
   - input: ref('int__mitxonline__ecommerce_order')
@@ -3261,7 +3265,8 @@ unit_tests:
     of the
     order columns. Platforms the decision does not cover are null. A MicroMasters
     order's state comes from the app, since tfact_order keeps the state it had when
-    the order was created.
+    the order was created. A MicroMasters order migrated to MITx Online, which
+    tfact_order drops, still pays for its enrollment.
   model: tfact_enrollment_order
   given:
   - input: ref('tfact_enrollment')
@@ -3297,6 +3302,9 @@ unit_tests:
       program_fk: null, platform_fk: "P_BOOTCAMPS", platform: "bootcamps", enrollment_mode: null}
     - {enrollment_key: "EDX_PARTIAL_REFUND", order_id: null, user_fk: "U15", courserun_fk: "CR2",
       program_fk: null, platform_fk: "P_EDX", platform: "edxorg", enrollment_mode: "audit"}
+    - {enrollment_key: "MXO_VIA_MIGRATED_MICROMASTERS", order_id: null, user_fk: "U16",
+      courserun_fk: "CR1", program_fk: null, platform_fk: "P_MXO", platform: "mitxonline",
+      enrollment_mode: "verified"}
   - input: ref('dim_product')
     rows:
     - {product_pk: "PROD_CR1", product_type: "course run", courserun_fk: "CR1", program_fk: null,
@@ -3328,14 +3336,24 @@ unit_tests:
   - input: ref('int__micromasters__orders')
     rows:
     # tfact_order holds 501 and 502 in the state they were created in.
-    - {order_id: 501, line_id: 51, order_state: "fulfilled", courserun_readable_id: "course-v1:MITxT+14.100x+1T2022",
+    - {order_id: 501, line_id: 51, user_id: 5, order_state: "fulfilled", courserun_readable_id: "course-v1:MITxT+14.100x+1T2022",
       courserun_edxorg_readable_id: "MITxT/14.100x/1T2022"}
-    - {order_id: 502, line_id: 52, order_state: "refunded", courserun_readable_id: "course-v1:MITx+14.100x+1T2020",
+    - {order_id: 502, line_id: 52, user_id: 10, order_state: "refunded", courserun_readable_id: "course-v1:MITx+14.100x+1T2020",
       courserun_edxorg_readable_id: "MITx/14.100x/1T2020"}
-    - {order_id: 503, line_id: 53, order_state: "fulfilled", courserun_readable_id: "course-v1:MITx+14.100x+1T2020",
+    - {order_id: 503, line_id: 53, user_id: 11, order_state: "fulfilled", courserun_readable_id: "course-v1:MITx+14.100x+1T2020",
       courserun_edxorg_readable_id: "MITx/14.100x/1T2020"}
-    - {order_id: 504, line_id: 54, order_state: "partially_refunded", courserun_readable_id: "course-v1:MITx+14.100x+1T2020",
-      courserun_edxorg_readable_id: "MITx/14.100x/1T2020"}
+    - {order_id: 504, line_id: 54, user_id: 15, order_state: "partially_refunded",
+      courserun_readable_id: "course-v1:MITx+14.100x+1T2020", courserun_edxorg_readable_id: "MITx/14.100x/1T2020"}
+    # Migrated to MITx Online, so tfact_order drops it.
+    - {order_id: 505, line_id: 55, user_id: 16, order_state: "fulfilled", courserun_readable_id: "course-v1:MITxT+14.100x+1T2022",
+      courserun_edxorg_readable_id: "MITxT/14.100x/1T2022"}
+  - input: ref('dim_user')
+    rows:
+    - {user_pk: "U5", micromasters_user_id: 5}
+    - {user_pk: "U10", micromasters_user_id: 10}
+    - {user_pk: "U11", micromasters_user_id: 11}
+    - {user_pk: "U15", micromasters_user_id: 15}
+    - {user_pk: "U16", micromasters_user_id: 16}
   - input: ref('int__mitxonline__program_course_run_orders')
     rows: []
   - input: ref('dim_course_run')
@@ -3375,6 +3393,7 @@ unit_tests:
     - {enrollment_key: "MXO_COPY_AUDIT", order_id: null, is_paid: false}
     - {enrollment_key: "BOOTCAMPS", order_id: null, is_paid: null}
     - {enrollment_key: "EDX_PARTIAL_REFUND", order_id: null, is_paid: true}
+    - {enrollment_key: "MXO_VIA_MIGRATED_MICROMASTERS", order_id: null, is_paid: true}
 - name: test_tfact_enrollment_order_takes_a_deferred_order_from_the_moved_line
   description: >
     On a two-course order, deferring one course leaves the other line paying for its
@@ -3469,6 +3488,8 @@ unit_tests:
     rows: []
   - input: ref('int__micromasters__orders')
     rows: []
+  - input: ref('dim_user')
+    rows: []
   - input: ref('int__mitxonline__course_runs')
     rows: []
   - input: ref('stg__mitxonline__app__postgres__courses_paidcourserun')
@@ -3530,6 +3551,8 @@ unit_tests:
   - input: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
     rows: []
   - input: ref('int__micromasters__orders')
+    rows: []
+  - input: ref('dim_user')
     rows: []
   - input: ref('int__mitxonline__course_runs')
     rows: []

@@ -281,9 +281,10 @@ with enrollment as (
 -- columns: tfact_order files them under their own platform, their ids overlap MITx
 -- Online's, and enrollment_detail_report joins payments on order_id and the enrollment's
 -- platform, so a MicroMasters id there would pick up another learner's receipt.
--- tfact_order gives only the learner. Its MicroMasters rows use the creation time as the
--- update time, so its incremental build never picks up a later fulfillment or refund,
--- and the state comes from the app's order instead.
+-- They are read from the app and not tfact_order, for two reasons. tfact_order's
+-- MicroMasters rows use the creation time as the update time, so its incremental build
+-- never picks up a later fulfillment or refund. And it drops the orders migrated to MITx
+-- Online, which still pay for an enrollment with no MITx Online order matched.
 , micromasters_orders as (
     select
         enrollment.enrollment_key
@@ -293,15 +294,12 @@ with enrollment as (
     from enrollment
     inner join course_run
         on enrollment.courserun_fk = course_run.courserun_pk
-    inner join {{ ref('tfact_order') }} as micromasters_order
-        on enrollment.user_fk = micromasters_order.user_fk
+    inner join {{ ref('dim_user') }} as micromasters_user
+        on enrollment.user_fk = micromasters_user.user_pk
     inner join {{ ref('int__micromasters__orders') }} as micromasters_line
-        on
-            micromasters_order.order_id = micromasters_line.order_id
-            and micromasters_order.line_id = cast(micromasters_line.line_id as varchar)
+        on micromasters_user.micromasters_user_id = micromasters_line.user_id
     where
-        micromasters_order.platform = 'micromasters'
-        and micromasters_line.order_state in ('fulfilled', 'partially_refunded', 'refunded')
+        micromasters_line.order_state in ('fulfilled', 'partially_refunded', 'refunded')
         and enrollment.platform in ('edxorg', 'mitxonline')
         and course_run.courserun_readable_id in (
             micromasters_line.courserun_readable_id
