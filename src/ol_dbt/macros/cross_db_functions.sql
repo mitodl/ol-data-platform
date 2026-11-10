@@ -1383,9 +1383,11 @@
     array of JSON values to unnest. Raises on malformed JSON and where the path holds
     something other than an array; use unnest_json_array for input that may be either.
 
-    Usage:
-      cross join unnest({{ json_extract_json_array('chat_json', "'$.chat_history'") }})
-      with ordinality as t (element, idx)
+    Usage (select it as a column, then unnest that column in a later CTE, since the
+    StarRocks unnest_with_ordinality names its array twice):
+      , {{ json_extract_json_array('chat_json', "'$.chat_history'") }} as chat_history
+      ...
+      cross join {{ unnest_with_ordinality('history.chat_history', 't', 'element', 'idx') }}
 #}
 {% macro json_extract_json_array(json_col, json_path) -%}
     {{ adapter.dispatch('json_extract_json_array', 'open_learning')(json_col, json_path) }}
