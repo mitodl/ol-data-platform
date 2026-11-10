@@ -17,8 +17,10 @@ list: production's first report (2026-10-25) was 67 eligible prefixes, all
 ``__dbt_tmp-<uuid>`` directories.
 
 The history layer is never deleted from, in any environment: its tables are
-snapshots that cannot be rebuilt. A history directory with no Glue table is
-reported and fails the run, so a person restores it or removes it by hand.
+snapshots that cannot be rebuilt. A uuid-suffixed history directory with no
+Glue table (every dbt-trino table directory has the suffix) is reported and
+fails the run, so a person restores it or removes it by hand. One without the
+suffix is listed with the other unsuffixed prefixes, as everywhere.
 
 The data lake buckets are versioned, so a deleted prefix stays recoverable,
 and billed, until its noncurrent versions expire: 30 days in the dbt layer
@@ -29,7 +31,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 import boto3
-from dagster import AssetExecutionContext, Config, MetadataValue, Output, asset
+from dagster import (
+    AssetExecutionContext,
+    AssetObservation,
+    Config,
+    MetadataValue,
+    Output,
+    asset,
+)
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.iceberg_maintenance import warehouse_env_for
 from ol_orchestrate.lib.lake_orphan_sweep import SweepResult, sweep_warehouse
@@ -81,19 +90,28 @@ def _detail_rows(result: SweepResult) -> list[dict[str, Any]]:
     ]
 
 
-def _refuse_history_orphans(result: SweepResult) -> None:
+def _refuse_history_orphans(
+    context: AssetExecutionContext, result: SweepResult, metadata: dict[str, Any]
+) -> None:
     """Fail the run when a history-layer bucket holds an unreferenced directory.
 
     History tables cannot be rebuilt, so one that lost its Glue entry is restored
     from S3 rather than swept, and a person has to look at it. The sweep never
     deletes there, whatever its age.
+
+    The run's metadata is recorded as an observation first. A history orphan
+    stays until someone acts, so without it every weekly run until then would
+    delete prefixes and record none of them.
     """
     if orphans := result.history_orphans:
+        context.log_event(
+            AssetObservation(asset_key=context.asset_key, metadata=metadata)
+        )
         paths = [f"s3://{row['bucket']}/{row['prefix']}/" for row in orphans]
         msg = (
             f"{len(paths)} directories in the history layer have no Glue table: "
             f"{paths[:METADATA_DETAIL_ROWS]}. The sweep leaves them alone. "
-            "Re-register the table from its last metadata file, or delete the "
+            "Restore the table (docs/HISTORY_LAYER_RESTORE.md), or delete the "
             "directory by hand if it was dropped on purpose."
         )
         raise RuntimeError(msg)
@@ -187,7 +205,7 @@ def lake_orphan_sweep(
             sum(r["bytes"] for r in eligible),
             sorted(result.unreadable_databases),
         )
-        _refuse_history_orphans(result)
+        _refuse_history_orphans(context, result, metadata)
         return Output(value=None, metadata=metadata)
 
     deleted = [o for o in result.outcomes if o.action == "deleted"]
@@ -225,5 +243,5 @@ def lake_orphan_sweep(
             f"{errors[:5]}"
         )
         raise RuntimeError(msg)
-    _refuse_history_orphans(result)
+    _refuse_history_orphans(context, result, metadata)
     return Output(value=None, metadata=metadata)

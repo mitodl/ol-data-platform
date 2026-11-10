@@ -99,12 +99,17 @@ def history_buckets(database_locations: dict[str, str]) -> set[str]:
     A developer's history schema is located under ``processed/`` in a staging
     bucket and does not make that bucket a history bucket.
     """
-    out: set[str] = set()
-    for name, uri in database_locations.items():
-        bucket, _, key = normalize(uri).partition("/")
-        if name.endswith(HISTORY_DATABASE_SUFFIX) and bucket and not key:
-            out.add(bucket)
-    return out
+    return {
+        bucket
+        for name, uri in database_locations.items()
+        if name.endswith(HISTORY_DATABASE_SUFFIX) and (bucket := root_bucket(uri))
+    }
+
+
+def root_bucket(uri: str) -> str:
+    """Return the bucket an s3 URI names when it is a bucket root, else ""."""
+    bucket, _, key = normalize(uri).partition("/")
+    return "" if key else bucket
 
 
 def normalize(uri: str) -> str:
@@ -370,8 +375,7 @@ def warehouse_scan_targets(
     databases: set[str] = set()
     buckets: set[str] = set()
     for name, uri in database_locations.items():
-        bucket, _, key = normalize(uri).partition("/")
-        if name.startswith(database_prefix) and bucket and not key:
+        if name.startswith(database_prefix) and (bucket := root_bucket(uri)):
             databases.add(name)
             buckets.add(bucket)
     targets = {(bucket, "") for bucket in buckets}

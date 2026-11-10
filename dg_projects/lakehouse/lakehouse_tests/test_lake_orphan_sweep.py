@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from dagster import build_asset_context
+from dagster import AssetObservation, build_asset_context
 from lakehouse.assets import lake_orphan_sweep as module
 from lakehouse.assets.lake_orphan_sweep import (
     LakeOrphanSweepConfig,
@@ -221,6 +221,28 @@ def test_a_history_orphan_fails_the_run(
         lake_orphan_sweep(build_asset_context(), config)
 
     assert f"s3://lake-history-qa/snapshot_dropped-{UUID}/" in str(raised.value)
+
+
+def test_a_history_orphan_keeps_the_runs_deletion_record(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _enable_delete(monkeypatch)
+    deleted = PrefixOutcome(
+        "lake-mart-qa", f"gone-{UUID}", "deleted", objects=2, bytes=105
+    )
+    _returning(monkeypatch, _result([deleted], orphans=[*ORPHANS, HISTORY_ORPHAN]))
+    context = build_asset_context()
+    # A direct invocation unbinds the context when the asset raises, which drops
+    # its events, so they are caught as they are logged.
+    logged: list[Any] = []
+    monkeypatch.setattr(context, "log_event", logged.append)
+
+    with pytest.raises(RuntimeError, match="history layer"):
+        lake_orphan_sweep(context, LakeOrphanSweepConfig(min_age_days=7, delete=True))
+
+    [observation] = [event for event in logged if isinstance(event, AssetObservation)]
+    assert observation.metadata["deleted_prefixes"].value == 1
+    assert observation.metadata["history_orphan_prefixes"].value == 1
 
 
 def test_a_scope_that_resolves_to_nothing_fails(monkeypatch: pytest.MonkeyPatch):
