@@ -41,7 +41,9 @@ from cyclopts import App
 from ol_orchestrate.lib.lake_orphan_sweep import (
     delete_prefix,
     delete_references,
+    glue_database_locations,
     glue_tables,
+    history_buckets,
     is_referenced,
     measure,
     normalize,
@@ -105,11 +107,19 @@ def report(
         rows = list(pool.map(lambda bp: measure(s3(), *bp), candidates))
 
     now = datetime.now(UTC)
+    # delete refuses these anyway; marking them keeps them out of a manifest.
+    history = history_buckets(glue_database_locations(glue()))
     for row in rows:
         age = (now - row["newest"]).days if row["newest"] else None
         row["age_days"] = age
         row["dbt_tmp_named"] = "__dbt_tmp" in row["prefix"]
-        row["eligible"] = row["objects"] > 0 and age is not None and age >= min_age_days
+        row["history"] = row["bucket"] in history
+        row["eligible"] = (
+            not row["history"]
+            and row["objects"] > 0
+            and age is not None
+            and age >= min_age_days
+        )
         row["newest"] = row["newest"].isoformat() if row["newest"] else ""
 
     if rows:
