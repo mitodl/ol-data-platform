@@ -13,7 +13,8 @@ aggregate call (``array_agg``, ``group_concat``, ``... within group``), SQL hand
 to a macro as a Jinja string, and the ``order_by`` argument of ``array_agg_filter``
 when it is a string literal or a variable the file sets to one. A sort key
 written wholly in Jinja (``order by {{ order_by }}``) is the caller's to check.
-Top-level and subquery ORDER BYs only order output rows and are not read.
+A query's own ORDER BY (top-level or in a subquery) is read only when a LIMIT
+follows it; otherwise it only orders output rows.
 """
 
 from __future__ import annotations
@@ -42,11 +43,13 @@ _DETAIL = (
 _ORDER_BY = re.compile(r"\border\s+by\b", re.IGNORECASE)
 _SUBQUERY = re.compile(r"\s*(?:select|with)\b", re.IGNORECASE)
 # Words that end a sort list at depth 0: a window frame, a LIMIT, group_concat's SEPARATOR.
-_LIST_END = re.compile(r"(?<!\w)(?:rows|range|groups|limit|separator)(?!\w)", re.IGNORECASE)
+# `t.range` is a column.
+_LIST_END = re.compile(r"(?<![\w.])(?:rows|range|groups|limit|separator)(?!\w)", re.IGNORECASE)
+_LIMIT = re.compile(r"limit\b", re.IGNORECASE)
 _EXPLICIT = re.compile(r"(?:\bdesc|\bnulls\s+(?:first|last))\s*\Z", re.IGNORECASE)
 _EXPRESSION = re.compile(r"\{\{.*?\}\}", re.DOTALL)
 _ORDER_BY_ARG = re.compile(
-    r"""\barray_agg_filter\s*\((?:[^()]|\([^()]*\))*?\border_by\s*=\s*"""
+    r"""\barray_agg_filter\s*\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*?\border_by\s*=\s*"""
     r"""(?:(?P<q>['"])(?P<literal>.*?)(?P=q)|(?P<name>\w+))""",
     re.DOTALL,
 )
@@ -133,6 +136,11 @@ def ascending_sort_keys(source: str) -> Iterator[SortKey]:
     for match in _ORDER_BY.finditer(code):
         if _sorts_rows_into_a_value(code, match.start()):
             yield from _ascending_keys(source, code, match.end(), len(code))
+        else:
+            # A query's own ORDER BY only orders its output, unless a LIMIT picks rows by it.
+            *_, (_, list_end) = _list_spans(code, match.end(), len(code))
+            if _LIMIT.match(code, list_end):
+                yield from _ascending_keys(source, code, match.end(), list_end)
 
     variables = {m.group("name"): m.span("value") for m in _SET_STRING.finditer(source)}
     for call in _ORDER_BY_ARG.finditer(source):

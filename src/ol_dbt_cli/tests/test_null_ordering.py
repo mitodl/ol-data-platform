@@ -75,7 +75,7 @@ def test_finds_each_ascending_key(sql: str, keys: list[str]) -> None:
         "select array_agg(x order by y NULLS LAST) from t",
         "select * from t order by a",
         "select * from (select a from t order by a) as s",
-        "with s as (select a from t order by a limit 1) select * from s",
+        "with s as (select a from t order by a desc limit 1) select * from s",
         "select a in (select b from u order by b) from t",
         "select 1 -- over (order by a)\n",
         "select 'over (order by a)'",
@@ -96,10 +96,27 @@ def test_ignores_explicit_keys_and_query_order(sql: str) -> None:
         ("{% set o = 'a desc, b ASC' %}\nselect {{ array_agg_filter('x', 'c', order_by=o) }}", ["b ASC"]),
         ("select {{ array_agg_filter('x', 'c', order_by='x nulls last', distinct=true) }}", []),
         ("select {{ array_agg_filter('x', 'c', order_by=unknown_name) }}", []),
+        ("select {{ array_agg_filter('coalesce(cast(x as varchar), y)', 'c', order_by='a') }}", ["a"]),
     ],
 )
 def test_reads_sql_and_order_by_passed_as_jinja_strings(sql: str, keys: list[str]) -> None:
     assert _keys(sql) == keys
+
+
+@pytest.mark.parametrize(
+    ("sql", "keys"),
+    [
+        ("with s as (select id from t order by created_on, id desc limit 1) select * from s", ["created_on"]),
+        ("select (select id from t order by created_on limit 1) as first_id", ["created_on"]),
+        ("select id from t\norder by created_on\nlimit 10\n", ["created_on"]),
+    ],
+)
+def test_reads_a_query_order_by_that_a_limit_follows(sql: str, keys: list[str]) -> None:
+    assert _keys(sql) == keys
+
+
+def test_a_qualified_column_named_like_a_frame_word_is_a_key() -> None:
+    assert _keys("select row_number() over (order by t.range, b) from t") == ["t.range", "b"]
 
 
 def test_exempts_macro_bodies_written_for_another_engine(dbt_dir: Path) -> None:
@@ -108,8 +125,11 @@ def test_exempts_macro_bodies_written_for_another_engine(dbt_dir: Path) -> None:
         "{% macro default__g(a) %}array_agg(a order by a){% endmacro %}\n"
         "{% macro starrocks__g(a) %}array_agg(a order by a nulls last){% endmacro %}\n"
         "{% macro h(a) %}\narray_agg(a order by a){% endmacro %}\n"
+        "{% macro default__k(a) %}array_agg(a order by a){% endmacro %}\n"
     )
-    assert _messages(dbt_dir) == ["macros/x.sql:5 has an ascending sort key with no NULLS clause: a"]
+    assert _messages(dbt_dir) == [
+        f"macros/x.sql:{line} has an ascending sort key with no NULLS clause: a" for line in (5, 6)
+    ]
 
 
 def test_reads_sql_expressions_in_yaml(dbt_dir: Path) -> None:

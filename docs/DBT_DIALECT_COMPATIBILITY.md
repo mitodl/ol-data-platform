@@ -48,10 +48,10 @@ array_agg(tag order by tag nulls last)
 {{ array_agg_filter('label', "kind = 'skill'", order_by='label nulls last') }}
 ```
 
-`ol-dbt validate` (the `null_ordering` check, run in dbt PR CI) fails on an ascending
-key with no NULLS clause. A query's own ORDER BY, top-level or in a subquery, is not
-checked. It orders output rows, unless a LIMIT follows it, and then it needs `nulls last`
-too.
+A query's own ORDER BY (top-level or in a subquery) only orders output rows, unless a
+LIMIT follows it, and then its ascending keys need `nulls last` too. `ol-dbt validate`
+(the `null_ordering` check, run in dbt PR CI) fails on an ascending key with no NULLS
+clause in any of these places.
 
 ## Examples
 
