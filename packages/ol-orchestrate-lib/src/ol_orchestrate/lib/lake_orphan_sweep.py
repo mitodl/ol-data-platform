@@ -29,6 +29,12 @@ log = logging.getLogger(__name__)
 DBT_DIR = re.compile(r"-[0-9a-f]{32}$")
 S3_DELETE_BATCH_SIZE = 1000
 
+# The history layer (``ol_warehouse_<env>_history``) holds snapshots of raw
+# tables that cannot be rebuilt from anything. A sweep reports what it finds
+# there and never deletes it: a history table that lost its Glue entry is
+# restored from S3, not cleaned up.
+HISTORY_DATABASE_SUFFIX = "_history"
+
 # Matched by hand, not with urlparse: an S3 key may contain "#" or "?", and
 # urlparse would cut the path there and leave a reference to a shorter prefix
 # than the one the table occupies.
@@ -87,6 +93,20 @@ def glue_database_locations(glue: Any) -> dict[str, str]:
     }
 
 
+def history_buckets(database_locations: dict[str, str]) -> set[str]:
+    """Return the buckets a history-layer database is located at the root of.
+
+    A developer's history schema is located under ``processed/`` in a staging
+    bucket and does not make that bucket a history bucket.
+    """
+    out: set[str] = set()
+    for name, uri in database_locations.items():
+        bucket, _, key = normalize(uri).partition("/")
+        if name.endswith(HISTORY_DATABASE_SUFFIX) and bucket and not key:
+            out.add(bucket)
+    return out
+
+
 def normalize(uri: str) -> str:
     """Return ``bucket/key`` for an s3 URI, or "" when it is not one."""
     # urlparse, which this replaced, dropped surrounding whitespace and any
@@ -131,10 +151,13 @@ class GlueReferences:
     In practice the database half only matters for a database located at a
     uuid-suffixed directory: :data:`DBT_DIR` already refuses any directory
     without the suffix, which covers every ``processed/<database>``.
+
+    ``history_buckets`` are refused outright (see :func:`history_buckets`).
     """
 
     tables: set[str]
     databases: set[str]
+    history_buckets: set[str]
 
     @classmethod
     def build(
@@ -153,6 +176,7 @@ class GlueReferences:
                 for uri in database_locations.values()
                 if "/" in (path := normalize(uri))
             },
+            history_buckets=history_buckets(database_locations),
         )
 
     def claims(self, candidate: str) -> bool:
@@ -239,7 +263,7 @@ class PrefixOutcome:
     errors: list[str] = field(default_factory=list)
 
 
-def delete_prefix(  # noqa: PLR0913
+def delete_prefix(  # noqa: PLR0911, PLR0913
     s3: Any,
     bucket: str,
     prefix: str,
@@ -251,6 +275,8 @@ def delete_prefix(  # noqa: PLR0913
     logger: logging.Logger = log,
 ) -> PrefixOutcome:
     """Delete one prefix if it is still an orphan, re-checking every guard.
+
+    A prefix in a history-layer bucket is refused, however old and unreferenced.
 
     :param referenced: Returns the Glue references as they are now, database
         locations included. Called once, after every other guard has passed and
@@ -287,7 +313,10 @@ def delete_prefix(  # noqa: PLR0913
             "skipped",
             f"newest object {newest.isoformat()} too recent",
         )
-    if referenced().claims(path):
+    references = referenced()
+    if bucket in references.history_buckets:
+        return PrefixOutcome(bucket, prefix, "refused", "history layer bucket")
+    if references.claims(path):
         return PrefixOutcome(bucket, prefix, "skipped", "now referenced by Glue")
     if not execute:
         return PrefixOutcome(
@@ -379,7 +408,8 @@ class SweepResult:
     targets: list[tuple[str, str]]
     prefixes_scanned: int
     # Unreferenced and uuid-suffixed, each measured: bucket, prefix, objects,
-    # bytes, newest, age_days, eligible.
+    # bytes, newest, age_days, history, eligible. A history row is never
+    # eligible.
     orphans: list[dict[str, Any]]
     # Unreferenced without the uuid suffix. Never deleted, so never measured:
     # one of these in the raw bucket can hold millions of objects.
@@ -394,6 +424,11 @@ class SweepResult:
     def eligible(self) -> list[dict[str, Any]]:
         """Return the orphans old enough to delete."""
         return [row for row in self.orphans if row["eligible"]]
+
+    @property
+    def history_orphans(self) -> list[dict[str, Any]]:
+        """Return the orphans in a history-layer bucket, which are never deleted."""
+        return [row for row in self.orphans if row["history"]]
 
 
 def refuse_to_delete_blind(unreadable: list[str]) -> None:
@@ -442,6 +477,7 @@ def sweep_warehouse(  # noqa: PLR0913
         refuse_to_delete_blind(unreadable)
     targets = warehouse_scan_targets(tables, locations, warehouse_env)
     referenced = references(tables)
+    history = history_buckets(locations)
     scanned = 0
     orphans: list[dict[str, Any]] = []
     unsuffixed: list[str] = []
@@ -456,8 +492,11 @@ def sweep_warehouse(  # noqa: PLR0913
                 continue
             row = measure(s3, bucket, prefix)
             row["age_days"] = (now - row["newest"]).days if row["newest"] else None
+            row["history"] = bucket in history
             row["eligible"] = (
-                row["age_days"] is not None and row["age_days"] >= min_age_days
+                not row["history"]
+                and row["age_days"] is not None
+                and row["age_days"] >= min_age_days
             )
             orphans.append(row)
 

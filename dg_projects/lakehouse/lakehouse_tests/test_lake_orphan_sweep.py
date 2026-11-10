@@ -26,6 +26,7 @@ ORPHANS = [
         "bytes": 105,
         "newest": datetime(2026, 9, 1, tzinfo=UTC),
         "age_days": 35,
+        "history": False,
         "eligible": True,
     },
     {
@@ -35,9 +36,20 @@ ORPHANS = [
         "bytes": 7,
         "newest": datetime(2026, 10, 4, tzinfo=UTC),
         "age_days": 2,
+        "history": False,
         "eligible": False,
     },
 ]
+HISTORY_ORPHAN = {
+    "bucket": "lake-history-qa",
+    "prefix": f"snapshot_dropped-{UUID}",
+    "objects": 3,
+    "bytes": 14,
+    "newest": datetime(2026, 9, 1, tzinfo=UTC),
+    "age_days": 35,
+    "history": True,
+    "eligible": False,
+}
 
 
 def _result(outcomes: list[PrefixOutcome] | None, **overrides: Any) -> SweepResult:
@@ -141,6 +153,7 @@ def test_report_run_says_delete_did_not_run(
     assert metadata["eligible_bytes"] == ORPHANS[0]["bytes"]
     assert metadata["orphan_details"][0]["path"] == f"s3://lake-mart-qa/gone-{UUID}/"
     assert metadata["unsuffixed_unreferenced_prefixes"] == 1
+    assert metadata["history_orphan_prefixes"] == 0
     assert metadata["unreadable_glue_databases"] == ["ol_warehouse_production_mart"]
     assert (
         "Report only: 2 orphan prefixes, 1 eligible (105 bytes). Unreadable Glue "
@@ -192,6 +205,22 @@ def test_delete_errors_fail_the_run(monkeypatch: pytest.MonkeyPatch):
         lake_orphan_sweep(
             build_asset_context(), LakeOrphanSweepConfig(min_age_days=7, delete=True)
         )
+
+
+@pytest.mark.parametrize("outcomes", [None, []], ids=["report", "delete"])
+def test_a_history_orphan_fails_the_run(
+    monkeypatch: pytest.MonkeyPatch, outcomes: list[PrefixOutcome] | None
+):
+    _enable_delete(monkeypatch)
+    _returning(monkeypatch, _result(outcomes, orphans=[*ORPHANS, HISTORY_ORPHAN]))
+    config = LakeOrphanSweepConfig(min_age_days=7, delete=outcomes is not None)
+
+    with pytest.raises(
+        RuntimeError, match="history layer have no Glue table"
+    ) as raised:
+        lake_orphan_sweep(build_asset_context(), config)
+
+    assert f"s3://lake-history-qa/snapshot_dropped-{UUID}/" in str(raised.value)
 
 
 def test_a_scope_that_resolves_to_nothing_fails(monkeypatch: pytest.MonkeyPatch):
