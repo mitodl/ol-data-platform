@@ -64,6 +64,7 @@ from ol_dbt_cli.lib.metric_registry import (
     check_metric_registry,
     load_metrics,
 )
+from ol_dbt_cli.lib.null_ordering import NULL_ORDERING_CHECK, check_null_ordering
 from ol_dbt_cli.lib.pipe_concat import PIPE_CONCAT_CHECK, check_pipe_concat
 from ol_dbt_cli.lib.qa_contract import BASELINE_FILENAME as QA_BASELINE_FILENAME
 from ol_dbt_cli.lib.qa_contract import (
@@ -1031,7 +1032,7 @@ def validate(
                 "Comma-separated list of checks to skip: yaml_sql_sync, upstream_refs, dangling_refs, "
                 "broken_ref_columns, docs_coverage, pk_test_coverage, yaml_integrity, select_star, "
                 "dimensional_layering, qa_branch_contract, data_contract, metric_registry, pipe_concat, "
-                "cohort_policy, raw_json_calls, exposure_contract, glossary_terms."
+                "null_ordering, cohort_policy, raw_json_calls, exposure_contract, glossary_terms."
             ),
         ),
     ] = None,
@@ -1043,8 +1044,8 @@ def validate(
                 "Comma-separated list of checks to run exclusively (all others are skipped): "
                 "yaml_sql_sync, upstream_refs, dangling_refs, broken_ref_columns, docs_coverage, "
                 "pk_test_coverage, yaml_integrity, select_star, dimensional_layering, qa_branch_contract, "
-                "data_contract, metric_registry, pipe_concat, cohort_policy, raw_json_calls, exposure_contract, "
-                "glossary_terms. "
+                "data_contract, metric_registry, pipe_concat, null_ordering, cohort_policy, raw_json_calls, "
+                "exposure_contract, glossary_terms. "
                 "Mutually exclusive with --skip."
             ),
         ),
@@ -1215,6 +1216,9 @@ def validate(
                                it depends on; regenerate with `ol-dbt exposures export` (ERROR)
     17. glossary_terms       — every config.meta.openmetadata.glossary FQN in the project names a
                                term declared in <repo>/glossary/ (ERROR)
+    18. null_ordering        — every ascending sort key in a window or an ordered aggregate says
+                               NULLS FIRST or NULLS LAST, since StarRocks sorts NULLs first
+                               and Trino last (ERROR)
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -1284,6 +1288,7 @@ def validate(
         DATA_CONTRACT_CHECK,
         METRIC_REGISTRY_CHECK,
         PIPE_CONCAT_CHECK,
+        NULL_ORDERING_CHECK,
         COHORT_POLICY_CHECK,
         RAW_JSON_CALLS_CHECK,
         EXPOSURE_CONTRACT_CHECK,
@@ -1297,6 +1302,7 @@ def validate(
         DATA_CONTRACT_CHECK,
         METRIC_REGISTRY_CHECK,
         PIPE_CONCAT_CHECK,
+        NULL_ORDERING_CHECK,
         COHORT_POLICY_CHECK,
         RAW_JSON_CALLS_CHECK,
         EXPOSURE_CONTRACT_CHECK,
@@ -1631,6 +1637,10 @@ def validate(
     # in a model, and --changed-only selects neither.
     if PIPE_CONCAT_CHECK not in skipped:
         check_pipe_concat(dbt_dir, report)
+
+    # Global like pipe_concat: a sort key is as wrong in a macro as in a model.
+    if NULL_ORDERING_CHECK not in skipped:
+        check_null_ordering(dbt_dir, report)
 
     # Global because the declarations live in YAML, which --changed-only does not select.
     if COHORT_POLICY_CHECK not in skipped:
