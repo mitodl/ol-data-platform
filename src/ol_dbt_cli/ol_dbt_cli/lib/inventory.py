@@ -545,6 +545,15 @@ def _check_history(unit: Unit, report: ValidationReport) -> None:
                 unit.key,
                 f"{raw_table} is left out of raw history because it declares no primary_key",
             )
+        keys = table.get("primary_key") or []
+        if history_in_scope(table) and any(len(path) != 1 for path in keys):
+            report.add(
+                CHECK,
+                Severity.ERROR,
+                unit.key,
+                f"{raw_table} is in history scope but its primary key {keys!r} has a nested path",
+                "A snapshot keys on columns. Take it out with `history.in_scope: false` and a reason.",
+            )
         if not isinstance(settings, dict):
             continue
         configured = sorted(set(settings) - {"in_scope", "reason"})
@@ -557,15 +566,6 @@ def _check_history(unit: Unit, report: ValidationReport) -> None:
                 "Nothing reads these settings for a table without a snapshot.",
             )
             continue
-        keys = table.get("primary_key") or []
-        if history_in_scope(table) and any(len(path) != 1 for path in keys):
-            report.add(
-                CHECK,
-                Severity.ERROR,
-                unit.key,
-                f"{raw_table} is in history scope but its primary key {keys!r} has a nested path",
-                "A snapshot keys on columns. Take it out with `history.in_scope: false` and a reason.",
-            )
         key_columns = {path[0].lower() for path in keys if path}
         excluded = {column.lower() for column in settings.get("exclude_columns", [])}
         ignored = {column.lower() for column in settings.get("ignore_columns", [])}

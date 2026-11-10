@@ -274,6 +274,11 @@ class TestRender:
 
 
 class TestFiles:
+    def test_an_empty_inventory_renders_nothing(self) -> None:
+        """A wrong --inventory-dir loads no units, and --write would then delete every file."""
+        with pytest.raises(RenderError, match="no inventory units"):
+            render_history([])
+
     def test_hand_edit_and_leftover_are_stale_and_write_fixes_both(self, tmp_path: Path) -> None:
         rendered = render_history([_unit(DB_UNIT)])
         write_history_files(tmp_path, rendered)
@@ -328,6 +333,12 @@ class TestValidation:
         }
         errors = _errors(_validate(inventory, ("mitxonline__mysql", data)))
         assert any("unknown tables ['nope']" in message for message in errors)
+
+    def test_nested_key_fails_without_a_history_block(self, inventory: Path) -> None:
+        data = copy.deepcopy(DB_UNIT)
+        data["tables"][1]["primary_key"] = [["payload", "id"]]
+        errors = _errors(_validate(inventory, ("mitxonline__mysql", data)))
+        assert any("has a nested path" in message for message in errors)
 
     def test_keyless_candidate_is_reported_as_info(self, inventory: Path) -> None:
         report = _validate(inventory, ("mitxonline__mysql", DB_UNIT))
