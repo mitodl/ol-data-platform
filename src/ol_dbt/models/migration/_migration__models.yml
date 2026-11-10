@@ -124,8 +124,8 @@ models:
 
 - name: edxorg_to_mitxonline_letter_grades
   description: >
-    edX.org letter grades for migrated course-v1:MITx+ course run grades in
-    MITx Online that have no letter grade. Used by the MITx Online
+    edX.org letter grades for migrated course-v1:MITx+ and VJx+ course run
+    grades in MITx Online that have no letter grade. Used by the MITx Online
     `migrate_edx_data --type letter_grades` command.
   config:
     meta:
