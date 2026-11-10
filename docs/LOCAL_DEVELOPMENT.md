@@ -288,36 +288,7 @@ du -sh ~/.ol-dbt/temp/
 
 If you've been using the legacy `--target dev_qa` or `--target dev_production` workflow with suffixed schemas, you can clean up old data. Everything in this section runs through Galaxy, so it stops working once Galaxy access is revoked (M4 in [ADR 0012](https://github.com/mitodl/ol-infrastructure/blob/main/docs/adr/0012-trino-to-starrocks-cutover.md)). Clean up before then.
 
-**Option 1: Using dbt run-operation (Recommended)**
-
-The `trino_utils` package (already installed) provides built-in cleanup macros:
-
-```bash
-cd src/ol_dbt
-
-# Drop all schemas matching your suffix (e.g., ol_warehouse_production_tmacey)
-uv run dbt run-operation trino__drop_schemas_by_prefixes \
-  --args "{prefixes: ['ol_warehouse_production_${DBT_SCHEMA_SUFFIX}']}" \
-  --target dev_production
-
-# Drop orphaned models no longer in project (dry run first)
-uv run dbt run-operation trino__drop_old_relations \
-  --args "{dry_run: true}" \
-  --target dev_production
-
-# Execute cleanup
-uv run dbt run-operation trino__drop_old_relations \
-  --target dev_production
-
-# Clean up multiple prefixes at once
-uv run dbt run-operation trino__drop_schemas_by_prefixes \
-  --args "{prefixes: ['ol_warehouse_production_tmacey', 'ol_warehouse_production_staging_tmacey']}" \
-  --target dev_production
-```
-
-**Option 2: Using Python cleanup script**
-
-For more detailed control and cross-target cleanup:
+Use the `ol-dbt local cleanup` command. It drops every table and view in the schemas carrying your suffix, whether or not the project still defines it. It does not drop only the relations missing from the project, as the removed `trino__drop_old_relations` macro did, so there is no way left to clear orphaned models while keeping the rest.
 
 ```bash
 # Dry run (see what would be deleted)

@@ -115,7 +115,7 @@ Add to `src/ol_dbt/packages.yml`:
 ```
 Wrap `audit_helper.compare_relations` / `compare_column_values` / `compare_row_counts`.
 (Current packages: `codegen`, `metaplane/dbt_expectations`, `dbt_utils`,
-`starburstdata/trino_utils`.)
+`audit_helper`.)
 
 ### 3.3 CLI surface
 New file `src/ol_dbt_cli/ol_dbt_cli/commands/diff.py`; register in `cli.py` via
