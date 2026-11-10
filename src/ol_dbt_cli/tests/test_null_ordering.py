@@ -109,6 +109,13 @@ def test_reads_sql_and_order_by_passed_as_jinja_strings(sql: str, keys: list[str
         ("with s as (select id from t order by created_on, id desc limit 1) select * from s", ["created_on"]),
         ("select (select id from t order by created_on limit 1) as first_id", ["created_on"]),
         ("select id from t\norder by created_on\nlimit 10\n", ["created_on"]),
+        ("select id from t order by a, b nulls last offset 5 limit 1", ["a"]),
+        ("select * from t order by a nulls last {% if target.name == 'dev' %} limit 10 {% endif %}", []),
+        (
+            "{% macro a() %}select * from t order by x{% endmacro %}"
+            "{% macro b() %}select y, z from u limit 1{% endmacro %}",
+            [],
+        ),
     ],
 )
 def test_reads_a_query_order_by_that_a_limit_follows(sql: str, keys: list[str]) -> None:

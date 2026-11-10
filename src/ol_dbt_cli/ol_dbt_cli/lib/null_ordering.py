@@ -13,8 +13,8 @@ aggregate call (``array_agg``, ``group_concat``, ``... within group``), SQL hand
 to a macro as a Jinja string, and the ``order_by`` argument of ``array_agg_filter``
 when it is a string literal or a variable the file sets to one. A sort key
 written wholly in Jinja (``order by {{ order_by }}``) is the caller's to check.
-A query's own ORDER BY (top-level or in a subquery) is read only when a LIMIT
-follows it; otherwise it only orders output rows.
+A query's own ORDER BY (top-level or in a subquery) is read only when a LIMIT or
+OFFSET follows it before any Jinja statement; otherwise it only orders output rows.
 """
 
 from __future__ import annotations
@@ -44,8 +44,9 @@ _ORDER_BY = re.compile(r"\border\s+by\b", re.IGNORECASE)
 _SUBQUERY = re.compile(r"\s*(?:select|with)\b", re.IGNORECASE)
 # Words that end a sort list at depth 0: a window frame, a LIMIT, group_concat's SEPARATOR.
 # `t.range` is a column.
-_LIST_END = re.compile(r"(?<![\w.])(?:rows|range|groups|limit|separator)(?!\w)", re.IGNORECASE)
-_LIMIT = re.compile(r"limit\b", re.IGNORECASE)
+_LIST_END = re.compile(r"(?<![\w.])(?:rows|range|groups|limit|offset|separator)(?!\w)", re.IGNORECASE)
+_ROW_LIMIT = re.compile(r"(?:limit|offset)\b", re.IGNORECASE)
+_JINJA_STATEMENT = re.compile(r"\{%")
 _EXPLICIT = re.compile(r"(?:\bdesc|\bnulls\s+(?:first|last))\s*\Z", re.IGNORECASE)
 _EXPRESSION = re.compile(r"\{\{.*?\}\}", re.DOTALL)
 _ORDER_BY_ARG = re.compile(
@@ -138,8 +139,12 @@ def ascending_sort_keys(source: str) -> Iterator[SortKey]:
             yield from _ascending_keys(source, code, match.end(), len(code))
         else:
             # A query's own ORDER BY only orders its output, unless a LIMIT picks rows by it.
-            *_, (_, list_end) = _list_spans(code, match.end(), len(code))
-            if _LIMIT.match(code, list_end):
+            # Its list ends at the next Jinja statement: an `{% if %}` around the LIMIT or
+            # an `{% endmacro %}` would otherwise run it on into code that is not a sort key.
+            statement = _JINJA_STATEMENT.search(source, match.end())
+            bound = statement.start() if statement else len(code)
+            *_, (_, list_end) = _list_spans(code, match.end(), bound)
+            if _ROW_LIMIT.match(code, list_end):
                 yield from _ascending_keys(source, code, match.end(), list_end)
 
     variables = {m.group("name"): m.span("value") for m in _SET_STRING.finditer(source)}
