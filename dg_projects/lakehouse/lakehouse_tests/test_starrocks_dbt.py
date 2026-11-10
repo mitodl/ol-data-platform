@@ -19,6 +19,7 @@ from lakehouse.lib.starrocks_dbt import (
     OM_ARTIFACTS,
     RETRIABLE_ERROR_PATTERN,
     RETRY_BASE_DELAY,
+    TOMBSTONE_RETENTION_DAYS,
     ChangeTrackedView,
     MaterializedViewRefreshError,
     MissingBaseTablesError,
@@ -1020,10 +1021,22 @@ class TestChangeLogSql:
             "(`organization_key`, `user_pk`, `sso_organization_id`, `user_global_id`, "
             "`row_hash`, `changed_on`, `is_deleted`) select"
         )
-        assert sql.endswith(
+        assert (
             "full outer join b2b_learner_records.mv_b2b_learner_changes c "
             "on m.`organization_key` <=> c.`organization_key` "
-            "and m.`user_pk` <=> c.`user_pk`"
+            "and m.`user_pk` <=> c.`user_pk` where"
+        ) in sql
+
+    def test_stamp_drops_only_removals_older_than_the_retention(self):
+        """ol-analytics-api refuses a cursor older than the retention, so an
+        older removal can never be served. A live row with an old changed_on is
+        a learner who hasn't changed, and stays.
+        """
+        sql = stamp_change_log_sql(LEARNER_VIEW)
+        assert TOMBSTONE_RETENTION_DAYS == 90
+        assert sql.endswith(
+            "where not (m.row_hash is null and c.is_deleted and c.changed_on < "
+            "date_sub(utc_timestamp(), interval 90 day))"
         )
 
 
