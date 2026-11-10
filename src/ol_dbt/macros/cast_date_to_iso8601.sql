@@ -36,9 +36,10 @@ end
 {#
     StarRocks has no try_cast, and a failed cast or str_to_date returns NULL where Trino's
     from_iso8601_date raises, so this raises where both are NULL for a non-NULL value (the
-    rule the strict JSON macros and date_parse follow). Trino's from_iso8601_date also
-    reads reduced forms (2026, 2026-11, week and ordinal dates), which this does not. The
-    lambda binds the input so it is rendered once.
+    rule the strict JSON macros and date_parse follow). The engines still differ at the
+    edges: Trino's from_iso8601_date reads reduced forms (2026, 2026-11, week and ordinal
+    dates), which this rejects, and str_to_date accepts trailing text after the date,
+    which Trino rejects. The lambda binds the input so it is rendered once.
 #}
 {% macro starrocks__cast_date_to_iso8601(column_name, null_when=none) %}
   array_map(
