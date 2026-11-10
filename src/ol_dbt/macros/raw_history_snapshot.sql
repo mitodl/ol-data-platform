@@ -15,8 +15,8 @@
     A load that leaves raw empty or short would otherwise make the snapshot
     write a delete row for every missing key, which cannot be undone, so the
     run first counts the current keys missing from the select
-    (raw_history_delete_guard) and fails, writing nothing, when they are more
-    than `max_delete_fraction` of the current keys.
+    (raw_history_delete_guard) and fails, writing nothing, when too many are
+    missing.
 
     Args:
         raw_table: name of the table in the `ol_warehouse_raw_data` source.
@@ -74,10 +74,14 @@
 
     Counts the snapshot's current keys (not already marked deleted) that are
     missing from `body`, the select the snapshot reads. Raises, so the run
-    writes nothing, when they exceed `max_delete_fraction` of the current keys.
+    writes nothing, when every current key is missing, or when the missing
+    keys are more than var('raw_history_min_delete_count', 10) and more than
+    `max_delete_fraction` of the current keys. The floor lets a small table
+    lose a few records without failing every run until someone overrides it.
     The first run of a snapshot has no current keys and is not checked.
 
-    A deliberate mass delete (a loader cutover, or a table's first keyset run)
+    A per-table `max_delete_fraction` takes precedence over the var. A
+    deliberate mass delete (a loader cutover, or a table's first keyset run)
     passes when the run lists the snapshot in
     var('raw_history_allow_deletes'), e.g.
     --vars '{raw_history_allow_deletes: [snapshot_raw__x]}'. The count is
@@ -91,9 +95,17 @@
         {{ return(none) }}
     {%- endif -%}
     {%- set keys = [unique_key] if unique_key is string else unique_key -%}
-    {%- set limit = max_delete_fraction
+    {%- set limit = (max_delete_fraction
         if max_delete_fraction is not none
-        else var('raw_history_max_delete_fraction', 0.1) -%}
+        else var('raw_history_max_delete_fraction', 0.1)) | float -%}
+    {%- set floor = var('raw_history_min_delete_count', 10) | int -%}
+    {%- set allow_list = var('raw_history_allow_deletes', []) -%}
+    {%- if allow_list is string -%}
+        {{ exceptions.raise_compiler_error(
+            "raw_history_allow_deletes must be a list of snapshot names, got "
+            ~ allow_list
+        ) }}
+    {%- endif -%}
     {%- set guard_sql -%}
         with source_keys as (
             select distinct {{ keys | join(', ') }}
@@ -101,7 +113,7 @@
         )
 
         , current_keys as (
-            select {{ keys | join(', ') }}
+            select distinct {{ keys | join(', ') }}
             from {{ target_relation }}
             where dbt_valid_to is null and coalesce(dbt_is_deleted, 'False') != 'True'
         )
@@ -121,18 +133,21 @@
     {%- set row = run_query(guard_sql).rows[0] -%}
     {%- set current_count = row[0] | int -%}
     {%- set missing_count = (row[1] or 0) | int -%}
-    {%- set allowed = this.identifier in var('raw_history_allow_deletes', []) -%}
+    {%- set allowed = this.identifier in allow_list -%}
     {{ log(
         "raw_history_delete_guard " ~ this.identifier ~ ": " ~ missing_count
         ~ " of " ~ current_count ~ " current keys missing from the source"
         ~ (" (allowed for this run)" if allowed else ""),
         info=true
     ) }}
-    {%- if not allowed and missing_count > current_count * limit -%}
+    {%- set everything = current_count > 0 and missing_count == current_count -%}
+    {%- set too_many = missing_count > floor and missing_count > current_count * limit -%}
+    {%- if not allowed and (everything or too_many) -%}
         {{ exceptions.raise_compiler_error(
             "raw_history_delete_guard: " ~ this.identifier ~ " would mark "
             ~ missing_count ~ " of its " ~ current_count ~ " current records "
-            ~ "deleted, more than " ~ limit ~ " of them. Nothing was written. "
+            ~ "deleted (limit: more than " ~ floor ~ " and more than " ~ limit
+            ~ " of them, or all of them). Nothing was written. "
             ~ "If the raw table is complete, rerun with --vars "
             ~ "'{raw_history_allow_deletes: [" ~ this.identifier ~ "]}'."
         ) }}
