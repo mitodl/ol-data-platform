@@ -15,6 +15,7 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV
 from data_loading.defs.ingestion.assets import (
     TRACKING_LOGS_DEPLOYMENTS,
     mitxonline_app_assets,
+    qa_first_app_database_assets,
     tracking_logs_table,
     xpro_app_assets,
 )
@@ -177,6 +178,24 @@ xpro_app_ingest_schedule = (
     if xpro_app_assets
     else None
 )
+# The cadence of each unit's production Airbyte connection (inventory
+# sync_interval_hours), offset from the MITx Online (:20) and xPro (:40) loads.
+QA_FIRST_APP_DATABASE_CRONS = {
+    "mitlearn_app": "10 5 * * *",  # mitlearn/app_postgres, 24h
+    "learn_ai_app": "30 */6 * * *",  # learn_ai/app_postgres, 6h
+    "ocw_studio_app": "50 */6 * * *",  # ocw/app_postgres, 6h
+}
+# Defined only where the assets are (QA_FIRST_APP_DATABASE_ENVIRONMENTS), and
+# selected by definition so a table added to a spec needs no edit here.
+qa_first_app_database_schedules = [
+    dg.ScheduleDefinition(
+        name=f"{name}_ingest_schedule",
+        target=dg.AssetSelection.assets(assets),
+        cron_schedule=QA_FIRST_APP_DATABASE_CRONS[name],
+        execution_timezone="Etc/UTC",
+    )
+    for name, assets in qa_first_app_database_assets.items()
+]
 # PostHog writes an hour's export object after that hour closes. Across the 168
 # objects written 2026-08-28 to 2026-09-03 the lag ran 1.4 to 15.1 minutes,
 # median 8.3, so :20 clears the measured maximum. Landing later than that costs
@@ -488,6 +507,7 @@ defs = dg.Definitions(
         keycloak_ingest_schedule,
         *([mitxonline_app_ingest_schedule] if mitxonline_app_ingest_schedule else []),
         *([xpro_app_ingest_schedule] if xpro_app_ingest_schedule else []),
+        *qa_first_app_database_schedules,
         posthog_events_ingest_schedule,
         course_xml_blocks_ingest_schedule,
         edxorg_program_reports_ingest_schedule,

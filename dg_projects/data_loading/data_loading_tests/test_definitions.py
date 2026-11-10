@@ -21,9 +21,17 @@ from data_loading.defs.ingestion.assets import (
     MITXONLINE_APP_DLT_ENVIRONMENTS,
     MITXONLINE_APP_KEYSET_ENVIRONMENTS,
     MITXONLINE_APP_KEYSET_UNIT,
+    QA_FIRST_APP_DATABASE_ENVIRONMENTS,
+    QA_FIRST_APP_DATABASES,
     XPRO_APP_DLT_ENVIRONMENTS,
 )
-from ol_dlt.sources import mitxonline_app, xpro_app
+from ol_dlt.sources import (
+    learn_ai_app,
+    mitlearn_app,
+    mitxonline_app,
+    ocw_studio_app,
+    xpro_app,
+)
 
 from ol_dlt import keyset
 
@@ -275,6 +283,58 @@ def test_mitxonline_app_dlt_does_not_run_in_production() -> None:
         assert "mitxonline_app_ingest_schedule" not in {
             s.name for s in repo.schedule_defs
         }
+
+
+_QA_FIRST_SPECS = {
+    "mitlearn_app": mitlearn_app.MITLEARN_APP_SPEC,
+    "learn_ai_app": learn_ai_app.LEARN_AI_APP_SPEC,
+    "ocw_studio_app": ocw_studio_app.OCW_STUDIO_APP_SPEC,
+}
+
+
+def test_every_qa_first_app_database_has_a_spec_here() -> None:
+    assert set(QA_FIRST_APP_DATABASES) == set(_QA_FIRST_SPECS)
+
+
+@pytest.mark.parametrize("environment", sorted(QA_FIRST_APP_DATABASE_ENVIRONMENTS))
+@pytest.mark.parametrize("name", sorted(_QA_FIRST_SPECS))
+def test_qa_first_app_database_loads_and_is_scheduled(
+    environment: str, name: str
+) -> None:
+    spec = _QA_FIRST_SPECS[name]
+    expected = {
+        f"ol_warehouse_raw_data/{spec.raw_table_name(table)}" for table in spec.tables
+    }
+    with _repository_for(environment) as repo:
+        asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
+        assert expected <= asset_keys
+        schedule = repo.get_schedule_def(f"{name}_ingest_schedule")
+        scheduled = {
+            key.to_user_string()
+            for key in repo.get_job(schedule.job_name).asset_layer.selected_asset_keys
+        }
+        assert scheduled == expected
+
+
+@pytest.mark.parametrize("environment", ["dev", "production"])
+def test_qa_first_app_databases_do_not_run_outside_their_environments(
+    environment: str,
+) -> None:
+    """Airbyte still loads these units in production under the same keys, and
+    the local lake gets them from fixtures carrying the production loader's
+    columns.
+    """
+    with _repository_for(environment) as repo:
+        asset_keys = {key.to_user_string() for key in repo.assets_defs_by_key}
+        assert asset_keys, f"code location exposed no assets under {environment}"
+        prefixes = tuple(spec.raw_table_prefix for spec in _QA_FIRST_SPECS.values())
+        assert not [
+            key for key in asset_keys if key.split("/")[-1].startswith(prefixes)
+        ]
+        schedule_names = {s.name for s in repo.schedule_defs}
+        assert not {f"{name}_ingest_schedule" for name in _QA_FIRST_SPECS} & (
+            schedule_names
+        )
 
 
 @pytest.mark.parametrize("environment", sorted(MITXONLINE_APP_KEYSET_ENVIRONMENTS))

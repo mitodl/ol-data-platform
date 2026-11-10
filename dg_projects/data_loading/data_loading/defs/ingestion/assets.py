@@ -34,12 +34,15 @@ from ol_dlt.sources import (
     edxorg_s3,
     google_ads,
     keycloak,
+    learn_ai_app,
     medium,
     mit_climate,
     mit_edx_programs,
+    mitlearn_app,
     mitpe,
     mitxonline_app,
     ocw_content,
+    ocw_studio_app,
     oll,
     openlearning,
     podcast_rss,
@@ -167,6 +170,44 @@ xpro_app_assets = (
     )
     if DAGSTER_ENV in XPRO_APP_DLT_ENVIRONMENTS
     else None
+)
+# App databases whose dlt source loads QA (and CI) ahead of the unit's
+# production cutover, so that QA raw holds data from the QA application (RFC
+# 12711). Production is absent for the reason MITXONLINE_APP_DLT_ENVIRONMENTS
+# gives: the unit's Airbyte connection still loads production under the same
+# asset keys. In QA the lakehouse location holds only non-materializable dbt
+# source nodes for these keys (QA Dagster GraphQL, 2026-11-10), so nothing
+# collides there.
+#
+# `dev` is absent because these units are `strategies.local: fixture`: the
+# local lake gets their raw tables from fixtures with the production loader's
+# columns, and a dlt load there would leave staging ordering by a column the
+# table lacks. A unit joins `dev` when it gains a local-dev app to read.
+#
+# Each source reads ``<NAME>_DB_HOST`` when the code location loads, and a
+# deployed profile raises without it, so ol-infrastructure has to set the host
+# before an image with the source deploys. Keyed by pipeline name, which is
+# also that variable's prefix. A unit leaves this table in the change that
+# disables its Airbyte connection and flips it to `loader: dlt`.
+QA_FIRST_APP_DATABASE_ENVIRONMENTS = frozenset({"ci", "qa"})
+QA_FIRST_APP_DATABASES: dict[str, tuple[Callable[[], Any], Any]] = {
+    "mitlearn_app": (mitlearn_app.build_source, mitlearn_app.mitlearn_app_pipeline),
+    "learn_ai_app": (learn_ai_app.build_source, learn_ai_app.learn_ai_app_pipeline),
+    "ocw_studio_app": (
+        ocw_studio_app.build_source,
+        ocw_studio_app.ocw_studio_app_pipeline,
+    ),
+}
+
+qa_first_app_database_assets: dict[str, AssetsDefinition] = (
+    {
+        name: build_ingest_assets(
+            name=f"{name}_ingest", source=build_source(), pipeline=pipeline
+        )
+        for name, (build_source, pipeline) in QA_FIRST_APP_DATABASES.items()
+    }
+    if DAGSTER_ENV in QA_FIRST_APP_DATABASE_ENVIRONMENTS
+    else {}
 )
 # Keys-only reads of the MITx Online app database (ol_dlt.keyset), for the
 # history snapshots and staging to tell deleted keys from live ones. Run by hand
@@ -699,6 +740,7 @@ defs = Definitions(
             *([mitxonline_app_assets] if mitxonline_app_assets else []),
             *([mitxonline_app_keyset_assets] if mitxonline_app_keyset_assets else []),
             *([xpro_app_assets] if xpro_app_assets else []),
+            *qa_first_app_database_assets.values(),
             youtube_assets,
             see_assets,
             openlearning_assets,

@@ -1042,7 +1042,11 @@ A unit moves in two steps, and they are separate changes:
 
 1. The dlt source is built and runs in `dev`, `ci` and `qa`. `mitxonline/app_postgres` and
    `xpro/app_postgres` are here today (`MITXONLINE_APP_DLT_ENVIRONMENTS` and
-   `XPRO_APP_DLT_ENVIRONMENTS` in `dg_projects/data_loading`).
+   `XPRO_APP_DLT_ENVIRONMENTS` in `dg_projects/data_loading`). `mitlearn/app_postgres`,
+   `learn_ai/app_postgres` and `ocw/app_postgres` run in `ci` and `qa` only
+   (`QA_FIRST_APP_DATABASES`), because their local strategy is `fixture`. While Airbyte still
+   loads production, the unit's `dlt:` block makes its QA staging dedup on `_dlt_load_id`
+   (`raw_metadata_column_lake_overrides()`).
 2. Production is cut over: every production Airbyte connection of the unit is paused,
    `production` joins that set and the unit flips to `loader: dlt`. A unit can have more than
    one connection (§3.5). Four in the order below have two: the three `mysql` units and
