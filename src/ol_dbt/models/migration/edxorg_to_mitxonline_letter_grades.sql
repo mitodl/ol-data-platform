@@ -7,7 +7,7 @@ with edxorg_grade as (
         , {{ format_course_id("replace(edxorg_grade.courserun_readable_id, 'course-v1:', '')", false) }}
             as courserun_readable_id
         -- Some course grading policies have a zero-width space before the label
-        , trim(replace(edxorg_grade.courserungrade_letter_grade, chr(8203), '')) as courserungrade_letter_grade
+        , replace(edxorg_grade.courserungrade_letter_grade, chr(8203), '') as courserungrade_letter_grade
     from {{ ref('stg__edxorg__s3__courserun_grade') }} as edxorg_grade
     inner join {{ ref('int__mitx__users') }} as mitx__users
         on cast(edxorg_grade.user_id as varchar) = cast(mitx__users.user_edxorg_id as varchar)
