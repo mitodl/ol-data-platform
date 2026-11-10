@@ -10,6 +10,9 @@ strategies:
   local: fixture
 loader: dlt
 table_prefix: raw__oll__google_sheets__
+# Each load reads the whole sheet, so a row missing from it was removed.
+history:
+  absence: deleted
 dlt:
   source_module: ol_dlt.sources.oll
   write_disposition: replace

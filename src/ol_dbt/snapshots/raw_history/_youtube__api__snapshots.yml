@@ -1,0 +1,140 @@
+---
+# GENERATED FILE - DO NOT EDIT.
+# Regenerate with `ol-dbt inventory history --write`; CI fails if this file and
+# ingestion/inventory/units/youtube__api.yml disagree.
+version: 2
+snapshots:
+- name: snapshot_raw__youtube__api__channels
+  description: >-
+    History of raw__youtube__api__channels (youtube/api, table raw__youtube__api__channels):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record missing from the newest load
+    gets a final row with dbt_is_deleted 'True'; the snapshot reads only the rows
+    of that load.
+  config:
+    meta:
+      raw_history:
+        unit: youtube/api
+        absence: deleted
+        delete_capture: latest_load
+  columns:
+  - name: channel_id
+    description: >-
+      primary key of the youtube/api raw__youtube__api__channels record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__youtube__api__playlist_items
+  description: >-
+    History of raw__youtube__api__playlist_items (youtube/api, table raw__youtube__api__playlist_items):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record missing from the newest load
+    gets a final row with dbt_is_deleted 'True'; the snapshot reads only the rows
+    of that load.
+  config:
+    meta:
+      raw_history:
+        unit: youtube/api
+        absence: deleted
+        delete_capture: latest_load
+  columns:
+  - name: playlist_id
+    description: >-
+      primary key of the youtube/api raw__youtube__api__playlist_items record.
+  - name: video_id
+    description: >-
+      primary key of the youtube/api raw__youtube__api__playlist_items record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__youtube__api__playlists
+  description: >-
+    History of raw__youtube__api__playlists (youtube/api, table raw__youtube__api__playlists):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record missing from the newest load
+    gets a final row with dbt_is_deleted 'True'; the snapshot reads only the rows
+    of that load.
+  config:
+    meta:
+      raw_history:
+        unit: youtube/api
+        absence: deleted
+        delete_capture: latest_load
+  columns:
+  - name: playlist_id
+    description: >-
+      primary key of the youtube/api raw__youtube__api__playlists record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__youtube__api__videos
+  description: >-
+    History of raw__youtube__api__videos (youtube/api, table raw__youtube__api__videos):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record missing from the newest load
+    gets a final row with dbt_is_deleted 'True'; the snapshot reads only the rows
+    of that load.
+  config:
+    meta:
+      raw_history:
+        unit: youtube/api
+        absence: deleted
+        delete_capture: latest_load
+  columns:
+  - name: video_id
+    description: primary key of the youtube/api raw__youtube__api__videos record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.

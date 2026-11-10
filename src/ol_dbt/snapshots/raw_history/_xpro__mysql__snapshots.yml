@@ -1,0 +1,1650 @@
+---
+# GENERATED FILE - DO NOT EDIT.
+# Regenerate with `ol-dbt inventory history --write`; CI fails if this file and
+# ingestion/inventory/units/xpro__mysql.yml disagree.
+version: 2
+snapshots:
+- name: snapshot_raw__xpro__openedx__mysql__assessment_assessment
+  description: >-
+    History of raw__xpro__openedx__mysql__assessment_assessment (xpro/mysql, table
+    assessment_assessment): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql assessment_assessment record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__assessment_assessmentfeedback
+  description: >-
+    History of raw__xpro__openedx__mysql__assessment_assessmentfeedback (xpro/mysql,
+    table assessment_assessmentfeedback): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql assessment_assessmentfeedback record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__assessment_assessmentfeedback_assessments
+  description: >-
+    History of raw__xpro__openedx__mysql__assessment_assessmentfeedback_assessments
+    (xpro/mysql, table assessment_assessmentfeedback_assessments): one row per version
+    of each record, with every source column except the loader's, secret-pattern columns
+    and any the inventory excludes. Resolution is one snapshot run, and history starts
+    at the first run. A record that leaves the source gets a final row with dbt_is_deleted
+    'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql assessment_assessmentfeedback_assessments record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__assessment_assessmentfeedback_options
+  description: >-
+    History of raw__xpro__openedx__mysql__assessment_assessmentfeedback_options (xpro/mysql,
+    table assessment_assessmentfeedback_options): one row per version of each record,
+    with every source column except the loader's, secret-pattern columns and any the
+    inventory excludes. Resolution is one snapshot run, and history starts at the
+    first run. A record that leaves the source gets a final row with dbt_is_deleted
+    'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql assessment_assessmentfeedback_options record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__assessment_assessmentfeedbackoption
+  description: >-
+    History of raw__xpro__openedx__mysql__assessment_assessmentfeedbackoption (xpro/mysql,
+    table assessment_assessmentfeedbackoption): one row per version of each record,
+    with every source column except the loader's, secret-pattern columns and any the
+    inventory excludes. Resolution is one snapshot run, and history starts at the
+    first run. A record that leaves the source gets a final row with dbt_is_deleted
+    'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql assessment_assessmentfeedbackoption record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__assessment_assessmentpart
+  description: >-
+    History of raw__xpro__openedx__mysql__assessment_assessmentpart (xpro/mysql, table
+    assessment_assessmentpart): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql assessment_assessmentpart record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__assessment_criterion
+  description: >-
+    History of raw__xpro__openedx__mysql__assessment_criterion (xpro/mysql, table
+    assessment_criterion): one row per version of each record, with every source column
+    except the loader's, secret-pattern columns and any the inventory excludes. Resolution
+    is one snapshot run, and history starts at the first run. A record that leaves
+    the source gets a final row with dbt_is_deleted 'True', since every load reads
+    the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql assessment_criterion record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__assessment_criterionoption
+  description: >-
+    History of raw__xpro__openedx__mysql__assessment_criterionoption (xpro/mysql,
+    table assessment_criterionoption): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql assessment_criterionoption record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__assessment_peerworkflow
+  description: >-
+    History of raw__xpro__openedx__mysql__assessment_peerworkflow (xpro/mysql, table
+    assessment_peerworkflow): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql assessment_peerworkflow record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__assessment_peerworkflowitem
+  description: >-
+    History of raw__xpro__openedx__mysql__assessment_peerworkflowitem (xpro/mysql,
+    table assessment_peerworkflowitem): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql assessment_peerworkflowitem record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__assessment_rubric
+  description: >-
+    History of raw__xpro__openedx__mysql__assessment_rubric (xpro/mysql, table assessment_rubric):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql assessment_rubric record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__assessment_studenttrainingworkflow
+  description: >-
+    History of raw__xpro__openedx__mysql__assessment_studenttrainingworkflow (xpro/mysql,
+    table assessment_studenttrainingworkflow): one row per version of each record,
+    with every source column except the loader's, secret-pattern columns and any the
+    inventory excludes. Resolution is one snapshot run, and history starts at the
+    first run. A record that leaves the source gets a final row with dbt_is_deleted
+    'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql assessment_studenttrainingworkflow record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__assessment_studenttrainingworkflowitem
+  description: >-
+    History of raw__xpro__openedx__mysql__assessment_studenttrainingworkflowitem (xpro/mysql,
+    table assessment_studenttrainingworkflowitem): one row per version of each record,
+    with every source column except the loader's, secret-pattern columns and any the
+    inventory excludes. Resolution is one snapshot run, and history starts at the
+    first run. A record that leaves the source gets a final row with dbt_is_deleted
+    'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql assessment_studenttrainingworkflowitem record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__assessment_trainingexample
+  description: >-
+    History of raw__xpro__openedx__mysql__assessment_trainingexample (xpro/mysql,
+    table assessment_trainingexample): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql assessment_trainingexample record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__assessment_trainingexample_options_selected
+  description: >-
+    History of raw__xpro__openedx__mysql__assessment_trainingexample_options_selected
+    (xpro/mysql, table assessment_trainingexample_options_selected): one row per version
+    of each record, with every source column except the loader's, secret-pattern columns
+    and any the inventory excludes. Resolution is one snapshot run, and history starts
+    at the first run. A record that leaves the source gets a final row with dbt_is_deleted
+    'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql assessment_trainingexample_options_selected record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__auth_user
+  description: >-
+    History of raw__xpro__openedx__mysql__auth_user (xpro/mysql, table auth_user):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql auth_user record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__auth_userprofile
+  description: >-
+    History of raw__xpro__openedx__mysql__auth_userprofile (xpro/mysql, table auth_userprofile):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql auth_userprofile record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__certificates_generatedcertificate
+  description: >-
+    History of raw__xpro__openedx__mysql__certificates_generatedcertificate (xpro/mysql,
+    table certificates_generatedcertificate): one row per version of each record,
+    with every source column except the loader's, secret-pattern columns and any the
+    inventory excludes. Resolution is one snapshot run, and history starts at the
+    first run. A record deleted at the source gets a final row with dbt_is_deleted
+    'True' once the unit's keyset (raw__xpro__openedx__mysql__certificates_generatedcertificate__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql certificates_generatedcertificate record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__course_groups_cohortmembership
+  description: >-
+    History of raw__xpro__openedx__mysql__course_groups_cohortmembership (xpro/mysql,
+    table course_groups_cohortmembership): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql course_groups_cohortmembership record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__course_groups_courseusergroup
+  description: >-
+    History of raw__xpro__openedx__mysql__course_groups_courseusergroup (xpro/mysql,
+    table course_groups_courseusergroup): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql course_groups_courseusergroup record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__credit_creditcourse
+  description: >-
+    History of raw__xpro__openedx__mysql__credit_creditcourse (xpro/mysql, table credit_creditcourse):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql credit_creditcourse record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__credit_crediteligibility
+  description: >-
+    History of raw__xpro__openedx__mysql__credit_crediteligibility (xpro/mysql, table
+    credit_crediteligibility): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    deleted at the source gets a final row with dbt_is_deleted 'True' once the unit's
+    keyset (raw__xpro__openedx__mysql__credit_crediteligibility__keyset) has been
+    read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql credit_crediteligibility record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__django_comment_client_role
+  description: >-
+    History of raw__xpro__openedx__mysql__django_comment_client_role (xpro/mysql,
+    table django_comment_client_role): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql django_comment_client_role record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__django_comment_client_role_users
+  description: >-
+    History of raw__xpro__openedx__mysql__django_comment_client_role_users (xpro/mysql,
+    table django_comment_client_role_users): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql django_comment_client_role_users record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__django_content_type
+  description: >-
+    History of raw__xpro__openedx__mysql__django_content_type (xpro/mysql, table django_content_type):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql django_content_type record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__edxval_coursevideo
+  description: >-
+    History of raw__xpro__openedx__mysql__edxval_coursevideo (xpro/mysql, table edxval_coursevideo):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql edxval_coursevideo record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__edxval_video
+  description: >-
+    History of raw__xpro__openedx__mysql__edxval_video (xpro/mysql, table edxval_video):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql edxval_video record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__forum_abuseflagger
+  description: >-
+    History of raw__xpro__openedx__mysql__forum_abuseflagger (xpro/mysql, table forum_abuseflagger):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql forum_abuseflagger record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__forum_comment
+  description: >-
+    History of raw__xpro__openedx__mysql__forum_comment (xpro/mysql, table forum_comment):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql forum_comment record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__forum_commentthread
+  description: >-
+    History of raw__xpro__openedx__mysql__forum_commentthread (xpro/mysql, table forum_commentthread):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql forum_commentthread record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__forum_historicalabuseflagger
+  description: >-
+    History of raw__xpro__openedx__mysql__forum_historicalabuseflagger (xpro/mysql,
+    table forum_historicalabuseflagger): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql forum_historicalabuseflagger record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__forum_mongocontent
+  description: >-
+    History of raw__xpro__openedx__mysql__forum_mongocontent (xpro/mysql, table forum_mongocontent):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql forum_mongocontent record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__forum_uservote
+  description: >-
+    History of raw__xpro__openedx__mysql__forum_uservote (xpro/mysql, table forum_uservote):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql forum_uservote record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__grades_persistentcoursegrade
+  description: >-
+    History of raw__xpro__openedx__mysql__grades_persistentcoursegrade (xpro/mysql,
+    table grades_persistentcoursegrade): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__xpro__openedx__mysql__grades_persistentcoursegrade__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql grades_persistentcoursegrade record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__grades_persistentsubsectiongrade
+  description: >-
+    History of raw__xpro__openedx__mysql__grades_persistentsubsectiongrade (xpro/mysql,
+    table grades_persistentsubsectiongrade): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__xpro__openedx__mysql__grades_persistentsubsectiongrade__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql grades_persistentsubsectiongrade record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__grades_persistentsubsectiongradeoverride
+  description: >-
+    History of raw__xpro__openedx__mysql__grades_persistentsubsectiongradeoverride
+    (xpro/mysql, table grades_persistentsubsectiongradeoverride): one row per version
+    of each record, with every source column except the loader's, secret-pattern columns
+    and any the inventory excludes. Resolution is one snapshot run, and history starts
+    at the first run. A record deleted at the source gets a final row with dbt_is_deleted
+    'True' once the unit's keyset (raw__xpro__openedx__mysql__grades_persistentsubsectiongradeoverride__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql grades_persistentsubsectiongradeoverride record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__organizations_organization
+  description: >-
+    History of raw__xpro__openedx__mysql__organizations_organization (xpro/mysql,
+    table organizations_organization): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql organizations_organization record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__organizations_organizationcourse
+  description: >-
+    History of raw__xpro__openedx__mysql__organizations_organizationcourse (xpro/mysql,
+    table organizations_organizationcourse): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql organizations_organizationcourse record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__student_anonymoususerid
+  description: >-
+    History of raw__xpro__openedx__mysql__student_anonymoususerid (xpro/mysql, table
+    student_anonymoususerid): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql student_anonymoususerid record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__student_courseaccessrole
+  description: >-
+    History of raw__xpro__openedx__mysql__student_courseaccessrole (xpro/mysql, table
+    student_courseaccessrole): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql student_courseaccessrole record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__student_courseenrollment
+  description: >-
+    History of raw__xpro__openedx__mysql__student_courseenrollment (xpro/mysql, table
+    student_courseenrollment): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql student_courseenrollment record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__student_languageproficiency
+  description: >-
+    History of raw__xpro__openedx__mysql__student_languageproficiency (xpro/mysql,
+    table student_languageproficiency): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql student_languageproficiency record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__submissions_score
+  description: >-
+    History of raw__xpro__openedx__mysql__submissions_score (xpro/mysql, table submissions_score):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql submissions_score record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__submissions_scoresummary
+  description: >-
+    History of raw__xpro__openedx__mysql__submissions_scoresummary (xpro/mysql, table
+    submissions_scoresummary): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql submissions_scoresummary record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__submissions_studentitem
+  description: >-
+    History of raw__xpro__openedx__mysql__submissions_studentitem (xpro/mysql, table
+    submissions_studentitem): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql submissions_studentitem record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__submissions_submission
+  description: >-
+    History of raw__xpro__openedx__mysql__submissions_submission (xpro/mysql, table
+    submissions_submission): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql submissions_submission record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__teams_courseteam
+  description: >-
+    History of raw__xpro__openedx__mysql__teams_courseteam (xpro/mysql, table teams_courseteam):
+    one row per version of each record, with every source column except the loader's,
+    secret-pattern columns and any the inventory excludes. Resolution is one snapshot
+    run, and history starts at the first run. A record that leaves the source gets
+    a final row with dbt_is_deleted 'True', since every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql teams_courseteam record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__teams_courseteammembership
+  description: >-
+    History of raw__xpro__openedx__mysql__teams_courseteammembership (xpro/mysql,
+    table teams_courseteammembership): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql teams_courseteammembership record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__user_api_usercoursetag
+  description: >-
+    History of raw__xpro__openedx__mysql__user_api_usercoursetag (xpro/mysql, table
+    user_api_usercoursetag): one row per version of each record, with every source
+    column except the loader's, secret-pattern columns and any the inventory excludes.
+    Resolution is one snapshot run, and history starts at the first run. A record
+    that leaves the source gets a final row with dbt_is_deleted 'True', since every
+    load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: primary key of the xpro/mysql user_api_usercoursetag record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__workflow_assessmentworkflow
+  description: >-
+    History of raw__xpro__openedx__mysql__workflow_assessmentworkflow (xpro/mysql,
+    table workflow_assessmentworkflow): one row per version of each record, with every
+    source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record deleted at the source gets a final row with dbt_is_deleted 'True' once
+    the unit's keyset (raw__xpro__openedx__mysql__workflow_assessmentworkflow__keyset)
+    has been read; until then, and while it is stale, deletes wait.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: keyset
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql workflow_assessmentworkflow record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.
+- name: snapshot_raw__xpro__openedx__mysql__workflow_assessmentworkflowstep
+  description: >-
+    History of raw__xpro__openedx__mysql__workflow_assessmentworkflowstep (xpro/mysql,
+    table workflow_assessmentworkflowstep): one row per version of each record, with
+    every source column except the loader's, secret-pattern columns and any the inventory
+    excludes. Resolution is one snapshot run, and history starts at the first run.
+    A record that leaves the source gets a final row with dbt_is_deleted 'True', since
+    every load reads the whole table.
+  config:
+    meta:
+      raw_history:
+        unit: xpro/mysql
+        absence: deleted
+        delete_capture: full_read
+  columns:
+  - name: id
+    description: >-
+      primary key of the xpro/mysql workflow_assessmentworkflowstep record.
+  - name: dbt_scd_id
+    description: >-
+      key of this version (hash of the primary key and dbt_updated_at).
+  - name: dbt_updated_at
+    description: time of the snapshot run that recorded this version.
+  - name: dbt_valid_from
+    description: time of the snapshot run that first saw this version.
+  - name: dbt_valid_to
+    description: >-
+      time of the snapshot run that saw it replaced or deleted; null for the current
+      version.
+  - name: dbt_is_deleted
+    description: >-
+      'True' on the row written when the record left the source, 'False' otherwise.
+      The deleted row also has a null dbt_valid_to.

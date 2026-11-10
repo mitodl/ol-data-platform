@@ -4,13 +4,14 @@ name: Ingestion inventory CI
 # Credential-free PR gate for the ingestion inventory — the human source of truth
 # for what we load (docs/specs/INGESTION_INVENTORY_SPEC.md, step 4).
 #
-# Three checks, and the second is the one that matters:
+# Four checks, and the second is the one that matters:
 #   validate         — schema, controlled vocabulary, and the §3.3 cross-unit rules.
 #   check-removals   — §7.2. Every (unit, raw_table) that disappears must be
 #                      acknowledged in retired.yml with a date and a reason, or
 #                      carry `renamed_from:` on the entry that replaced it.
 #   reconcile        — every raw table a dbt source declares maps to a unit, so
 #                      a source nothing loads cannot be added unnoticed.
+#   history          — the generated raw history files match the inventory.
 #
 # A dropped table entry is the one failure mode with no symptom: the loader simply
 # stops loading, nothing errors, and a dbt model quietly goes stale. Renames are
@@ -28,6 +29,8 @@ on:
     - "ingestion/inventory/**"
     - "src/ol_dbt/models/**/*.yml"
     - "src/ol_dbt/models/**/*.yaml"
+    - "src/ol_dbt/snapshots/raw_history/**"
+    - "src/ol_dbt/macros/_raw_delete_filters.sql"
     - "src/ol_dbt_cli/**"
     - ".github/workflows/ingestion_inventory_ci.yaml"
   workflow_dispatch:
@@ -71,6 +74,12 @@ jobs:
 
     - name: Reconcile dbt sources against the inventory
       run: uv run ol-dbt inventory reconcile
+
+    # The raw history snapshots, their docs, the keyset sources and the delete
+    # filter map are generated from the inventory and committed. A hand edit, or
+    # an inventory change that was not regenerated, fails here.
+    - name: Check the generated raw history files
+      run: uv run ol-dbt inventory history
 
     # The rendered JSON is committed into ol-infrastructure by hand (§4 — there is
     # deliberately no cross-repo pipeline). Rendering here proves the inventory can

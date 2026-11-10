@@ -11,6 +11,11 @@ strategies:
 mirror_max_age_days: 90
 loader: airbyte
 table_prefix: raw__thirdparty__zendesk_support__
+# brands and organizations are read whole on each sync, so a record missing
+# from one was deleted. users syncs incrementally and never drops a row from
+# raw; a deleted user shows in its own `active` and `permanently_deleted`.
+history:
+  absence: deleted
 airbyte:
   source_kind: source-zendesk-support
   replication_method: n/a

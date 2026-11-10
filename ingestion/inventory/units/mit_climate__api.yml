@@ -10,6 +10,10 @@ strategies:
   local: fixture
 loader: dlt
 table_prefix: raw__mit_climate__api__
+# Each load reads both feeds whole (flat arrays, no paging), so an article
+# missing from a load has left the feed.
+history:
+  absence: deleted
 dlt:
   source_module: ol_dlt.sources.mit_climate
   write_disposition: merge

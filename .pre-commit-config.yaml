@@ -17,7 +17,9 @@ repos:
   rev: 0.2.3
   hooks:
   - id: yamlfmt
-    exclude: src/ol_superset/assets
+    # The raw history YAML is generated, and `ol-dbt inventory history` fails
+    # on any change to it, so reformatting it would make the two checks fight.
+    exclude: src/ol_superset/assets|src/ol_dbt/snapshots/raw_history/|src/ol_dbt/models/staging/_raw_keysets__sources\.yml
     args:
     - --mapping
     - '2'

@@ -12,6 +12,10 @@ strategies:
   local: fixture
 loader: dlt
 table_prefix: raw__youtube__api__
+# Each load pages through every configured playlist to its end, so a video or
+# playlist missing from a load was removed.
+history:
+  absence: deleted
 dlt:
   source_module: ol_dlt.sources.youtube
   write_disposition: merge

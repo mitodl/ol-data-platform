@@ -530,6 +530,7 @@ connection is `inactive`. Resuming one brings the warning back.
 | Airbyte config | `ol-dbt inventory render airbyte` → the expected state step 8's drift check compares against | §4, §6.0 — no longer applied by Pulumi |
 | Dagster sync cadence | `ol-dbt inventory render dagster-intervals` | Replaces the hand-maintained `group_name_to_interval` literal (`definitions.py:219-254`) |
 | dlt source specs | `ol-dbt inventory render dlt` | Phase 2 only; emits `DatabaseSourceSpec`/`DatabaseTable` inputs (`src/ol_dlt/ol_dlt/database.py`) |
+| Raw history snapshots | `ol-dbt inventory history --write` | Snapshots, their docs, keyset sources and the delete filter map (§11) |
 
 `render airbyte` and `render dagster-intervals` are built. Two things they settle that the table
 above leaves open:
@@ -1182,7 +1183,8 @@ Iceberg snapshots). Both are rows that exist today, and the cutover is what woul
 Each unit therefore takes these steps, in this order:
 
 1. The unit's raw history snapshots
-   (`tk-generate-raw-history-snapshots-from-the-ingestio-cb4f69`) run in production on its
+   (`tk-generate-raw-history-snapshots-from-the-ingestio-cb4f69`, turned on with
+   `history.live: true`, §11.2) run in production on its
    Airbyte-loaded tables for at least one load cycle. Their first versions are then the
    Airbyte state, deleted-at-source keys included. They read raw and do not depend on the
    dlt source, so they can go live before it is built.
@@ -1194,7 +1196,8 @@ Each unit therefore takes these steps, in this order:
    loader columns the snapshots drop, because `_airbyte_extracted_at` is the only order an
    append table's versions have. It has the history layer's grants, and its row counts are
    checked against the source table. Archive tables are never rebuilt or dropped.
-4. The unit's cutover time is recorded in its inventory unit. Reports use it to discount
+4. The unit's cutover time is recorded in its inventory unit, as a `history.markers` entry
+   of kind `loader_cutover` (§11.2). Reports use it to discount
    the versions and deletes from the first snapshot run after it. A renamed column, or a type
    the snapshot compares differently, writes one new version of every row.
 5. The first production dlt load runs. The snapshot run after it records each key that
@@ -1215,3 +1218,109 @@ retained table holds the same history.
 
 `tk-history-gate-for-each-unit-s-production-dlt-cuto-5b7751` tracks these steps and blocks the
 per-source cutover recipe. Unit 1 is the first that has to pass it.
+
+## 11. Raw history snapshots
+
+Every table in history scope gets a dbt snapshot of its raw table, generated from the
+inventory by `ol-dbt inventory history --write` (`ol_dbt_cli.lib.raw_history`). Scope and
+settings were decided on `tk-decide-the-scope-of-raw-table-history-scd2-snaps-8430c2`, keyset
+consumption on `tk-delete-capture-for-dlt-migrated-sources-reconcil-826b18`.
+
+### 11.1 Scope
+
+A table is in scope when it is `modeled: true`, its `sync_mode` is `full_refresh_overwrite`,
+`full_refresh_overwrite_deduped` or `incremental_deduped_history`, it declares a
+`primary_key`, and it is not one of the seven learner-activity tables
+(`LEARNER_ACTIVITY_TABLES`), whose history the tracking logs hold. That was 339 tables in 18
+units on 2026-11-10. Append modes are out because raw already keeps every version. A table
+without a key is left out until one is declared, and `validate` lists each one as INFO.
+
+A table leaves scope only by saying so:
+
+```yaml
+history:
+  in_scope: false
+  reason: 40M rows, and the tracking logs hold its history
+```
+
+### 11.2 Settings
+
+On the unit:
+
+- `history.absence`: `deleted` (a record that stops appearing was deleted, and the snapshot
+  writes a `dbt_is_deleted` `'True'` row) or `aged_out` (nothing is written, for a source that
+  only returns recent records, such as a feed; the snapshot has no `dbt_is_deleted`). A
+  database unit (`app_postgres`, `mysql`, `openedx_notes`) defaults to `deleted`; any other
+  unit with a table in scope must state it, and `validate` fails until it does. Moving a live
+  unit from `aged_out` to `deleted` needs `alter table <snapshot> add column dbt_is_deleted
+  varchar` on each of its snapshots first. dbt fails the run otherwise ("Snapshot target is
+  missing configured columns"), and the delete guard reads that column.
+- `history.live`: whether dbt builds the unit's snapshots. Default false, so a unit's files are
+  generated disabled until it is rolled out. History rolls out a unit at a time once its
+  prerequisites hold (8430c2 items 26-27), and a unit's snapshots have to run for at least one
+  load before its dlt cutover (§10.4 step 1).
+- `history.markers`: `{at, kind: loader_cutover | schema_change, tables?, note}`. A loader
+  cutover or a source schema change writes one extra version of every row, and a marker lets
+  reports discount the versions that start then. Markers are copied into each snapshot's
+  `meta.raw_history.markers`.
+
+On a table, under `history`: `live` (overrides the unit; the eight xPRO pilot tables use it),
+`exclude_columns` (not stored) and `ignore_columns` (stored, not compared, so a change to them
+alone writes no version). Settings on a table out of scope, and a key column excluded or
+ignored, fail `validate`.
+
+### 11.3 What the macro does
+
+`raw_history_snapshot` (src/ol_dbt/macros/raw_history_snapshot.sql):
+
+- stores every raw column except the loader's (`_airbyte_*`, `_ab_*`, `_dlt_*`), names
+  containing a secret pattern (`raw_history_secret_patterns`: password, secret, token, api_key
+  and the like) and the table's `exclude_columns`;
+- collapses duplicate raw rows of one key to the newest, ordered as `deduplicate_raw_table`
+  orders them, and logs the count. A table whose inventory declares no `raw_metadata_column`
+  has nothing to order by, so duplicates there fail the run;
+- compares every stored column (`check_cols: all`), or every one but `ignore_columns` through
+  the `raw_history_check` strategy, which reads the column list at run time so a column the
+  source adds later is compared;
+- maps `absence` to `hard_deletes: new_record` or `ignore`, and runs the delete guard
+  (`raw_history_delete_guard`) only for `deleted`;
+- narrows its input with `raw_delete_filter` so that a deleted record leaves it.
+
+### 11.4 Deletes the load does not show
+
+`raw_delete_filter_map()` (src/ol_dbt/macros/_raw_delete_filters.sql, generated) names the
+tables whose input has to be filtered:
+
+- `keyset`: a table in scope synced `incremental_deduped_history` from a database unit not
+  loaded by dlt replace. These are the tables `ol-dbt inventory keysets` writes for
+  `ol_dlt.keyset` (124 on 2026-11-10). A raw row is kept when its key is in
+  `<raw_table>__keyset`, or when the loader wrote it (`_airbyte_extracted_at`, or
+  `_dlt_load_id` as a time) after the keyset read started, less
+  `var('raw_keyset_trust_margin_minutes', 60)`. No keyset table yet means no filter; an empty
+  keyset fails the run. A keyset older than two load intervals is still applied and logged:
+  running unfiltered would bring every key already recorded as deleted back as an open version,
+  because raw still holds its row (owner decision 2026-11-10, replacing 826b18 decision 3 for
+  this filter).
+- `latest_load`: a dlt `merge` unit whose tables re-read the whole source
+  (`full_refresh_overwrite_deduped`) and whose absence is `deleted`. Only the newest
+  `_dlt_load_id`'s rows are kept.
+
+The macro is meant to be shared with staging (`tk-filter-deleted-keys-out-of-staging-for-keyset-ta-0bda08`).
+The keyset tables are declared as dbt sources in the generated
+`src/ol_dbt/models/staging/_raw_keysets__sources.yml`, and `reconcile` counts them as
+accounted for. The snapshot reads the keyset by relation name, not through `source()`, so it
+adds no Dagster dependency until the orchestration of
+`tk-run-each-unit-s-keysets-after-every-load-and-sta-4caeb1` is in place.
+
+### 11.5 Generated files and the CI check
+
+| File | Contents |
+|---|---|
+| `src/ol_dbt/snapshots/raw_history/<deployment>__<layer>.sql` | One snapshot per table, named `snapshot_<raw_table>` (the pilot's names, which production tables carry) |
+| `src/ol_dbt/snapshots/raw_history/_<deployment>__<layer>__snapshots.yml` | Docs, and `meta.raw_history` (unit, absence, delete capture, markers) |
+| `src/ol_dbt/models/staging/_raw_keysets__sources.yml` | The keyset tables as dbt sources |
+| `src/ol_dbt/macros/_raw_delete_filters.sql` | `raw_delete_filter_map()` |
+
+Every file under `raw_history/` is generated, so `--write` deletes one no unit produces any
+more. The Ingestion inventory CI workflow runs `ol-dbt inventory history` without `--write`,
+which fails on a hand edit or on an inventory change that was not regenerated.
