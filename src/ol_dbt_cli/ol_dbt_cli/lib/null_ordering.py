@@ -50,10 +50,12 @@ _DETAIL = (
 _ORDER_BY = re.compile(r"\border\s+by\b", re.IGNORECASE)
 _SUBQUERY = re.compile(r"\s*(?:select|with)\b", re.IGNORECASE)
 # Words that end a window's or an aggregate's sort list at depth 0: a frame, a LIMIT,
-# group_concat's SEPARATOR. `t.range` is a column.
-_VALUE_LIST_END = re.compile(r"(?<![\w.])(?:rows|range|groups|limit|separator)(?!\w)", re.IGNORECASE)
+# group_concat's SEPARATOR, or the ORDER BY of another `{% if %}` branch. `t.range` is a column.
+_VALUE_LIST_END = re.compile(r"(?<![\w.])(?:rows|range|groups|limit|separator|order\s+by)(?!\w)", re.IGNORECASE)
 # A query's sort list also ends at an OFFSET, which Trino writes before LIMIT, or the next query.
-_QUERY_LIST_END = re.compile(r"(?<![\w.])(?:limit|offset|union|intersect|except|select)(?!\w)|;", re.IGNORECASE)
+_QUERY_LIST_END = re.compile(
+    r"(?<![\w.])(?:limit|offset|union|intersect|except|select|order\s+by)(?!\w)|;", re.IGNORECASE
+)
 _ROW_LIMIT = re.compile(r"(?:limit|offset)\b", re.IGNORECASE)
 _NOT_NEWLINE = re.compile(r"[^\n]")
 _EXPLICIT = re.compile(r"(?:\bdesc|\bnulls\s+(?:first|last))\s*\Z", re.IGNORECASE)
@@ -137,6 +139,22 @@ def _ascending_keys(
         yield SortKey(key_start, key_end)
 
 
+def _query_bound(
+    offset: int,
+    statements: list[tuple[int, int]],
+    macros: list[tuple[tuple[int, int], tuple[int, int]]],
+    default: int,
+) -> int:
+    """Where a query ORDER BY at *offset* must end its list: its statement's or macro body's end, or the next macro."""
+    for start, end in statements:
+        if start <= offset < end:
+            return end
+    for (_, _), (body_start, body_end) in macros:
+        if body_start <= offset < body_end:
+            return body_end
+    return min((start for (start, _), _ in macros if start > offset), default=default)
+
+
 def ascending_sort_keys(source: str) -> Iterator[SortKey]:
     """Yield the ascending window and ordered-aggregate sort keys in *source* with no NULLS clause.
 
@@ -153,18 +171,22 @@ def ascending_sort_keys(source: str) -> Iterator[SortKey]:
     for start, end in statements:
         chars[start:end] = _NOT_NEWLINE.sub(" ", code[start:end])
     outside_statements = "".join(chars)
-    macro_bodies = [match.span("body") for match in macro_declarations(source)]
+    macros = [(match.span(), match.span("body")) for match in macro_declarations(source)]
     for match in _ORDER_BY.finditer(code):
         in_statement = any(start <= match.start() < end for start, end in statements)
         view = code if in_statement else outside_statements
         if _sorts_rows_into_a_value(view, match.start()):
             yield from _ascending_keys(source, view, match.end(), len(view))
             continue
-        # A query's own ORDER BY only orders its output, unless a LIMIT picks rows by it. The
-        # list stays inside its macro, whose `{% endmacro %}` is blank here.
-        bound = next((end for start, end in macro_bodies if start <= match.start() < end), len(view))
+        # A query's own ORDER BY only orders its output, unless a LIMIT picks rows by it.
+        bound = _query_bound(match.start(), statements if in_statement else [], macros, len(view))
         *_, (_, list_end) = _list_spans(view, match.end(), bound, _QUERY_LIST_END)
-        if _ROW_LIMIT.match(view, list_end):
+        # `{% if %}order by a{% else %}order by b{% endif %} limit 1`: the LIMIT follows the
+        # other branch's list, and applies to this one too.
+        limit_end = list_end
+        while (other := _ORDER_BY.match(view, limit_end)) is not None:
+            *_, (_, limit_end) = _list_spans(view, other.end(), bound, _QUERY_LIST_END)
+        if _ROW_LIMIT.match(view, limit_end):
             yield from _ascending_keys(source, view, match.end(), list_end, _QUERY_LIST_END)
 
     variables = {m.group("name"): m.span("value") for m in _SET_STRING.finditer(source)}

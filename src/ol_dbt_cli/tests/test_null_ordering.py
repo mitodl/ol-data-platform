@@ -123,6 +123,23 @@ def test_reads_sql_and_order_by_passed_as_jinja_strings(sql: str, keys: list[str
             [],
         ),
         ("select * from t order by x union all select * from u limit 1", []),
+        ("select * from t order by x intersect select * from u limit 1", []),
+        ("select * from t order by x except select * from u limit 1", []),
+        ("select * from t order by x;\nselect * from u limit 1", []),
+        ("select * from t order by a {# {% x %} #} limit 10", ["a"]),
+        ("select * from t order by a, '{% x %}' limit 10", ["a"]),
+        ("{% macro a() %}select * from t order by x{% endmacro %}{% macro b() %}limit 1{% endmacro %}", []),
+        ("select * from t order by a\n{% macro m() %}\nlimit 10\n{% endmacro %}", []),
+        (
+            "select * from t\n{% if x %}\norder by a\n{% else %}\norder by b nulls last\n{% endif %}\nlimit 10",
+            ["a"],
+        ),
+        (
+            "select * from t\n{% if x %}\norder by a nulls last\n{% else %}\norder by b\n{% endif %}\nlimit 10",
+            ["b"],
+        ),
+        ("select * from t\n{% if x %}\norder by a\n{% else %}\norder by b\n{% endif %}", []),
+        ("""{% set ob = "order by a" %}{% if target.name == 'dev' %}limit 10{% endif %}""", []),
     ],
 )
 def test_reads_a_query_order_by_that_a_limit_follows(sql: str, keys: list[str]) -> None:
@@ -132,6 +149,11 @@ def test_reads_a_query_order_by_that_a_limit_follows(sql: str, keys: list[str]) 
 def test_a_jinja_statement_string_is_not_part_of_a_window_key() -> None:
     sql = "select row_number() over (order by a nulls last {% if target.name == 'dev' %}, b{% endif %}) from t"
     assert _keys(sql) == ["b"]
+
+
+def test_a_window_list_ends_at_another_branchs_order_by() -> None:
+    sql = "select row_number() over (partition by x {% if y %}order by a{% else %}order by b nulls last{% endif %})"
+    assert _keys(sql) == ["a"]
 
 
 def test_a_window_list_does_not_end_at_offset() -> None:
