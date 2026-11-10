@@ -3,7 +3,7 @@ with chatbot as (
         *
         , row_number() over (
             partition by chatsession_thread_id
-            order by djangocheckpoint_id
+            order by djangocheckpoint_id nulls last
         ) as message_index
     from (
         select * from {{ ref("int__learn_ai__chatbot") }}
@@ -56,14 +56,14 @@ with chatbot as (
         , chatsession_created_on
         , row_number() over (
             partition by chatsession_thread_id
-            order by tutorbotoutput_id, message_index
+            order by tutorbotoutput_id nulls last, message_index nulls last
         ) as message_index
     from (
         select
             *
             , row_number() over (
                 partition by chatsession_thread_id, human_message, agent_message
-                order by tutorbotoutput_id, message_index
+                order by tutorbotoutput_id nulls last, message_index nulls last
             ) as message_occurrence
         from tutorbot_flatten
     ) as tutorbot_occurrences

@@ -367,7 +367,7 @@ with mitxonline_enrollments as (
             , dim_program.program_pk as micromasters_program_pk
             , row_number() over (
                 partition by mm_enroll.courserun_readable_id, mm_enroll.platform
-                order by dim_program.program_pk
+                order by dim_program.program_pk nulls last
             ) as _row_num
         from {{ ref('int__micromasters__course_enrollments') }} as mm_enroll
         inner join dim_program

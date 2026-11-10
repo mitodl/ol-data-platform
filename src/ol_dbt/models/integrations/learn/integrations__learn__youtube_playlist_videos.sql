@@ -45,7 +45,7 @@ select
     , playlist_items.video_id                                as video_readable_id
     , row_number() over (
         partition by playlists.readable_id
-        order by playlist_items.playlist_item_position
+        order by playlist_items.playlist_item_position nulls last
     ) - 1                                                    as position
 from playlist_items
 inner join playlists on playlist_items.playlist_id = playlists.readable_id

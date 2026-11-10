@@ -58,7 +58,7 @@ with orders as (
         , row_number() over (
             partition by course_run_orders.line_id
             order by
-                case when program_orders.program_id = course_run_orders.program_id then 0 else 1 end
+                case when program_orders.program_id = course_run_orders.program_id then 0 else 1 end nulls last
                 , program_orders.order_created_on desc
         ) as row_num
     from course_run_orders

@@ -19,7 +19,7 @@ with resources as (
 , program_courses as (
     select
         program_courses.program_readable_id
-        , array_agg(program_courses.course_readable_id order by program_courses.course_position)
+        , array_agg(program_courses.course_readable_id order by program_courses.course_position nulls last)
             as course_readable_ids
     from {{ ref('int__mitpe__program_courses') }} as program_courses
     inner join {{ ref('integrations__learn__mitpe_courses') }} as courses

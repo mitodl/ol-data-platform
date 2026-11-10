@@ -253,7 +253,7 @@ with run_concepts as (
     select
         concept_fk
         , provider_courserun_fk
-        , array_agg(narrower_concept_fk order by narrower_concept_fk) as narrower_concept_fks
+        , array_agg(narrower_concept_fk order by narrower_concept_fk nulls last) as narrower_concept_fks
     from narrower_cells
     where is_covered
     group by concept_fk, provider_courserun_fk
@@ -263,7 +263,7 @@ with run_concepts as (
     select
         concept_fk
         , provider_courserun_fk
-        , array_agg(narrower_concept_fk order by narrower_concept_fk) as narrower_concept_fks
+        , array_agg(narrower_concept_fk order by narrower_concept_fk nulls last) as narrower_concept_fks
     from narrower_cells
     where not is_covered
     group by concept_fk, provider_courserun_fk

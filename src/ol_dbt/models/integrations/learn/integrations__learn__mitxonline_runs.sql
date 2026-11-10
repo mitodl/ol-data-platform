@@ -68,7 +68,7 @@ with catalog_runs as (
 , prices as (
     select
         courserun_id
-        , array_agg(price order by price) as prices
+        , array_agg(price order by price nulls last) as prices
     from price_rows
     group by courserun_id
 )

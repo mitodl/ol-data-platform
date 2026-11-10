@@ -617,7 +617,7 @@ with mitxonline_problem_events as (
             *
             , row_number() over (
                 partition by platform, openedx_user_id, courserun_readable_id, problem_block_id, attempt
-                order by event_timestamp
+                order by event_timestamp nulls last
             ) as rn
         from combined
     ) as subquery

@@ -188,7 +188,7 @@ with run_concepts as (
                 , candidate_matches.concept_fk
                 , candidate_matches.provider_courserun_fk
             order by
-                case candidate_matches.match_type when 'direct' then 1 when 'close' then 2 else 3 end
+                case candidate_matches.match_type when 'direct' then 1 when 'close' then 2 else 3 end nulls last
         ) as match_rank
     from candidate_matches
     inner join course_runs as requiring_runs
@@ -240,9 +240,9 @@ select
             then row_number() over (
                 partition by paths.courserun_fk, paths.concept_fk
                 order by
-                    case paths.match_type when 'direct' then 1 when 'close' then 2 else 3 end
+                    case paths.match_type when 'direct' then 1 when 'close' then 2 else 3 end nulls last
                     , coalesce(paths.provider_scope_count, paths.narrower_taught_count) desc
-                    , paths.provider_courserun_readable_id asc
+                    , paths.provider_courserun_readable_id asc nulls last
             )
     end as provider_rank
     , case

@@ -161,7 +161,7 @@ with stored_extractions as (
         , courserun_readable_id
         , scope_id
         , scope_part_count
-        , {{ array_join('array_agg(input_text_checksum order by scope_part)', ',') }} as scope_part_checksums
+        , {{ array_join('array_agg(input_text_checksum order by scope_part nulls last)', ',') }} as scope_part_checksums
     from latest_scope_inputs
     group by platform, courserun_readable_id, scope_id, scope_part_count
 )
@@ -290,17 +290,17 @@ with stored_extractions as (
                     , complete_readings.courserun_readable_id
                     , complete_readings.scope_id
                 order by
-                    case when approved_versions.courserun_readable_id is not null then 0 else 1 end
-                    , case when latest_splits.scope_id is not null then 0 else 1 end
+                    case when approved_versions.courserun_readable_id is not null then 0 else 1 end nulls last
+                    , case when latest_splits.scope_id is not null then 0 else 1 end nulls last
                     , case
                         when
                             complete_readings.reading_header_version is null
                             or complete_readings.reading_header_version = latest_headers.header_version
                             then 0
                         else 1
-                    end
+                    end nulls last
                     , complete_readings.read_at desc
-                    , complete_readings.scope_part_checksums asc
+                    , complete_readings.scope_part_checksums asc nulls last
             ) as reading_rank
         from (
             select

@@ -114,8 +114,8 @@ with content as (
         , row_number() over (
             partition by coursecontent_s3_key
             order by
-                case when lower(coalesce(transcript_language, '')) like 'en%' then 0 else 1 end
-                , idx
+                case when lower(coalesce(transcript_language, '')) like 'en%' then 0 else 1 end nulls last
+                , idx nulls last
         ) as transcript_rank
     from transcript_flags
     where names_file

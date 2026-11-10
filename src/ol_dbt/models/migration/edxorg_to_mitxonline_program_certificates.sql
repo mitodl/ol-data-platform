@@ -19,7 +19,7 @@ with edxorg_program_certificates_raw as (
             *
             , row_number() over (
                 partition by user_id, normalized_program_title
-                order by program_certificate_awarded_on
+                order by program_certificate_awarded_on nulls last
             ) as row_num
         from edxorg_program_certificates_raw
     ) as subquery

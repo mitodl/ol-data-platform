@@ -55,7 +55,7 @@ select
             and max(feedback.subject_text) is not null
             then max(feedback.subject_text)
         else nullif({{ array_join(
-            "array_agg(feedback.feedback_text order by feedback.turn_index)",
+            "array_agg(feedback.feedback_text order by feedback.turn_index nulls last)",
             "\n---\n"
         ) }}, '')
     end as conversation_text

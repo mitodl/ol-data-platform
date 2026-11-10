@@ -17,7 +17,7 @@ with discussion_component_topics as (
         , {{ json_query_string('cast(t.value as varchar)', "'$.id'") }} as topic_id -- noqa
         , row_number() over (
             partition by course.block_id, {{ json_query_string('cast(t.value as varchar)', "'$.id'") }} -- noqa
-            order by {{ json_query_string('cast(t.value as varchar)', "'$.sort_key'") }} asc -- noqa
+            order by {{ json_query_string('cast(t.value as varchar)', "'$.sort_key'") }} asc nulls last -- noqa
         ) as row_num
     from {{ ref('dim_course_content') }} as course
     cross join {{ unnest_json_map(json_extract_json('course.block_metadata', "'$.discussion_topics'"), 't', 'key', 'value') }} -- noqa

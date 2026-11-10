@@ -143,14 +143,14 @@ with users as (
             order by
                 unlinked_edxorg.user_last_login desc nulls last
                 , unlinked_edxorg.user_joined_on desc nulls last
-                , unlinked_edxorg.user_edxorg_id asc
+                , unlinked_edxorg.user_edxorg_id asc nulls last
         ) as edxorg_rank
         , row_number() over (
             partition by unlinked_edxorg.user_edxorg_id
             order by
                 unlinked_mitxonline.user_last_login desc nulls last
                 , unlinked_mitxonline.user_joined_on desc nulls last
-                , unlinked_mitxonline.user_mitxonline_id asc
+                , unlinked_mitxonline.user_mitxonline_id asc nulls last
         ) as mitxonline_rank
     from unlinked_mitxonline
     inner join unlinked_edxorg

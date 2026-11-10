@@ -242,7 +242,7 @@ with content as (
         , block_id as scope_id
         , block_title as scope_title
         , row_number() over (
-            partition by platform, courserun_readable_id order by block_index
+            partition by platform, courserun_readable_id order by block_index nulls last
         ) as scope_position
     from classified_sequentials
     where not is_context_sequential
@@ -270,7 +270,7 @@ with content as (
         , {{ regexp_extract_or_null('content.block_id', "'block@(.+)$'", 1) }} as block_name
         , row_number() over (
             partition by content.platform, content.courserun_readable_id, content.parent_block_id
-            order by content.block_index
+            order by content.block_index nulls last
         ) as sibling_position
         , parent.block_category as parent_category
     from content
@@ -450,7 +450,7 @@ with content as (
         , content_file_text as source_text
         , row_number() over (
             partition by platform, courserun_readable_id, content_file_path
-            order by block_index
+            order by block_index nulls last
         ) as link_rank
     from counted_link_matches
     where is_exact = 1 or (exact_matches = 0 and key_matches = 1)
@@ -476,7 +476,7 @@ with content as (
         , 'context' as scope_id
         , 0 as source_group
         , row_number() over (
-            partition by platform, courserun_readable_id order by content_file_path
+            partition by platform, courserun_readable_id order by content_file_path nulls last
         ) as source_order
         , content_file_path as source_ref
         , concat(page_folder, '_page') as source_kind
@@ -539,7 +539,7 @@ with content as (
         , 0 as source_group
         , row_number() over (
             partition by unscoped_documents.platform, unscoped_documents.courserun_readable_id
-            order by unscoped_documents.content_file_path
+            order by unscoped_documents.content_file_path nulls last
         ) as source_order
         , unscoped_documents.content_file_path as source_ref
         , 'document' as source_kind
@@ -775,7 +775,7 @@ with content as (
             partition by
                 release_rows.courserun_readable_id
                 , cast({{ element_at_array('release_rows.problem_sets', 'problem_sets.problem_set_index') }} as integer)
-            order by release_rows.table_index, release_rows.row_index
+            order by release_rows.table_index nulls last, release_rows.row_index nulls last
         ) as release_rank
     from ocw_release_rows as release_rows
     cross join {{ unnest_sequence(array_length('release_rows.problem_sets'), 'problem_sets', 'problem_set_index') }}
@@ -847,7 +847,7 @@ with content as (
         , session_topic
         , row_number() over (
             partition by courserun_readable_id, session_kind, session_number
-            order by case when section = 'calendar' then 0 else 1 end, page_key, table_index, row_index
+            order by case when section = 'calendar' then 0 else 1 end nulls last, page_key nulls last, table_index nulls last, row_index nulls last
         ) as title_rank
     from ocw_session_rows
 )
@@ -907,7 +907,7 @@ with content as (
         , scope_title
         , row_number() over (
             partition by courserun_readable_id
-            order by group_order, sort_number nulls first, sort_key, sort_offset nulls last, scope_id
+            order by group_order nulls last, sort_number nulls first, sort_key nulls last, sort_offset nulls last, scope_id nulls last
         ) as scope_position
     from (
         select * from ocw_session_units
@@ -1149,7 +1149,7 @@ with content as (
         , scope_id
         , row_number() over (
             partition by courserun_readable_id, scope_id
-            order by member_order, member_key, link_order, source_ref
+            order by member_order nulls last, member_key nulls last, link_order nulls last, source_ref nulls last
         ) as source_order
         , source_ref
         , source_kind
@@ -1160,7 +1160,7 @@ with content as (
         -- numbered again over the units left with text
         , case
             when scope_kind = 'unit'
-                then dense_rank() over (partition by courserun_readable_id, scope_kind order by scope_position)
+                then dense_rank() over (partition by courserun_readable_id, scope_kind order by scope_position nulls last)
             else scope_position
         end as scope_position
     from (
@@ -1169,8 +1169,8 @@ with content as (
             , row_number() over (
                 partition by courserun_readable_id, {{ dbt.hash('source_text') }}
                 order by
-                    case scope_kind when 'unit' then 0 when 'context' then 1 else 2 end
-                    , scope_position, member_order, member_key, link_order, source_ref
+                    case scope_kind when 'unit' then 0 when 'context' then 1 else 2 end nulls last
+                    , scope_position nulls last, member_order nulls last, member_key nulls last, link_order nulls last, source_ref nulls last
             ) as text_rank
         from ocw_positioned_sources
     ) as ranked
@@ -1276,7 +1276,7 @@ select
     , scoped_sources.scope_position
     , row_number() over (
         partition by scoped_sources.platform, scoped_sources.courserun_readable_id, scoped_sources.scope_id
-        order by scoped_sources.source_group, scoped_sources.source_order, scoped_sources.source_ref
+        order by scoped_sources.source_group nulls last, scoped_sources.source_order nulls last, scoped_sources.source_ref nulls last
     ) as source_position
     , scoped_sources.source_ref
     , scoped_sources.source_kind

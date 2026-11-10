@@ -43,12 +43,12 @@ with content_types as (
         , {{ array_agg_filter(
             'cast(uservote.user_id as varchar)'
             , 'uservote.vote > 0'
-            , order_by='uservote.id'
+            , order_by='uservote.id nulls last'
         ) }} as votes_up
         , {{ array_agg_filter(
             'cast(uservote.user_id as varchar)'
             , 'uservote.vote < 0'
-            , order_by='uservote.id'
+            , order_by='uservote.id nulls last'
         ) }} as votes_down
     from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__forum_uservote') }} as uservote
     inner join content_types on uservote.content_type_id = content_types.id
@@ -59,7 +59,7 @@ with content_types as (
     select
         content_types.model
         , flagger.content_object_id
-        , array_agg(cast(flagger.user_id as varchar) order by flagger.id) as user_ids
+        , array_agg(cast(flagger.user_id as varchar) order by flagger.id nulls last) as user_ids
     from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__forum_abuseflagger') }} as flagger
     inner join content_types on flagger.content_type_id = content_types.id
     group by content_types.model, flagger.content_object_id
@@ -69,7 +69,7 @@ with content_types as (
     select
         content_types.model
         , flagger.content_object_id
-        , array_agg(cast(flagger.user_id as varchar) order by flagger.id) as user_ids
+        , array_agg(cast(flagger.user_id as varchar) order by flagger.id nulls last) as user_ids
     from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__forum_historicalabuseflagger') }} as flagger
     inner join content_types on flagger.content_type_id = content_types.id
     group by content_types.model, flagger.content_object_id

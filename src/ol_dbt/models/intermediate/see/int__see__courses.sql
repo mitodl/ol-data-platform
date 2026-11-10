@@ -21,8 +21,8 @@ with courses as (
 , run_rollups as (
     select
         readable_id
-        , array_agg(distinct delivery order by delivery) as delivery
-        , array_agg(distinct pace order by pace) as pace
+        , array_agg(distinct delivery order by delivery nulls last) as delivery
+        , array_agg(distinct pace order by pace nulls last) as pace
         , bool_or(is_asynchronous) as has_asynchronous_run
         , bool_or(is_synchronous) as has_synchronous_run
     from runs
@@ -35,7 +35,7 @@ with courses as (
     select
         readable_id
         , continuing_ed_credits
-        , row_number() over (partition by readable_id order by run_api_position) as run_rank
+        , row_number() over (partition by readable_id order by run_api_position nulls last) as run_rank
     from runs
 )
 
@@ -44,7 +44,7 @@ with courses as (
 , topics as (
     select
         courses.course_id as readable_id
-        , array_agg(distinct topic_lookup.topic_name order by topic_lookup.topic_name) as topics
+        , array_agg(distinct topic_lookup.topic_name order by topic_lookup.topic_name nulls last) as topics
     from courses
     inner join topic_lookup
         on trim({{ regexp_extract_or_null('courses.course_topic_raw', "'([^:]*)$'", 1) }})

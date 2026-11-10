@@ -69,7 +69,7 @@ with combined_enrollments as (
             {{ array_agg_filter(
                 'edx_signatory.signatory_normalized_name'
                 , "edx_signatory.signatory_normalized_name <> ''"
-                , order_by='edx_signatory.signatory_normalized_name'
+                , order_by='edx_signatory.signatory_normalized_name nulls last'
             ) }}
           ) as signatory_names
         , {{ array_sort(

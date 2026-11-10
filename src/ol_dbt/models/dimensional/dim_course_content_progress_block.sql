@@ -59,7 +59,7 @@ with content as (
             "case when block_category = 'vertical' then block_id end"
           ) }} over (
             partition by platform, courserun_readable_id
-            order by block_index
+            order by block_index nulls last
             rows between unbounded preceding and current row
         ) as nearest_vertical_block_id
         -- A vertical nested in a split_test or conditional is not a unit: its blocks belong
@@ -68,7 +68,7 @@ with content as (
             "case when block_category = 'vertical' and parent_block_id = sequential_block_id then block_id end"
           ) }} over (
             partition by platform, courserun_readable_id, sequential_block_id
-            order by block_index
+            order by block_index nulls last
             rows between unbounded preceding and current row
         ) as vertical_block_id
     from {{ ref('dim_course_content') }}

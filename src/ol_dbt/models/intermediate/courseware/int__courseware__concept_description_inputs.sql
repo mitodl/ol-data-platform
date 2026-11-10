@@ -51,7 +51,7 @@ with eligible_runs as (
         , courses.course_title
         , row_number() over (
             partition by mentions.concept_id, mentions.platform, mentions.courserun_readable_id
-            order by case when mentions.teaching_status = 'taught' then 0 else 1 end, length(mentions.description) desc
+            order by case when mentions.teaching_status = 'taught' then 0 else 1 end nulls last, length(mentions.description) desc
         ) as run_rank
     from mentions
     left join course_runs
@@ -69,7 +69,7 @@ with eligible_runs as (
         , concept_kind
         , description
         , course_title
-        , row_number() over (partition by concept_id order by course_title, label) as context_rank
+        , row_number() over (partition by concept_id order by course_title nulls last, label nulls last) as context_rank
     from ranked
     where run_rank = 1
 )

@@ -16,9 +16,9 @@ with program_mapping as (
                 certificates.user_id
                 , coalesce(program_mapping.mitxonline_program_readable_id, certificates.program_title)
             order by
-                certificates.program_title
-                , certificates.program_certificate_awarded_on
-                , certificates.program_uuid
+                certificates.program_title nulls last
+                , certificates.program_certificate_awarded_on nulls last
+                , certificates.program_uuid nulls last
         ) as row_num
     from {{ ref('int__edxorg__mitx_program_certificates') }} as certificates
     left join program_mapping

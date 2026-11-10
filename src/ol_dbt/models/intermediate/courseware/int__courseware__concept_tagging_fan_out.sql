@@ -33,7 +33,7 @@ with tags as (
             *
             , row_number() over (
                 partition by pattern_key, concept_id
-                order by tagged_concept_id
+                order by tagged_concept_id nulls last
             ) as concept_rank
         from {{ ref('int__courseware__concept_tagging_aliases') }}
     ) as ranked
