@@ -1,0 +1,101 @@
+slice_name: Learner Video Engagement
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 90__table
+  viz_type: table
+  slice_id: 199
+  matrixify_enable: false
+  matrixify_mode_columns: disabled
+  matrixify_dimension_selection_mode_columns: members
+  matrixify_dimension_columns:
+    dimension: ''
+    values: []
+  matrixify_topn_value_columns: 10
+  matrixify_all_sort_by_columns: a_to_z
+  matrixify_topn_order_columns: true
+  matrixify_show_column_headers: true
+  matrixify_fit_columns_dynamically: true
+  matrixify_mode_rows: disabled
+  matrixify_dimension_selection_mode_rows: members
+  matrixify_dimension_rows:
+    dimension: ''
+    values: []
+  matrixify_topn_value_rows: 10
+  matrixify_all_sort_by_rows: a_to_z
+  matrixify_topn_order_rows: true
+  matrixify_show_row_labels: true
+  matrixify_row_height: 300
+  matrixify_charts_per_row: 3
+  matrixify_cell_title_template: ''
+  query_mode: raw
+  groupby: []
+  temporal_columns_lookup: {}
+  all_columns:
+  - user_email
+  - course_title
+  - courserun_readable_id
+  - section_title
+  - subsection_title
+  - expressionType: SQL
+    label: Percent_Watched
+    sqlExpression: case when estimated_time_played < 0 then null when estimated_time_played>=video_duration
+      then 1 when (video_duration is null or video_duration= 0 or estimated_time_played
+      is null) then null else estimated_time_played/video_duration end
+  - expressionType: SQL
+    label: estimated_time_played(seconds)
+    sqlExpression: case when estimated_time_played < 0 then null when estimated_time_played
+      > video_duration then cast(video_duration as int) else cast(estimated_time_played
+      as int) end
+  - datasourceWarning: false
+    expressionType: SQL
+    label: video_duration(seconds)
+    sqlExpression: cast(video_duration as int)
+  - num_of_rewatches
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  server_pagination: false
+  row_limit: 10000
+  percent_metric_calculation: row_limit
+  show_totals: false
+  table_timestamp_format: smart_date
+  include_search: true
+  allow_rearrange_columns: false
+  allow_render_html: true
+  column_config:
+    Percent_Watched:
+      d3NumberFormat: ',.1%'
+    estimated_time_played(seconds):
+      showCellBars: false
+    video_duration(seconds):
+      showCellBars: false
+  show_cell_bars: true
+  align_pn: false
+  color_pn: true
+  comparison_color_enabled: false
+  comparison_color_scheme: Green
+  conditional_formatting: []
+  comparison_type: values
+  extra_form_data: {}
+  dashboards:
+  - 34
+query_context: '{"datasource":{"id":90,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["user_email","course_title","courserun_readable_id","section_title","subsection_title",{"expressionType":"SQL","label":"Percent_Watched","sqlExpression":"case
+  when estimated_time_played < 0 then null when estimated_time_played>=video_duration
+  then 1 when (video_duration is null or video_duration= 0 or estimated_time_played
+  is null) then null else estimated_time_played/video_duration end"},{"expressionType":"SQL","label":"estimated_time_played(seconds)","sqlExpression":"case
+  when estimated_time_played < 0 then null when estimated_time_played > video_duration
+  then cast(video_duration as int) else cast(estimated_time_played as int) end"},{"datasourceWarning":false,"expressionType":"SQL","label":"video_duration(seconds)","sqlExpression":"cast(video_duration
+  as int)"},"num_of_rewatches"],"orderby":[],"annotation_layers":[],"row_limit":10000,"series_limit":0,"group_others_when_limit_reached":false,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"90__table","viz_type":"table","slice_id":199,"matrixify_enable":false,"matrixify_mode_columns":"disabled","matrixify_dimension_selection_mode_columns":"members","matrixify_dimension_columns":{"dimension":"","values":[]},"matrixify_topn_value_columns":10,"matrixify_all_sort_by_columns":"a_to_z","matrixify_topn_order_columns":true,"matrixify_show_column_headers":true,"matrixify_fit_columns_dynamically":true,"matrixify_mode_rows":"disabled","matrixify_dimension_selection_mode_rows":"members","matrixify_dimension_rows":{"dimension":"","values":[]},"matrixify_topn_value_rows":10,"matrixify_all_sort_by_rows":"a_to_z","matrixify_topn_order_rows":true,"matrixify_show_row_labels":true,"matrixify_row_height":300,"matrixify_charts_per_row":3,"matrixify_cell_title_template":"","query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["user_email","course_title","courserun_readable_id","section_title","subsection_title",{"expressionType":"SQL","label":"Percent_Watched","sqlExpression":"case
+  when estimated_time_played < 0 then null when estimated_time_played>=video_duration
+  then 1 when (video_duration is null or video_duration= 0 or estimated_time_played
+  is null) then null else estimated_time_played/video_duration end"},{"expressionType":"SQL","label":"estimated_time_played(seconds)","sqlExpression":"case
+  when estimated_time_played < 0 then null when estimated_time_played > video_duration
+  then cast(video_duration as int) else cast(estimated_time_played as int) end"},{"datasourceWarning":false,"expressionType":"SQL","label":"video_duration(seconds)","sqlExpression":"cast(video_duration
+  as int)"},"num_of_rewatches"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"server_pagination":false,"row_limit":10000,"percent_metric_calculation":"row_limit","show_totals":false,"table_timestamp_format":"smart_date","include_search":true,"allow_rearrange_columns":false,"allow_render_html":true,"column_config":{"Percent_Watched":{"d3NumberFormat":",.1%"},"estimated_time_played(seconds)":{"showCellBars":false},"video_duration(seconds)":{"showCellBars":false}},"show_cell_bars":true,"align_pn":false,"color_pn":true,"comparison_color_enabled":false,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[34],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
+cache_timeout: null
+uuid: 3c5fdc59-85d7-484b-9fdf-170336c8a4c0
+version: 1.0.0
+dataset_uuid: 4752cd11-a13e-4a8e-be31-4d9227b07ca2
