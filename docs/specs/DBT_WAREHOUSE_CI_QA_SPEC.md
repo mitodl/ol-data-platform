@@ -171,7 +171,9 @@ loudly instead of silently falling to text.
    - The per-column mismatch path joins `a_query.<key> = b_query.<key>` once and buckets every
      compared column with conditional aggregates that copy `compare_column_values`' CASE order,
      so the whole pass is one `dbt show` and one join (it used to call `compare_column_values`
-     once per column, capped at 25 columns). The join needs a **scalar** column name present on
+     once per column, capped at 25 columns). Columns are split across more queries only when
+     one query's SQL would pass 64 KiB, because `dbt show --inline` takes it as a single
+     argument and Linux caps one argument at 128 KiB. The join needs a **scalar** column name present on
      both sides. A composite key is therefore collapsed into a single hashed join column inside
      the `a_query`/`b_query` CTEs. Build that column with the project's `diff_composite_key` macro
      (`src/ol_dbt/macros/diff_composite_key.sql`) — **not**
