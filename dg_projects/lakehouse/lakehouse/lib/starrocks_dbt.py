@@ -741,6 +741,12 @@ def stamp_change_log(
     `record_updated_on` can't give this: the change reaches the MV some time
     after it was made.
 
+    The API refuses a cursor earlier than the log table's create_time, which
+    the stamp's INSERT OVERWRITE leaves alone. Reset a log (e.g. after a key
+    or identity change) only by DROP, and let the next run re-seed it. A
+    TRUNCATE keeps create_time while dropping every tombstone, so a client
+    syncing across it would never learn of those removals.
+
     A view that was not refreshed must not be stamped. `dbt build`
     recreates an MV empty, and an MV whose refresh then fails
     stays empty; stamping it would mark every record deleted. The stamp reads
